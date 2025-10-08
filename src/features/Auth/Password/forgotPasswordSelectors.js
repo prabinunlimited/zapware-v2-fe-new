@@ -1,0 +1,14 @@
+export const selectEmail = (state) => state.forgotPassword.email;
+export const selectPasscode = (state) => state.forgotPassword.passcode;
+export const selectNewPassword = (state) => state.forgotPassword.newPassword;
+export const selectConfirmPassword = (state) => state.forgotPassword.confirmPassword;
+export const selectStep = (state) => state.forgotPassword.step;
+export const selectError = (state) => state.forgotPassword.error;
+export const selectSuccessMessage = (state) => state.forgotPassword.successMessage;
+export const selectIsLoading = (state) => state.forgotPassword.isLoading;
+export const selectShowPassword = (state) => state.forgotPassword.showPassword;
+export const selectCurrentPasswordError = (state) => state.forgotPassword.currentPasswordError;
+export const selectNewPasswordError = (state) => state.forgotPassword.newPasswordError;
+export const selectConfirmPasswordError = (state) => state.forgotPassword.confirmPasswordError;
+export const selectApiResponse = (state) => state.forgotPassword.apiResponse;
+export const selectProgressBarWidth = (state) => (state.forgotPassword.step / 3) * 100;
