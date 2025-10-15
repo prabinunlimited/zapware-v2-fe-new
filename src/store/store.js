@@ -23,6 +23,7 @@ import transactionReducer from '../components/Dashboard/Account/Transaction/Tran
 
 // ===================== BENEFICIARIES =====================
 import beneficiariesReducer from "../page/Beneficiary/MyBeneficiaries/BeneficiariesSlice";
+import addBeneficiaryReducer from "../page/Beneficiary/AddBeneficiary/addBeneficiarySlice";
 import modalReducer from "../page/Beneficiary/MyBeneficiaries/ModalSlice";
 
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
@@ -128,6 +129,7 @@ export const store = configureStore({
     
     // Beneficiaries
     beneficiaries: beneficiariesReducer,
+    addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
   },
   middleware: (getDefaultMiddleware) =>

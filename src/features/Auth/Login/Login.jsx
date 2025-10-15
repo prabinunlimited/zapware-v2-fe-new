@@ -1,5 +1,4 @@
-// src/features/Auth/components/Login.js
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
@@ -7,6 +6,9 @@ import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { AiOutlineClose } from "react-icons/ai";
+import { faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faExternalLinkAlt } from "@fortawesome/free-solid-svg-icons";
+
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
 import { RingLoader } from "react-spinners";
@@ -22,9 +24,12 @@ import {
   generateOTP,
   verifyPasscode,
   verifyOTP,
-  initiatePlaidFlow, // ✅ Make sure this is imported
+  initiatePlaidFlow,
   downloadManual,
 } from "../../Auth/authThunk";
+
+// Services
+import { tokenService, initializePartnerToken } from "../../../services/authService";
 
 // Selectors
 import {
@@ -88,11 +93,17 @@ import {
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
 
-import { selectIsInitialized } from "../../Auth/slices/authSlice";
-
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  // Add state for iframe management
+  const [showPlaidIframe, setShowPlaidIframe] = useState(false);
+  const [plaidUrl, setPlaidUrl] = useState("");
+  const [showPlaidModal, setShowPlaidModal] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+  const [tokenInitialized, setTokenInitialized] = useState(false);
+  const iframeRef = useRef(null);
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -109,6 +120,10 @@ const Login = () => {
   const requiresKyc = useSelector(selectRequiresKycVerification);
   const showCustomerType = useSelector(selectShowCustomerType);
 
+  // FIXED: Proper loading state handling
+  const isLoading = auth.loading?.general || false;
+  const isSubmitting = auth.isSubmitting || false;
+
   // Destructure state with defaults
   const {
     passcode = [],
@@ -119,7 +134,6 @@ const Login = () => {
     otpSent = false,
     rememberMe = false,
     customerType = "",
-    loading = false,
     is_owner_login = false,
     owner_id = null,
   } = auth;
@@ -134,6 +148,7 @@ const Login = () => {
   const inputType = useSelector(selectInputType);
   const hostName = window.location.hostname;
 
+  // Validation schema
   const validationSchema = Yup.object({
     email: Yup.string()
       .email("Invalid email address")
@@ -160,268 +175,147 @@ const Login = () => {
     }),
   });
 
-  const formatPhoneForPlaid = (phoneCode, mobileNumber) => {
-    // Remove any non-digit characters
-    const cleanCode = phoneCode.replace(/\D/g, '');
-    const cleanNumber = mobileNumber.replace(/\D/g, '');
+  // ========== EFFECTS ==========
 
-    // Ensure proper E.164 format: +[country code][number] (max 15 digits total)
-    const fullNumber = `+${cleanCode}${cleanNumber}`;
+  // Debug loading state
+  useEffect(() => {
+    console.log('🔍 Login component state:', {
+      isLoading,
+      isSubmitting,
+      tokenInitialized,
+      modalOpen: modal.isOpen,
+      showPasscodeInput,
+      showOtpInput
+    });
+  }, [isLoading, isSubmitting, tokenInitialized, modal.isOpen, showPasscodeInput, showOtpInput]);
 
-    // Validate length (country code + number should be max 15 digits)
-    if (fullNumber.length > 16) { // + plus 15 digits
-      console.warn('Phone number too long for Plaid:', fullNumber);
-      // Truncate to max length while preserving country code
-      const countryCodePart = `+${cleanCode}`;
-      const maxNumberLength = 15 - countryCodePart.length;
-      const truncatedNumber = cleanNumber.slice(0, maxNumberLength);
-      return `${countryCodePart}${truncatedNumber}`;
-    }
-
-    return fullNumber;
-  };
-
-  const handleKycVerification = async (response, values) => {
-    console.log('🔍 [KYC Handler] Processing response:', response);
-
-    // ✅ Handle Plaid redirect from verifyPasscode response
-    if (response.requiresPlaidRedirect && response.plaidUrl) {
-      console.log('🎯 [KYC Handler] KYC required - redirecting to Plaid');
-
-      const customerId = response.customer_id || response.customerData?.customer_id;
-
-      if (!customerId) {
-        throw new Error("Unable to start bank verification: Missing customer information");
+  // Token initialization effect - OPTIMIZED
+  useEffect(() => {
+    const initializeToken = async () => {
+      try {
+        await initializePartnerToken();
+        setTokenInitialized(true);
+      } catch (error) {
+        console.error('❌ Token initialization failed:', error);
+        setTokenInitialized(true); // Still set to true to prevent blocking
       }
+    };
 
-      // Store pending auth data for callback handling
-      const pendingAuth = {
-        email: values.email,
-        mobile_number: values.mobile_number,
-        phone_code: values.phone_code,
-        inputType: values.inputType,
-        customer_id: customerId,
-        kyc_status: response.kyc_status,
-        timestamp: Date.now()
-      };
+    initializeToken();
+  }, []);
 
-      sessionStorage.setItem('pending_kyc_auth', JSON.stringify(pendingAuth));
+  // Initialization effect
+  useEffect(() => {
+    dispatch(initializeApp());
+  }, [dispatch]);
 
-      // Show redirect message to user
-      dispatch(
-        openModal({
-          title: "KYC Verification Required",
-          message: "You must complete bank verification before accessing your account. Redirecting to verification system...",
-          type: "info",
-          modalProps: {
-            showSpinner: true,
-            autoClose: true,
-            autoCloseDelay: 2000,
-            onClose: () => {
-              console.log('🔄 [KYC Handler] Redirecting to Plaid for KYC verification');
-              window.location.href = response.plaidUrl;
-            }
-          },
-          disableBackdropClick: true,
-          disableEscapeKey: true
-        })
-      );
-
-      return null; // Stop further processing - NO LOGIN ALLOWED
-    }
-
-    // ✅ Handle owner login (bypass KYC)
-    if (response.is_owner_login) {
-      console.log('👑 [KYC Handler] Owner login detected - bypassing KYC');
-      dispatch(
-        setOwnerDetails({
-          is_owner_login: true,
-          owner_id: response.owner_id,
-          owner_role_name: response.owner_role_name,
-        })
-      );
-
-      dispatch(
-        openModal({
-          title: "Owner Login Successful",
-          message: "Redirecting to owner dashboard...",
-          type: "success",
-          modalProps: {
-            showSpinner: true,
-            autoClose: true,
-            autoCloseDelay: 1500,
-            onClose: () => {
-              navigate(`/signupowner/${response.owner_id}`);
-            }
-          },
-          disableBackdropClick: true,
-          disableEscapeKey: true
-        })
-      );
-
-      return response;
-    }
-
-    // ✅ CRITICAL: If we get a response with kyc_status "0" but no redirect, BLOCK LOGIN
-    if (response.kyc_status === "0" || response.kyc_status === 0) {
-      console.log('🚫 [KYC Handler] KYC status is 0 but no redirect - BLOCKING LOGIN');
-
-      let errorMessage = "KYC verification is required before you can access your account. ";
-
-      // Handle specific phone number format errors
-      if (response.message && response.message.includes("phone_number must consist of +")) {
-        errorMessage += "There's an issue with your phone number format. Please contact support to resolve this issue.";
-
-        // Log detailed phone number info for debugging
-        console.error('📞 Phone number format issue:', {
-          phoneCode: values.phone_code,
-          mobileNumber: values.mobile_number,
-          formatted: formatPhoneForPlaid(values.phone_code, values.mobile_number),
-          responseMessage: response.message
-        });
-      } else {
-        errorMessage += "Please contact support to complete your KYC verification.";
+  // Auto-close stuck modals
+  useEffect(() => {
+    const modalTimer = setTimeout(() => {
+      if (modal.isOpen) {
+        console.log('🔄 Auto-closing stuck modal');
+        dispatch(closeModal());
       }
+    }, 5000);
 
-      dispatch(
-        openModal({
-          title: "KYC Verification Required",
-          message: errorMessage,
-          type: "error",
-          modalProps: {
-            actions: [
-              {
-                label: "Contact Support",
-                primary: true,
-                actionType: "NAVIGATE",
-                path: "/contact-support"
-              },
-              {
-                label: "Try Again",
-                primary: false,
-                actionType: "CALLBACK",
-                callback: () => {
-                  // Reset passcode/OTP states to allow retry
-                  dispatch(setPasscode(new Array(6).fill("")));
-                  dispatch(setOtp(new Array(6).fill("")));
-                  dispatch(setShowPasscodeInput(false));
-                  dispatch(setShowOtpInput(false));
-                }
-              }
-            ]
-          }
-        })
-      );
+    return () => clearTimeout(modalTimer);
+  }, [modal.isOpen, dispatch]);
 
-      throw new Error("KYC verification required"); // This will prevent login
-    }
+  // Reset stuck loading state
+  useEffect(() => {
+    const loadingTimer = setTimeout(() => {
+      if (isLoading) {
+        console.log('🔄 Resetting stuck loading state');
+        dispatch(setLoading(false));
+      }
+    }, 10000);
 
-    // ✅ Handle bank approval pending
-    if (response.bank_approve_status !== "1") {
-      console.log('🚫 [KYC Handler] Bank approval pending - BLOCKING LOGIN');
-      dispatch(
-        openModal({
-          title: "Bank Approval Pending",
-          message: "Your bank account is pending approval. You cannot access your account until approval is complete. Please contact support.",
-          type: "error",
-          modalProps: {
-            actions: [
-              {
-                label: "Contact Support",
-                primary: true,
-                actionType: "NAVIGATE",
-                path: "/contact-support"
-              }
-            ]
-          }
-        })
-      );
+    return () => clearTimeout(loadingTimer);
+  }, [isLoading, dispatch]);
 
-      throw new Error("Bank account not approved");
-    }
-
-    // ✅ ONLY if we get here, it's a successful login with completed KYC and bank approval
-    console.log('✅ [KYC Handler] KYC verified - allowing login');
-    return response;
-  };
-
-  // Add this useEffect to your Login component to handle KYC callbacks
+  // KYC callback handler - OPTIMIZED
   useEffect(() => {
     const handleKycCallback = () => {
-      // Check URL parameters for KYC callback
       const urlParams = new URLSearchParams(window.location.search);
-      const kycStatus = urlParams.get('status');
-      const kycMessage = urlParams.get('message');
-      const customerId = urlParams.get('customer_id');
-
-      // Check for Plaid callback parameters
-      const plaidStatus = urlParams.get('plaid_status');
-      const plaidError = urlParams.get('plaid_error');
-
-      console.log('🔍 Checking for KYC callback:', {
-        kycStatus,
-        kycMessage,
-        customerId,
-        plaidStatus,
-        plaidError
-      });
+      const kycStatus = urlParams.get("status");
+      const kycMessage = urlParams.get("message");
+      const customerId = urlParams.get("customer_id");
+      const plaidStatus = urlParams.get("plaid_status");
+      const plaidError = urlParams.get("plaid_error");
 
       // Handle successful KYC
-      if (kycStatus === 'success' || plaidStatus === 'success') {
-        console.log('✅ KYC/Plaid completed successfully');
+      if (kycStatus === "success" || plaidStatus === "success") {
+        // Try to restore auth from temp storage
+        const tempAuth = sessionStorage.getItem("temp_auth_data");
+        const pendingAuth = sessionStorage.getItem("pending_kyc_auth");
 
-        // Get pending auth data
-        const pendingAuth = sessionStorage.getItem('pending_kyc_auth');
         let authData = null;
 
-        if (pendingAuth) {
+        if (tempAuth) {
+          try {
+            authData = JSON.parse(tempAuth);
+          } catch (e) {
+            // Silent error
+          }
+        }
+
+        if (!authData && pendingAuth) {
           try {
             authData = JSON.parse(pendingAuth);
           } catch (e) {
-            console.error('Error parsing pending auth:', e);
+            // Silent error
           }
         }
 
         // Clear the URL parameters
-        window.history.replaceState({}, '', window.location.pathname);
+        window.history.replaceState({}, "", window.location.pathname);
 
         dispatch(
           openModal({
             title: "Verification Successful! 🎉",
-            message: kycMessage || "Your bank verification has been completed successfully.",
+            message:
+              kycMessage ||
+              "Your bank verification has been completed successfully.",
             type: "success",
             modalProps: {
               showCloseButton: true,
               onClose: () => {
-                // Redirect to appropriate page
                 const redirectCustomerId = customerId || authData?.customer_id;
                 if (redirectCustomerId) {
+                  // Clear temp data and redirect
+                  sessionStorage.removeItem("temp_auth_data");
+                  sessionStorage.removeItem("pending_kyc_auth");
                   navigate(`/home/${redirectCustomerId}`);
                 } else {
-                  navigate('/');
+                  navigate("/");
                 }
-                sessionStorage.removeItem('pending_kyc_auth');
-              }
+              },
             },
           })
         );
       }
 
       // Handle failed KYC
-      else if (kycStatus === 'failed' || plaidStatus === 'error' || plaidError) {
-        console.error('❌ KYC/Plaid verification failed');
-
+      else if (
+        kycStatus === "failed" ||
+        plaidStatus === "error" ||
+        plaidError
+      ) {
         dispatch(
           openModal({
             title: "Verification Failed",
-            message: kycMessage || plaidError || "We were unable to complete your bank verification. Please try again.",
+            message:
+              kycMessage ||
+              plaidError ||
+              "We were unable to complete your bank verification. Please try again.",
             type: "error",
             modalProps: {
               showCloseButton: true,
               onClose: () => {
-                window.history.replaceState({}, '', window.location.pathname);
-                sessionStorage.removeItem('pending_kyc_auth');
-              }
+                window.history.replaceState({}, "", window.location.pathname);
+                sessionStorage.removeItem("temp_auth_data");
+                sessionStorage.removeItem("pending_kyc_auth");
+              },
             },
           })
         );
@@ -431,15 +325,38 @@ const Login = () => {
     handleKycCallback();
   }, [dispatch, navigate]);
 
-  const handleSuccessfulLoginRedirect = (processedData) => {
-    console.log('🔍 REDIRECT DEBUG:', {
-      isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
-      type: typeof processedData.isRemittanceOnlyCustomer,
-      value: processedData.isRemittanceOnlyCustomer,
-      customer_id: processedData.customer_id
-    });
+  // Owner login redirect - OPTIMIZED
+  useEffect(() => {
+    if (is_owner_login && owner_id) {
+      navigate(`/signupowner/${owner_id}`);
+    }
+  }, [is_owner_login, owner_id, navigate]);
 
-    // ✅ Consistent check for both string "Y" and boolean true
+  // Download status handler
+  useEffect(() => {
+    if (downloadStatus === "succeeded" && lastDownloadUrl) {
+      window.open(lastDownloadUrl, "_blank");
+    }
+  }, [downloadStatus, lastDownloadUrl]);
+
+  // Auth state change handler - FIXED (No infinite re-renders)
+  useEffect(() => {
+    // Only redirect if fully authenticated with valid data
+    const shouldRedirect = auth.isAuthenticated && 
+                          auth.customerId && 
+                          auth.token;
+
+    if (shouldRedirect) {
+      handleSuccessfulLoginRedirect({
+        customer_id: auth.customerId,
+        isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer || false,
+      });
+    }
+  }, [auth.isAuthenticated, auth.customerId, auth.token, auth.user]);
+
+  // ========== HANDLER FUNCTIONS ==========
+
+  const handleSuccessfulLoginRedirect = (processedData) => {
     const shouldRedirectToHomeRemit =
       processedData.isRemittanceOnlyCustomer === "Y" ||
       processedData.isRemittanceOnlyCustomer === true;
@@ -448,30 +365,230 @@ const Login = () => {
       ? `/homeremit/${processedData.customer_id}`
       : `/home/${processedData.customer_id}`;
 
-    console.log('🔍 FINAL REDIRECT PATH:', redirectPath);
-
-    // ✅ Use replace: true to prevent back navigation issues
     navigate(redirectPath, { replace: true });
   };
 
-  // ✅ Add this useEffect to handle auth state changes
-  useEffect(() => {
-    console.log('🔍 [Login] Auth state changed:', {
-      token: auth.token,
-      customerId: auth.customerId,
-      isAuthenticated: auth.isAuthenticated
-    });
-
-    // ✅ If somehow we become authenticated while on login page, redirect
-    if (auth.isAuthenticated && auth.customerId) {
-      console.log('🔄 [Login] Already authenticated, redirecting to home');
-      handleSuccessfulLoginRedirect({
-        customer_id: auth.customerId,
-        isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer
-      });
+  // ========== FIXED KYC VERIFICATION HANDLER ==========
+  const handleKycVerification = async (response, values) => {
+    // Check for owner login first with proper validation
+    if (response.is_owner_login === true || response.is_owner_login === "1") {
+      return response;
     }
-  }, [auth.token, auth.customerId, auth.isAuthenticated, auth.user]);
 
+    if (response.requiresPlaidRedirect && response.plaidUrl) {
+      // Store data
+      const pendingAuth = {
+        email: values.email,
+        customer_id: response.customer_id,
+        timestamp: Date.now(),
+        plaidUrl: response.plaidUrl,
+      };
+      sessionStorage.setItem("pending_kyc_auth", JSON.stringify(pendingAuth));
+
+      // Show modal with Plaid options
+      setPlaidUrl(response.plaidUrl);
+      setShowPlaidModal(true);
+
+      return null;
+    }
+
+    // Handle successful login
+    if (response.token && response.customer_id) {
+      return response;
+    }
+
+    throw new Error("Unexpected login response");
+  };
+
+  // Open Plaid in new window
+  const openPlaidInNewWindow = () => {
+    const plaidWindow = window.open(
+      plaidUrl,
+      "plaid_verification",
+      "width=800,height=700,scrollbars=yes,resizable=yes,top=100,left=100"
+    );
+
+    if (plaidWindow) {
+      // Set up monitoring for the Plaid window
+      monitorPlaidWindow(plaidWindow);
+
+      // Close the modal
+      setShowPlaidModal(false);
+
+      // Show success message
+      dispatch(
+        openModal({
+          title: "Bank Verification Started",
+          message:
+            "A new window has opened for bank verification. Please complete the verification process there. You can return to this page after completion.",
+          type: "info",
+          modalProps: {
+            showCloseButton: true,
+          },
+        })
+      );
+    } else {
+      // Popup blocked - show alternative options
+      dispatch(
+        openModal({
+          title: "Popup Blocked",
+          message:
+            "Please allow popups for this site, or use the manual link below.",
+          type: "warning",
+          modalProps: {
+            actions: [
+              {
+                label: "Copy Verification Link",
+                primary: true,
+                actionType: "CALLBACK",
+                callback: () => {
+                  navigator.clipboard.writeText(plaidUrl);
+                  dispatch(
+                    openModal({
+                      title: "Link Copied",
+                      message:
+                        "Verification link copied to clipboard. Please paste it in a new browser tab.",
+                      type: "success",
+                    })
+                  );
+                },
+              },
+              {
+                label: "Open Link Now",
+                primary: false,
+                actionType: "CALLBACK",
+                callback: () => {
+                  window.open(plaidUrl, "_blank");
+                  setShowPlaidModal(false);
+                },
+              },
+            ],
+          },
+        })
+      );
+    }
+  };
+
+  // Monitor Plaid window for completion
+  const monitorPlaidWindow = (plaidWindow) => {
+    let checkCount = 0;
+    const maxChecks = 300;
+
+    const checkWindow = setInterval(() => {
+      checkCount++;
+
+      if (plaidWindow.closed) {
+        clearInterval(checkWindow);
+
+        // Show completion message
+        setTimeout(() => {
+          dispatch(
+            openModal({
+              title: "Verification Completed",
+              message:
+                "Thank you for completing bank verification. You can now try logging in again.",
+              type: "success",
+              modalProps: {
+                showCloseButton: true,
+                onClose: () => {
+                  // Clear the passcode and reset state
+                  dispatch(setPasscode(new Array(6).fill("")));
+                  dispatch(setShowPasscodeInput(false));
+                  dispatch(setPasscodeSent(false));
+                },
+              },
+            })
+          );
+        }, 1000);
+      } else if (checkCount >= maxChecks) {
+        // Timeout after 5 minutes
+        clearInterval(checkWindow);
+      }
+    }, 1000);
+  };
+
+  // Open Plaid in same tab
+  const openPlaidInSameTab = () => {
+    window.location.href = plaidUrl;
+  };
+
+  // Close Plaid modal
+  const closePlaidModal = () => {
+    setShowPlaidModal(false);
+    setPlaidUrl("");
+  };
+
+  // Handle iframe load events
+  const handleIframeLoad = () => {
+    setIframeLoading(false);
+  };
+
+  const handleIframeError = () => {
+    setIframeLoading(false);
+    dispatch(
+      openModal({
+        title: "Verification Error",
+        message:
+          "Failed to load verification. Please try again or contact support.",
+        type: "error",
+      })
+    );
+  };
+
+  // Close iframe handler
+  const closePlaidIframe = () => {
+    setShowPlaidIframe(false);
+    setPlaidUrl("");
+    setIframeLoading(true);
+
+    // Check if verification was completed
+    const pendingAuth = sessionStorage.getItem("pending_kyc_auth");
+    if (pendingAuth) {
+      dispatch(
+        openModal({
+          title: "Verification Incomplete",
+          message:
+            "Have you completed the bank verification? If yes, please try logging in again. If not, you can reopen verification from your account settings.",
+          type: "info",
+          modalProps: {
+            showCloseButton: true,
+          },
+        })
+      );
+    }
+  };
+
+  // Handle messages from iframe
+  useEffect(() => {
+    const handleMessage = (event) => {
+      // Check if message is from Plaid domain
+      if (
+        event.origin.includes("plaid.com") ||
+        event.origin.includes("verify.plaid.com")
+      ) {
+        // Handle verification completion
+        if (
+          event.data.type === "VERIFICATION_COMPLETED" ||
+          event.data.status === "success"
+        ) {
+          closePlaidIframe();
+          dispatch(
+            openModal({
+              title: "Verification Completed",
+              message:
+                "Bank verification completed successfully! Please try logging in again.",
+              type: "success",
+            })
+          );
+        }
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [dispatch]);
+
+  // Formik setup
   const formik = useFormik({
     initialValues: {
       email: "",
@@ -484,6 +601,18 @@ const Login = () => {
     validationSchema,
     onSubmit: async (values) => {
       try {
+        // Check token status before proceeding
+        if (!tokenInitialized) {
+          dispatch(
+            openModal({
+              title: "System Initializing",
+              message: "Please wait while we initialize the system...",
+              type: "info",
+            })
+          );
+          return;
+        }
+
         let payload = {
           sign_in_option: inputType,
           email: values.email,
@@ -494,7 +623,6 @@ const Login = () => {
           otp: Array.isArray(otp) ? otp.join("") : "",
         };
 
-        // Add customer_type to payload when showCustomerType is "Y" and customerType is selected
         if (showCustomerType === "Y" && values.customerType) {
           payload.customer_type = values.customerType;
         }
@@ -519,7 +647,6 @@ const Login = () => {
           dispatch(setShowOtpInput(false));
         }
 
-        // Handle verification requirements first
         if (!response.verified) {
           if (inputType === "email") {
             await dispatch(
@@ -528,8 +655,8 @@ const Login = () => {
                 password: values.password,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                  customer_type: values.customerType,
-                }),
+                    customer_type: values.customerType,
+                  }),
               })
             ).unwrap();
             dispatch(setShowPasscodeInput(true));
@@ -542,8 +669,8 @@ const Login = () => {
                 mobile_number: values.mobile_number,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                  customer_type: values.customerType,
-                }),
+                    customer_type: values.customerType,
+                  }),
               })
             ).unwrap();
             dispatch(setShowOtpInput(true));
@@ -552,12 +679,9 @@ const Login = () => {
           }
         }
 
-        // MODIFIED: Handle KYC verification using the new approach
         const processedData = await handleKycVerification(response, values);
 
-        // If handleKycVerification returned data, continue with normal flow
         if (processedData) {
-          // Handle owner login
           if (processedData.is_owner_login === "1") {
             dispatch(
               setOwnerDetails({
@@ -570,12 +694,12 @@ const Login = () => {
             return;
           }
 
-          // Bank approval check
           if (processedData.bank_approve_status !== "1") {
-            throw new Error("Bank account not approved. Please contact support.");
+            throw new Error(
+              "Bank account not approved. Please contact support."
+            );
           }
 
-          // Auth state setup
           const authState = {
             token: processedData.token,
             customerId: processedData.customer_id,
@@ -590,7 +714,6 @@ const Login = () => {
 
           dispatch(setAuthState(authState));
 
-          // Success flow
           dispatch(
             openModal({
               title: "Success",
@@ -607,12 +730,10 @@ const Login = () => {
 
           setTimeout(() => {
             dispatch(closeModal());
-            // USE CONSISTENT REDIRECT LOGIC
             handleSuccessfulLoginRedirect(processedData);
           }, 1500);
         }
       } catch (error) {
-        console.error("Login error:", error);
         dispatch(setLoading(false));
         dispatch(setPasscode([]));
         dispatch(setOtp([]));
@@ -648,11 +769,11 @@ const Login = () => {
   const countryOptions = useMemo(() => {
     return Array.isArray(countries)
       ? countries.map((country) => ({
-        value: country.phone_code,
-        label: `${country.name} (${country.phone_code})`,
-        countryName: country.name,
-        flagUrl: country.flag_url,
-      }))
+          value: country.phone_code,
+          label: `${country.name} (${country.phone_code})`,
+          countryName: country.name,
+          flagUrl: country.flag_url,
+        }))
       : [];
   }, [countries]);
 
@@ -663,122 +784,7 @@ const Login = () => {
     );
   }, [countryOptions, values.phone_code]);
 
-  // Initialization effect
-  useEffect(() => {
-    dispatch(initializeApp());
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (is_owner_login && owner_id) {
-      navigate(`/signupowner/${owner_id}`);
-    }
-  }, [is_owner_login, owner_id, navigate]);
-
-  useEffect(() => {
-    if (downloadStatus === "succeeded" && lastDownloadUrl) {
-      window.open(lastDownloadUrl, "_blank");
-    }
-  }, [downloadStatus, lastDownloadUrl]);
-
-  useEffect(() => {
-    const handleKycResults = () => {
-      // Check for KYC result in URL parameters
-      const urlParams = new URLSearchParams(window.location.search);
-      const kycStatus = urlParams.get('kyc_status');
-      const kycMessage = urlParams.get('kyc_message');
-      const customerId = urlParams.get('customer_id');
-
-      // Check session storage for pending auth
-      const pendingAuth = sessionStorage.getItem('pending_kyc_auth');
-      let pendingData = null;
-
-      if (pendingAuth) {
-        try {
-          pendingData = JSON.parse(pendingAuth);
-        } catch (e) {
-          console.error('Error parsing pending auth:', e);
-        }
-      }
-
-      console.log('🔍 Checking for KYC results:', {
-        urlStatus: kycStatus,
-        urlMessage: kycMessage,
-        customerId,
-        pendingData: !!pendingData
-      });
-
-      // Handle KYC success
-      if (kycStatus === 'success' || kycStatus === 'completed') {
-        console.log('✅ KYC completed successfully');
-
-        // Clear pending auth
-        sessionStorage.removeItem('pending_kyc_auth');
-
-        // Update localStorage
-        localStorage.setItem('kyc_status', '1');
-
-        dispatch(
-          openModal({
-            title: "Verification Successful! 🎉",
-            message: kycMessage || "Your identity has been successfully verified. You can now access your account.",
-            type: "success",
-            modalProps: {
-              showCloseButton: true,
-              onClose: () => {
-                // Redirect to dashboard
-                if (customerId) {
-                  navigate(`/home/${customerId}`);
-                } else if (pendingData?.customer_id) {
-                  navigate(`/home/${pendingData.customer_id}`);
-                } else {
-                  navigate('/');
-                }
-
-                // Clean up URL
-                window.history.replaceState({}, '', window.location.pathname);
-              }
-            },
-          })
-        );
-      }
-
-      // Handle KYC failure
-      else if (kycStatus === 'failed' || kycStatus === 'error') {
-        console.error('❌ KYC verification failed');
-
-        dispatch(
-          openModal({
-            title: "Verification Failed",
-            message: kycMessage || "We were unable to verify your identity. Please try again.",
-            type: "error",
-            modalProps: {
-              showCloseButton: true,
-              onClose: () => {
-                // Clean up
-                sessionStorage.removeItem('pending_kyc_auth');
-                window.history.replaceState({}, '', window.location.pathname);
-              }
-            },
-          })
-        );
-      }
-    };
-
-    handleKycResults();
-  }, [dispatch, navigate]);
-
-  useEffect(() => {
-    if (is_owner_login && owner_id) {
-      navigate(`/signupowner/${owner_id}`);
-    }
-  }, [is_owner_login, owner_id, navigate]);
-
-  useEffect(() => {
-    if (downloadStatus === "succeeded" && lastDownloadUrl) {
-      window.open(lastDownloadUrl, "_blank");
-    }
-  }, [downloadStatus, lastDownloadUrl]);
-
+  // Handler functions
   const handleGeneratePasscode = async (e) => {
     e.preventDefault();
 
@@ -796,34 +802,28 @@ const Login = () => {
     try {
       dispatch(setLoading(true));
 
-      // Create payload with customer_type if available
       const payload = {
         email: values.email,
         password: values.password,
       };
 
-      // Add customer_type when available and showCustomerType is Y
       if (showCustomerType === "Y" && values.customerType) {
         payload.customer_type = values.customerType;
       }
 
       const result = await dispatch(generatePasscode(payload)).unwrap();
 
-      // Handle multiple accounts scenario
       if (result.status === "multiple_accounts") {
-        // Reset passcode states to prevent the verification popup from showing
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode([]));
         return;
       }
 
-      // If we get here, passcode was generated successfully (no multiple accounts)
       dispatch(setShowPasscodeInput(true));
       dispatch(setPasscodeSent(true));
       dispatch(setPasscode(new Array(6).fill("")));
 
-      // Show success message
       dispatch(
         openModal({
           title: "Passcode Sent",
@@ -836,9 +836,6 @@ const Login = () => {
         })
       );
     } catch (error) {
-      console.error("Passcode generation error:", error);
-
-      // Handle blocked account case
       if (
         error.data?.blocked_status === 1 ||
         error.payload?.data?.blocked_status === 1
@@ -863,7 +860,6 @@ const Login = () => {
         return;
       }
 
-      // Extract the message from the API response
       let displayMessage = "Failed to generate passcode";
 
       if (error.message) {
@@ -899,15 +895,13 @@ const Login = () => {
         return;
       }
 
-      // Create payload with customer_type if needed
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
-        // Add customer_type when available
         ...(showCustomerType === "Y" &&
           values.customerType && {
-          customer_type: values.customerType,
-        }),
+            customer_type: values.customerType,
+          }),
       };
 
       const result = await dispatch(generateOTP(payload)).unwrap();
@@ -928,9 +922,7 @@ const Login = () => {
         );
       }
     } catch (error) {
-      // Handle multiple accounts scenario
       if (error.requiresCustomerType) {
-        // The thunk already dispatched setShowCustomerType("Y")
         dispatch(
           openModal({
             title: "Select Account Type",
@@ -950,11 +942,6 @@ const Login = () => {
       );
     }
   };
-
-  useEffect(() => {
-    console.log("showCustomerType:", showCustomerType);
-    console.log("values.customerType:", values.customerType);
-  }, [showCustomerType, values.customerType]);
 
   const handleManualDownload = async (e) => {
     e.preventDefault();
@@ -985,22 +972,22 @@ const Login = () => {
   };
 
   const handlePasscodeChange = (e, index) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 1); // Only digits, max 1 char
+    const value = e.target.value.replace(/\D/g, "").slice(0, 1);
     const newPasscode = [...passcode];
     newPasscode[index] = value;
     dispatch(setPasscode(newPasscode));
 
-    // Auto-advance to next input
     if (value && index < passcode.length - 1) {
       setTimeout(() => {
-        const nextInput = document.getElementById(`passcode-input-${index + 1}`);
+        const nextInput = document.getElementById(
+          `passcode-input-${index + 1}`
+        );
         if (nextInput) nextInput.focus();
       }, 10);
     }
   };
 
   const handlePasscodeKeyDown = (e, index) => {
-    // Handle backspace - move to previous input if current is empty
     if (e.key === "Backspace" && !passcode[index] && index > 0) {
       const prevInput = document.getElementById(`passcode-input-${index - 1}`);
       if (prevInput) {
@@ -1008,10 +995,9 @@ const Login = () => {
       }
     }
 
-    // Handle paste
     if (e.key === "v" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      navigator.clipboard.readText().then(text => {
+      navigator.clipboard.readText().then((text) => {
         const pasteData = text.replace(/\D/g, "").slice(0, 6);
         if (pasteData.length === 6) {
           const newPasscode = pasteData.split("");
@@ -1035,22 +1021,7 @@ const Login = () => {
     }
   };
 
-  const handleBackspace = (e, index, isPasscode = true) => {
-    if (e.key === "Backspace") {
-      if (isPasscode) {
-        if (!passcode[index] && index > 0) {
-          document.getElementById(`passcode-input-${index - 1}`).focus();
-        }
-      } else {
-        if (!otp[index] && index > 0) {
-          document.getElementById(`otp-input-${index - 1}`).focus();
-        }
-      }
-    }
-  };
-
   const handleVerifyPasscode = async () => {
-    // Validate passcode length
     if (passcode.join("").length !== 6) {
       dispatch(
         openModal({
@@ -1063,9 +1034,6 @@ const Login = () => {
     }
 
     try {
-      console.log('🔄 [handleVerifyPasscode] Starting verification...');
-
-      // ✅ CRITICAL: Ensure we have all required data
       if (!values.email) {
         throw new Error("Email is required for verification");
       }
@@ -1073,66 +1041,77 @@ const Login = () => {
       const verifyPayload = {
         email: values.email.trim().toLowerCase(),
         passcode: passcode,
-        password: values.password, // Include password for initial verification
+        password: values.password,
         sign_in_option: inputType,
       };
 
-      // Add customer_type if available and required
       if (showCustomerType === "Y" && values.customerType) {
         verifyPayload.customer_type = values.customerType;
       }
 
-      console.log('📤 [handleVerifyPasscode] Calling verifyPasscode with:', {
-        email: verifyPayload.email,
-        passcodeLength: verifyPayload.passcode.length,
-        hasPassword: !!verifyPayload.password,
-        customerType: verifyPayload.customer_type
-      });
-
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
 
-      console.log('🔍 [handleVerifyPasscode] Thunk result:', result);
+      // Check for owner login FIRST with proper validation
+      if (result.is_owner_login === true || result.is_owner_login === "1") {
+        // Close the passcode popup
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
 
-      // ✅ Use the STRICTER KYC verification handling
+        // Handle owner redirect
+        dispatch(
+          setOwnerDetails({
+            is_owner_login: true,
+            owner_id: result.owner_id,
+            owner_role_name: result.owner_role_name,
+          })
+        );
+        navigate(`/signupowner/${result.owner_id}`);
+        return;
+      }
+
+      // Handle Plaid redirect
+      if (result.requiresPlaidRedirect) {
+        // Close the passcode popup
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        const processedData = await handleKycVerification(result, values);
+        return;
+      }
+
       const processedData = await handleKycVerification(result, values);
 
-      // If processedData is null, it means we redirected to Plaid (NO LOGIN)
       if (processedData === null) {
-        console.log('🔄 [handleVerifyPasscode] Redirected to Plaid for KYC - NO LOGIN ALLOWED');
         return;
       }
 
-      // ✅ Handle owner login
-      if (processedData.is_owner_login) {
-        console.log('👑 [handleVerifyPasscode] Owner login flow completed');
-        return;
-      }
-
-      // ✅ ONLY proceed if we have valid data AND KYC is not 0
+      // Handle successful login with proper validation
       if (processedData && processedData.token && processedData.customer_id) {
         const customerId = processedData.customer_id;
 
-        console.log('✅ [handleVerifyPasscode] Successful login for customer:', customerId);
+        // Wait a brief moment for Redux state to update
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
-        // Set auth state
         dispatch(
           setAuthState({
             token: processedData.token,
             customerId: customerId,
             user: {
               email: values.email,
-              isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer || false,
+              isRemittanceOnlyCustomer:
+                processedData.isRemittanceOnlyCustomer || false,
               customerType: processedData.customer_type || "individual",
             },
           })
         );
 
-        // Clear passcode state
+        // Close passcode popup on successful login
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
 
-        // Show success message
         dispatch(
           openModal({
             title: "Login Successful",
@@ -1141,46 +1120,40 @@ const Login = () => {
             modalProps: {
               showSpinner: true,
               autoClose: true,
-              autoCloseDelay: 1500
+              autoCloseDelay: 1500,
             },
             disableBackdropClick: true,
             disableEscapeKey: true,
           })
         );
 
-        // Redirect after delay
         setTimeout(() => {
           dispatch(closeModal());
           handleSuccessfulLoginRedirect({
             customer_id: customerId,
-            isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer
+            isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
           });
         }, 1500);
       } else {
-        // This should never happen with the stricter checks above
-        console.error('❌ [handleVerifyPasscode] Missing token or customer_id:', processedData);
         throw new Error("Login successful but missing required information");
       }
     } catch (error) {
-      console.error("❌ [handleVerifyPasscode] Verification error:", error);
-
-      // Reset focus to first input for retry
       const firstInput = document.getElementById("passcode-input-0");
       if (firstInput) {
         setTimeout(() => firstInput.focus(), 100);
       }
 
-      // Clear passcode for security
       dispatch(setPasscode(new Array(6).fill("")));
 
-      // Show appropriate error message
-      let displayMessage = error.message || "Verification failed. Please try again.";
+      let displayMessage =
+        error.message || "Verification failed. Please try again.";
 
-      // Don't show modal for KYC-related errors (they're handled in the KYC handler)
-      if (error.message &&
+      if (
+        error.message &&
         !error.message.includes("KYC") &&
         !error.message.includes("bank verification") &&
-        !error.message.includes("Plaid")) {
+        !error.message.includes("Plaid")
+      ) {
         dispatch(
           openModal({
             title: "Verification Failed",
@@ -1193,11 +1166,11 @@ const Login = () => {
                   primary: true,
                   actionType: "CALLBACK",
                   callback: () => {
-                    // Reset state for retry
                     dispatch(setPasscode(new Array(6).fill("")));
-                    const firstInput = document.getElementById("passcode-input-0");
+                    const firstInput =
+                      document.getElementById("passcode-input-0");
                     if (firstInput) firstInput.focus();
-                  }
+                  },
                 },
                 {
                   label: "Request New Code",
@@ -1207,11 +1180,11 @@ const Login = () => {
                     dispatch(setShowPasscodeInput(false));
                     dispatch(setPasscodeSent(false));
                     dispatch(setPasscode(new Array(6).fill("")));
-                    handleGeneratePasscode({ preventDefault: () => { } });
-                  }
-                }
-              ]
-            }
+                    handleGeneratePasscode({ preventDefault: () => {} });
+                  },
+                },
+              ],
+            },
           })
         );
       }
@@ -1237,28 +1210,30 @@ const Login = () => {
         verifyPayload.customer_type = values.customerType;
       }
 
-      console.log('🔄 [handleVerifyOtp] Calling verifyOTP thunk');
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
-      console.log('🔍 [handleVerifyOtp] Thunk result:', result);
+      // Close OTP popup immediately when KYC verification is required
+      if (result.requiresPlaidRedirect) {
+        // Close the OTP popup
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
 
-      // ✅ Use the same KYC verification handling
+        const processedData = await handleKycVerification(result, values);
+        return;
+      }
+
       const processedData = await handleKycVerification(result, values);
 
-      // If processedData is null, it means we redirected to Plaid
       if (processedData === null) {
-        console.log('🔄 [handleVerifyOtp] Redirected to Plaid, stopping further processing');
         return;
       }
 
       if (processedData) {
-        // Handle owner login
         if (processedData.is_owner_login) {
-          console.log('👑 [handleVerifyOtp] Owner login flow');
           return;
         }
 
-        // Successful login
         dispatch(
           setAuthState({
             token: processedData.token,
@@ -1267,18 +1242,18 @@ const Login = () => {
             user: {
               mobile_number: values.mobile_number,
               phone_code: values.phone_code,
-              isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer || false,
+              isRemittanceOnlyCustomer:
+                processedData.isRemittanceOnlyCustomer || false,
               customerType: processedData.customer_type || "individual",
             },
           })
         );
 
-        // Clear OTP state
+        // Close OTP popup on successful login
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
 
-        // Show success
         dispatch(
           openModal({
             title: "Login Successful",
@@ -1289,21 +1264,20 @@ const Login = () => {
           })
         );
 
-        // Redirect
         setTimeout(() => {
           dispatch(closeModal());
           handleSuccessfulLoginRedirect(processedData);
         }, 1500);
       }
     } catch (error) {
-      console.error("❌ [handleVerifyOtp] Verification failed:", error);
       dispatch(setOtp(new Array(6).fill("")));
 
-      // Only show modal for non-KYC related errors
-      if (error.message &&
+      if (
+        error.message &&
         !error.message.includes("bank verification") &&
         !error.message.includes("KYC") &&
-        !error.message.includes("Plaid")) {
+        !error.message.includes("Plaid")
+      ) {
         dispatch(
           openModal({
             title: "Verification Error",
@@ -1316,28 +1290,12 @@ const Login = () => {
   };
 
   const handleNavigation = () => {
-    console.log('🚀 [Login] handleNavigation triggered');
-    console.log('📍 [Login] Current path before navigation:', window.location.pathname);
-    console.log('🎯 [Login] Navigating to: /selectaccounttype');
-
     navigate("/selectaccounttype");
-
-    // Log after navigation attempt
-    setTimeout(() => {
-      console.log('⏱️ [Login] Post-navigation check - current path:', window.location.pathname);
-    }, 100);
   };
-
-  useEffect(() => {
-    console.log('🔍 [Login] Auth state changed:', {
-      token: auth.token,
-      customerId: auth.customerId,
-      isAuthenticated: auth.isAuthenticated
-    });
-  }, [auth.token, auth.customerId, auth.isAuthenticated]);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
+      {/* LEFT SIDE - MAIN LOGIN FORM */}
       <div className="w-full md:w-1/2 flex-1 flex flex-col items-center justify-center p-10 md:p-8 lg:p-12">
         <div className="w-full max-w-md bg-white md:p-8">
           <h1 className="text-3xl font-bold mb-8">
@@ -1353,19 +1311,18 @@ const Login = () => {
                 name="sign_in_option"
                 value="email"
                 onChange={(e) => {
-                  if (!loading) {
-                    dispatch(setInputType(e.target.value));
-                  }
+                  dispatch(setInputType(e.target.value));
                 }}
                 checked={inputType === "email"}
                 className="absolute opacity-0 w-5 h-5"
                 id="email-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
-                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                  : ""
-                  }`}
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
+                  inputType === "email"
+                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                    : ""
+                }`}
               ></span>
               <label
                 htmlFor="email-radio"
@@ -1381,29 +1338,22 @@ const Login = () => {
                 name="sign_in_option"
                 value="mobile"
                 onChange={(e) => {
-                  if (!loading) {
-                    dispatch(setInputType(e.target.value));
-                  }
+                  dispatch(setInputType(e.target.value));
                 }}
                 checked={inputType === "mobile"}
                 className="absolute opacity-0 w-5 h-5"
-                disabled={loading}
                 id="mobile-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "mobile"
-                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                  : loading
-                    ? "opacity-50 cursor-not-allowed"
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
+                  inputType === "mobile"
+                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
                     : ""
-                  }`}
+                }`}
               ></span>
               <label
                 htmlFor="mobile-radio"
-                className={`font-semibold uppercase cursor-pointer transition-colors text-sm ${loading
-                  ? "text-gray-400 cursor-not-allowed"
-                  : "text-gray-500 hover:text-blue-400"
-                  }`}
+                className="font-semibold uppercase cursor-pointer transition-colors text-sm text-gray-500 hover:text-blue-400"
               >
                 Mobile Number
               </label>
@@ -1422,7 +1372,6 @@ const Login = () => {
                 value={values.email}
                 name="email"
                 autoComplete="off"
-                disabled={loading}
               />
               <label
                 htmlFor="email"
@@ -1516,7 +1465,6 @@ const Login = () => {
                     }
                     value={values.mobile_number}
                     name="mobile_number"
-                    disabled={loading}
                   />
                   <label
                     htmlFor="mobile_number"
@@ -1545,7 +1493,6 @@ const Login = () => {
               value={values.password}
               name="password"
               autoComplete="current-password"
-              disabled={loading}
             />
             <label
               htmlFor="password"
@@ -1599,7 +1546,7 @@ const Login = () => {
               type="button"
               onClick={handleGeneratePasscode}
               className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
-              disabled={isGeneratingPasscode || loading}
+              disabled={isGeneratingPasscode}
             >
               {isGeneratingPasscode ? (
                 <>
@@ -1616,7 +1563,7 @@ const Login = () => {
                 type="button"
                 onClick={handleGenerateOTP}
                 className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
-                disabled={isGeneratingOtp || loading}
+                disabled={isGeneratingOtp}
               >
                 {isGeneratingOtp ? (
                   <>
@@ -1644,7 +1591,6 @@ const Login = () => {
               onClick={() => navigate("/forgotpassword")}
               type="button"
               className="text-sm text-red-600 hover:underline"
-              disabled={loading}
             >
               Forgot Password?
             </button>
@@ -1655,7 +1601,6 @@ const Login = () => {
               Don't have an account?{" "}
               <button
                 onClick={handleNavigation}
-                disabled={loading}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
                 Sign Up
@@ -1684,6 +1629,7 @@ const Login = () => {
         </div>
       </div>
 
+      {/* ========== EXISTING MODAL COMPONENT ========== */}
       <Modal
         isOpen={modal.isOpen}
         onClose={() => dispatch(closeModal())}
@@ -1693,6 +1639,120 @@ const Login = () => {
         modalProps={modal.modalProps}
       />
 
+      {/* ========== PLAID IFRAME MODAL ========== */}
+      {showPlaidModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                KYC Verification Required
+              </h2>
+              <button
+                onClick={closePlaidModal}
+                className="text-gray-500 hover:text-gray-700 transition-colors p-2"
+              >
+                <AiOutlineClose size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FontAwesomeIcon
+                    icon={faExternalLinkAlt}
+                    className="text-blue-600 text-2xl"
+                  />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  Secure KYC Verification
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  You need to complete kyc verification to access your account.
+                  This is a secure process powered by Plaid.
+                </p>
+              </div>
+
+              {/* Security Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start">
+                  <svg
+                    className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">
+                      Secure & Encrypted
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Your information is protected with bank-level security. We
+                      never store your banking credentials.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={openPlaidInNewWindow}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-3"
+                >
+                  <FontAwesomeIcon icon={faExternalLinkAlt} />
+                  <span>Open in New Window (Recommended)</span>
+                </button>
+
+                <button
+                  onClick={openPlaidInSameTab}
+                  className="w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-3"
+                >
+                  <span>Open in This Tab</span>
+                </button>
+
+                <div className="text-center">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(plaidUrl);
+                      dispatch(
+                        openModal({
+                          title: "Link Copied",
+                          message: "Verification link copied to clipboard.",
+                          type: "success",
+                          modalProps: {
+                            autoClose: true,
+                            autoCloseDelay: 2000,
+                          },
+                        })
+                      );
+                    }}
+                    className="text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    Copy verification link instead
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <p className="text-xs text-gray-500 text-center">
+                By continuing, you agree to our Terms of Service and Privacy
+                Policy
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== EXISTING OTP MODAL ========== */}
       {showOtpInput && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
@@ -1792,6 +1852,7 @@ const Login = () => {
         </div>
       )}
 
+      {/* ========== EXISTING PASSCODE MODAL ========== */}
       {showPasscodeInput && passcodeSent && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">

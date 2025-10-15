@@ -1,24 +1,80 @@
-// src/features/Auth/slices/authSlice.js - COMPLETE ENHANCED VERSION
-import { createSlice } from "@reduxjs/toolkit";
+// src/features/Auth/slices/authSlice.js - FIXED VERSION
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+
+// ===================== ASYNC THUNKS =====================
+export const fetchUserProfile = createAsyncThunk(
+  "auth/fetchUserProfile",
+  async ({ customerId }, { rejectWithValue, getState }) => {
+    try {
+      const state = getState();
+      const token = state.auth.token;
+
+      const response = await fetch(`/api/customer/profile/${customerId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const fetchAllowedModules = createAsyncThunk(
+  "auth/fetchAllowedModules",
+  async ({ customerId }, { rejectWithValue, getState }) => {
+    try {
+      const state = getState();
+      const token = state.auth.token;
+
+      const response = await fetch(
+        `/api/customer/${customerId}/allowed-modules`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 // ===================== CONSTANTS =====================
 const KYC_STATUS = {
   PENDING: "0",
   COMPLETED: "1",
-  VERIFIED: "2"
+  VERIFIED: "2",
 };
 
 const BANK_STATUS = {
   PENDING: "0",
   APPROVED: "1",
-  REJECTED: "2"
+  REJECTED: "2",
 };
 
 const PLAID_STATUS = {
   IDLE: "idle",
   LOADING: "loading",
   SUCCESS: "success",
-  ERROR: "error"
+  ERROR: "error",
 };
 
 // ===================== UTILITY FUNCTIONS =====================
@@ -41,7 +97,7 @@ const setLocalStorageItem = (key, value) => {
   if (typeof window !== "undefined") {
     if (value === null || value === undefined) {
       localStorage.removeItem(key);
-    } else if (typeof value === 'object') {
+    } else if (typeof value === "object") {
       localStorage.setItem(key, JSON.stringify(value));
     } else {
       localStorage.setItem(key, value.toString());
@@ -70,9 +126,9 @@ const clearAuthStorage = () => {
       "is_owner_login",
       "bearertoken",
       "refreshtoken",
-      "logoutTime"
+      "logoutTime",
     ];
-    authKeys.forEach(key => localStorage.removeItem(key));
+    authKeys.forEach((key) => localStorage.removeItem(key));
   }
 };
 
@@ -87,7 +143,14 @@ const initialState = {
   // User Data
   user: null,
   token: null,
+  bearertoken: null,  
   customerId: null,
+  tempAuthData: null,
+
+  // Data Fetching Flags
+  hasFetchedData: false,
+  hasFetchedProfile: false,
+  hasFetchedModules: false,
 
   // Verification Status
   kycStatus: null,
@@ -133,7 +196,7 @@ const initialState = {
     status: PLAID_STATUS.IDLE,
     url: null,
     message: null,
-    error: null
+    error: null,
   },
   plaidLoading: false,
   plaidError: null,
@@ -155,7 +218,18 @@ const initialState = {
 
   // Error Handling
   error: null,
-  lastError: null
+  lastError: null,
+
+  // Loading States
+  loading: {
+    profile: false,
+    modules: false,
+    general: false,
+  },
+
+  // Profile Data
+  userProfile: null,
+  allowedModules: null,
 };
 
 // ===================== AUTH SLICE =====================
@@ -163,6 +237,25 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    // ===================== DATA FETCHING FLAGS =====================
+    setHasFetchedData: (state, action) => {
+      state.hasFetchedData = action.payload;
+    },
+
+    setHasFetchedProfile: (state, action) => {
+      state.hasFetchedProfile = action.payload;
+    },
+
+    setHasFetchedModules: (state, action) => {
+      state.hasFetchedModules = action.payload;
+    },
+
+    resetFetchFlags: (state) => {
+      state.hasFetchedData = false;
+      state.hasFetchedProfile = false;
+      state.hasFetchedModules = false;
+    },
+
     // ===================== INITIALIZATION & STATE SYNC =====================
     setInitialized: (state, action) => {
       state.isInitialized = action.payload;
@@ -173,17 +266,19 @@ const authSlice = createSlice({
         const token = localStorage.getItem("authtoken");
         const customerId = localStorage.getItem("authcustomer_id");
 
-        // ✅ Enhanced validation
-        const isValidToken = token && token !== "undefined" && token !== "null" && token !== "false";
-        const isValidCustomerId = customerId && customerId !== "undefined" && customerId !== "null";
+        const isValidToken =
+          token &&
+          token !== "undefined" &&
+          token !== "null" &&
+          token !== "false";
+        const isValidCustomerId =
+          customerId && customerId !== "undefined" && customerId !== "null";
 
         if (isValidToken && isValidCustomerId) {
           state.token = token;
           state.customerId = customerId;
           state.isAuthenticated = true;
-          console.log('✅ [authSlice] Auth state restored from localStorage');
         } else {
-          console.log('❌ [authSlice] Invalid auth data in localStorage, clearing state');
           clearAuthStorage();
           state.token = null;
           state.customerId = null;
@@ -195,11 +290,14 @@ const authSlice = createSlice({
     },
 
     setAuthState: (state, action) => {
-      const { token, customerId, user, isAuthenticated = true } = action.payload;
+      const {
+        token,
+        customerId,
+        user,
+        isAuthenticated = true,
+      } = action.payload;
 
-      // ✅ Validate inputs
       if (!token || !customerId) {
-        console.error('❌ [authSlice] setAuthState called with invalid data');
         return;
       }
 
@@ -210,108 +308,59 @@ const authSlice = createSlice({
       state.isInitialized = true;
       state.error = null;
 
-      // Persist to localStorage
       setLocalStorageItem("authtoken", token);
       setLocalStorageItem("authcustomer_id", customerId);
-
-      console.log('✅ [authSlice] Auth state updated and persisted');
     },
 
-    // ===================== COMPREHENSIVE STATE SYNC =====================
+    // ===================== OPTIMIZED STATE SYNC =====================
     syncLocalStorageState: (state) => {
-      console.log('🔄 [authSlice] syncLocalStorageState called');
+      if (typeof window === "undefined") {
+        state.isInitialized = true;
+        return;
+      }
 
-      if (typeof window !== "undefined") {
+      try {
         const token = localStorage.getItem("authtoken");
         const customerId = localStorage.getItem("authcustomer_id");
 
-        console.log('📦 [authSlice] LocalStorage values:', {
-          token: !!token,
-          customerId,
-          hasToken: !!token,
-          hasCustomerId: !!customerId
-        });
-
-        // ✅ Enhanced validation with type checking
-        const isValidToken = token &&
+        const isValidToken =
+          token &&
           token !== "undefined" &&
           token !== "null" &&
           token !== "false" &&
-          typeof token === "string" &&
-          token.length > 10;
+          token.length > 10 &&
+          !token.includes("undefined") &&
+          !token.includes("null");
 
-        const isValidCustomerId = customerId &&
+        const isValidCustomerId =
+          customerId &&
           customerId !== "undefined" &&
           customerId !== "null" &&
           customerId !== "false" &&
-          !isNaN(parseInt(customerId));
+          !isNaN(Number(customerId)) &&
+          Number(customerId) > 0;
 
-        // ✅ Only set authenticated state if BOTH token and customerId are valid
         if (isValidToken && isValidCustomerId) {
           state.token = token;
           state.customerId = customerId;
           state.isAuthenticated = true;
-          console.log('✅ [authSlice] Valid auth state restored from localStorage');
         } else {
-          // Clear inconsistent state
-          console.log('❌ [authSlice] Invalid auth data in localStorage - clearing state');
-          state.token = null;
-          state.customerId = null;
+          if (!isValidToken) {
+            localStorage.removeItem("authtoken");
+            state.token = null;
+          }
+          if (!isValidCustomerId) {
+            localStorage.removeItem("authcustomer_id");
+            state.customerId = null;
+          }
           state.isAuthenticated = false;
-
-          // Clear invalid storage
-          if (!isValidToken) localStorage.removeItem("authtoken");
-          if (!isValidCustomerId) localStorage.removeItem("authcustomer_id");
         }
 
-        // Sync staff info
-        state.staffInfo = {
-          isStaffLogin: localStorage.getItem("is_staff_login") === "1",
-          staffRole: localStorage.getItem("staff_role") || "",
-          staffId: localStorage.getItem("staff_id") || "0",
-        };
-
-        // Sync white label info
-        state.whiteLabelInfo = {
-          isWhiteLabelCustomer: localStorage.getItem("whitelabelled_customer") === "Y",
-          partnerId: parseInt(localStorage.getItem("whitelabelled_customer_partnerid")) || 0,
-          partnerName: localStorage.getItem("whitelabelled_customer_partnername"),
-        };
-
-        // Sync other states with validation
-        state.hasSilaBankAccount = localStorage.getItem("hasSilaBankAccount") === "Y";
-        state.customerUuid = localStorage.getItem("customerUuid");
-
-        // Sync Plaid status with error handling
-        try {
-          const plaidStatus = localStorage.getItem("plaidStatus");
-          state.plaidStatus = plaidStatus ? JSON.parse(plaidStatus) : initialState.plaidStatus;
-        } catch (error) {
-          console.error('❌ [authSlice] Error parsing plaidStatus:', error);
-          state.plaidStatus = initialState.plaidStatus;
-          localStorage.removeItem("plaidStatus");
-        }
-
-        // Sync owner details with error handling
-        try {
-          const ownerDetails = localStorage.getItem("ownerDetails");
-          state.ownerDetails = ownerDetails ? JSON.parse(ownerDetails) : null;
-          state.isOwnerLogin = !!state.ownerDetails;
-        } catch (error) {
-          console.error('❌ [authSlice] Error parsing ownerDetails:', error);
-          state.ownerDetails = null;
-          state.isOwnerLogin = false;
-          localStorage.removeItem("ownerDetails");
-        }
-
-        // Sync verification status
-        state.kycStatus = localStorage.getItem("kyc_status");
-        state.bankApproveStatus = localStorage.getItem("bank_approve_status");
-        state.isOwnerLogin = localStorage.getItem("is_owner_login") === "1" || !!state.ownerDetails;
+        state.isInitialized = true;
+      } catch (error) {
+        state.isInitialized = true;
+        state.isAuthenticated = false;
       }
-
-      state.isInitialized = true;
-      console.log('🏁 [authSlice] Auth initialization complete');
     },
 
     // ===================== LOADING STATES =====================
@@ -343,9 +392,7 @@ const authSlice = createSlice({
 
     // ===================== AUTH STATE MANAGEMENT =====================
     clearAuthState: (state) => {
-      console.log('🔄 [authSlice] Clearing auth state');
       clearAuthStorage();
-
       return {
         ...initialState,
         isInitialized: true,
@@ -354,9 +401,6 @@ const authSlice = createSlice({
     },
 
     logoutUser: (state) => {
-      console.log('🔄 [authSlice] Logging out user');
-
-      // Clear state
       state.user = null;
       state.token = null;
       state.customerId = null;
@@ -371,10 +415,13 @@ const authSlice = createSlice({
       state.plaidLoading = false;
       state.plaidError = null;
 
-      // Clear localStorage
-      clearAuthStorage();
+      state.hasFetchedData = false;
+      state.hasFetchedProfile = false;
+      state.hasFetchedModules = false;
+      state.userProfile = null;
+      state.allowedModules = null;
 
-      console.log('✅ [authSlice] User logged out successfully');
+      clearAuthStorage();
     },
 
     // ===================== OTP & PASSCODE MANAGEMENT =====================
@@ -452,7 +499,6 @@ const authSlice = createSlice({
 
     setInputType: (state, action) => {
       state.inputType = action.payload;
-      // Reset related states when input type changes
       if (action.payload === "email") {
         state.showOtpInput = false;
         state.otpSent = false;
@@ -531,7 +577,7 @@ const authSlice = createSlice({
       state.plaidStatus = {
         ...state.plaidStatus,
         ...action.payload,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       setLocalStorageItem("plaidStatus", JSON.stringify(state.plaidStatus));
     },
@@ -592,7 +638,10 @@ const authSlice = createSlice({
       state.staffInfo = { ...state.staffInfo, ...action.payload };
 
       if (action.payload.isStaffLogin !== undefined) {
-        setLocalStorageItem("is_staff_login", action.payload.isStaffLogin ? "1" : "0");
+        setLocalStorageItem(
+          "is_staff_login",
+          action.payload.isStaffLogin ? "1" : "0"
+        );
       }
       if (action.payload.staffRole) {
         setLocalStorageItem("staff_role", action.payload.staffRole);
@@ -606,13 +655,22 @@ const authSlice = createSlice({
       state.whiteLabelInfo = { ...state.whiteLabelInfo, ...action.payload };
 
       if (action.payload.isWhiteLabelCustomer !== undefined) {
-        setLocalStorageItem("whitelabelled_customer", action.payload.isWhiteLabelCustomer ? "Y" : "N");
+        setLocalStorageItem(
+          "whitelabelled_customer",
+          action.payload.isWhiteLabelCustomer ? "Y" : "N"
+        );
       }
       if (action.payload.partnerId !== undefined) {
-        setLocalStorageItem("whitelabelled_customer_partnerid", action.payload.partnerId.toString());
+        setLocalStorageItem(
+          "whitelabelled_customer_partnerid",
+          action.payload.partnerId.toString()
+        );
       }
       if (action.payload.partnerName !== undefined) {
-        setLocalStorageItem("whitelabelled_customer_partnername", action.payload.partnerName);
+        setLocalStorageItem(
+          "whitelabelled_customer_partnername",
+          action.payload.partnerName
+        );
       }
     },
 
@@ -620,7 +678,10 @@ const authSlice = createSlice({
     setBankAccountInfo: (state, action) => {
       if (action.payload.hasSilaBankAccount !== undefined) {
         state.hasSilaBankAccount = action.payload.hasSilaBankAccount;
-        setLocalStorageItem("hasSilaBankAccount", action.payload.hasSilaBankAccount ? "Y" : "N");
+        setLocalStorageItem(
+          "hasSilaBankAccount",
+          action.payload.hasSilaBankAccount ? "Y" : "N"
+        );
       }
       if (action.payload.customerUuid !== undefined) {
         state.customerUuid = action.payload.customerUuid;
@@ -638,16 +699,14 @@ const authSlice = createSlice({
       if (action.payload.token) {
         state.token = action.payload.token;
         setLocalStorageItem("authtoken", action.payload.token);
-        console.log('✅ [authSlice] Token refreshed');
       }
     },
 
     invalidateSession: (state) => {
-      console.log('🔄 [authSlice] Invalidating session');
       state.isAuthenticated = false;
       state.token = null;
       clearAuthStorage();
-    }
+    },
   },
 
   // ===================== EXTRA REDUCERS =====================
@@ -678,7 +737,6 @@ const authSlice = createSlice({
         state.isGeneratingPasscode = false;
         state.error = null;
 
-        // Only set passcode states if not multiple accounts
         if (action.payload?.status !== "multiple_accounts") {
           state.showPasscodeInput = true;
           state.passcodeSent = true;
@@ -698,7 +756,7 @@ const authSlice = createSlice({
         state.isVerifyingPasscode = true;
         state.error = null;
       })
-      
+
       .addCase("auth/verifyPasscode/fulfilled", (state, action) => {
         state.isLoading = false;
         state.isVerifyingPasscode = false;
@@ -706,37 +764,66 @@ const authSlice = createSlice({
 
         const payload = action.payload;
 
-        console.log('🔍 [authSlice] verifyPasscode fulfilled payload:', payload);
-
-        // Handle verification status
         if (payload.kyc_status !== undefined) {
           state.kycStatus = payload.kyc_status;
           setLocalStorageItem("kyc_status", payload.kyc_status);
         }
         if (payload.bank_approve_status !== undefined) {
           state.bankApproveStatus = payload.bank_approve_status;
-          setLocalStorageItem("bank_approve_status", payload.bank_approve_status);
+          setLocalStorageItem(
+            "bank_approve_status",
+            payload.bank_approve_status
+          );
         }
 
-        // ✅ Handle Plaid redirect - DON'T set auth state, just return the data
         if (payload.requiresPlaidRedirect) {
           state.plaidStatus = {
             status: "pending",
             url: payload.plaidUrl,
             message: "Redirecting to Plaid",
           };
-          // Don't set authentication state here - let the component handle the redirect
+
+          if (payload.tempToken && payload.customer_id) {
+            state.tempAuthData = {
+              token: payload.tempToken,
+              customerId: payload.customer_id,
+              requiresKyc: true,
+            };
+            sessionStorage.setItem(
+              "temp_auth_data",
+              JSON.stringify({
+                token: payload.tempToken,
+                customer_id: payload.customer_id,
+                requiresKyc: true,
+                timestamp: Date.now(),
+              })
+            );
+          }
+
           return;
         }
 
-        // Handle KYC verification required (but no redirect)
         if (payload.requiresKycVerification) {
           state.requiresKycVerification = true;
-          // Don't set authentication state here either
+          if (payload.tempToken && payload.customer_id) {
+            state.tempAuthData = {
+              token: payload.tempToken,
+              customerId: payload.customer_id,
+              requiresKyc: true,
+            };
+            sessionStorage.setItem(
+              "temp_auth_data",
+              JSON.stringify({
+                token: payload.tempToken,
+                customer_id: payload.customer_id,
+                requiresKyc: true,
+                timestamp: Date.now(),
+              })
+            );
+          }
           return;
         }
 
-        // Handle owner login
         if (payload.is_owner_login) {
           state.isOwnerLogin = true;
           state.ownerDetails = {
@@ -749,7 +836,6 @@ const authSlice = createSlice({
           return;
         }
 
-        // ✅ CRITICAL: Handle successful authentication - ensure customer_id is set
         if (payload.token && payload.customer_id) {
           state.token = payload.token;
           state.customerId = payload.customer_id.toString();
@@ -760,29 +846,39 @@ const authSlice = createSlice({
             isRemittanceOnlyCustomer: payload.isRemittanceOnlyCustomer || false,
           };
 
-          // Set all localStorage items
+          state.tempAuthData = null;
+          sessionStorage.removeItem("temp_auth_data");
+
           setLocalStorageItem("authtoken", payload.token);
-          setLocalStorageItem("authcustomer_id", payload.customer_id.toString());
+          setLocalStorageItem(
+            "authcustomer_id",
+            payload.customer_id.toString()
+          );
           setLocalStorageItem("kyc_status", payload.kyc_status);
-          setLocalStorageItem("bank_approve_status", payload.bank_approve_status);
+          setLocalStorageItem(
+            "bank_approve_status",
+            payload.bank_approve_status
+          );
           setLocalStorageItem("is_staff_login", payload.is_staff_login || "0");
           setLocalStorageItem("staff_role", payload.staff_role || "");
           setLocalStorageItem("staff_id", payload.staff_id || "0");
           setLocalStorageItem("is_owner_login", payload.is_owner_login || "0");
           setLocalStorageItem("owner_id", payload.owner_id || "0");
-          setLocalStorageItem("whitelabelled_customer", payload.whitelabelled_customer || "N");
-          setLocalStorageItem("whitelabelled_customer_partnerid", payload.whitelabelled_customer_partnerid || "0");
-          setLocalStorageItem("whitelabelled_customer_partnername", payload.whitelabelled_customer_partnername || "");
-
-          console.log('✅ [authSlice] Auth state set with customerId:', payload.customer_id);
-        } else {
-          console.error('❌ [authSlice] Missing token or customer_id in verifyPasscode response:', {
-            hasToken: !!payload.token,
-            hasCustomerId: !!payload.customer_id,
-            payload: payload
-          });
+          setLocalStorageItem(
+            "whitelabelled_customer",
+            payload.whitelabelled_customer || "N"
+          );
+          setLocalStorageItem(
+            "whitelabelled_customer_partnerid",
+            payload.whitelabelled_customer_partnerid || "0"
+          );
+          setLocalStorageItem(
+            "whitelabelled_customer_partnername",
+            payload.whitelabelled_customer_partnername || ""
+          );
         }
       })
+
       .addCase("auth/verifyPasscode/rejected", (state, action) => {
         state.isLoading = false;
         state.isVerifyingPasscode = false;
@@ -799,7 +895,10 @@ const authSlice = createSlice({
         state.isGeneratingOtp = false;
         state.error = null;
 
-        if (action.payload?.checkMultipleCustomer === "Y" || action.payload?.requiresCustomerType) {
+        if (
+          action.payload?.checkMultipleCustomer === "Y" ||
+          action.payload?.requiresCustomerType
+        ) {
           state.showCustomerType = "Y";
         } else {
           state.showOtpInput = true;
@@ -835,12 +934,9 @@ const authSlice = createSlice({
           customer_type,
         } = action.payload;
 
-        console.log('🔍 [authSlice] verifyOTP fulfilled payload:', action.payload);
-
-        // ✅ CRITICAL: Enhanced validation
         if (token && customer_id) {
           state.token = token;
-          state.customerId = customer_id.toString(); // Ensure it's a string
+          state.customerId = customer_id.toString();
           state.isAuthenticated = true;
           state.user = {
             mobile_number: state.user?.mobile_number || "",
@@ -852,14 +948,6 @@ const authSlice = createSlice({
           setLocalStorageItem("authcustomer_id", customer_id.toString());
           setLocalStorageItem("kyc_status", kyc_status);
           setLocalStorageItem("bank_approve_status", bank_approve_status);
-
-          console.log('✅ [authSlice] OTP Auth state set with customerId:', customer_id);
-        } else {
-          console.error('❌ [authSlice] Missing token or customer_id in verifyOTP response:', {
-            hasToken: !!token,
-            hasCustomerId: !!customer_id,
-            payload: action.payload
-          });
         }
 
         state.kycStatus = kyc_status;
@@ -888,7 +976,7 @@ const authSlice = createSlice({
           status: PLAID_STATUS.SUCCESS,
           url: action.payload.url,
           message: action.payload.message,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
         setLocalStorageItem("plaidStatus", JSON.stringify(state.plaidStatus));
       })
@@ -920,10 +1008,14 @@ const authSlice = createSlice({
           state.isAuthenticated = true;
           state.user = {
             customerType: action.payload.data.customer_type || "individual",
-            isRemittanceOnlyCustomer: action.payload.data.isRemittanceOnlyCustomer || false,
+            isRemittanceOnlyCustomer:
+              action.payload.data.isRemittanceOnlyCustomer || false,
           };
           setLocalStorageItem("authtoken", action.payload.data.token);
-          setLocalStorageItem("authcustomer_id", action.payload.data.customer_id);
+          setLocalStorageItem(
+            "authcustomer_id",
+            action.payload.data.customer_id
+          );
         }
       })
       .addCase("auth/login/rejected", (state, action) => {
@@ -937,84 +1029,131 @@ const authSlice = createSlice({
           ...initialState,
           isInitialized: true,
         };
+      })
+
+      // ===================== DATA FETCHING ASYNC THUNKS =====================
+      .addCase(fetchUserProfile.pending, (state) => {
+        state.loading.profile = true;
+        state.error = null;
+      })
+      .addCase(fetchUserProfile.fulfilled, (state, action) => {
+        state.loading.profile = false;
+        state.hasFetchedProfile = true;
+        state.userProfile = action.payload;
+      })
+      .addCase(fetchUserProfile.rejected, (state, action) => {
+        state.loading.profile = false;
+        state.hasFetchedProfile = false;
+        state.error = action.payload;
+      })
+
+      .addCase(fetchAllowedModules.pending, (state) => {
+        state.loading.modules = true;
+        state.error = null;
+      })
+      .addCase(fetchAllowedModules.fulfilled, (state, action) => {
+        state.loading.modules = false;
+        state.hasFetchedModules = true;
+        state.allowedModules = action.payload;
+      })
+      .addCase(fetchAllowedModules.rejected, (state, action) => {
+        state.loading.modules = false;
+        state.hasFetchedModules = false;
+        state.error = action.payload;
       });
   },
 });
 
-// ===================== SELECTORS =====================
+// ===================== SELECTORS (CLEAN - NO CONSOLE.LOG) =====================
 export const selectAuth = (state) => state.auth;
 
-// ✅ Enhanced token selector with validation
-export const selectToken = (state) => {
-  const token = state.auth.token;
 
-  // Enhanced validation
-  const isValidToken = token &&
-    token !== "undefined" &&
-    token !== "null" &&
-    token !== "false" &&
-    typeof token === "string" &&
-    token.length > 10;
+// export const selectAuthToken = (state) => {
+//   const token = state.auth.token;
 
-  if (!isValidToken) {
-    console.log('🔍 [selectToken] Invalid token in state:', token);
+//   const isValidToken =
+//     token &&
+//     token !== "undefined" &&
+//     token !== "null" &&
+//     token !== "false" &&
+//     typeof token === "string" &&
+//     token.length > 10;
 
-    // Check localStorage as fallback
-    const storedToken = localStorage.getItem("authtoken");
-    const isValidStoredToken = storedToken &&
-      storedToken !== "undefined" &&
-      storedToken !== "null" &&
-      storedToken !== "false" &&
-      typeof storedToken === "string" &&
-      storedToken.length > 10;
+//   if (isValidToken) {
+//     return token;
+//   }
 
-    if (isValidStoredToken) {
-      console.log('🔄 [selectToken] Using valid token from localStorage');
-      return storedToken;
-    }
+//   const tempAuthData = state.auth.tempAuthData;
+//   if (tempAuthData?.token) {
+//     return tempAuthData.token;
+//   }
 
-    console.log('❌ [selectToken] No valid token found');
-    return null;
-  }
+//   try {
+//     const sessionTempAuth = sessionStorage.getItem("temp_auth_data");
+//     if (sessionTempAuth) {
+//       const tempAuth = JSON.parse(sessionTempAuth);
+//       if (
+//         tempAuth.token &&
+//         tempAuth.timestamp &&
+//         Date.now() - tempAuth.timestamp < 300000
+//       ) {
+//         return tempAuth.token;
+//       }
+//     }
+//   } catch (e) {
+//     // Silent catch
+//   }
 
-  console.log('🔍 [selectToken] Returning valid token from state');
-  return token;
-};
+//   const storedToken = localStorage.getItem("authtoken");
+//   const isValidStoredToken =
+//     storedToken &&
+//     storedToken !== "undefined" &&
+//     storedToken !== "null" &&
+//     storedToken !== "false" &&
+//     typeof storedToken === "string" &&
+//     storedToken.length > 10;
 
-// ✅ Enhanced authentication selector
+//   if (isValidStoredToken) {
+//     return storedToken;
+//   }
+
+//   return null;
+// };
+
 export const selectIsAuthenticated = (state) => {
-  const token = selectToken(state);
+  const token = selectAuthToken(state);
   const customerId = state.auth.customerId;
 
-  const isValidCustomerId = customerId &&
+  const isValidCustomerId =
+    customerId &&
     customerId !== "undefined" &&
     customerId !== "null" &&
     customerId !== "false" &&
     !isNaN(parseInt(customerId));
 
-  const isAuthenticated = !!(token && isValidCustomerId);
-
-  console.log('🔍 [selectIsAuthenticated] Check:', {
-    hasToken: !!token,
-    hasCustomerId: !!customerId,
-    isValidCustomerId,
-    isAuthenticated
-  });
-
-  return isAuthenticated;
+  return !!(token && isValidCustomerId);
 };
 
-export const selectBearerToken = (state) => state.auth.bearertoken;
-export const selectAuthToken = (state) => state.auth.token;
+// Data Fetching Selectors
+export const selectHasFetchedData = (state) => state.auth.hasFetchedData;
+export const selectHasFetchedProfile = (state) => state.auth.hasFetchedProfile;
+export const selectHasFetchedModules = (state) => state.auth.hasFetchedModules;
+export const selectUserProfile = (state) => state.auth.userProfile;
+export const selectAllowedModules = (state) => state.auth.allowedModules;
+export const selectProfileLoading = (state) => state.auth.loading.profile;
+export const selectModulesLoading = (state) => state.auth.loading.modules;
+
 export const selectCustomerId = (state) => state.auth.customerId;
 export const selectKycStatus = (state) => state.auth.kycStatus;
 export const selectBankApproveStatus = (state) => state.auth.bankApproveStatus;
 export const selectIsOwnerLogin = (state) => state.auth.isOwnerLogin;
 export const selectOwnerDetails = (state) => state.auth.ownerDetails;
 export const selectIsLoading = (state) => state.auth.isLoading;
-export const selectIsGeneratingPasscode = (state) => state.auth.isGeneratingPasscode;
+export const selectIsGeneratingPasscode = (state) =>
+  state.auth.isGeneratingPasscode;
 export const selectIsGeneratingOtp = (state) => state.auth.isGeneratingOtp;
-export const selectIsVerifyingPasscode = (state) => state.auth.isVerifyingPasscode;
+export const selectIsVerifyingPasscode = (state) =>
+  state.auth.isVerifyingPasscode;
 export const selectIsVerifyingOtp = (state) => state.auth.isVerifyingOtp;
 export const selectPasscode = (state) => state.auth.passcode;
 export const selectOtp = (state) => state.auth.otp;
@@ -1031,9 +1170,11 @@ export const selectIsInitialized = (state) => state.auth.isInitialized;
 export const selectStaffInfo = (state) => state.auth.staffInfo;
 export const selectWhiteLabelInfo = (state) => state.auth.whiteLabelInfo;
 export const selectPlaidStatus = (state) => state.auth.plaidStatus;
-export const selectHasSilaBankAccount = (state) => state.auth.hasSilaBankAccount;
+export const selectHasSilaBankAccount = (state) =>
+  state.auth.hasSilaBankAccount;
 export const selectCustomerUuid = (state) => state.auth.customerUuid;
-export const selectRequiresKycVerification = (state) => state.auth.requiresKycVerification;
+export const selectRequiresKycVerification = (state) =>
+  state.auth.requiresKycVerification;
 export const selectPlaidLoading = (state) => state.auth.plaidLoading;
 export const selectPlaidError = (state) => state.auth.plaidError;
 export const selectModalData = (state) => state.auth.modalData;
@@ -1066,9 +1207,20 @@ export const selectLoginMethod = (state) => ({
   otpSent: state.auth.otpSent,
 });
 
+// Data Fetching Status Selector
+export const selectDataFetchingStatus = (state) => ({
+  hasFetchedData: state.auth.hasFetchedData,
+  hasFetchedProfile: state.auth.hasFetchedProfile,
+  hasFetchedModules: state.auth.hasFetchedModules,
+  profileLoading: state.auth.loading.profile,
+  modulesLoading: state.auth.loading.modules,
+  userProfile: state.auth.userProfile,
+  allowedModules: state.auth.allowedModules,
+});
+
 // Session validation selector
 export const selectIsValidSession = (state) => {
-  const token = selectToken(state);
+  const token = selectAuthToken(state);
   const customerId = state.auth.customerId;
   const isAuthenticated = selectIsAuthenticated(state);
 
@@ -1077,12 +1229,16 @@ export const selectIsValidSession = (state) => {
     hasToken: !!token,
     hasCustomerId: !!customerId,
     token,
-    customerId
+    customerId,
   };
 };
 
 // ===================== ACTIONS =====================
 export const {
+  setHasFetchedData,
+  setHasFetchedProfile,
+  setHasFetchedModules,
+  resetFetchFlags,
   initializeAuth,
   setAuthState,
   clearAuthState,

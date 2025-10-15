@@ -2,18 +2,18 @@
 import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from "react-redux";
 import { Outlet, Navigate, useLocation, useParams } from "react-router-dom";
-import {
-  selectToken,
-  selectCustomerId,
-  selectIsInitialized,
-  selectIsAuthenticated,
-  syncLocalStorageState
-} from "../src/features/Auth/slices/authSlice";
+import { 
+  selectAuthToken, 
+  selectCustomerId, 
+  selectIsInitialized, 
+  selectIsAuthenticated 
+} from "../src/store/selectors";
+import { syncLocalStorageState } from '../src/features/Auth/slices/authSlice';
 import Footer from "../src/components/Dashboard/Footer/Footer";
 import Header from '../src/components/Dashboard/Header/Header';
 
 const ProtectedRoute = () => {
-  const token = useSelector(selectToken);
+  const token = useSelector(selectAuthToken);
   const customerId = useSelector(selectCustomerId);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const isInitialized = useSelector(selectIsInitialized);

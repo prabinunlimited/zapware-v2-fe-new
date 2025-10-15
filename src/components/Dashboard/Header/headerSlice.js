@@ -255,7 +255,6 @@ export const selectHeaderLoading = (state) => state.header.loading;
 export const selectHeaderError = (state) => state.header.error;
 export const selectIsDropdownOpen = (state) => state.header.isDropdownOpen;
 export const selectHeaderColor = (state) => state.header.headerColor;
-export const selectAuthToken = (state) => state.header.authtoken;
 export const selectIsStaffLogin = (state) => state.header.isStaffLogin;
 export const selectStaffRole = (state) => state.header.staffRole;
 export const selectIsOwnerLogin = (state) => state.header.isOwnerLogin;

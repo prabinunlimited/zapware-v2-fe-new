@@ -1,5 +1,6 @@
-// services/api.js - COMPLETE FIXED VERSION
+// src/services/api.js - FIXED WITH SINGLE EXPORT
 import axios from "axios";
+import { tokenService } from './authService';
 
 // ===================== CONFIG =====================
 const api = axios.create({
@@ -7,47 +8,63 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000,
+  timeout: 80000,
 });
 
-// ===================== PUBLIC ENDPOINTS =====================
-const publicEndpoints = [
-  "/",
-  "/register",
-  "/terms-condition",
-  "/partner-login",
-  "/request-passcode-login",
-  "/generate-passcode",
-  "/verify-passcode",
-  "/generate-otp",
-  "/verify-otp",
-  "/forgot-password",
-  "/reset-password",
-  "/terms-by-partner",
-  "/get-manuals",
-  "/gif-images",
-  "/logout-time",
-  "/send-otp-login",
-  "/countries",
-  "/partners/get-partner-detail",
-  "/partner-basic-setup",
-  "/login",
-  "/kyc",
-  "/kycs",
-  "/kyc/initiate"
-];
+// ===================== REQUEST DEDUPLICATION =====================
+const activeRequests = new Map();
+const requestDebounceTimers = new Map();
 
+const getRequestSignature = (config) => {
+  return `${config.method?.toUpperCase()}-${config.url}-${JSON.stringify(config.params || {})}-${JSON.stringify(config.data || {})}`;
+};
+
+const isDuplicateRequest = (config) => {
+  const signature = getRequestSignature(config);
+  return activeRequests.has(signature);
+};
+
+const addActiveRequest = (config) => {
+  const signature = getRequestSignature(config);
+  activeRequests.set(signature, true);
+};
+
+const removeActiveRequest = (config) => {
+  const signature = getRequestSignature(config);
+  activeRequests.delete(signature);
+};
+
+// ===================== DEBOUNCE UTILITY =====================
+export const debouncedApiCall = (key, apiCall, delay = 100) => {
+  if (requestDebounceTimers.has(key)) {
+    clearTimeout(requestDebounceTimers.get(key));
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(async () => {
+      try {
+        requestDebounceTimers.delete(key);
+        const result = await apiCall();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    }, delay);
+
+    requestDebounceTimers.set(key, timer);
+  });
+};
 
 let tokenRefreshPromise = null;
 
 // ===================== TOKEN MANAGEMENT =====================
-const getBearerToken = async (forceRefresh = false) => {
-  let token = localStorage.getItem("bearertoken");
-  const tokenTimestamp = localStorage.getItem("bearertoken_timestamp");
-  const tokenExpiry = 55 * 60 * 1000; // 55 minutes
-
-  if (token && tokenTimestamp && (Date.now() - parseInt(tokenTimestamp)) < tokenExpiry && !forceRefresh) {
-    return token;
+// ✅ SINGLE EXPORT: Only export getBearerToken once here
+export const getBearerToken = async (forceRefresh = false) => {
+  // Use tokenService instead of direct localStorage access
+  const existingToken = tokenService.getToken();
+  
+  if (existingToken && !forceRefresh) {
+    return existingToken;
   }
 
   if (tokenRefreshPromise) {
@@ -56,9 +73,9 @@ const getBearerToken = async (forceRefresh = false) => {
 
   tokenRefreshPromise = (async () => {
     try {
-      console.log("🔐 Fetching new bearer token...");
+      console.log("🔄 Refreshing partner token...");
 
-      const tokenResponse = await axios.post(
+      const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/partner-login`,
         {
           client_id: "HK6V7709",
@@ -70,19 +87,22 @@ const getBearerToken = async (forceRefresh = false) => {
         }
       );
 
-      if (tokenResponse.data?.data?.token) {
-        token = tokenResponse.data.data.token;
-        localStorage.setItem("bearertoken", token);
-        localStorage.setItem("bearertoken_timestamp", Date.now().toString());
-        console.log("✅ Token refreshed successfully");
+      if (response.data?.data?.token) {
+        const token = response.data.data.token;
+        
+        // Use tokenService to store the token
+        tokenService.setToken(token);
+        
+        console.log("✅ Partner token refreshed successfully");
         return token;
       } else {
         throw new Error("Invalid token response structure");
       }
     } catch (error) {
-      console.error("❌ Failed to get bearer token:", error);
-      localStorage.removeItem("bearertoken");
-      localStorage.removeItem("bearertoken_timestamp");
+      console.error("❌ Token refresh failed:", error);
+      
+      // Use tokenService to clear the token
+      tokenService.clearToken();
       throw error;
     } finally {
       tokenRefreshPromise = null;
@@ -98,50 +118,68 @@ api.interceptors.request.use(
     const requestId = Math.random().toString(36).substring(7);
     config.requestId = requestId;
 
-    console.log(`🔄 API Request [${requestId}]: ${config.method?.toUpperCase()} ${config.url}`);
+    if (isDuplicateRequest(config)) {
+      return Promise.reject(new axios.Cancel('Duplicate request cancelled'));
+    }
 
-    // Extract clean endpoint path
     let urlPath = config.url;
     if (config.baseURL && urlPath.startsWith(config.baseURL)) {
       urlPath = urlPath.replace(config.baseURL, "");
     }
     urlPath = urlPath.split('?')[0];
 
-    // Check if this is a public endpoint
+    const publicEndpoints = [
+      "/",
+      "/register",
+      "/terms-condition",
+      "/partner-login",
+      "/request-passcode-login",
+      "/generate-passcode",
+      "/verify-passcode",
+      "/generate-otp",
+      "/verify-otp",
+      "/forgot-password",
+      "/reset-password",
+      "/terms-by-partner",
+      "/get-manuals",
+      "/gif-images",
+      "/logout-time",
+      "/send-otp-login",
+      "/countries",
+      "/partners/get-partner-detail",
+      "/partner-basic-setup",
+      "/login",
+      "/kyc",
+      "/kycs",
+      "/kyc/initiate"
+    ];
+
     const isPublicEndpoint = publicEndpoints.some(endpoint => {
       return urlPath === endpoint ||
         urlPath.startsWith(endpoint + '/') ||
         (endpoint !== '/' && urlPath.includes(endpoint));
     });
 
-    console.log(`🔍 Endpoint Check [${requestId}]: ${urlPath} - Public: ${isPublicEndpoint}`);
-
-    // Skip token for public endpoints
     if (isPublicEndpoint) {
-      console.log(`⏩ Skipping token for public endpoint: ${urlPath}`);
+      addActiveRequest(config);
       return config;
     }
 
-    // For all other endpoints, require authentication
-    console.log(`🔐 Private endpoint requiring token: ${urlPath}`);
     try {
       const token = await getBearerToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log(`✅ Token added to request: ${urlPath}`);
+        addActiveRequest(config);
       } else {
-        console.error(`❌ No token available for: ${urlPath}`);
         throw new Error("Authentication token not available");
       }
     } catch (error) {
-      console.error(`❌ Token acquisition failed for ${urlPath}:`, error);
       return Promise.reject(new Error("Authentication failed. Please try again."));
     }
 
     return config;
   },
   (error) => {
-    console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
@@ -149,19 +187,20 @@ api.interceptors.request.use(
 // ===================== RESPONSE INTERCEPTOR =====================
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Success: ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
+    removeActiveRequest(response.config);
     return response;
   },
   async (error) => {
+    if (error.config) {
+      removeActiveRequest(error.config);
+    }
+
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config;
 
-    console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
-      status: error.response?.status,
-      message: error.message,
-      data: error.response?.data
-    });
-
-    // Handle network errors
     if (!error.response) {
       if (error.code === 'ECONNABORTED') {
         error.message = "Request timeout. Please check your connection.";
@@ -171,19 +210,15 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 401 Unauthorized - don't retry for login endpoints
     if (error.response?.status === 401) {
       const isLoginEndpoint = originalRequest.url.includes('/login');
 
       if (isLoginEndpoint && !originalRequest._retry) {
-        console.log("🔐 Login 401 - not retrying, invalid credentials");
-        // For login endpoints, 401 usually means invalid credentials
         error.message = "Invalid email or passcode. Please check your credentials.";
         return Promise.reject(error);
       }
 
       if (!isLoginEndpoint && !originalRequest._retry) {
-        console.log("🔄 Attempting token refresh due to 401...");
         originalRequest._retry = true;
 
         try {
@@ -193,10 +228,11 @@ api.interceptors.response.use(
             return api(originalRequest);
           }
         } catch (refreshError) {
-          console.error("❌ Token refresh failed:", refreshError);
-          // Clear auth data and redirect for non-login endpoints
           if (!isLoginEndpoint) {
-            localStorage.clear();
+            // Use tokenService to clear tokens
+            tokenService.clearToken();
+            localStorage.removeItem("authtoken");
+            localStorage.removeItem("authcustomer_id");
             window.location.href = "/";
           }
           return Promise.reject(new Error("Session expired. Please login again."));
@@ -204,7 +240,6 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle other error statuses
     if (error.response.status === 400) {
       error.message = error.response.data?.message || "Invalid request. Please check your input.";
     } else if (error.response.status === 403) {

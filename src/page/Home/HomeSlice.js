@@ -2,12 +2,31 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../utils/errorHandling";
 
-const API_URL = import.meta.env.VITE_API_URL || import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL;
 
-// Async thunks - FIXED: Added isRefresh parameter handling
+// ✅ REQUEST DEDUPLICATION TRACKER
+const pendingRequests = new Map();
+
+const getRequestKey = (customerId, isRefresh = false) => {
+  return `account-${customerId}-${isRefresh ? 'refresh' : 'initial'}`;
+};
+
+// ✅ OPTIMIZED ASYNC THUNK WITH DEDUPLICATION
 export const fetchAccountDetails = createAsyncThunk(
   "home/fetchAccountDetails",
-  async ({ customerId, authtoken, isRefresh = false }, { rejectWithValue }) => {
+  async ({ customerId, authtoken, isRefresh = false }, { getState, rejectWithValue }) => {
+    
+    const requestKey = getRequestKey(customerId, isRefresh);
+    
+    // Check if request already in progress
+    if (pendingRequests.has(requestKey)) {
+      console.log("⏸️ Request already in progress, skipping duplicate...");
+      return rejectWithValue("Request already in progress");
+    }
+
+    // Track this request
+    pendingRequests.set(requestKey, true);
+
     try {
       console.log(`🔄 ${isRefresh ? 'Refreshing' : 'Fetching'} account details for customer:`, customerId);
       
@@ -15,7 +34,7 @@ export const fetchAccountDetails = createAsyncThunk(
         `${API_URL}/active-account-details/${customerId}`,
         {
           headers: { Authorization: `Bearer ${authtoken}` },
-          timeout: 30000, // Add timeout to prevent hanging requests
+          timeout: 30000,
         }
       );
 
@@ -37,9 +56,11 @@ export const fetchAccountDetails = createAsyncThunk(
         return rejectWithValue("Unauthenticated");
       }
       
-      // ✅ FIX: Return string error message
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
+    } finally {
+      // Always remove from tracking
+      pendingRequests.delete(requestKey);
     }
   }
 );
@@ -52,7 +73,7 @@ const initialState = {
   
   // Loading states
   initialLoading: true,
-  isLoading: false, // ADD THIS - missing loading state
+  isLoading: false,
   refreshing: false,
   childComponentsLoading: 0,
   
@@ -61,7 +82,7 @@ const initialState = {
   textColor: localStorage.getItem("text_color") || "#000000",
   hasFetchedAccount: false,
   
-  // Error state - ✅ FIX: Always store string errors
+  // Error state
   error: null,
 };
 
@@ -75,7 +96,7 @@ const homeSlice = createSlice({
     setInitialLoading: (state, action) => {
       state.initialLoading = action.payload;
     },
-    setLoading: (state, action) => { // ADD THIS - missing action
+    setLoading: (state, action) => {
       state.isLoading = action.payload;
     },
     setRefreshing: (state, action) => {
@@ -88,7 +109,6 @@ const homeSlice = createSlice({
       state.textColor = action.payload;
     },
     setError: (state, action) => {
-      // ✅ FIX: Ensure error is always a string
       state.error = typeof action.payload === 'string'
         ? action.payload
         : extractErrorMessage(action.payload);
@@ -111,11 +131,15 @@ const homeSlice = createSlice({
         hasFetchedAccount: state.hasFetchedAccount,
       };
     },
-    resetLoadingStates: (state) => { // ADD THIS - emergency reset
+    resetLoadingStates: (state) => {
       state.initialLoading = false;
       state.isLoading = false;
       state.refreshing = false;
       state.childComponentsLoading = 0;
+    },
+    // ✅ ADD: Reset fetch flag when dependencies change
+    resetFetchFlag: (state) => {
+      state.hasFetchedAccount = false;
     },
   },
   extraReducers: (builder) => {
@@ -127,7 +151,7 @@ const homeSlice = createSlice({
         if (isRefresh) {
           state.refreshing = true;
         } else {
-          state.initialLoading = true;
+          state.initialLoading = !state.hasFetchedAccount;
           state.isLoading = true;
         }
         state.error = null;
@@ -150,7 +174,7 @@ const homeSlice = createSlice({
 
         state.lastUpdated = new Date().toISOString();
         state.initialLoading = false;
-        state.isLoading = false; // ADD THIS
+        state.isLoading = false;
         state.refreshing = false;
         state.hasFetchedAccount = true;
         state.error = null;
@@ -161,10 +185,9 @@ const homeSlice = createSlice({
         console.log("❌ Fetch account details rejected:", action.payload);
         
         state.initialLoading = false;
-        state.isLoading = false; // ADD THIS
+        state.isLoading = false;
         state.refreshing = false;
         
-        // ✅ FIX: Ensure error is a string
         state.error = typeof action.payload === 'string'
           ? action.payload
           : extractErrorMessage(action.payload);
@@ -180,10 +203,12 @@ const homeSlice = createSlice({
 // Selectors
 export const selectHome = (state) => state.home;
 export const selectAccountData = (state) => state.home.accountData;
-export const selectedCurrency = (state) => state.home.selectedCurrency;
+export const selectAccounts = (state) => state.home.accountData?.account_details || [];
+export const selectSelectedCurrency = (state) => state.home.selectedCurrency;
 export const selectCurrencyOptions = (state) => state.home.currencyOptions;
 export const selectInitialLoading = (state) => state.home.initialLoading;
-export const selectIsLoading = (state) => state.home.isLoading; // ADD THIS - direct isLoading selector
+export const selectIsLoading = (state) => state.home.isLoading;
+export const selectAccountLoading = (state) => state.home.initialLoading || state.home.isLoading;
 export const selectRefreshing = (state) => state.home.refreshing;
 export const selectChildComponentsLoading = (state) => state.home.childComponentsLoading;
 export const selectLastUpdated = (state) => state.home.lastUpdated;
@@ -191,7 +216,7 @@ export const selectTextColor = (state) => state.home.textColor;
 export const selectError = (state) => state.home.error;
 export const selectHasFetchedAccount = (state) => state.home.hasFetchedAccount;
 
-// Derived selectors - UPDATED: Use the direct isLoading state
+// Derived selectors
 export const selectIsAnyLoading = (state) => 
   state.home.initialLoading || state.home.isLoading || state.home.childComponentsLoading > 0;
 
@@ -222,7 +247,7 @@ export const selectSelectedAccountMemo = (state) => {
 export const {
   setSelectedCurrency,
   setInitialLoading,
-  setLoading, // ADD THIS export
+  setLoading,
   setRefreshing,
   setLastUpdated,
   setTextColor,
@@ -232,7 +257,8 @@ export const {
   resetChildLoading,
   setHasFetchedAccount,
   clearHomeState,
-  resetLoadingStates, // ADD THIS export
+  resetLoadingStates,
+  resetFetchFlag,
 } = homeSlice.actions;
 
 export default homeSlice.reducer;

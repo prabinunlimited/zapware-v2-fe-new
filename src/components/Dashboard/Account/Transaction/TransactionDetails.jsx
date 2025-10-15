@@ -1,8 +1,7 @@
-// src/components/TransactionDetails/TransactionDetails.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
-import PropTypes from 'prop-types';
+import PropTypes from "prop-types";
 import ClipLoader from "react-spinners/ClipLoader";
 
 // Redux
@@ -12,244 +11,362 @@ import {
   selectTransactionLoading,
   selectTransactionError,
 } from "../../Account/Transaction/TransactionSlice";
-import { selectBearerToken } from "../../../../features/Auth/slices/authSlice";
 
-const TransactionDetails = ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
-  const dispatch = useDispatch();
+import { selectAuthToken } from "../../../../store/selectors";
 
-  // Redux Selectors with safety checks
-  const transactions = useSelector(selectTransactions) || [];
-  const transactionLoading = useSelector(selectTransactionLoading);
-  const transactionError = useSelector(selectTransactionError);
-  const bearertoken = useSelector(selectBearerToken);
+const TransactionDetails = React.memo(
+  ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
+    const dispatch = useDispatch();
 
-  // Local state for pagination/filtering
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+    // Redux Selectors with safety checks
+    const transactions = useSelector(selectTransactions) || [];
+    const transactionLoading = useSelector(selectTransactionLoading);
+    const transactionError = useSelector(selectTransactionError);
+    const bearertoken = useSelector(selectAuthToken);
 
-  // Fetch transactions when currency or customer changes
-  useEffect(() => {
-    if (customerId && selectedCurrencyCode && bearertoken) {
-      dispatch(
-        fetchTransactionDetails({
-          customerId,
-          currencyCode: selectedCurrencyCode,
-          bearertoken,
-        })
+    // Local state for pagination/filtering
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+
+    // Memoized transaction data
+    const currentTransactions = useMemo(() => {
+      const indexOfLastItem = currentPage * itemsPerPage;
+      const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+      return transactions.slice(indexOfFirstItem, indexOfLastItem);
+    }, [transactions, currentPage, itemsPerPage]);
+
+    const totalPages = useMemo(
+      () => Math.ceil(transactions.length / itemsPerPage),
+      [transactions.length, itemsPerPage]
+    );
+
+    // Fetch transactions when currency or customer changes - OPTIMIZED
+    useEffect(() => {
+      if (customerId && selectedCurrencyCode) {
+        dispatch(
+          fetchTransactionDetails({
+            customerId,
+            currencyCode: selectedCurrencyCode,
+            // bearertoken removed - thunk gets it from state
+          })
+        );
+      }
+    }, [customerId, selectedCurrencyCode, dispatch]);
+
+    // Handle transaction completion
+    useEffect(() => {
+      if (onTransactionComplete && transactions.length > 0) {
+        onTransactionComplete();
+      }
+    }, [transactions, onTransactionComplete]);
+
+    // Memoized utility functions
+    const formatDate = useCallback((dateString) => {
+      try {
+        return new Date(dateString).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch (error) {
+        return "Invalid Date";
+      }
+    }, []);
+
+    const getStatusColor = useCallback((status) => {
+      if (!status) return "text-gray-600 bg-gray-100";
+
+      const statusLower = status.toLowerCase();
+      switch (statusLower) {
+        case "completed":
+        case "success":
+        case "approved":
+          return "text-green-600 bg-green-100";
+        case "pending":
+        case "processing":
+          return "text-yellow-600 bg-yellow-100";
+        case "failed":
+        case "rejected":
+        case "declined":
+          return "text-red-600 bg-red-100";
+        default:
+          return "text-gray-600 bg-gray-100";
+      }
+    }, []);
+
+    const getDirectionColor = useCallback((direction) => {
+      if (!direction) return "text-gray-600";
+
+      const directionLower = direction.toLowerCase();
+      switch (directionLower) {
+        case "in":
+        case "credit":
+        case "deposit":
+          return "text-green-600";
+        case "out":
+        case "debit":
+        case "withdrawal":
+          return "text-red-600";
+        default:
+          return "text-gray-600";
+      }
+    }, []);
+
+    // Pagination handlers
+    const handlePreviousPage = useCallback(() => {
+      setCurrentPage((prev) => Math.max(prev - 1, 1));
+    }, []);
+
+    const handleNextPage = useCallback(() => {
+      setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+    }, [totalPages]);
+
+    const handlePageClick = useCallback((pageNumber) => {
+      setCurrentPage(pageNumber);
+    }, []);
+
+    // Generate page numbers for pagination
+    const pageNumbers = useMemo(() => {
+      const pages = [];
+      const maxVisiblePages = 5;
+
+      let startPage = Math.max(
+        1,
+        currentPage - Math.floor(maxVisiblePages / 2)
+      );
+      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+      if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+
+      return pages;
+    }, [currentPage, totalPages]);
+
+    if (transactionLoading) {
+      return (
+        <div className="flex justify-center items-center h-32">
+          <div className="text-center">
+            <ClipLoader color="#3B82F6" size={40} />
+            <p className="text-gray-500 mt-2">Loading transactions...</p>
+          </div>
+        </div>
       );
     }
-  }, [customerId, selectedCurrencyCode, bearertoken, dispatch]);
 
-  // Handle transaction completion
-  useEffect(() => {
-    if (onTransactionComplete) {
-      onTransactionComplete();
-    }
-  }, [transactions, onTransactionComplete]);
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentTransactions = transactions.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(transactions.length / itemsPerPage);
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-      case "success":
-        return "text-green-600 bg-green-100";
-      case "pending":
-        return "text-yellow-600 bg-yellow-100";
-      case "failed":
-      case "rejected":
-        return "text-red-600 bg-red-100";
-      default:
-        return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getDirectionColor = (direction) => {
-    switch (direction?.toLowerCase()) {
-      case "in":
-      case "credit":
-        return "text-green-600";
-      case "out":
-      case "debit":
-        return "text-red-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-
-  if (transactionLoading) {
-    return (
-      <div className="flex justify-center items-center h-32">
-        <ClipLoader color="#36d7b7" size={40} />
-      </div>
-    );
-  }
-
-  if (transactionError) {
-    return (
-      <div className="text-center p-4 text-red-500">
-        <p>Error loading transactions: {transactionError}</p>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="w-full p-4"
-    >
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">Transaction History</h2>
-        <div className="text-sm text-gray-600">
-          {transactions.length} transactions found
-        </div>
-      </div>
-
-      {transactions.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No transactions found for the selected currency.
-        </div>
-      ) : (
-        <>
-          {/* Transactions Table */}
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date & Time
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Transaction ID
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Direction
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Balance
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {currentTransactions.map((transaction, index) => (
-                  <motion.tr
-                    key={transaction.transaction_id || index}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {formatDate(transaction.transaction_datetime)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-mono">
-                      {transaction.transaction_id || "N/A"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      <div>
-                        <div className="font-medium">
-                          {transaction.beneficiary_name || transaction.sender_name || "N/A"}
-                        </div>
-                        {transaction.description && (
-                          <div className="text-xs text-gray-500">
-                            {transaction.description}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`font-medium ${getDirectionColor(transaction.direction)}`}>
-                        {transaction.direction || "N/A"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      <div>
-                        <div className="font-medium">
-                          {transaction.instructed_amount || "0"} {transaction.currency_code}
-                        </div>
-                        {transaction.fee_amount && (
-                          <div className="text-xs text-gray-500">
-                            Fee: {transaction.fee_amount}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                      {transaction.balance || "0"}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                          transaction.status
-                        )}`}
-                      >
-                        {transaction.status || "Unknown"}
-                      </span>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
+    if (transactionError) {
+      return (
+        <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
+          <div className="text-red-600 font-medium mb-2">
+            Error loading transactions
           </div>
+          <div className="text-red-500 text-sm">
+            {transactionError.message || "Please try again later"}
+          </div>
+        </div>
+      );
+    }
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-4 px-4">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300"
-              >
-                Previous
-              </button>
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="w-full"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Transaction History
+          </h2>
+          <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+            {transactions.length} transaction
+            {transactions.length !== 1 ? "s" : ""} found
+          </div>
+        </div>
 
-              <span className="text-sm text-gray-600">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300"
-              >
-                Next
-              </button>
+        {transactions.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-gray-400 text-6xl mb-4">💸</div>
+            <h3 className="text-lg font-medium text-gray-700 mb-2">
+              No transactions found
+            </h3>
+            <p className="text-gray-500">
+              {selectedCurrencyCode && selectedCurrencyCode !== "all"
+                ? `No transactions found for ${selectedCurrencyCode} currency.`
+                : "No transactions available for the selected period."}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Transactions Table */}
+            <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date & Time
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Transaction ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Direction
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Balance
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentTransactions.map((transaction, index) => (
+                    <motion.tr
+                      key={transaction.transaction_id || `transaction-${index}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="hover:bg-gray-50 transition-colors duration-150"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(transaction.transaction_datetime)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                        {transaction.transaction_id ? (
+                          <span className="bg-gray-100 px-2 py-1 rounded text-xs">
+                            {transaction.transaction_id.slice(0, 8)}...
+                          </span>
+                        ) : (
+                          "N/A"
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div>
+                          <div className="font-medium">
+                            {transaction.beneficiary_name ||
+                              transaction.sender_name ||
+                              "N/A"}
+                          </div>
+                          {transaction.description && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {transaction.description}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span
+                          className={`font-medium ${getDirectionColor(
+                            transaction.direction
+                          )}`}
+                        >
+                          {transaction.direction || "N/A"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div>
+                          <div className="font-medium">
+                            {transaction.instructed_amount || "0"}{" "}
+                            {transaction.currency_code}
+                          </div>
+                          {transaction.fee_amount &&
+                            parseFloat(transaction.fee_amount) > 0 && (
+                              <div className="text-xs text-gray-500">
+                                Fee: {transaction.fee_amount}
+                              </div>
+                            )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        {transaction.balance || "0"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                            transaction.status
+                          )}`}
+                        >
+                          {transaction.status || "Unknown"}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </>
-      )}
-    </motion.div>
-  );
-};
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 px-2">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Previous
+                  </button>
+
+                  <div className="flex items-center space-x-1">
+                    {pageNumbers.map((pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        onClick={() => handlePageClick(pageNumber)}
+                        className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                          currentPage === pageNumber
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </motion.div>
+    );
+  }
+);
 
 TransactionDetails.propTypes = {
   customerId: PropTypes.string.isRequired,
   selectedCurrencyCode: PropTypes.string,
   onTransactionComplete: PropTypes.func,
 };
+
+TransactionDetails.defaultProps = {
+  selectedCurrencyCode: "all",
+  onTransactionComplete: () => {},
+};
+
+TransactionDetails.displayName = "TransactionDetails";
 
 export default TransactionDetails;

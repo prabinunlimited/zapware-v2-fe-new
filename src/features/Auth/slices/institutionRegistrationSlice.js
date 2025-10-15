@@ -1,7 +1,8 @@
 // institutionRegistrationSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
-import { handleApiError, getBearerToken } from "../authThunk";
+import { handleApiError } from "../authThunk";
+import { getBearerToken } from "../../../services/api";
 
 // institutionRegistrationSlice.js - Add these async thunks
 

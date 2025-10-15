@@ -8,12 +8,15 @@ const API_URL = import.meta.env.VITE_API_URL;
 // Async thunks
 export const fetchTransactionDetails = createAsyncThunk(
   "transaction/fetchTransactionDetails",
-  async ({ customerId, currencyCode, bearertoken }, { rejectWithValue }) => {
+  async ({ customerId, currencyCode }, { rejectWithValue, getState }) => {
     try {
+      const state = getState();
+      const token = state.auth.token; // Use the main token
+
       const response = await axios.get(
         `${API_URL}/transactions/currency-transaction-details/${customerId}/${currencyCode}`,
         {
-          headers: { Authorization: `Bearer ${bearertoken}` },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
       return response.data.transaction_details || [];
@@ -25,17 +28,20 @@ export const fetchTransactionDetails = createAsyncThunk(
 
 export const exportTransactionsToExcel = createAsyncThunk(
   "transaction/exportToExcel",
-  async ({ customerId, bearertoken }, { rejectWithValue }) => {
+  async ({ customerId }, { rejectWithValue, getState }) => {
     try {
+      const state = getState();
+      const token = state.auth.token; // Use the main token
+
       const response = await axios.get(
         `${API_URL}/transactions/currency-transaction-details/${customerId}/all`,
         {
-          headers: { Authorization: `Bearer ${bearertoken}` },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       const transactions = response.data.transaction_details || [];
-      
+
       // Map the transaction details for Excel
       const data = transactions.map((transaction) => ({
         "Transaction ID": transaction.transaction_id || "",

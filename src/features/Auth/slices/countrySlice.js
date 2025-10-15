@@ -1,4 +1,8 @@
-import { createAsyncThunk, createSlice, createSelector } from '@reduxjs/toolkit';
+import {
+  createAsyncThunk,
+  createSlice,
+  createSelector,
+} from "@reduxjs/toolkit";
 
 export const countries = [
   {
@@ -2405,8 +2409,9 @@ export const fetchCountry = createAsyncThunk(
   }
 );
 
+// Initialize with the static countries data
 const initialState = {
-  countries: [],
+  countries: countries, // Initialize with the static data
   selectedCountry: null,
   loading: false,
   error: null,
@@ -2442,7 +2447,8 @@ const countriesSlice = createSlice({
       );
     },
     refreshCountries: (state) => {
-      // No-op for static data
+      // Reset to initial static data
+      state.countries = countries;
     },
     resetCountriesState: () => initialState,
   },
@@ -2459,12 +2465,14 @@ const countriesSlice = createSlice({
         state.error = null;
         state.lastUpdated = new Date().getTime();
 
-        console.log(`✅ Countries loaded successfully: ${action.payload.length} countries`);
+        console.log(
+          `✅ Countries loaded successfully: ${action.payload.length} countries`
+        );
       })
       .addCase(fetchCountries.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || action.error.message;
-        console.error('❌ Countries fetch rejected:', state.error);
+        console.error("❌ Countries fetch rejected:", state.error);
       })
       // Fetch single country
       .addCase(fetchCountry.pending, (state) => {
@@ -2494,7 +2502,7 @@ export const {
   resetCountriesState,
 } = countriesSlice.actions;
 
-// Selectors - MAKE SURE THESE ARE PROPERLY EXPORTED
+// Selectors
 export const selectCountries = (state) => state.countries.countries;
 export const selectSelectedCountry = (state) => state.countries.selectedCountry;
 export const selectCountriesLoading = (state) => state.countries.loading;
@@ -2514,16 +2522,16 @@ export const selectCountriesOptions = createSelector(
   [(state) => state.countries?.countries || []],
   (countries) => {
     if (!countries || !Array.isArray(countries)) {
-      console.warn('⚠️ No countries data available for options');
+      console.warn("⚠️ No countries data available for options");
       return [];
     }
 
     return countries.map((country) => ({
-      value: country.id || country.country_code || "",
-      label: country.name || country.country_name || country.label || "Unknown Country",
-      phoneCode: country.phone_code || country.phoneCode || "",
-      flag_url: country.flag_url || "",
-      country_code: country.country_code || country.code || "",
+      value: country.id, // Use country ID as value
+      label: country.name, // Use country name as label
+      phoneCode: country.phone_code,
+      flag_url: country.flag_url,
+      country_code: country.country_code,
       originalData: country,
     }));
   }
@@ -2536,13 +2544,35 @@ export const selectCountriesOptionsSafe = (state) => {
   } catch (error) {
     console.warn("Error in selectCountriesOptions, using fallback:", error);
     return [
-      { value: "US", label: "United States", phoneCode: "+1", country_code: "US" },
-      { value: "GB", label: "United Kingdom", phoneCode: "+44", country_code: "GB" },
-      { value: "CA", label: "Canada", phoneCode: "+1", country_code: "CA" },
-      { value: "AU", label: "Australia", phoneCode: "+61", country_code: "AU" },
+      {
+        value: 186,
+        label: "United States",
+        phoneCode: "+1",
+        country_code: "US",
+      },
+      {
+        value: 185,
+        label: "United Kingdom",
+        phoneCode: "+44",
+        country_code: "GB",
+      },
+      { value: 32, label: "Canada", phoneCode: "+1", country_code: "CA" },
+      { value: 9, label: "Australia", phoneCode: "+61", country_code: "AU" },
     ];
   }
 };
+
+// Selector for phone code options specifically
+export const selectPhoneCodeOptions = createSelector(
+  [selectCountries],
+  (countries) => {
+    return countries.map((country) => ({
+      value: country.phone_code,
+      label: `${country.phone_code} (${country.name})`,
+      country: country,
+    }));
+  }
+);
 
 export const selectCountryByCode = (state, phoneCode) =>
   state.countries.countries.find((country) => country.phone_code === phoneCode);
@@ -2550,14 +2580,10 @@ export const selectCountryByCode = (state, phoneCode) =>
 export const selectCountriesSorted = (state, sortBy = "name") =>
   [...state.countries.countries].sort((a, b) => {
     if (sortBy === "name") {
-      const nameA = a.name || a.countryName || a.label || "";
-      const nameB = b.name || b.countryName || b.label || "";
-      return nameA.localeCompare(nameB);
+      return a.name.localeCompare(b.name);
     }
     if (sortBy === "phoneCode") {
-      const codeA = a.phone_code || a.phoneCode || "";
-      const codeB = b.phone_code || b.phoneCode || "";
-      return codeA.localeCompare(codeB);
+      return a.phone_code.localeCompare(b.phone_code);
     }
     return 0;
   });
@@ -2565,8 +2591,7 @@ export const selectCountriesSorted = (state, sortBy = "name") =>
 // Selector for countries that have phone codes
 export const selectCountriesWithPhoneCodes = createSelector(
   [selectCountries],
-  (countries) =>
-    countries.filter((country) => country.phone_code || country.phoneCode)
+  (countries) => countries.filter((country) => country.phone_code)
 );
 
 // Selector for popular countries (customizable)
@@ -2585,7 +2610,7 @@ export const selectPopularCountries = createSelector(
       "JP",
     ];
     return countries.filter((country) =>
-      popularCountryCodes.includes(country.country_code || country.code)
+      popularCountryCodes.includes(country.country_code)
     );
   }
 );
@@ -2598,9 +2623,6 @@ export const selectCountryBySearchTerm = (state, searchTerm) => {
   return state.countries.countries.filter(
     (country) =>
       (country.name && country.name.toLowerCase().includes(term)) ||
-      (country.countryName &&
-        country.countryName.toLowerCase().includes(term)) ||
-      (country.label && country.label.toLowerCase().includes(term)) ||
       (country.country_code &&
         country.country_code.toLowerCase().includes(term)) ||
       (country.phone_code && country.phone_code.includes(term))

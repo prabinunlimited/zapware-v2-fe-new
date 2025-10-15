@@ -1,24 +1,18 @@
-// src/page/Beneficiary/MyBeneficiaries/beneficiarySlice.js - UPDATED VERSION
 import {
   createSlice,
   createAsyncThunk,
   createSelector,
 } from "@reduxjs/toolkit";
-import api from "../../../services/api";
 
-// ===================== UPDATED ASYNC THUNKS TO MATCH FIRST EXAMPLE =====================
+// Async thunk for fetching beneficiaries
 export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
     try {
       console.log("🔄 Fetching beneficiaries for customer:", customerId);
       const authtoken = localStorage.getItem("authtoken");
-
-      // ✅ FIXED: Use the correct API endpoint format without the extra "/beneficiaries" prefix
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/customer-view/${customerId}`,
+        `${import.meta.env.VITE_API_URL}/beneficiaries/${customerId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -40,7 +34,7 @@ export const fetchBeneficiaries = createAsyncThunk(
   }
 );
 
-
+// Async thunk for deleting beneficiary
 export const deleteBeneficiary = createAsyncThunk(
   "beneficiaries/deleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
@@ -73,6 +67,7 @@ export const deleteBeneficiary = createAsyncThunk(
   }
 );
 
+// Async thunk for toggling beneficiary visibility
 export const toggleBeneficiaryVisibility = createAsyncThunk(
   "beneficiaries/toggleBeneficiaryVisibility",
   async ({ customerId, beneficiaryId, isVisible }, { rejectWithValue }) => {
@@ -112,7 +107,7 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
   }
 );
 
-// ===================== EXISTING ADDITIONAL ASYNC THUNKS =====================
+// Async thunk for updating beneficiary
 export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
   async (
@@ -153,7 +148,7 @@ export const updateBeneficiary = createAsyncThunk(
   }
 );
 
-// ===================== ADD BENEFICIARY ASYNC THUNKS =====================
+// Async thunk for creating beneficiary with banks
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
@@ -172,7 +167,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         banks: bankAccounts.map((account) => {
           let bankDetails = {
             rails: account.rails,
-            currency_code: currency,
+            currency_code: account.currency || currency,
             payment_method: account.paymentMethod,
             benef_iban: account.iban,
             swift_code: account.swift,
@@ -198,8 +193,9 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           // Transform based on rails type
           if (account.rails === "Swift") {
             bankDetails = {
+              benef_id: beneficiaryData.beneficiary_id,
               rails: "Swift",
-              currency_code: currency,
+              currency_code: account.currency || currency,
               payment_method: "swift",
               benef_iban: account.iban,
               swift_code: account.swift,
@@ -209,6 +205,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
             // Handle different currencies for local transfers
             if (currency === "INR") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -219,6 +216,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "USD") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: account.paymentMethod,
@@ -230,6 +228,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "AED") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -238,6 +237,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "NPR") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -247,6 +247,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "KES") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -255,6 +256,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "NGN") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -264,6 +266,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "BDT") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -274,6 +277,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "LKR") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -284,6 +288,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "AUD") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -294,6 +299,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
               };
             } else if (currency === "PKR") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
@@ -304,32 +310,37 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
                 benef_iban: account.iban,
                 account_title: account.accountTitle,
               };
-            } else if (currency === "GBP") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                sort_code: account.sortCode,
-              };
-            } else if (currency === "DKK") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                sort_code: account.sortCode,
-              };
             } else if (currency === "EUR") {
               bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
                 rails: "Local",
                 currency_code: currency,
                 payment_method: "",
                 benef_iban: account.iban,
               };
+            } else if (currency === "GBP" || currency === "DKK") {
+              bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
+                rails: "Local",
+                currency_code: currency,
+                payment_method: "",
+                bank_acc_no: account.accountNumber,
+                sort_code: account.sortCode,
+              };
+            } else {
+              // Default local transfer structure
+              bankDetails = {
+                benef_id: beneficiaryData.beneficiary_id,
+                rails: "Local",
+                currency_code: currency,
+                payment_method: "",
+                bank_acc_no: account.accountNumber,
+                bank_name: account.bankName,
+              };
             }
           } else if (account.rails === "Mobile") {
             bankDetails = {
+              benef_id: beneficiaryData.beneficiary_id,
               rails: "Mobile",
               currency_code: currency,
               payment_method: "mobile",
@@ -527,23 +538,33 @@ export const fetchBankBranches = createAsyncThunk(
   }
 );
 
-// ===================== INITIAL STATE =====================
 const initialState = {
-  // Existing beneficiaries state
+  // Beneficiaries list state
   beneficiaries: [],
-  loading: false,
-  error: null,
-  success: false,
+  beneficiariesLoading: false,
+  beneficiariesError: null,
+
+  // Operation states
+  operationLoading: false,
+  operationError: null,
+  operationSuccess: false,
+
+  // Selected beneficiary
   selectedBeneficiary: null,
-  lastUpdated: null,
 
-  // Existing search/filter state
-  searchQuery: "",
-  filterVisibility: "all",
-  currentPage: 1,
-  deleteLoading: false,
+  // Filters and pagination
+  filters: {
+    search: "",
+    status: "all",
+    beneftype: "all",
+  },
+  pagination: {
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+  },
 
-  // NEW STATE FOR ADD BENEFICIARY
+  // Add beneficiary state
   createLoading: false,
   createError: null,
   createSuccess: false,
@@ -559,108 +580,81 @@ const initialState = {
   dropdownError: null,
 };
 
-// ===================== SLICE =====================
-const beneficiarySlice = createSlice({
+const beneficiariesSlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
-    // Existing reducers
+    // Clear errors
     clearError: (state) => {
-      state.error = null;
+      state.beneficiariesError = null;
+      state.operationError = null;
       state.createError = null;
       state.dropdownError = null;
     },
+
+    // Clear success messages
     clearSuccess: (state) => {
-      state.success = false;
+      state.operationSuccess = false;
       state.createSuccess = false;
     },
+
+    // Reset state
     resetState: (state) => {
-      state.loading = false;
-      state.error = null;
-      state.success = false;
+      state.beneficiariesLoading = false;
+      state.operationLoading = false;
+      state.beneficiariesError = null;
+      state.operationError = null;
+      state.operationSuccess = false;
+      state.createLoading = false;
+      state.createError = null;
+      state.createSuccess = false;
     },
+
+    // Set selected beneficiary
     setSelectedBeneficiary: (state, action) => {
       state.selectedBeneficiary = action.payload;
     },
+
+    // Clear selected beneficiary
     clearSelectedBeneficiary: (state) => {
       state.selectedBeneficiary = null;
     },
-    resetBeneficiaries: (state) => {
-      state.beneficiaries = [];
-      state.loading = false;
-      state.error = null;
-      state.success = false;
-      state.selectedBeneficiary = null;
-      state.lastUpdated = null;
-      state.searchQuery = "";
-      state.filterVisibility = "all";
-      state.currentPage = 1;
-      state.deleteLoading = false;
-    },
-    updateBeneficiaryInList: (state, action) => {
-      const { beneficiaryId, updates } = action.payload;
-      const index = state.beneficiaries.findIndex(
-        (b) => b.id === beneficiaryId
-      );
-      if (index !== -1) {
-        state.beneficiaries[index] = {
-          ...state.beneficiaries[index],
-          ...updates,
-        };
-      }
-    },
-    addBeneficiaryToList: (state, action) => {
-      const newBeneficiary = action.payload;
-      if (Array.isArray(state.beneficiaries)) {
-        state.beneficiaries.unshift(newBeneficiary);
-      } else {
-        state.beneficiaries = [newBeneficiary];
-      }
+
+    // Update filters
+    setFilters: (state, action) => {
+      state.filters = { ...state.filters, ...action.payload };
     },
 
-    // Search, filter and pagination reducers
-    setSearchQuery: (state, action) => {
-      state.searchQuery = action.payload;
-      state.currentPage = 1;
-    },
-    setFilterVisibility: (state, action) => {
-      state.filterVisibility = action.payload;
-      state.currentPage = 1;
-    },
-    setCurrentPage: (state, action) => {
-      state.currentPage = action.payload;
-    },
-    toggleVisibilityLocal: (state, action) => {
-      const beneficiary = state.beneficiaries.find(
-        (b) => b.id === action.payload
-      );
-      if (beneficiary) {
-        if (beneficiary.hasOwnProperty("isVisible")) {
-          beneficiary.isVisible = !beneficiary.isVisible;
-        } else if (beneficiary.hasOwnProperty("is_visible")) {
-          beneficiary.is_visible = !beneficiary.is_visible;
-        } else {
-          beneficiary.isVisible = true;
-        }
-      }
+    // Clear filters
+    clearFilters: (state) => {
+      state.filters = {
+        search: "",
+        status: "all",
+        beneftype: "all",
+      };
     },
 
-    // NEW REDUCERS FOR ADD BENEFICIARY
+    // Add beneficiary actions
     clearCreateError: (state) => {
       state.createError = null;
     },
+
     clearCreateSuccess: (state) => {
       state.createSuccess = false;
     },
+
     resetCreateState: (state) => {
       state.createLoading = false;
       state.createError = null;
       state.createSuccess = false;
       state.beneficiaryId = null;
     },
+
+    // Dropdown data actions
     clearDropdownError: (state) => {
       state.dropdownError = null;
     },
+
     clearDropdownData: (state) => {
       state.nationalities = [];
       state.banks = {};
@@ -668,120 +662,95 @@ const beneficiarySlice = createSlice({
       state.cities = {};
       state.bankBranches = {};
     },
-    clearBanksData: (state) => {
-      state.banks = {};
-    },
-    clearIdTypesData: (state) => {
-      state.idTypes = {};
-    },
   },
   extraReducers: (builder) => {
     builder
-      // ===================== UPDATED EXTRA REDUCERS TO MATCH FIRST EXAMPLE =====================
       // Fetch beneficiaries
       .addCase(fetchBeneficiaries.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        state.beneficiariesLoading = true;
+        state.beneficiariesError = null;
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
-        state.loading = false;
-
-        // Check if the response has the nested data structure
-        const beneficiariesData = Array.isArray(action.payload)
-          ? action.payload
-          : action.payload.data || [];
-
-        state.beneficiaries = beneficiariesData;
-        state.error = null;
-        state.lastUpdated = new Date().toISOString();
+        state.beneficiariesLoading = false;
+        state.beneficiaries = action.payload;
+        state.beneficiariesError = null;
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+        state.beneficiariesLoading = false;
+        state.beneficiariesError = action.payload;
       })
 
       // Delete beneficiary
       .addCase(deleteBeneficiary.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-        state.deleteLoading = true;
+        state.operationLoading = true;
+        state.operationError = null;
+        state.operationSuccess = false;
       })
       .addCase(deleteBeneficiary.fulfilled, (state, action) => {
-        state.loading = false;
+        state.operationLoading = false;
         state.beneficiaries = state.beneficiaries.filter(
           (beneficiary) => beneficiary.id !== action.payload.beneficiaryId
         );
-        state.success = true;
-        state.error = null;
-        state.deleteLoading = false;
-        state.lastUpdated = new Date().toISOString();
+        state.operationSuccess = true;
+        state.operationError = null;
       })
       .addCase(deleteBeneficiary.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.deleteLoading = false;
+        state.operationLoading = false;
+        state.operationError = action.payload;
+        state.operationSuccess = false;
       })
 
-      // Toggle visibility
+      // Toggle beneficiary visibility
       .addCase(toggleBeneficiaryVisibility.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        state.operationLoading = true;
+        state.operationError = null;
+        state.operationSuccess = false;
       })
       .addCase(toggleBeneficiaryVisibility.fulfilled, (state, action) => {
-        state.loading = false;
+        state.operationLoading = false;
         const { beneficiaryId, isVisible } = action.payload;
         const beneficiary = state.beneficiaries.find(
           (b) => b.id === beneficiaryId
         );
         if (beneficiary) {
           beneficiary.status = isVisible ? 1 : 0;
-          // Also update the is_visible and isVisible fields for consistency
-          beneficiary.is_visible = isVisible;
-          beneficiary.isVisible = isVisible;
         }
-        state.success = true;
-        state.error = null;
-        state.lastUpdated = new Date().toISOString();
+        state.operationSuccess = true;
+        state.operationError = null;
       })
       .addCase(toggleBeneficiaryVisibility.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+        state.operationLoading = false;
+        state.operationError = action.payload;
+        state.operationSuccess = false;
       })
 
-      // ===================== EXISTING ADDITIONAL EXTRA REDUCERS =====================
       // Update beneficiary
       .addCase(updateBeneficiary.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-        state.success = false;
+        state.operationLoading = true;
+        state.operationError = null;
+        state.operationSuccess = false;
       })
       .addCase(updateBeneficiary.fulfilled, (state, action) => {
-        state.loading = false;
-        state.error = null;
-        state.success = true;
-        state.lastUpdated = new Date().toISOString();
-
+        state.operationLoading = false;
         const { beneficiaryId, beneficiary } = action.payload;
-        if (Array.isArray(state.beneficiaries)) {
-          const beneficiaryIndex = state.beneficiaries.findIndex(
-            (b) => b.id === beneficiaryId
-          );
-
-          if (beneficiaryIndex !== -1) {
-            state.beneficiaries[beneficiaryIndex] = {
-              ...state.beneficiaries[beneficiaryIndex],
-              ...beneficiary,
-            };
-          }
+        const index = state.beneficiaries.findIndex(
+          (b) => b.id === beneficiaryId
+        );
+        if (index !== -1) {
+          state.beneficiaries[index] = {
+            ...state.beneficiaries[index],
+            ...beneficiary,
+          };
         }
+        state.operationSuccess = true;
+        state.operationError = null;
       })
       .addCase(updateBeneficiary.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.success = false;
+        state.operationLoading = false;
+        state.operationError = action.payload;
+        state.operationSuccess = false;
       })
 
-      // ===================== ADD BENEFICIARY EXTRA REDUCERS =====================
       // Create beneficiary with banks
       .addCase(createBeneficiaryWithBanks.pending, (state) => {
         state.createLoading = true;
@@ -793,15 +762,10 @@ const beneficiarySlice = createSlice({
         state.createSuccess = true;
         state.beneficiaryId = action.payload.beneficiary_id;
         state.createError = null;
-        state.lastUpdated = new Date().toISOString();
 
-        // Add the new beneficiary to the list immediately
+        // Add the new beneficiary to the list
         if (action.payload.beneficiary) {
-          if (Array.isArray(state.beneficiaries)) {
-            state.beneficiaries.unshift(action.payload.beneficiary);
-          } else {
-            state.beneficiaries = [action.payload.beneficiary];
-          }
+          state.beneficiaries.unshift(action.payload.beneficiary);
         }
       })
       .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
@@ -887,51 +851,26 @@ const beneficiarySlice = createSlice({
   },
 });
 
-// ===================== ACTION EXPORTS =====================
-export const {
-  clearError,
-  clearSuccess,
-  resetState,
-  setSelectedBeneficiary,
-  clearSelectedBeneficiary,
-  resetBeneficiaries,
-  updateBeneficiaryInList,
-  addBeneficiaryToList,
-  setSearchQuery,
-  setFilterVisibility,
-  setCurrentPage,
-  toggleVisibilityLocal,
-  // NEW ACTION EXPORTS
-  clearCreateError,
-  clearCreateSuccess,
-  resetCreateState,
-  clearDropdownError,
-  clearDropdownData,
-  clearBanksData,
-  clearIdTypesData,
-} = beneficiarySlice.actions;
-
-// ===================== SELECTORS =====================
-
-// Existing selectors
-export const selectBeneficiaries = (state) =>
-  state.beneficiaries.beneficiaries || [];
+// Selectors
+export const selectBeneficiaries = (state) => state.beneficiaries.beneficiaries;
 export const selectBeneficiariesLoading = (state) =>
-  state.beneficiaries.loading;
-export const selectBeneficiariesError = (state) => state.beneficiaries.error;
-export const selectBeneficiariesSuccess = (state) =>
-  state.beneficiaries.success;
+  state.beneficiaries.beneficiariesLoading;
+export const selectBeneficiariesError = (state) =>
+  state.beneficiaries.beneficiariesError;
+
+// ✅ FIXED: Added the missing selectors
+export const selectOperationLoading = (state) =>
+  state.beneficiaries.operationLoading;
+export const selectOperationError = (state) =>
+  state.beneficiaries.operationError;
+export const selectOperationSuccess = (state) =>
+  state.beneficiaries.operationSuccess;
+
 export const selectSelectedBeneficiary = (state) =>
   state.beneficiaries.selectedBeneficiary;
-export const selectBeneficiariesLastUpdated = (state) =>
-  state.beneficiaries.lastUpdated;
-export const selectSearchQuery = (state) => state.beneficiaries.searchQuery;
-export const selectFilterVisibility = (state) =>
-  state.beneficiaries.filterVisibility;
-export const selectCurrentPage = (state) => state.beneficiaries.currentPage;
-export const selectDeleteLoading = (state) => state.beneficiaries.deleteLoading;
+export const selectFilters = (state) => state.beneficiaries.filters;
 
-// NEW SELECTORS FOR ADD BENEFICIARY
+// Add beneficiary selectors
 export const selectCreateLoading = (state) => state.beneficiaries.createLoading;
 export const selectCreateError = (state) => state.beneficiaries.createError;
 export const selectCreateSuccess = (state) => state.beneficiaries.createSuccess;
@@ -947,7 +886,36 @@ export const selectDropdownLoading = (state) =>
   state.beneficiaries.dropdownLoading;
 export const selectDropdownError = (state) => state.beneficiaries.dropdownError;
 
-// Helper function to get banks for currency
+// Memoized selectors
+export const selectFilteredBeneficiaries = createSelector(
+  [selectBeneficiaries, selectFilters],
+  (beneficiaries, filters) => {
+    const { search, status, beneftype } = filters;
+
+    return beneficiaries.filter((beneficiary) => {
+      // Search filter
+      const matchesSearch =
+        !search ||
+        beneficiary.name?.toLowerCase().includes(search.toLowerCase()) ||
+        beneficiary.email?.toLowerCase().includes(search.toLowerCase()) ||
+        beneficiary.phone_number?.includes(search);
+
+      // Status filter
+      const matchesStatus =
+        status === "all" ||
+        (status === "active" && beneficiary.status === 1) ||
+        (status === "inactive" && beneficiary.status === 0);
+
+      // Beneficiary type filter
+      const matchesType =
+        beneftype === "all" || beneficiary.beneftype === beneftype;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }
+);
+
+// Helper function to get banks based on currency and type
 export const selectBanksForCurrency = (currency) => (state) => {
   if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
     return state.beneficiaries.banks[`${currency}_int`] || [];
@@ -955,109 +923,25 @@ export const selectBanksForCurrency = (currency) => (state) => {
   return state.beneficiaries.banks[currency] || [];
 };
 
-// Helper function to get ID types for currency
-export const selectIdTypesForCurrency = (currency) => (state) => {
-  return state.beneficiaries.idTypes[currency] || [];
-};
-
-// Helper function to get cities for country
-export const selectCitiesForCountry = (countryId) => (state) => {
-  return state.beneficiaries.cities[countryId] || [];
-};
-
 // Helper function to get bank branches
 export const selectBankBranchesForBank = (bankCode) => (state) => {
   return state.beneficiaries.bankBranches[bankCode] || [];
 };
 
-// Memoized selectors with createSelector for better performance
-export const selectFilteredBeneficiaries = createSelector(
-  [selectBeneficiaries, selectSearchQuery, selectFilterVisibility],
-  (beneficiaries, searchQuery, filterVisibility) => {
-    let filtered = beneficiaries;
+// Export actions
+export const {
+  clearError,
+  clearSuccess,
+  resetState,
+  setSelectedBeneficiary,
+  clearSelectedBeneficiary,
+  setFilters,
+  clearFilters,
+  clearCreateError,
+  clearCreateSuccess,
+  resetCreateState,
+  clearDropdownError,
+  clearDropdownData,
+} = beneficiariesSlice.actions;
 
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (beneficiary) =>
-          beneficiary.name?.toLowerCase().includes(query) ||
-          beneficiary.full_phone_number?.toLowerCase().includes(query) ||
-          beneficiary.phone_number?.toLowerCase().includes(query) ||
-          beneficiary.relationtobenef?.toLowerCase().includes(query) ||
-          beneficiary.email?.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply visibility filter
-    if (filterVisibility === "visible") {
-      filtered = filtered.filter(
-        (beneficiary) =>
-          beneficiary.isVisible === true ||
-          beneficiary.is_visible === true ||
-          beneficiary.status === 1
-      );
-    } else if (filterVisibility === "hidden") {
-      filtered = filtered.filter(
-        (beneficiary) =>
-          beneficiary.isVisible === false ||
-          beneficiary.is_visible === false ||
-          beneficiary.status === 0
-      );
-    }
-
-    return filtered;
-  }
-);
-
-export const selectPaginatedBeneficiaries = createSelector(
-  [selectFilteredBeneficiaries, selectCurrentPage],
-  (filteredBeneficiaries, currentPage) => {
-    const startIndex = (currentPage - 1) * 10;
-    const endIndex = startIndex + 10;
-    return filteredBeneficiaries.slice(startIndex, endIndex);
-  }
-);
-
-export const selectTotalPages = createSelector(
-  [selectFilteredBeneficiaries],
-  (filteredBeneficiaries) => Math.ceil(filteredBeneficiaries.length / 10)
-);
-
-// Helper selectors
-export const selectVisibleBeneficiaries = (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) =>
-      beneficiary.is_visible !== false &&
-      beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
-  );
-
-export const selectBeneficiaryById = (beneficiaryId) => (state) =>
-  (state.beneficiaries.beneficiaries || []).find(
-    (beneficiary) => beneficiary.id === beneficiaryId
-  );
-
-export const selectBeneficiariesByCurrency = (currency) => (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) => beneficiary.currency === currency
-  );
-
-// Additional utility selectors
-export const selectBeneficiariesCount = (state) =>
-  state.beneficiaries.beneficiaries?.length || 0;
-
-export const selectFilteredBeneficiariesCount = createSelector(
-  [selectFilteredBeneficiaries],
-  (filteredBeneficiaries) => filteredBeneficiaries.length
-);
-
-export const selectVisibleBeneficiariesCount = (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) =>
-      beneficiary.is_visible !== false &&
-      beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
-  ).length;
-
-export default beneficiarySlice.reducer;
+export default beneficiariesSlice.reducer;
