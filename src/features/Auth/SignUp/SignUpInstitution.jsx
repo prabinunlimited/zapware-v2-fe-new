@@ -1,12 +1,7 @@
 // src/features/Auth/components/SignUpInstitution.js
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  Formik,
-  Form,
-  Field,
-  FieldArray,
-} from "formik";
+import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ClipLoader } from "react-spinners";
@@ -21,10 +16,14 @@ import BenefitsSection from "./FormFields/BenefitsSection";
 import institutionSchema from "../../../components/Schema/InstitutionSchema";
 
 // Import Redux actions and selectors - use direct imports to avoid circular deps
-import { fetchCountries, selectCountriesOptions, selectCountriesLoading } from "../../../features/Auth/slices/countrySlice";
+import {
+  fetchCountries,
+  selectCountriesOptions,
+  selectCountriesLoading,
+} from "../../../features/Auth/slices/countrySlice";
 
 // Import institution registration actions and selectors
-import { 
+import {
   fetchInstitutionData,
   submitInstitutionForm,
   uploadFile,
@@ -49,7 +48,7 @@ import {
   syncControllerDataFromForm,
   validateOwnershipPercentage,
   togglePasswordVisibility,
-  toggleConfirmPasswordVisibility
+  toggleConfirmPasswordVisibility,
 } from "../slices/institutionRegistrationSlice";
 
 // ========== UTILITY FUNCTIONS ==========
@@ -98,12 +97,16 @@ const PhoneNumberField = ({
 }) => {
   const [selectedCountry, setSelectedCountry] = useState(null);
   const countryOptions = useSelector((state) => state.countries?.options || []);
-  const countriesLoading = useSelector((state) => state.countries?.loading || false);
+  const countriesLoading = useSelector(
+    (state) => state.countries?.loading || false
+  );
 
   useEffect(() => {
     if (countryCodeValue && countryOptions.length > 0) {
       const country = countryOptions.find(
-        (opt) => opt.phoneCode === countryCodeValue || opt.phone_code === countryCodeValue
+        (opt) =>
+          opt.phoneCode === countryCodeValue ||
+          opt.phone_code === countryCodeValue
       );
       setSelectedCountry(country);
     }
@@ -136,9 +139,9 @@ const PhoneNumberField = ({
                 setSelectedCountry(option);
                 if (countryCodeName) {
                   onChange({
-                    target: { 
-                      name: countryCodeName, 
-                      value: option?.phoneCode || option?.phone_code 
+                    target: {
+                      name: countryCodeName,
+                      value: option?.phoneCode || option?.phone_code,
                     },
                   });
                 }
@@ -272,61 +275,64 @@ const Institution = () => {
   // Location state processing
   const locationStateData = location.state || {};
 
-  const processLocationState = useCallback((data) => {
-    if (data && Object.keys(data).length > 0) {
-      dispatch(setLocationStateData(data));
+  const processLocationState = useCallback(
+    (data) => {
+      if (data && Object.keys(data).length > 0) {
+        dispatch(setLocationStateData(data));
 
-      if (data.service_provide_ids) {
-        const isNamed = data.service_provide_ids.some(
-          (id) => typeof id === "string" && id.includes("named")
-        );
-        dispatch(setAccountType(isNamed ? "named" : "pooled"));
-      }
+        if (data.service_provide_ids) {
+          const isNamed = data.service_provide_ids.some(
+            (id) => typeof id === "string" && id.includes("named")
+          );
+          dispatch(setAccountType(isNamed ? "named" : "pooled"));
+        }
 
-      if (data.package_currencies) {
-        dispatch(setPackageCurrencies(data.package_currencies));
-      }
+        if (data.package_currencies) {
+          dispatch(setPackageCurrencies(data.package_currencies));
+        }
 
-      if (data.kyc_verify !== undefined) {
-        dispatch(setKycRequirements(data.kyc_verify));
-      }
-      if (data.document_upload !== undefined) {
-        dispatch(setDocumentRequirements(data.document_upload));
-      }
-      if (data.owner_add !== undefined) {
-        dispatch(setOwnerAdd(data.owner_add));
-      }
+        if (data.kyc_verify !== undefined) {
+          dispatch(setKycRequirements(data.kyc_verify));
+        }
+        if (data.document_upload !== undefined) {
+          dispatch(setDocumentRequirements(data.document_upload));
+        }
+        if (data.owner_add !== undefined) {
+          dispatch(setOwnerAdd(data.owner_add));
+        }
 
-      if (data.referral_code) {
+        if (data.referral_code) {
+          dispatch(
+            setReferralData({
+              referralCode: data.referral_code,
+              agentCode: data.agent_code,
+            })
+          );
+        }
+
+        if (data.ssn_required !== undefined) {
+          dispatch(setSsnRequired(data.ssn_required));
+        }
+        if (data.ein_required !== undefined) {
+          dispatch(setEinRequired(data.ein_required));
+        }
+
+        const isWhiteLabelled =
+          localStorage.getItem("iswhitelabelledpartner") === "Y";
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+        const packageModule = localStorage.getItem("isPartnerPackageModule");
+
         dispatch(
-          setReferralData({
-            referralCode: data.referral_code,
-            agentCode: data.agent_code,
+          setWhiteLabelInfo({
+            isWhiteLabelledPartner: isWhiteLabelled,
+            whiteLabelledPartnerId: partnerId,
+            partnerPackageModule: packageModule,
           })
         );
       }
-
-      if (data.ssn_required !== undefined) {
-        dispatch(setSsnRequired(data.ssn_required));
-      }
-      if (data.ein_required !== undefined) {
-        dispatch(setEinRequired(data.ein_required));
-      }
-
-      const isWhiteLabelled =
-        localStorage.getItem("iswhitelabelledpartner") === "Y";
-      const partnerId = localStorage.getItem("whitelabelledpartnerid");
-      const packageModule = localStorage.getItem("isPartnerPackageModule");
-
-      dispatch(
-        setWhiteLabelInfo({
-          isWhiteLabelledPartner: isWhiteLabelled,
-          whiteLabelledPartnerId: partnerId,
-          partnerPackageModule: packageModule,
-        })
-      );
-    }
-  }, [dispatch]);
+    },
+    [dispatch]
+  );
 
   useEffect(() => {
     if (locationStateData && Object.keys(locationStateData).length > 0) {
@@ -336,9 +342,9 @@ const Institution = () => {
 
   useEffect(() => {
     if (!initialLoadRef.current) {
-      console.log('🚀 Institution component mounted - fetching initial data');
+      console.log("🚀 Institution component mounted - fetching initial data");
       initialLoadRef.current = true;
-      
+
       dispatch(fetchCountries());
       dispatch(fetchGenders());
       dispatch(fetchNationalities());
@@ -347,38 +353,47 @@ const Institution = () => {
   }, [dispatch]);
 
   // Validation functions
-  const validateEIN = useCallback((ein) => {
-    if (isNamedAccount && (!ein || ein.trim() === "")) {
-      return "EIN is required";
-    }
-    if (ein && ein.trim() !== "") {
-      const cleanEIN = ein.replace(/-/g, "");
-      if (cleanEIN.length !== 9 || !/^\d+$/.test(cleanEIN)) {
-        return "EIN must be 9 digits";
+  const validateEIN = useCallback(
+    (ein) => {
+      if (isNamedAccount && (!ein || ein.trim() === "")) {
+        return "EIN is required";
       }
-    }
-    return "";
-  }, [isNamedAccount]);
+      if (ein && ein.trim() !== "") {
+        const cleanEIN = ein.replace(/-/g, "");
+        if (cleanEIN.length !== 9 || !/^\d+$/.test(cleanEIN)) {
+          return "EIN must be 9 digits";
+        }
+      }
+      return "";
+    },
+    [isNamedAccount]
+  );
 
-  const validateSSN = useCallback((ssn, isUSSelected) => {
-    if (isNamedAccount && isUSSelected) {
-      if (!ssn || ssn.trim() === "") {
-        return "SSN is required";
+  const validateSSN = useCallback(
+    (ssn, isUSSelected) => {
+      if (isNamedAccount && isUSSelected) {
+        if (!ssn || ssn.trim() === "") {
+          return "SSN is required";
+        }
+        const cleanSSN = ssn.replace(/-/g, "");
+        if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
+          return "SSN must be 9 digits";
+        }
       }
-      const cleanSSN = ssn.replace(/-/g, "");
-      if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
-        return "SSN must be 9 digits";
-      }
-    }
-    return "";
-  }, [isNamedAccount]);
+      return "";
+    },
+    [isNamedAccount]
+  );
 
-  const validateBusinessAliasField = useCallback((businessAlias) => {
-    if (isNamedAccount && (!businessAlias || businessAlias.trim() === "")) {
-      return "Business alias is required";
-    }
-    return "";
-  }, [isNamedAccount]);
+  const validateBusinessAliasField = useCallback(
+    (businessAlias) => {
+      if (isNamedAccount && (!businessAlias || businessAlias.trim() === "")) {
+        return "Business alias is required";
+      }
+      return "";
+    },
+    [isNamedAccount]
+  );
 
   const formatTaxId = useCallback((value, type) => {
     if (!value) return value;
@@ -390,295 +405,447 @@ const Institution = () => {
       if (cleanValue.length <= 3) return cleanValue;
       if (cleanValue.length <= 5)
         return `${cleanValue.slice(0, 3)}-${cleanValue.slice(3)}`;
-      return `${cleanValue.slice(0, 3)}-${cleanValue.slice(3, 5)}-${cleanValue.slice(5, 9)}`;
+      return `${cleanValue.slice(0, 3)}-${cleanValue.slice(
+        3,
+        5
+      )}-${cleanValue.slice(5, 9)}`;
     }
     return value;
   }, []);
 
   // FIXED: Step completion validation
-  const isStepComplete = useCallback((step, values, errors, touched) => {
-      console.log("🔍 ========== STEP COMPLETION VALIDATION ==========");
-    console.log(`📝 Validating Step ${step} Completion`);
-    console.log("📊 Current Values:", values);
-    console.log("❌ Current Errors:", errors);
-    console.log("👆 Touched Fields:", touched);
+const isStepComplete = useCallback((step, values, errors, touched) => {
+  console.log("🔍 ========== STEP COMPLETION VALIDATION ==========");
+  console.log(`📝 Validating Step ${step} Completion`);
+  console.log("📊 Current Values:", values);
+  console.log("❌ Current Errors:", JSON.stringify(errors));
+  console.log("👆 Touched Fields:", touched);
 
-    switch (step) {
-      case 1: {
-         console.log("🏢 STEP 1: Business Information Validation");
-        // Basic required fields that are always required
-        const basicRequiredComplete =
-          values.institution_name &&
-          values.registration_number &&
-          values.country_of_registration &&
-          values.registered_address_street_state &&
-          values.registered_address_street_city &&
-          values.registered_address_street_1 &&
-          values.registered_address_street_zip &&
-          values.date_incorporation &&
-          values.industry_type;
+  switch (step) {
+    case 1: {
+      console.log("🏢 STEP 1: Business Information Validation");
+      
+      // Check if required fields have values AND no errors
+      const requiredFields = [
+        'institution_name',
+        'registration_number', 
+        'country_of_registration',
+        'registered_address_street_state',
+        'registered_address_street_city',
+        'registered_address_street_1',
+        'registered_address_street_zip',
+        'date_incorporation',
+        'industry_type'
+      ];
 
-          console.log("📋 Basic Required Fields:", basicRequiredComplete);
+      const hasValues = requiredFields.every(field => 
+        values[field] && values[field].toString().trim() !== ''
+      );
+      
+      const hasNoErrors = requiredFields.every(field => !errors[field]);
+      
+      console.log("✅ Required fields filled:", hasValues);
+      console.log("✅ No validation errors:", hasNoErrors);
+      
+      // Check conditional fields
+      const einValid = !showEINField || (values.ein && !errors.ein);
+      const naicsValid = !showNAICSField || (values.naice_code && !errors.naice_code);
+      const businessTypeValid = !showBusinessTypeField || (values.business_type && !errors.business_type);
+      const businessAliasValid = !showBusinessAliasField || (values.business_alias && !errors.business_alias);
 
+      console.log("🔍 Conditional fields:", {
+        einValid, naicsValid, businessTypeValid, businessAliasValid
+      });
 
-        // Conditional field validation
-        const einValid = !showEINField || (showEINField && values.ein && !validateEIN(values.ein));
-        const naicsValid = !showNAICSField || (showNAICSField && values.naice_code);
-        const businessTypeValid = !showBusinessTypeField || (showBusinessTypeField && values.business_type);
-        const businessAliasValid = !showBusinessAliasField || (showBusinessAliasField && values.business_alias && !validateBusinessAliasField(values.business_alias));
+      const isComplete = hasValues && hasNoErrors && einValid && naicsValid && businessTypeValid && businessAliasValid;
+      
+      console.log("🎯 Step 1 complete:", isComplete);
+      return isComplete;
+    }
 
-        return basicRequiredComplete && einValid && naicsValid && businessTypeValid && businessAliasValid;
+    case 2: {
+      console.log("👤 STEP 2: Primary Contact Information Validation");
+      
+      const requiredFields = [
+        'first_name',
+        'last_name',
+        'email',
+        'password',
+        'confirm_password',
+        'resident_country',
+        'mobilenumber_countrycode',
+        'mobile_number',
+        'nationality',
+        'country',
+        'state',
+        'city',
+        'street_address_1',
+        'zip_code',
+        'gender',
+        'dob',
+        'terms_agreement'
+      ];
+
+      const hasValues = requiredFields.every(field => {
+        if (field === 'terms_agreement') {
+          return values[field] === true;
+        }
+        return values[field] && values[field].toString().trim() !== '';
+      });
+      
+      const hasNoErrors = requiredFields.every(field => !errors[field]);
+      
+      console.log("✅ Required fields filled:", hasValues);
+      console.log("✅ No validation errors:", hasNoErrors);
+
+      // Check SSN validation for US residents
+      const isUS = values.country === "United States";
+      const ssnValid = !showSSNField || !isUS || (values.ssn && !errors.ssn);
+      
+      // Check password match
+      const passwordsMatch = values.password === values.confirm_password && !errors.confirm_password;
+
+      console.log("🔍 Additional validations:", {
+        isUS,
+        ssnValid,
+        passwordsMatch,
+        termsAccepted: values.terms_agreement
+      });
+
+      const isComplete = hasValues && hasNoErrors && ssnValid && passwordsMatch;
+      
+      console.log("🎯 Step 2 complete:", isComplete);
+      return isComplete;
+    }
+
+    case 3: {
+      console.log("🎛️ STEP 3: Controller Information Validation");
+      
+      // Always require is_controller field
+      if (!values.is_controller || values.is_controller === "") {
+        console.log("❌ is_controller not selected");
+        return false;
       }
 
-      case 2: {
-        const basicFieldsComplete =
-          values.first_name &&
-          values.last_name &&
-          values.email &&
-          values.password &&
-          values.confirm_password &&
-          values.resident_country &&
-          values.mobilenumber_countrycode &&
-          values.mobile_number &&
-          values.nationality &&
-          values.country &&
-          values.state &&
-          values.city &&
-          values.street_address_1 &&
-          values.zip_code &&
-          values.gender &&
-          values.dob;
+      // If user is NOT the controller, validate controller fields
+      if (values.is_controller === "no") {
+        const requiredFields = [
+          'controller_first_name',
+          'controller_last_name',
+          'controller_email',
+          'controller_password',
+          'controller_confirm_password',
+          'controller_resident_country',
+          'controller_mobilenumber_countrycode',
+          'controller_mobile_number',
+          'controller_nationality',
+          'controller_country',
+          'controller_state',
+          'controller_city',
+          'controller_street_address_1',
+          'controller_zip_code',
+          'controller_gender',
+          'controller_dob'
+        ];
 
-        const isUS = values.country === "United States";
-        const ssnValid = !showSSNField || !isUS || (values.ssn && !validateSSN(values.ssn, isUS));
-        const termsAccepted = values.terms_agreement;
-
-        return basicFieldsComplete && ssnValid && termsAccepted;
-      }
-
-      case 3: {
-        if (!values.is_controller || values.is_controller === "") {
-          return false;
-        }
-
-        if (values.is_controller === "no") {
-          const step3Complete =
-            values.controller_first_name &&
-            values.controller_last_name &&
-            values.controller_email &&
-            values.controller_password &&
-            values.controller_confirm_password &&
-            values.controller_resident_country &&
-            values.controller_mobilenumber_countrycode &&
-            values.controller_mobile_number &&
-            values.controller_nationality &&
-            values.controller_country &&
-            values.controller_state &&
-            values.controller_city &&
-            values.controller_street_address_1 &&
-            values.controller_zip_code &&
-            values.controller_gender &&
-            values.controller_dob;
-
-          const isControllerUS = values.controller_country === "United States";
-          const ssnValid = !showSSNField || !isControllerUS || (values.controller_ssn && !validateSSN(values.controller_ssn, isControllerUS));
-          const passwordsMatch = values.controller_password === values.controller_confirm_password;
-
-          return step3Complete && ssnValid && passwordsMatch;
-        }
-
-        return values.is_controller === "yes";
-      }
-
-      case 4: {
-        if (!values.owner_details || values.owner_details.length === 0) {
-          return false;
-        }
-        
-        const totalOwnership = values.owner_details.reduce(
-          (total, owner) => total + (parseFloat(owner.ownership_percentage) || 0),
-          0
+        const hasValues = requiredFields.every(field => 
+          values[field] && values[field].toString().trim() !== ''
         );
         
-        if (Math.abs(totalOwnership - 100) > 0.01) {
-          return false;
+        const hasNoErrors = requiredFields.every(field => !errors[field]);
+        
+        console.log("✅ Controller fields filled:", hasValues);
+        console.log("✅ No controller errors:", hasNoErrors);
+
+        // Check SSN validation for US controller residents
+        const isControllerUS = values.controller_country === "United States";
+        const ssnValid = !showSSNField || !isControllerUS || (values.controller_ssn && !errors.controller_ssn);
+        
+        // Check controller passwords match
+        const passwordsMatch = values.controller_password === values.controller_confirm_password && !errors.controller_confirm_password;
+
+        console.log("🔍 Controller validations:", {
+          isControllerUS,
+          ssnValid,
+          passwordsMatch
+        });
+
+        const isComplete = hasValues && hasNoErrors && ssnValid && passwordsMatch;
+        
+        console.log("🎯 Step 3 complete:", isComplete);
+        return isComplete;
+      }
+
+      // If user IS the controller, step is complete
+      console.log("✅ User is controller, step complete");
+      return values.is_controller === "yes";
+    }
+
+    case 4: {
+      console.log("👥 STEP 4: Ownership Information Validation");
+      
+      // Check if there are any owners
+      if (!values.owner_details || values.owner_details.length === 0) {
+        console.log("❌ No owners added");
+        return false;
+      }
+      
+      // Calculate total ownership percentage
+      const totalOwnership = values.owner_details.reduce(
+        (total, owner) => total + (parseFloat(owner.ownership_percentage) || 0),
+        0
+      );
+      
+      console.log("📊 Total ownership percentage:", totalOwnership);
+      
+      // Check if total ownership equals 100%
+      const ownershipValid = Math.abs(totalOwnership - 100) <= 0.01;
+      if (!ownershipValid) {
+        console.log("❌ Ownership percentage not 100%:", totalOwnership);
+        return false;
+      }
+
+      // Validate each owner
+      const allOwnersComplete = values.owner_details.every((owner, index) => {
+        const baseFieldsValid = 
+          owner.owner_first_name && owner.owner_first_name.trim() !== '' &&
+          owner.owner_last_name && owner.owner_last_name.trim() !== '' &&
+          owner.owner_email && owner.owner_email.trim() !== '' &&
+          owner.owner_country_id && owner.owner_country_id.toString().trim() !== '' &&
+          owner.owner_phone_number_country_code && owner.owner_phone_number_country_code.toString().trim() !== '' &&
+          owner.owner_phone_number && owner.owner_phone_number.toString().trim() !== '' &&
+          owner.ownership_percentage > 0 &&
+          owner.owner_dob && owner.owner_dob.trim() !== '';
+
+        // Check role if system access is needed
+        const roleValid = owner.owner_needs_access_to_system !== "yes" || 
+                         (owner.owner_role_id && owner.owner_role_id.toString().trim() !== '');
+
+        // Check US-specific fields for named accounts
+        const ownerCountry = countryOptions.find((c) => c.value === owner.owner_country_id);
+        const isUSOwner = ownerCountry?.label === "United States" || ownerCountry?.value === "United States";
+        
+        let usFieldsValid = true;
+        if (isNamedAccount && isUSOwner) {
+          usFieldsValid = owner.ssn && owner.ssn.trim() !== '' && 
+                         owner.doc_type && owner.doc_type.toString().trim() !== '' && 
+                         owner.doc_id && owner.doc_id.trim() !== '';
         }
+        
+        const ownerValid = baseFieldsValid && roleValid && usFieldsValid;
+        
+        if (!ownerValid) {
+          console.log(`❌ Owner ${index + 1} incomplete:`, {
+            baseFieldsValid,
+            roleValid,
+            usFieldsValid,
+            isUSOwner,
+            isNamedAccount
+          });
+        }
+        
+        return ownerValid;
+      });
+      
+      console.log("✅ All owners complete:", allOwnersComplete);
+      console.log("✅ Ownership percentage valid:", ownershipValid);
+      
+      return allOwnersComplete && ownershipValid;
+    }
 
-        const allOwnersComplete = values.owner_details.every((owner) => {
-          const baseFieldsValid =
-            owner.owner_if &&
-            owner.ownership_percentage > 0 &&
-            owner.owner_first_name &&
-            owner.owner_last_name &&
-            owner.owner_email &&
-            owner.owner_country_id &&
-            owner.owner_phone_number_country_code &&
-            owner.owner_phone_number;
-
-          const roleValid = owner.owner_needs_access_to_system !== "yes" || owner.owner_role_id;
-          const ownerCountry = countries.find((c) => c.id === owner.owner_country_id);
-          const isUSOwner = ownerCountry?.name === "United States";
-          
-          let usFieldsValid = true;
-          if (isNamedAccount && isUSOwner) {
-            usFieldsValid = owner.ssn && owner.doc_type && owner.doc_id;
+    case 5: {
+      console.log("📄 STEP 5: Document Upload & Final Review Validation");
+      
+      let documentsValid = true;
+      
+      // Validate document uploads if required
+      if (documentUpload) {
+        const requiredDocuments = documents.filter(doc => doc.required);
+        const allRequiredUploaded = requiredDocuments.every(doc => {
+          const hasFile = values.user_image && values.user_image[doc.id];
+          if (!hasFile) {
+            console.log(`❌ Required document missing: ${doc.name}`);
           }
-          
-          return baseFieldsValid && roleValid && usFieldsValid;
+          return hasFile;
         });
         
-        return allOwnersComplete;
+        documentsValid = allRequiredUploaded;
+        console.log("✅ All required documents uploaded:", allRequiredUploaded);
       }
 
-      case 5: {
-        if (documentUpload) {
-          const requiredDocuments = documents.filter(doc => doc.required);
-          const allRequiredUploaded = requiredDocuments.every(doc => 
-            values.user_image && values.user_image[doc.id]
-          );
-          return allRequiredUploaded && values.terms_agreement;
-        }
-        return values.terms_agreement;
+      // Check terms agreement
+      const termsAccepted = values.terms_agreement === true;
+      if (!termsAccepted) {
+        console.log("❌ Terms not accepted");
       }
 
-      default:
-        return true;
+      console.log("✅ Terms accepted:", termsAccepted);
+      
+      const isComplete = documentsValid && termsAccepted;
+      console.log("🎯 Step 5 complete:", isComplete);
+      
+      return isComplete;
     }
-  }, [
-    showEINField,
-    showNAICSField,
-    showBusinessTypeField,
-    showBusinessAliasField,
-    showSSNField,
-    documentUpload,
-    isNamedAccount,
-    countries,
-    validateEIN,
-    validateSSN,
-    validateBusinessAliasField
-  ]);
 
-  const getStepFields = useCallback((step, values) => {
-    switch (step) {
-      case 1:
-        const step1Fields = [
-          "institution_name",
-          "registration_number",
-          "country_of_registration",
-          "registered_address_street_state",
-          "registered_address_street_city",
-          "registered_address_street_1",
-          "registered_address_street_zip",
-          "date_incorporation",
-          "industry_type",
-        ];
+    default: {
+      console.log("❓ Unknown step:", step);
+      return true;
+    }
+  }
+}, [
+  showEINField,
+  showNAICSField,
+  showBusinessTypeField,
+  showBusinessAliasField,
+  showSSNField,
+  documentUpload,
+  isNamedAccount,
+  countries,
+  countryOptions,
+  documents,
+  validateEIN,
+  validateSSN,
+  validateBusinessAliasField
+]);
 
-        if (showEINField) step1Fields.push("ein");
-        if (showNAICSField) step1Fields.push("naice_code");
-        if (showBusinessTypeField) step1Fields.push("business_type");
-        if (showBusinessAliasField) step1Fields.push("business_alias");
-        if (showBusinessEmailField) step1Fields.push("business_email");
-        if (showBusinessWebsiteField) step1Fields.push("business_website");
+  const getStepFields = useCallback(
+    (step, values) => {
+      switch (step) {
+        case 1:
+          const step1Fields = [
+            "institution_name",
+            "registration_number",
+            "country_of_registration",
+            "registered_address_street_state",
+            "registered_address_street_city",
+            "registered_address_street_1",
+            "registered_address_street_zip",
+            "date_incorporation",
+            "industry_type",
+          ];
 
-        return step1Fields;
+          if (showEINField) step1Fields.push("ein");
+          if (showNAICSField) step1Fields.push("naice_code");
+          if (showBusinessTypeField) step1Fields.push("business_type");
+          if (showBusinessAliasField) step1Fields.push("business_alias");
+          if (showBusinessEmailField) step1Fields.push("business_email");
+          if (showBusinessWebsiteField) step1Fields.push("business_website");
 
-      case 2:
-        const step2Fields = [
-          "first_name",
-          "last_name",
-          "email",
-          "password",
-          "confirm_password",
-          "resident_country",
-          "mobilenumber_countrycode",
-          "mobile_number",
-          "nationality",
-          "country",
-          "state",
-          "city",
-          "street_address_1",
-          "zip_code",
-          "gender",
-          "dob",
-        ];
+          return step1Fields;
 
-        if (showSSNField && values.country === "United States") {
-          step2Fields.push("ssn");
-        }
+        case 2:
+          const step2Fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "password",
+            "confirm_password",
+            "resident_country",
+            "mobilenumber_countrycode",
+            "mobile_number",
+            "nationality",
+            "country",
+            "state",
+            "city",
+            "street_address_1",
+            "zip_code",
+            "gender",
+            "dob",
+          ];
 
-        return step2Fields;
-
-      case 3:
-        const step3Fields = ["is_controller"];
-
-        if (values.is_controller === "no") {
-          step3Fields.push(
-            "controller_first_name",
-            "controller_last_name",
-            "controller_email",
-            "controller_password",
-            "controller_confirm_password",
-            "controller_resident_country",
-            "controller_mobilenumber_countrycode",
-            "controller_mobile_number",
-            "controller_nationality",
-            "controller_country",
-            "controller_state",
-            "controller_city",
-            "controller_street_address_1",
-            "controller_zip_code",
-            "controller_gender",
-            "controller_dob"
-          );
-
-          if (showSSNField && values.controller_country === "United States") {
-            step3Fields.push("controller_ssn");
+          if (showSSNField && values.country === "United States") {
+            step2Fields.push("ssn");
           }
-        }
 
-        return step3Fields;
+          return step2Fields;
 
-      case 4:
-        const ownerFields = [];
-        if (values.owner_details && values.owner_details.length > 0) {
-          values.owner_details.forEach((owner, index) => {
-            ownerFields.push(
-              `owner_details[${index}].owner_first_name`,
-              `owner_details[${index}].owner_last_name`,
-              `owner_details[${index}].owner_email`,
-              `owner_details[${index}].owner_phone_number`,
-              `owner_details[${index}].owner_country_id`,
-              `owner_details[${index}].ownership_percentage`,
-              `owner_details[${index}].owner_dob`
+        case 3:
+          const step3Fields = ["is_controller"];
+
+          if (values.is_controller === "no") {
+            step3Fields.push(
+              "controller_first_name",
+              "controller_last_name",
+              "controller_email",
+              "controller_password",
+              "controller_confirm_password",
+              "controller_resident_country",
+              "controller_mobilenumber_countrycode",
+              "controller_mobile_number",
+              "controller_nationality",
+              "controller_country",
+              "controller_state",
+              "controller_city",
+              "controller_street_address_1",
+              "controller_zip_code",
+              "controller_gender",
+              "controller_dob"
             );
 
-            if (owner.owner_country_id === "United States" && isNamedAccount) {
-              ownerFields.push(
-                `owner_details[${index}].ssn`,
-                `owner_details[${index}].doc_type`,
-                `owner_details[${index}].doc_id`
-              );
+            if (showSSNField && values.controller_country === "United States") {
+              step3Fields.push("controller_ssn");
             }
-          });
-        }
-        return ownerFields;
+          }
 
-      case 5:
-        const step5Fields = ["terms_agreement"];
-        
-        if (documentUpload) {
-          const requiredDocs = documents.filter(doc => doc.required);
-          requiredDocs.forEach(doc => {
-            step5Fields.push(`user_image.${doc.id}`);
-          });
-        }
-        
-        return step5Fields;
+          return step3Fields;
 
-      default:
-        return [];
-    }
-  }, [showEINField, showNAICSField, showBusinessTypeField, showBusinessAliasField, showBusinessEmailField, showBusinessWebsiteField, showSSNField, documentUpload, isNamedAccount, documents]);
+        case 4:
+          const ownerFields = [];
+          if (values.owner_details && values.owner_details.length > 0) {
+            values.owner_details.forEach((owner, index) => {
+              ownerFields.push(
+                `owner_details[${index}].owner_first_name`,
+                `owner_details[${index}].owner_last_name`,
+                `owner_details[${index}].owner_email`,
+                `owner_details[${index}].owner_phone_number`,
+                `owner_details[${index}].owner_country_id`,
+                `owner_details[${index}].ownership_percentage`,
+                `owner_details[${index}].owner_dob`
+              );
+
+              if (
+                owner.owner_country_id === "United States" &&
+                isNamedAccount
+              ) {
+                ownerFields.push(
+                  `owner_details[${index}].ssn`,
+                  `owner_details[${index}].doc_type`,
+                  `owner_details[${index}].doc_id`
+                );
+              }
+            });
+          }
+          return ownerFields;
+
+        case 5:
+          const step5Fields = ["terms_agreement"];
+
+          if (documentUpload) {
+            const requiredDocs = documents.filter((doc) => doc.required);
+            requiredDocs.forEach((doc) => {
+              step5Fields.push(`user_image.${doc.id}`);
+            });
+          }
+
+          return step5Fields;
+
+        default:
+          return [];
+      }
+    },
+    [
+      showEINField,
+      showNAICSField,
+      showBusinessTypeField,
+      showBusinessAliasField,
+      showBusinessEmailField,
+      showBusinessWebsiteField,
+      showSSNField,
+      documentUpload,
+      isNamedAccount,
+      documents,
+    ]
+  );
 
   const getFirstErrorMessage = useCallback((errors) => {
     for (const [key, value] of Object.entries(errors)) {
@@ -697,101 +864,155 @@ const Institution = () => {
   }, []);
 
   // FIXED: handleNextStep
-  const handleNextStep = useCallback(async (values, setErrors, setTouched, validateForm) => {
-    try {
-      const stepFields = getStepFields(currentStep, values);
-      const touchedFields = {};
+  const handleNextStep = useCallback(
+    async (values, setErrors, setTouched, validateForm) => {
+      try {
+        console.log("🚀 Handling next step...");
 
-      stepFields.forEach((field) => {
-        if (field.includes("[") && field.includes("]")) {
-          const baseField = field.split("[")[0];
-          const index = field.match(/\[(\d+)\]/)?.[1];
-          const subField = field.split(".")[1];
+        // Mark all step fields as touched
+        const stepFields = getStepFields(currentStep, values);
+        const touchedFields = {};
 
-          if (index !== undefined) {
-            if (!touchedFields[baseField]) touchedFields[baseField] = [];
-            if (!touchedFields[baseField][index])
-              touchedFields[baseField][index] = {};
-            touchedFields[baseField][index][subField] = true;
+        stepFields.forEach((field) => {
+          if (field.includes("[") && field.includes("]")) {
+            // Handle array fields (like owner_details)
+            const baseField = field.split("[")[0];
+            const index = field.match(/\[(\d+)\]/)?.[1];
+            const subField = field.split(".")[1];
+
+            if (index !== undefined) {
+              if (!touchedFields[baseField]) touchedFields[baseField] = [];
+              if (!touchedFields[baseField][index])
+                touchedFields[baseField][index] = {};
+              touchedFields[baseField][index][subField] = true;
+            }
+          } else {
+            touchedFields[field] = true;
           }
-        } else {
-          touchedFields[field] = true;
+        });
+
+        console.log("👆 Setting touched fields:", touchedFields);
+        setTouched(touchedFields);
+
+        // Validate form
+        const formErrors = await validateForm();
+        console.log("❌ Form errors after validation:", formErrors);
+
+        // Check if step is complete
+        const stepComplete = isStepComplete(
+          currentStep,
+          values,
+          formErrors,
+          touchedFields
+        );
+        console.log("✅ Step complete:", stepComplete);
+
+        if (!stepComplete || Object.keys(formErrors).length > 0) {
+          const firstError =
+            getFirstErrorMessage(formErrors) ||
+            "Please complete all required fields for this step.";
+          console.log("🚫 Blocking navigation - error:", firstError);
+          dispatch(setErrorMessage(firstError));
+          dispatch(setShowPopup(true));
+          return;
         }
-      });
 
-      setTouched(touchedFields);
+        // Proceed to next step
+        console.log("✅ Proceeding to next step");
+        let nextStep = currentStep + 1;
 
-      const formErrors = await validateForm();
-      
-      const stepComplete = isStepComplete(currentStep, values, formErrors, touchedFields);
-      
-      if (!stepComplete || Object.keys(formErrors).length > 0) {
-        const firstError = getFirstErrorMessage(formErrors) || "Please complete all required fields for this step.";
-        dispatch(setErrorMessage(firstError));
-        dispatch(setShowPopup(true));
-        return;
-      }
+        if (currentStep === 4 && ownerAdd !== "Y") {
+          nextStep = currentStep + 1;
+        }
 
-      let nextStep = currentStep + 1;
-      
-      if (currentStep === 4 && ownerAdd !== "Y") {
-        nextStep = currentStep + 1;
-      }
-      
-      dispatch(setCurrentStep(nextStep));
-      dispatch(setErrorMessage(""));
-      dispatch(setShowPopup(false));
-    } catch (error) {
-      console.error("Error in handleNextStep:", error);
-      dispatch(setErrorMessage("Validation failed. Please check all fields."));
-      dispatch(setShowPopup(true));
-    }
-  }, [currentStep, dispatch, getStepFields, isStepComplete, getFirstErrorMessage, ownerAdd]);
-
-  const handleSubmit = useCallback(async (values, { setSubmitting }) => {
-    try {
-      console.log("=== FINAL SUBMISSION ===");
-
-      const finalData = {
-        ...values,
-        referral_code: referralCode,
-        agent_code: agentCode,
-        is_named_account: isNamedAccount,
-        package_currencies: packageCurrencies,
-        customer_type: "institution",
-        kyc_verify: kycVerify,
-        document_upload: documentUpload,
-        owner_add: ownerAdd,
-      };
-
-      console.log("Final submission data:", finalData);
-
-      const result = await dispatch(submitInstitutionForm(finalData)).unwrap();
-      console.log("Final API response:", result);
-
-      if (result && (result.success === true || result.success === undefined)) {
-        console.log("Registration completed successfully");
-        navigate("/success");
-      } else {
-        dispatch(setErrorMessage(result.message || "Registration failed"));
+        dispatch(setCurrentStep(nextStep));
+        dispatch(setErrorMessage(""));
+        dispatch(setShowPopup(false));
+      } catch (error) {
+        console.error("❌ Error in handleNextStep:", error);
+        dispatch(
+          setErrorMessage("Validation failed. Please check all fields.")
+        );
         dispatch(setShowPopup(true));
       }
-    } catch (error) {
-      console.error("Final submission error:", error);
-      dispatch(setErrorMessage("Registration failed. Please try again."));
-      dispatch(setShowPopup(true));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [dispatch, navigate, referralCode, agentCode, isNamedAccount, packageCurrencies, kycVerify, documentUpload, ownerAdd]);
+    },
+    [
+      currentStep,
+      dispatch,
+      getStepFields,
+      isStepComplete,
+      getFirstErrorMessage,
+      ownerAdd,
+    ]
+  );
+
+  const handleSubmit = useCallback(
+    async (values, { setSubmitting }) => {
+      try {
+        console.log("=== FINAL SUBMISSION ===");
+
+        const finalData = {
+          ...values,
+          referral_code: referralCode,
+          agent_code: agentCode,
+          is_named_account: isNamedAccount,
+          package_currencies: packageCurrencies,
+          customer_type: "institution",
+          kyc_verify: kycVerify,
+          document_upload: documentUpload,
+          owner_add: ownerAdd,
+        };
+
+        console.log("Final submission data:", finalData);
+
+        const result = await dispatch(
+          submitInstitutionForm(finalData)
+        ).unwrap();
+        console.log("Final API response:", result);
+
+        if (
+          result &&
+          (result.success === true || result.success === undefined)
+        ) {
+          console.log("Registration completed successfully");
+          navigate("/success");
+        } else {
+          dispatch(setErrorMessage(result.message || "Registration failed"));
+          dispatch(setShowPopup(true));
+        }
+      } catch (error) {
+        console.error("Final submission error:", error);
+        dispatch(setErrorMessage("Registration failed. Please try again."));
+        dispatch(setShowPopup(true));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [
+      dispatch,
+      navigate,
+      referralCode,
+      agentCode,
+      isNamedAccount,
+      packageCurrencies,
+      kycVerify,
+      documentUpload,
+      ownerAdd,
+    ]
+  );
 
   // FIXED: Proper country options transformation
   const getSafeCountryOptions = useCallback(() => {
     if (countries && countries.length > 0) {
       return countries.map((country) => {
-        const countryName = country.name || country.label || country.country_name || country.country_code || 'Unknown Country';
-        const phoneCode = country.phone_code || country.phoneCode || '';
-        
+        const countryName =
+          country.name ||
+          country.label ||
+          country.country_name ||
+          country.country_code ||
+          "Unknown Country";
+        const phoneCode = country.phone_code || country.phoneCode || "";
+
         return {
           value: countryName,
           label: countryName,
@@ -801,11 +1022,14 @@ const Institution = () => {
         };
       });
     }
-    
+
     return [];
   }, [countries]);
 
-  const countryOptions = useMemo(() => getSafeCountryOptions(), [getSafeCountryOptions]);
+  const countryOptions = useMemo(
+    () => getSafeCountryOptions(),
+    [getSafeCountryOptions]
+  );
 
   const naicsOptions = useMemo(
     () =>
@@ -824,16 +1048,19 @@ const Institution = () => {
   // FIXED: Industry type options with fallback
   const industryTypeOptions = useMemo(() => {
     if (industryTypes && industryTypes.length > 0) {
-      return industryTypes.map((type) => ({ value: type.id, label: type.name }));
+      return industryTypes.map((type) => ({
+        value: type.id,
+        label: type.name,
+      }));
     }
-    
+
     // Fallback options for testing
     return [
       { value: 1, label: "Technology" },
       { value: 2, label: "Finance" },
       { value: 3, label: "Healthcare" },
       { value: 4, label: "Education" },
-      { value: 5, label: "Manufacturing" }
+      { value: 5, label: "Manufacturing" },
     ];
   }, [industryTypes]);
 
@@ -1110,7 +1337,10 @@ const Institution = () => {
               label="Controller Country"
               options={countryOptions}
               onChange={(option) => {
-                setFieldValue("controller_country_address", option?.value || "");
+                setFieldValue(
+                  "controller_country_address",
+                  option?.value || ""
+                );
               }}
               value={countryOptions.find(
                 (opt) => opt.value === values.controller_country_address
@@ -1197,7 +1427,10 @@ const Institution = () => {
                 label="Issuing Country"
                 options={countryOptions}
                 onChange={(option) => {
-                  setFieldValue(`owner_details[${index}].doc_country`, option?.value || "");
+                  setFieldValue(
+                    `owner_details[${index}].doc_country`,
+                    option?.value || ""
+                  );
                 }}
                 value={countryOptions.find(
                   (opt) => opt.value === owner.doc_country
@@ -1270,28 +1503,31 @@ const Institution = () => {
   };
 
   // Password validation rules
-  const passwordValidationRules = useMemo(() => [
-    {
-      label: "At least 12 characters",
-      regex: /^.{12,}$/,
-    },
-    {
-      label: "At least one uppercase letter",
-      regex: /[A-Z]/,
-    },
-    {
-      label: "At least one lowercase letter", 
-      regex: /[a-z]/,
-    },
-    {
-      label: "At least one number",
-      regex: /\d/,
-    },
-    {
-      label: "At least one special character",
-      regex: /[!@#$%^&*(),.?":{}|<>]/,
-    },
-  ], []);
+  const passwordValidationRules = useMemo(
+    () => [
+      {
+        label: "At least 12 characters",
+        regex: /^.{12,}$/,
+      },
+      {
+        label: "At least one uppercase letter",
+        regex: /[A-Z]/,
+      },
+      {
+        label: "At least one lowercase letter",
+        regex: /[a-z]/,
+      },
+      {
+        label: "At least one number",
+        regex: /\d/,
+      },
+      {
+        label: "At least one special character",
+        regex: /[!@#$%^&*(),.?":{}|<>]/,
+      },
+    ],
+    []
+  );
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
@@ -1524,7 +1760,10 @@ const Institution = () => {
                     {/* Industry Type Field */}
                     {showIndustryTypeField && (
                       <div className="space-y-2">
-                        <label htmlFor="industry_type" className="block text-sm font-medium text-gray-700">
+                        <label
+                          htmlFor="industry_type"
+                          className="block text-sm font-medium text-gray-700"
+                        >
                           Industry Type <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -1532,10 +1771,19 @@ const Institution = () => {
                           name="industry_type"
                           options={industryTypeOptions}
                           onChange={(option) => {
+                            console.log(
+                              "🎯 Industry type selected:",
+                              option?.value
+                            );
                             setFieldValue("industry_type", option?.value || "");
-                            handleBlur({ target: { name: "industry_type" } });
+                            // Manually trigger blur for validation
+                            setTimeout(() => {
+                              handleBlur({ target: { name: "industry_type" } });
+                            }, 100);
                           }}
-                          onBlur={handleBlur}
+                          onBlur={() =>
+                            handleBlur({ target: { name: "industry_type" } })
+                          }
                           value={industryTypeOptions.find(
                             (opt) => opt.value === values.industry_type
                           )}
@@ -1550,8 +1798,11 @@ const Institution = () => {
                             {errors.industry_type}
                           </p>
                         )}
+                        {/* Debug info */}
                         <div className="text-xs text-gray-500">
-                          Current value: {values.industry_type || "Not selected"}
+                          Selected value:{" "}
+                          {values.industry_type || "Not selected"} | Options
+                          loaded: {industryTypeOptions.length}
                         </div>
                       </div>
                     )}
@@ -1570,7 +1821,10 @@ const Institution = () => {
                         label="Country of Registration"
                         options={countryOptions}
                         onChange={(option) => {
-                          setFieldValue("country_of_registration", option?.value || "");
+                          setFieldValue(
+                            "country_of_registration",
+                            option?.value || ""
+                          );
                         }}
                         value={countryOptions.find(
                           (opt) => opt.value === values.country_of_registration
@@ -1587,7 +1841,10 @@ const Institution = () => {
                         label="Primary Country of Operation"
                         options={countryOptions}
                         onChange={(option) => {
-                          setFieldValue("country_of_operation", option?.value || "");
+                          setFieldValue(
+                            "country_of_operation",
+                            option?.value || ""
+                          );
                         }}
                         value={countryOptions.find(
                           (opt) => opt.value === values.country_of_operation
@@ -1617,7 +1874,9 @@ const Institution = () => {
                             onChange={(selectedOptions) => {
                               setFieldValue(
                                 "operating_countries",
-                                selectedOptions ? selectedOptions.map((opt) => opt.value) : []
+                                selectedOptions
+                                  ? selectedOptions.map((opt) => opt.value)
+                                  : []
                               );
                             }}
                             className="react-select-container"
@@ -1724,10 +1983,15 @@ const Institution = () => {
                         label="Registered Address Country"
                         options={countryOptions}
                         onChange={(option) => {
-                          setFieldValue("registered_address_street_country", option?.value || "");
+                          setFieldValue(
+                            "registered_address_street_country",
+                            option?.value || ""
+                          );
                         }}
                         value={countryOptions.find(
-                          (opt) => opt.value === values.registered_address_street_country
+                          (opt) =>
+                            opt.value ===
+                            values.registered_address_street_country
                         )}
                         touched={touched.registered_address_street_country}
                         error={errors.registered_address_street_country}
@@ -1820,7 +2084,9 @@ const Institution = () => {
                       error={errors.password}
                       required
                       showPassword={showPassword}
-                      onToggleVisibility={() => dispatch(togglePasswordVisibility())}
+                      onToggleVisibility={() =>
+                        dispatch(togglePasswordVisibility())
+                      }
                       validationRules={passwordValidationRules}
                     />
 
@@ -1835,7 +2101,9 @@ const Institution = () => {
                       error={errors.confirm_password}
                       required
                       showPassword={showConfirmPassword}
-                      onToggleVisibility={() => dispatch(toggleConfirmPasswordVisibility())}
+                      onToggleVisibility={() =>
+                        dispatch(toggleConfirmPasswordVisibility())
+                      }
                     />
 
                     <SelectField
@@ -1912,23 +2180,27 @@ const Institution = () => {
                       countryCodeValue={values.mobilenumber_countrycode}
                     />
 
-                    {values.resident_country === "United States" && showSSNField && (
-                      <FormField
-                        id="ssn"
-                        label="Social Security Number (SSN)"
-                        name="ssn"
-                        value={values.ssn}
-                        onChange={(e) => {
-                          const formatted = formatTaxId(e.target.value, "ssn");
-                          setFieldValue("ssn", formatted);
-                        }}
-                        onBlur={handleBlur}
-                        touched={touched.ssn}
-                        error={errors.ssn}
-                        required={values.resident_country === "United States"}
-                        placeholder="XXX-XX-XXXX"
-                      />
-                    )}
+                    {values.resident_country === "United States" &&
+                      showSSNField && (
+                        <FormField
+                          id="ssn"
+                          label="Social Security Number (SSN)"
+                          name="ssn"
+                          value={values.ssn}
+                          onChange={(e) => {
+                            const formatted = formatTaxId(
+                              e.target.value,
+                              "ssn"
+                            );
+                            setFieldValue("ssn", formatted);
+                          }}
+                          onBlur={handleBlur}
+                          touched={touched.ssn}
+                          error={errors.ssn}
+                          required={values.resident_country === "United States"}
+                          placeholder="XXX-XX-XXXX"
+                        />
+                      )}
                   </div>
 
                   {/* Address Section */}
@@ -2051,7 +2323,8 @@ const Institution = () => {
                     Controller Information
                   </h2>
                   <p className="text-gray-600 mb-6">
-                    Please specify if you are the controller of this institution or provide controller details.
+                    Please specify if you are the controller of this institution
+                    or provide controller details.
                   </p>
 
                   <ControllerSection
@@ -2079,213 +2352,284 @@ const Institution = () => {
                     Ownership Information
                   </h2>
                   <p className="text-gray-600 mb-6">
-                    Add all owners with 25% or more ownership in the institution.
+                    Add all owners with 25% or more ownership in the
+                    institution.
                   </p>
 
                   <FieldArray name="owner_details">
                     {({ push, remove }) => (
                       <div className="space-y-6">
-                        {values.owner_details && values.owner_details.map((owner, index) => (
-                          <div key={index} className="border border-gray-200 rounded-lg p-4">
-                            <div className="flex justify-between items-center mb-4">
-                              <h3 className="text-lg font-medium text-blue-600">
-                                Owner {index + 1}
-                              </h3>
-                              {values.owner_details.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    remove(index);
-                                    dispatch(removeOwner(index));
-                                  }}
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <i className="fas fa-trash"></i> Remove
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                id={`owner_details[${index}].owner_first_name`}
-                                label="First Name"
-                                name={`owner_details[${index}].owner_first_name`}
-                                value={owner.owner_first_name}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.owner_first_name}
-                                error={errors.owner_details?.[index]?.owner_first_name}
-                                required
-                              />
-
-                              <FormField
-                                id={`owner_details[${index}].owner_last_name`}
-                                label="Last Name"
-                                name={`owner_details[${index}].owner_last_name`}
-                                value={owner.owner_last_name}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.owner_last_name}
-                                error={errors.owner_details?.[index]?.owner_last_name}
-                                required
-                              />
-
-                              <FormField
-                                id={`owner_details[${index}].owner_email`}
-                                label="Email"
-                                name={`owner_details[${index}].owner_email`}
-                                type="email"
-                                value={owner.owner_email}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.owner_email}
-                                error={errors.owner_details?.[index]?.owner_email}
-                                required
-                              />
-
-                              <FormField
-                                id={`owner_details[${index}].ownership_percentage`}
-                                label="Ownership Percentage"
-                                name={`owner_details[${index}].ownership_percentage`}
-                                type="number"
-                                value={owner.ownership_percentage}
-                                onChange={(e) => {
-                                  handleChange(e);
-                                  dispatch(validateOwnershipPercentage());
-                                }}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.ownership_percentage}
-                                error={errors.owner_details?.[index]?.ownership_percentage}
-                                required
-                                min="0"
-                                max="100"
-                                step="0.01"
-                              />
-
-                              <FormField
-                                id={`owner_details[${index}].owner_dob`}
-                                label="Date of Birth"
-                                name={`owner_details[${index}].owner_dob`}
-                                type="date"
-                                value={owner.owner_dob}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.owner_dob}
-                                error={errors.owner_details?.[index]?.owner_dob}
-                                required
-                              />
-
-                              {/* Owner Country */}
-                              <SelectField
-                                id={`owner_details[${index}].owner_country_id`}
-                                label="Country"
-                                options={countryOptions}
-                                onChange={(option) => {
-                                  setFieldValue(`owner_details[${index}].owner_country_id`, option?.value || "");
-                                }}
-                                value={countryOptions.find(
-                                  (opt) => opt.value === owner.owner_country_id
-                                )}
-                                touched={touched.owner_details?.[index]?.owner_country_id}
-                                error={errors.owner_details?.[index]?.owner_country_id}
-                                required
-                                isLoading={countriesLoading}
-                              />
-
-                              <PhoneNumberField
-                                id={`owner_details[${index}].owner_phone_number`}
-                                label="Phone Number"
-                                name={`owner_details[${index}].owner_phone_number`}
-                                value={owner.owner_phone_number}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                touched={touched.owner_details?.[index]?.owner_phone_number}
-                                error={errors.owner_details?.[index]?.owner_phone_number}
-                                required
-                                countryCodeName={`owner_details[${index}].owner_phone_number_country_code`}
-                                countryCodeValue={owner.owner_phone_number_country_code}
-                              />
-
-                              {/* US-specific fields for named accounts */}
-                              {owner.owner_country_id === "United States" && isNamedAccount && (
-                                <>
-                                  <FormField
-                                    id={`owner_details[${index}].ssn`}
-                                    label="SSN"
-                                    name={`owner_details[${index}].ssn`}
-                                    value={owner.ssn}
-                                    onChange={(e) => {
-                                      const formatted = formatTaxId(e.target.value, "ssn");
-                                      setFieldValue(`owner_details[${index}].ssn`, formatted);
+                        {values.owner_details &&
+                          values.owner_details.map((owner, index) => (
+                            <div
+                              key={index}
+                              className="border border-gray-200 rounded-lg p-4"
+                            >
+                              <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-medium text-blue-600">
+                                  Owner {index + 1}
+                                </h3>
+                                {values.owner_details.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      remove(index);
+                                      dispatch(removeOwner(index));
                                     }}
-                                    onBlur={handleBlur}
-                                    touched={touched.owner_details?.[index]?.ssn}
-                                    error={errors.owner_details?.[index]?.ssn}
-                                    required
-                                    placeholder="XXX-XX-XXXX"
-                                  />
-
-                                  <EnhancedDocumentSection
-                                    values={values}
-                                    setFieldValue={setFieldValue}
-                                    handleChange={handleChange}
-                                    handleBlur={handleBlur}
-                                    touched={touched}
-                                    errors={errors}
-                                    index={index}
-                                    owner={owner}
-                                  />
-                                </>
-                              )}
-
-                              {/* System Access */}
-                              <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Does this owner need access to the system?
-                                </label>
-                                <div className="flex space-x-4">
-                                  <label className="flex items-center">
-                                    <Field
-                                      type="radio"
-                                      name={`owner_details[${index}].owner_needs_access_to_system`}
-                                      value="yes"
-                                      className="mr-2"
-                                    />
-                                    <span>Yes</span>
-                                  </label>
-                                  <label className="flex items-center">
-                                    <Field
-                                      type="radio"
-                                      name={`owner_details[${index}].owner_needs_access_to_system`}
-                                      value="no"
-                                      className="mr-2"
-                                    />
-                                    <span>No</span>
-                                  </label>
-                                </div>
-
-                                {owner.owner_needs_access_to_system === "yes" && (
-                                  <div className="mt-3">
-                                    <SelectField
-                                      id={`owner_details[${index}].owner_role_id`}
-                                      label="Role"
-                                      options={roleOptions}
-                                      onChange={(option) =>
-                                        setFieldValue(`owner_details[${index}].owner_role_id`, option?.value)
-                                      }
-                                      value={roleOptions.find(
-                                        (opt) => opt.value === owner.owner_role_id
-                                      )}
-                                      touched={touched.owner_details?.[index]?.owner_role_id}
-                                      error={errors.owner_details?.[index]?.owner_role_id}
-                                      required
-                                    />
-                                  </div>
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <i className="fas fa-trash"></i> Remove
+                                  </button>
                                 )}
                               </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                  id={`owner_details[${index}].owner_first_name`}
+                                  label="First Name"
+                                  name={`owner_details[${index}].owner_first_name`}
+                                  value={owner.owner_first_name}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]
+                                      ?.owner_first_name
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]
+                                      ?.owner_first_name
+                                  }
+                                  required
+                                />
+
+                                <FormField
+                                  id={`owner_details[${index}].owner_last_name`}
+                                  label="Last Name"
+                                  name={`owner_details[${index}].owner_last_name`}
+                                  value={owner.owner_last_name}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]
+                                      ?.owner_last_name
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]
+                                      ?.owner_last_name
+                                  }
+                                  required
+                                />
+
+                                <FormField
+                                  id={`owner_details[${index}].owner_email`}
+                                  label="Email"
+                                  name={`owner_details[${index}].owner_email`}
+                                  type="email"
+                                  value={owner.owner_email}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]?.owner_email
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]?.owner_email
+                                  }
+                                  required
+                                />
+
+                                <FormField
+                                  id={`owner_details[${index}].ownership_percentage`}
+                                  label="Ownership Percentage"
+                                  name={`owner_details[${index}].ownership_percentage`}
+                                  type="number"
+                                  value={owner.ownership_percentage}
+                                  onChange={(e) => {
+                                    handleChange(e);
+                                    dispatch(validateOwnershipPercentage());
+                                  }}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]
+                                      ?.ownership_percentage
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]
+                                      ?.ownership_percentage
+                                  }
+                                  required
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                />
+
+                                <FormField
+                                  id={`owner_details[${index}].owner_dob`}
+                                  label="Date of Birth"
+                                  name={`owner_details[${index}].owner_dob`}
+                                  type="date"
+                                  value={owner.owner_dob}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]?.owner_dob
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]?.owner_dob
+                                  }
+                                  required
+                                />
+
+                                {/* Owner Country */}
+                                <SelectField
+                                  id={`owner_details[${index}].owner_country_id`}
+                                  label="Country"
+                                  options={countryOptions}
+                                  onChange={(option) => {
+                                    setFieldValue(
+                                      `owner_details[${index}].owner_country_id`,
+                                      option?.value || ""
+                                    );
+                                  }}
+                                  value={countryOptions.find(
+                                    (opt) =>
+                                      opt.value === owner.owner_country_id
+                                  )}
+                                  touched={
+                                    touched.owner_details?.[index]
+                                      ?.owner_country_id
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]
+                                      ?.owner_country_id
+                                  }
+                                  required
+                                  isLoading={countriesLoading}
+                                />
+
+                                <PhoneNumberField
+                                  id={`owner_details[${index}].owner_phone_number`}
+                                  label="Phone Number"
+                                  name={`owner_details[${index}].owner_phone_number`}
+                                  value={owner.owner_phone_number}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  touched={
+                                    touched.owner_details?.[index]
+                                      ?.owner_phone_number
+                                  }
+                                  error={
+                                    errors.owner_details?.[index]
+                                      ?.owner_phone_number
+                                  }
+                                  required
+                                  countryCodeName={`owner_details[${index}].owner_phone_number_country_code`}
+                                  countryCodeValue={
+                                    owner.owner_phone_number_country_code
+                                  }
+                                />
+
+                                {/* US-specific fields for named accounts */}
+                                {owner.owner_country_id === "United States" &&
+                                  isNamedAccount && (
+                                    <>
+                                      <FormField
+                                        id={`owner_details[${index}].ssn`}
+                                        label="SSN"
+                                        name={`owner_details[${index}].ssn`}
+                                        value={owner.ssn}
+                                        onChange={(e) => {
+                                          const formatted = formatTaxId(
+                                            e.target.value,
+                                            "ssn"
+                                          );
+                                          setFieldValue(
+                                            `owner_details[${index}].ssn`,
+                                            formatted
+                                          );
+                                        }}
+                                        onBlur={handleBlur}
+                                        touched={
+                                          touched.owner_details?.[index]?.ssn
+                                        }
+                                        error={
+                                          errors.owner_details?.[index]?.ssn
+                                        }
+                                        required
+                                        placeholder="XXX-XX-XXXX"
+                                      />
+
+                                      <EnhancedDocumentSection
+                                        values={values}
+                                        setFieldValue={setFieldValue}
+                                        handleChange={handleChange}
+                                        handleBlur={handleBlur}
+                                        touched={touched}
+                                        errors={errors}
+                                        index={index}
+                                        owner={owner}
+                                      />
+                                    </>
+                                  )}
+
+                                {/* System Access */}
+                                <div className="md:col-span-2">
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Does this owner need access to the system?
+                                  </label>
+                                  <div className="flex space-x-4">
+                                    <label className="flex items-center">
+                                      <Field
+                                        type="radio"
+                                        name={`owner_details[${index}].owner_needs_access_to_system`}
+                                        value="yes"
+                                        className="mr-2"
+                                      />
+                                      <span>Yes</span>
+                                    </label>
+                                    <label className="flex items-center">
+                                      <Field
+                                        type="radio"
+                                        name={`owner_details[${index}].owner_needs_access_to_system`}
+                                        value="no"
+                                        className="mr-2"
+                                      />
+                                      <span>No</span>
+                                    </label>
+                                  </div>
+
+                                  {owner.owner_needs_access_to_system ===
+                                    "yes" && (
+                                    <div className="mt-3">
+                                      <SelectField
+                                        id={`owner_details[${index}].owner_role_id`}
+                                        label="Role"
+                                        options={roleOptions}
+                                        onChange={(option) =>
+                                          setFieldValue(
+                                            `owner_details[${index}].owner_role_id`,
+                                            option?.value
+                                          )
+                                        }
+                                        value={roleOptions.find(
+                                          (opt) =>
+                                            opt.value === owner.owner_role_id
+                                        )}
+                                        touched={
+                                          touched.owner_details?.[index]
+                                            ?.owner_role_id
+                                        }
+                                        error={
+                                          errors.owner_details?.[index]
+                                            ?.owner_role_id
+                                        }
+                                        required
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
 
                         {/* Add Owner Button */}
                         <button
@@ -2321,18 +2665,24 @@ const Institution = () => {
                         {/* Total Ownership Display */}
                         <div className="bg-blue-50 p-4 rounded-lg">
                           <div className="flex justify-between items-center">
-                            <span className="font-medium">Total Ownership:</span>
-                            <span className={`text-lg font-bold ${
-                              Math.abs(totalOwnershipPercentage - 100) < 0.01 
-                                ? "text-green-600" 
-                                : "text-red-600"
-                            }`}>
+                            <span className="font-medium">
+                              Total Ownership:
+                            </span>
+                            <span
+                              className={`text-lg font-bold ${
+                                Math.abs(totalOwnershipPercentage - 100) < 0.01
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
                               {totalOwnershipPercentage.toFixed(2)}%
                             </span>
                           </div>
                           {Math.abs(totalOwnershipPercentage - 100) > 0.01 && (
                             <p className="text-red-600 text-sm mt-2">
-                              Total ownership must equal 100%. Current difference: {(100 - totalOwnershipPercentage).toFixed(2)}%
+                              Total ownership must equal 100%. Current
+                              difference:{" "}
+                              {(100 - totalOwnershipPercentage).toFixed(2)}%
                             </p>
                           )}
                         </div>
@@ -2364,9 +2714,15 @@ const Institution = () => {
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {documents.map((doc) => (
-                          <div key={doc.id} className="border border-gray-200 rounded-lg p-4">
+                          <div
+                            key={doc.id}
+                            className="border border-gray-200 rounded-lg p-4"
+                          >
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                              {doc.name} {doc.required && <span className="text-red-500">*</span>}
+                              {doc.name}{" "}
+                              {doc.required && (
+                                <span className="text-red-500">*</span>
+                              )}
                             </label>
                             <input
                               type="file"
@@ -2374,7 +2730,9 @@ const Institution = () => {
                                 const file = e.target.files[0];
                                 if (file) {
                                   setFieldValue(`user_image.${doc.id}`, file);
-                                  dispatch(uploadFile({ documentId: doc.id, file }));
+                                  dispatch(
+                                    uploadFile({ documentId: doc.id, file })
+                                  );
                                 }
                               }}
                               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -2382,16 +2740,20 @@ const Institution = () => {
                             />
                             {values.user_image && values.user_image[doc.id] && (
                               <p className="text-sm text-green-600 mt-1">
-                                ✓ Document uploaded: {values.user_image[doc.id].name}
+                                ✓ Document uploaded:{" "}
+                                {values.user_image[doc.id].name}
                               </p>
                             )}
-                            {touched.user_image?.[doc.id] && errors.user_image?.[doc.id] && (
-                              <div className="text-red-500 text-xs mt-1">
-                                {errors.user_image[doc.id]}
-                              </div>
-                            )}
+                            {touched.user_image?.[doc.id] &&
+                              errors.user_image?.[doc.id] && (
+                                <div className="text-red-500 text-xs mt-1">
+                                  {errors.user_image[doc.id]}
+                                </div>
+                              )}
                             {doc.description && (
-                              <p className="text-xs text-gray-500 mt-1">{doc.description}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {doc.description}
+                              </p>
                             )}
                           </div>
                         ))}
@@ -2401,7 +2763,9 @@ const Institution = () => {
 
                   {/* Final Terms Agreement */}
                   <div className="border-t pt-6">
-                    <h3 className="text-lg font-medium mb-4">Final Agreement</h3>
+                    <h3 className="text-lg font-medium mb-4">
+                      Final Agreement
+                    </h3>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <label className="flex items-start space-x-3">
                         <Field
@@ -2410,8 +2774,10 @@ const Institution = () => {
                           className="mt-1"
                         />
                         <span className="text-sm text-gray-700">
-                          I certify that all information provided is true and accurate to the best of my knowledge. 
-                          I agree to abide by the terms and conditions of this institution registration.
+                          I certify that all information provided is true and
+                          accurate to the best of my knowledge. I agree to abide
+                          by the terms and conditions of this institution
+                          registration.
                         </span>
                       </label>
                       {touched.terms_agreement && errors.terms_agreement && (
@@ -2428,8 +2794,9 @@ const Institution = () => {
                       Ready to Submit!
                     </h3>
                     <p className="text-green-700 text-sm">
-                      Please review all information before submitting. Once submitted, 
-                      your application will be processed and you will receive a confirmation email.
+                      Please review all information before submitting. Once
+                      submitted, your application will be processed and you will
+                      receive a confirmation email.
                     </p>
                   </div>
                 </motion.div>
@@ -2466,7 +2833,9 @@ const Institution = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={loading || !isStepComplete(5, values, errors, touched)}
+                  disabled={
+                    loading || !isStepComplete(5, values, errors, touched)
+                  }
                   className="flex items-center gap-2 rounded-xl bg-green-600 px-6 py-3 text-white shadow-md hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {loading ? (
