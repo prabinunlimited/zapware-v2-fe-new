@@ -8,11 +8,12 @@ import {
   selectIsInitialized, 
   selectIsAuthenticated 
 } from "../src/store/selectors";
-import { syncLocalStorageState } from '../src/features/Auth/slices/authSlice';
+import { syncLocalStorageState, setAuthState } from '../src/features/Auth/slices/authSlice';
 import Footer from "../src/components/Dashboard/Footer/Footer";
 import Header from '../src/components/Dashboard/Header/Header';
 
 const ProtectedRoute = () => {
+  // ✅ ALL HOOKS AT THE TOP - BEFORE ANY CONDITIONALS
   const token = useSelector(selectAuthToken);
   const customerId = useSelector(selectCustomerId);
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -20,7 +21,6 @@ const ProtectedRoute = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const [isChecking, setIsChecking] = useState(true);
-
   const routeParams = useParams();
   const routeCustomerId = routeParams.customerId;
 
@@ -76,7 +76,7 @@ const ProtectedRoute = () => {
     initializeAuth();
   }, [dispatch, token, customerId]);
 
-  // Show loading while initializing
+  // ✅ Show loading while initializing - AFTER ALL HOOKS
   if (!isInitialized || isChecking) {
     console.log('⏳ [ProtectedRoute] Still loading, showing spinner');
     return (
@@ -121,4 +121,5 @@ const ProtectedRoute = () => {
     </div>
   );
 };
+
 export default ProtectedRoute;

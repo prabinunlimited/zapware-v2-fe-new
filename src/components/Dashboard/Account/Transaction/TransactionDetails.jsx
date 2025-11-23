@@ -1,64 +1,90 @@
 import React, { useEffect, useMemo, useCallback, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
 import PropTypes from "prop-types";
 import ClipLoader from "react-spinners/ClipLoader";
 
-// Redux
-import {
-  fetchTransactionDetails,
-  selectTransactions,
-  selectTransactionLoading,
-  selectTransactionError,
-} from "../../Account/Transaction/TransactionSlice";
-
-import { selectAuthToken } from "../../../../store/selectors";
+// ✅ USE THE NEW HOOK
+import { useTransactionData } from "../../../../hooks/transactionHooks";
 
 const TransactionDetails = React.memo(
   ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
-    const dispatch = useDispatch();
+    // ✅ USE SUCCESS-BASED TRANSACTION HOOK
+    const { 
+      transactions, 
+      loading, 
+      error, 
+      fetchTransactions, 
+      forceRefresh,
+      hasSuccessfulData 
+    } = useTransactionData();
 
-    // Redux Selectors with safety checks
-    const transactions = useSelector(selectTransactions) || [];
-    const transactionLoading = useSelector(selectTransactionLoading);
-    const transactionError = useSelector(selectTransactionError);
-    const bearertoken = useSelector(selectAuthToken);
-
-    // Local state for pagination/filtering
+    // Local state for pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
+    const [initialFetchDone, setInitialFetchDone] = useState(false);
+    const [transactionCompletionNotified, setTransactionCompletionNotified] = useState(false);
 
     // Memoized transaction data
     const currentTransactions = useMemo(() => {
+      const safeTransactions = Array.isArray(transactions) ? transactions : [];
       const indexOfLastItem = currentPage * itemsPerPage;
       const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-      return transactions.slice(indexOfFirstItem, indexOfLastItem);
+      return safeTransactions.slice(indexOfFirstItem, indexOfLastItem);
     }, [transactions, currentPage, itemsPerPage]);
 
     const totalPages = useMemo(
-      () => Math.ceil(transactions.length / itemsPerPage),
+      () => Math.ceil((Array.isArray(transactions) ? transactions.length : 0) / itemsPerPage),
       [transactions.length, itemsPerPage]
     );
 
-    // Fetch transactions when currency or customer changes - OPTIMIZED
+    // ✅ FIXED: SINGLE FETCH EFFECT WITH SUCCESS-BASED STOPPING
     useEffect(() => {
-      if (customerId && selectedCurrencyCode) {
-        dispatch(
-          fetchTransactionDetails({
-            customerId,
-            currencyCode: selectedCurrencyCode,
-            // bearertoken removed - thunk gets it from state
-          })
-        );
+      if (!customerId || !selectedCurrencyCode || selectedCurrencyCode === "all") {
+        console.log("⏹️ Missing customerId or currency, skipping transaction fetch");
+        return;
       }
-    }, [customerId, selectedCurrencyCode, dispatch]);
 
-    // Handle transaction completion
-    useEffect(() => {
-      if (onTransactionComplete && transactions.length > 0) {
-        onTransactionComplete();
+      // ✅ STOP IF ALREADY HAVE SUCCESSFUL DATA
+      if (hasSuccessfulData(customerId, selectedCurrencyCode)) {
+        console.log("✅ Already have transaction data, skipping fetch");
+        return;
       }
-    }, [transactions, onTransactionComplete]);
+
+      // ✅ PREVENT DUPLICATE INITIAL FETCH
+      if (initialFetchDone) {
+        console.log("⏸️ Initial fetch already completed, skipping...");
+        return;
+      }
+
+      console.log("🔄 Initial transaction fetch triggered", {
+        customerId,
+        selectedCurrencyCode,
+        hasSuccessfulData: hasSuccessfulData(customerId, selectedCurrencyCode)
+      });
+
+      setInitialFetchDone(true);
+      fetchTransactions(customerId, selectedCurrencyCode);
+
+    }, [customerId, selectedCurrencyCode, fetchTransactions, hasSuccessfulData, initialFetchDone]);
+
+    // ✅ FIXED: Handle transaction completion WITHOUT triggering account refresh
+    useEffect(() => {
+      // Only notify completion once when we have transactions and not loading
+      if (onTransactionComplete && 
+          transactions.length > 0 && 
+          !loading && 
+          !transactionCompletionNotified) {
+        console.log("✅ Transaction completion callback triggered (notification only)");
+        setTransactionCompletionNotified(true);
+        // Just notify completion without triggering refresh
+        onTransactionComplete(false); // Pass false to indicate no refresh needed
+      }
+    }, [transactions, onTransactionComplete, loading, transactionCompletionNotified]);
+
+    // Reset completion notification when currency changes
+    useEffect(() => {
+      setTransactionCompletionNotified(false);
+    }, [selectedCurrencyCode]);
 
     // Memoized utility functions
     const formatDate = useCallback((dateString) => {
@@ -127,15 +153,22 @@ const TransactionDetails = React.memo(
       setCurrentPage(pageNumber);
     }, []);
 
+    // Manual refresh function
+    const handleManualRefresh = useCallback(() => {
+      if (!customerId || !selectedCurrencyCode) return;
+      
+      console.log("🔄 Manual transaction refresh triggered");
+      setInitialFetchDone(false); // Reset to allow new fetch
+      setTransactionCompletionNotified(false); // Reset completion notification
+      forceRefresh(customerId, selectedCurrencyCode);
+    }, [customerId, selectedCurrencyCode, forceRefresh]);
+
     // Generate page numbers for pagination
     const pageNumbers = useMemo(() => {
       const pages = [];
       const maxVisiblePages = 5;
 
-      let startPage = Math.max(
-        1,
-        currentPage - Math.floor(maxVisiblePages / 2)
-      );
+      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
       let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
       if (endPage - startPage + 1 < maxVisiblePages) {
@@ -149,7 +182,7 @@ const TransactionDetails = React.memo(
       return pages;
     }, [currentPage, totalPages]);
 
-    if (transactionLoading) {
+    if (loading) {
       return (
         <div className="flex justify-center items-center h-32">
           <div className="text-center">
@@ -160,18 +193,26 @@ const TransactionDetails = React.memo(
       );
     }
 
-    if (transactionError) {
+    if (error) {
       return (
         <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
           <div className="text-red-600 font-medium mb-2">
             Error loading transactions
           </div>
-          <div className="text-red-500 text-sm">
-            {transactionError.message || "Please try again later"}
+          <div className="text-red-500 text-sm mb-4">
+            {error.message || "Please try again later"}
           </div>
+          <button 
+            onClick={handleManualRefresh}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm"
+          >
+            Try Again
+          </button>
         </div>
       );
     }
+
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
     return (
       <motion.div
@@ -183,13 +224,22 @@ const TransactionDetails = React.memo(
           <h2 className="text-xl font-semibold text-gray-800">
             Transaction History
           </h2>
-          <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-            {transactions.length} transaction
-            {transactions.length !== 1 ? "s" : ""} found
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              {safeTransactions.length} transaction
+              {safeTransactions.length !== 1 ? "s" : ""} found
+            </div>
+            <button
+              onClick={handleManualRefresh}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              disabled={loading}
+            >
+              Refresh
+            </button>
           </div>
         </div>
 
-        {transactions.length === 0 ? (
+        {safeTransactions.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
             <div className="text-gray-400 text-6xl mb-4">💸</div>
             <h3 className="text-lg font-medium text-gray-700 mb-2">
@@ -200,6 +250,12 @@ const TransactionDetails = React.memo(
                 ? `No transactions found for ${selectedCurrencyCode} currency.`
                 : "No transactions available for the selected period."}
             </p>
+            <button 
+              onClick={handleManualRefresh}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              Check Again
+            </button>
           </div>
         ) : (
           <>

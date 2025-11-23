@@ -1,6 +1,5 @@
-// src/services/api.js - FIXED WITH SINGLE EXPORT
 import axios from "axios";
-import { tokenService } from './authService';
+import { tokenService } from "./authService"; // Your existing service
 
 // ===================== CONFIG =====================
 const api = axios.create({
@@ -34,82 +33,44 @@ const removeActiveRequest = (config) => {
   activeRequests.delete(signature);
 };
 
-// ===================== DEBOUNCE UTILITY =====================
-export const debouncedApiCall = (key, apiCall, delay = 100) => {
-  if (requestDebounceTimers.has(key)) {
-    clearTimeout(requestDebounceTimers.get(key));
-  }
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(async () => {
-      try {
-        requestDebounceTimers.delete(key);
-        const result = await apiCall();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    }, delay);
-
-    requestDebounceTimers.set(key, timer);
-  });
-};
-
-let tokenRefreshPromise = null;
-
 // ===================== TOKEN MANAGEMENT =====================
-// ✅ SINGLE EXPORT: Only export getBearerToken once here
 export const getBearerToken = async (forceRefresh = false) => {
-  // Use tokenService instead of direct localStorage access
-  const existingToken = tokenService.getToken();
+  // ✅ USE YOUR EXISTING TOKEN SERVICE
+  let token = tokenService.getToken();
   
-  if (existingToken && !forceRefresh) {
-    return existingToken;
+  if (token && !forceRefresh) {
+    return token;
   }
 
-  if (tokenRefreshPromise) {
-    return tokenRefreshPromise;
-  }
-
-  tokenRefreshPromise = (async () => {
-    try {
-      console.log("🔄 Refreshing partner token...");
-
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/partner-login`,
-        {
-          client_id: "HK6V7709",
-          client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-          timeout: 10000
-        }
-      );
-
-      if (response.data?.data?.token) {
-        const token = response.data.data.token;
-        
-        // Use tokenService to store the token
-        tokenService.setToken(token);
-        
-        console.log("✅ Partner token refreshed successfully");
-        return token;
-      } else {
-        throw new Error("Invalid token response structure");
+  console.log("🔄 Refreshing partner token...");
+  
+  try {
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_URL}/partner-login`,
+      {
+        client_id: "HK6V7709",
+        client_secret: "057d433a-2d02-437b-a265-56114567aa44",
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 10000
       }
-    } catch (error) {
-      console.error("❌ Token refresh failed:", error);
-      
-      // Use tokenService to clear the token
-      tokenService.clearToken();
-      throw error;
-    } finally {
-      tokenRefreshPromise = null;
-    }
-  })();
+    );
 
-  return tokenRefreshPromise;
+    if (response.data?.data?.token) {
+      const newToken = response.data.data.token;
+      // ✅ USE YOUR TOKEN SERVICE TO STORE
+      tokenService.setToken(newToken);
+      console.log("✅ Partner token refreshed successfully");
+      return newToken;
+    } else {
+      throw new Error("Invalid token response structure");
+    }
+  } catch (error) {
+    console.error("❌ Token refresh failed:", error);
+    tokenService.clearToken();
+    throw error;
+  }
 };
 
 // ===================== REQUEST INTERCEPTOR =====================
@@ -166,20 +127,33 @@ api.interceptors.request.use(
     }
 
     try {
-      const token = await getBearerToken();
+      // ✅ USE YOUR TOKEN SERVICE
+      const token = tokenService.getToken();
+      
+      console.log("🔐 API Request - Token Check:", {
+        url: config.url,
+        tokenInfo: tokenService.debugToken(),
+        tokenPresent: !!token
+      });
+
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        addActiveRequest(config);
+        console.log("✅ Token added to headers");
       } else {
-        throw new Error("Authentication token not available");
+        console.warn("⚠️ No token available for API request");
+        // Don't throw error, let the server handle authentication
       }
+
+      addActiveRequest(config);
     } catch (error) {
-      return Promise.reject(new Error("Authentication failed. Please try again."));
+      console.error("❌ Token setup error:", error);
+      // Continue without token
     }
 
     return config;
   },
   (error) => {
+    console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
@@ -229,7 +203,7 @@ api.interceptors.response.use(
           }
         } catch (refreshError) {
           if (!isLoginEndpoint) {
-            // Use tokenService to clear tokens
+            // ✅ USE YOUR TOKEN SERVICE TO CLEAR
             tokenService.clearToken();
             localStorage.removeItem("authtoken");
             localStorage.removeItem("authcustomer_id");

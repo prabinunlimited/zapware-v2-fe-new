@@ -12,7 +12,7 @@ import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
 import OpenCurrencyAccount from "../src/features/Auth/Registration/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
-import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback"
+import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
 import HomeRemit from "../src/page/Home/HomeRemit";
@@ -26,6 +26,14 @@ import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 
 import URLDebugger from "./URLDebugger";
+import Profile from "../src/page/Profile/Profile";
+import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
+import DepositPage from "../src/page/Deposit/DepositPage";
+import BankLink from "../src/page/Deposit/components/BankLink";
+import CardPayment from "../src/page/Deposit/components/Card/CardPayment";
+import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIframe";
+import Team from "../src/page/Team/Team";
+import AddTeamMember from "../src/page/Team/AddNewMember";
 
 const ProtectedLayout = () => {
   return (
@@ -73,7 +81,7 @@ const router = createBrowserRouter([
       {
         path: "plaidcallback",
         element: <PlaidCallback />,
-      }
+      },
     ],
   },
 
@@ -87,6 +95,37 @@ const router = createBrowserRouter([
         element: <Home />,
       },
       {
+        path: "transfer/:customerId",
+        element: <TransferBalancePage />,
+      },
+      {
+        path: "deposit/:customerId",
+        element: <DepositPage />,
+      },
+      {
+        path: "linkbank/:customerId",
+        element: <BankLink />,
+      },
+      {
+        path: "deposit/:customerId/:currency",
+        element: <DepositPage />,
+      },
+      {
+        path: "card",
+        element: <CardPayment />,
+      },
+      {
+        path: "cardiframe",
+        element: <CardPaymentIframe />,
+      },
+      {
+        path: "team/:customerId",
+        element: <Team />,
+      },
+      {path: "addteam/:customerId",
+        element: <AddTeamMember />,
+      },
+      {
         path: "homeremit/:customerId",
         element: <HomeRemit />,
       },
@@ -97,7 +136,11 @@ const router = createBrowserRouter([
       {
         path: "addbeneficiary/:customerId",
         element: <AddBeneficiary />,
-      }
+      },
+      {
+        path: "profile/:customerId",
+        element: <Profile />,
+      },
     ],
   },
 

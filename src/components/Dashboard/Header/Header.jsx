@@ -53,11 +53,25 @@ import { logoutUser } from "../../../features/Auth/slices/authSlice";
 // Partner config hook
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
-// LOCAL FIX: Copy the selectAuthToken implementation here
 const selectAuthToken = (state) => {
-  const token = state.auth?.token;
+  // Use bearertoken from localStorage for API calls
+  const bearertoken = localStorage.getItem("bearertoken");
 
   const isValidToken =
+    bearertoken &&
+    bearertoken !== "undefined" &&
+    bearertoken !== "null" &&
+    bearertoken !== "false" &&
+    typeof bearertoken === "string" &&
+    bearertoken.length > 10;
+
+  if (isValidToken) {
+    return bearertoken;
+  }
+
+  // Fallback to Redux token
+  const token = state.auth?.token;
+  const isValidReduxToken =
     token &&
     token !== "undefined" &&
     token !== "null" &&
@@ -65,41 +79,7 @@ const selectAuthToken = (state) => {
     typeof token === "string" &&
     token.length > 10;
 
-  if (isValidToken) {
-    return token;
-  }
-
-  const tempAuthData = state.auth?.tempAuthData;
-  if (tempAuthData?.token) {
-    return tempAuthData.token;
-  }
-
-  try {
-    const sessionTempAuth = sessionStorage.getItem("temp_auth_data");
-    if (sessionTempAuth) {
-      const tempAuth = JSON.parse(sessionTempAuth);
-      if (
-        tempAuth.token &&
-        tempAuth.timestamp &&
-        Date.now() - tempAuth.timestamp < 300000
-      ) {
-        return tempAuth.token;
-      }
-    }
-  } catch (e) {
-    // Silent catch
-  }
-
-  const storedToken = localStorage.getItem("authtoken");
-  const isValidStoredToken =
-    storedToken &&
-    storedToken !== "undefined" &&
-    storedToken !== "null" &&
-    storedToken !== "false" &&
-    typeof storedToken === "string" &&
-    storedToken.length > 10;
-
-  return isValidStoredToken ? storedToken : null;
+  return isValidReduxToken ? token : null;
 };
 
 const Header = ({ customerId }) => {
@@ -111,6 +91,7 @@ const Header = ({ customerId }) => {
   const dropdownRef = useRef(null);
   const timerRef = useRef(null);
   const hoverTimerRef = useRef(null);
+  const fetchTimeoutRef = useRef(null);
 
   // Use the partner config hook
   const {
@@ -154,6 +135,17 @@ const Header = ({ customerId }) => {
 
   const bearertoken = localStorage.getItem("bearertoken");
 
+  // 🔍 REDUX PROFILE STORAGE DEBUG EFFECT
+  useEffect(() => {
+    console.log("🔍 REDUX PROFILE STORAGE CHECK:", {
+      profileData, // Should change from null → object when fetched
+      profileLoading, // Should be false when done
+      fetchStatus: fetchStatus.profile, // Should be 'succeeded'
+      storedInRedux: !!profileData,
+      dataStructure: profileData ? Object.keys(profileData) : "null",
+    });
+  }, [profileData, profileLoading, fetchStatus.profile]);
+
   // 🔍 COMPREHENSIVE DEBUG EFFECT
   useEffect(() => {
     console.log("🔍 ========== HEADER DEBUG INFO ==========");
@@ -189,6 +181,11 @@ const Header = ({ customerId }) => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
+    }
+
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = null;
     }
 
     if (authtoken) {
@@ -254,95 +251,60 @@ const Header = ({ customerId }) => {
     }
   }, [dispatch, bearertoken, fetchStatus.fx]);
 
-  // 🔍 PRIMARY PROFILE FETCHING EFFECT
+  // 🔍 UPDATED: Profile fetch effect with proper conditions
   useEffect(() => {
-    console.log("🔍 Primary Profile Fetch Effect Triggered");
-    console.log("🔍 Conditions:", {
-      bearertoken: !!bearertoken,
-      customerId: !!customerId,
-      fetchStatusProfile: fetchStatus.profile,
-      hasFirstName: !!localStorage.getItem("firstName"),
-    });
-
-    // Always try to fetch if we don't have firstName
-    if (bearertoken && customerId && !localStorage.getItem("firstName")) {
-      console.log("🔍 Dispatching fetchUserProfile - firstName missing");
-      dispatch(fetchUserProfile({ customerId, bearertoken }));
-    } else if (bearertoken && customerId && fetchStatus.profile === "idle") {
-      console.log("🔍 Dispatching fetchUserProfile - idle status");
-      dispatch(fetchUserProfile({ customerId, bearertoken }));
-    } else {
-      console.log("🔍 Profile fetch skipped. Reasons:", {
-        missingBearer: !bearertoken,
-        missingCustomerId: !customerId,
-        alreadyHasFirstName: !!localStorage.getItem("firstName"),
-        fetchStatus: fetchStatus.profile,
-      });
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
     }
-  }, [dispatch, bearertoken, customerId, fetchStatus.profile]);
 
-  // 🔍 EMERGENCY FALLBACK PROFILE FETCH
-  useEffect(() => {
-    const emergencyFetchProfile = async () => {
-      if (!bearertoken || !customerId) {
-        console.log("🚨 Emergency fetch skipped: missing tokens");
-        return;
+    fetchTimeoutRef.current = setTimeout(() => {
+      console.log("🔍 Profile Fetch Effect - Current State:", {
+        bearertoken: !!bearertoken,
+        customerId: !!customerId,
+        fetchStatus: fetchStatus.profile,
+        profileLoading,
+        profileData: !!profileData,
+        hasFirstName: !!localStorage.getItem("firstName"),
+      });
+
+      // Fetch profile data if we don't have it in Redux
+      const shouldFetchProfile =
+        bearertoken &&
+        customerId &&
+        fetchStatus.profile === "idle" &&
+        !profileLoading &&
+        !profileData; // Only fetch if we don't have data in Redux
+
+      if (shouldFetchProfile) {
+        console.log("🔍 Dispatching fetchUserProfile - need to populate Redux");
+        dispatch(fetchUserProfile({ customerId, bearertoken }));
+      } else {
+        console.log("🔍 Profile fetch skipped", {
+          reason: profileData
+            ? "Already have profileData in Redux"
+            : "Other conditions not met",
+          hasProfileData: !!profileData,
+          hasBearer: !!bearertoken,
+          hasCustomerId: !!customerId,
+          fetchStatus: fetchStatus.profile,
+          isLoading: profileLoading,
+        });
       }
+    }, 100);
 
-      console.log("🚨 Emergency profile fetch triggered");
-
-      try {
-        const response = await fetch(
-          `https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile`,
-          {
-            headers: {
-              Authorization: `Bearer ${bearertoken}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        console.log("🚨 Emergency fetch response status:", response.status);
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log("🚨 Emergency fetch data:", data);
-
-          if (data.profile && data.profile.first_name) {
-            localStorage.setItem("firstName", data.profile.first_name);
-            localStorage.setItem("lastName", data.profile.last_name);
-            console.log(
-              "🚨 Emergency fetch SUCCESS - Saved:",
-              data.profile.first_name
-            );
-            // Force re-render by updating Redux state
-            dispatch(updateLocalStorageState());
-          } else {
-            console.log("🚨 Emergency fetch: No profile data in response");
-          }
-        } else {
-          console.log(
-            "🚨 Emergency fetch failed with status:",
-            response.status
-          );
-        }
-      } catch (error) {
-        console.error("🚨 Emergency fetch error:", error);
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
       }
     };
-
-    // Only run if we don't have firstName after 3 seconds
-    const timer = setTimeout(() => {
-      if (!localStorage.getItem("firstName")) {
-        console.log(
-          "🚨 No firstName found after 3s, triggering emergency fetch"
-        );
-        emergencyFetchProfile();
-      }
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [bearertoken, customerId, dispatch]);
+  }, [
+    dispatch,
+    bearertoken,
+    customerId,
+    fetchStatus.profile,
+    profileLoading,
+    profileData,
+  ]);
 
   // Navigation handlers
   const handleBeneficiariesClick = useCallback(() => {
@@ -351,12 +313,13 @@ const Header = ({ customerId }) => {
   }, [customerId, navigate, dispatch]);
 
   const handleProfileClick = useCallback(() => {
+    console.log("🔍 Navigating to profile page for customer:", customerId);
     navigate(`/profile/${customerId}`);
     dispatch(closeDropdown());
   }, [customerId, navigate, dispatch]);
 
   const handleTeamClick = useCallback(() => {
-    navigate(`/teammember/${customerId}`);
+    navigate(`/team/${customerId}`);
     dispatch(closeDropdown());
   }, [customerId, navigate, dispatch]);
 
@@ -468,7 +431,7 @@ const Header = ({ customerId }) => {
       return (
         <div className="flex items-center">
           <ClipLoader size={30} color={"#ffffff"} loading={true} />
-          <span className="ml-2 text-white text-sm">Loading...</span>
+          <span className="ml-2 text-white text-sm">Loading Profile...</span>
         </div>
       );
     }
@@ -477,7 +440,9 @@ const Header = ({ customerId }) => {
       console.error("🔍 Profile error in ProfileSection:", profileError);
     }
 
-    const displayName = localStorage.getItem("firstName") || "User";
+    // Use data from Redux if available, otherwise fallback to localStorage
+    const displayName =
+      profileData?.first_name || localStorage.getItem("firstName") || "User";
     const userRole =
       isStaffLogin === "1"
         ? staffRole
@@ -485,7 +450,12 @@ const Header = ({ customerId }) => {
         ? ownerRoleName
         : "Customer";
 
-    console.log("🔍 ProfileSection rendering with name:", displayName);
+    console.log(
+      "🔍 ProfileSection rendering with name:",
+      displayName,
+      "from Redux:",
+      !!profileData
+    );
 
     return (
       <div
@@ -498,7 +468,6 @@ const Header = ({ customerId }) => {
         <motion.div
           whileHover={{ scale: 1.05 }}
           className="flex items-center cursor-pointer bg-white/10 hover:bg-white/20 rounded-2xl px-4 py-3 transition-all duration-300 backdrop-blur-sm border border-white/20"
-          // REMOVED: onClick={() => dispatch(toggleDropdown())}
         >
           <motion.div
             whileHover={{ rotate: 5 }}
@@ -703,6 +672,7 @@ const Header = ({ customerId }) => {
   }, [
     profileLoading,
     profileError,
+    profileData,
     isDropdownOpen,
     isOwnerLogin,
     isStaffLogin,
@@ -764,11 +734,14 @@ const Header = ({ customerId }) => {
     return {};
   }, [headerColor]);
 
-  // Cleanup timer on unmount
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) {
         clearTimeout(hoverTimerRef.current);
+      }
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
       }
     };
   }, []);

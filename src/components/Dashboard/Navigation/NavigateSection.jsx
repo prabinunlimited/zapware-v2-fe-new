@@ -1,4 +1,4 @@
-// src/components/NavigateSection.js - COMPLETE IMPLEMENTATION
+// src/components/NavigateSection.js - RESPONSIVE IMPLEMENTATION
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -166,7 +166,6 @@ function NavigateSection({
     hasFetchedProfile,
     hasFetchedModules,
     dispatch,
-    // ✅ Removed isFetching
   ]);
 
   // ✅ FIXED: Simplified effect with minimal dependencies
@@ -218,7 +217,7 @@ function NavigateSection({
       );
       return;
     }
-    navigate(`/transferbalance/${customerId}`);
+    navigate(`/transfer/${customerId}`);
   };
 
   const handleDepositClick = () => {
@@ -329,18 +328,18 @@ function NavigateSection({
   // Render loading states
   if (profileLoading || isFetching) {
     return (
-      <div className="px-2 col-span-1 md:col-span-1 xl:col-span-1 flex justify-center items-center min-h-[300px] sm:min-h-[350px] md:min-h-[400px] lg:min-h-[450px] xl:min-h-[500px] w-full lg:w-[400px] xl:w-[500px] 2xl:w-[600px] ml-0 lg:ml-4">
-        <ClipLoader color="#36d7b7" size={50} />
+      <div className="w-full px-2 sm:px-4 flex justify-center items-center min-h-[200px]">
+        <ClipLoader color="#36d7b7" size={40} />
       </div>
     );
   }
 
   return (
-    <div
-      className="px-2 col-span-1 md:col-span-1 xl:col-span-1 flex justify-start items-start min-h-[300px] sm:min-h-[350px] md:min-h-[400px] lg:min-h-[450px] xl:min-h-[500px] w-full lg:w-[400px] xl:w-[500px] 2xl:w-[600px] ml-0 lg:ml-4 space-y-12"
+    <div 
+      className="px-2 sm:px-4 md:px-6 w-full max-w-md lg:max-w-lg xl:max-w-xl mx-auto lg:mx-0 lg:ml-4"
       style={{ color: textColor }}
     >
-      <div className="w-full flex flex-col gap-3">
+      <div className="w-full flex flex-col gap-3 sm:gap-4">
         {/* Transfer Money */}
         {allowedModules.some((module) => module.module_name === "Transfer") &&
           (hostName === "localhost" ||
@@ -348,212 +347,226 @@ function NavigateSection({
           hostName === "sandbox-ourzap.unlimitedremit.com" ? (
             <div
               onClick={handleTransferClick}
-              className="w-full lg:w-full mx-auto"
+              className="w-full cursor-pointer"
             >
-              <div className="rounded-2xl border flex flex-row justify-between items-center border-stroke h-auto sm:h-16 bg-white py-4 sm:py-6 px-6 sm:px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-                <div className="flex items-center space-x-4 sm:space-x-6">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
                   <img
                     src={depositImg}
-                    alt="Custom Icon"
-                    className="w-6 h-6 sm:w-6 sm:h-6"
+                    alt="Transfer Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
                   />
-                  <div className="text-xs sm:text-sm">
-                    <h2 className="font-semibold text-base">Transfer</h2>
-                    <p
-                      className="text-xs sm:text-xs text-gray-500"
-                      {...textColorProps}
-                    >
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Transfer
+                    </h2>
+                    <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                       Transfer Money
                     </p>
                   </div>
                 </div>
-                <IoIosArrowForward className="hidden sm:block lg:hidden xl:block w-6 h-6 text-sky-800" />
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
           ) : (
             <div
-              onClick={() => navigate(`/transferbalance/${customerId}`)}
-              className="w-full lg:w-full mx-auto"
+              onClick={() => navigate(`/transfer/${customerId}`)}
+              className="w-full cursor-pointer"
             >
-              <div className="rounded-2xl border flex flex-row justify-between items-center border-stroke h-auto sm:h-16 bg-white py-4 sm:py-6 px-6 sm:px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-                <div className="flex items-center space-x-4 sm:space-x-6">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
                   <img
                     src={depositImg}
-                    alt="Custom Icon"
-                    className="w-6 h-6 sm:w-6 sm:h-6"
+                    alt="Internal Transfer Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
                   />
-                  <div className="text-xs sm:text-sm">
-                    <h2 className="font-semibold text-base">
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                       Internal Transfer
                     </h2>
-                    <p
-                      className="text-xs text-gray-500 sm:text-xs"
-                      {...textColorProps}
-                    >
+                    <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                       Transfer Money
                     </p>
                   </div>
                 </div>
-                <IoIosArrowForward className="hidden sm:block lg:hidden xl:block w-6 h-6 text-sky-800" />
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
           ))}
 
+        {/* Deposit */}
         {allowedModules.some((module) => module.module_name === "Deposit") && (
           <div onClick={handleDepositClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-              <div className="flex items-center">
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 <img
                   src={depositImg}
-                  alt="Custom Icon"
-                  className="w-6 h-6 mr-4"
+                  alt="Deposit Icon"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
                 />
-                <div className="text-xs sm:text-sm">
-                  <h2 className="text-base font-medium">Deposit</h2>
-                  <p className="text-xs text-gray-500" {...textColorProps}>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Deposit
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                     Deposit Money
                   </p>
                 </div>
               </div>
-              <IoIosArrowForward className="hidden sm:block lg:hidden xl:block w-6 h-6 text-sky-800" />
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
             </div>
           </div>
         )}
 
+        {/* Convert */}
         {(allowedModules.some((module) => module.module_name === "Convert") ||
           hostName === "ourzap.unlimitedremit.com") && (
-          <div
-            onClick={handleConversionClick}
-            className="w-full cursor-pointer"
-          >
-            <div
-              className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer 
-              hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out"
-            >
-              <div className="flex items-center">
+          <div onClick={handleConversionClick} className="w-full cursor-pointer">
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 <img
                   src={convertImg}
-                  alt="Custom Icon"
-                  className="w-6 h-6 mr-4"
+                  alt="Convert Icon"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
                 />
-                <div className="text-xs sm:text-sm">
-                  <h2 className="text-base font-medium">Convert</h2>
-                  <p className="text-xs text-gray-500" {...textColorProps}>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Convert
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                     Global currency conversion
                   </p>
                 </div>
               </div>
-              <IoIosArrowForward className="w-6 h-6 text-black" />
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
             </div>
           </div>
         )}
 
+        {/* Payout */}
         {allowedModules.some((module) => module.module_name === "Payout") && (
           <div onClick={handlePayoutClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-              <div className="flex items-center">
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 <img
                   src={remitImg}
-                  alt="Custom Icon"
-                  className="w-6 h-6 mr-4"
+                  alt="Payout Icon"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
                 />
-                <div className="text-xs sm:text-sm">
-                  <h2 className="text-base font-medium">Payout</h2>
-                  <p className="text-xs text-gray-500" {...textColorProps}>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Payout
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                     Send money WorldWide
                   </p>
                 </div>
               </div>
-              <IoIosArrowForward className="w-6 h-6 text-black" />
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
             </div>
           </div>
         )}
+
+        {/* Remittance */}
         {allowedModules.some(
           (module) => module.module_name === "Remittance"
         ) && (
           <div onClick={handleRemitClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-              <div className="flex items-center">
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 <img
                   src={remitImg}
-                  alt="Custom Icon"
-                  className="w-6 h-6 mr-4"
+                  alt="Remittance Icon"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
                 />
-                <div className="text-xs sm:text-sm">
-                  <h2 className="text-base font-medium">Remittance</h2>
-                  <p className="text-xs text-gray-500" {...textColorProps}>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Remittance
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
                     Send money globally
                   </p>
                 </div>
               </div>
-              <IoIosArrowForward className="w-6 h-6 text-black" />
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
             </div>
           </div>
         )}
+
+        {/* Add More Accounts */}
         {allowedModules.some(
           (module) => module.module_name === "Add More Accounts"
         ) && (
           <div
             onClick={() => navigate(`/addaccount/${customerId}`)}
-            className="w-full lg:w-full"
+            className="w-full cursor-pointer"
           >
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-              <div className="flex items-center">
-                <img src={addImg} alt="Custom Icon" className="w-6 h-6 mr-4" />
-                <div>
-                  <h2 className="text-base font-medium">Add More Accounts</h2>
-                  <p className="text-xs text-gray-500" {...textColorProps}>
-                    Enhance accessibility by adding additional accounts
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <img
+                  src={addImg}
+                  alt="Add Account Icon"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
+                />
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Add More Accounts
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
+                    Enhance accessibility
                   </p>
                 </div>
               </div>
-              <IoIosArrowForward className="w-6 h-6 text-black" />
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
             </div>
           </div>
         )}
-        {isRemittanceOnlyCustomer === "Y" && (
-          <div>
-            {selectedCurrencyCode === "USD" && (
-              <div onClick={handleLinkBankClick} className="w-full lg:w-full">
-                <div className="rounded-2xl border flex justify-between items-center border-stroke h-16 bg-white py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-200 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
-                  <div className="flex items-center">
-                    <MdAccountBalance className="mr-4 text-xl text-green-600" />
-                    <div>
-                      <h2 className="text-base font-medium">Link Bank</h2>
-                      <p className="text-xs text-gray-500" {...textColorProps}>
-                        Connect your bank
-                      </p>
-                    </div>
-                  </div>
-                  <IoIosArrowForward className="w-6 h-6 text-black" />
+
+        {/* Link Bank */}
+        {isRemittanceOnlyCustomer === "Y" && selectedCurrencyCode === "USD" && (
+          <div onClick={handleLinkBankClick} className="w-full cursor-pointer">
+            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <MdAccountBalance className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    Link Bank
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate" {...textColorProps}>
+                    Connect your bank
+                  </p>
                 </div>
               </div>
-            )}
+              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+            </div>
           </div>
         )}
+
+        {/* User Manual */}
         {download_operation_manual === "Y" && (
-          <div>
+          <div className="w-full flex justify-center mt-2">
             <div
               onClick={handleUserManualClick}
-              className="w-full lg:w-full flex justify-center items-center"
+              className="w-full sm:w-3/4 cursor-pointer"
             >
-              <div className="w-3/4 rounded-2xl border flex justify-center items-center border-stroke h-16 text-white bg-gray-800 py-6 px-8 shadow-default dark:border-stroke dark:bg-boxdark cursor-pointer hover:bg-gray-700 hover:shadow-xl hover:scale-105 transform transition duration-300 ease-in-out">
+              <div className="rounded-2xl border flex justify-center items-center border-stroke h-14 sm:h-16 text-white bg-gray-800 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-700 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                 {manualLoading ? (
-                  <div className="flex justify-center items-center h-full">
-                    <ClipLoader color="#36d7b7" size={50} />
+                  <div className="flex justify-center items-center">
+                    <ClipLoader color="#36d7b7" size={25} />
                   </div>
                 ) : (
-                  <div className="flex items-center">
-                    <Download className="mr-4 text-xl text-white" />
-                    <div>
-                      <h2 className="text-base font-medium">User Manual</h2>
-                      <p className="text-xs text-gray-500" {...textColorProps}>
+                  <div className="flex items-center space-x-3">
+                    <Download className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    <div className="text-center sm:text-left">
+                      <h2 className="text-sm sm:text-base font-semibold">
                         User Manual
+                      </h2>
+                      <p className="text-xs text-gray-300">
+                        Download user guide
                       </p>
                     </div>
                   </div>
                 )}
-                <IoIosArrowForward className="w-6 h-6 text-black" />
               </div>
             </div>
           </div>
@@ -562,20 +575,20 @@ function NavigateSection({
 
       {/* Navigation Popup */}
       {/* {popupData.show && (
-      <NavigationPopup
-        message={popupData.message}
-        onClose={() => dispatch(setPopupData({ show: false, message: "", onConfirm: null }))}
-        onConfirm={() => {
-          dispatch(setPopupData({ show: false, message: "", onConfirm: null }));
-          if (popupData.onConfirm) popupData.onConfirm();
-        }}
-      />
-    )} */}
+        <NavigationPopup
+          message={popupData.message}
+          onClose={() => dispatch(setPopupData({ show: false, message: "", onConfirm: null }))}
+          onConfirm={() => {
+            dispatch(setPopupData({ show: false, message: "", onConfirm: null }));
+            if (popupData.onConfirm) popupData.onConfirm();
+          }}
+        />
+      )} */}
 
       {/* Show Popup when isPopupVisible is true */}
       {/* {isPopupVisible && (
-      <FeatureUnavailablePopup onClose={handlePopupToggle} />
-    )} */}
+        <FeatureUnavailablePopup onClose={handlePopupToggle} />
+      )} */}
     </div>
   );
 }

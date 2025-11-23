@@ -793,9 +793,13 @@ export const verifyOTP = createAsyncThunk(
 // ===================== SEND OTP =====================
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
-  async (mobileNumber, { rejectWithValue }) => {
+  async (mobileNumber, { rejectWithValue, dispatch }) => {
     try {
       const token = await getBearerToken();
+
+      console.log("🔄 Sending OTP to:", mobileNumber);
+
+      // ✅ UPDATED: Use the same endpoint as reference code
       const response = await api.post(
         "/send-otp",
         {
@@ -809,20 +813,73 @@ export const sendOtp = createAsyncThunk(
         }
       );
 
+      console.log("✅ Send OTP response:", response.data);
+
+      // ✅ ADDED: Fetch OTP counter info after successful OTP send (like reference code)
+      if (response.data.status === "success") {
+        try {
+          const otpCounterResponse = await api.get("/otp-counter", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (otpCounterResponse.data?.counter) {
+            const otpInfo = otpCounterResponse.data.counter;
+
+            // Update Redux state with OTP limit info
+            dispatch({
+              type: "auth/setResendAttempts",
+              payload: otpInfo.otp_limit,
+            });
+
+            // Also set resend timer if available
+            if (otpInfo.otp_resend) {
+              dispatch({
+                type: "auth/setResendTimer",
+                payload: otpInfo.otp_resend,
+              });
+            }
+
+            console.log("✅ OTP counter info:", otpInfo);
+          }
+        } catch (otpCounterError) {
+          console.warn("⚠️ Could not fetch OTP counter info:", otpCounterError);
+          // Continue without OTP counter info - not critical
+        }
+      }
+
       if (response.status === 429) {
         return rejectWithValue(
           "Too many requests. Please wait a moment before trying again."
         );
       }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return rejectWithValue(errorData.message || "Failed to Generate OTP");
+      if (response.data?.status === "error") {
+        return rejectWithValue(response.data.message || "Failed to send OTP");
       }
-      return await response.json();
+
+      // Return success response
+      return {
+        status: "success",
+        message: response.data?.message || "OTP sent successfully",
+        data: response.data?.data || {},
+      };
     } catch (error) {
+      console.error("❌ Send OTP error:", error);
+
       const errorMessage = extractErrorMessage(error);
-      return rejectWithValue(errorMessage);
+
+      // Handle specific error cases
+      if (error.response?.status === 429) {
+        return rejectWithValue(
+          "Too many requests. Please wait before trying again."
+        );
+      }
+
+      if (error.response?.data?.message) {
+        return rejectWithValue(error.response.data.message);
+      }
+
+      return rejectWithValue(errorMessage || "Failed to send OTP");
     }
   }
 );
@@ -831,50 +888,43 @@ export const sendOtp = createAsyncThunk(
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
-    { phone_code, mobile_number, otp, password, sign_in_option, customer_type },
+    { country_code, mobile_number, otp },
     { dispatch, rejectWithValue }
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
       console.log("🔄 validateOtp thunk called with:", {
-        phone_code,
+        country_code,
         mobile_number,
-        otp,
-        sign_in_option,
+        mobile_number_type: typeof mobile_number,
+        mobile_number_length: mobile_number.length,
+        mobile_number_has_dashes: mobile_number.includes("-"),
+        otp: Array.isArray(otp) ? otp.join("") : otp,
       });
 
-      // Clean inputs
-      const cleanPhoneCode = phone_code ? phone_code.replace(/\D/g, "") : "";
-      const cleanMobileNumber = mobile_number
-        ? mobile_number.replace(/\D/g, "")
-        : "";
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
-
-      // Validate inputs
-      if (!cleanMobileNumber || !formattedOTP || !password) {
-        throw new Error("Mobile number, OTP and password are required");
-      }
-
-      if (formattedOTP.length !== 6) {
-        throw new Error("OTP must be 6 digits");
-      }
-
       const token = await getBearerToken();
+      const currentDateTimeLocal = new Date().toLocaleString();
 
-      // Use the correct endpoint and payload structure
+      // ✅ CRITICAL FIX: Use the FULL mobile number with country code
+      // This matches how the customer was registered: "+977 9813017273"
+      const full_mobile_number = `${country_code} ${mobile_number}`;
+
       const payload = {
-        mobile_number: cleanMobileNumber,
+        sign_in_option: "mobile",
+        mobile_number: full_mobile_number, // ✅ Send "+977 9813017273" not just "9813017273"
         otp: formattedOTP,
-        password: password,
-        phone_code: cleanPhoneCode,
-        sign_in_option: sign_in_option || "mobile",
-        hostname: window.location.hostname,
+        currentDate: currentDateTimeLocal,
       };
 
-      console.log("📤 Sending OTP verification request:", payload);
+      console.log(
+        "📤 Sending OTP verification to /validate-otp:",
+        JSON.stringify(payload, null, 2)
+      );
+      console.log("🔍 Full mobile number being sent:", full_mobile_number);
 
-      const response = await api.post("/login", payload, {
+      const response = await api.post("/validate-otp", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -883,18 +933,34 @@ export const validateOtp = createAsyncThunk(
 
       console.log("✅ OTP verification response:", response.data);
 
-      // Check if response indicates success
+      // Handle successful response
       if (response.data.status === "success") {
-        const responseData = response.data.data;
+        const responseData = response.data;
 
-        // Handle Plaid redirect if needed
-        const handlePlaidRedirect = (url, customerData) => {
+        const successResponse = {
+          status: "success",
+          kyc_status: responseData.kyc_status,
+          plaid_status: responseData.plaid_status,
+          plaid_url: responseData.plaid_url,
+          token: responseData.token,
+          customer_id: responseData.customer_id,
+          is_whitelabelled_partner_customer:
+            responseData.is_whitelabelled_partner_customer,
+          message: responseData.message || "OTP verified successfully!",
+          data: responseData.data || responseData,
+        };
+
+        // Handle Plaid redirect
+        if (responseData.plaid_status === "success" && responseData.plaid_url) {
+          console.log("🎯 Plaid redirect required");
+
           sessionStorage.setItem(
             "pending_mobile_auth",
             JSON.stringify({
-              phone_code: cleanPhoneCode,
-              mobile_number: cleanMobileNumber,
-              customer_id: customerData.customer_id,
+              country_code: country_code,
+              mobile_number: full_mobile_number,
+              customer_id: responseData.customer_id,
+              timestamp: Date.now(),
             })
           );
 
@@ -903,98 +969,38 @@ export const validateOtp = createAsyncThunk(
           dispatch({ type: "auth/setOtpSent", payload: false });
 
           return {
+            ...successResponse,
             redirected: true,
-            plaid_url: url,
-            customer_id: customerData.customer_id,
-            message: "Redirecting to bank verification...",
+            requiresPlaidRedirect: true,
           };
-        };
-
-        // Check for Plaid redirect
-        if (
-          response.data?.plaid_status === "success" &&
-          response.data?.plaid_url
-        ) {
-          return handlePlaidRedirect(response.data.plaid_url, responseData);
         }
 
-        // Handle KYC verification flow
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          if (
-            responseData.plaid_status === "success" &&
-            responseData.plaid_url
-          ) {
-            return handlePlaidRedirect(responseData.plaid_url, responseData);
-          }
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return handlePlaidRedirect(plaidResponse.url, responseData);
-            }
-            throw new Error("No Plaid URL received");
-          } catch (plaidError) {
-            console.error("Plaid initiation failed:", plaidError);
-            return {
-              requiresKycVerification: true,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              message: "Bank verification required but setup failed",
-            };
-          }
-        }
-
-        // Handle bank approval
-        if (responseData.bank_approve_status !== "1") {
+        if (responseData.kyc_status === 1 || responseData.kyc_status === "1") {
+          console.log("✅ KYC already verified");
+          return successResponse;
+        } else {
+          console.log("🚫 KYC verification required");
           return {
-            requiresBankApproval: true,
-            bank_approve_status: responseData.bank_approve_status,
-            message: "Bank account approval pending",
+            ...successResponse,
+            requiresKycVerification: true,
           };
         }
-
-        // Handle owner login
-        if (responseData.is_owner_login === "1") {
-          return {
-            is_owner_login: true,
-            owner_id: responseData.owner_id,
-            owner_role_name: responseData.owner_role_name,
-            kyc_status: responseData.kyc_status,
-            bank_approve_status: responseData.bank_approve_status,
-            message: "Owner login successful",
-          };
-        }
-
-        // Successful verification - return the complete success response
-        return {
-          status: "success",
-          token: responseData.token,
-          customer_id: responseData.customer_id,
-          kyc_status: responseData.kyc_status,
-          bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer:
-            responseData.isRemittanceOnlyCustomer || false,
-          customer_type: responseData.customer_type || "individual",
-          message: response.data.message || "OTP verification successful",
-          data: responseData,
-        };
       } else {
-        // Handle API error response
+        console.log("❌ OTP verification failed:", response.data);
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
       console.error("❌ OTP verification failed:", error);
+      console.log("🔍 Error response data:", error.response?.data);
+      console.log("🔍 Error status:", error.response?.status);
 
       const errorMessage = extractErrorMessage(error);
-
       dispatch({ type: "auth/setError", payload: errorMessage });
-      return rejectWithValue(errorMessage);
+      return rejectWithValue({
+        status: "error",
+        message: errorMessage,
+        error: error.response?.data || error.message,
+      });
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }

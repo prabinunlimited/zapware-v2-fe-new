@@ -1,36 +1,51 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../../../utils/errorHandling";
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-
-// ✅ IMPORT AUTH SELECTORS
-  import { selectAuthToken } from "../../../../store/selectors";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ✅ REQUEST DEDUPLICATION TRACKER
+// ✅ FIXED: Import selectAuthToken from the correct path
+import { selectAuthToken } from "../../../../store/selectors";
+
+// ✅ ENHANCED: Global request coordination with SUCCESS TRACKING
+let globalFetchInProgress = false;
+const GLOBAL_FETCH_COOLDOWN = 10000; // 10 seconds
 const pendingRequests = new Map();
+const successfulFetches = new Map(); // Track successful fetches by customerId
 
 const getRequestKey = (customerId, isRefresh = false) => {
   return `account-${customerId}-${isRefresh ? 'refresh' : 'initial'}`;
 };
 
-// Async thunks
+// ✅ CHECK IF SUCCESSFUL FETCH EXISTS
+const hasSuccessfulFetch = (customerId) => {
+  return successfulFetches.has(customerId);
+};
+
+// ✅ OPTIMIZED ASYNC THUNK WITH SUCCESS-BASED STOPPING
 export const fetchAccountDetails = createAsyncThunk(
   "account/fetchAccountDetails",
   async ({ customerId, authtoken, isRefresh = false }, { getState, rejectWithValue }) => {
     
     const requestKey = getRequestKey(customerId, isRefresh);
     
-    // Check if request already in progress
-    if (pendingRequests.has(requestKey)) {
-      console.log("⏸️ Request already in progress, skipping duplicate...");
+    // ✅ ENHANCED: Stop if we already have a successful fetch (unless force refresh)
+    if (!isRefresh && hasSuccessfulFetch(customerId)) {
+      console.log("✅ Already have successful account data, skipping fetch");
+      return rejectWithValue("Already have successful data");
+    }
+
+    // Enhanced duplicate request check with global coordination
+    if (pendingRequests.has(requestKey) || globalFetchInProgress) {
+      console.log("⏸️ Request already in progress or global fetch active, skipping duplicate...");
       return rejectWithValue("Request already in progress");
     }
 
     // Track this request
-    pendingRequests.set(requestKey, true);
+    pendingRequests.set(requestKey, Date.now());
+    globalFetchInProgress = true;
 
     try {
       console.log(`🔄 ${isRefresh ? 'Refreshing' : 'Fetching'} account details for customer:`, customerId);
@@ -45,20 +60,27 @@ export const fetchAccountDetails = createAsyncThunk(
 
       console.log("📦 Account details response:", response.data);
 
+      // ✅ MARK AS SUCCESSFUL FETCH
       if (response.data.count_account_details > 0) {
+        successfulFetches.set(customerId, {
+          timestamp: Date.now(),
+          count: response.data.count_account_details
+        });
+        console.log("✅ Account fetch marked as successful for customer:", customerId);
         return response.data.account_details;
       } else {
         return rejectWithValue("No accounts found");
       }
     } catch (error) {
       console.error("❌ Error fetching account details:", error);
-      
-      // ✅ FIX: Return string error message
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
-      // Always remove from tracking
-      pendingRequests.delete(requestKey);
+      // Remove from tracking after a delay to prevent immediate re-requests
+      setTimeout(() => {
+        pendingRequests.delete(requestKey);
+        globalFetchInProgress = false;
+      }, GLOBAL_FETCH_COOLDOWN);
     }
   }
 );
@@ -69,7 +91,6 @@ export const updateAccountBalance = createAsyncThunk(
     try {
       console.log("🔄 Updating account balance for customer:", customerId);
       
-      // First update the balance
       const updateResponse = await axios.get(`${API_URL}/transaction-balance`, {
         headers: { Authorization: `Bearer ${authtoken}` },
       });
@@ -78,7 +99,6 @@ export const updateAccountBalance = createAsyncThunk(
         throw new Error("Failed to update balance");
       }
 
-      // Then fetch updated account details
       const balanceResponse = await axios.get(
         `${API_URL}/account-details/${customerId}`,
         {
@@ -87,14 +107,17 @@ export const updateAccountBalance = createAsyncThunk(
       );
 
       if (balanceResponse.data.count_account_details > 0) {
+        // ✅ UPDATE SUCCESSFUL FETCH TRACKING
+        successfulFetches.set(customerId, {
+          timestamp: Date.now(),
+          count: balanceResponse.data.count_account_details
+        });
         return balanceResponse.data.account_details;
       } else {
         throw new Error("No account details found after updating balance");
       }
     } catch (error) {
       console.error("❌ Error updating account balance:", error);
-      
-      // ✅ FIX: Return string error message
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     }
@@ -103,7 +126,7 @@ export const updateAccountBalance = createAsyncThunk(
 
 // Enhanced initial state with debugging
 const initialState = {
-  accounts: [], // Always initialize as empty array
+  accounts: [],
   selectedAccount: null,
   selectedCurrency: "all",
   accountLoading: false,
@@ -111,7 +134,7 @@ const initialState = {
   accountError: null,
   lastUpdated: null,
   accountDropdownOpen: false,
-  hasFetchedAccount: false, // ✅ ADD: Track if account has been fetched
+  hasFetchedAccount: false,
   _debug: {
     sliceName: "account",
     storePath: "state.account"
@@ -155,7 +178,6 @@ const accountSlice = createSlice({
       state.balanceLoading = action.payload;
     },
     setAccountError: (state, action) => {
-      // ✅ FIX: Ensure error is always a string
       state.accountError = typeof action.payload === 'string' 
         ? action.payload 
         : extractErrorMessage(action.payload);
@@ -170,7 +192,6 @@ const accountSlice = createSlice({
     setHasFetchedAccount: (state, action) => {
       state.hasFetchedAccount = action.payload;
     },
-    // Debug action to check store state
     debugAccountState: (state) => {
       console.log("🔍 Account State Debug:", {
         accounts: state.accounts,
@@ -181,11 +202,36 @@ const accountSlice = createSlice({
         hasFetchedAccount: state.hasFetchedAccount,
         storePath: "state.account"
       });
+    },
+    // ✅ ADDED: Reset fetch coordination (for emergency recovery)
+    resetFetchCoordination: () => {
+      globalFetchInProgress = false;
+      pendingRequests.clear();
+      console.log("🔄 Fetch coordination reset");
+    },
+    // ✅ ADDED: Clear successful fetch tracking (for logout or manual refresh)
+    clearSuccessfulFetch: (state, action) => {
+      const customerId = action.payload;
+      if (customerId) {
+        successfulFetches.delete(customerId);
+        console.log("🧹 Cleared successful fetch tracking for customer:", customerId);
+      } else {
+        successfulFetches.clear();
+        console.log("🧹 Cleared all successful fetch tracking");
+      }
+    },
+    // ✅ ADDED: Force refresh by clearing successful status
+    forceRefreshAccounts: (state, action) => {
+      const customerId = action.payload;
+      if (customerId) {
+        successfulFetches.delete(customerId);
+        state.hasFetchedAccount = false;
+        console.log("🔄 Force refresh triggered for customer:", customerId);
+      }
     }
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Account Details
       .addCase(fetchAccountDetails.pending, (state) => {
         console.log("⏳ Fetching account details...");
         state.accountLoading = true;
@@ -196,7 +242,7 @@ const accountSlice = createSlice({
         state.accountLoading = false;
         state.accounts = Array.isArray(action.payload) ? action.payload : [];
         state.lastUpdated = new Date().toISOString();
-        state.hasFetchedAccount = true; // ✅ ADD: Mark as fetched
+        state.hasFetchedAccount = true;
         
         if (state.accounts.length > 0) {
           if (!state.selectedAccount) {
@@ -214,20 +260,21 @@ const accountSlice = createSlice({
         }
       })
       .addCase(fetchAccountDetails.rejected, (state, action) => {
-        console.error("❌ Failed to fetch account details:", action.payload);
-        state.accountLoading = false;
+        // ✅ DON'T set error for "already have data" cases
+        const isAlreadyHaveData = action.payload === "Already have successful data";
         
-        // ✅ FIX: Ensure error is a string
-        state.accountError = typeof action.payload === 'string'
-          ? action.payload
-          : extractErrorMessage(action.payload);
-          
-        state.accounts = [];
-        state.selectedAccount = null;
-        state.selectedCurrency = "all";
-        state.hasFetchedAccount = false; // ✅ ADD: Reset on error
+        if (!isAlreadyHaveData) {
+          console.error("❌ Failed to fetch account details:", action.payload);
+          state.accountError = typeof action.payload === 'string'
+            ? action.payload
+            : extractErrorMessage(action.payload);
+        } else {
+          console.log("⏸️ Fetch skipped - already have data");
+        }
+        
+        state.accountLoading = false;
+        state.hasFetchedAccount = isAlreadyHaveData ? true : false;
       })
-      // Update Account Balance
       .addCase(updateAccountBalance.pending, (state) => {
         console.log("⏳ Updating account balance...");
         state.balanceLoading = true;
@@ -256,8 +303,6 @@ const accountSlice = createSlice({
       .addCase(updateAccountBalance.rejected, (state, action) => {
         console.error("❌ Failed to update account balance:", action.payload);
         state.balanceLoading = false;
-        
-        // ✅ FIX: Ensure error is a string
         state.accountError = typeof action.payload === 'string'
           ? action.payload
           : extractErrorMessage(action.payload);
@@ -302,44 +347,23 @@ export const {
   refreshLastUpdated,
   setHasFetchedAccount,
   debugAccountState,
+  resetFetchCoordination,
+  clearSuccessfulFetch,
+  forceRefreshAccounts,
 } = accountSlice.actions;
 
 export default accountSlice.reducer;
 
-// ✅ CUSTOM HOOK: useAccountData - ADDED DIRECTLY TO THIS FILE
+// ✅ FIXED CUSTOM HOOK: useAccountData with SUCCESS-BASED STOPPING
 export const useAccountData = () => {
   const dispatch = useDispatch();
   const customerId = localStorage.getItem('authcustomer_id');
-  const authtoken = useSelector(selectAuthToken); // ✅ NOW DEFINED
+  const authtoken = useSelector(selectAuthToken);
   const hasFetchedAccount = useSelector(selectHasFetchedAccount);
+  const accountLoading = useSelector(selectAccountLoading);
+  const accounts = useSelector(selectAccounts);
 
-  // Refs to track previous values and prevent duplicate calls
-  const hasFetchedRef = useRef(false);
-  const prevCustomerIdRef = useRef(customerId);
-  const prevAuthtokenRef = useRef(authtoken);
-
-  // ✅ CORRECT: useEffect must come BEFORE any conditional logic
-  useEffect(() => {
-    const customerIdChanged = prevCustomerIdRef.current !== customerId;
-    const authtokenChanged = prevAuthtokenRef.current !== authtoken;
-
-    if (customerIdChanged || authtokenChanged) {
-      hasFetchedRef.current = false;
-      prevCustomerIdRef.current = customerId;
-      prevAuthtokenRef.current = authtoken;
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 useAccountData useEffect:', {
-        customerId,
-        authtoken: authtoken ? 'present' : 'missing',
-        customerIdChanged,
-        authtokenChanged,
-        hasFetchedRef: hasFetchedRef.current
-      });
-    }
-  }, [customerId, authtoken]);
-
+  // Stable fetch function with enhanced coordination
   const fetchAccountData = useCallback(
     (forceRefresh = false) => {
       if (!customerId || !authtoken) {
@@ -347,19 +371,38 @@ export const useAccountData = () => {
         return;
       }
 
-      // Prevent duplicate calls unless forced refresh
-      if (hasFetchedRef.current && !forceRefresh) {
-        console.log('⏩ Skipping duplicate account fetch');
+      // ✅ ENHANCED: Global request coordination
+      if (globalFetchInProgress && !forceRefresh) {
+        console.log('⏸️ Global fetch already in progress, skipping...');
         return;
+      }
+
+      // ✅ ENHANCED: Prevent fetch if already loading (unless force refresh)
+      if (accountLoading && !forceRefresh) {
+        console.log('⏸️ Account already loading, skipping...');
+        return;
+      }
+
+      // ✅ ENHANCED: Check if we already have successful data (unless force refresh)
+      if (hasSuccessfulFetch(customerId) && !forceRefresh) {
+        console.log('✅ Already have successful account data, skipping fetch');
+        return;
+      }
+
+      // ✅ ENHANCED: Clear successful status if force refresh
+      if (forceRefresh) {
+        successfulFetches.delete(customerId);
+        console.log('🔄 Force refresh - cleared successful status');
       }
 
       console.log('🔄 Fetching account details...', {
         customerId,
-        hasFetched: hasFetchedRef.current,
-        forceRefresh
+        hasFetchedAccount,
+        forceRefresh,
+        accountLoading,
+        hasSuccessfulData: hasSuccessfulFetch(customerId)
       });
 
-      hasFetchedRef.current = true;
       dispatch(
         fetchAccountDetails({ 
           customerId, 
@@ -368,52 +411,33 @@ export const useAccountData = () => {
         })
       );
     },
-    [customerId, authtoken, dispatch]
+    [customerId, authtoken, dispatch, accountLoading, hasFetchedAccount]
   );
 
-  // Debounced version for search/input scenarios
-  const debouncedFetchAccount = useCallback(
-    (forceRefresh = false) => {
-      const timeoutId = setTimeout(() => {
-        fetchAccountData(forceRefresh);
-      }, 300);
-      
-      return () => clearTimeout(timeoutId);
-    },
-    [fetchAccountData]
-  );
+  // Memoize the function to prevent unnecessary recreations
+  const stableFetchAccountData = useMemo(() => fetchAccountData, [fetchAccountData]);
 
-  // Manual refresh function
-  const refreshAccountData = useCallback(() => {
-    console.log('🔄 Manual account data refresh requested');
-    hasFetchedRef.current = false;
-    fetchAccountData(true);
-  }, [fetchAccountData]);
-
-  // Reset function for cleanup
-  const resetAccountData = useCallback(() => {
-    console.log('🔄 Resetting account data state');
-    hasFetchedRef.current = false;
-    dispatch(resetAccountState());
-  }, [dispatch]);
-
-  // ✅ CORRECT: Return must be the LAST statement
   return {
-    fetchAccountData,
-    debouncedFetchAccount,
-    refreshAccountData,
-    resetAccountData,
-    shouldFetch: !hasFetchedAccount && customerId && authtoken,
+    fetchAccountData: stableFetchAccountData,
+    shouldFetch: !hasFetchedAccount && customerId && authtoken && !accountLoading && !hasSuccessfulFetch(customerId),
     canFetch: Boolean(customerId && authtoken),
-    isLoading: useSelector(selectAccountLoading),
+    isLoading: accountLoading,
     error: useSelector(selectAccountError),
-    accounts: useSelector(selectAccounts),
-    hasAccounts: useSelector(selectHasAccounts),
-    lastUpdated: useSelector(selectLastUpdated)
+    accounts: accounts,
+    hasAccounts: accounts.length > 0,
+    lastUpdated: useSelector(selectLastUpdated),
+    // ✅ ADDED: Enhanced reset functions
+    resetFetch: () => dispatch(resetFetchCoordination()),
+    forceRefresh: () => {
+      successfulFetches.delete(customerId);
+      dispatch(forceRefreshAccounts(customerId));
+      fetchAccountData(true);
+    },
+    hasSuccessfulData: hasSuccessfulFetch(customerId)
   };
 };
 
-// ✅ ADDITIONAL HOOK: useAccountSelection - For account selection logic
+// ✅ FIXED HOOK: useAccountSelection
 export const useAccountSelection = () => {
   const dispatch = useDispatch();
   const selectedAccount = useSelector(selectSelectedAccount);
@@ -447,11 +471,11 @@ export const useAccountSelection = () => {
   };
 };
 
-// ✅ ADDITIONAL HOOK: useAccountBalance - For balance-related operations
+// ✅ FIXED HOOK: useAccountBalance
 export const useAccountBalance = () => {
   const dispatch = useDispatch();
   const customerId = localStorage.getItem('authcustomer_id');
-  const authtoken = useSelector(selectAuthToken); // ✅ NOW DEFINED
+  const authtoken = useSelector(selectAuthToken);
   const selectedAccount = useSelector(selectSelectedAccount);
   const balanceLoading = useSelector(selectBalanceLoading);
 

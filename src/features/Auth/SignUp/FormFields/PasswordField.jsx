@@ -2,6 +2,18 @@ import React from "react";
 import FormField from "./FormField";
 
 const PasswordField = ({
+  id,
+  label,
+  name,
+  type = "password", // Add default
+  value,
+  onChange,
+  onBlur,
+  onFocus,
+  touched,
+  error,
+  required = false,
+  activeField,
   visible,
   onToggleVisibility,
   validationRules,
@@ -11,7 +23,18 @@ const PasswordField = ({
     <div>
       <div className="relative">
         <FormField
+          id={id}
+          label={label}
+          name={name}
           type={visible ? "text" : "password"}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          onFocus={onFocus}
+          touched={touched}
+          error={error}
+          required={required}
+          activeField={activeField}
           {...props}
         />
         <button
@@ -33,14 +56,14 @@ const PasswordField = ({
               <li
                 key={index}
                 className={`flex items-center ${
-                  rule.regex.test(props.value)
+                  rule.regex.test(value) // Changed from props.value to value
                     ? "text-green-600"
                     : "text-gray-500"
                 }`}
               >
                 <span
                   className={`inline-block w-3 h-3 rounded-full mr-2 ${
-                    rule.regex.test(props.value)
+                    rule.regex.test(value) // Changed from props.value to value
                       ? "bg-green-500"
                       : "bg-gray-300"
                   }`}
