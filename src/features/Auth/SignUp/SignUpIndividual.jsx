@@ -9,7 +9,7 @@ import {
   faEyeSlash,
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import { ClipLoader } from "react-spinners";
+import { RingLoader, ClipLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -69,27 +69,40 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
+    console.error("Error caught by boundary:", error, errorInfo);
     this.setState({
-      error: error?.toString() || 'Unknown error'
+      error: error?.toString() || "Unknown error",
     });
   }
 
   render() {
     if (this.state.hasError) {
-      const errorMessage = this.state.error?.message ||
+      const errorMessage =
+        this.state.error?.message ||
         this.state.error?.toString() ||
-        'An unexpected error occurred';
+        "An unexpected error occurred";
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
           <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              <svg
+                className="w-8 h-8 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-red-600 mb-2">Something went wrong</h2>
+            <h2 className="text-xl font-bold text-red-600 mb-2">
+              Something went wrong
+            </h2>
             <p className="text-gray-600 mb-4">{errorMessage}</p>
             <button
               onClick={() => window.location.reload()}
@@ -108,10 +121,10 @@ class ErrorBoundary extends React.Component {
 
 // Debug component
 const ReduxStateDebug = () => {
-  const state = useSelector(state => state);
+  const state = useSelector((state) => state);
 
   useEffect(() => {
-    console.log('🔍 Current Redux State:', state);
+    console.log("🔍 Current Redux State:", state);
   }, [state]);
 
   return null;
@@ -130,6 +143,7 @@ function SignUpIndividualContent() {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFullScreenLoader, setShowFullScreenLoader] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [selectedResidentCountry, setSelectedResidentCountry] = useState(null);
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
@@ -181,9 +195,9 @@ function SignUpIndividualContent() {
     kyc_verify = [],
     accountType = null,
     is_remit: isRemit = false,
-    ssn_required = 'N',
+    ssn_required = "N",
     show_remittance_only_on_registration = false,
-    accountOptions = []
+    accountOptions = [],
   } = location.state || {};
 
   const formSections = [
@@ -208,12 +222,17 @@ function SignUpIndividualContent() {
     password: Yup.string()
       .min(12, "Password must be at least 12 characters")
       .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .matches(/[!@#$%^&*(),.?":{}|<>]/, "Password must contain at least one special character")
+      .matches(
+        /[!@#$%^&*(),.?":{}|<>]/,
+        "Password must contain at least one special character"
+      )
       .required("Password is required"),
     confirmPassword: Yup.string()
       .oneOf([Yup.ref("password"), null], "Passwords must match")
       .required("Confirm password is required"),
-    mobile_number: Yup.string().required("Phone number is required"),
+    mobile_number: Yup.string()
+      .required("Phone number is required")
+      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
     resident_country: Yup.string().required("Resident country is required"),
     street_address_1: Yup.string().required("Street address is required"),
     city: Yup.string().required("City is required"),
@@ -224,10 +243,13 @@ function SignUpIndividualContent() {
     gender: Yup.string().required("Gender is required"),
     dob: Yup.date()
       .required("Date of birth is required")
-      .max(new Date(new Date().setFullYear(new Date().getFullYear() - 18)), "You must be at least 18 years old"),
+      .max(
+        new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
+        "You must be at least 18 years old"
+      ),
     ssn: Yup.string().test(
-      'ssn-conditional',
-      'SSN must be in format XXX-XX-XXXX',
+      "ssn-conditional",
+      "SSN must be in format XXX-XX-XXXX",
       function (value) {
         const { showSSNField, hasNamedAccounts } = this.parent;
 
@@ -238,7 +260,9 @@ function SignUpIndividualContent() {
 
         // If SSN is required, validate format
         if (!value) {
-          return this.createError({ message: 'SSN is required for named accounts' });
+          return this.createError({
+            message: "SSN is required for named accounts",
+          });
         }
 
         const cleanSSN = value.replace(/-/g, "");
@@ -289,28 +313,41 @@ function SignUpIndividualContent() {
     onSubmit: async (values, { setErrors, setSubmitting }) => {
       try {
         setIsSubmitting(true);
+        setShowFullScreenLoader(true);
 
         // Clear any previous SSN error
-        dispatch(setMetadataField({ field: 'ssnError', value: "" }));
+        dispatch(setMetadataField({ field: "ssnError", value: "" }));
 
         // Check if terms are accepted
-        if (termsFetched && termsConditions.length > 0 && acceptedTerms.length === 0) {
+        if (
+          termsFetched &&
+          termsConditions.length > 0 &&
+          acceptedTerms.length === 0
+        ) {
           setErrorMessage("Please accept the terms and conditions");
           setIsModalOpen(true);
           setIsSubmitting(false);
+          setShowFullScreenLoader(false);
           return;
         }
 
         // Show SSN confirmation for named accounts
-        if (showSSNField && hasNamedAccounts && values.ssn && values.ssn.trim() !== "") {
-          dispatch(setMetadataField({ field: 'showSSNConfirmation', value: true }));
+        if (
+          showSSNField &&
+          hasNamedAccounts &&
+          values.ssn &&
+          values.ssn.trim() !== ""
+        ) {
+          dispatch(
+            setMetadataField({ field: "showSSNConfirmation", value: true })
+          );
           setIsSubmitting(false);
           return;
         }
 
         await handleFormSubmission(values);
       } catch (error) {
-        console.error('Form submission error:', error);
+        console.error("Form submission error:", error);
         setErrorMessage("An error occurred during form validation");
         setIsModalOpen(true);
       } finally {
@@ -322,8 +359,13 @@ function SignUpIndividualContent() {
   // Handle form submission
   const handleFormSubmission = async (values) => {
     try {
+      setShowFullScreenLoader(true);
+
+      // No need to clean mobile_number now since it's already clean
       const updatedValues = {
         ...values,
+        // mobile_number is already clean: "9813017273"
+        mobilenumber_countrycode: values.mobilenumber_countrycode, // "+1"
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
         terms_and_conditions: termsFetched ? acceptedTerms : [],
         hostname: window.location.hostname,
@@ -341,6 +383,12 @@ function SignUpIndividualContent() {
         idIssuedDate: idIssuedDate,
       };
 
+      console.log("📤 Submitting form data:", {
+        mobile_number: updatedValues.mobile_number, // Already clean: "9813017273"
+        mobilenumber_countrycode: updatedValues.mobilenumber_countrycode,
+        full_mobile_number: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
+      });
+
       const response = await fetch(`${API_URL}/customers/sign-up`, {
         method: "POST",
         headers: {
@@ -353,46 +401,66 @@ function SignUpIndividualContent() {
       const responseData = await response.json();
 
       if (!response.ok) {
+        console.error("❌ Submission failed:", responseData);
+
         if (responseData.message) {
           setErrorMessage(responseData.message);
           setIsModalOpen(true);
         } else if (responseData.errors) {
-          setErrors(responseData.errors);
+          // Handle field-specific errors
+          const formattedErrors = {};
+          Object.keys(responseData.errors).forEach((key) => {
+            formattedErrors[key] = responseData.errors[key].join(", ");
+          });
+          formik.setErrors(formattedErrors);
           toast.error("Please check the form for errors");
         } else {
           setErrorMessage("Submission Error: Please check all the inputs");
           setIsModalOpen(true);
         }
         setIsSubmitting(false);
+        setShowFullScreenLoader(false);
         return;
       }
+
+      console.log("✅ Registration successful:", responseData);
 
       setSuccessMessage(responseData.message);
       setIsSuccessModalOpen(true);
 
       if (responseData.status === "success") {
         toast.success(responseData.message || "Registration successful!");
+
+        // Navigate to phone verification with clean mobile number
         navigate("/phoneverification", {
           state: {
-            mobileNumber: `${values.mobilenumber_countrycode} ${values.mobile_number}`,
+            mobileNumber: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
             kyc_verify: kyc_verify,
+            customerData: responseData.data || null,
           },
         });
       } else {
-        setErrorMessage(responseData.message || "Something went wrong during registration!");
+        setErrorMessage(
+          responseData.message || "Something went wrong during registration!"
+        );
         setIsModalOpen(true);
       }
     } catch (error) {
-      setErrorMessage("An error occurred during submission");
+      console.error("🚨 Form submission error:", error);
+      setErrorMessage(
+        error.message ||
+          "An error occurred during submission. Please try again."
+      );
       setIsModalOpen(true);
     } finally {
       setIsSubmitting(false);
+      setShowFullScreenLoader(false);
     }
   };
 
   // Handle SSN confirmation
   const handleSSNConfirmation = (confirmed) => {
-    dispatch(setMetadataField({ field: 'showSSNConfirmation', value: false }));
+    dispatch(setMetadataField({ field: "showSSNConfirmation", value: false }));
     if (confirmed) {
       // Proceed with form submission
       handleFormSubmission(formik.values);
@@ -411,37 +479,46 @@ function SignUpIndividualContent() {
         setIsLoading(true);
         setInitializationError(null);
 
-        console.log('🟡 Starting initialization...');
-        console.log('➡️ Service Provider IDs:', service_provide_ids);
-        console.log('➡️ Countries already loaded:', countries.length);
-        console.log('➡️ Terms already fetched:', termsFetched);
+        console.log("🟡 Starting initialization...");
+        console.log("➡️ Service Provider IDs:", service_provide_ids);
+        console.log("➡️ Countries already loaded:", countries.length);
+        console.log("➡️ Terms already fetched:", termsFetched);
 
         // Determine account types with error handling
         let hasNamed = false;
         let hasUSD = false;
 
         try {
-          hasNamed = service_provide_ids?.some((idWithType) => {
-            const parts = idWithType.split("-");
-            return parts.length > 1 && parts[1] === "named";
-          }) || false;
+          hasNamed =
+            service_provide_ids?.some((idWithType) => {
+              const parts = idWithType.split("-");
+              return parts.length > 1 && parts[1] === "named";
+            }) || false;
 
-          hasUSD = service_provide_ids?.some((idWithType) => {
-            const id = parseInt(idWithType.split("-")[0]);
-            const account = accountOptions?.find(
-              (opt) => opt.service_provide_id === id
-            );
-            return account && account.currency === "USD";
-          }) || false;
+          hasUSD =
+            service_provide_ids?.some((idWithType) => {
+              const id = parseInt(idWithType.split("-")[0]);
+              const account = accountOptions?.find(
+                (opt) => opt.service_provide_id === id
+              );
+              return account && account.currency === "USD";
+            }) || false;
 
-          console.log('✅ Account type check complete:', { hasNamed, hasUSD });
+          console.log("✅ Account type check complete:", { hasNamed, hasUSD });
         } catch (error) {
           console.warn("⚠️ Error processing account types:", error);
         }
 
-        dispatch(setMetadataField({ field: 'hasNamedAccounts', value: hasNamed }));
-        dispatch(setMetadataField({ field: 'isUSDSelected', value: hasUSD }));
-        dispatch(setMetadataField({ field: 'showSSNField', value: ssn_required === 'Y' || hasNamed }));
+        dispatch(
+          setMetadataField({ field: "hasNamedAccounts", value: hasNamed })
+        );
+        dispatch(setMetadataField({ field: "isUSDSelected", value: hasUSD }));
+        dispatch(
+          setMetadataField({
+            field: "showSSNField",
+            value: ssn_required === "Y" || hasNamed,
+          })
+        );
 
         // Create an array of promises for all API calls
         const apiPromises = [];
@@ -449,28 +526,34 @@ function SignUpIndividualContent() {
         // ALWAYS fetch countries
         console.log("🌍 Fetching countries...");
         apiPromises.push(
-          dispatch(fetchCountries()).unwrap().catch(error => {
-            console.error('❌ Countries fetch failed:', error);
-            return [];
-          })
+          dispatch(fetchCountries())
+            .unwrap()
+            .catch((error) => {
+              console.error("❌ Countries fetch failed:", error);
+              return [];
+            })
         );
 
         // Fetch nationalities
         console.log("🗺️ Fetching nationalities...");
         apiPromises.push(
-          dispatch(fetchNationalities()).unwrap().catch(error => {
-            console.error('❌ Nationalities fetch failed:', error);
-            return [];
-          })
+          dispatch(fetchNationalities())
+            .unwrap()
+            .catch((error) => {
+              console.error("❌ Nationalities fetch failed:", error);
+              return [];
+            })
         );
 
         // Fetch ID document types
         console.log("🪪 Fetching ID document types...");
         apiPromises.push(
-          dispatch(fetchIdDocumentTypes()).unwrap().catch(error => {
-            console.error('❌ ID document types fetch failed:', error);
-            return [];
-          })
+          dispatch(fetchIdDocumentTypes())
+            .unwrap()
+            .catch((error) => {
+              console.error("❌ ID document types fetch failed:", error);
+              return [];
+            })
         );
 
         // Fetch terms if needed
@@ -478,36 +561,40 @@ function SignUpIndividualContent() {
         if (bearertoken && !termsFetched) {
           console.log("📄 Fetching terms and conditions...");
           apiPromises.push(
-            dispatch(fetchTermsAndConditions()).unwrap().catch(error => {
-              console.error('❌ Terms fetch failed:', error);
-              return [];
-            })
+            dispatch(fetchTermsAndConditions())
+              .unwrap()
+              .catch((error) => {
+                console.error("❌ Terms fetch failed:", error);
+                return [];
+              })
           );
         }
 
         // Wait for all API calls with timeout
         const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => resolve('timeout'), 30000)
+          setTimeout(() => resolve("timeout"), 30000)
         );
 
         const results = await Promise.race([
           Promise.allSettled(apiPromises),
-          timeoutPromise
+          timeoutPromise,
         ]);
 
-        if (results === 'timeout') {
-          console.warn('⚠️ Initialization timeout, proceeding with available data');
+        if (results === "timeout") {
+          console.warn(
+            "⚠️ Initialization timeout, proceeding with available data"
+          );
         } else {
-          console.log('📦 API call results:', results);
+          console.log("📦 API call results:", results);
         }
 
         if (isMounted) {
           setIsLoading(false);
-          console.log('✅ Initialization completed successfully');
+          console.log("✅ Initialization completed successfully");
         }
       } catch (error) {
         if (isMounted) {
-          console.error('🚨 Initialization error:', error);
+          console.error("🚨 Initialization error:", error);
           setInitializationError(error.message);
           setIsLoading(false);
         }
@@ -525,7 +612,7 @@ function SignUpIndividualContent() {
     countries.length,
     termsFetched,
     ssn_required,
-    accountOptions
+    accountOptions,
   ]);
 
   // Handle errors
@@ -542,70 +629,82 @@ function SignUpIndividualContent() {
     }
   }, [isModalOpen, termsError, dispatch]);
 
-  const handleCheckboxChange = useCallback(async (termId) => {
-    try {
-      // Get current date and time
-      const currentDateTimeLocal = new Date().toLocaleString();
-
-      let ip = "Unknown";
-      let location = "Unknown";
-      let device = "Unknown";
-
+  const handleCheckboxChange = useCallback(
+    async (termId) => {
       try {
-        // Fetch IP address
-        const ipResponse = await fetch("https://api.ipify.org?format=json");
-        if (ipResponse.ok) {
-          const ipData = await ipResponse.json();
-          ip = ipData.ip;
-        }
+        // Get current date and time
+        const currentDateTimeLocal = new Date().toLocaleString();
 
-        // Fetch location data based on IP
-        if (ip !== "Unknown") {
-          const locationResponse = await fetch(`https://ipapi.co/${ip}/json/`);
-          if (locationResponse.ok) {
-            const locationData = await locationResponse.json();
-            location = `${locationData.city || 'Unknown'}, ${locationData.region || 'Unknown'}, ${locationData.country_name || 'Unknown'}`;
+        let ip = "Unknown";
+        let location = "Unknown";
+        let device = "Unknown";
+
+        try {
+          // Fetch IP address
+          const ipResponse = await fetch("https://api.ipify.org?format=json");
+          if (ipResponse.ok) {
+            const ipData = await ipResponse.json();
+            ip = ipData.ip;
           }
+
+          // Fetch location data based on IP
+          if (ip !== "Unknown") {
+            const locationResponse = await fetch(
+              `https://ipapi.co/${ip}/json/`
+            );
+            if (locationResponse.ok) {
+              const locationData = await locationResponse.json();
+              location = `${locationData.city || "Unknown"}, ${
+                locationData.region || "Unknown"
+              }, ${locationData.country_name || "Unknown"}`;
+            }
+          }
+
+          // Get device details
+          if (typeof UAParser !== "undefined") {
+            const parser = new UAParser();
+            const deviceInfo = parser.getResult();
+            device = `${deviceInfo.os.name || "Unknown"} on ${
+              deviceInfo.device.model || "Unknown Device"
+            }`;
+          }
+        } catch (deviceError) {
+          console.warn("Device fingerprinting failed, using fallback values");
         }
 
-        // Get device details
-        if (typeof UAParser !== 'undefined') {
-          const parser = new UAParser();
-          const deviceInfo = parser.getResult();
-          device = `${deviceInfo.os.name || 'Unknown'} on ${deviceInfo.device.model || "Unknown Device"}`;
-        }
-      } catch (deviceError) {
-        console.warn("Device fingerprinting failed, using fallback values");
+        const termData = {
+          accepted_at: currentDateTimeLocal,
+          ip,
+          location,
+          device,
+        };
+
+        dispatch(
+          setTermsAccepted({
+            termId,
+            accepted: !acceptedTerms.some((item) => item.id === termId),
+            metadata: termData,
+          })
+        );
+      } catch (error) {
+        console.error("Error in handleCheckboxChange:", error);
+        // Fallback without device fingerprinting
+        dispatch(
+          setTermsAccepted({
+            termId,
+            accepted: !acceptedTerms.some((item) => item.id === termId),
+            metadata: {
+              accepted_at: new Date().toLocaleString(),
+              ip: "Unknown",
+              location: "Unknown",
+              device: "Unknown",
+            },
+          })
+        );
       }
-
-      const termData = {
-        accepted_at: currentDateTimeLocal,
-        ip,
-        location,
-        device,
-      };
-
-      dispatch(setTermsAccepted({
-        termId,
-        accepted: !acceptedTerms.some(item => item.id === termId),
-        metadata: termData
-      }));
-
-    } catch (error) {
-      console.error("Error in handleCheckboxChange:", error);
-      // Fallback without device fingerprinting
-      dispatch(setTermsAccepted({
-        termId,
-        accepted: !acceptedTerms.some(item => item.id === termId),
-        metadata: {
-          accepted_at: new Date().toLocaleString(),
-          ip: "Unknown",
-          location: "Unknown",
-          device: "Unknown"
-        }
-      }));
-    }
-  }, [dispatch, acceptedTerms]);
+    },
+    [dispatch, acceptedTerms]
+  );
 
   // Handler functions
   const handleCountrySelect = (selectedOption) => {
@@ -614,25 +713,31 @@ function SignUpIndividualContent() {
 
     // Auto-set SSN field for US residents
     if (selectedOption?.label === "United States") {
-      dispatch(setMetadataField({ field: 'showSSNField', value: true }));
+      dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
   };
 
   const handleResidentCountrySelect = (selectedOption) => {
     setSelectedResidentCountry(selectedOption);
     formik.setFieldValue("resident_country", selectedOption?.value || "");
-    formik.setFieldValue("mobilenumber_countrycode", selectedOption?.phoneCode || "");
+    formik.setFieldValue(
+      "mobilenumber_countrycode",
+      selectedOption?.phoneCode || ""
+    );
     formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
     setSelectedPhoneCode(selectedOption || null);
 
     // Auto-set SSN field for US residents
     if (selectedOption?.label === "United States") {
-      dispatch(setMetadataField({ field: 'showSSNField', value: true }));
+      dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
   };
 
   const handleCountryCodeSelect = (selectedOption) => {
-    formik.setFieldValue("mobilenumber_countrycode", selectedOption?.phoneCode || "");
+    formik.setFieldValue(
+      "mobilenumber_countrycode",
+      selectedOption?.phoneCode || ""
+    );
     formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
     setSelectedPhoneCode(selectedOption || null);
   };
@@ -645,18 +750,21 @@ function SignUpIndividualContent() {
     formik.setFieldValue("gender", selectedOption?.value || "");
   };
 
-  // Enhanced phone number formatting
-  const formatPhoneNumber = (value) => {
-    if (!value) return value;
-    const phoneNumber = value.replace(/[^\d]/g, "");
-    if (phoneNumber.length <= 3) return phoneNumber;
-    if (phoneNumber.length <= 6)
-      return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3)}`;
-    return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
+  // Phone number handler - NO DASHES
+  const handlePhoneChange = (e) => {
+    // Remove all non-numeric characters and limit to 10 digits
+    const rawValue = e.target.value.replace(/\D/g, '').slice(0, 10);
+    
+    // Set the raw numeric value directly (no formatting)
+    formik.setFieldValue("mobile_number", rawValue);
   };
 
-  const handlePhoneChange = (e) => {
-    formik.setFieldValue("mobile_number", formatPhoneNumber(e.target.value));
+  // Prevent non-numeric input for phone
+  const handlePhoneKeyPress = (e) => {
+    // Only allow numbers (0-9)
+    if (!/[0-9]/.test(e.key)) {
+      e.preventDefault();
+    }
   };
 
   const handleSSNChange = (e) => {
@@ -675,19 +783,23 @@ function SignUpIndividualContent() {
 
     // Clear SSN error when user types
     if (ssnError) {
-      dispatch(setMetadataField({ field: 'ssnError', value: "" }));
+      dispatch(setMetadataField({ field: "ssnError", value: "" }));
     }
   };
 
   // Enhanced state validation for US
   const handleStateChange = (e) => {
-    const isUS = formik.values.country === "US" ||
+    const isUS =
+      formik.values.country === "US" ||
       (selectedCountry && selectedCountry.label === "United States");
     let value = e.target.value;
 
     if (isUS) {
       // Only allow uppercase letters and limit to 2 characters
-      value = value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
+      value = value
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "")
+        .slice(0, 2);
     }
 
     formik.setFieldValue("state", value);
@@ -696,7 +808,10 @@ function SignUpIndividualContent() {
   const validationRules = [
     { label: "At least 12 characters", regex: /^.{12,}$/ },
     { label: "At least one uppercase letter", regex: /[A-Z]/ },
-    { label: "At least one special character", regex: /[!@#$%^&*(),.?":{}|<>]/ },
+    {
+      label: "At least one special character",
+      regex: /[!@#$%^&*(),.?":{}|<>]/,
+    },
   ];
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
@@ -704,24 +819,48 @@ function SignUpIndividualContent() {
   // Enhanced progress calculation
   useEffect(() => {
     const calculateProgress = () => {
-      const personalFields = ["first_name", "last_name", "email", "dob", "nationality", "gender"];
-      const contactFields = ["resident_country", "mobile_number", "street_address_1", "city", "state", "zip_code", "country"];
+      const personalFields = [
+        "first_name",
+        "last_name",
+        "email",
+        "dob",
+        "nationality",
+        "gender",
+      ];
+      const contactFields = [
+        "resident_country",
+        "mobile_number",
+        "street_address_1",
+        "city",
+        "state",
+        "zip_code",
+        "country",
+      ];
       const identityFields = showSSNField && hasNamedAccounts ? ["ssn"] : [];
       const securityFields = ["password", "confirmPassword"];
 
-      let completed = 0, total = 0;
+      let completed = 0,
+        total = 0;
 
       total += personalFields.length;
-      completed += personalFields.filter((f) => formik.values[f] && formik.values[f].toString().trim()).length;
+      completed += personalFields.filter(
+        (f) => formik.values[f] && formik.values[f].toString().trim()
+      ).length;
 
       total += contactFields.length;
-      completed += contactFields.filter((f) => formik.values[f] && formik.values[f].toString().trim()).length;
+      completed += contactFields.filter(
+        (f) => formik.values[f] && formik.values[f].toString().trim()
+      ).length;
 
       total += identityFields.length;
-      completed += identityFields.filter((f) => formik.values[f] && formik.values[f].toString().trim()).length;
+      completed += identityFields.filter(
+        (f) => formik.values[f] && formik.values[f].toString().trim()
+      ).length;
 
       total += securityFields.length;
-      completed += securityFields.filter((f) => formik.values[f] && formik.values[f].toString().trim()).length;
+      completed += securityFields.filter(
+        (f) => formik.values[f] && formik.values[f].toString().trim()
+      ).length;
 
       total += 1;
       completed += acceptedTerms.length > 0 ? 1 : 0;
@@ -733,30 +872,31 @@ function SignUpIndividualContent() {
   }, [formik.values, acceptedTerms, showSSNField, hasNamedAccounts]);
 
   // Options for selects with safe defaults
-  const countryOptions = (Array.isArray(countries) && countries.length > 0)
-    ? countries.map((country) => ({
-      value: country.id,
-      label: country.name,
-      flag_url: country.flag_url,
-      phoneCode: country.phone_code,
-      country_code: country.country_code,
-    }))
-    : [];
+  const countryOptions =
+    Array.isArray(countries) && countries.length > 0
+      ? countries.map((country) => ({
+          value: country.id,
+          label: country.name,
+          flag_url: country.flag_url,
+          phoneCode: country.phone_code,
+          country_code: country.country_code,
+        }))
+      : [];
 
   const nationalityOptions = nationalities.map((nat) => ({
     value: nat.id,
-    label: nat.name
+    label: nat.name,
   }));
 
   const genderOptions = [
     { value: "1", label: "Male" },
     { value: "2", label: "Female" },
-    { value: "3", label: "Other" }
+    { value: "3", label: "Other" },
   ];
 
   const idDocumentTypeOptions = idDocumentTypes.map((docType) => ({
     value: docType.name,
-    label: docType.name
+    label: docType.name,
   }));
 
   // Custom styles for react-select
@@ -776,7 +916,8 @@ function SignUpIndividualContent() {
     menu: (provided) => ({
       ...provided,
       borderRadius: "0.375rem",
-      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
+      boxShadow:
+        "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
       zIndex: 20,
     }),
     option: (provided, state) => ({
@@ -815,8 +956,18 @@ function SignUpIndividualContent() {
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
           <div className="text-yellow-500 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-16 h-16 mx-auto"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
           </div>
           <h3 className="text-lg font-semibold mb-2">Initialization Error</h3>
@@ -829,7 +980,7 @@ function SignUpIndividualContent() {
               Reload Page
             </button>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
             >
               Go Back
@@ -854,6 +1005,23 @@ function SignUpIndividualContent() {
   return (
     <RegistrationLayout>
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30">
+        {showFullScreenLoader && (
+          <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
+            <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
+              <RingLoader
+                color="#3b82f6"
+                size={80}
+                loading={showFullScreenLoader}
+              />
+              <p className="mt-6 text-gray-700 font-medium text-lg">
+                Creating your account...
+              </p>
+              <p className="mt-2 text-gray-500 text-sm">
+                This may take a few moments
+              </p>
+            </div>
+          </div>
+        )}
         <div className="max-w-6xl w-full bg-white rounded-2xl shadow-lg overflow-hidden relative border border-gray-100">
           {/* Debug component - remove in production */}
           <ReduxStateDebug />
@@ -921,10 +1089,11 @@ function SignUpIndividualContent() {
                   key={idx}
                   type="button"
                   onClick={() => setActiveSection(idx)}
-                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 ${activeSection === idx
-                    ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                    : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
-                    }`}
+                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 ${
+                    activeSection === idx
+                      ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                      : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                  }`}
                 >
                   {section}
                   {activeSection === idx && (
@@ -977,8 +1146,11 @@ function SignUpIndividualContent() {
                       id: "dob",
                       label: "Date of Birth *",
                       type: "date",
-                      max: new Date(new Date().setFullYear(new Date().getFullYear() - 18))
-                        .toISOString().split('T')[0]
+                      max: new Date(
+                        new Date().setFullYear(new Date().getFullYear() - 18)
+                      )
+                        .toISOString()
+                        .split("T")[0],
                     },
                   ].map(({ id, label, type, placeholder, max }) => (
                     <div key={id} className="relative">
@@ -997,10 +1169,11 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values[id]}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched[id] && formik.errors[id]
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched[id] && formik.errors[id]
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                       />
                       {formik.touched[id] && formik.errors[id] ? (
                         <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -1033,7 +1206,9 @@ function SignUpIndividualContent() {
                     {isLoadingNationalities ? (
                       <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
                         <ClipLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">Loading nationalities...</span>
+                        <span className="ml-2 text-gray-600">
+                          Loading nationalities...
+                        </span>
                       </div>
                     ) : (
                       <Select
@@ -1052,17 +1227,20 @@ function SignUpIndividualContent() {
                             minHeight: "52px",
                             borderRadius: "12px",
                             borderColor:
-                              formik.touched.nationality && formik.errors.nationality
+                              formik.touched.nationality &&
+                              formik.errors.nationality
                                 ? "#f87171"
                                 : "#e5e7eb",
                             boxShadow: state.isFocused
-                              ? formik.touched.nationality && formik.errors.nationality
+                              ? formik.touched.nationality &&
+                                formik.errors.nationality
                                 ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
                                 : "0 0 0 3px rgba(59, 130, 246, 0.1)"
                               : "none",
                             "&:hover": {
                               borderColor:
-                                formik.touched.nationality && formik.errors.nationality
+                                formik.touched.nationality &&
+                                formik.errors.nationality
                                   ? "#ef4444"
                                   : "#3b82f6",
                             },
@@ -1215,17 +1393,20 @@ function SignUpIndividualContent() {
                           minHeight: "52px",
                           borderRadius: "12px",
                           borderColor:
-                            formik.touched.resident_country && formik.errors.resident_country
+                            formik.touched.resident_country &&
+                            formik.errors.resident_country
                               ? "#f87171"
                               : "#e5e7eb",
                           boxShadow: state.isFocused
-                            ? formik.touched.resident_country && formik.errors.resident_country
+                            ? formik.touched.resident_country &&
+                              formik.errors.resident_country
                               ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
                               : "0 0 0 3px rgba(59, 130, 246, 0.1)"
                             : "none",
                           "&:hover": {
                             borderColor:
-                              formik.touched.resident_country && formik.errors.resident_country
+                              formik.touched.resident_country &&
+                              formik.errors.resident_country
                                 ? "#ef4444"
                                 : "#3b82f6",
                           },
@@ -1234,7 +1415,8 @@ function SignUpIndividualContent() {
                       value={selectedResidentCountry}
                       placeholder="Select Country"
                     />
-                    {formik.touched.resident_country && formik.errors.resident_country ? (
+                    {formik.touched.resident_country &&
+                    formik.errors.resident_country ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -1277,17 +1459,20 @@ function SignUpIndividualContent() {
                               minHeight: "52px",
                               borderRadius: "12px",
                               borderColor:
-                                formik.touched.mobilenumber_countrycode && formik.errors.mobilenumber_countrycode
+                                formik.touched.mobilenumber_countrycode &&
+                                formik.errors.mobilenumber_countrycode
                                   ? "#f87171"
                                   : "#e5e7eb",
                               boxShadow: state.isFocused
-                                ? formik.touched.mobilenumber_countrycode && formik.errors.mobilenumber_countrycode
+                                ? formik.touched.mobilenumber_countrycode &&
+                                  formik.errors.mobilenumber_countrycode
                                   ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
                                   : "0 0 0 3px rgba(59, 130, 246, 0.1)"
                                 : "none",
                               "&:hover": {
                                 borderColor:
-                                  formik.touched.mobilenumber_countrycode && formik.errors.mobilenumber_countrycode
+                                  formik.touched.mobilenumber_countrycode &&
+                                  formik.errors.mobilenumber_countrycode
                                     ? "#ef4444"
                                     : "#3b82f6",
                               },
@@ -1304,7 +1489,8 @@ function SignUpIndividualContent() {
                             </div>
                           )}
                         />
-                        {formik.touched.mobilenumber_countrycode && formik.errors.mobilenumber_countrycode ? (
+                        {formik.touched.mobilenumber_countrycode &&
+                        formik.errors.mobilenumber_countrycode ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
                             <svg
                               className="w-3.5 h-3.5 mr-1"
@@ -1328,15 +1514,20 @@ function SignUpIndividualContent() {
                           id="mobile_number"
                           name="mobile_number"
                           onChange={handlePhoneChange}
+                          onKeyPress={handlePhoneKeyPress}
                           onBlur={formik.handleBlur}
                           value={formik.values.mobile_number}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.mobile_number && formik.errors.mobile_number
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                            } shadow-sm`}
-                          placeholder="123-456-7890"
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                            formik.touched.mobile_number &&
+                            formik.errors.mobile_number
+                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                          placeholder="9813017273"
+                          maxLength={10}
                         />
-                        {formik.touched.mobile_number && formik.errors.mobile_number ? (
+                        {formik.touched.mobile_number &&
+                        formik.errors.mobile_number ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
                             <svg
                               className="w-3.5 h-3.5 mr-1"
@@ -1372,10 +1563,12 @@ function SignUpIndividualContent() {
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
                       value={formik.values.house_number}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.house_number && formik.errors.house_number
-                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        formik.touched.house_number &&
+                        formik.errors.house_number
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
                     />
                   </div>
 
@@ -1411,7 +1604,9 @@ function SignUpIndividualContent() {
                         htmlFor={id}
                         className="block text-sm font-medium text-gray-700 mb-2.5"
                       >
-                        {id === "state" && (formik.values.country === "US" || selectedCountry?.label === "United States")
+                        {id === "state" &&
+                        (formik.values.country === "US" ||
+                          selectedCountry?.label === "United States")
                           ? "State Code *"
                           : label}
                       </label>
@@ -1420,14 +1615,25 @@ function SignUpIndividualContent() {
                         name={id}
                         type="text"
                         placeholder={placeholder}
-                        onChange={id === "state" ? handleStateChange : formik.handleChange}
+                        onChange={
+                          id === "state"
+                            ? handleStateChange
+                            : formik.handleChange
+                        }
                         onBlur={formik.handleBlur}
                         value={formik.values[id]}
-                        maxLength={id === "state" && (formik.values.country === "US" || selectedCountry?.label === "United States") ? 2 : undefined}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched[id] && formik.errors[id]
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        maxLength={
+                          id === "state" &&
+                          (formik.values.country === "US" ||
+                            selectedCountry?.label === "United States")
+                            ? 2
+                            : undefined
+                        }
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched[id] && formik.errors[id]
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                       />
                       {formik.touched[id] && formik.errors[id] ? (
                         <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -1574,9 +1780,13 @@ function SignUpIndividualContent() {
                         className="block text-sm font-medium text-gray-700 mb-2.5"
                       >
                         Social Security Number (SSN){" "}
-                        {hasNamedAccounts && <span className="text-red-500">*</span>}
+                        {hasNamedAccounts && (
+                          <span className="text-red-500">*</span>
+                        )}
                         {!hasNamedAccounts && (
-                          <span className="text-gray-500 text-xs ml-2">(optional for pooled accounts)</span>
+                          <span className="text-gray-500 text-xs ml-2">
+                            (optional for pooled accounts)
+                          </span>
                         )}
                       </label>
                       <input
@@ -1586,10 +1796,11 @@ function SignUpIndividualContent() {
                         onChange={handleSSNChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.ssn}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${(formik.touched.ssn && formik.errors.ssn) || ssnError
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          (formik.touched.ssn && formik.errors.ssn) || ssnError
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                         placeholder="XXX-XX-XXXX"
                         maxLength={11}
                       />
@@ -1640,14 +1851,21 @@ function SignUpIndividualContent() {
                     {isLoadingDocumentTypes ? (
                       <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
                         <ClipLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">Loading document types...</span>
+                        <span className="ml-2 text-gray-600">
+                          Loading document types...
+                        </span>
                       </div>
                     ) : (
                       <select
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!selectedIdDocumentType ? "border-red-400 focus:ring-red-500/30 focus:border-red-500" : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          !selectedIdDocumentType
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                         value={selectedIdDocumentType}
-                        onChange={(e) => setSelectedIdDocumentType(e.target.value)}
+                        onChange={(e) =>
+                          setSelectedIdDocumentType(e.target.value)
+                        }
                         required
                       >
                         <option value="">-- Select ID Document Type --</option>
@@ -1687,8 +1905,11 @@ function SignUpIndividualContent() {
                       type="text"
                       value={idDocumentNumber}
                       onChange={(e) => setIdDocumentNumber(e.target.value)}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!idDocumentNumber ? "border-red-400 focus:ring-red-500/30 focus:border-red-500" : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idDocumentNumber
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
                       placeholder="Enter document number"
                       required
                     />
@@ -1700,8 +1921,11 @@ function SignUpIndividualContent() {
                       ID Issuing Country *
                     </label>
                     <select
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!idIssuedCountryCode ? "border-red-400 focus:ring-red-500/30 focus:border-red-500" : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedCountryCode
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
                       value={idIssuedCountryCode}
                       onChange={(e) => setIdIssuedCountryCode(e.target.value)}
                       required
@@ -1724,8 +1948,11 @@ function SignUpIndividualContent() {
                       type="date"
                       value={idIssuedDate}
                       onChange={(e) => setIdIssuedDate(e.target.value)}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!idIssuedDate ? "border-red-400 focus:ring-red-500/30 focus:border-red-500" : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedDate
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
                       required
                     />
                   </div>
@@ -1802,10 +2029,11 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.password}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${formik.touched.password && formik.errors.password
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.password && formik.errors.password
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                         placeholder="Create a strong password"
                       />
                       <button
@@ -1845,10 +2073,11 @@ function SignUpIndividualContent() {
                         {validationRules.map((rule, idx) => (
                           <li
                             key={idx}
-                            className={`flex items-center ${isRuleMet(rule.regex)
-                              ? "text-green-600"
-                              : "text-gray-500"
-                              }`}
+                            className={`flex items-center ${
+                              isRuleMet(rule.regex)
+                                ? "text-green-600"
+                                : "text-gray-500"
+                            }`}
                           >
                             {isRuleMet(rule.regex) ? (
                               <FontAwesomeIcon
@@ -1893,16 +2122,20 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.confirmPassword}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${formik.touched.confirmPassword && formik.errors.confirmPassword
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.confirmPassword &&
+                          formik.errors.confirmPassword
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                         placeholder="Confirm your password"
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
-                        onClick={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                        onClick={() =>
+                          setConfirmPasswordVisible(!confirmPasswordVisible)
+                        }
                         tabIndex={-1}
                       >
                         <FontAwesomeIcon
@@ -1910,29 +2143,36 @@ function SignUpIndividualContent() {
                         />
                       </button>
                     </div>
-                    {formik.touched.confirmPassword && formik.errors.confirmPassword && (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
+                    {formik.touched.confirmPassword &&
+                      formik.errors.confirmPassword && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.confirmPassword}
+                        </p>
+                      )}
+                    {formik.values.password &&
+                      formik.values.confirmPassword &&
+                      formik.values.password ===
+                        formik.values.confirmPassword && (
+                        <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
+                          <FontAwesomeIcon
+                            icon={faCheckCircle}
+                            className="mr-2"
                           />
-                        </svg>
-                        {formik.errors.confirmPassword}
-                      </p>
-                    )}
-                    {formik.values.password && formik.values.confirmPassword && formik.values.password === formik.values.confirmPassword && (
-                      <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
-                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-                        Passwords match
-                      </div>
-                    )}
+                          Passwords match
+                        </div>
+                      )}
                   </div>
                 </div>
 
@@ -1983,7 +2223,11 @@ function SignUpIndividualContent() {
               </section>
 
               {/* Terms & Conditions Section */}
-              <section className={`${activeSection !== (showSSNField ? 4 : 3) ? "hidden" : ""}`}>
+              <section
+                className={`${
+                  activeSection !== (showSSNField ? 4 : 3) ? "hidden" : ""
+                }`}
+              >
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     {showSSNField ? 5 : 4}
@@ -1994,7 +2238,9 @@ function SignUpIndividualContent() {
                 {termsLoading ? (
                   <div className="flex justify-center items-center py-8">
                     <ClipLoader color="#3b82f6" size={30} />
-                    <span className="ml-3 text-gray-600">Loading terms and conditions...</span>
+                    <span className="ml-3 text-gray-600">
+                      Loading terms and conditions...
+                    </span>
                   </div>
                 ) : termsError ? (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
@@ -2015,7 +2261,8 @@ function SignUpIndividualContent() {
                           Unable to load terms and conditions
                         </p>
                         <p className="text-yellow-600 text-xs mt-1">
-                          You can still proceed with registration. Please contact support if you need to review the terms.
+                          You can still proceed with registration. Please
+                          contact support if you need to review the terms.
                         </p>
                         <button
                           onClick={() => dispatch(fetchTermsAndConditions())}
@@ -2037,7 +2284,9 @@ function SignUpIndividualContent() {
                           <input
                             type="checkbox"
                             id={`term-${term.id}`}
-                            checked={acceptedTerms.some((item) => item.id === term.id)}
+                            checked={acceptedTerms.some(
+                              (item) => item.id === term.id
+                            )}
                             onChange={() => handleCheckboxChange(term.id)}
                             className="mt-1 mr-4 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
@@ -2061,14 +2310,16 @@ function SignUpIndividualContent() {
 
                     <div className="bg-blue-50 p-4 rounded-lg mb-6">
                       <p className="text-blue-700 text-sm">
-                        <strong>Note:</strong> You must accept all terms and conditions to continue.
+                        <strong>Note:</strong> You must accept all terms and
+                        conditions to continue.
                       </p>
                     </div>
                   </>
                 ) : (
                   <div className="bg-green-50 p-4 rounded-lg mb-6">
                     <p className="text-green-700 text-sm">
-                      <strong>No additional terms required:</strong> You can proceed with registration.
+                      <strong>No additional terms required:</strong> You can
+                      proceed with registration.
                     </p>
                   </div>
                 )}
@@ -2104,7 +2355,11 @@ function SignUpIndividualContent() {
                     >
                       {isCancelling ? (
                         <>
-                          <ClipLoader size={20} color="#ffffff" className="mr-2" />
+                          <ClipLoader
+                            size={20}
+                            color="#ffffff"
+                            className="mr-2"
+                          />
                           Cancelling...
                         </>
                       ) : (
@@ -2129,12 +2384,20 @@ function SignUpIndividualContent() {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || (termsConditions.length > 0 && acceptedTerms.length === 0)}
+                      disabled={
+                        isSubmitting ||
+                        (termsConditions.length > 0 &&
+                          acceptedTerms.length === 0)
+                      }
                       className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                     >
                       {isSubmitting ? (
                         <>
-                          <ClipLoader size={20} color="#ffffff" className="mr-2" />
+                          <ClipLoader
+                            size={20}
+                            color="#ffffff"
+                            className="mr-2"
+                          />
                           Processing...
                         </>
                       ) : (

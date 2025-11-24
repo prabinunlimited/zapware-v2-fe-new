@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useFormik } from 'formik';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../../hooks/index';
+import React, { useState, useEffect, useRef } from "react";
+import { useFormik } from "formik";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../../../hooks/index";
+import { motion } from "framer-motion";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { AiOutlineClose } from "react-icons/ai";
+import { FaExternalLinkAlt } from "react-icons/fa";
 
 // Import REGULAR ACTIONS from authSlice
 import {
@@ -16,25 +21,23 @@ import {
   selectResendAttempts,
   selectOtp,
   selectIsLoading,
-  selectIsVerifyingOtp
-} from '../../Auth/slices/authSlice';
+  selectIsVerifyingOtp,
+} from "../../Auth/slices/authSlice";
 
 // Import THUNK ACTIONS from authThunk
-import { sendOtp, validateOtp } from '../../../features/Auth/authThunk';
+import { sendOtp, validateOtp } from "../../../features/Auth/authThunk";
 
-import useFieldFocus from '../../../hooks/useFieldFocus';
-import PopupModal from '../../../components/PopupModal/PopupModal';
-import { ClipLoader } from 'react-spinners';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faMobileAlt,
-  faShieldAlt,
-  faCopy,
-  faPaperPlane,
-  faCheckCircle,
-  faExclamationTriangle,
-  faArrowLeft
-} from '@fortawesome/free-solid-svg-icons';
+  FiCheckCircle,
+  FiArrowLeft,
+  FiRefreshCw,
+  FiSend,
+  FiSmartphone,
+  FiCopy,
+  FiShield,
+} from "react-icons/fi";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function PhoneVerification() {
   const dispatch = useAppDispatch();
@@ -45,38 +48,47 @@ function PhoneVerification() {
   const resendTimer = useAppSelector(selectResendTimer);
   const resendAttempts = useAppSelector(selectResendAttempts);
   const otp = useAppSelector(selectOtp);
-  const modalData = useAppSelector((state) => state.auth.modalData);
 
-  // Use field focus hook
-  const { activeField, handleFocus, handleBlur: handleFieldBlur } = useFieldFocus();
-
-  const [showOtpInput, setShowOtpInput] = useState(false);
   const [copied, setCopied] = useState(false);
-  const bearertoken = localStorage.getItem('bearertoken');
+  const [showPlaidModal, setShowPlaidModal] = useState(false);
+  const [plaidUrl, setPlaidUrl] = useState("");
+  const [isPlaidLoading, setIsPlaidLoading] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { kyc_verify = 1 } = location.state || {};
-  const { mobileNumber } = location.state || { mobileNumber: [] };
-
+  const { mobileNumber } = location.state || { mobileNumber: "" };
   const otpRefs = useRef(new Array(6).fill(null));
+
+  // Extract country code and number for display and submission
+  const extractPhoneParts = (fullNumber) => {
+    if (!fullNumber) return { country_code: "+1", number: "" };
+
+    if (fullNumber.includes("+")) {
+      const parts = fullNumber.split(" ");
+      if (parts.length > 1) {
+        return {
+          country_code: parts[0],
+          number: parts.slice(1).join("").replace(/\D/g, ""),
+        };
+      }
+      // If no space but has +, try to extract country code
+      const match = fullNumber.match(/^(\+\d+)(\d+)$/);
+      if (match) {
+        return { country_code: match[1], number: match[2] };
+      }
+    }
+    return { country_code: "+1", number: fullNumber.replace(/\D/g, "") };
+  };
+
+  const { country_code, number } = extractPhoneParts(mobileNumber);
 
   const initialValues = {
     mobile_number: mobileNumber,
-    otp: '',
+    otp: "",
   };
 
   // Add useEffect to automatically close the modal after a delay
-  useEffect(() => {
-    if (modalData.isOpen) {
-      const timer = setTimeout(() => {
-        dispatch(closeModal());
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [modalData.isOpen, dispatch]);
-
   useEffect(() => {
     if (resendTimer > 0) {
       const interval = setInterval(() => {
@@ -86,147 +98,196 @@ function PhoneVerification() {
     }
   }, [resendTimer, dispatch]);
 
-  const {
-    values,
-    handleBlur: formikHandleBlur,
-    handleChange,
-    handleSubmit: formikSubmit,
-    setFieldValue,
-    errors,
-    touched,
-  } = useFormik({
-    initialValues,
-    validate: (values) => {
-      const errors = {};
-      if (!values.mobile_number) {
-        errors.mobile_number = 'Mobile number is required';
+  // ========== PLAID HANDLER FUNCTIONS ==========
+
+  const handleKycVerification = async (response) => {
+    console.log("🔄 Handling KYC verification:", response);
+
+    // If Plaid URL is provided, show modal for KYC verification
+    if (response.plaid_url && response.plaid_url !== "") {
+      setPlaidUrl(response.plaid_url);
+      
+      // For whitelabeled partners, open directly in new tab
+      if (response.is_whitelabelled_partner_customer === "1") {
+        window.open(response.plaid_url, "_blank");
+        toast.info("Bank verification opened in new tab");
+        
+        // Store auth data temporarily
+        if (response.token) {
+          localStorage.setItem("authtoken", response.token);
+        }
+        if (response.customer_id) {
+          localStorage.setItem("authcustomer_id", response.customer_id);
+          sessionStorage.setItem("pending_kyc_auth", JSON.stringify({
+            customer_id: response.customer_id,
+            timestamp: Date.now(),
+            plaidUrl: response.plaid_url,
+          }));
+        }
+        
+        return null;
+      } else {
+        // For regular customers, show modal with options
+        setShowPlaidModal(true);
+        return null;
       }
-      return errors;
-    },
+    }
+
+    // If KYC is already completed, proceed to home
+    if (response.kyc_status === 1 || response.kyc_status === "1") {
+      return response;
+    }
+
+    // If no Plaid URL and KYC not completed, proceed normally
+    return response;
+  };
+
+  const openPlaidInNewWindow = () => {
+    if (!plaidUrl) {
+      toast.error("No verification URL available");
+      return;
+    }
+
+    const plaidWindow = window.open(
+      plaidUrl,
+      "plaid_verification",
+      "width=800,height=700,scrollbars=yes,resizable=yes,top=100,left=100"
+    );
+
+    if (plaidWindow) {
+      monitorPlaidWindow(plaidWindow);
+      setShowPlaidModal(false);
+      setIsPlaidLoading(true);
+      toast.info("Bank verification started in new window");
+    } else {
+      toast.warning(
+        "Popup blocked! Please allow popups or use the manual link."
+      );
+    }
+  };
+
+  const openPlaidInSameTab = () => {
+    if (!plaidUrl) {
+      toast.error("No verification URL available");
+      return;
+    }
+    window.location.href = plaidUrl;
+  };
+
+  const closePlaidModal = () => {
+    setShowPlaidModal(false);
+    setPlaidUrl("");
+    setIsPlaidLoading(false);
+  };
+
+  const monitorPlaidWindow = (plaidWindow) => {
+    let checkCount = 0;
+    const maxChecks = 300; // 5 minutes
+
+    const checkWindow = setInterval(() => {
+      checkCount++;
+      if (plaidWindow.closed) {
+        clearInterval(checkWindow);
+        setIsPlaidLoading(false);
+        
+        setTimeout(() => {
+          toast.success("Bank verification completed!");
+          
+          // Check if we have stored auth data
+          const customerId = localStorage.getItem("authcustomer_id");
+          const token = localStorage.getItem("authtoken");
+          
+          if (customerId && token) {
+            navigate(`/home/${customerId}`);
+          } else {
+            navigate("/");
+          }
+        }, 1000);
+      } else if (checkCount >= maxChecks) {
+        clearInterval(checkWindow);
+        setIsPlaidLoading(false);
+        toast.info("Verification timeout. You can retry later.");
+      }
+    }, 1000);
+  };
+
+  const handleCopyPlaidLink = () => {
+    if (!plaidUrl) {
+      toast.error("No verification URL available");
+      return;
+    }
+    
+    navigator.clipboard.writeText(plaidUrl);
+    setCopied(true);
+    toast.success("Verification link copied to clipboard!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const { values, handleSubmit: formikSubmit } = useFormik({
+    initialValues,
     onSubmit: async (values) => {
-      const currentDateTimeLocal = new Date().toLocaleString();
-
-      // Extract phone code and number from the mobileNumber
-      const mobileNumberParts = values.mobile_number.split(' ');
-      const phone_code = mobileNumberParts[0] || '+1'; // Default to +1 if not available
-      const mobile_number = mobileNumberParts.slice(1).join('').replace(/\D/g, "");
-
+      // ✅ Create loginData with the correct format
       const loginData = {
-        phone_code: phone_code,
-        mobile_number: mobile_number,
-        otp: otp.join(''),
-        password: 'defaultPassword', // You need to get this from somewhere
-        sign_in_option: 'mobile',
-        currentDate: currentDateTimeLocal,
+        country_code: country_code,
+        mobile_number: number,
+        otp: otp.join(""),
       };
 
-      console.log('🔄 Starting OTP validation with:', loginData);
+      console.log("🔄 Starting OTP validation with:", loginData);
 
       try {
         const result = await dispatch(validateOtp(loginData));
 
-        console.log('📦 OTP validation result:', result);
-
         if (result.payload) {
           const data = result.payload;
+          console.log("✅ OTP validation response:", data);
 
-          console.log('✅ OTP validation successful:', data);
-
-          // Handle different response scenarios
           if (data.status === "success") {
-            dispatch(setModalData({
-              isOpen: true,
-              title: 'Success',
-              message: data.message || 'OTP verification successful!',
-              type: 'success',
-            }));
+            toast.success(data.message || "OTP verification successful!");
 
             // Store authentication data if available
             if (data.token) {
-              localStorage.setItem('authtoken', data.token);
+              localStorage.setItem("authtoken", data.token);
             }
             if (data.customer_id) {
-              localStorage.setItem('authcustomer_id', data.customer_id);
+              localStorage.setItem("authcustomer_id", data.customer_id);
             }
 
-            // Handle different post-verification scenarios
-            setTimeout(() => {
-              if (data.redirected && data.plaid_url) {
-                // Redirect to Plaid for KYC - UPDATED TO USE REACT ROUTER
-                if (kyc_verify === '1') {
-                  // Use window.location.href for external Plaid URL
-                  window.location.href = data.plaid_url;
-                } else {
-                  navigate('/');
-                }
-              } else if (data.requiresKycVerification) {
-                // Handle KYC requirement
-                navigate('/kyc-verification');
-              } else if (data.is_owner_login) {
-                // Handle owner login
-                navigate('/owner-dashboard');
-              } else {
-                // Regular successful login
-                navigate('/');
-              }
-            }, 2000);
-          } else if (data.redirected) {
-            // Handle Plaid redirect
-            dispatch(setModalData({
-              isOpen: true,
-              title: 'Redirecting',
-              message: data.message || 'Redirecting to bank verification...',
-              type: 'info',
-            }));
+            // Handle KYC/Plaid flow
+            const processedData = await handleKycVerification(data);
 
-            if (data.plaid_url) {
+            if (processedData === null) {
+              // KYC verification is in progress, don't navigate yet
+              return;
+            }
+
+            // If no KYC required or KYC already completed
+            if (processedData) {
               setTimeout(() => {
-                if (kyc_verify === '1') {
-                  window.location.href = data.plaid_url;
-                } else {
-                  navigate('/');
-                }
-              }, 1000);
+                navigate("/");
+              }, 2000);
             }
           } else {
-            // Handle other success cases
-            dispatch(setModalData({
-              isOpen: true,
-              title: 'Success',
-              message: data.message || 'Action completed successfully',
-              type: 'success',
-            }));
+            toast.error(data.message || "OTP verification failed");
           }
-
         } else if (result.error) {
-          // Handle rejected thunk
-          console.error('❌ OTP validation failed:', result.error);
-          const errorMessage = result.error.message || 'Failed to verify OTP. Please try again.';
-
-          dispatch(setModalData({
-            isOpen: true,
-            title: 'Error',
-            message: errorMessage,
-            type: 'error',
-          }));
+          const errorMessage =
+            result.error.message ||
+            result.error.payload?.message ||
+            "Failed to verify OTP. Please try again.";
+          toast.error(errorMessage);
         }
       } catch (error) {
-        console.error('💥 Unexpected error during OTP validation:', error);
-        dispatch(setModalData({
-          isOpen: true,
-          title: 'Error',
-          message: 'An unexpected error occurred. Please try again.',
-          type: 'error',
-        }));
+        console.error("💥 Unexpected error during OTP validation:", error);
+        toast.error("An unexpected error occurred. Please try again.");
       }
     },
   });
 
   useEffect(() => {
-    const storedMobileNumber = localStorage.getItem('fullMobileNumber');
+    const storedMobileNumber = localStorage.getItem("fullMobileNumber");
     if (storedMobileNumber) {
-      setFieldValue('mobile_number', storedMobileNumber);
-      localStorage.removeItem('fullMobileNumber');
+      localStorage.removeItem("fullMobileNumber");
     }
 
     // Auto-focus first OTP input when component mounts
@@ -237,7 +298,9 @@ function PhoneVerification() {
     return () => {
       dispatch(resetAuthOtpState());
     };
-  }, [dispatch, setFieldValue]);
+  }, [dispatch]);
+
+  // ... rest of your existing functions (handleOtpChange, handleCopyOtp, handlePasteOtp, handleBackspace, handleGenerateOTP, handleResendOTP, handleSubmit, handleGoBack) remain the same
 
   const handleOtpChange = (e, index) => {
     const value = e.target.value.slice(0, 1);
@@ -252,35 +315,28 @@ function PhoneVerification() {
     }
   };
 
-  const handleOtpFocus = (index) => {
-    handleFocus(`otp-${index}`);
-  };
-
-  const handleOtpBlur = () => {
-    handleFieldBlur();
-  };
-
   const handleCopyOtp = async () => {
-    const otpString = otp.join('');
+    const otpString = otp.join("");
     try {
       await navigator.clipboard.writeText(otpString);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success("OTP copied to clipboard!");
     } catch (err) {
-      console.error('Failed to copy OTP:', err);
+      toast.error("Failed to copy OTP");
     }
   };
 
   const handlePasteOtp = (e) => {
-    const pastedValue = e.clipboardData.getData('text').slice(0, 6);
+    const pastedValue = e.clipboardData.getData("text").slice(0, 6);
     if (/^\d{6}$/.test(pastedValue)) {
-      dispatch(setOtp(pastedValue.split('').map((char) => char)));
+      dispatch(setOtp(pastedValue.split("").map((char) => char)));
       otpRefs.current[5].focus();
     }
   };
 
   const handleBackspace = (e, index) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
       otpRefs.current[index - 1].focus();
     }
   };
@@ -288,34 +344,18 @@ function PhoneVerification() {
   const handleGenerateOTP = async () => {
     if (resendAttempts <= 0) return;
 
-    const storedMobileNumber = localStorage.getItem('fullMobileNumber');
+    const storedMobileNumber = localStorage.getItem("fullMobileNumber");
     if (!storedMobileNumber) {
-      dispatch(setModalData({
-        isOpen: true,
-        title: 'Error',
-        message: 'No mobile number found. Please try again.',
-        type: 'error',
-      }));
+      toast.error("No mobile number found. Please try again.");
       return;
     }
 
     try {
       await dispatch(sendOtp(storedMobileNumber)).unwrap();
-      setShowOtpInput(true);
-      dispatch(setModalData({
-        isOpen: true,
-        title: 'OTP Sent',
-        message: 'Verification code has been sent to your phone.',
-        type: 'success',
-      }));
+      toast.success("Verification code has been sent to your phone!");
     } catch (error) {
-      console.error('Error generating OTP:', error);
-      dispatch(setModalData({
-        isOpen: true,
-        title: 'Error',
-        message: 'Failed to send OTP. Please try again.',
-        type: 'error',
-      }));
+      console.error("Error generating OTP:", error);
+      toast.error("Failed to send OTP. Please try again.");
     }
   };
 
@@ -328,32 +368,21 @@ function PhoneVerification() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Check if OTP is complete before submitting
-    const isOtpComplete = otp.every(digit => digit !== '');
+    const isOtpComplete = otp.every((digit) => digit !== "");
     if (!isOtpComplete) {
-      dispatch(setModalData({
-        isOpen: true,
-        title: 'Error',
-        message: 'Please enter the complete 6-digit OTP code.',
-        type: 'error',
-      }));
+      toast.error("Please enter the complete 6-digit OTP code.");
       return;
     }
 
+    const loginData = {
+      country_code: country_code,
+      mobile_number: number,
+      otp: otp.join(""),
+    };
+
+    console.log("📤 PhoneVerification sending:", loginData);
+
     formikSubmit();
-  };
-
-  const handleCloseModal = () => {
-    dispatch(closeModal());
-  };
-
-  const handleMobileNumberFocus = () => {
-    handleFocus('mobile_number');
-  };
-
-  const handleMobileNumberBlur = (e) => {
-    formikHandleBlur(e);
-    handleFieldBlur();
   };
 
   const handleGoBack = () => {
@@ -361,175 +390,257 @@ function PhoneVerification() {
   };
 
   const isSubmitting = isLoading || isVerifyingOtp;
-  const isOtpComplete = otp.every(digit => digit !== '');
+  const isOtpComplete = otp.every((digit) => digit !== "");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-6"
+    >
+      <ToastContainer position="top-right" autoClose={3000} />
+
+      <div className="w-full flex flex-col items-center justify-between max-w-2xl bg-white rounded-xl shadow-xl p-8 space-y-8 border border-gray-100">
         {/* Header */}
-        <div className="bg-gradient-to-r from-sky-700 to-indigo-800 p-6 text-white text-center">
+        <div className="flex items-center justify-between w-full">
           <button
             onClick={handleGoBack}
-            className="absolute left-4 top-4 text-white hover:text-blue-200 transition-colors"
-            aria-label="Go back"
+            className="text-gray-600 hover:text-gray-800 transition-colors p-2"
+            disabled={isSubmitting}
           >
-            <FontAwesomeIcon icon={faArrowLeft} size="lg" />
+            <FiArrowLeft size={24} />
           </button>
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FontAwesomeIcon icon={faShieldAlt} size="2x" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Phone Verification</h1>
-          <p className="text-blue-100">Enter the verification code sent to your phone</p>
+          <h1 className="text-3xl font-semibold text-gray-900">
+            Phone Verification
+          </h1>
+          <FiSmartphone className="text-5xl text-blue-600" />
         </div>
 
-        <div className="p-6">
-          <PopupModal
-            isOpen={modalData.isOpen}
-            title={modalData.title}
-            message={modalData.message}
-            type={modalData.type}
-            onClose={handleCloseModal}
-          />
-
-          {isSubmitting && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 flex flex-col items-center">
-                <ClipLoader color="#3B82F6" size={50} />
-                <p className="mt-4 text-gray-600">Verifying OTP...</p>
+        {/* PLAID MODAL - Enhanced from Login component */}
+        {showPlaidModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  KYC Verification Required
+                </h2>
+                <button
+                  onClick={closePlaidModal}
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-2"
+                  disabled={isPlaidLoading}
+                >
+                  <AiOutlineClose size={24} />
+                </button>
               </div>
-            </div>
-          )}
 
-          {/* Wrap the content in a form element */}
-          <form onSubmit={handleSubmit}>
-            {/* Mobile Number Display */}
-            <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FontAwesomeIcon icon={faMobileAlt} className="mr-2 text-blue-600" />
-                Mobile Number
-              </label>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-lg font-semibold text-gray-800">{mobileNumber}</span>
-                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                  <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
+              <div className="p-6">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiShield className="text-blue-600 text-2xl" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    Secure KYC Verification
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    You need to complete KYC verification to access your account. 
+                    This is a secure process powered by Plaid.
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-start">
+                    <FiShield className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">
+                        Secure & Encrypted
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Your information is protected with bank-level security. 
+                        We never store your banking credentials.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    onClick={openPlaidInNewWindow}
+                    disabled={isPlaidLoading}
+                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-3 disabled:opacity-70"
+                  >
+                    {isPlaidLoading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <FaExternalLinkAlt className="text-lg" />
+                    )}
+                    <span>
+                      {isPlaidLoading ? "Opening..." : "Open in New Window (Recommended)"}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={openPlaidInSameTab}
+                    disabled={isPlaidLoading}
+                    className="w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-3 disabled:opacity-70"
+                  >
+                    <span>Open in This Tab</span>
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      onClick={handleCopyPlaidLink}
+                      disabled={isPlaidLoading}
+                      className="text-blue-600 hover:text-blue-800 text-sm disabled:opacity-50"
+                    >
+                      {copied ? "Copied!" : "Copy verification link instead"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* OTP Input Section */}
-            <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-4">
-                Enter 6-digit verification code
-              </label>
-
-              <div className="flex justify-between mb-4 relative">
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (otpRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength="1"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(e, index)}
-                    onKeyDown={(e) => handleBackspace(e, index)}
-                    onPaste={handlePasteOtp}
-                    onFocus={() => handleOtpFocus(index)}
-                    onBlur={handleOtpBlur}
-                    className={`w-12 h-12 text-center border-2 rounded-lg text-xl font-bold transition-all duration-200 focus:outline-none focus:ring-0 ${activeField === `otp-${index}`
-                      ? 'border-blue-500 ring-4 ring-blue-100 bg-blue-50 transform scale-105'
-                      : digit ? 'border-green-400 bg-green-50' : 'border-gray-300'
-                      }`}
-                    disabled={isSubmitting}
-                  />
-                ))}
+              <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+                <p className="text-xs text-gray-500 text-center">
+                  By continuing, you agree to our Terms of Service and Privacy Policy
+                </p>
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Copy OTP Button */}
-              <button
-                type="button"
-                onClick={handleCopyOtp}
-                disabled={!isOtpComplete || copied}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                <FontAwesomeIcon icon={copied ? faCheckCircle : faCopy} />
-                {copied ? 'Copied to clipboard!' : 'Copy OTP code'}
-              </button>
+        {/* Main Content */}
+        <div className="w-full space-y-8">
+          {/* Mobile Number Display */}
+          <div className="text-center">
+            <label className="block text-lg font-medium text-gray-700 mb-4">
+              Verification code sent to:
+            </label>
+            <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="text-xl font-semibold text-gray-800">
+                {country_code} {number}
+              </span>
+              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center ml-3">
+                <FiCheckCircle className="text-white text-xs" />
+              </div>
+            </div>
+          </div>
+
+          {/* OTP Input Section */}
+          <div className="space-y-6">
+            <label className="block text-lg font-medium text-gray-700 text-center">
+              Enter 6-digit verification code
+            </label>
+
+            <div
+              className="flex justify-center gap-4 my-8"
+              onPaste={handlePasteOtp}
+            >
+              {otp.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(el) => (otpRefs.current[index] = el)}
+                  type="text"
+                  maxLength="1"
+                  value={digit}
+                  onChange={(e) => handleOtpChange(e, index)}
+                  onKeyDown={(e) => handleBackspace(e, index)}
+                  className="w-16 h-16 border border-gray-300 rounded-lg text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  disabled={isSubmitting}
+                />
+              ))}
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-4">
-              <button
-                type="submit"
-                disabled={!isOtpComplete || isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                onFocus={() => handleFocus('verify-button')}
-                onBlur={handleFieldBlur}
-              >
-                {isVerifyingOtp ? (
-                  <>
-                    <ClipLoader color="#ffffff" size={16} />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faCheckCircle} />
-                    Verify Code
-                  </>
-                )}
-              </button>
+            {/* Copy OTP Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              type="button"
+              onClick={handleCopyOtp}
+              disabled={!isOtpComplete || copied || isSubmitting}
+              className="w-full flex items-center justify-center gap-2 py-3 text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
+            >
+              <FiCopy />
+              {copied ? "Copied to clipboard!" : "Copy OTP code"}
+            </motion.button>
+          </div>
 
-              <button
-                type="button"
-                onClick={handleResendOTP}
-                disabled={resendAttempts <= 0 || resendTimer > 0}
-                className="w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent font-semibold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
-                onFocus={() => handleFocus('resend-button')}
-                onBlur={handleFieldBlur}
-              >
-                <FontAwesomeIcon icon={faPaperPlane} />
-                {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
-              </button>
-            </div>
-          </form>
+          {/* Action Buttons */}
+          <div className="space-y-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleSubmit}
+              disabled={!isOtpComplete || isSubmitting}
+              className="w-full bg-green-600 text-white py-4 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center font-semibold text-xl disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {isVerifyingOtp ? (
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <FiCheckCircle className="mr-3 text-2xl" />
+                  Verify Code
+                </>
+              )}
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleResendOTP}
+              disabled={resendAttempts <= 0 || resendTimer > 0 || isSubmitting}
+              className={`w-full py-4 rounded-lg ${
+                resendTimer > 0 || resendAttempts <= 0
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
+              } flex items-center justify-center font-semibold text-xl`}
+            >
+              <FiRefreshCw className="mr-3 text-2xl" />
+              {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend Code"}
+            </motion.button>
+          </div>
 
           {/* Status Information */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between text-lg text-gray-600">
               <span>Attempts remaining:</span>
-              <span className={`font-semibold ${resendAttempts <= 2 ? 'text-orange-500' : 'text-green-600'}`}>
+              <span
+                className={`font-semibold ${
+                  resendAttempts <= 2 ? "text-orange-500" : "text-green-600"
+                }`}
+              >
                 {resendAttempts}
               </span>
             </div>
 
             {resendAttempts <= 2 && resendAttempts > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-orange-600 text-sm">
-                <FontAwesomeIcon icon={faExclamationTriangle} />
-                <span>Only {resendAttempts} attempt{resendAttempts !== 1 ? 's' : ''} remaining</span>
+              <div className="mt-2 flex items-center gap-2 text-orange-600 text-lg">
+                ⚠️ Only {resendAttempts} attempt
+                {resendAttempts !== 1 ? "s" : ""} remaining
               </div>
             )}
 
             {resendAttempts <= 0 && (
-              <div className="mt-2 flex items-center gap-2 text-red-600 text-sm">
-                <FontAwesomeIcon icon={faExclamationTriangle} />
-                <span>No more attempts remaining. Please contact support.</span>
+              <div className="mt-2 flex items-center gap-2 text-red-600 text-lg">
+                ⚠️ No more attempts remaining. Please contact support.
               </div>
             )}
           </div>
 
           {/* Quick Tips */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-800 mb-2">💡 Quick Tips</h4>
-            <ul className="text-sm text-blue-600 space-y-1">
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-semibold text-blue-800 mb-3 text-lg">
+              💡 Quick Tips
+            </h4>
+            <ul className="text-blue-600 space-y-2 text-lg">
               <li>• Check your SMS messages for the code</li>
               <li>• Codes expire after 10 minutes</li>
-              <li>• Enter all 6 digits to auto-verify</li>
+              <li>• Enter all 6 digits to verify automatically</li>
+              <li>• Complete KYC verification if required</li>
             </ul>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

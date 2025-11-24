@@ -1,69 +1,14 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../services/api";
+import api, { getBearerToken } from "../../services/api";
 import axios from "axios";
 import { openModal } from "./slices/uiSlice";
 import { extractErrorMessage } from "../../utils/errorHandling";
+import { tokenService } from "../../services/authService";
 
 // ===================== TOKEN MANAGEMENT =====================
-let tokenPromise = null;
-let tokenExpiryTime = 0;
-const TOKEN_EXPIRY_BUFFER = 300;
+let tokenRequest = null;
 
-export const getBearerToken = async () => {
-  const now = Date.now() / 1000;
-  const existingToken = localStorage.getItem("bearertoken");
-
-  if (existingToken) {
-    try {
-      const payload = JSON.parse(atob(existingToken.split(".")[1]));
-      const isExpired = payload.exp && payload.exp < now + TOKEN_EXPIRY_BUFFER;
-
-      if (!isExpired) {
-        tokenExpiryTime = payload.exp;
-        return existingToken;
-      }
-    } catch (error) {
-      console.warn("Token validation failed, getting new token");
-    }
-  }
-
-  if (tokenPromise) {
-    return tokenPromise;
-  }
-
-  try {
-    tokenPromise = axios
-      .post(`${import.meta.env.VITE_API_URL}/partner-login`, {
-        client_id: "HK6V7709",
-        client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-      })
-      .then((response) => {
-        const newToken = response.data.data.token;
-        localStorage.setItem("bearertoken", newToken);
-
-        try {
-          const payload = JSON.parse(atob(newToken.split(".")[1]));
-          tokenExpiryTime = payload.exp;
-        } catch (error) {
-          tokenExpiryTime = now + 3600;
-        }
-
-        return newToken;
-      })
-      .finally(() => {
-        tokenPromise = null;
-      });
-
-    return await tokenPromise;
-  } catch (error) {
-    tokenPromise = null;
-    throw new Error("Failed to obtain authentication token");
-  }
-};
-
-// ===================== ERROR HANDLING =====================
 export const handleApiError = (error, dispatch = null) => {
-  // ✅ FIX: Use the extractErrorMessage utility
   let errorMessage = extractErrorMessage(error);
 
   if (error.response) {
@@ -72,7 +17,7 @@ export const handleApiError = (error, dispatch = null) => {
         errorMessage = "Session expired. Please login again.";
         localStorage.removeItem("authtoken");
         localStorage.removeItem("authcustomer_id");
-        localStorage.removeItem("bearertoken");
+        tokenService.clearToken();
         window.location.href = "/";
         break;
       case 403:
@@ -81,7 +26,6 @@ export const handleApiError = (error, dispatch = null) => {
       case 429:
         errorMessage = "Too many requests. Please try again later.";
         break;
-      // Keep other cases but use the extracted message as base
     }
   }
 
@@ -91,7 +35,7 @@ export const handleApiError = (error, dispatch = null) => {
       type: "ui/openModal",
       payload: {
         title: "Error",
-        message: errorMessage, // ✅ Now this is always a string
+        message: errorMessage,
         type: "error",
       },
     });
@@ -128,11 +72,11 @@ export const initializeApp = createAsyncThunk(
       const hostname = window.location.hostname;
       dispatch({ type: "hostname/setHostname", payload: hostname });
 
-      // 2. Fetch client token
+      // 2. Fetch client token - THIS WILL NOW MAKE ONLY ONE CALL
       let bearerToken;
       try {
         bearerToken = await getBearerToken();
-        localStorage.setItem("bearertoken", bearerToken);
+        console.log("✅ Partner token initialized for app");
       } catch (tokenError) {
         console.error("Token fetch failed:", tokenError);
         throw new Error("Failed to establish secure connection");
@@ -142,6 +86,7 @@ export const initializeApp = createAsyncThunk(
       let countriesData;
       if (apiCache.countries) {
         countriesData = apiCache.countries;
+        console.log("✅ Using cached countries data");
       } else {
         const countriesResponse = await api.get("/countries", {
           headers: {
@@ -151,12 +96,14 @@ export const initializeApp = createAsyncThunk(
         countriesData = countriesResponse.data.data;
         apiCache.countries = countriesData;
         localStorage.setItem("allcountries", JSON.stringify(countriesData));
+        console.log("✅ Fetched and cached countries data");
       }
 
       // 4. Fetch partner details with caching
       let partnerData;
       if (apiCache.partnerDetail) {
         partnerData = apiCache.partnerDetail;
+        console.log("✅ Using cached partner details");
       } else {
         const partnerResponse = await api.get(
           `/partners/get-partner-detail/${hostname}`,
@@ -168,6 +115,7 @@ export const initializeApp = createAsyncThunk(
         );
         partnerData = partnerResponse.data.data;
         apiCache.partnerDetail = partnerData;
+        console.log("✅ Fetched and cached partner details");
       }
 
       // Store partner details in localStorage
@@ -190,6 +138,7 @@ export const initializeApp = createAsyncThunk(
         let partnerConfig;
         if (apiCache.partnerConfig) {
           partnerConfig = apiCache.partnerConfig;
+          console.log("✅ Using cached partner config");
         } else {
           const configResponse = await api.get(
             `/partner-basic-setup/${partnerData.partner_id}`,
@@ -210,6 +159,7 @@ export const initializeApp = createAsyncThunk(
               partnerConfig.download_operation_manual
             );
             window.dispatchEvent(new Event("storage"));
+            console.log("✅ Fetched and cached partner config");
           }
         }
       }
@@ -218,6 +168,7 @@ export const initializeApp = createAsyncThunk(
       let gifImagesData;
       if (apiCache.gifImages) {
         gifImagesData = apiCache.gifImages;
+        console.log("✅ Using cached GIF images");
       } else {
         const gifResponse = await api.get("/gif-images", {
           headers: {
@@ -226,6 +177,7 @@ export const initializeApp = createAsyncThunk(
         });
         gifImagesData = gifResponse.data.images || [];
         apiCache.gifImages = gifImagesData;
+        console.log("✅ Fetched and cached GIF images");
       }
 
       // 7. Fetch logout time
@@ -237,23 +189,22 @@ export const initializeApp = createAsyncThunk(
         });
         const dataExpiryTime = logoutTimeResponse.data.expiry_time * 60 * 1000;
         localStorage.setItem("logoutTime", dataExpiryTime);
+        console.log("✅ Fetched logout time");
       } catch (err) {
         console.log("Failed to fetch timer setup");
       }
 
-      // Dispatch the fetchCountries thunk
+      // Dispatch all data to store
       dispatch({
         type: "country/fetchCountries/fulfilled",
         payload: countriesData,
       });
 
-      // Dispatch partner config to store
       dispatch({
         type: "partner/setPartnerConfig",
         payload: partnerData,
       });
 
-      // Dispatch GIF images to store
       dispatch({
         type: "ui/setGifImages",
         payload: gifImagesData,
@@ -261,6 +212,8 @@ export const initializeApp = createAsyncThunk(
 
       // Mark as initialized
       dispatch({ type: "auth/setInitialized", payload: true });
+
+      console.log("✅ App initialization completed successfully");
 
       return {
         hostname,
@@ -270,7 +223,7 @@ export const initializeApp = createAsyncThunk(
       };
     } catch (error) {
       isInitializing = false;
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
+      console.error("❌ App initialization failed:", error);
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
@@ -288,6 +241,7 @@ export const generatePasscode = createAsyncThunk(
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: true });
 
       const token = await getBearerToken();
+
       const payload = {
         email,
         password,
@@ -297,6 +251,11 @@ export const generatePasscode = createAsyncThunk(
       if (customer_type) {
         payload.customer_type = customer_type;
       }
+
+      console.log(
+        "🔄 Generating passcode with token:",
+        token ? "✅ Available" : "❌ Missing"
+      );
 
       const response = await api.post("/request-passcode-login", payload, {
         headers: {
@@ -321,8 +280,9 @@ export const generatePasscode = createAsyncThunk(
       }
 
       if (response.data.status === "error") {
-        // ✅ FIX: Return string error message
-        return rejectWithValue(response.data.message || "Failed to generate passcode");
+        return rejectWithValue(
+          response.data.message || "Failed to generate passcode"
+        );
       }
 
       if (response.data.status === "success") {
@@ -366,22 +326,18 @@ export const generatePasscode = createAsyncThunk(
             };
           }
 
-          // ✅ FIX: Return string error message
           return rejectWithValue(
-            responseData.message || "Validation failed. Please check your input."
+            responseData.message ||
+              "Validation failed. Please check your input."
           );
         }
 
-        // ✅ FIX: Return string error message
         return rejectWithValue(
           responseData.message || "Failed to generate passcode"
         );
       }
 
-      // ✅ FIX: Return string error message
-      return rejectWithValue(
-        error.message || "Failed to generate passcode"
-      );
+      return rejectWithValue(error.message || "Failed to generate passcode");
     } finally {
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: false });
     }
@@ -397,11 +353,11 @@ export const verifyPasscode = createAsyncThunk(
     try {
       dispatch({ type: "auth/setVerifyingPasscode", payload: true });
 
-      console.log('🔍 [verifyPasscode] Starting verification with:', {
+      console.log("🔍 [verifyPasscode] Starting verification with:", {
         email,
         passcodeLength: passcode?.length,
         sign_in_option,
-        hasPassword: !!password
+        hasPassword: !!password,
       });
 
       // Validate inputs
@@ -420,24 +376,21 @@ export const verifyPasscode = createAsyncThunk(
       // Get bearer token
       const token = await getBearerToken();
 
-      // ✅ CRITICAL FIX: Use the correct payload structure
       const payload = {
         email: email.trim().toLowerCase(),
         passcode: formattedPasscode,
         sign_in_option: sign_in_option || "email",
-        // Only include password if provided (for initial login)
         ...(password && { password: password }),
         hostname: window.location.hostname,
       };
 
-      // Add customer_type if provided
       if (customer_type) {
         payload.customer_type = customer_type;
       }
 
-      console.log('📤 [verifyPasscode] Sending payload:', {
+      console.log("📤 [verifyPasscode] Sending payload:", {
         ...payload,
-        password: password ? '***' : 'not provided'
+        password: password ? "***" : "not provided",
       });
 
       const response = await api.post("/login", payload, {
@@ -447,21 +400,39 @@ export const verifyPasscode = createAsyncThunk(
         },
       });
 
-      console.log('✅ [verifyPasscode] Login API Response:', response.data);
+      console.log("✅ [verifyPasscode] Login API Response:", response.data);
 
-      // ✅ Handle successful login response
       if (response.data?.status === "success" && response.data?.data) {
         const responseData = response.data.data;
 
-        console.log('🔍 [verifyPasscode] Success response data:', responseData);
+        console.log("🔍 [verifyPasscode] Success response data:", responseData);
 
-        // ✅ Handle KYC verification required
+        // ✅ FIX: Store temporary auth data for KYC flow
         if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log('🚫 [verifyPasscode] KYC NOT VERIFIED - Blocking login');
+          console.log(
+            "🚫 [verifyPasscode] KYC NOT VERIFIED - Storing temp auth data"
+          );
 
-          // ✅ CASE 1: Plaid URL is directly provided - redirect to Plaid
-          if (responseData.plaid_status === "success" && responseData.plaid_url) {
-            console.log('✅ Redirecting to Plaid for KYC verification');
+          // Store temporary authentication data
+          const tempAuthData = {
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            email: email,
+            timestamp: Date.now(),
+            requiresKyc: true,
+          };
+
+          sessionStorage.setItem(
+            "temp_auth_data",
+            JSON.stringify(tempAuthData)
+          );
+          localStorage.setItem("pending_customer_id", responseData.customer_id);
+
+          if (
+            responseData.plaid_status === "success" &&
+            responseData.plaid_url
+          ) {
+            console.log("✅ Redirecting to Plaid for KYC verification");
             return {
               requiresPlaidRedirect: true,
               plaidUrl: responseData.plaid_url,
@@ -469,12 +440,15 @@ export const verifyPasscode = createAsyncThunk(
               customer_id: responseData.customer_id,
               kyc_status: responseData.kyc_status,
               bank_approve_status: responseData.bank_approve_status,
-              message: "KYC verification required - redirecting to bank verification"
+              tempToken: responseData.token, // Include token for immediate use
+              message:
+                "KYC verification required - redirecting to bank verification",
             };
           }
 
-          // ✅ CASE 2: Try to initiate Plaid flow
-          console.log('🔄 Attempting to initiate Plaid flow for KYC verification');
+          console.log(
+            "🔄 Attempting to initiate Plaid flow for KYC verification"
+          );
           try {
             const plaidResponse = await dispatch(
               initiatePlaidFlow({
@@ -484,7 +458,9 @@ export const verifyPasscode = createAsyncThunk(
             ).unwrap();
 
             if (plaidResponse.url) {
-              console.log('✅ Plaid URL obtained, redirecting for KYC verification');
+              console.log(
+                "✅ Plaid URL obtained, redirecting for KYC verification"
+              );
               return {
                 requiresPlaidRedirect: true,
                 plaidUrl: plaidResponse.url,
@@ -492,29 +468,28 @@ export const verifyPasscode = createAsyncThunk(
                 customer_id: responseData.customer_id,
                 kyc_status: responseData.kyc_status,
                 bank_approve_status: responseData.bank_approve_status,
-                message: "KYC verification required - redirecting to bank verification"
+                tempToken: responseData.token, // Include token for immediate use
+                message:
+                  "KYC verification required - redirecting to bank verification",
               };
-            } else {
-              throw new Error("No Plaid URL received for KYC verification");
             }
           } catch (plaidError) {
-            console.error('❌ Plaid initiation failed:', plaidError);
-
-            // Provide specific error message
-            let errorMessage = "KYC verification required but unable to start the process. ";
-            if (plaidError.message?.includes("Customer account not found")) {
-              errorMessage += "Your account needs KYC profile setup. Please contact support.";
-            } else {
-              errorMessage += "Please contact support.";
-            }
-
-            throw new Error(errorMessage);
+            console.error("❌ Plaid initiation failed:", plaidError);
+            // Even if Plaid fails, store the temp auth data
+            return {
+              requiresKycVerification: true,
+              customer_id: responseData.customer_id,
+              kyc_status: responseData.kyc_status,
+              bank_approve_status: responseData.bank_approve_status,
+              tempToken: responseData.token,
+              message: "KYC verification required",
+            };
           }
         }
 
-        // ✅ Handle owner login (bypass KYC check for owners)
+        // Handle owner login
         if (responseData.is_owner_login === "1") {
-          console.log('👑 Owner login detected - bypassing KYC check');
+          console.log("👑 Owner login detected - bypassing KYC check");
           return {
             is_owner_login: true,
             owner_id: responseData.owner_id,
@@ -523,44 +498,50 @@ export const verifyPasscode = createAsyncThunk(
             bank_approve_status: responseData.bank_approve_status,
             customer_id: responseData.customer_id,
             token: responseData.token,
-            customerData: responseData
+            customerData: responseData,
           };
         }
 
-        // ✅ Handle bank approval status
+        // Handle bank approval status
         if (responseData.bank_approve_status !== "1") {
           throw new Error("Bank account not approved. Please contact support.");
         }
 
-        // ✅ ONLY allow login if KYC is verified (status not 0) and bank is approved
-        console.log('✅ KYC verified - allowing login');
+        // ✅ Successful login with KYC verified - IMPLEMENTED AS REQUESTED
+        console.log("✅ KYC verified - allowing login");
         return {
-          token: responseData.token,
-          customer_id: responseData.customer_id,
+          token: responseData.token, // ✅ Make sure this is included
+          customer_id: responseData.customer_id, // ✅ Make sure this is included
           kyc_status: responseData.kyc_status,
           bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
+          isRemittanceOnlyCustomer:
+            responseData.isRemittanceOnlyCustomer || false,
           customer_type: responseData.customer_type || "individual",
           is_staff_login: responseData.is_staff_login || "0",
           staff_role: responseData.staff_role || "",
           staff_id: responseData.staff_id || "0",
-          is_owner_login: responseData.is_owner_login || "0",
+          is_owner_login: responseData.is_owner_login || "0", // ✅ Make sure this is correct
           owner_id: responseData.owner_id || "0",
           whitelabelled_customer: responseData.whitelabelled_customer || "N",
-          whitelabelled_customer_partnerid: responseData.whitelabelled_customer_partnerid || "0",
-          whitelabelled_customer_partnername: responseData.whitelabelled_customer_partnername || "",
+          whitelabelled_customer_partnerid:
+            responseData.whitelabelled_customer_partnerid || "0",
+          whitelabelled_customer_partnername:
+            responseData.whitelabelled_customer_partnername || "",
           customerUuid: responseData.customerUuid || null,
-          message: "Login successful"
+          message: "Login successful",
         };
       }
 
       // Handle non-success responses
       if (response.data?.status === "error") {
-        // Provide specific error messages based on the response
         let errorMessage = response.data.message || "Login failed";
 
-        if (errorMessage.includes("Invalid passcode") || errorMessage.includes("Invalid credentials")) {
-          errorMessage = "Invalid passcode. Please check the code and try again.";
+        if (
+          errorMessage.includes("Invalid passcode") ||
+          errorMessage.includes("Invalid credentials")
+        ) {
+          errorMessage =
+            "Invalid passcode. Please check the code and try again.";
         } else if (errorMessage.includes("expired")) {
           errorMessage = "Passcode has expired. Please request a new one.";
         }
@@ -569,13 +550,9 @@ export const verifyPasscode = createAsyncThunk(
       }
 
       throw new Error("Invalid server response format");
-
     } catch (error) {
       console.error("❌ [verifyPasscode] Verification failed:", error);
-
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
-
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setVerifyingPasscode", payload: false });
@@ -586,7 +563,10 @@ export const verifyPasscode = createAsyncThunk(
 // ===================== OTP OPERATIONS =====================
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
-  async ({ phone_code, mobile_number, customer_type }, { dispatch, rejectWithValue }) => {
+  async (
+    { phone_code, mobile_number, customer_type },
+    { dispatch, rejectWithValue }
+  ) => {
     try {
       const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
       const cleanPhoneCode = phone_code.replace(/\D/g, "");
@@ -636,7 +616,6 @@ export const generateOTP = createAsyncThunk(
         }
       }
 
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const apiError = extractErrorMessage(error);
       return rejectWithValue(apiError);
     }
@@ -687,15 +666,18 @@ export const verifyOTP = createAsyncThunk(
         },
       });
 
-      console.log('✅ OTP verification response:', response.data);
+      console.log("✅ OTP verification response:", response.data);
 
       // Handle successful response
       if (response.data.status === "success") {
         const responseData = response.data.data;
 
         // Handle Plaid redirect directly from login response
-        if (response.data?.plaid_status === "success" && response.data?.plaid_url) {
-          console.log('🎯 Redirecting to Plaid from login response');
+        if (
+          response.data?.plaid_status === "success" &&
+          response.data?.plaid_url
+        ) {
+          console.log("🎯 Redirecting to Plaid from login response");
 
           sessionStorage.setItem(
             "pending_mobile_auth",
@@ -703,7 +685,7 @@ export const verifyOTP = createAsyncThunk(
               phone_code: cleanPhoneCode,
               mobile_number: cleanMobileNumber,
               customer_id: responseData.customer_id,
-              timestamp: Date.now()
+              timestamp: Date.now(),
             })
           );
 
@@ -711,13 +693,13 @@ export const verifyOTP = createAsyncThunk(
             requiresPlaidRedirect: true,
             plaidUrl: response.data.plaid_url,
             customerData: responseData,
-            message: "Redirecting to bank verification..."
+            message: "Redirecting to bank verification...",
           };
         }
 
         // Handle KYC verification required
         if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log('🎯 KYC verification required, initiating Plaid flow');
+          console.log("🎯 KYC verification required, initiating Plaid flow");
 
           sessionStorage.setItem(
             "pending_mobile_auth",
@@ -725,7 +707,7 @@ export const verifyOTP = createAsyncThunk(
               phone_code: cleanPhoneCode,
               mobile_number: cleanMobileNumber,
               customer_id: responseData.customer_id,
-              timestamp: Date.now()
+              timestamp: Date.now(),
             })
           );
 
@@ -742,17 +724,18 @@ export const verifyOTP = createAsyncThunk(
                 requiresPlaidRedirect: true,
                 plaidUrl: plaidResponse.url,
                 customerData: responseData,
-                message: "Redirecting to bank verification..."
+                message: "Redirecting to bank verification...",
               };
             }
           } catch (plaidError) {
-            console.error('❌ Plaid initiation failed:', plaidError);
+            console.error("❌ Plaid initiation failed:", plaidError);
             return {
               requiresKycVerification: true,
               kyc_status: responseData.kyc_status,
               bank_approve_status: responseData.bank_approve_status,
               customerData: responseData,
-              message: "Bank verification required but setup failed. Please contact support."
+              message:
+                "Bank verification required but setup failed. Please contact support.",
             };
           }
         }
@@ -763,7 +746,7 @@ export const verifyOTP = createAsyncThunk(
             requiresBankApproval: true,
             bank_approve_status: responseData.bank_approve_status,
             customerData: responseData,
-            message: "Bank account approval pending. Please contact support."
+            message: "Bank account approval pending. Please contact support.",
           };
         }
 
@@ -774,7 +757,7 @@ export const verifyOTP = createAsyncThunk(
             owner_id: responseData.owner_id,
             owner_role_name: responseData.owner_role_name,
             customerData: responseData,
-            message: "Owner login successful"
+            message: "Owner login successful",
           };
         }
 
@@ -785,19 +768,18 @@ export const verifyOTP = createAsyncThunk(
           customer_id: responseData.customer_id,
           kyc_status: responseData.kyc_status,
           bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
+          isRemittanceOnlyCustomer:
+            responseData.isRemittanceOnlyCustomer || false,
           customer_type: responseData.customer_type || "individual",
           message: response.data.message || "Login successful",
-          data: responseData
+          data: responseData,
         };
       } else {
         throw new Error(response.data.message || "OTP verification failed");
       }
-
     } catch (error) {
       console.error("❌ OTP verification failed:", error);
 
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
 
       dispatch({ type: "auth/setError", payload: errorMessage });
@@ -811,9 +793,13 @@ export const verifyOTP = createAsyncThunk(
 // ===================== SEND OTP =====================
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
-  async (mobileNumber, { rejectWithValue }) => {
+  async (mobileNumber, { rejectWithValue, dispatch }) => {
     try {
       const token = await getBearerToken();
+
+      console.log("🔄 Sending OTP to:", mobileNumber);
+
+      // ✅ UPDATED: Use the same endpoint as reference code
       const response = await api.post(
         "/send-otp",
         {
@@ -827,21 +813,73 @@ export const sendOtp = createAsyncThunk(
         }
       );
 
+      console.log("✅ Send OTP response:", response.data);
+
+      // ✅ ADDED: Fetch OTP counter info after successful OTP send (like reference code)
+      if (response.data.status === "success") {
+        try {
+          const otpCounterResponse = await api.get("/otp-counter", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (otpCounterResponse.data?.counter) {
+            const otpInfo = otpCounterResponse.data.counter;
+
+            // Update Redux state with OTP limit info
+            dispatch({
+              type: "auth/setResendAttempts",
+              payload: otpInfo.otp_limit,
+            });
+
+            // Also set resend timer if available
+            if (otpInfo.otp_resend) {
+              dispatch({
+                type: "auth/setResendTimer",
+                payload: otpInfo.otp_resend,
+              });
+            }
+
+            console.log("✅ OTP counter info:", otpInfo);
+          }
+        } catch (otpCounterError) {
+          console.warn("⚠️ Could not fetch OTP counter info:", otpCounterError);
+          // Continue without OTP counter info - not critical
+        }
+      }
+
       if (response.status === 429) {
         return rejectWithValue(
           "Too many requests. Please wait a moment before trying again."
         );
       }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return rejectWithValue(errorData.message || "Failed to Generate OTP");
+      if (response.data?.status === "error") {
+        return rejectWithValue(response.data.message || "Failed to send OTP");
       }
-      return await response.json();
+
+      // Return success response
+      return {
+        status: "success",
+        message: response.data?.message || "OTP sent successfully",
+        data: response.data?.data || {},
+      };
     } catch (error) {
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
+      console.error("❌ Send OTP error:", error);
+
       const errorMessage = extractErrorMessage(error);
-      return rejectWithValue(errorMessage);
+
+      // Handle specific error cases
+      if (error.response?.status === 429) {
+        return rejectWithValue(
+          "Too many requests. Please wait before trying again."
+        );
+      }
+
+      if (error.response?.data?.message) {
+        return rejectWithValue(error.response.data.message);
+      }
+
+      return rejectWithValue(errorMessage || "Failed to send OTP");
     }
   }
 );
@@ -850,68 +888,79 @@ export const sendOtp = createAsyncThunk(
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
-    { phone_code, mobile_number, otp, password, sign_in_option, customer_type },
+    { country_code, mobile_number, otp },
     { dispatch, rejectWithValue }
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
-      console.log('🔄 validateOtp thunk called with:', {
-        phone_code,
+      console.log("🔄 validateOtp thunk called with:", {
+        country_code,
         mobile_number,
-        otp,
-        sign_in_option
+        mobile_number_type: typeof mobile_number,
+        mobile_number_length: mobile_number.length,
+        mobile_number_has_dashes: mobile_number.includes("-"),
+        otp: Array.isArray(otp) ? otp.join("") : otp,
       });
 
-      // Clean inputs
-      const cleanPhoneCode = phone_code ? phone_code.replace(/\D/g, "") : "";
-      const cleanMobileNumber = mobile_number ? mobile_number.replace(/\D/g, "") : "";
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
-
-      // Validate inputs
-      if (!cleanMobileNumber || !formattedOTP || !password) {
-        throw new Error("Mobile number, OTP and password are required");
-      }
-
-      if (formattedOTP.length !== 6) {
-        throw new Error("OTP must be 6 digits");
-      }
-
       const token = await getBearerToken();
+      const currentDateTimeLocal = new Date().toLocaleString();
 
-      // Use the correct endpoint and payload structure
+      // ✅ CRITICAL FIX: Use the FULL mobile number with country code
+      // This matches how the customer was registered: "+977 9813017273"
+      const full_mobile_number = `${country_code} ${mobile_number}`;
+
       const payload = {
-        mobile_number: cleanMobileNumber,
+        sign_in_option: "mobile",
+        mobile_number: full_mobile_number, // ✅ Send "+977 9813017273" not just "9813017273"
         otp: formattedOTP,
-        password: password,
-        phone_code: cleanPhoneCode,
-        sign_in_option: sign_in_option || "mobile",
-        hostname: window.location.hostname,
+        currentDate: currentDateTimeLocal,
       };
 
-      console.log('📤 Sending OTP verification request:', payload);
+      console.log(
+        "📤 Sending OTP verification to /validate-otp:",
+        JSON.stringify(payload, null, 2)
+      );
+      console.log("🔍 Full mobile number being sent:", full_mobile_number);
 
-      const response = await api.post("/login", payload, {
+      const response = await api.post("/validate-otp", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
 
-      console.log('✅ OTP verification response:', response.data);
+      console.log("✅ OTP verification response:", response.data);
 
-      // Check if response indicates success
+      // Handle successful response
       if (response.data.status === "success") {
-        const responseData = response.data.data;
+        const responseData = response.data;
 
-        // Handle Plaid redirect if needed
-        const handlePlaidRedirect = (url, customerData) => {
+        const successResponse = {
+          status: "success",
+          kyc_status: responseData.kyc_status,
+          plaid_status: responseData.plaid_status,
+          plaid_url: responseData.plaid_url,
+          token: responseData.token,
+          customer_id: responseData.customer_id,
+          is_whitelabelled_partner_customer:
+            responseData.is_whitelabelled_partner_customer,
+          message: responseData.message || "OTP verified successfully!",
+          data: responseData.data || responseData,
+        };
+
+        // Handle Plaid redirect
+        if (responseData.plaid_status === "success" && responseData.plaid_url) {
+          console.log("🎯 Plaid redirect required");
+
           sessionStorage.setItem(
             "pending_mobile_auth",
             JSON.stringify({
-              phone_code: cleanPhoneCode,
-              mobile_number: cleanMobileNumber,
-              customer_id: customerData.customer_id,
+              country_code: country_code,
+              mobile_number: full_mobile_number,
+              customer_id: responseData.customer_id,
+              timestamp: Date.now(),
             })
           );
 
@@ -920,96 +969,38 @@ export const validateOtp = createAsyncThunk(
           dispatch({ type: "auth/setOtpSent", payload: false });
 
           return {
+            ...successResponse,
             redirected: true,
-            plaid_url: url,
-            customer_id: customerData.customer_id,
-            message: "Redirecting to bank verification..."
+            requiresPlaidRedirect: true,
           };
-        };
-
-        // Check for Plaid redirect
-        if (
-          response.data?.plaid_status === "success" &&
-          response.data?.plaid_url
-        ) {
-          return handlePlaidRedirect(response.data.plaid_url, responseData);
         }
 
-        // Handle KYC verification flow
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          if (responseData.plaid_status === "success" && responseData.plaid_url) {
-            return handlePlaidRedirect(responseData.plaid_url, responseData);
-          }
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return handlePlaidRedirect(plaidResponse.url, responseData);
-            }
-            throw new Error("No Plaid URL received");
-          } catch (plaidError) {
-            console.error("Plaid initiation failed:", plaidError);
-            return {
-              requiresKycVerification: true,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              message: "Bank verification required but setup failed",
-            };
-          }
-        }
-
-        // Handle bank approval
-        if (responseData.bank_approve_status !== "1") {
+        if (responseData.kyc_status === 1 || responseData.kyc_status === "1") {
+          console.log("✅ KYC already verified");
+          return successResponse;
+        } else {
+          console.log("🚫 KYC verification required");
           return {
-            requiresBankApproval: true,
-            bank_approve_status: responseData.bank_approve_status,
-            message: "Bank account approval pending",
+            ...successResponse,
+            requiresKycVerification: true,
           };
         }
-
-        // Handle owner login
-        if (responseData.is_owner_login === "1") {
-          return {
-            is_owner_login: true,
-            owner_id: responseData.owner_id,
-            owner_role_name: responseData.owner_role_name,
-            kyc_status: responseData.kyc_status,
-            bank_approve_status: responseData.bank_approve_status,
-            message: "Owner login successful",
-          };
-        }
-
-        // Successful verification - return the complete success response
-        return {
-          status: "success",
-          token: responseData.token,
-          customer_id: responseData.customer_id,
-          kyc_status: responseData.kyc_status,
-          bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
-          customer_type: responseData.customer_type || "individual",
-          message: response.data.message || "OTP verification successful",
-          data: responseData
-        };
       } else {
-        // Handle API error response
+        console.log("❌ OTP verification failed:", response.data);
         throw new Error(response.data.message || "OTP verification failed");
       }
-
     } catch (error) {
       console.error("❌ OTP verification failed:", error);
+      console.log("🔍 Error response data:", error.response?.data);
+      console.log("🔍 Error status:", error.response?.status);
 
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
-
       dispatch({ type: "auth/setError", payload: errorMessage });
-      return rejectWithValue(errorMessage);
+      return rejectWithValue({
+        status: "error",
+        message: errorMessage,
+        error: error.response?.data || error.message,
+      });
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
@@ -1027,12 +1018,18 @@ export const initiatePlaidFlow = createAsyncThunk(
       const token = await getBearerToken();
       const customerId = customerData.customerId;
 
-      console.log('🔄 Initiating Plaid flow for customer:', customerId);
+      console.log("🔄 Initiating Plaid flow for customer:", customerId);
 
       // ✅ CRITICAL: Enhanced customerId validation
-      if (!customerId || customerId === "undefined" || customerId === "null" || customerId === "0") {
-        const errorMsg = "Invalid customer ID for KYC verification. Please contact support.";
-        console.error('❌', errorMsg);
+      if (
+        !customerId ||
+        customerId === "undefined" ||
+        customerId === "null" ||
+        customerId === "0"
+      ) {
+        const errorMsg =
+          "Invalid customer ID for KYC verification. Please contact support.";
+        console.error("❌", errorMsg);
         throw new Error(errorMsg);
       }
 
@@ -1041,54 +1038,68 @@ export const initiatePlaidFlow = createAsyncThunk(
 
       // ✅ STRATEGY 1: Try the main backend endpoint
       try {
-        console.log('🔄 Trying backend endpoint: GET /kycs/' + customerId);
+        console.log("🔄 Trying backend endpoint: GET /kycs/" + customerId);
         const response = await api.get(`/kycs/${customerId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        console.log('✅ Backend KYC response:', response.data);
+        console.log("✅ Backend KYC response:", response.data);
 
         if (response.data.kyc_url) {
           plaidUrl = response.data.kyc_url;
           message = "Bank verification ready";
-          console.log('✅ Plaid URL obtained from backend');
+          console.log("✅ Plaid URL obtained from backend");
         } else {
-          throw new Error('No KYC URL in response');
+          throw new Error("No KYC URL in response");
         }
       } catch (backendError) {
-        console.log('❌ Backend endpoint failed:', backendError.response?.data || backendError.message);
+        console.log(
+          "❌ Backend endpoint failed:",
+          backendError.response?.data || backendError.message
+        );
 
         // If customer not found (404), provide specific guidance
         if (backendError.response?.status === 404) {
-          const errorMsg = "Customer account not found in verification system. This usually means your KYC profile needs to be created. Please contact support.";
-          console.error('❌', errorMsg);
+          const errorMsg =
+            "Customer account not found in verification system. This usually means your KYC profile needs to be created. Please contact support.";
+          console.error("❌", errorMsg);
           throw new Error(errorMsg);
         }
 
         // ✅ STRATEGY 2: Try alternative endpoint for KYC initiation
-        console.log('🔄 Trying alternative KYC initiation endpoint');
+        console.log("🔄 Trying alternative KYC initiation endpoint");
         try {
-          const initiateResponse = await api.post('/kyc/initiate', {
-            customer_id: customerId,
-            hostname: window.location.hostname,
-          }, {
-            headers: {
-              Authorization: `Bearer ${token}`,
+          const initiateResponse = await api.post(
+            "/kyc/initiate",
+            {
+              customer_id: customerId,
+              hostname: window.location.hostname,
             },
-          });
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
 
           if (initiateResponse.data?.kyc_url || initiateResponse.data?.url) {
-            plaidUrl = initiateResponse.data.kyc_url || initiateResponse.data.url;
+            plaidUrl =
+              initiateResponse.data.kyc_url || initiateResponse.data.url;
             message = "Bank verification initiated";
-            console.log('✅ Plaid URL obtained from initiation endpoint');
+            console.log("✅ Plaid URL obtained from initiation endpoint");
           } else {
-            throw new Error('No URL in initiation response');
+            throw new Error("No URL in initiation response");
           }
         } catch (initiateError) {
-          console.log('❌ Initiation endpoint failed:', initiateError.response?.data || initiateError.message);
-          throw new Error("KYC system temporarily unavailable. Please try again later or contact support.");
+          console.log(
+            "❌ Initiation endpoint failed:",
+            initiateError.response?.data || initiateError.message
+          );
+          throw new Error(
+            "KYC system temporarily unavailable. Please try again later or contact support."
+          );
         }
       }
 
@@ -1097,7 +1108,7 @@ export const initiatePlaidFlow = createAsyncThunk(
         throw new Error("Failed to obtain verification link");
       }
 
-      console.log('✅ Final Plaid URL:', plaidUrl);
+      console.log("✅ Final Plaid URL:", plaidUrl);
 
       dispatch({
         type: "auth/setPlaidStatus",
@@ -1111,12 +1122,11 @@ export const initiatePlaidFlow = createAsyncThunk(
       return {
         url: plaidUrl,
         message: message || "Bank verification ready",
-        customerId: customerId
+        customerId: customerId,
       };
     } catch (error) {
-      console.error('❌ Plaid initiation failed:', error);
+      console.error("❌ Plaid initiation failed:", error);
 
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
       dispatch({ type: "auth/setPlaidError", payload: errorMessage });
 
@@ -1130,68 +1140,81 @@ export const initiatePlaidFlow = createAsyncThunk(
 
 // ===================== KYC CALLBACK PROCESSING =====================
 export const processPlaidKycCallback = createAsyncThunk(
-  'auth/processPlaidKycCallback',
+  "auth/processPlaidKycCallback",
   async (callbackData, { dispatch, rejectWithValue }) => {
     try {
-      console.log('🔄 Processing Plaid KYC callback:', callbackData);
+      console.log("🔄 Processing Plaid KYC callback:", callbackData);
 
-      const { identity_verification_id, status, user_token, error_code, error_message } = callbackData;
+      const {
+        identity_verification_id,
+        status,
+        user_token,
+        error_code,
+        error_message,
+      } = callbackData;
 
       const token = await getBearerToken();
 
       const callbackEndpoints = [
-        '/process-kyc-callback',
-        '/kyc/callback',
-        '/plaid/callback'
+        "/process-kyc-callback",
+        "/kyc/callback",
+        "/plaid/callback",
       ];
 
       let response = null;
 
       for (const endpoint of callbackEndpoints) {
         try {
-          response = await api.post(endpoint, {
-            identity_verification_id,
-            status,
-            user_token,
-            error_code,
-            error_message,
-            hostname: window.location.hostname,
-          }, {
-            headers: {
-              Authorization: `Bearer ${token}`,
+          response = await api.post(
+            endpoint,
+            {
+              identity_verification_id,
+              status,
+              user_token,
+              error_code,
+              error_message,
+              hostname: window.location.hostname,
             },
-          });
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
 
           console.log(`✅ Callback processed via ${endpoint}:`, response.data);
           break;
         } catch (endpointError) {
-          console.log(`❌ Callback endpoint ${endpoint} failed:`, endpointError.response?.data || endpointError.message);
+          console.log(
+            `❌ Callback endpoint ${endpoint} failed:`,
+            endpointError.response?.data || endpointError.message
+          );
           continue;
         }
       }
 
       if (!response) {
-        throw new Error('All callback endpoints failed');
+        throw new Error("All callback endpoints failed");
       }
 
-      if (response.data.status === 'success') {
-        sessionStorage.removeItem('pending_kyc_auth');
-        sessionStorage.removeItem('pending_mobile_auth');
+      if (response.data.status === "success") {
+        sessionStorage.removeItem("pending_kyc_auth");
+        sessionStorage.removeItem("pending_mobile_auth");
 
         return {
           kycStatus: response.data.kyc_status,
           message: response.data.message,
           customerId: response.data.customer_id,
-          status: 'success'
+          status: "success",
         };
       } else {
-        throw new Error(response.data.message || 'Failed to process KYC verification');
+        throw new Error(
+          response.data.message || "Failed to process KYC verification"
+        );
       }
-
     } catch (error) {
-      console.error('❌ KYC callback processing error:', error);
+      console.error("❌ KYC callback processing error:", error);
 
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
 
       return rejectWithValue(errorMessage);
@@ -1238,7 +1261,6 @@ export const downloadManual = createAsyncThunk(
         title: response.data.data.title || "Manual",
       };
     } catch (error) {
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
@@ -1290,7 +1312,7 @@ export const loginUser = createAsyncThunk(
 
       if (response.data.status === "success") {
         const {
-          token,
+          token: userToken, // Rename to avoid confusion
           customer_id,
           isRemittanceOnlyCustomer,
           customer_type,
@@ -1302,7 +1324,8 @@ export const loginUser = createAsyncThunk(
           plaid_link_url,
         } = response.data.data;
 
-        localStorage.setItem("bearertoken", token);
+        // ✅ FIX: Store user token as "authtoken", NOT "bearertoken"
+        localStorage.setItem("authtoken", userToken);
         localStorage.setItem("authcustomer_id", customer_id);
 
         if (is_owner_login === "1") {
@@ -1335,7 +1358,7 @@ export const loginUser = createAsyncThunk(
         }
 
         const authState = {
-          token,
+          token: userToken, // Use the renamed variable
           customerId: customer_id,
           isAuthenticated: true,
           user: {
@@ -1363,8 +1386,7 @@ export const loginUser = createAsyncThunk(
       throw new Error(response.data.message || "Login failed");
     } catch (error) {
       console.error("Login error:", error);
-      
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
+
       let errorMessage = extractErrorMessage(error);
       let modalActions = [];
       let isBlocked = false;
@@ -1372,9 +1394,11 @@ export const loginUser = createAsyncThunk(
       if (error.response) {
         if (error.response.status === 401) {
           if (error.response.data?.error === "invalid_credentials") {
-            errorMessage = "The email/phone or password you entered is incorrect";
+            errorMessage =
+              "The email/phone or password you entered is incorrect";
           } else if (error.response.data?.error === "account_locked") {
-            errorMessage = "Your account has been locked due to multiple failed attempts";
+            errorMessage =
+              "Your account has been locked due to multiple failed attempts";
             isBlocked = true;
             modalActions = [
               {
@@ -1386,7 +1410,8 @@ export const loginUser = createAsyncThunk(
             ];
           }
         } else if (error.response.status === 403) {
-          errorMessage = "Your account is not verified. Please complete verification.";
+          errorMessage =
+            "Your account is not verified. Please complete verification.";
         }
       }
 
@@ -1427,7 +1452,6 @@ export const logoutUser = createAsyncThunk(
       dispatch({ type: "auth/clearAuthState" });
       return true;
     } catch (error) {
-      // ✅ FIX: Use extractErrorMessage for consistent error handling
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {

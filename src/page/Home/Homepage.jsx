@@ -4,42 +4,45 @@ import React, {
   useMemo,
   useRef,
   useCallback,
-  createContext,
-  useContext
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
+import { RingLoader } from "react-spinners";
 
-import NavigateSection from '../../components/Dashboard/Navigation/NavigateSection';
-import AccountSummary from '../../components/Dashboard/Account/AccountSummary/AccountSummary'
+import NavigateSection from "../../components/Dashboard/Navigation/NavigateSection";
+import AccountSummary from "../../components/Dashboard/Account/AccountSummary/AccountSummary";
 
+// Import from the same account slice file
 import {
-  fetchAccountDetails,
   setSelectedCurrency,
   selectAccounts,
   selectSelectedCurrency,
   selectAccountLoading,
   selectLastUpdated,
-} from "../../components/Dashboard/Account/AccountSummary/AccountSlice"
+  selectHasFetchedAccount,
+  useAccountData,
+} from "../../components/Dashboard/Account/AccountSummary/AccountSlice";
 
-import { selectAuthToken, selectBearerToken } from '../../features/Auth/slices/authSlice';
-import { extractErrorMessage, SafeErrorDisplay } from '../../utils/errorHandling';
+import { selectAuthToken } from "../../store/selectors";
 
-// Create LoadingContext inside this file
-const LoadingContext = createContext();
+import {
+  extractErrorMessage,
+  SafeErrorDisplay,
+} from "../../utils/errorHandling";
 
-// Custom hook for using the loading context
+// ✅ LOADING CONTEXT
+const LoadingContext = React.createContext();
+
 const useLoading = () => {
-  const context = useContext(LoadingContext);
+  const context = React.useContext(LoadingContext);
   if (!context) {
-    throw new Error('useLoading must be used within a LoadingProvider');
+    throw new Error("useLoading must be used within a LoadingProvider");
   }
   return context;
 };
 
-// Loading Provider Component
 const LoadingProvider = ({ children }) => {
   const [loadingCount, setLoadingCount] = useState(0);
 
@@ -53,104 +56,122 @@ const LoadingProvider = ({ children }) => {
 
   const isLoading = loadingCount > 0;
 
-  const value = useMemo(() => ({
-    startLoading,
-    stopLoading,
-    isLoading,
-  }), [startLoading, stopLoading, isLoading]);
+  const value = useMemo(
+    () => ({
+      startLoading,
+      stopLoading,
+      isLoading,
+    }),
+    [startLoading, stopLoading, isLoading]
+  );
 
   return (
-    <LoadingContext.Provider value={value}>
-      {children}
-    </LoadingContext.Provider>
+    <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>
   );
 };
 
-const FullScreenLoader = () => (
+// ✅ RING LOADER COMPONENT
+const FullScreenLoader = React.memo(() => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-white bg-opacity-90 z-50 flex flex-col items-center justify-center"
+    className="fixed inset-0 bg-white bg-opacity-90 z-[10000] flex flex-col items-center justify-center"
   >
-    <div className="relative">
-      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-        <svg
-          className="w-8 h-8 text-blue-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          />
-        </svg>
-      </div>
-    </div>
+    <RingLoader
+      color="#3B82F6"
+      loading={true}
+      size={80}
+      speedMultiplier={1}
+    />
     <p className="mt-4 text-gray-600 font-medium">
       Loading your account details...
     </p>
   </motion.div>
-);
+));
 
-// Inner component that uses the LoadingContext
-function HomepageContent() {
+// ✅ SAFE ARRAY UTILITIES
+const safeArray = (data, fallback = []) => {
+  if (!data) return fallback;
+  if (Array.isArray(data)) return data;
+  if (data.data && Array.isArray(data.data)) return data.data;
+  if (typeof data === "object" && !Array.isArray(data)) {
+    if (data.accounts && Array.isArray(data.accounts)) return data.accounts;
+    if (Object.keys(data).length > 0) return Object.values(data);
+  }
+  return fallback;
+};
+
+// ✅ FIXED HOMEPAGE CONTENT
+const HomepageContent = React.memo(() => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const customerId = localStorage.getItem("authcustomer_id");
   const authtoken = useSelector(selectAuthToken);
-  const bearertoken = useSelector(selectBearerToken);
 
-  // Redux Selectors with safety checks
-  const accounts = useSelector(selectAccounts) || [];
+  // Redux Selectors with optimization
+  const accounts = useSelector(selectAccounts);
   const selectedCurrency = useSelector(selectSelectedCurrency);
   const accountLoading = useSelector(selectAccountLoading);
   const lastUpdated = useSelector(selectLastUpdated);
+  const hasFetchedAccount = useSelector(selectHasFetchedAccount);
 
   // Local state
   const [textColor, setTextColor] = useState("#000000");
+  const [componentError, setComponentError] = useState(null);
+  const [emergencyStop, setEmergencyStop] = useState(false);
 
-  // Fix: Provide proper defaults for role values
-  const isOwnerLogin = useRef(localStorage.getItem("is_owner_login") || "0").current;
-  const ownerRoleName = useRef(localStorage.getItem("owner_role_name") || "").current;
-  const isStaffLogin = useRef(localStorage.getItem("is_staff_login") || "0").current;
-  const staffRole = useRef(localStorage.getItem("staff_role") || "").current;
+  // Refs for tracking
+  const fetchCountRef = useRef(0);
+  const initialFetchDoneRef = useRef(false);
+
+  // Role values with refs to prevent re-renders
+  const roleRefs = useRef({
+    isOwnerLogin: localStorage.getItem("is_owner_login") || "0",
+    ownerRoleName: localStorage.getItem("owner_role_name") || "",
+    isStaffLogin: localStorage.getItem("is_staff_login") || "0",
+    staffRole: localStorage.getItem("staff_role") || "",
+  });
 
   // Use the LoadingContext
   const { isLoading: contextLoading } = useLoading();
 
-  console.log("🔍 Homepage component rendering");
-  console.log("🔍 customerId from localStorage:", customerId);
-  console.log("🔍 Accounts data:", accounts);
-  console.log("🔍 Accounts type:", typeof accounts);
-  console.log("🔍 Is accounts array?", Array.isArray(accounts));
-  console.log("🔍 Role Debug:", {
-    isStaffLogin,
-    isOwnerLogin,
-    staffRole,
-    ownerRoleName
+  // Use custom account data hook - SINGLE SOURCE OF TRUTH
+  const { fetchAccountData, shouldFetch } = useAccountData();
+
+  console.log("🔍 Homepage component rendering", {
+    customerId,
+    accountsCount: safeArray(accounts).length,
+    hasFetchedAccount,
+    shouldFetch,
+    accountLoading,
+    emergencyStop,
   });
 
-  // Check if any component is still loading
-  const isLoading = useMemo(
-    () => accountLoading || contextLoading,
-    [accountLoading, contextLoading]
-  );
+  // ✅ FIXED: Optimized loading calculation
+  const isLoading = useMemo(() => {
+    const initialLoad = !hasFetchedAccount && customerId && authtoken;
+    return accountLoading || initialLoad;
+  }, [
+    accountLoading,
+    hasFetchedAccount,
+    customerId,
+    authtoken,
+  ]);
 
-  // Get currency options from accounts with safety checks
+  // Get currency options from accounts with safety checks - memoized
   const currencyOptions = useMemo(() => {
-    if (!accounts || !Array.isArray(accounts) || accounts.length === 0) {
+    const safeAccounts = safeArray(accounts);
+    if (safeAccounts.length === 0) {
       return [];
     }
-    return [...new Set(accounts.map(account => account.currency))].filter(Boolean);
+    return [...new Set(safeAccounts.map((account) => account.currency))].filter(
+      Boolean
+    );
   }, [accounts]);
 
-  // Setup background and text color
+  // Setup background and text color - optimized
   useEffect(() => {
     const partnerBackgroundClasses = [
       "bg-yellow-500",
@@ -173,6 +194,7 @@ function HomepageContent() {
       "bg-teal-400",
     ];
 
+    // Cleanup previous styles
     document.body.classList.remove(...partnerBackgroundClasses);
     document.documentElement.classList.remove(...partnerBackgroundClasses);
     document.body.style.backgroundColor = "";
@@ -180,9 +202,9 @@ function HomepageContent() {
     document.documentElement.style.backgroundColor = "";
     document.documentElement.style.background = "";
 
+    // Apply new styles
     document.body.classList.add("bg-gray-100");
     document.documentElement.classList.add("bg-gray-100");
-
     document.documentElement.style.setProperty("--text-color", textColor);
     document.body.style.color = textColor;
 
@@ -194,118 +216,291 @@ function HomepageContent() {
     };
   }, [textColor]);
 
-  // Redirect if no token
+  // Redirect if no token - optimized
   useEffect(() => {
     if (!authtoken) {
+      console.log("🔐 No auth token, redirecting to login");
       toast.info("Please log in to continue");
       navigate("/");
     }
   }, [authtoken, navigate]);
 
-  // Set text color from localStorage
+  // Set text color from localStorage - optimized
   useEffect(() => {
     const storedTextColor = localStorage.getItem("text_color");
-    if (storedTextColor) {
+    if (storedTextColor && storedTextColor !== textColor) {
       setTextColor(storedTextColor);
     }
-  }, []);
+  }, [textColor]);
 
-  // Currency change handler
-  const handleCurrencyChange = useCallback((currency) => {
-    dispatch(setSelectedCurrency(currency));
-  }, [dispatch]);
+  // ✅ FIXED: SINGLE FETCH EFFECT - No duplicate fetching
+  useEffect(() => {
+    // Emergency stop check
+    if (emergencyStop) {
+      console.log("🛑 Emergency stop active - skipping fetch");
+      return;
+    }
 
-  // Role check - determine if navigation should be shown - FIXED VERSION
+    // Check if we should fetch
+    if (shouldFetch && !accountLoading && !initialFetchDoneRef.current) {
+      fetchCountRef.current += 1;
+      
+      // Emergency stop if too many attempts
+      if (fetchCountRef.current > 3) {
+        console.error('🆘 EMERGENCY STOP: Too many fetch attempts', fetchCountRef.current);
+        setEmergencyStop(true);
+        toast.error("Too many loading attempts. Please refresh the page.");
+        return;
+      }
+
+      console.log("🚀 Initial account data fetch triggered", {
+        attempt: fetchCountRef.current,
+        shouldFetch,
+        accountLoading,
+        hasFetchedAccount
+      });
+
+      initialFetchDoneRef.current = true;
+      fetchAccountData();
+    }
+  }, [shouldFetch, accountLoading, fetchAccountData, emergencyStop, hasFetchedAccount]);
+
+  // Reset emergency stop when auth changes
+  useEffect(() => {
+    if (authtoken && customerId) {
+      setEmergencyStop(false);
+      fetchCountRef.current = 0;
+      initialFetchDoneRef.current = false;
+    }
+  }, [authtoken, customerId]);
+
+  // Currency change handler - memoized
+  const handleCurrencyChange = useCallback(
+    (currency) => {
+      console.log("💰 Currency change requested:", currency);
+      dispatch(setSelectedCurrency(currency));
+    },
+    [dispatch]
+  );
+
+  // Role check - determine if navigation should be shown - memoized
   const shouldShowNavigation = useMemo(() => {
-    console.log("🔍 Navigation Debug:", {
-      accounts: accounts,
-      accountsLength: accounts.length,
+    const isStaffLogin = localStorage.getItem("is_staff_login");
+    const isOwnerLogin = localStorage.getItem("is_owner_login");
+
+    console.log("🔍 Role Check Debug:", {
       isStaffLogin,
       isOwnerLogin,
-      staffRole,
-      ownerRoleName
+      staffRole: localStorage.getItem("staff_role"),
+      ownerRoleName: localStorage.getItem("owner_role_name"),
+      ownerId: localStorage.getItem("owner_id"),
     });
 
-    // Check role-based permissions with proper defaults
-    const hasNavigationPermission = (
-      (isStaffLogin === "0" && isOwnerLogin === "0") || // Regular customer
-      (isStaffLogin === "1" && staffRole === "Administrator") || // Admin staff
-      (isOwnerLogin === "1" && ownerRoleName === "Admin (Owner)") // Admin owner
-    );
+    // Show navigation for regular customers (not staff or owner)
+    const isStaff = isStaffLogin === "1";
+    const isOwner = isOwnerLogin === "1";
+    const isRegularCustomer = !isStaff && !isOwner;
 
-    console.log("🔍 Navigation Decision:", {
-      hasNavigationPermission,
-      finalDecision: hasNavigationPermission
-    });
+    if (isRegularCustomer) {
+      return true; // Regular customers always see navigation
+    }
 
-    // Show navigation if user has permission
-    // Don't depend on accounts being available since navigation handles its own logic
-    return hasNavigationPermission;
-  }, [isStaffLogin, isOwnerLogin, staffRole, ownerRoleName]);
+    // For staff, only show if they have admin privileges
+    if (isStaff) {
+      const staffRole = localStorage.getItem("staff_role") || "";
+      return staffRole === "Administrator" || staffRole.includes("Admin");
+    }
 
-  // ✅ FIX: Add error boundary for this component
-  const [componentError, setComponentError] = useState(null);
+    // For owners, show navigation by default
+    if (isOwner) {
+      const ownerRoleName = localStorage.getItem("owner_role_name");
+      // If owner role name is missing, empty, or null, show navigation
+      if (
+        !ownerRoleName ||
+        ownerRoleName === "null" ||
+        ownerRoleName === "undefined"
+      ) {
+        return true;
+      }
+      // If role name exists, check for admin privileges
+      return (
+        ownerRoleName === "Admin (Owner)" || ownerRoleName.includes("Admin")
+      );
+    }
+
+    return false;
+  }, []);
+
+  // Error boundary effect
+  useEffect(() => {
+    const handleError = (error) => {
+      console.error("❌ HomepageContent error:", error);
+      setComponentError(error);
+    };
+
+    window.addEventListener("error", handleError);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+    };
+  }, []);
+
+  // Reset function for emergency recovery
+  const handleResetFetch = useCallback(() => {
+    console.log("🔄 Manual fetch reset triggered");
+    setEmergencyStop(false);
+    fetchCountRef.current = 0;
+    initialFetchDoneRef.current = false;
+    
+    // Small delay to allow state update
+    setTimeout(() => {
+      if (shouldFetch && !accountLoading) {
+        fetchAccountData();
+      }
+    }, 100);
+  }, [shouldFetch, accountLoading, fetchAccountData]);
 
   if (componentError) {
-    return <SafeErrorDisplay error={componentError} />;
+    return (
+      <SafeErrorDisplay
+        error={componentError}
+        className="flex items-center justify-center min-h-screen p-4"
+      />
+    );
+  }
+
+  // Show emergency recovery UI if stopped
+  if (emergencyStop) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-gray-100">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="text-red-500 text-6xl mb-4">🛑</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Loading Issue Detected
+          </h2>
+          <p className="text-gray-600 mb-6">
+            We detected too many loading attempts. This might be due to a temporary connection issue.
+          </p>
+          <div className="space-y-4">
+            <button
+              onClick={handleResetFetch}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+          <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <p className="text-sm text-yellow-700">
+              <strong>Debug Info:</strong> Fetch attempts: {fetchCountRef.current}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
       {/* Full screen loader */}
-      <AnimatePresence>{isLoading && <FullScreenLoader />}</AnimatePresence>
+      <AnimatePresence>
+        {isLoading && <FullScreenLoader />}
+      </AnimatePresence>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="min-h-screen bg-gray-100"
-        style={{ color: textColor }}
-      >
-        {/* Last updated indicator */}
-        {lastUpdated && (
-          <div
-            className="fixed bottom-4 right-4 z-30 bg-gray-800 text-xs px-3 py-1 rounded-lg opacity-70"
-            style={{ color: "#ffffff" }}
-          >
-            Last updated: {new Date(lastUpdated).toLocaleTimeString()}
-          </div>
-        )}
+      {/* Main container with proper z-index context */}
+      <div className="relative z-0">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="min-h-screen bg-gray-100 relative"
+          style={{ color: textColor }}
+        >
+          {/* Last updated indicator */}
+          {lastUpdated && (
+            <div
+              className="fixed bottom-4 right-4 z-40 bg-gray-800 text-xs px-3 py-1 rounded-lg opacity-70"
+              style={{ color: "#ffffff" }}
+            >
+              Last updated: {new Date(lastUpdated).toLocaleTimeString()}
+            </div>
+          )}
 
-        <div className="p-2 mt-2">
-          <div className="flex flex-col lg:flex-row gap-4 w-full max-w-[2100px] mx-auto">
-            {/* Navigation Section - Conditionally rendered */}
-            {shouldShowNavigation && (
+          {/* Manual reset button for debugging */}
+          {process.env.NODE_ENV === "development" && (
+            <button
+              onClick={handleResetFetch}
+              className="fixed top-4 right-4 z-50 bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded opacity-70"
+            >
+              Reset Fetch
+            </button>
+          )}
+
+          {/* Main content area */}
+          <div className="p-2 mt-2 relative">
+            <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
+              {/* Navigation Section - Conditionally rendered */}
+              {shouldShowNavigation && (
+                <motion.div
+                  initial={{ x: -100, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full lg:w-[28%] relative z-10"
+                >
+                  <NavigateSection
+                    textColor={textColor}
+                    selectedCurrencyCode={selectedCurrency}
+                  />
+                </motion.div>
+              )}
+
+              {/* Main Content Area */}
               <motion.div
-                initial={{ x: -100, opacity: 0 }}
+                initial={{ x: 100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className="w-full lg:w-[28%]"
+                className={`w-full relative ${
+                  shouldShowNavigation ? "lg:w-[72%]" : "lg:w-full"
+                }`}
+                style={{
+                  isolation: "auto",
+                  zIndex: "auto",
+                }}
               >
-                <NavigateSection
+                <AccountSummary
                   textColor={textColor}
+                  onCurrencyChange={handleCurrencyChange}
                 />
               </motion.div>
-            )}
-
-            {/* Main Content Area */}
-            <motion.div
-              initial={{ x: 100, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className={`w-full ${shouldShowNavigation ? 'lg:w-[72%]' : 'lg:w-full'}`}
-            >
-              <AccountSummary
-                textColor={textColor}
-                onCurrencyChange={handleCurrencyChange}
-              />
-            </motion.div>
+            </div>
           </div>
-        </div>
-      </motion.div>
+
+          {/* Debug information - only in development */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="fixed top-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
+              <div>Accounts: {safeArray(accounts).length}</div>
+              <div>
+                Navigation: {shouldShowNavigation ? "Visible" : "Hidden"}
+              </div>
+              <div>Currency: {selectedCurrency}</div>
+              <div>Fetched: {hasFetchedAccount ? "Yes" : "No"}</div>
+              <div>Loading: {isLoading ? "Yes" : "No"}</div>
+              <div>Fetch Attempts: {fetchCountRef.current}</div>
+              <div>Emergency Stop: {emergencyStop ? "Yes" : "No"}</div>
+            </div>
+          )}
+        </motion.div>
+      </div>
     </>
   );
-}
+});
+
+HomepageContent.displayName = "HomepageContent";
 
 // Main component that wraps with LoadingProvider
 function Homepage() {
@@ -316,4 +511,4 @@ function Homepage() {
   );
 }
 
-export default Homepage;
+export default React.memo(Homepage);

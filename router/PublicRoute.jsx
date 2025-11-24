@@ -1,15 +1,15 @@
 // src/router/PublicRoute.jsx
 import { useSelector, useDispatch } from "react-redux";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
-import {
-  selectToken,
-  selectCustomerId,
-  selectIsInitialized,
-} from "../src/features/Auth/slices/authSlice";
+import { 
+  selectAuthToken, 
+  selectCustomerId, 
+  selectIsInitialized 
+} from "../src/store/selectors";
 import { clearAuthState } from "../src/features/Auth/slices/authSlice"; // Import the clear action
 
 const PublicRoute = () => {
-  const token = useSelector(selectToken);
+  const token = useSelector(selectAuthToken);
   const customerId = useSelector(selectCustomerId);
   const isInitialized = useSelector(selectIsInitialized);
   const location = useLocation();

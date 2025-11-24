@@ -1,671 +1,745 @@
-// features/Beneficiaries/components/Beneficiaries.jsx
-import React, { useState, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import {
-    FaEye,
-    FaEdit,
-    FaTrashAlt,
-    FaUniversity,
-    FaSpinner,
-    FaSearch,
-    FaFilter,
-    FaPlus,
-    FaLandmark,
-    FaArrowLeft,
-    FaArrowRight,
-} from "react-icons/fa";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { motion, AnimatePresence } from "framer-motion";
-import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
-
-// Redux imports
+import { RingLoader } from "react-spinners";
 import {
-    fetchBeneficiaries,
-    deleteBeneficiary,
-    toggleVisibilityLocal,
-    setSearchQuery,
-    setFilterVisibility,
-    setCurrentPage,
-    clearError,
-    selectFilteredBeneficiaries,
-    selectPaginatedBeneficiaries,
-    selectTotalPages,
-    selectBeneficiariesLoading,
-    selectBeneficiariesError,
-    selectSearchQuery,
-    selectFilterVisibility,
-    selectCurrentPage,
-    selectDeleteLoading,
+  fetchBeneficiaries,
+  deleteBeneficiary,
+  toggleBeneficiaryVisibility,
+  // ✅ FIXED: Use the actual filter actions that exist in your slice
+  setSearchQuery, // This is the actual search filter action
+  setFilterVisibility, // This is the actual status filter action
+  setSelectedBeneficiary,
+  clearError,
+  clearSuccess,
+  selectFilteredBeneficiaries,
+  selectBeneficiariesLoading,
+  selectBeneficiariesError,
+  selectBeneficiariesSuccess,
+  selectSearchQuery,
+  selectFilterVisibility,
 } from "./BeneficiariesSlice";
 
-import {
-    showDeleteModal,
-    hideDeleteModal,
-    setDeleteModalMessage,
-    setDeleteModalLoading,
-    selectDeleteModal,
-} from "./ModalSlice";
-
-const DeleteConfirmationModal = ({
-    show,
-    onClose,
-    onConfirm,
-    message,
-    isLoading,
-}) => {
-    return (
-        <AnimatePresence>
-            {show && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 flex justify-center items-center bg-gray-800 bg-opacity-60 z-50 p-4 backdrop-blur-sm"
-                >
-                    <motion.div
-                        initial={{ scale: 0.95, y: 20 }}
-                        animate={{ scale: 1, y: 0 }}
-                        exit={{ scale: 0.95, y: 20 }}
-                        className="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg"
-                    >
-                        <h2 className="text-2xl font-semibold text-gray-800 text-center mb-4">
-                            {message &&
-                                message !== "Do you really want to delete this beneficiary?"
-                                ? "Success"
-                                : "Confirm Deletion"}
-                        </h2>
-                        <p className="text-gray-600 text-center text-lg mb-6">
-                            {message ||
-                                "Do you really want to delete this beneficiary? This action cannot be undone."}
-                        </p>
-                        <div className="flex flex-col md:flex-row gap-4">
-                            {message ? (
-                                <button
-                                    onClick={onClose}
-                                    className="w-full px-4 py-3 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-all duration-200 font-medium"
-                                    disabled={isLoading}
-                                >
-                                    Close
-                                </button>
-                            ) : (
-                                <>
-                                    <button
-                                        onClick={onClose}
-                                        className="w-full px-4 py-3 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-all duration-200 font-medium"
-                                        disabled={isLoading}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={onConfirm}
-                                        className="w-full px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-all duration-200 font-medium flex items-center justify-center"
-                                        disabled={isLoading}
-                                    >
-                                        {isLoading ? (
-                                            <FaSpinner className="animate-spin mr-2" />
-                                        ) : null}
-                                        Yes, Delete
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-};
-
 const Beneficiaries = () => {
-    const dispatch = useDispatch();
-    const navigate = useNavigate();
-    const { customerId } = useParams();
+  const { customerId } = useParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-    // Redux selectors
-    const beneficiaries = useSelector(selectPaginatedBeneficiaries);
-    const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
-    const totalPages = useSelector(selectTotalPages);
-    const isLoading = useSelector(selectBeneficiariesLoading);
-    const error = useSelector(selectBeneficiariesError);
-    const searchQuery = useSelector(selectSearchQuery);
-    const filterVisibility = useSelector(selectFilterVisibility);
-    const currentPage = useSelector(selectCurrentPage);
-    const isDeleting = useSelector(selectDeleteLoading);
+  // Selectors - using the actual exported selector names
+  const beneficiaries = useSelector(selectFilteredBeneficiaries);
+  const loading = useSelector(selectBeneficiariesLoading);
+  const error = useSelector(selectBeneficiariesError);
+  const operationSuccess = useSelector(selectBeneficiariesSuccess);
+  const searchQuery = useSelector(selectSearchQuery);
+  const filterVisibility = useSelector(selectFilterVisibility);
 
-    // Modal state from Redux
-    const deleteModal = useSelector(selectDeleteModal);
+  // Use the same loading state for both initial load and operations
+  const operationLoading = loading;
 
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // Local state for filters - map to your actual filter structure
+  const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [statusFilter, setStatusFilter] = useState(filterVisibility);
+  const [typeFilter, setTypeFilter] = useState("all");
 
-    // Get auth token and partner config
-    const authToken = localStorage.getItem("authtoken");
-    const config = usePartnerConfig(authToken);
-    const headerColor =
-        config?.header_color || localStorage.getItem("header_color");
-    const textColor = config?.text_color || localStorage.getItem("text_color");
+  // Fetch beneficiaries on component mount
+  useEffect(() => {
+    if (customerId) {
+      dispatch(fetchBeneficiaries(customerId));
+    }
+  }, [customerId, dispatch]);
 
-    const getTextColorStyle = () => {
-        if (textColor && textColor.startsWith("text-")) {
-            return { className: textColor };
-        } else if (textColor && textColor.startsWith("#")) {
-            return { style: { color: textColor } };
-        }
-        return {};
-    };
+  // Handle search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      dispatch(setSearchQuery(localSearch));
+    }, 300);
 
-    const getHeaderColorStyle = () => {
-        if (headerColor && headerColor.startsWith("bg-")) {
-            return { className: headerColor };
-        } else if (headerColor && headerColor.startsWith("#")) {
-            return { style: { backgroundColor: headerColor } };
-        }
-        return { className: "bg-blue-600" };
-    };
+    return () => clearTimeout(timer);
+  }, [localSearch, dispatch]);
 
-    const textColorProps = getTextColorStyle();
-    const headerColorProps = getHeaderColorStyle();
+  // Handle status filter changes
+  useEffect(() => {
+    dispatch(setFilterVisibility(statusFilter));
+  }, [statusFilter, dispatch]);
 
-    useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, []);
+  // Handle type filter changes - you'll need to add this functionality to your slice
+  useEffect(() => {
+    // If you need type filtering, add it to your slice
+    // For now, we'll just ignore this since it's not in your slice
+  }, [typeFilter, dispatch]);
 
-    // Fetch beneficiaries on component mount
-    useEffect(() => {
-        if (customerId) {
-            dispatch(fetchBeneficiaries(customerId));
-        }
-    }, [dispatch, customerId]);
+  // Handle errors and success messages
+  useEffect(() => {
+    if (error) {
+      toast.error(`Error: ${error}`);
+      dispatch(clearError());
+    }
 
-    // Handle search query change
-    const handleSearchChange = (query) => {
-        dispatch(setSearchQuery(query));
-    };
+    if (operationSuccess) {
+      toast.success("Operation completed successfully!");
+      dispatch(clearSuccess());
+    }
+  }, [error, operationSuccess, dispatch]);
 
-    // Handle filter change
-    const handleFilterChange = (filter) => {
-        dispatch(setFilterVisibility(filter));
-    };
+  const handleAddBeneficiary = () => {
+    navigate(`/addbeneficiary/${customerId}`);
+  };
 
-    // Handle page change
-    const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages) {
-            dispatch(setCurrentPage(page));
-        }
-    };
+  const handleEditBeneficiary = (beneficiaryId) => {
+    navigate(`/edit-beneficiary/${customerId}/${beneficiaryId}`);
+  };
 
-    // Handle visibility toggle
-    const handleToggleVisibility = (id) => {
-        dispatch(toggleVisibilityLocal(id));
-    };
+  const handleViewBeneficiary = (beneficiaryId) => {
+    navigate(`/beneficiary/${customerId}/${beneficiaryId}`);
+  };
 
-    // Handle delete beneficiary
-    const handleDelete = (id) => {
-        dispatch(showDeleteModal(id));
-    };
+  const handleDeleteBeneficiary = (beneficiaryId, beneficiaryName) => {
+    if (
+      window.confirm(
+        `Are you sure you want to delete beneficiary "${beneficiaryName}"? This action cannot be undone.`
+      )
+    ) {
+      dispatch(deleteBeneficiary({ customerId, beneficiaryId }));
+    }
+  };
 
-    const handleConfirmDelete = async () => {
-        if (deleteModal.beneficiaryToDelete) {
-            dispatch(setDeleteModalLoading(true));
+  const handleToggleVisibility = (
+    beneficiaryId,
+    beneficiaryName,
+    currentStatus
+  ) => {
+    const newStatus = !currentStatus;
+    const action = newStatus ? "activate" : "deactivate";
 
-            try {
-                const result = await dispatch(
-                    deleteBeneficiary({
-                        id: deleteModal.beneficiaryToDelete,
-                        customerId,
-                    })
-                ).unwrap();
+    if (
+      window.confirm(
+        `Are you sure you want to ${action} beneficiary "${beneficiaryName}"?`
+      )
+    ) {
+      dispatch(
+        toggleBeneficiaryVisibility({
+          customerId,
+          beneficiaryId,
+          isVisible: newStatus,
+        })
+      );
+    }
+  };
 
-                toast.success(result.message || "Beneficiary deleted successfully!");
-                dispatch(hideDeleteModal());
-            } catch (error) {
-                dispatch(setDeleteModalMessage(error.message));
-                toast.error(error.message);
-            } finally {
-                dispatch(setDeleteModalLoading(false));
-            }
-        }
-    };
+  const handleClearFilters = () => {
+    setLocalSearch("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    // Clear the actual filters in the slice
+    dispatch(setSearchQuery(""));
+    dispatch(setFilterVisibility("all"));
+  };
 
-    const handleCloseModal = () => {
-        dispatch(hideDeleteModal());
-        dispatch(clearError());
-    };
+  const handleExportBeneficiaries = () => {
+    // Simple export functionality - could be enhanced with CSV export
+    const beneficiariesData = JSON.stringify(beneficiaries, null, 2);
+    const blob = new Blob([beneficiariesData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `beneficiaries-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
-    const editBeneficiary = (benefId) => {
-        navigate(`/editbeneficiary/${benefId}`);
-    };
+    toast.info("Beneficiaries data exported successfully!");
+  };
 
-    const handleRoute = () => {
-        navigate(`/addbeneficiary/${customerId}`);
-    };
+  // Calculate statistics
+  const stats = {
+    total: beneficiaries.length,
+    active: beneficiaries.filter((b) => b.status === 1).length,
+    inactive: beneficiaries.filter((b) => b.status === 0).length,
+    individuals: beneficiaries.filter((b) => b.beneftype === "individual")
+      .length,
+    institutions: beneficiaries.filter((b) => b.beneftype === "institution")
+      .length,
+  };
 
-    const handleBankRoute = () => {
-        navigate(`/addbeneficiarybank/${customerId}`);
-    };
-
-    const handleBeneficiaryBank = (benefId) => {
-        navigate(`/bankdetails/${customerId}/${benefId}`);
-    };
-
-    // Render mobile view
-    const renderMobileView = () => (
-        <div className="space-y-4 p-4">
-            {beneficiaries.length > 0 ? (
-                beneficiaries.map((beneficiary) => (
-                    <motion.div
-                        key={beneficiary.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white p-4 rounded-lg shadow-md border border-gray-100"
-                    >
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                                <h3 className="font-medium text-gray-900 text-lg">
-                                    {beneficiary.isVisible ? beneficiary.name : "*****"}
-                                </h3>
-                                <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                    {beneficiary.isVisible
-                                        ? beneficiary.relationtobenef
-                                        : "*****"}
-                                </span>
-                            </div>
-
-                            <div className="text-sm text-gray-600 space-y-1">
-                                <p className="flex items-center">
-                                    <span className="font-medium w-24">Phone:</span>
-                                    {beneficiary.isVisible
-                                        ? beneficiary.full_phone_number
-                                        : "••••••••••"}
-                                </p>
-                                <p className="flex items-start">
-                                    <span className="font-medium w-24">Address:</span>
-                                    {beneficiary.isVisible
-                                        ? beneficiary.street || "Not Available"
-                                        : "••••••••••"}
-                                </p>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 pt-2">
-                                <button
-                                    onClick={() => handleToggleVisibility(beneficiary.id)}
-                                    className="flex-1 flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
-                                >
-                                    <FaEye className="mr-1" />
-                                    {beneficiary.isVisible ? "Hide" : "Show"}
-                                </button>
-                                <button
-                                    onClick={() => editBeneficiary(beneficiary.id)}
-                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
-                                >
-                                    <FaEdit className="mr-1" />
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => handleBeneficiaryBank(beneficiary.id)}
-                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                                >
-                                    <FaUniversity className="mr-1" />
-                                    Bank
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(beneficiary.id)}
-                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
-                                >
-                                    <FaTrashAlt className="mr-1" />
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                    </motion.div>
-                ))
-            ) : (
-                <div className="text-center py-8 text-gray-500">
-                    No beneficiaries found. Try adjusting your search or filters.
-                </div>
-            )}
-        </div>
-    );
-
-    // Render desktop view
-    const renderDesktopView = () => (
-        <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider ${textColorProps.className ?? "text-gray-500"}`}>
-                            Name
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider ${textColorProps.className ?? "text-gray-500"}`}>
-                            Phone
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider ${textColorProps.className ?? "text-gray-500"}`}>
-                            Relation
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider ${textColorProps.className ?? "text-gray-500"}`}>
-                            Address
-                        </th>
-                        <th className={`px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider ${textColorProps.className ?? "text-gray-500"}`}>
-                            Actions
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                    {beneficiaries.length > 0 ? (
-                        beneficiaries.map((beneficiary) => (
-                            <motion.tr
-                                key={beneficiary.id}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="hover:bg-gray-50 transition-colors"
-                            >
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">
-                                        {beneficiary.isVisible ? beneficiary.name : "Hidden"}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">
-                                        {beneficiary.isVisible
-                                            ? beneficiary.full_phone_number
-                                            : "••••••••••"}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">
-                                        {beneficiary.isVisible
-                                            ? beneficiary.relationtobenef
-                                            : "••••••"}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">
-                                        {beneficiary.isVisible
-                                            ? beneficiary.street || "Not Available"
-                                            : "••••••••••"}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <div className="flex justify-end space-x-2">
-                                        <button
-                                            onClick={() => handleToggleVisibility(beneficiary.id)}
-                                            className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                                        >
-                                            <FaEye className="mr-1" />
-                                            {beneficiary.isVisible ? "Hide" : "Show"}
-                                        </button>
-                                        <button
-                                            onClick={() => editBeneficiary(beneficiary.id)}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md text-white bg-green-600 hover:bg-green-700"
-                                        >
-                                            <FaEdit className="mr-1" />
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleBeneficiaryBank(beneficiary.id)}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                                        >
-                                            <FaUniversity className="mr-1" />
-                                            Bank
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(beneficiary.id)}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md text-white bg-red-600 hover:bg-red-700"
-                                        >
-                                            <FaTrashAlt className="mr-1" />
-                                            Delete
-                                        </button>
-                                    </div>
-                                </td>
-                            </motion.tr>
-                        ))
-                    ) : (
-                        <tr>
-                            <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-                                No beneficiaries found. Try adjusting your search or filters.
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
-        </div>
-    );
-
-    // Render skeleton loader
-    const renderSkeletonLoader = () => (
-        <div className="p-4">
-            {isMobile ? (
-                <div className="space-y-4">
-                    {[...Array(3)].map((_, i) => (
-                        <div
-                            key={i}
-                            className="bg-gray-100 p-4 rounded-lg animate-pulse h-32"
-                        ></div>
-                    ))}
-                </div>
-            ) : (
-                <div className="animate-pulse space-y-4">
-                    <div className="h-12 bg-gray-100 rounded"></div>
-                    {[...Array(5)].map((_, i) => (
-                        <div key={i} className="h-16 bg-gray-100 rounded"></div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-
-    // Calculate pagination display values
-    const indexOfFirstBeneficiary = (currentPage - 1) * 10 + 1;
-    const indexOfLastBeneficiary = Math.min(currentPage * 10, filteredBeneficiaries.length);
-
+  if (loading && beneficiaries.length === 0) {
     return (
-        <div className="min-h-screen bg-gray-50">
-            <ToastContainer
-                position="top-right"
-                autoClose={5000}
-                hideProgressBar={false}
-                newestOnTop={false}
-                closeOnClick
-                rtl={false}
-                pauseOnFocusLoss
-                draggable
-                pauseOnHover
-                theme="colored"
-            />
+      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+        <div className="text-center">
+          <RingLoader
+            color="#3B82F6"
+            loading={true}
+            size={60}
+            speedMultiplier={1}
+          />
+          <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
+        </div>
+      </div>
+    );
+  }
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="bg-white rounded-xl shadow-md overflow-hidden">
-                    {/* Header Section */}
-                    <div
-                        className={`px-6 py-6 sm:px-8 ${headerColorProps.className}`}
-                        style={headerColorProps.style}
-                    >
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold text-white">
-                                    My Beneficiaries
-                                </h1>
-                                <p className="text-blue-100 mt-1" {...textColorProps}>
-                                    Manage your beneficiary details
-                                </p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                                <button
-                                    onClick={handleRoute}
-                                    className={`text-sky-800 font-semibold py-3 px-6 rounded-lg hover:bg-blue-50 transition duration-300 flex items-center justify-center gap-2 bg-white`}
-                                    style={headerColorProps.style}
-                                >
-                                    <FaPlus />
-                                    <span>Add Beneficiary</span>
-                                </button>
-                                <button
-                                    onClick={handleBankRoute}
-                                    className={`text-sky-800 bg-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-50 transition duration-300 flex items-center justify-center gap-2`}
-                                >
-                                    <FaLandmark />
-                                    <span>Add Bank</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                My Beneficiaries
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Manage your beneficiaries and their bank accounts
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleExportBeneficiaries}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                disabled={beneficiaries.length === 0}
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Export
+              </button>
+              <button
+                onClick={handleAddBeneficiary}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                Add Beneficiary
+              </button>
+            </div>
+          </div>
+        </div>
 
-                    {/* Search and Filter Section */}
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="relative flex-grow">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <FaSearch className="text-gray-400" />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Search by name, phone, or relation..."
-                                    value={searchQuery}
-                                    onChange={(e) => handleSearchChange(e.target.value)}
-                                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                            <div className="relative w-full md:w-48">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <FaFilter className="text-gray-400" />
-                                </div>
-                                <select
-                                    value={filterVisibility}
-                                    onChange={(e) => handleFilterChange(e.target.value)}
-                                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                                >
-                                    <option value="all">Show All</option>
-                                    <option value="visible">Visible Only</option>
-                                    <option value="hidden">Hidden Only</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-blue-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">
+                  Total Beneficiaries
+                </h3>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {stats.total}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                    {/* Main Content Section */}
-                    {isLoading ? (
-                        renderSkeletonLoader()
-                    ) : error ? (
-                        <div className="p-6 text-center">
-                            <div className="text-red-500 font-medium">{error}</div>
-                            <button
-                                onClick={() => dispatch(fetchBeneficiaries(customerId))}
-                                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            {isMobile ? renderMobileView() : renderDesktopView()}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="bg-green-100 p-3 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Active</h3>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {stats.active}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                            {/* Pagination Section */}
-                            {filteredBeneficiaries.length > 0 && (
-                                <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className={`text-sm ${textColorProps.className ?? "text-gray-500"}`}>
-                                        Showing{" "}
-                                        <span className="font-medium">
-                                            {indexOfFirstBeneficiary}
-                                        </span>{" "}
-                                        to{" "}
-                                        <span className="font-medium">
-                                            {indexOfLastBeneficiary}
-                                        </span>{" "}
-                                        of{" "}
-                                        <span className="font-medium">
-                                            {filteredBeneficiaries.length}
-                                        </span>{" "}
-                                        results
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {/* Previous Page Button */}
-                                        <button
-                                            onClick={() => handlePageChange(currentPage - 1)}
-                                            disabled={currentPage === 1}
-                                            className={`p-2 rounded-md ${currentPage === 1
-                                                    ? `${textColorProps.className ?? "text-gray-400"} cursor-not-allowed`
-                                                    : `hover:bg-gray-200 ${textColorProps.className ?? "text-gray-700"}`
-                                                }`}
-                                            aria-label="Previous page"
-                                        >
-                                            <FaArrowLeft />
-                                        </button>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="bg-red-100 p-3 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-red-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Inactive</h3>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {stats.inactive}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                                        {/* Page Number Buttons */}
-                                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                                            let pageNum;
-                                            if (totalPages <= 5) {
-                                                pageNum = i + 1;
-                                            } else if (currentPage <= 3) {
-                                                pageNum = i + 1;
-                                            } else if (currentPage >= totalPages - 2) {
-                                                pageNum = totalPages - 4 + i;
-                                            } else {
-                                                pageNum = currentPage - 2 + i;
-                                            }
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-purple-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">
+                  Individuals
+                </h3>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {stats.individuals}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                                            return (
-                                                <button
-                                                    key={pageNum}
-                                                    onClick={() => handlePageChange(pageNum)}
-                                                    className={`w-10 h-10 rounded-md ${currentPage === pageNum
-                                                            ? "bg-blue-600 text-white"
-                                                            : `hover:bg-gray-200 ${textColorProps.className ?? "text-gray-700"}`
-                                                        }`}
-                                                >
-                                                    {pageNum}
-                                                </button>
-                                            );
-                                        })}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="bg-orange-100 p-3 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-orange-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">
+                  Institutions
+                </h3>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {stats.institutions}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                                        {/* Ellipsis for many pages */}
-                                        {totalPages > 5 && <span className="px-2">...</span>}
-
-                                        {/* Next Page Button */}
-                                        <button
-                                            onClick={() => handlePageChange(currentPage + 1)}
-                                            disabled={currentPage === totalPages}
-                                            className={`p-2 rounded-md ${currentPage === totalPages
-                                                    ? `${textColorProps.className ?? "text-gray-400"} cursor-not-allowed`
-                                                    : `hover:bg-gray-200 ${textColorProps.className ?? "text-gray-700"}`
-                                                }`}
-                                            aria-label="Next page"
-                                        >
-                                            <FaArrowRight />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-
-                {/* Back to Dashboard Button */}
-                <div className="flex justify-center items-center mt-4">
-                    <button
-                        onClick={() => navigate(-1)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-blue-600 border border-blue-600 hover:bg-blue-50 transition-colors duration-200"
-                    >
-                        <FaArrowLeft className="text-blue-600" />
-                        <span>Back to Dashboard</span>
-                    </button>
-                </div>
+        {/* Filters Section - Updated to match your actual filter structure */}
+        <div className="bg-white rounded-lg shadow mb-6 p-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-end">
+            <div className="flex-1">
+              <label
+                htmlFor="search"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Search Beneficiaries
+              </label>
+              <input
+                type="text"
+                id="search"
+                placeholder="Search by name, email, or phone..."
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
 
-            {/* Delete Confirmation Modal */}
-            <DeleteConfirmationModal
-                show={deleteModal.show}
-                onClose={handleCloseModal}
-                onConfirm={handleConfirmDelete}
-                message={deleteModal.message}
-                isLoading={deleteModal.isLoading}
-            />
+            <div className="w-full lg:w-48">
+              <label
+                htmlFor="status"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Status
+              </label>
+              <select
+                id="status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="visible">Active</option>
+                <option value="hidden">Inactive</option>
+              </select>
+            </div>
+
+            {/* Remove type filter for now since it's not in your slice */}
+            {/* <div className="w-full lg:w-48">
+              <label
+                htmlFor="type"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Type
+              </label>
+              <select
+                id="type"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Types</option>
+                <option value="individual">Individual</option>
+                <option value="institution">Institution</option>
+              </select>
+            </div> */}
+
+            <button
+              onClick={handleClearFilters}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
         </div>
-    );
+
+        {/* Beneficiaries Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          {beneficiaries.length === 0 ? (
+            <div className="text-center py-12">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              <h3 className="mt-4 text-lg font-medium text-gray-900">
+                No beneficiaries found
+              </h3>
+              <p className="mt-2 text-gray-500">
+                {searchQuery || statusFilter !== "all" 
+                  ? "Try adjusting your filters to see more results."
+                  : "Get started by adding your first beneficiary."}
+              </p>
+              <div className="mt-6">
+                <button
+                  onClick={handleAddBeneficiary}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Add Beneficiary
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Beneficiary
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Type
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Contact
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Created
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {beneficiaries.map((beneficiary) => (
+                    <tr key={beneficiary.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-medium">
+                              {beneficiary.name?.charAt(0).toUpperCase() || "B"}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {beneficiary.name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {beneficiary.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            beneficiary.beneftype === "individual"
+                              ? "bg-purple-100 text-purple-800"
+                              : "bg-orange-100 text-orange-800"
+                          }`}
+                        >
+                          {beneficiary.beneftype === "individual"
+                            ? "Individual"
+                            : "Institution"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {beneficiary.phone_number || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            beneficiary.status === 1
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {beneficiary.status === 1 ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {beneficiary.created_at
+                          ? new Date(
+                              beneficiary.created_at
+                            ).toLocaleDateString()
+                          : "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() =>
+                              handleViewBeneficiary(beneficiary.id)
+                            }
+                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                            title="View Details"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleEditBeneficiary(beneficiary.id)
+                            }
+                            className="text-green-600 hover:text-green-900 transition-colors"
+                            title="Edit"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleToggleVisibility(
+                                beneficiary.id,
+                                beneficiary.name,
+                                beneficiary.status === 1
+                              )
+                            }
+                            className={`${
+                              beneficiary.status === 1
+                                ? "text-yellow-600 hover:text-yellow-900"
+                                : "text-green-600 hover:text-green-900"
+                            } transition-colors`}
+                            title={
+                              beneficiary.status === 1
+                                ? "Deactivate"
+                                : "Activate"
+                            }
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              {beneficiary.status === 1 ? (
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                                />
+                              ) : (
+                                <>
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                  />
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                  />
+                                </>
+                              )}
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleDeleteBeneficiary(
+                                beneficiary.id,
+                                beneficiary.name
+                              )
+                            }
+                            className="text-red-600 hover:text-red-900 transition-colors"
+                            title="Delete"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Loading overlay for operations */}
+        {operationLoading && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 flex items-center gap-3">
+              <RingLoader
+                color="#3B82F6"
+                loading={true}
+                size={30}
+                speedMultiplier={1}
+              />
+              <p className="text-gray-700">Processing...</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+    </div>
+  );
 };
 
 export default Beneficiaries;

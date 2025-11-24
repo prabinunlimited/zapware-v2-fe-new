@@ -4,7 +4,7 @@ import { useSelector } from "react-redux";
 import axios from "axios";
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
-const API_URL = import.meta.env.VITE_API_URL || import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL;
 
 const Footer = () => {
     console.log("🔄 Footer component is rendering"); // ADD THIS
