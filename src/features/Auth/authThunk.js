@@ -1263,6 +1263,7 @@ export const loginUser = createAsyncThunk(
         payload.email = loginData.email;
         if (loginData.passcode) {
           payload.passcode = Array.isArray(loginData.passcode)
+          console.log(passcode)
             ? loginData.passcode.join("")
             : loginData.passcode;
         }
