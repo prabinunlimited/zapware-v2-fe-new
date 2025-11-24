@@ -261,7 +261,7 @@ function NavigateSection({
       );
       return;
     }
-    navigate(`/remitpayout/${customerId}`);
+    navigate(`/payout/${customerId}`);
   };
 
   const handleRemitClick = () => {

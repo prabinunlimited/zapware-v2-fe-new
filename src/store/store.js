@@ -42,6 +42,9 @@ import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
 import teamReducer from "../page/Team/Slice/teamSlice";
 import teamMemberReducer from "../page/Team/Slice/teamMemberSlice";
 
+// ===================== TEAM SLICES =====================
+import payoutReducer from "../page/Payout/slices/payoutSlice";
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -137,6 +140,7 @@ const customSerializableCheck = {
     "cardPayment/setPaymentStatus",
     "cardPayment/setCurrentPayment",
     "cardPayment/setShowPaymentForm",
+    "payout/setFileValue"
   ],
   ignoredPaths: [
     "kyc.plaid",
@@ -185,6 +189,8 @@ const customSerializableCheck = {
     "cardPayment.currentPayment",
     "cardPayment.session",
     "cardPayment.paymentResult",
+
+    "payout.formValues.invoice_file"
   ],
 };
 
@@ -230,6 +236,9 @@ export const store = configureStore({
     beneficiaries: beneficiariesReducer,
     addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
+
+    // payout
+    payout: payoutReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
