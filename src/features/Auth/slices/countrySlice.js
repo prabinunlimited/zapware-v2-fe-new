@@ -2388,9 +2388,9 @@ export const fetchCountries = createAsyncThunk(
         total: countries.length,
         firstCountry: countries[0],
         keys: Object.keys(countries[0]),
-        hasPhoneCode: countries[0].hasOwnProperty('phone_code'),
+        hasPhoneCode: countries[0].hasOwnProperty("phone_code"),
         hasPhoneCodeValue: countries[0].phone_code,
-        sampleData: countries.slice(0, 3) // First 3 countries
+        sampleData: countries.slice(0, 3), // First 3 countries
       });
       return countries;
     } catch (error) {
@@ -2473,11 +2473,11 @@ const countriesSlice = createSlice({
         state.error = null;
         state.lastUpdated = new Date().getTime();
 
-         console.log("✅ Countries loaded into Redux:", {
-        count: action.payload.length,
-        stateCount: state.countries.length,
-        sample: state.countries.slice(0, 2)
-      });
+        console.log("✅ Countries loaded into Redux:", {
+          count: action.payload.length,
+          stateCount: state.countries.length,
+          sample: state.countries.slice(0, 2),
+        });
       })
       .addCase(fetchCountries.rejected, (state, action) => {
         state.loading = false;
@@ -2535,7 +2535,7 @@ export const selectCountriesOptions = createSelector(
       countriesCount: countries.length,
       isArray: Array.isArray(countries),
       firstItem: countries[0],
-      allKeys: countries.length > 0 ? Object.keys(countries[0]) : 'no data'
+      allKeys: countries.length > 0 ? Object.keys(countries[0]) : "no data",
     });
 
     if (!countries || !Array.isArray(countries)) {
@@ -2554,7 +2554,7 @@ export const selectCountriesOptions = createSelector(
     console.log("🔄 Processed country options:", {
       optionsCount: options.length,
       firstOption: options[0],
-      optionsStructure: options.slice(0, 3) // First 3 options
+      optionsStructure: options.slice(0, 3), // First 3 options
     });
 
     return options;
@@ -2593,7 +2593,14 @@ export const selectPhoneCodeOptions = createSelector(
     return countries.map((country) => ({
       value: country.phone_code,
       label: `${country.phone_code} (${country.name})`,
-      country: country,
+      country: {
+        id: country.id, // ✅ Explicitly pass the ID
+        name: country.name, // ✅ Pass other needed properties
+        flag_url: country.flag_url,
+      },
+      // Or as an alternative, you can add these at the top level:
+      countryId: country.id, // ✅ Direct access to country ID
+      countryName: country.name,
     }));
   }
 );

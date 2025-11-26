@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
+import { countries } from "../../../features/Auth/slices/countrySlice";
 
 // ===================== ASYNC THUNKS =====================
 export const fetchDestinationCurrencies = createAsyncThunk(
@@ -94,14 +95,9 @@ export const fetchCountries = createAsyncThunk(
   "payout/fetchCountries",
   async (_, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.get(`/countries`, {
-        headers: { Authorization: `Bearer ${bearertoken}` },
-      });
-
-      return response.data.data;
+      return countries;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      return rejectWithValue(error.message);
     }
   }
 );
@@ -171,6 +167,22 @@ export const convertCurrency = createAsyncThunk(
   "payout/convertCurrency",
   async (payload, { rejectWithValue }) => {
     try {
+      // For same currency conversions, you might need different logic
+      if (payload.from === payload.to) {
+        // Handle same currency conversion - no FX rate needed
+        const sameCurrencyResponse = {
+          status: "Success",
+          converted_value: payload.value, // Same amount
+          conversion_id: "same-currency-" + Date.now(),
+          // fxRate might be 1 or not included
+          fxRate: 1,
+          swiftOut: "0.00",
+          payoutCharge: "0.00",
+          toServiceProviderId: null,
+        };
+        return sameCurrencyResponse;
+      }
+
       const bearertoken = localStorage.getItem("bearertoken");
       const response = await api.post(`/exchange-rates`, payload, {
         headers: {
@@ -256,7 +268,7 @@ const initialState = {
     destination_country: "",
     transfer_purpose: "",
     occupation: "",
-    convertedValue: "",
+    convertedValue: 0,
     transaction_type: "",
     promocode: "",
     purpose: "",
@@ -276,9 +288,9 @@ const initialState = {
   // Rates and conversion
   convertedValue: null,
   convertedId: null,
-  fxRate: null,
-  swiftRate: null,
-  payoutRate: null,
+  fxRate: 0,
+  swiftRate: 0,
+  payoutRate: 0,
   toServiceProvider: null,
   toServiceProviderInr: null,
   availableBalance: null,
@@ -452,12 +464,12 @@ const payoutSlice = createSlice({
       })
       .addCase(convertCurrency.fulfilled, (state, action) => {
         state.loading = false;
-        state.convertedValue = action.payload.converted_value;
+        state.convertedValue = parseFloat(action.payload.converted_value) || 0;
         state.convertedId = action.payload.conversion_id;
-        state.fxRate = action.payload.fxRate;
-        state.swiftRate = action.payload.swiftOut;
-        state.payoutRate = action.payload.payoutCharge;
-        state.toServiceProvider = action.payload.toServiceProviderId;
+        state.fxRate = action.payload.fxRate || null;
+        state.swiftRate = action.payload.swiftOut || null;
+        state.payoutRate = action.payload.payoutCharge || null;
+        state.toServiceProvider = action.payload.toServiceProviderId || null;
         state.showModal = true;
       })
       .addCase(convertCurrency.rejected, (state, action) => {

@@ -238,7 +238,7 @@ const PayoutPage = () => {
         ) {
           // Call createpayments API after successful verification
           const res = await axios.post(
-            "https://zapware.unlimitedremit.com/api/b4b/createpayments",
+            "https://sandbox-zapware.unlimitedremit.com/api/b4b/createpayments",
             payload
           );
 
@@ -253,10 +253,17 @@ const PayoutPage = () => {
         } else {
           await handleSubmit(e, isRecurring, recurringFrequency, customDays);
         }
+      } else {
+        // Handle case where Status is not "success"
+        dispatch(setModalMessage(res.message || "Invalid passcode"));
+        dispatch(setShowErrorModal(true));
       }
     } catch (err) {
+      console.error("Passcode verification error:", err);
       dispatch(
-        setModalMessage(err.response?.data?.message || "verification failed")
+        setModalMessage(
+          err.response?.data?.message || err.message || "Verification failed"
+        )
       );
       dispatch(setShowErrorModal(true));
     }
@@ -276,8 +283,8 @@ const PayoutPage = () => {
 
     const formData = new FormData();
 
-    // Append form data
-    formData.append("convertedValue", formValues.convertedValue);
+    // FIX: Use the convertedValue from Redux state instead of formValues
+    formData.append("convertedValue", convertedValue); // Changed this line
     formData.append("amount", formValues.value);
     formData.append("purpose", formValues.purpose);
     formData.append("promo_code", formValues.promocode);
@@ -997,13 +1004,15 @@ const PayoutPage = () => {
               <p className="text-lg font-medium text-gray-700">
                 FX Rate:{" "}
                 <span className="font-semibold text-indigo-600">
-                  {formValues.from} 1 = {formValues.to} {fxRate?.toFixed(4)}
+                  {formValues.from} 1 = {formValues.to}{" "}
+                  {fxRate ? parseFloat(fxRate).toFixed(4) : "1.0000"}
                 </span>
               </p>
               <p className="text-xl mt-4 font-semibold text-gray-800">
                 Txn Amount:{" "}
                 <span className="text-xl font-bold text-teal-600">
-                  {formValues.from} {formValues.value}
+                  {formValues.from}{" "}
+                  {parseFloat(formValues.value || 0).toFixed(2)}
                 </span>
               </p>
               <p className="text-xl mt-4 font-semibold text-gray-800">
@@ -1011,8 +1020,12 @@ const PayoutPage = () => {
                 <span className="text-xl font-bold text-teal-600">
                   {formValues.transaction_type === "bank" ||
                   formValues.transaction_type === "mobile"
-                    ? `${formValues.from} ${payoutRate}`
-                    : `${formValues.from} ${swiftRate}`}
+                    ? `${formValues.from} ${parseFloat(payoutRate || 0).toFixed(
+                        2
+                      )}`
+                    : `${formValues.from} ${parseFloat(swiftRate || 0).toFixed(
+                        2
+                      )}`}
                 </span>
               </p>
               <p className="text-xl mt-4 font-semibold text-gray-800">
@@ -1021,17 +1034,22 @@ const PayoutPage = () => {
                   {formValues.transaction_type === "bank" ||
                   formValues.transaction_type === "mobile"
                     ? `${formValues.from} ${(
-                        parseFloat(formValues.value) + parseFloat(payoutRate)
+                        parseFloat(formValues.value || 0) +
+                        parseFloat(payoutRate || 0)
                       ).toFixed(2)}`
                     : `${formValues.from} ${(
-                        parseFloat(formValues.value) + parseFloat(swiftRate)
+                        parseFloat(formValues.value || 0) +
+                        parseFloat(swiftRate || 0)
                       ).toFixed(2)}`}
                 </span>
               </p>
               <p className="text-xl mt-4 font-semibold text-gray-800">
                 Amount to be deposited:{" "}
                 <span className="text-xl font-bold text-teal-600">
-                  {formValues.to} {convertedValue?.toFixed(4)}
+                  {formValues.to}{" "}
+                  {convertedValue
+                    ? parseFloat(convertedValue).toFixed(2)
+                    : "0.00"}
                 </span>
               </p>
             </div>

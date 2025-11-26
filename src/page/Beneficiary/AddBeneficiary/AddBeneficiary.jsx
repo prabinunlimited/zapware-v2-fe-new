@@ -663,13 +663,31 @@ const AddBeneficiary = () => {
   const renderCountryDropdown = () => (
     <select
       className="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      onChange={formik.handleChange}
+      onChange={(e) => {
+        const selectedCountryId = e.target.value;
+        const selectedCountry = countries.find(
+          (country) => country.id === parseInt(selectedCountryId)
+        );
+
+        // ✅ Set the country ID (numeric) not the name
+        formik.setFieldValue("country_id", selectedCountryId);
+
+        // ✅ Automatically set the phone code when country is selected
+        if (selectedCountry) {
+          formik.setFieldValue(
+            "country_phone_code",
+            selectedCountry.phone_code || "+1"
+          );
+        }
+      }}
       value={formik.values.country_id}
       name="country_id"
     >
       <option value="">Select Country</option>
       {countriesOptions.map((country) => (
-        <option key={country.value} value={country.value}>
+        <option key={country.value} value={country.id}>
+          {" "}
+          {/* ✅ Use country.id here */}
           {country.label} ({country.country_code})
         </option>
       ))}
