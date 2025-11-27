@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ClipLoader } from "react-spinners";
+import { motion, AnimatePresence } from "framer-motion";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
+import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
+import { ClipLoader, RingLoader } from "react-spinners";
 import Select from "react-select";
-import { FiPlusCircle } from "react-icons/fi";
 import axios from "axios";
 
 // Redux imports
@@ -55,16 +59,149 @@ import {
   submitPayout,
 } from "./slices/payoutSlice";
 
-// import { useNotifications } from "../../../context/NotificationContext";
-
 const API_URL = import.meta.env.REACT_APP_API_URL;
+
+// Step Indicator Component
+const StepIndicator = ({ activeStep }) => {
+  const steps = [
+    { number: 1, label: "Account Selection" },
+    { number: 2, label: "Transfer Details" },
+    { number: 3, label: "Confirmation" },
+  ];
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-center">
+        {steps.map((step, index) => (
+          <React.Fragment key={step.number}>
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold font-sans ${
+                  activeStep >= step.number
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-300 text-gray-500 bg-white"
+                }`}
+              >
+                {step.number}
+              </div>
+              <span
+                className={`mt-2 text-sm font-medium font-sans ${
+                  activeStep >= step.number ? "text-blue-600" : "text-gray-500"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {index < steps.length - 1 && (
+              <div
+                className={`w-24 h-1 mx-4 ${
+                  activeStep > step.number ? "bg-blue-600" : "bg-gray-300"
+                }`}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Success Popup Component
+const SuccessPopup = ({ transaction, onClose, onDownload }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9 }}
+    animate={{ opacity: 1, scale: 1 }}
+    exit={{ opacity: 0, scale: 0.9 }}
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+  >
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FaCheck className="w-8 h-8 text-green-600" />
+        </div>
+        <h3 className="text-2xl font-bold text-gray-900 mb-2 font-sans">
+          Success!
+        </h3>
+        <p className="text-gray-600 mb-6 font-sans">
+          Your payout has been initiated successfully.
+        </p>
+        <div className="flex space-x-3">
+          <button
+            onClick={onDownload}
+            className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium font-sans"
+          >
+            Download Receipt
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium font-sans"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+);
+
+// Cancel Modal Component
+const CancelModal = ({ onConfirm, onCancel }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9 }}
+    animate={{ opacity: 1, scale: 1 }}
+    exit={{ opacity: 0, scale: 0.9 }}
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+  >
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FaTimes className="w-8 h-8 text-red-600" />
+        </div>
+        <h3 className="text-2xl font-bold text-gray-900 mb-2 font-sans">
+          Cancel Payout?
+        </h3>
+        <p className="text-gray-600 mb-6 font-sans">
+          Are you sure you want to cancel this payout? Your progress will be
+          lost.
+        </p>
+        <div className="flex space-x-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium font-sans"
+          >
+            Continue
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3 px-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium font-sans"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+);
+
+// Safe array access helper function
+const safeArray = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (typeof data === 'object' && data !== null) {
+    // If it's an object, try to extract array from common properties
+    if (data.data && Array.isArray(data.data)) return data.data;
+    if (data.accounts && Array.isArray(data.accounts)) return data.accounts;
+    if (data.items && Array.isArray(data.items)) return data.items;
+  }
+  console.warn('Expected array but got:', typeof data, data);
+  return [];
+};
 
 const PayoutPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const { customerId } = useParams();
-  // const { addNotification } = useNotifications();
   const bearertoken = localStorage.getItem("bearertoken");
 
   // Select state from Redux
@@ -93,10 +230,20 @@ const PayoutPage = () => {
   const passcode = useSelector(selectPasscode);
   const toServiceProviderInr = useSelector(selectServiceProviderInr);
 
-  // Local state for recurring payments
+  // Local state for UI
+  const [activeStep, setActiveStep] = useState(1);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState("");
   const [customDays, setCustomDays] = useState("");
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 customerBankAccounts:', customerBankAccounts);
+    console.log('🔍 Type of customerBankAccounts:', typeof customerBankAccounts);
+    console.log('🔍 Is array?', Array.isArray(customerBankAccounts));
+  }, [customerBankAccounts]);
 
   // Initialize form with customerId
   useEffect(() => {
@@ -107,11 +254,31 @@ const PayoutPage = () => {
   useEffect(() => {
     const authtoken = localStorage.getItem("authtoken");
     if (customerId && authtoken) {
-      dispatch(fetchCustomerBankAccounts(customerId));
+      console.log('🔄 Fetching initial data for customer:', customerId);
+      dispatch(fetchCustomerBankAccounts(customerId))
+        .unwrap()
+        .then((result) => {
+          console.log('✅ Customer bank accounts loaded:', result);
+          setDataLoaded(true);
+        })
+        .catch((error) => {
+          console.error('❌ Failed to load customer bank accounts:', error);
+          setDataLoaded(true);
+        });
+      
       dispatch(fetchCountries());
       dispatch(fetchDestinationCurrencies());
     }
   }, [customerId, dispatch]);
+
+  // Update step based on form progress
+  useEffect(() => {
+    if (formValues.from && formValues.to && formValues.transaction_type) {
+      setActiveStep(2);
+    } else {
+      setActiveStep(1);
+    }
+  }, [formValues.from, formValues.to, formValues.transaction_type]);
 
   // Handlers
   const handleChange = async (e) => {
@@ -150,7 +317,7 @@ const PayoutPage = () => {
     if (file) {
       const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
       if (!allowedTypes.includes(file.type)) {
-        alert("Please upload a file of type PDF, JPG, JPEG, or PNG.");
+        toast.error("Please upload a file of type PDF, JPG, JPEG, or PNG.");
         return;
       }
       dispatch(setFileValue({ name, file }));
@@ -158,7 +325,9 @@ const PayoutPage = () => {
   };
 
   const handleConvert = async () => {
-    const selectedAccount = customerBankAccounts.find(
+    // Use safeArray to ensure we're working with an array
+    const safeCustomerAccounts = safeArray(customerBankAccounts);
+    const selectedAccount = safeCustomerAccounts.find(
       (account) => account.currency_code === formValues.from
     );
 
@@ -176,6 +345,7 @@ const PayoutPage = () => {
     };
 
     dispatch(convertCurrency(payload));
+    setActiveStep(3);
   };
 
   const handleSendPasscode = async () => {
@@ -183,7 +353,10 @@ const PayoutPage = () => {
   };
 
   const handleVerifyAndConvert = async (e) => {
-    if (!passcode) return alert("Please enter passcode");
+    if (!passcode) {
+      toast.error("Please enter passcode");
+      return;
+    }
 
     try {
       const res = await dispatch(
@@ -206,7 +379,9 @@ const PayoutPage = () => {
 
         const serviceProviderId = Number(toprovider.data.service_provider_id);
 
-        const selectedAccount = customerBankAccounts.find(
+        // Use safeArray to ensure we're working with an array
+        const safeCustomerAccounts = safeArray(customerBankAccounts);
+        const selectedAccount = safeCustomerAccounts.find(
           (account) => account.currency_code === formValues.from
         );
 
@@ -254,7 +429,6 @@ const PayoutPage = () => {
           await handleSubmit(e, isRecurring, recurringFrequency, customDays);
         }
       } else {
-        // Handle case where Status is not "success"
         dispatch(setModalMessage(res.message || "Invalid passcode"));
         dispatch(setShowErrorModal(true));
       }
@@ -277,14 +451,15 @@ const PayoutPage = () => {
   ) => {
     e.preventDefault();
 
-    const selectedAccount = customerBankAccounts.find(
+    // Use safeArray to ensure we're working with an array
+    const safeCustomerAccounts = safeArray(customerBankAccounts);
+    const selectedAccount = safeCustomerAccounts.find(
       (account) => account.currency_code === formValues.from
     );
 
     const formData = new FormData();
 
-    // FIX: Use the convertedValue from Redux state instead of formValues
-    formData.append("convertedValue", convertedValue); // Changed this line
+    formData.append("convertedValue", convertedValue);
     formData.append("amount", formValues.value);
     formData.append("purpose", formValues.purpose);
     formData.append("promo_code", formValues.promocode);
@@ -333,6 +508,14 @@ const PayoutPage = () => {
     });
   };
 
+  const handleCancel = () => {
+    setShowCancelModal(true);
+  };
+
+  const confirmCancel = () => {
+    navigate(-1);
+  };
+
   // Helper functions
   const getAvailableTransactionTypes = (currency, providerId) => {
     if (currency === "KES") {
@@ -370,30 +553,33 @@ const PayoutPage = () => {
     control: (provided) => ({
       ...provided,
       backgroundColor: "transparent",
-      border: "0px",
-      borderRadius: "0.5rem",
-      padding: "0px",
+      border: "1px solid #D1D5DB",
+      borderRadius: "0.75rem",
+      padding: "12px 16px",
       fontSize: "1rem",
       color: "#111827",
       boxShadow: "none",
+      "&:hover": {
+        borderColor: "#3B82F6",
+      },
     }),
     menu: (provided) => ({
       ...provided,
-      borderRadius: "0.5rem",
+      borderRadius: "0.75rem",
     }),
     placeholder: (provided) => ({
       ...provided,
-      color: "hsl(0, 0%, 20%)",
-      fontWeight: 600,
+      color: "#6B7280",
+      fontWeight: 500,
     }),
   };
 
-  const countryOptions = countries.map((country) => ({
+  const countryOptions = safeArray(countries).map((country) => ({
     value: country.country_code3,
     label: country.name,
   }));
 
-  const destinationcountryOptions = countries.map((country) => ({
+  const destinationcountryOptions = safeArray(countries).map((country) => ({
     value: country.id,
     label: country.name,
   }));
@@ -443,750 +629,858 @@ const PayoutPage = () => {
     return false;
   };
 
+  // Use safeArray for all array operations
+  const safeCustomerBankAccounts = safeArray(customerBankAccounts);
+  const safeBenefBankAccounts = safeArray(benefBankAccounts);
+  const safeBeneficiaryBanks = safeArray(beneficiaryBanks);
+  const safeDestinationCurrencies = safeArray(destinationCurrencies);
+  const safeCurrencies = safeArray(currencies);
+
   return (
-    <div className="flex flex-col justify-center items-center w-full h-full bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 font-sans">
+      <ToastContainer position="top-right" autoClose={5000} />
+
       {/* Loading states */}
-      {loading && (
-        <>
-          <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50"></div>
-          <div className="absolute inset-0 flex justify-center items-center z-50">
-            <ClipLoader color="#36d7b7" loading={loading} size={50} />
+      {(loading || benefLoading) && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex justify-center items-center">
+          <div className="bg-white rounded-xl shadow-lg p-6 max-w-xs w-full mx-4 border border-gray-200">
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <RingLoader color="#3B82F6" size={60} />
+              </div>
+              <h3 className="text-lg font-medium text-gray-800 mb-2 font-sans">
+                {loading ? "Processing..." : "Loading..."}
+              </h3>
+              <p className="text-sm text-gray-600 font-sans">
+                {loading
+                  ? "Your transaction is being processed"
+                  : "Please wait a moment"}
+              </p>
+            </div>
           </div>
-        </>
+        </div>
       )}
 
-      {benefLoading && (
-        <>
-          <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50"></div>
-          <div className="absolute inset-0 flex justify-center items-center z-50">
-            <ClipLoader color="#36d7b7" loading={benefLoading} size={50} />
-          </div>
-        </>
-      )}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={handleCancel}
+            className="flex items-center mb-4 text-gray-600 hover:text-gray-800 transition-colors font-medium font-sans"
+          >
+            <FiArrowLeft className="mr-2" />
+            Back to Dashboard
+          </button>
 
-      <form className="w-full h-full flex flex-col md:flex-row bg-white shadow-lg rounded-lg p-8 space-y-8 md:space-y-0 md:space-x-8">
-        <div className="flex-1 bg-white p-10 shadow-xl rounded-lg space-y-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 space-y-4 sm:space-y-0">
-            <h1 className="text-3xl font-semibold text-gray-800">Payout</h1>
-            <button
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 font-sans">
+                Send Money
+              </h1>
+              <p className="text-gray-600 mt-2 font-sans">
+                Transfer funds to your beneficiaries securely
+              </p>
+            </div>
+            <motion.button
               type="button"
               onClick={handleAddBeneficiary}
-              className="py-2 px-4 bg-green-600 text-white rounded-lg shadow-lg hover:bg-green-500 transition-all duration-300 ease-out w-full sm:w-auto"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="mt-4 sm:mt-0 inline-flex items-center px-6 py-3 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 font-sans"
             >
+              <FiPlusCircle className="mr-2" />
               Add Beneficiary
-            </button>
+            </motion.button>
           </div>
 
-          {/* Source Currency */}
-          <div className="mb-8">
-            <label
-              htmlFor="from"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Source Currency
-            </label>
-            <select
-              name="from"
-              value={formValues.from}
-              onChange={handleChange}
-              className="w-full px-5 py-4 mt-2 border appearance-none border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              required
-            >
-              <option value="">Select Currency</option>
-              {customerBankAccounts.map((account) => (
-                <option key={account.id} value={account.currency_code}>
-                  {account.currency_code}
-                </option>
-              ))}
-            </select>
+          <StepIndicator activeStep={activeStep} />
+        </div>
+
+        {/* Main Form */}
+        <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+          <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <h2 className="text-xl font-medium text-gray-900 font-sans">
+              Transfer Details
+            </h2>
           </div>
 
-          {availableBalance !== null && (
-            <div className="mt-2 text-sm text-green-600 font-medium">
-              Available Balance: {availableBalance} {formValues.from}
-            </div>
-          )}
-
-          {/* Source Amount */}
-          <div className="mb-8">
-            <label
-              htmlFor="value"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Source Amount
-            </label>
-            <input
-              type="number"
-              name="value"
-              value={formValues.value}
-              onChange={handleChange}
-              placeholder="Enter amount"
-              className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              required
-            />
-          </div>
-
-          {/* Destination Currency */}
-          {formValues.transaction_type !== "swift" && (
-            <div className="mb-8">
-              <label
-                htmlFor="to"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Destination Currency
-              </label>
-              <select
-                name="to"
-                value={formValues.to}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="" disabled>
-                  Select Destination Currency
-                </option>
-                {destinationCurrencies.map((currency) => (
-                  <option
-                    key={currency.currency_code}
-                    value={currency.currency_code}
-                  >
-                    {currency.currency_code}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Payment Method */}
-          {formValues.to && (
-            <div className="mb-8">
-              <label
-                htmlFor="transaction_type"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Payment Method
-              </label>
-              <select
-                name="transaction_type"
-                value={formValues.transaction_type}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="" disabled>
-                  Select Payment Method
-                </option>
-                {availableTransactionTypes.map((method) => (
-                  <option key={method} value={method}>
-                    {method.charAt(0).toUpperCase() + method.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* SWIFT Specific Fields */}
-          {formValues.transaction_type === "swift" && (
-            <>
-              <div className="mb-8">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Destination Country
+          <form className="px-8 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              {/* Source Currency */}
+              <div>
+                <label
+                  htmlFor="from"
+                  className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                >
+                  Source Currency
                 </label>
-                {loading ? (
-                  <p className="text-gray-500 text-sm mt-2">Loading...</p>
-                ) : (
-                  <Select
-                    options={destinationcountryOptions}
-                    onChange={(selectedOption) =>
-                      handleChange({
-                        target: {
-                          name: "country_id",
-                          value: selectedOption?.value,
-                        },
-                      })
-                    }
-                    value={destinationcountryOptions.find(
-                      (option) => option.value === formValues.country_id
-                    )}
-                    className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-                    classNamePrefix="react-select"
-                    placeholder="Select Destination Country"
-                    styles={customStyles}
-                  />
+                <select
+                  name="from"
+                  value={formValues.from}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                  required
+                >
+                  <option value="">Select Currency</option>
+                  {safeCustomerBankAccounts.length > 0 ? (
+                    safeCustomerBankAccounts.map((account) => (
+                      <option key={account.id} value={account.currency_code}>
+                        {account.currency_code} 
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>
+                      No accounts available
+                    </option>
+                  )}
+                </select>
+                {availableBalance !== null && (
+                  <p className="mt-2 text-sm text-green-600 font-medium font-sans">
+                    Available Balance: {availableBalance} {formValues.from}
+                  </p>
                 )}
               </div>
 
-              {currencies.length > 0 && (
-                <div className="mb-8">
+              {/* Source Amount */}
+              <div>
+                <label
+                  htmlFor="value"
+                  className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                >
+                  Amount to Send
+                </label>
+                <input
+                  type="number"
+                  name="value"
+                  value={formValues.value}
+                  onChange={handleChange}
+                  placeholder="Enter amount"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                  required
+                />
+              </div>
+
+              {/* Destination Currency */}
+              {formValues.transaction_type !== "swift" && (
+                <div>
                   <label
                     htmlFor="to"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                   >
-                    Select Destination Currency
+                    Destination Currency
                   </label>
                   <select
                     name="to"
                     value={formValues.to}
                     onChange={handleChange}
-                    className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
                   >
                     <option value="" disabled>
-                      Select Currency
+                      Select Destination Currency
                     </option>
-                    {currencies.map((currency) => (
+                    {safeDestinationCurrencies.map((currency) => (
                       <option
-                        key={currency.currency_id}
-                        value={currency.currency.currency_code}
+                        key={currency.currency_code}
+                        value={currency.currency_code}
                       >
-                        {currency.currency.currency_code}
+                        {currency.currency_code}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
-            </>
-          )}
 
-          {/* AED Purpose Code */}
-          {formValues.to === "AED" && (
-            <div className="mb-8">
-              <label
-                htmlFor="purpose"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Purpose Code
-              </label>
-              <select
-                name="purpose"
-                value={formValues.purpose}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 appearance-none border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="">Select a Purpose</option>
-                {aedPurpose.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
+              {/* Payment Method */}
+              {formValues.to && (
+                <div>
+                  <label
+                    htmlFor="transaction_type"
+                    className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                  >
+                    Payment Method
+                  </label>
+                  <select
+                    name="transaction_type"
+                    value={formValues.transaction_type}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                  >
+                    <option value="" disabled>
+                      Select Payment Method
+                    </option>
+                    {availableTransactionTypes.map((method) => (
+                      <option key={method} value={method}>
+                        {method.charAt(0).toUpperCase() + method.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Promocode */}
-          {["AED", "KES"].includes(formValues.to) && (
-            <div className="mb-8">
-              <label
-                htmlFor="promocode"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Promocode (optional)
-              </label>
-              <input
-                type="text"
-                name="promocode"
-                value={formValues.promocode}
-                onChange={handleChange}
-                placeholder="Enter promocode"
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              />
-            </div>
-          )}
+            {/* Additional Fields Grid */}
+            {(formValues.transaction_type === "swift" ||
+              formValues.to === "AED" ||
+              ["AED", "KES"].includes(formValues.to) ||
+              formValues.to === "INR" ||
+              showIncomeSourceField() ||
+              showTransferPurposeField() ||
+              formValues.to === "NPR") && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                {/* SWIFT Specific Fields */}
+                {formValues.transaction_type === "swift" && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2 font-sans">
+                        Select Destination Country
+                      </label>
+                      <Select
+                        options={destinationcountryOptions}
+                        onChange={(selectedOption) =>
+                          handleChange({
+                            target: {
+                              name: "country_id",
+                              value: selectedOption?.value,
+                            },
+                          })
+                        }
+                        value={destinationcountryOptions.find(
+                          (option) => option.value === formValues.country_id
+                        )}
+                        classNamePrefix="react-select"
+                        placeholder="Select Destination Country"
+                        styles={customStyles}
+                      />
+                    </div>
 
-          {/* INR Specific Fields */}
-          {formValues.to === "INR" && toServiceProvider === 25 && (
-            <div className="mb-8">
-              <label
-                htmlFor="pay_mode"
-                className="block text-sm font-medium text-gray-700"
-              >
-                PayMode
-              </label>
-              <select
-                name="pay_mode"
-                value={formValues.pay_mode}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="" disabled>
-                  Select PayMode
-                </option>
-                <option value="IM">IMPS</option>
-              </select>
-            </div>
-          )}
+                    {safeCurrencies.length > 0 && (
+                      <div>
+                        <label
+                          htmlFor="to"
+                          className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                        >
+                          Select Destination Currency
+                        </label>
+                        <select
+                          name="to"
+                          value={formValues.to}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                        >
+                          <option value="" disabled>
+                            Select Currency
+                          </option>
+                          {safeCurrencies.map((currency) => (
+                            <option
+                              key={currency.currency_id}
+                              value={currency.currency?.currency_code}
+                            >
+                              {currency.currency?.currency_code}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
 
-          {formValues.to === "INR" && (
-            <div className="mb-8">
-              <label
-                htmlFor="remarks"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Remarks
-              </label>
-              <input
-                type="text"
-                name="remarks"
-                value={formValues.remarks}
-                onChange={handleChange}
-                placeholder="Enter Remarks"
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              />
-            </div>
-          )}
+                {/* AED Purpose Code */}
+                {formValues.to === "AED" && (
+                  <div>
+                    <label
+                      htmlFor="purpose"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Purpose Code
+                    </label>
+                    <select
+                      name="purpose"
+                      value={formValues.purpose}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    >
+                      <option value="">Select a Purpose</option>
+                      {aedPurpose.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-          {/* USD Invoice Upload */}
-          {formValues.to === "USD" &&
-            formValues.from !== "GBP" &&
-            formValues.transaction_type !== "swift" && (
-              <div className="mb-8">
-                <label
-                  htmlFor="invoice_file"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Invoice Upload (optional)
-                </label>
-                <input
-                  type="file"
-                  name="invoice_file"
-                  onChange={handleFileChange}
-                  className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-                />
+                {/* Promocode */}
+                {["AED", "KES"].includes(formValues.to) && (
+                  <div>
+                    <label
+                      htmlFor="promocode"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Promocode (optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="promocode"
+                      value={formValues.promocode}
+                      onChange={handleChange}
+                      placeholder="Enter promocode"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    />
+                  </div>
+                )}
+
+                {/* INR Specific Fields */}
+                {formValues.to === "INR" && toServiceProvider === 25 && (
+                  <div>
+                    <label
+                      htmlFor="pay_mode"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      PayMode
+                    </label>
+                    <select
+                      name="pay_mode"
+                      value={formValues.pay_mode}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    >
+                      <option value="" disabled>
+                        Select PayMode
+                      </option>
+                      <option value="IM">IMPS</option>
+                    </select>
+                  </div>
+                )}
+
+                {formValues.to === "INR" && (
+                  <div>
+                    <label
+                      htmlFor="remarks"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Remarks
+                    </label>
+                    <input
+                      type="text"
+                      name="remarks"
+                      value={formValues.remarks}
+                      onChange={handleChange}
+                      placeholder="Enter Remarks"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    />
+                  </div>
+                )}
+
+                {/* Income Source */}
+                {showIncomeSourceField() && (
+                  <div>
+                    <label
+                      htmlFor="income_source"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Income Source
+                    </label>
+                    <select
+                      name="income_source"
+                      value={formValues.income_source}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    >
+                      <option value="" disabled>
+                        Select Income Source
+                      </option>
+                      {toServiceProviderInr === 41 ? (
+                        <>
+                          <option value="1">PERSONAL SAVINGS</option>
+                          <option value="2">SALARY</option>
+                          <option value="3">END OF SERVICE FUNDS</option>
+                          <option value="4">
+                            LOAN FROM FINANCIAL INSTITUTION
+                          </option>
+                          <option value="5">BUSINESS</option>
+                          <option value="6">OTHERS</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="SAL">SALARIED</option>
+                          <option value="PIE">PERSONAL INCOME</option>
+                          <option value="BUS">BUSINESS</option>
+                          <option value="LON">LOAN</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Transfer Purpose */}
+                {showTransferPurposeField() && (
+                  <div>
+                    <label
+                      htmlFor="transfer_purpose"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Transfer Purpose
+                    </label>
+                    <select
+                      name="transfer_purpose"
+                      value={formValues.transfer_purpose}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    >
+                      <option value="" disabled>
+                        Select Transfer Purpose
+                      </option>
+                      {toServiceProviderInr === 49 ? (
+                        <>
+                          <option value="1">FAMILY MAINTENANCE</option>
+                          <option value="2">EDUCATION</option>
+                          <option value="3">MEDICAL</option>
+                          <option value="4">INVESTMENT</option>
+                          <option value="5">TOURISM</option>
+                        </>
+                      ) : toServiceProviderInr === 41 ? (
+                        <>
+                          <option value="1">FAMILY MAINTENANCE</option>
+                          <option value="2">MEDICAL</option>
+                          <option value="3">TRAVEL AND TOURISM</option>
+                          <option value="4">EDUCATION</option>
+                          <option value="5">ACCOUNT OPENING</option>
+                          <option value="6">SAVINGS</option>
+                          <option value="7">INSURANCE</option>
+                          <option value="8">
+                            INVESTMENT IN MUTUAL FUNDS/SHARES
+                          </option>
+                          <option value="9">LOAN PAYMENT</option>
+                          <option value="10">SALARY</option>
+                          <option value="11">TAX PAYMENT</option>
+                        </>
+                      ) : toServiceProviderInr === 27 ? (
+                        <>
+                          <option value="FAM">Family Maintenance</option>
+                          <option value="SAV">SAVINGS</option>
+                          <option value="TRE">TRADE REMITTANCE</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="FAM">FAMILY</option>
+                          <option value="SAV">SAVINGS</option>
+                          <option value="RE">REMITTANCE</option>
+                          <option value="GIFT">GIFT</option>
+                          <option value="TRE">TRADE REMITTANCE</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Occupation */}
+                {formValues.to === "NPR" && (
+                  <div>
+                    <label
+                      htmlFor="occupation"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Occupation
+                    </label>
+                    <input
+                      type="text"
+                      name="occupation"
+                      value={formValues.occupation}
+                      onChange={handleChange}
+                      placeholder="Enter Occupation"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    />
+                  </div>
+                )}
+
+                {/* USD Invoice Upload */}
+                {formValues.to === "USD" &&
+                  formValues.from !== "GBP" &&
+                  formValues.transaction_type !== "swift" && (
+                    <div>
+                      <label
+                        htmlFor="invoice_file"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Invoice Upload (optional)
+                      </label>
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        onChange={handleFileChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      />
+                    </div>
+                  )}
               </div>
             )}
 
-          {/* Income Source */}
-          {showIncomeSourceField() && (
-            <div className="mb-8">
-              <label
-                htmlFor="income_source"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Income Source
-              </label>
-              <select
-                name="income_source"
-                value={formValues.income_source}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="" disabled>
-                  Select Income Source
-                </option>
-                {toServiceProviderInr === 41 ? (
-                  <>
-                    <option value="1">PERSONAL SAVINGS</option>
-                    <option value="2">SALARY</option>
-                    <option value="3">END OF SERVICE FUNDS</option>
-                    <option value="4">LOAN FROM FINANCIAL INSTITUTION</option>
-                    <option value="5">BUSINESS</option>
-                    <option value="6">OTHERS</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="SAL">SALARIED</option>
-                    <option value="PIE">PERSONAL INCOME</option>
-                    <option value="BUS">BUSINESS</option>
-                    <option value="LON">LOAN</option>
-                  </>
-                )}
-              </select>
-            </div>
-          )}
+            {/* Beneficiary Selection */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              <div>
+                <label
+                  htmlFor="benef_account"
+                  className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                >
+                  Select Beneficiary
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    name="benef_account"
+                    value={formValues.benef_account}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    required
+                  >
+                    <option value="">Select a beneficiary</option>
+                    {safeBenefBankAccounts.length > 0 ? (
+                      safeBenefBankAccounts.map((benefBankAccount) => (
+                        <option
+                          key={benefBankAccount.id}
+                          value={benefBankAccount.id}
+                        >
+                          {benefBankAccount.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>
+                        No beneficiaries available
+                      </option>
+                    )}
+                  </select>
+                </div>
+              </div>
 
-          {/* Transfer Purpose */}
-          {showTransferPurposeField() && (
-            <div className="mb-8">
-              <label
-                htmlFor="transfer_purpose"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Transfer Purpose
-              </label>
-              <select
-                name="transfer_purpose"
-                value={formValues.transfer_purpose}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="" disabled>
-                  Select Transfer Purpose
-                </option>
-                {toServiceProviderInr === 49 ? (
-                  <>
-                    <option value="1">FAMILY MAINTENANCE</option>
-                    <option value="2">EDUCATION</option>
-                    <option value="3">MEDICAL</option>
-                    <option value="4">INVESTMENT</option>
-                    <option value="5">TOURISM</option>
-                  </>
-                ) : toServiceProviderInr === 41 ? (
-                  <>
-                    <option value="1">FAMILY MAINTENANCE</option>
-                    <option value="2">MEDICAL</option>
-                    <option value="3">TRAVEL AND TOURISM</option>
-                    <option value="4">EDUCATION</option>
-                    <option value="5">ACCOUNT OPENING</option>
-                    <option value="6">SAVINGS</option>
-                    <option value="7">INSURANCE</option>
-                    <option value="8">INVESTMENT IN MUTUAL FUNDS/SHARES</option>
-                    <option value="9">LOAN PAYMENT</option>
-                    <option value="10">SALARY</option>
-                    <option value="11">TAX PAYMENT</option>
-                  </>
-                ) : toServiceProviderInr === 27 ? (
-                  <>
-                    <option value="FAM">Family Maintenance</option>
-                    <option value="SAV">SAVINGS</option>
-                    <option value="TRE">TRADE REMITTANCE</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="FAM">FAMILY</option>
-                    <option value="SAV">SAVINGS</option>
-                    <option value="RE">REMITTANCE</option>
-                    <option value="GIFT">GIFT</option>
-                    <option value="TRE">TRADE REMITTANCE</option>
-                  </>
-                )}
-              </select>
+              {/* Beneficiary Bank Account */}
+              {safeBeneficiaryBanks.length > 0 && (
+                <div>
+                  <label
+                    htmlFor="benef_bank_account"
+                    className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                  >
+                    Select Beneficiary Bank Account
+                  </label>
+                  <select
+                    name="benef_bank_account"
+                    value={formValues.benef_bank_account}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                  >
+                    <option value="">Select a bank account</option>
+                    {safeBeneficiaryBanks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.payment_method === "Swift"
+                          ? `${bank.benef_iban || "N/A"} - ${
+                              bank.swift || "N/A"
+                            }`
+                          : bank.rails === "Card"
+                          ? `(${bank.rails}) ${bank.bank_name} - ${
+                              bank.card_number || "N/A"
+                            }`
+                          : bank.bank_acc_no
+                          ? `${bank.bank_name} - ${bank.bank_acc_no}`
+                          : `${bank.benef_iban || "N/A"}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Occupation */}
-          {formValues.to === "NPR" && (
+            {/* Description */}
             <div className="mb-8">
               <label
-                htmlFor="occupation"
-                className="block text-sm font-medium text-gray-700"
+                htmlFor="description"
+                className="block text-sm font-medium text-gray-700 mb-2 font-sans"
               >
-                Occupation
+                Description
               </label>
               <input
                 type="text"
-                name="occupation"
-                value={formValues.occupation}
+                name="description"
+                value={formValues.description}
                 onChange={handleChange}
-                placeholder="Enter Occupation"
-                className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
+                placeholder="Enter transfer description"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                required
               />
             </div>
-          )}
 
-          {/* Beneficiary Selection */}
-          <div className="mb-8">
-            <label
-              htmlFor="benef_account"
-              className="block text-sm font-medium text-gray-700"
+            {/* Info Box */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-blue-50 border-l-4 border-blue-400 p-6 mt-8 rounded-lg font-sans"
             >
-              Select Beneficiary
-            </label>
-            <div className="flex items-center gap-2">
-              <select
-                name="benef_account"
-                value={formValues.benef_account}
-                onChange={handleChange}
-                className="w-full px-5 py-4 border appearance-none border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-                required
-              >
-                <option value="">Select a beneficiary</option>
-                {benefBankAccounts.map((benefBankAccount) => (
-                  <option key={benefBankAccount.id} value={benefBankAccount.id}>
-                    {benefBankAccount.name}
-                  </option>
-                ))}
-              </select>
-              <button
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <FiInfo className="h-6 w-6 text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-base text-blue-700 font-sans">
+                    <strong>Note:</strong> Processing times may vary depending
+                    on the payment method selected. Most transfers are completed
+                    within 1-3 business days.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Form Actions */}
+            <div className="mt-10 flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4">
+              <motion.button
                 type="button"
-                onClick={handleAddBeneficiary}
-                className="p-2 text-blue-600 rounded-lg shadow-lg hover:text-blue-500 transition-all duration-300 ease-out"
+                onClick={handleCancel}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="px-8 py-4 border border-gray-300 rounded-xl shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center transition-all font-sans"
               >
-                <FiPlusCircle size={28} />
-                <span className="font-semibold text-lg">Add</span>
-              </button>
+                <FaTimes className="mr-3" />
+                Cancel
+              </motion.button>
+
+              <motion.button
+                type="button"
+                onClick={handleConvert}
+                disabled={
+                  loading ||
+                  !formValues.from ||
+                  !formValues.value ||
+                  !formValues.to ||
+                  !formValues.transaction_type ||
+                  !formValues.benef_account
+                }
+                whileHover={{ scale: loading ? 1 : 1.02 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
+                className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all font-sans"
+              >
+                {loading ? (
+                  <>
+                    <ClipLoader color="#ffffff" size={20} className="mr-3" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <FaExchangeAlt className="mr-3" />
+                    Continue to Review
+                  </>
+                )}
+              </motion.button>
             </div>
-          </div>
-
-          {/* Beneficiary Bank Account */}
-          {beneficiaryBanks.length > 0 && (
-            <div className="mb-8">
-              <label
-                htmlFor="benef_bank_account"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Select Beneficiary Bank Account
-              </label>
-              <select
-                name="benef_bank_account"
-                value={formValues.benef_bank_account}
-                onChange={handleChange}
-                className="w-full px-5 py-4 mt-2 border appearance-none border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              >
-                <option value="">Select a bank account</option>
-                {beneficiaryBanks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>
-                    {bank.payment_method === "Swift"
-                      ? `${bank.benef_iban || "N/A"} - ${bank.swift || "N/A"}`
-                      : bank.rails === "Card"
-                      ? `(${bank.rails}) ${bank.bank_name} - ${
-                          bank.card_number || "N/A"
-                        }`
-                      : bank.bank_acc_no
-                      ? `${bank.bank_name} - ${bank.bank_acc_no}`
-                      : `${bank.benef_iban || "N/A"}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Description */}
-          <div className="mb-8">
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Description
-            </label>
-            <input
-              type="text"
-              name="description"
-              value={formValues.description}
-              onChange={handleChange}
-              className="w-full px-5 py-4 mt-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-lg font-semibold text-gray-900"
-              required
-            />
-          </div>
-
-          {/* Submit Buttons */}
-          <div className="flex justify-center space-x-6 w-full mt-6">
-            <button
-              type="button"
-              onClick={handleConvert}
-              className={`w-2/3 py-4 text-lg bg-green-800 text-white rounded-lg shadow-lg hover:bg-green-700 transition-all duration-300 ease-out transform ${
-                loading ? "bg-gray-700 cursor-not-allowed" : ""
-              }`}
-              disabled={loading}
-            >
-              {loading ? "Processing..." : "Submit"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate(`/newhomepage/${customerId}`)}
-              className="w-2/3 py-4 text-lg bg-red-800 text-white rounded-lg shadow-lg hover:bg-red-500 transition-all duration-300 ease-out transform"
-            >
-              Cancel
-            </button>
-          </div>
+          </form>
         </div>
-      </form>
-
-      {/* Back to Dashboard Button */}
-      <div className="flex justify-center items-center mt-8">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-3 px-6 py-3 rounded-xl text-blue-600 border border-blue-600 hover:bg-blue-50 transition-colors duration-200 font-sans text-base"
-        >
-          ← Back to Dashboard
-        </button>
       </div>
 
-      {/* Conversion Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center bg-gray-900 bg-opacity-60">
-          <div className="bg-white p-8 rounded-lg shadow-xl space-y-6 max-w-lg mx-auto relative">
-            <button
-              onClick={() => dispatch(setShowModal(false))}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl"
+     {/* Conversion Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-center items-center bg-gray-900 bg-opacity-60"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4"
             >
-              ✕
-            </button>
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-900 mb-6 font-sans">
+                  Transfer Review
+                </h3>
 
-            <div className="text-center">
-              <p className="text-lg font-medium text-gray-700">
-                FX Rate:{" "}
-                <span className="font-semibold text-indigo-600">
-                  {formValues.from} 1 = {formValues.to}{" "}
-                  {fxRate ? parseFloat(fxRate).toFixed(4) : "1.0000"}
-                </span>
-              </p>
-              <p className="text-xl mt-4 font-semibold text-gray-800">
-                Txn Amount:{" "}
-                <span className="text-xl font-bold text-teal-600">
-                  {formValues.from}{" "}
-                  {parseFloat(formValues.value || 0).toFixed(2)}
-                </span>
-              </p>
-              <p className="text-xl mt-4 font-semibold text-gray-800">
-                Fee:{" "}
-                <span className="text-xl font-bold text-teal-600">
-                  {formValues.transaction_type === "bank" ||
-                  formValues.transaction_type === "mobile"
-                    ? `${formValues.from} ${parseFloat(payoutRate || 0).toFixed(
-                        2
-                      )}`
-                    : `${formValues.from} ${parseFloat(swiftRate || 0).toFixed(
-                        2
-                      )}`}
-                </span>
-              </p>
-              <p className="text-xl mt-4 font-semibold text-gray-800">
-                Amount to be deducted:{" "}
-                <span className="text-xl font-bold text-teal-600">
-                  {formValues.transaction_type === "bank" ||
-                  formValues.transaction_type === "mobile"
-                    ? `${formValues.from} ${(
+                <div className="space-y-4 text-left">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 font-sans">FX Rate:</span>
+                    <span className="font-semibold text-gray-900 font-sans">
+                      {formValues.from} 1 = {formValues.to}{" "}
+                      {fxRate ? parseFloat(fxRate).toFixed(4) : "1.0000"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 font-sans">
+                      Transfer Amount:
+                    </span>
+                    <span className="font-semibold text-gray-900 font-sans">
+                      {formValues.from}{" "}
+                      {parseFloat(formValues.value || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 font-sans">Fee:</span>
+                    <span className="font-semibold text-gray-900 font-sans">
+                      {formValues.from}{" "}
+                      {parseFloat(
+                        formValues.transaction_type === "bank" ||
+                          formValues.transaction_type === "mobile"
+                          ? payoutRate || 0
+                          : swiftRate || 0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-4">
+                    <span className="text-gray-600 font-sans">
+                      Total Deducted:
+                    </span>
+                    <span className="font-semibold text-gray-900 font-sans">
+                      {formValues.from}{" "}
+                      {(
                         parseFloat(formValues.value || 0) +
-                        parseFloat(payoutRate || 0)
-                      ).toFixed(2)}`
-                    : `${formValues.from} ${(
-                        parseFloat(formValues.value || 0) +
-                        parseFloat(swiftRate || 0)
-                      ).toFixed(2)}`}
-                </span>
-              </p>
-              <p className="text-xl mt-4 font-semibold text-gray-800">
-                Amount to be deposited:{" "}
-                <span className="text-xl font-bold text-teal-600">
-                  {formValues.to}{" "}
-                  {convertedValue
-                    ? parseFloat(convertedValue).toFixed(2)
-                    : "0.00"}
-                </span>
-              </p>
-            </div>
+                        parseFloat(
+                          formValues.transaction_type === "bank" ||
+                            formValues.transaction_type === "mobile"
+                            ? payoutRate || 0
+                            : swiftRate || 0
+                        )
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-4">
+                    <span className="text-gray-600 font-sans">
+                      Amount to be Received:
+                    </span>
+                    <span className="font-semibold text-green-600 text-lg font-sans">
+                      {formValues.to}{" "}
+                      {convertedValue
+                        ? parseFloat(convertedValue).toFixed(2)
+                        : "0.00"}
+                    </span>
+                  </div>
+                </div>
 
-            <h3 className="text-md text-gray-800 text-center mt-6 font-semibold">
-              Do you want to continue with the payout?
-            </h3>
+                <p className="text-gray-600 mt-6 mb-6 font-sans">
+                  Do you want to continue with this transfer?
+                </p>
 
-            <div className="flex justify-center space-x-6 mt-6">
-              <button
-                type="button"
-                onClick={handleSendPasscode}
-                className="bg-green-600 text-white py-2 px-6 rounded-lg"
-                disabled={loading}
-              >
-                {loading ? "Submitting..." : "Submit"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate(`/newhomepage/${customerId}`)}
-                className="bg-red-600 text-white py-2 px-6 rounded-lg"
-              >
-                No
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setShowModal(false))}
+                    className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium font-sans"
+                  >
+                    Review Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendPasscode}
+                    disabled={loading}
+                    className="flex-1 py-3 px-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium font-sans disabled:opacity-50"
+                  >
+                    {loading ? "Sending..." : "Confirm Transfer"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Passcode Modal */}
-      {showPasscodeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[90%] max-w-md shadow-lg">
-            <h2 className="text-xl font-semibold mb-4">
-              Enter the verification code we emailed to you
-            </h2>
-            <input
-              type="text"
-              value={passcode}
-              onChange={(e) => dispatch(setPasscode(e.target.value))}
-              className="w-full p-3 border rounded mb-4"
-              placeholder="Enter your 6-digit passcode"
-            />
-            <div className="flex justify-end space-x-3">
-              <button
-                className="bg-gray-500 text-white px-4 py-2 rounded"
-                onClick={() => dispatch(setShowPasscodeModal(false))}
-              >
-                Cancel
-              </button>
-              <button
-                className="bg-green-700 text-white px-4 py-2 rounded"
-                onClick={handleVerifyAndConvert}
-                disabled={verifying}
-              >
-                {verifying ? "Verifying..." : "Verify & Submit"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showPasscodeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-center items-center bg-black bg-opacity-50"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full mx-4"
+            >
+              <h2 className="text-2xl font-semibold mb-4 font-sans">
+                Verification Required
+              </h2>
+              <p className="text-gray-600 mb-6 font-sans">
+                Enter the verification code we sent to your email to confirm
+                this transfer.
+              </p>
+              <input
+                type="text"
+                value={passcode}
+                onChange={(e) => dispatch(setPasscode(e.target.value))}
+                className="w-full p-4 border border-gray-300 rounded-xl mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans"
+                placeholder="Enter 6-digit verification code"
+              />
+              <div className="flex justify-end space-x-3">
+                <button
+                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium font-sans"
+                  onClick={() => dispatch(setShowPasscodeModal(false))}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium font-sans disabled:opacity-50"
+                  onClick={handleVerifyAndConvert}
+                  disabled={verifying}
+                >
+                  {verifying ? "Verifying..." : "Confirm & Send"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center bg-gray-900 bg-opacity-60">
-          <div className="bg-white p-6 md:p-8 rounded-lg shadow-xl w-11/12 max-h-[90vh] overflow-y-auto md:max-w-xl lg:max-w-2xl xl:max-w-3xl mx-auto space-y-6">
-            <div className="text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-green-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-900 mt-4">
-                Success!
-              </h3>
-              <p className="mt-2 text-sm text-gray-600">{modalMessage}</p>
-            </div>
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch(setShowSuccessModal(false));
-                  navigate(-1);
-                }}
-                className="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <SuccessPopup
+            onClose={() => {
+              dispatch(setShowSuccessModal(false));
+              navigate(-1);
+            }}
+            onDownload={() => {
+              // Implement download receipt functionality
+              toast.info("Receipt download feature coming soon!");
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Error Modal */}
-      {showErrorModal && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center bg-gray-900 bg-opacity-60">
-          <div className="bg-white p-6 md:p-8 rounded-lg shadow-xl w-11/12 max-h-[90vh] overflow-y-auto md:max-w-xl lg:max-w-2xl xl:max-w-3xl mx-auto space-y-6">
-            <div className="text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-red-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-900 mt-4">
-                Error
-              </h3>
-              <p className="mt-2 text-sm text-gray-600">{modalMessage}</p>
+      <AnimatePresence>
+        {showErrorModal && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          >
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaTimes className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2 font-sans">
+                  Error
+                </h3>
+                <p className="text-gray-600 mb-6 font-sans">{modalMessage}</p>
+                <button
+                  onClick={() => dispatch(setShowErrorModal(false))}
+                  className="w-full py-3 px-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium font-sans"
+                >
+                  OK
+                </button>
+              </div>
             </div>
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => dispatch(setShowErrorModal(false))}
-                className="px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Cancel Modal */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <CancelModal
+            onConfirm={confirmCancel}
+            onCancel={() => setShowCancelModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
