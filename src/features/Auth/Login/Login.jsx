@@ -179,7 +179,14 @@ const Login = () => {
 
   // Debug loading state
   useEffect(() => {
-    
+    console.log('🔍 Login component state:', {
+      isLoading,
+      isSubmitting,
+      tokenInitialized,
+      modalOpen: modal.isOpen,
+      showPasscodeInput,
+      showOtpInput
+    });
   }, [isLoading, isSubmitting, tokenInitialized, modal.isOpen, showPasscodeInput, showOtpInput]);
 
   // Token initialization effect - OPTIMIZED
@@ -189,7 +196,7 @@ const Login = () => {
         await initializePartnerToken();
         setTokenInitialized(true);
       } catch (error) {
-        
+        console.error('❌ Token initialization failed:', error);
         setTokenInitialized(true); // Still set to true to prevent blocking
       }
     };
@@ -206,7 +213,7 @@ const Login = () => {
   useEffect(() => {
     const modalTimer = setTimeout(() => {
       if (modal.isOpen) {
-        
+        console.log('🔄 Auto-closing stuck modal');
         dispatch(closeModal());
       }
     }, 5000);
@@ -218,7 +225,7 @@ const Login = () => {
   useEffect(() => {
     const loadingTimer = setTimeout(() => {
       if (isLoading) {
-        
+        console.log('🔄 Resetting stuck loading state');
         dispatch(setLoading(false));
       }
     }, 10000);

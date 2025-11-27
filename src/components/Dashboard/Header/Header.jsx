@@ -47,7 +47,8 @@ import {
     selectProfileError,
 } from "./headerSlice";
 
-import { logoutUser, selectAuthToken } from "../../../features/Auth/slices/authSlice";
+import { logoutUser } from "../../../features/Auth/slices/authSlice";
+import {selectAuthToken} from "../../../store/selectors"
 
 // Partner config hook
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";

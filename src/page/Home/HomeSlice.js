@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../utils/errorHandling";
+import api from "../../services/api"; // Add this import
 
 const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL;
 
@@ -10,6 +11,39 @@ const pendingRequests = new Map();
 const getRequestKey = (customerId, isRefresh = false) => {
   return `account-${customerId}-${isRefresh ? "refresh" : "initial"}`;
 };
+
+// ✅ CORRECTED: Home-specific FX currencies thunk with "home/" prefix
+export const fetchPartnerFxCurrencies = createAsyncThunk(
+  "home/fetchPartnerFxCurrencies",  // ← CHANGED TO "home/" prefix
+  async (bearertoken, { rejectWithValue }) => {
+    try {
+      if (!bearertoken) {
+        throw new Error("Bearer token missing");
+      }
+
+      const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+      const partnerId =
+        isWhiteLabelled === "1"
+          ? localStorage.getItem("whitelabelledpartnerid") || "9"
+          : "9";
+
+      const response = await api.post(
+        `/partner-fxcurrencies?partner_id=${partnerId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+          timeout: 10000,
+        }
+      );
+
+      return response.data.rates || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  }
+);
 
 // ✅ OPTIMIZED ASYNC THUNK WITH DEDUPLICATION
 export const fetchAccountDetails = createAsyncThunk(
@@ -65,6 +99,12 @@ const initialState = {
   accountData: { account_details: [] },
   selectedCurrency: "",
   currencyOptions: [],
+
+  // FX data states - ADDED
+  partnerFxCurrencies: [],
+  hasFxData: false,
+  fxLoading: false,
+  fxError: null,
 
   // Loading states
   initialLoading: true,
@@ -140,9 +180,23 @@ const homeSlice = createSlice({
     resetFetchFlag: (state) => {
       state.hasFetchedAccount = false;
     },
+    // ADD FX-related reducers
+    setFxLoading: (state, action) => {
+      state.fxLoading = action.payload;
+    },
+    clearFxError: (state) => {
+      state.fxError = null;
+    },
+    resetFxState: (state) => {
+      state.partnerFxCurrencies = [];
+      state.hasFxData = false;
+      state.fxLoading = false;
+      state.fxError = null;
+    },
   },
   extraReducers: (builder) => {
     builder
+      // Your existing account details cases
       .addCase(fetchAccountDetails.pending, (state, action) => {
         const isRefresh = action.meta.arg?.isRefresh;
 
@@ -189,6 +243,23 @@ const homeSlice = createSlice({
 
         // Auto-reset child loading after error
         state.childComponentsLoading = 0;
+      })
+      
+      // ✅ ADD FX currencies cases
+      .addCase(fetchPartnerFxCurrencies.pending, (state) => {
+        state.fxLoading = true;
+        state.fxError = null;
+      })
+      .addCase(fetchPartnerFxCurrencies.fulfilled, (state, action) => {
+        state.fxLoading = false;
+        state.partnerFxCurrencies = action.payload;
+        state.hasFxData = action.payload.length > 0;
+        state.fxError = null;
+      })
+      .addCase(fetchPartnerFxCurrencies.rejected, (state, action) => {
+        state.fxLoading = false;
+        state.fxError = action.payload;
+        state.hasFxData = false;
       });
   },
 });
@@ -212,11 +283,18 @@ export const selectTextColor = (state) => state.home.textColor;
 export const selectError = (state) => state.home.error;
 export const selectHasFetchedAccount = (state) => state.home.hasFetchedAccount;
 
+// ADD FX selectors
+export const selectPartnerFxCurrencies = (state) => state.home.partnerFxCurrencies;
+export const selectHasFxData = (state) => state.home.hasFxData;
+export const selectFxLoading = (state) => state.home.fxLoading;
+export const selectFxError = (state) => state.home.fxError;
+
 // Derived selectors
 export const selectIsAnyLoading = (state) =>
   state.home.initialLoading ||
   state.home.isLoading ||
-  state.home.childComponentsLoading > 0;
+  state.home.childComponentsLoading > 0 ||
+  state.home.fxLoading;
 
 export const selectAccountsByCurrency = (state) => {
   const { accountData, selectedCurrency } = state.home;
@@ -259,6 +337,10 @@ export const {
   clearHomeState,
   resetLoadingStates,
   resetFetchFlag,
+  // ADD FX actions
+  setFxLoading,
+  clearFxError,
+  resetFxState,
 } = homeSlice.actions;
 
 export default homeSlice.reducer;

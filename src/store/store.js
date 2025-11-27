@@ -1,5 +1,12 @@
-// src/store/store.js - CLEANED VERSION
+// src/store/store.js - COMPLETE FIXED VERSION
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
+
+// ===================== ACTION CREATOR IMPORTS =====================
+import { 
+  setAuthState, 
+  setInitialized, 
+  setVerificationStatus 
+} from "../features/Auth/slices/authSlice";
 
 // ===================== AUTH AND RELATED SLICES =====================
 import authReducer from "../features/Auth/slices/authSlice";
@@ -41,6 +48,9 @@ import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
 // ===================== TEAM SLICES =====================
 import teamReducer from "../page/Team/Slice/teamSlice";
 import teamMemberReducer from "../page/Team/Slice/teamMemberSlice";
+
+// ===================== PAYOUT SLICES =====================
+import payoutReducer from "../page/Payout/slices/payoutSlice";
 
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
@@ -137,6 +147,7 @@ const customSerializableCheck = {
     "cardPayment/setPaymentStatus",
     "cardPayment/setCurrentPayment",
     "cardPayment/setShowPaymentForm",
+    "payout/setFileValue"
   ],
   ignoredPaths: [
     "kyc.plaid",
@@ -185,6 +196,8 @@ const customSerializableCheck = {
     "cardPayment.currentPayment",
     "cardPayment.session",
     "cardPayment.paymentResult",
+
+    "payout.formValues.invoice_file"
   ],
 };
 
@@ -231,6 +244,9 @@ export const store = configureStore({
     beneficiaries: beneficiariesReducer,
     addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
+
+    // payout
+    payout: payoutReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -249,20 +265,16 @@ const initializeAuthState = () => {
     const customerId = localStorage.getItem("authcustomer_id");
 
     if (token && customerId) {
-      store.dispatch({
-        type: "auth/setAuthState",
-        payload: {
-          token,
-          customerId,
-          isAuthenticated: true,
-          isInitialized: true,
-        },
-      });
+      // ✅ FIXED: Use action creator instead of string type
+      store.dispatch(setAuthState({
+        token,
+        customerId,
+        isAuthenticated: true,
+        isInitialized: true,
+      }));
     } else {
-      store.dispatch({
-        type: "auth/setInitialized",
-        payload: true,
-      });
+      // ✅ FIXED: Use action creator instead of string type
+      store.dispatch(setInitialized(true));
     }
 
     syncAdditionalStorageStates();
@@ -273,17 +285,17 @@ const syncAdditionalStorageStates = () => {
   const statesToSync = [
     {
       key: "kyc_status",
-      action: "auth/setVerificationStatus",
+      action: setVerificationStatus, // ✅ FIXED: Use action creator
       transform: (value) => ({ kycStatus: value }),
     },
     {
       key: "bank_approve_status",
-      action: "auth/setVerificationStatus",
+      action: setVerificationStatus, // ✅ FIXED: Use action creator
       transform: (value) => ({ bankStatus: value }),
     },
     {
       key: "is_owner_login",
-      action: "auth/setVerificationStatus",
+      action: setVerificationStatus, // ✅ FIXED: Use action creator
       transform: (value) => ({ isOwnerLogin: value === "1" }),
     },
   ];
@@ -292,10 +304,8 @@ const syncAdditionalStorageStates = () => {
     const value = localStorage.getItem(key);
     if (value !== null) {
       const payload = transform ? transform(value) : value;
-      store.dispatch({
-        type: action,
-        payload,
-      });
+      // ✅ FIXED: Use action creator instead of string type
+      store.dispatch(action(payload));
     }
   });
 };

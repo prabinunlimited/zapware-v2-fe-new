@@ -23,7 +23,7 @@ const ReceiverSearchSection = ({
   const handleSearchReceiver = async () => {
     if (!searchQuery || !selectedCountryCode) return;
 
-    
+    console.log("🔍 Starting receiver search...", { searchQuery, selectedCountryCode });
 
     const result = await dispatch(
       searchReceiverByMobile({
@@ -32,20 +32,20 @@ const ReceiverSearchSection = ({
       })
     );
 
-    
-    
-    
-    );
+    console.log("🔍 Search result:", result);
+    console.log("🔍 Search result payload:", result.payload);
+    console.log("🔍 Search result type:", typeof result);
+    console.log("🔍 Search result keys:", Object.keys(result));
 
     // FIX: Check the actual structure returned by the thunk
     if (result?.success) {
-      , calling onReceiverFound");
+      console.log("✅ Receiver found (direct success), calling onReceiverFound");
       onReceiverFound();
     } else if (result?.payload?.success) {
-      , calling onReceiverFound");
+      console.log("✅ Receiver found (payload success), calling onReceiverFound");
       onReceiverFound();
     } else {
-      
+      console.log("❌ Receiver not found or error:", result?.error || result?.payload?.error);
     }
   };
 

@@ -41,7 +41,7 @@ const fetchData = async (url, token = null) => {
     });
     return response.data;
   } catch (error) {
-    
+    console.error(`Error fetching data from ${url}:`, error);
     throw error;
   }
 };
@@ -338,7 +338,7 @@ export const handleInstitutionTermsCheckbox =
         );
       }
     } catch (error) {
-      
+      console.error("Error handling terms checkbox:", error);
       const termData = {
         id: termId,
         accepted_at: new Date().toISOString(),

@@ -32,35 +32,34 @@ export const selectRemittanceOnlyAccepted = (state) =>
   state.currencyAccounts.remittanceOnlyAccepted;
 export const selectTermsModalOpen = (state) =>
   state.currencyAccounts.termsModalOpen;
+
 export const selectIsNamedAccount = createSelector(
   [selectSelectedAccounts, selectAccountOptions],
   (selectedAccounts, accountOptions) => {
     // Debug logging
-     =>
-        typeof acc === "string" ? acc : acc.id || acc
-      ),
-    });
+    console.log('Selected accounts:', selectedAccounts);
+    console.log('Account options:', accountOptions);
 
     if (!selectedAccounts || selectedAccounts.length === 0) {
-      
+      console.log('No selected accounts, returning false');
       return false;
     }
 
     // Convert selected accounts to strings for easier checking
     const selectedAccountStrings = selectedAccounts.map((account) =>
-      typeof account === "string" ? account : account.id || account.toString()
+      typeof account === 'string' ? account : account.id || account.toString()
     );
 
-    
+    console.log('Selected account strings:', selectedAccountStrings);
 
     // Check if any selected account contains "named"
     const hasNamedAccount = selectedAccountStrings.some((accountStr) => {
-      const isNamed = accountStr.includes("named");
-      
+      const isNamed = accountStr.includes('named');
+      console.log(`Account ${accountStr} is named: ${isNamed}`);
       return isNamed;
     });
 
-    
+    console.log('Has named account:', hasNamedAccount);
     return hasNamedAccount;
   }
 );

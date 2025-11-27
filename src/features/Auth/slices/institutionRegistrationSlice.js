@@ -130,18 +130,16 @@ export const fetchGenders = createAsyncThunk(
   async () => {
     try {
       const response = await api.get("/genders");
-      
+
       // Handle different response structures
       if (Array.isArray(response.data)) {
         return response.data;
       } else if (response.data?.data && Array.isArray(response.data.data)) {
         return response.data.data;
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       throw error;
     }
   }
@@ -152,18 +150,16 @@ export const fetchNationalities = createAsyncThunk(
   async () => {
     try {
       const response = await api.get("/nationalities");
-      
+
       // Handle different response structures
       if (Array.isArray(response.data)) {
         return response.data;
       } else if (response.data?.data && Array.isArray(response.data.data)) {
         return response.data.data;
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       throw error;
     }
   }
@@ -210,14 +206,15 @@ export const fetchInstitutionData = createAsyncThunk(
       );
 
       if (failedRequests.length > 0) {
-        
         return rejectWithValue("Some data failed to load");
       }
 
       dispatch(setDataFetched(true));
       return { success: true };
     } catch (error) {
-      return rejectWithValue(error.message || "Failed to fetch institution data");
+      return rejectWithValue(
+        error.message || "Failed to fetch institution data"
+      );
     } finally {
       dispatch(setFetching(false));
     }
@@ -234,8 +231,6 @@ export const validateInstitutionStep = createAsyncThunk(
       );
       return response.data;
     } catch (error) {
-      
-
       if (
         error.response?.data?.status === "error" &&
         error.response.data.message &&
@@ -262,7 +257,6 @@ export const submitInstitutionForm = createAsyncThunk(
   async (formData, { rejectWithValue }) => {
     try {
       // Log what we're sending for debugging
-      
 
       const response = await api.post(
         "/customers/sign-up-institution",
@@ -283,11 +277,8 @@ export const submitInstitutionForm = createAsyncThunk(
 
       return response.data;
     } catch (error) {
-      
-
       // Enhanced error handling
       if (error.response?.data) {
-        
         return rejectWithValue(
           error.response.data.message || "Registration failed"
         );
@@ -326,8 +317,6 @@ export const fetchBusinessTypes = createAsyncThunk(
     try {
       const response = await api.get("/get-silabusiness_type");
 
-      
-
       const formattedBusinessTypes = response.data.map((item, index) => ({
         id: index + 1, // Generate IDs since the new API doesn't provide them
         name: item.name, // Use 'name' as the identifier
@@ -336,7 +325,6 @@ export const fetchBusinessTypes = createAsyncThunk(
 
       return formattedBusinessTypes;
     } catch (error) {
-      
       return rejectWithValue(error.message || "Failed to fetch business types");
     }
   }
@@ -347,8 +335,6 @@ export const fetchIndustryTypes = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get("/industry-types");
-
-      
 
       // Handle different response structures
       let industryTypesData = [];
@@ -363,14 +349,11 @@ export const fetchIndustryTypes = createAsyncThunk(
       ) {
         industryTypesData = response.data.industry_types;
       } else {
-        
         industryTypesData = [];
       }
 
-      
       return industryTypesData;
     } catch (error) {
-      
       return rejectWithValue(error.message || "Failed to fetch industry types");
     }
   }
@@ -407,7 +390,9 @@ export const fetchIdDocumentTypes = createAsyncThunk(
       const response = await api.get("/all-id-document-types");
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || "Failed to fetch ID document types");
+      return rejectWithValue(
+        error.message || "Failed to fetch ID document types"
+      );
     }
   }
 );
@@ -439,11 +424,9 @@ export const fetchTermsAndConditions = createAsyncThunk(
         const termsArray = Object.values(termsData).find(Array.isArray);
         return termsArray || [];
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       // Don't block registration if terms fail to load
       return [];
     }
@@ -485,6 +468,37 @@ export const syncControllerDataForm = createAsyncThunk(
       return syncData;
     } catch (error) {
       return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const uploadFile = createAsyncThunk(
+  "institutionRegistration/uploadFile",
+  async ({ file, documentType, ownerIndex = null }, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("document_type", documentType);
+
+      if (ownerIndex !== null) {
+        formData.append("owner_index", ownerIndex);
+      }
+
+      const response = await api.post("/upload-document", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      return {
+        ...response.data,
+        documentType,
+        ownerIndex,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "File upload failed"
+      );
     }
   }
 );
@@ -1290,6 +1304,33 @@ const institutionRegistrationSlice = createSlice({
         state.businessAliasValid = false;
       })
 
+      .addCase(uploadFile.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(uploadFile.fulfilled, (state, action) => {
+        state.loading = false;
+        // Handle the uploaded file data
+        const { documentType, fileData, ownerIndex } = action.payload;
+
+        if (ownerIndex !== null && ownerIndex !== undefined) {
+          // Store owner document
+          if (state.formData.owner_details[ownerIndex]) {
+            state.formData.owner_details[ownerIndex].documents =
+              state.formData.owner_details[ownerIndex].documents || {};
+            state.formData.owner_details[ownerIndex].documents[documentType] =
+              fileData;
+          }
+        } else {
+          // Store institution document
+          state.formData.user_image = state.formData.user_image || {};
+          state.formData.user_image[documentType] = fileData;
+        }
+      })
+      .addCase(uploadFile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
       // Industry Types with NAICS
       .addCase(fetchIndustryTypesWithNAICS.pending, (state) => {
         state.loading = true;
@@ -1426,11 +1467,9 @@ const institutionRegistrationSlice = createSlice({
         // Optional: Add loading state if needed
       })
       .addCase(fetchIndustryTypes.fulfilled, (state, action) => {
-        
         state.industryTypes = action.payload;
       })
       .addCase(fetchIndustryTypes.rejected, (state, action) => {
-        
         state.industryTypes = [];
       })
 

@@ -13,7 +13,7 @@ export default defineConfig({
   },
   build: {
     minify: "esbuild",
-    sourcemap: false,
+    sourcemap: true,
     rollupOptions: {
       external: [
         // Remove Adyen from external - let it be bundled

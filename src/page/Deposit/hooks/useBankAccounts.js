@@ -45,7 +45,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ Cleanup function for aborting pending requests
   const cleanupPendingRequests = useCallback(() => {
     if (abortControllerRef.current) {
-      
+      console.log("🛑 Aborting pending request");
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
@@ -54,11 +54,17 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ Debug function to see all available accounts
   const debugAvailableAccounts = useCallback(async () => {
     try {
-      
+      console.log("🔍 Debug: Checking all available accounts from API");
       const response = await depositAPI.getAllManualAccounts();
       
       if (response.data && response.data.account_details) {
-        )
+        console.log("📊 All available accounts:", {
+          total: response.data.count_account_details,
+          currencies: response.data.account_details.map(acc => ({
+            currency: acc.currency,
+            account_id: acc.account_id,
+            bank_name: acc.bank_name
+          }))
         });
         
         // Check if selected currency is available
@@ -66,21 +72,28 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           const hasCurrency = response.data.account_details.some(
             acc => acc.currency === selectedCurrency
           );
-          
+          console.log(`🎯 Selected currency ${selectedCurrency} available:`, hasCurrency);
         }
       }
     } catch (error) {
-      
+      console.error("❌ Debug: Error checking available accounts:", error);
     }
   }, [selectedCurrency]);
 
   // ✅ FIXED: Reset all states when currency changes
   useEffect(() => {
-    
+    console.log("🔄 useBankAccounts - Currency change detected:", {
+      previous: prevCurrencyRef.current,
+      current: selectedCurrency,
+      paymentMethod: paymentMethod,
+    });
 
     // Only clear if currency actually changed
     if (prevCurrencyRef.current !== selectedCurrency) {
-      
+      console.log(
+        "🔄 useBankAccounts - Currency changed, clearing states for:",
+        selectedCurrency
+      );
 
       // Clean up any pending requests
       cleanupPendingRequests();
@@ -106,7 +119,9 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
       prevPaymentMethodRef.current === "manual_deposit" &&
       paymentMethod !== "manual_deposit"
     ) {
-      
+      console.log(
+        "🔄 useBankAccounts - Payment method changed away from manual_deposit, clearing manual details"
+      );
       cleanupPendingRequests();
       dispatch(clearManualAccountDetails());
     }
@@ -130,11 +145,14 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           prevFetchRef.current.paymentMethod === paymentMethod;
 
         if (isDuplicateCall) {
-          
+          console.log("⏩ Skipping duplicate manual details fetch for:", selectedCurrency);
           return;
         }
 
-        
+        console.log("🔄 useBankAccounts - Fetching filtered manual details for:", {
+          currency: selectedCurrency,
+          paymentMethod
+        });
 
         // Debug available accounts first
         await debugAvailableAccounts();
@@ -144,7 +162,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
         try {
           // ✅ Clear any existing mismatched data
           if (manualAccountDetails && manualAccountDetails.currency !== selectedCurrency) {
-            
+            console.log("🔄 Clearing mismatched manual details before fetch");
             dispatch(clearManualAccountDetails());
           }
 
@@ -153,7 +171,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           
           // Check if the request was aborted
           if (abortControllerRef.current.signal.aborted) {
-            
+            console.log("↪️ Request aborted for:", selectedCurrency);
             return;
           }
 
@@ -161,26 +179,29 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           if (fetchManualAccountDetails.fulfilled.match(resultAction)) {
             const result = resultAction.payload;
             if (result && result.currency === selectedCurrency) {
-              
+              console.log("✅ useBankAccounts - Successfully loaded manual details for:", selectedCurrency);
             } else if (result) {
-              
+              console.warn("⚠️ useBankAccounts - Currency mismatch in response:", {
+                expected: selectedCurrency,
+                received: result.currency
+              });
             } else {
-              
+              console.warn("⚠️ useBankAccounts - No account found for:", selectedCurrency);
             }
           } else if (fetchManualAccountDetails.rejected.match(resultAction)) {
-            
+            console.error("❌ useBankAccounts - Manual details fetch rejected:", resultAction.error);
           }
           
         } catch (error) {
           if (error.name === 'AbortError') {
-            
+            console.log("↪️ Manual details fetch aborted for:", selectedCurrency);
           } else {
-            
+            console.error("❌ useBankAccounts - Error in manual details fetch:", error);
           }
         }
       } else if (paymentMethod !== "manual_deposit" && manualAccountDetails) {
         // Clear manual details if payment method changed away from manual_deposit
-        
+        console.log("🔄 Clearing manual details - payment method changed");
         dispatch(clearManualAccountDetails());
       }
     };
@@ -199,16 +220,21 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   useEffect(() => {
     const fetchUSDData = async () => {
       if (selectedCurrency === "USD" && paymentMethod === "bank_transfer") {
-        
+        console.log("🔄 useBankAccounts - Fetching USD bank accounts");
         setUsdAccountsLoading(true);
         setUsdAccountsError(null);
 
         try {
           const accounts = await fetchUSDAccounts();
           setUsdBankAccounts(accounts);
-          
+          console.log(
+            `✅ useBankAccounts - Loaded ${accounts.length} USD bank accounts`
+          );
         } catch (error) {
-          
+          console.error(
+            "❌ useBankAccounts - Error fetching USD accounts:",
+            error
+          );
           setUsdAccountsError("Failed to load USD bank accounts");
           setUsdBankAccounts([]);
         } finally {
@@ -221,7 +247,8 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           usdAccountsLoading ||
           usdAccountsError
         ) {
-          "
+          console.log(
+            "🔄 useBankAccounts - Clearing USD bank accounts (not needed)"
           );
           setUsdBankAccounts([]);
           setUsdAccountsLoading(false);
@@ -237,16 +264,19 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   useEffect(() => {
     const fetchAEDData = async () => {
       if (selectedCurrency === "AED" && paymentMethod === "bank_transfer") {
-        
+        console.log("🔄 useBankAccounts - Fetching AED account details");
         setAedDetailsLoading(true);
         setAedDetailsError(null);
 
         try {
           const details = await fetchAEDDetails();
           setAedAccountDetails(details);
-          
+          console.log("✅ useBankAccounts - Loaded AED account details");
         } catch (error) {
-          
+          console.error(
+            "❌ useBankAccounts - Error fetching AED details:",
+            error
+          );
           setAedDetailsError("Failed to load AED account details");
           setAedAccountDetails(null);
         } finally {
@@ -255,7 +285,8 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
       } else {
         // Clear AED data if not needed
         if (aedAccountDetails || aedDetailsLoading || aedDetailsError) {
-          "
+          console.log(
+            "🔄 useBankAccounts - Clearing AED account details (not needed)"
           );
           setAedAccountDetails(null);
           setAedDetailsLoading(false);
@@ -270,7 +301,9 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ IMPROVED: Final validation - should now always match with client-side filtering
   useEffect(() => {
     if (manualAccountDetails && manualAccountDetails.currency !== selectedCurrency) {
-      
+      console.error(
+        `🚨 CRITICAL: Currency mismatch after client-side filtering! Expected ${selectedCurrency}, got ${manualAccountDetails.currency}. This should not happen with client-side filtering.`
+      );
       dispatch(forceClearManualDetailsForCurrency(selectedCurrency));
     }
   }, [manualAccountDetails, selectedCurrency, dispatch]);
@@ -278,7 +311,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ NEW: Manual refresh function
   const refreshManualDetails = useCallback(async () => {
     if (selectedCurrency && paymentMethod === "manual_deposit") {
-      
+      console.log("🔄 Manual refresh triggered for:", selectedCurrency);
       cleanupPendingRequests();
       dispatch(clearManualAccountDetails());
       prevFetchRef.current = { currency: null, paymentMethod: null };
@@ -293,14 +326,14 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ NEW: Debug function to see all available accounts
   const debugAllAccounts = useCallback(async () => {
     try {
-      
+      console.log("🔍 Debug: Fetching all available accounts");
       const result = await dispatch(fetchAllManualAccounts());
       if (fetchAllManualAccounts.fulfilled.match(result)) {
-        
+        console.log("📊 All available accounts:", result.payload);
         return result.payload;
       }
     } catch (error) {
-      
+      console.error("❌ Debug: Error fetching all accounts:", error);
     }
   }, [dispatch]);
 
@@ -313,7 +346,27 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
 
   // ✅ Comprehensive logging for debugging
   useEffect(() => {
-    
+    console.log("📊 useBankAccounts - State update:", {
+      selectedCurrency,
+      paymentMethod,
+      manualAccountDetails: manualAccountDetails ? {
+        currency: manualAccountDetails.currency,
+        accountId: manualAccountDetails.account_id,
+        bankName: manualAccountDetails.bank_name,
+      } : null,
+      manualDetailsLoading,
+      manualDetailsError,
+      usdAccounts: {
+        count: usdBankAccounts.length,
+        loading: usdAccountsLoading,
+        error: usdAccountsError
+      },
+      aedAccount: {
+        exists: !!aedAccountDetails,
+        loading: aedDetailsLoading,
+        error: aedDetailsError
+      }
+    });
   }, [
     selectedCurrency,
     paymentMethod,

@@ -291,21 +291,17 @@ function NavigateSectionContent({
   };
 
   const handlePayoutClick = () => {
-    try {
-      if (customerStatus === "Deactivated") {
-        showPopup("Your account is deactivated. You cannot request a payout.");
-        return;
-      }
-      if (customerBankApprovedStatus === "0") {
-        showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
-        );
-        return;
-      }
-      navigate(`/remitpayout/${customerId}`);
-    } catch (error) {
-      setLocalError("Failed to navigate to payout");
+    if (customerStatus === "Deactivated") {
+      showPopup("Your account is deactivated. You cannot request a payout.");
+      return;
     }
+    if (customerBankApprovedStatus === "0") {
+      showPopup(
+        "Your Bank account is not approved. You cannot perform this transaction."
+      );
+      return;
+    }
+    navigate(`/payout/${customerId}`);
   };
 
   const handleRemitClick = () => {
