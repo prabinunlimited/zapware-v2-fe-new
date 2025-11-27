@@ -23,15 +23,7 @@ const USDBankDepositInfo = ({
     selectedCurrency === "USD" && paymentMethod === "bank_transfer";
 
   // Debug logging (remove in production)
-  console.log("USDBankDepositInfo Debug:", {
-    selectedCurrency,
-    paymentMethod,
-    selectedBankAccount,
-    usdBankAccounts: usdBankAccounts,
-    loading,
-    error,
-    isUSDTransfer,
-  });
+  
 
   if (!isUSDTransfer) {
     return null;
@@ -87,8 +79,8 @@ const USDBankDepositInfo = ({
     : null;
 
   // Debug selected account
-  console.log("Selected Account:", selectedAccount);
-  console.log("Bank Details:", selectedAccount?.bank_details);
+  
+  
 
   return (
     <motion.div
@@ -138,7 +130,7 @@ const USDBankDepositInfo = ({
           {safeUsdBankAccounts.map((account) => {
             // Ensure account has required properties
             if (!account || !account.id) {
-              console.warn("Invalid bank account found:", account);
+              
               return null;
             }
 

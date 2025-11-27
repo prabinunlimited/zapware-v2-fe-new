@@ -76,9 +76,9 @@ export const initializeApp = createAsyncThunk(
       let bearerToken;
       try {
         bearerToken = await getBearerToken();
-        console.log("✅ Partner token initialized for app");
+        
       } catch (tokenError) {
-        console.error("Token fetch failed:", tokenError);
+        
         throw new Error("Failed to establish secure connection");
       }
 
@@ -86,7 +86,7 @@ export const initializeApp = createAsyncThunk(
       let countriesData;
       if (apiCache.countries) {
         countriesData = apiCache.countries;
-        console.log("✅ Using cached countries data");
+        
       } else {
         const countriesResponse = await api.get("/countries", {
           headers: {
@@ -96,14 +96,14 @@ export const initializeApp = createAsyncThunk(
         countriesData = countriesResponse.data.data;
         apiCache.countries = countriesData;
         localStorage.setItem("allcountries", JSON.stringify(countriesData));
-        console.log("✅ Fetched and cached countries data");
+        
       }
 
       // 4. Fetch partner details with caching
       let partnerData;
       if (apiCache.partnerDetail) {
         partnerData = apiCache.partnerDetail;
-        console.log("✅ Using cached partner details");
+        
       } else {
         const partnerResponse = await api.get(
           `/partners/get-partner-detail/${hostname}`,
@@ -115,7 +115,7 @@ export const initializeApp = createAsyncThunk(
         );
         partnerData = partnerResponse.data.data;
         apiCache.partnerDetail = partnerData;
-        console.log("✅ Fetched and cached partner details");
+        
       }
 
       // Store partner details in localStorage
@@ -138,7 +138,7 @@ export const initializeApp = createAsyncThunk(
         let partnerConfig;
         if (apiCache.partnerConfig) {
           partnerConfig = apiCache.partnerConfig;
-          console.log("✅ Using cached partner config");
+          
         } else {
           const configResponse = await api.get(
             `/partner-basic-setup/${partnerData.partner_id}`,
@@ -159,7 +159,7 @@ export const initializeApp = createAsyncThunk(
               partnerConfig.download_operation_manual
             );
             window.dispatchEvent(new Event("storage"));
-            console.log("✅ Fetched and cached partner config");
+            
           }
         }
       }
@@ -168,7 +168,7 @@ export const initializeApp = createAsyncThunk(
       let gifImagesData;
       if (apiCache.gifImages) {
         gifImagesData = apiCache.gifImages;
-        console.log("✅ Using cached GIF images");
+        
       } else {
         const gifResponse = await api.get("/gif-images", {
           headers: {
@@ -177,7 +177,7 @@ export const initializeApp = createAsyncThunk(
         });
         gifImagesData = gifResponse.data.images || [];
         apiCache.gifImages = gifImagesData;
-        console.log("✅ Fetched and cached GIF images");
+        
       }
 
       // 7. Fetch logout time
@@ -189,9 +189,9 @@ export const initializeApp = createAsyncThunk(
         });
         const dataExpiryTime = logoutTimeResponse.data.expiry_time * 60 * 1000;
         localStorage.setItem("logoutTime", dataExpiryTime);
-        console.log("✅ Fetched logout time");
+        
       } catch (err) {
-        console.log("Failed to fetch timer setup");
+        
       }
 
       // Dispatch all data to store
@@ -213,7 +213,7 @@ export const initializeApp = createAsyncThunk(
       // Mark as initialized
       dispatch({ type: "auth/setInitialized", payload: true });
 
-      console.log("✅ App initialization completed successfully");
+      
 
       return {
         hostname,
@@ -223,7 +223,7 @@ export const initializeApp = createAsyncThunk(
       };
     } catch (error) {
       isInitializing = false;
-      console.error("❌ App initialization failed:", error);
+      
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
@@ -252,10 +252,7 @@ export const generatePasscode = createAsyncThunk(
         payload.customer_type = customer_type;
       }
 
-      console.log(
-        "🔄 Generating passcode with token:",
-        token ? "✅ Available" : "❌ Missing"
-      );
+      
 
       const response = await api.post("/request-passcode-login", payload, {
         headers: {
@@ -264,7 +261,7 @@ export const generatePasscode = createAsyncThunk(
         },
       });
 
-      console.log("API Response:", response.data);
+      
 
       // Handle multiple accounts scenario
       if (
@@ -299,7 +296,7 @@ export const generatePasscode = createAsyncThunk(
 
       return rejectWithValue("Unexpected response format from server");
     } catch (error) {
-      console.error("Passcode generation error:", error);
+      
 
       if (error.response) {
         const responseData = error.response.data;
@@ -353,12 +350,7 @@ export const verifyPasscode = createAsyncThunk(
     try {
       dispatch({ type: "auth/setVerifyingPasscode", payload: true });
 
-      console.log("🔍 [verifyPasscode] Starting verification with:", {
-        email,
-        passcodeLength: passcode?.length,
-        sign_in_option,
-        hasPassword: !!password,
-      });
+      
 
       // Validate inputs
       if (!email || !passcode) {
@@ -388,10 +380,7 @@ export const verifyPasscode = createAsyncThunk(
         payload.customer_type = customer_type;
       }
 
-      console.log("📤 [verifyPasscode] Sending payload:", {
-        ...payload,
-        password: password ? "***" : "not provided",
-      });
+      
 
       const response = await api.post("/login", payload, {
         headers: {
@@ -400,18 +389,16 @@ export const verifyPasscode = createAsyncThunk(
         },
       });
 
-      console.log("✅ [verifyPasscode] Login API Response:", response.data);
+      
 
       if (response.data?.status === "success" && response.data?.data) {
         const responseData = response.data.data;
 
-        console.log("🔍 [verifyPasscode] Success response data:", responseData);
+        
 
         // ✅ FIX: Store temporary auth data for KYC flow
         if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log(
-            "🚫 [verifyPasscode] KYC NOT VERIFIED - Storing temp auth data"
-          );
+          
 
           // Store temporary authentication data
           const tempAuthData = {
@@ -432,7 +419,7 @@ export const verifyPasscode = createAsyncThunk(
             responseData.plaid_status === "success" &&
             responseData.plaid_url
           ) {
-            console.log("✅ Redirecting to Plaid for KYC verification");
+            
             return {
               requiresPlaidRedirect: true,
               plaidUrl: responseData.plaid_url,
@@ -446,9 +433,7 @@ export const verifyPasscode = createAsyncThunk(
             };
           }
 
-          console.log(
-            "🔄 Attempting to initiate Plaid flow for KYC verification"
-          );
+          
           try {
             const plaidResponse = await dispatch(
               initiatePlaidFlow({
@@ -458,9 +443,7 @@ export const verifyPasscode = createAsyncThunk(
             ).unwrap();
 
             if (plaidResponse.url) {
-              console.log(
-                "✅ Plaid URL obtained, redirecting for KYC verification"
-              );
+              
               return {
                 requiresPlaidRedirect: true,
                 plaidUrl: plaidResponse.url,
@@ -474,7 +457,7 @@ export const verifyPasscode = createAsyncThunk(
               };
             }
           } catch (plaidError) {
-            console.error("❌ Plaid initiation failed:", plaidError);
+            
             // Even if Plaid fails, store the temp auth data
             return {
               requiresKycVerification: true,
@@ -489,7 +472,7 @@ export const verifyPasscode = createAsyncThunk(
 
         // Handle owner login
         if (responseData.is_owner_login === "1") {
-          console.log("👑 Owner login detected - bypassing KYC check");
+          
           return {
             is_owner_login: true,
             owner_id: responseData.owner_id,
@@ -508,7 +491,7 @@ export const verifyPasscode = createAsyncThunk(
         }
 
         // ✅ Successful login with KYC verified - IMPLEMENTED AS REQUESTED
-        console.log("✅ KYC verified - allowing login");
+        
         return {
           token: responseData.token, // ✅ Make sure this is included
           customer_id: responseData.customer_id, // ✅ Make sure this is included
@@ -551,7 +534,7 @@ export const verifyPasscode = createAsyncThunk(
 
       throw new Error("Invalid server response format");
     } catch (error) {
-      console.error("❌ [verifyPasscode] Verification failed:", error);
+      
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
@@ -666,7 +649,7 @@ export const verifyOTP = createAsyncThunk(
         },
       });
 
-      console.log("✅ OTP verification response:", response.data);
+      
 
       // Handle successful response
       if (response.data.status === "success") {
@@ -677,7 +660,7 @@ export const verifyOTP = createAsyncThunk(
           response.data?.plaid_status === "success" &&
           response.data?.plaid_url
         ) {
-          console.log("🎯 Redirecting to Plaid from login response");
+          
 
           sessionStorage.setItem(
             "pending_mobile_auth",
@@ -699,7 +682,7 @@ export const verifyOTP = createAsyncThunk(
 
         // Handle KYC verification required
         if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log("🎯 KYC verification required, initiating Plaid flow");
+          
 
           sessionStorage.setItem(
             "pending_mobile_auth",
@@ -728,7 +711,7 @@ export const verifyOTP = createAsyncThunk(
               };
             }
           } catch (plaidError) {
-            console.error("❌ Plaid initiation failed:", plaidError);
+            
             return {
               requiresKycVerification: true,
               kyc_status: responseData.kyc_status,
@@ -778,7 +761,7 @@ export const verifyOTP = createAsyncThunk(
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
-      console.error("❌ OTP verification failed:", error);
+      
 
       const errorMessage = extractErrorMessage(error);
 
@@ -797,7 +780,7 @@ export const sendOtp = createAsyncThunk(
     try {
       const token = await getBearerToken();
 
-      console.log("🔄 Sending OTP to:", mobileNumber);
+      
 
       // ✅ UPDATED: Use the same endpoint as reference code
       const response = await api.post(
@@ -813,7 +796,7 @@ export const sendOtp = createAsyncThunk(
         }
       );
 
-      console.log("✅ Send OTP response:", response.data);
+      
 
       // ✅ ADDED: Fetch OTP counter info after successful OTP send (like reference code)
       if (response.data.status === "success") {
@@ -839,10 +822,10 @@ export const sendOtp = createAsyncThunk(
               });
             }
 
-            console.log("✅ OTP counter info:", otpInfo);
+            
           }
         } catch (otpCounterError) {
-          console.warn("⚠️ Could not fetch OTP counter info:", otpCounterError);
+          
           // Continue without OTP counter info - not critical
         }
       }
@@ -864,7 +847,7 @@ export const sendOtp = createAsyncThunk(
         data: response.data?.data || {},
       };
     } catch (error) {
-      console.error("❌ Send OTP error:", error);
+      
 
       const errorMessage = extractErrorMessage(error);
 
@@ -894,12 +877,7 @@ export const validateOtp = createAsyncThunk(
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
-      console.log("🔄 validateOtp thunk called with:", {
-        country_code,
-        mobile_number,
-        mobile_number_type: typeof mobile_number,
-        mobile_number_length: mobile_number.length,
-        mobile_number_has_dashes: mobile_number.includes("-"),
+      ,
         otp: Array.isArray(otp) ? otp.join("") : otp,
       });
 
@@ -918,11 +896,9 @@ export const validateOtp = createAsyncThunk(
         currentDate: currentDateTimeLocal,
       };
 
-      console.log(
-        "📤 Sending OTP verification to /validate-otp:",
-        JSON.stringify(payload, null, 2)
+      
       );
-      console.log("🔍 Full mobile number being sent:", full_mobile_number);
+      
 
       const response = await api.post("/validate-otp", payload, {
         headers: {
@@ -931,7 +907,7 @@ export const validateOtp = createAsyncThunk(
         },
       });
 
-      console.log("✅ OTP verification response:", response.data);
+      
 
       // Handle successful response
       if (response.data.status === "success") {
@@ -952,7 +928,7 @@ export const validateOtp = createAsyncThunk(
 
         // Handle Plaid redirect
         if (responseData.plaid_status === "success" && responseData.plaid_url) {
-          console.log("🎯 Plaid redirect required");
+          
 
           sessionStorage.setItem(
             "pending_mobile_auth",
@@ -976,23 +952,23 @@ export const validateOtp = createAsyncThunk(
         }
 
         if (responseData.kyc_status === 1 || responseData.kyc_status === "1") {
-          console.log("✅ KYC already verified");
+          
           return successResponse;
         } else {
-          console.log("🚫 KYC verification required");
+          
           return {
             ...successResponse,
             requiresKycVerification: true,
           };
         }
       } else {
-        console.log("❌ OTP verification failed:", response.data);
+        
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
-      console.error("❌ OTP verification failed:", error);
-      console.log("🔍 Error response data:", error.response?.data);
-      console.log("🔍 Error status:", error.response?.status);
+      
+      
+      
 
       const errorMessage = extractErrorMessage(error);
       dispatch({ type: "auth/setError", payload: errorMessage });
@@ -1018,7 +994,7 @@ export const initiatePlaidFlow = createAsyncThunk(
       const token = await getBearerToken();
       const customerId = customerData.customerId;
 
-      console.log("🔄 Initiating Plaid flow for customer:", customerId);
+      
 
       // ✅ CRITICAL: Enhanced customerId validation
       if (
@@ -1029,7 +1005,7 @@ export const initiatePlaidFlow = createAsyncThunk(
       ) {
         const errorMsg =
           "Invalid customer ID for KYC verification. Please contact support.";
-        console.error("❌", errorMsg);
+        
         throw new Error(errorMsg);
       }
 
@@ -1038,38 +1014,35 @@ export const initiatePlaidFlow = createAsyncThunk(
 
       // ✅ STRATEGY 1: Try the main backend endpoint
       try {
-        console.log("🔄 Trying backend endpoint: GET /kycs/" + customerId);
+        
         const response = await api.get(`/kycs/${customerId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        console.log("✅ Backend KYC response:", response.data);
+        
 
         if (response.data.kyc_url) {
           plaidUrl = response.data.kyc_url;
           message = "Bank verification ready";
-          console.log("✅ Plaid URL obtained from backend");
+          
         } else {
           throw new Error("No KYC URL in response");
         }
       } catch (backendError) {
-        console.log(
-          "❌ Backend endpoint failed:",
-          backendError.response?.data || backendError.message
-        );
+        
 
         // If customer not found (404), provide specific guidance
         if (backendError.response?.status === 404) {
           const errorMsg =
             "Customer account not found in verification system. This usually means your KYC profile needs to be created. Please contact support.";
-          console.error("❌", errorMsg);
+          
           throw new Error(errorMsg);
         }
 
         // ✅ STRATEGY 2: Try alternative endpoint for KYC initiation
-        console.log("🔄 Trying alternative KYC initiation endpoint");
+        
         try {
           const initiateResponse = await api.post(
             "/kyc/initiate",
@@ -1088,15 +1061,12 @@ export const initiatePlaidFlow = createAsyncThunk(
             plaidUrl =
               initiateResponse.data.kyc_url || initiateResponse.data.url;
             message = "Bank verification initiated";
-            console.log("✅ Plaid URL obtained from initiation endpoint");
+            
           } else {
             throw new Error("No URL in initiation response");
           }
         } catch (initiateError) {
-          console.log(
-            "❌ Initiation endpoint failed:",
-            initiateError.response?.data || initiateError.message
-          );
+          
           throw new Error(
             "KYC system temporarily unavailable. Please try again later or contact support."
           );
@@ -1108,7 +1078,7 @@ export const initiatePlaidFlow = createAsyncThunk(
         throw new Error("Failed to obtain verification link");
       }
 
-      console.log("✅ Final Plaid URL:", plaidUrl);
+      
 
       dispatch({
         type: "auth/setPlaidStatus",
@@ -1125,7 +1095,7 @@ export const initiatePlaidFlow = createAsyncThunk(
         customerId: customerId,
       };
     } catch (error) {
-      console.error("❌ Plaid initiation failed:", error);
+      
 
       const errorMessage = extractErrorMessage(error);
       dispatch({ type: "auth/setPlaidError", payload: errorMessage });
@@ -1143,7 +1113,7 @@ export const processPlaidKycCallback = createAsyncThunk(
   "auth/processPlaidKycCallback",
   async (callbackData, { dispatch, rejectWithValue }) => {
     try {
-      console.log("🔄 Processing Plaid KYC callback:", callbackData);
+      
 
       const {
         identity_verification_id,
@@ -1182,13 +1152,10 @@ export const processPlaidKycCallback = createAsyncThunk(
             }
           );
 
-          console.log(`✅ Callback processed via ${endpoint}:`, response.data);
+          
           break;
         } catch (endpointError) {
-          console.log(
-            `❌ Callback endpoint ${endpoint} failed:`,
-            endpointError.response?.data || endpointError.message
-          );
+          
           continue;
         }
       }
@@ -1213,7 +1180,7 @@ export const processPlaidKycCallback = createAsyncThunk(
         );
       }
     } catch (error) {
-      console.error("❌ KYC callback processing error:", error);
+      
 
       const errorMessage = extractErrorMessage(error);
 
@@ -1384,7 +1351,7 @@ export const loginUser = createAsyncThunk(
 
       throw new Error(response.data.message || "Login failed");
     } catch (error) {
-      console.error("Login error:", error);
+      
 
       let errorMessage = extractErrorMessage(error);
       let modalActions = [];

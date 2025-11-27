@@ -1,3 +1,4 @@
+// src/components/PopupModal/SSNConfirmationPopup.js
 import React from "react";
 import PropTypes from "prop-types";
 import { ShieldAlert } from "lucide-react";

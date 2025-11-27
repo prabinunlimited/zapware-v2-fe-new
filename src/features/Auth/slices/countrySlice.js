@@ -2383,18 +2383,8 @@ export const fetchCountries = createAsyncThunk(
   "countries/fetchCountries",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🌍 Using static countries data");
-      console.log("📊 Countries data structure:", {
-        total: countries.length,
-        firstCountry: countries[0],
-        keys: Object.keys(countries[0]),
-        hasPhoneCode: countries[0].hasOwnProperty('phone_code'),
-        hasPhoneCodeValue: countries[0].phone_code,
-        sampleData: countries.slice(0, 3) // First 3 countries
-      });
       return countries;
     } catch (error) {
-      console.error("💥 Error loading countries:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -2411,7 +2401,6 @@ export const fetchCountry = createAsyncThunk(
       }
       return country;
     } catch (error) {
-      console.error("Failed to fetch country:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -2472,17 +2461,10 @@ const countriesSlice = createSlice({
         state.countries = action.payload;
         state.error = null;
         state.lastUpdated = new Date().getTime();
-
-         console.log("✅ Countries loaded into Redux:", {
-        count: action.payload.length,
-        stateCount: state.countries.length,
-        sample: state.countries.slice(0, 2)
-      });
       })
       .addCase(fetchCountries.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || action.error.message;
-        console.error("❌ Countries fetch rejected:", state.error);
       })
       // Fetch single country
       .addCase(fetchCountry.pending, (state) => {
@@ -2531,30 +2513,24 @@ export const selectCountriesByRegion = (state, region) =>
 export const selectCountriesOptions = createSelector(
   [(state) => state.countries?.countries || []],
   (countries) => {
-    console.log("🔍 selectCountriesOptions - raw countries data:", {
-      countriesCount: countries.length,
-      isArray: Array.isArray(countries),
-      firstItem: countries[0],
-      allKeys: countries.length > 0 ? Object.keys(countries[0]) : 'no data'
-    });
-
     if (!countries || !Array.isArray(countries)) {
-      console.warn("⚠️ No countries data available for options");
       return [];
     }
 
-    const options = countries.map((country) => ({
-      value: country.name,
-      label: country.name,
-      phoneCode: country.phone_code || country.phoneCode,
-      country_code: country.country_code,
-      id: country.id,
-    }));
+    const options = countries.map((country) => {
+      // ✅ KEEP the original phone code format for searching
+      const rawPhoneCode = country.phone_code || country.phoneCode || "";
 
-    console.log("🔄 Processed country options:", {
-      optionsCount: options.length,
-      firstOption: options[0],
-      optionsStructure: options.slice(0, 3) // First 3 options
+      return {
+        value: country.name,
+        label: country.name,
+        phoneCode: rawPhoneCode, // ✅ Keep original format with +
+        country_code: country.country_code,
+        id: country.id,
+        flag: country.flag_url,
+        flag_url: country.flag_url,
+        originalData: country,
+      };
     });
 
     return options;
@@ -2566,7 +2542,6 @@ export const selectCountriesOptionsSafe = (state) => {
   try {
     return selectCountriesOptions(state);
   } catch (error) {
-    console.warn("Error in selectCountriesOptions, using fallback:", error);
     return [
       {
         value: 186,
@@ -2593,7 +2568,14 @@ export const selectPhoneCodeOptions = createSelector(
     return countries.map((country) => ({
       value: country.phone_code,
       label: `${country.phone_code} (${country.name})`,
-      country: country,
+      country: {
+        id: country.id, // ✅ Explicitly pass the ID
+        name: country.name, // ✅ Pass other needed properties
+        flag_url: country.flag_url,
+      },
+      // Or as an alternative, you can add these at the top level:
+      countryId: country.id, // ✅ Direct access to country ID
+      countryName: country.name,
     }));
   }
 );

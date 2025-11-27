@@ -211,7 +211,6 @@ const AddBeneficiary = () => {
     initialValues: {
       name: "",
       country_id: "",
-      phone_code_country_id: "",
       country_phone_code: "+1",
       phone_number: "",
       email: "",
@@ -242,7 +241,6 @@ const AddBeneficiary = () => {
         name: values.name,
         email: values.email,
         country_id: values.country_id,
-        country_phone_code: values.country_phone_code,
         phone_number: values.phone_number,
         state: values.state,
         city: values.city,
@@ -280,13 +278,7 @@ const AddBeneficiary = () => {
   });
 
   useEffect(() => {
-    console.log("🔍 Environment Debug:", {
-      VITE_API_URL: import.meta.env.VITE_API_URL,
-      customerId: customerId,
-      fullURL: `${
-        import.meta.env.VITE_API_URL
-      }/beneficiaries/customer-view/${customerId}`,
-    });
+    
   }, [customerId]);
 
   // Fetch initial data
@@ -329,9 +321,9 @@ const AddBeneficiary = () => {
 
   // Debug countries data
   useEffect(() => {
-    console.log("🌍 Countries Options:", countriesOptions);
-    console.log("🌍 Countries Data:", countries);
-    console.log("🌍 Phone Code Options:", phoneCodeOptions);
+    
+    
+    
   }, [countriesOptions, countries, phoneCodeOptions]);
 
   // Get cities for selected country
@@ -378,7 +370,7 @@ const AddBeneficiary = () => {
 
   const handleCurrencyChange = async (e) => {
     const newCurrency = e.target.value;
-    console.log("new currencies", newCurrency);
+    
     setCurrency(newCurrency);
 
     // Fetch ID types for the currency
@@ -510,7 +502,6 @@ const AddBeneficiary = () => {
     const beneficiaryData = {
       name: formik.values.name,
       country_id: formik.values.country_id,
-      country_phone_code: formik.values.country_phone_code,
       phone_number: formik.values.phone_number,
       email: formik.values.email,
       beneftype: formik.values.beneftype,
@@ -540,7 +531,7 @@ const AddBeneficiary = () => {
 
       resetForm();
     } catch (error) {
-      console.error("Failed to create beneficiary:", error);
+      
     } finally {
       setLoading(false);
     }
@@ -634,10 +625,7 @@ const AddBeneficiary = () => {
             "country_phone_code",
             selectedOption?.value || ""
           );
-          formik.setFieldValue(
-            "phone_code_country_id",
-            selectedOption?.country?.id || ""
-          );
+          // ✅ No need to set phone_code_country_id anymore
         }}
         value={phoneCodeOptions.find(
           (option) => option.value === formik.values.country_phone_code
@@ -663,13 +651,31 @@ const AddBeneficiary = () => {
   const renderCountryDropdown = () => (
     <select
       className="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      onChange={formik.handleChange}
+      onChange={(e) => {
+        const selectedCountryId = e.target.value;
+        const selectedCountry = countries.find(
+          (country) => country.id === parseInt(selectedCountryId)
+        );
+
+        // ✅ Set the country ID (numeric) not the name
+        formik.setFieldValue("country_id", selectedCountryId);
+
+        // ✅ Automatically set the phone code when country is selected
+        if (selectedCountry) {
+          formik.setFieldValue(
+            "country_phone_code",
+            selectedCountry.phone_code || "+1"
+          );
+        }
+      }}
       value={formik.values.country_id}
       name="country_id"
     >
       <option value="">Select Country</option>
       {countriesOptions.map((country) => (
-        <option key={country.value} value={country.value}>
+        <option key={country.value} value={country.id}>
+          {" "}
+          {/* ✅ Use country.id here */}
           {country.label} ({country.country_code})
         </option>
       ))}

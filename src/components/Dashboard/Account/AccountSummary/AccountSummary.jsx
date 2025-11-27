@@ -43,10 +43,14 @@ import {
   selectAccountError,
   selectHasFetchedAccount,
   selectAccountDropdown,
+} from "./AccountSlice";
+
+// Import hooks from separate file
+import {
   useAccountData,
   useAccountSelection,
   useAccountBalance,
-} from "./AccountSlice";
+} from "./accountHooks";
 
 // Import UI slice actions and selectors separately
 import {
@@ -182,7 +186,6 @@ const useTokenSync = () => {
     const localStorageToken = localStorage.getItem("authtoken");
 
     if (authtoken && localStorageToken && authtoken !== localStorageToken) {
-      console.warn("🔁 Token mismatch detected, updating localStorage...");
       localStorage.setItem("authtoken", authtoken);
     }
   }, [authtoken]);
@@ -245,39 +248,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     [config?.text_color, textColor]
   );
 
-  // ✅ OPTIMIZED ACCOUNT DEBUGGING - Only log when data changes significantly
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔍 ACCOUNT DEBUG INFORMATION:");
-      console.log("📊 Raw accounts data:", accounts);
-      console.log("🔄 Safe accounts array:", safeAccounts);
-      console.log("📈 Safe accounts length:", safeAccounts.length);
-      console.log("✅ Has accounts:", hasAccounts);
-      console.log("🎯 Selected account:", selectedAccount);
-      console.log("💰 Selected currency:", selectedCurrency);
-      console.log("⏳ Account loading:", accountLoading);
-      console.log("🔄 Has fetched account:", hasFetchedAccount);
-      console.log("❌ Account error:", accountError);
-      
-      // Log individual account details
-      if (safeAccounts.length > 0) {
-        console.log("📋 INDIVIDUAL ACCOUNT DETAILS:");
-        safeAccounts.forEach((account, index) => {
-          console.log(`  Account ${index + 1}:`, {
-            currency: account.currency,
-            available_balance: account.available_balance,
-            flag_url: account.flag_url,
-            account_number: account.account_number,
-            iban: account.iban,
-            id: account.id
-          });
-        });
-      } else {
-        console.log("📭 No accounts available in safeAccounts array");
-      }
-    }
-  }, [accounts, safeAccounts, hasAccounts, selectedAccount, selectedCurrency, accountLoading, hasFetchedAccount, accountError]);
-
   // Balance animation effect - optimized
   useEffect(() => {
     if (selectedAccount?.available_balance !== undefined) {
@@ -311,32 +281,25 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   }, [dispatch, accountDropdown.isOpen]);
 
   // ✅ FIXED: Transaction completion handler - NO ACCOUNT REFRESH
-  const handleTransactionComplete = useCallback(async (shouldRefresh = false) => {
-    console.log("✅ Transaction completed, refreshing data:", { shouldRefresh });
-    
-    if (shouldRefresh) {
-      // Only refresh if explicitly requested (e.g., after a new transaction)
-      fetchAccountData(true); // Force refresh
-    } else {
-      // Just update the transaction data without refreshing accounts
-      console.log("⏸️ Transaction completion - no account refresh needed");
-    }
-  }, [fetchAccountData]);
+  const handleTransactionComplete = useCallback(
+    async (shouldRefresh = false) => {
+      if (shouldRefresh) {
+        // Only refresh if explicitly requested (e.g., after a new transaction)
+        fetchAccountData(true); // Force refresh
+      } else {
+        // Just update the transaction data without refreshing accounts
+      }
+    },
+    [fetchAccountData]
+  );
 
   // ✅ OPTIMIZED HANDLERS WITH useCallback
   const handleDropdownToggle = useCallback(() => {
-    console.log("📋 Dropdown toggle - Available accounts:", safeAccounts.length);
     dispatch(setAccountDropdownOpen(!accountDropdown.isOpen));
   }, [dispatch, accountDropdown.isOpen, safeAccounts.length]);
 
   const handleAccountChange = useCallback(
     (account) => {
-      console.log("🔄 Account change selected:", {
-        currency: account.currency,
-        balance: account.available_balance,
-        account_number: account.account_number
-      });
-      
       setAccount(account);
       const newCurrency = account.currency || "all";
       setCurrency(newCurrency);
@@ -351,19 +314,16 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   );
 
   const handleAccountDetailsClick = useCallback(() => {
-    console.log("👁️ Account details clicked for:", selectedAccount);
     if (selectedAccount) {
       dispatch(openAccountDetailsModal(selectedAccount));
     }
   }, [dispatch, selectedAccount]);
 
   const handleCloseModal = useCallback(() => {
-    console.log("❌ Closing account details modal");
     dispatch(closeAccountDetailsModal());
   }, [dispatch]);
 
   const handleBankLetter = useCallback(() => {
-    console.log("🏦 Bank letter requested for customer:", customerId);
     if (!customerId) {
       alert("Customer ID not found!");
       return;
@@ -375,14 +335,12 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   }, [customerId, navigate, selectedAccount]);
 
   const handleExcelExport = useCallback(() => {
-    console.log("📊 Excel export requested for customer:", customerId);
     if (customerId && bearertoken) {
       dispatch(exportTransactionsToExcel({ customerId, bearertoken }));
     }
   }, [customerId, bearertoken, dispatch]);
 
   const handleBalanceUpdate = useCallback(async () => {
-    console.log("🔄 Balance update requested");
     updateBalance();
   }, [updateBalance]);
 
@@ -458,7 +416,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
 
   // ✅ Show empty state if no accounts and not loading
   if (!hasAccounts && !accountLoading) {
-    console.log("📭 Rendering empty state - no accounts available");
     return (
       <div className="flex flex-col justify-center items-center w-full space-y-6">
         <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
@@ -479,7 +436,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
 
   // ✅ FIX: Safe error handling - AFTER all hooks
   if (accountError) {
-    console.log("❌ Rendering error state:", accountError);
     return (
       <SafeErrorDisplay
         error={accountError}
@@ -487,8 +443,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       />
     );
   }
-
-  console.log("🎨 Rendering AccountSummary component with", safeAccounts.length, "accounts");
 
   return (
     <motion.div

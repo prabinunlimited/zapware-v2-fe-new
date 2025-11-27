@@ -10,7 +10,7 @@ import Login from "../src/features/Auth/Login/Login";
 import SignUpIndividual from "../src/features/Auth/SignUp/SignUpIndividual";
 import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
-import OpenCurrencyAccount from "../src/features/Auth/Registration/CurrencySelectAccount";
+import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
 import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";

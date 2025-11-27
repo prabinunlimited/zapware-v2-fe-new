@@ -51,20 +51,20 @@ const useFixedCurrency = (initialCurrency) => {
   const accountLoading = useSelector(selectAccountLoading);
   const accountError = useSelector(selectAccountError);
 
-  console.log("🔍 useFixedCurrency - Raw accounts from Redux:", accounts);
-  console.log("⏳ useFixedCurrency - Loading state:", accountLoading);
-  console.log("❌ useFixedCurrency - Error state:", accountError);
+  
+  
+  
 
   useEffect(() => {
     // Pre-check and ensure token is available before any API calls
     const ensureToken = async () => {
-      console.log("🔐 Pre-checking token status...");
+      
 
       const tokenInfo = tokenService.debugToken();
-      console.log("📊 Token debug info:", tokenInfo);
+      
 
       if (!tokenInfo.exists) {
-        console.log("🔄 No token found, attempting to get partner token...");
+        
         try {
           // ✅ SIMPLER: Use axios directly to get partner token
           const response = await axios.post(
@@ -82,19 +82,15 @@ const useFixedCurrency = (initialCurrency) => {
           if (response.data?.data?.token) {
             const newToken = response.data.data.token;
             tokenService.setToken(newToken);
-            console.log("✅ Partner token obtained and stored");
+            
           } else {
-            console.error("❌ Failed to get partner token - invalid response");
+            
           }
         } catch (error) {
-          console.error("❌ Token pre-check failed:", error);
+          
         }
       } else {
-        console.log("✅ Token is available:", {
-          isValid: tokenInfo.validation?.isValid,
-          isJWT: tokenInfo.validation?.isJWT,
-          isExpired: tokenInfo.validation?.isExpired,
-        });
+        
       }
     };
 
@@ -104,23 +100,18 @@ const useFixedCurrency = (initialCurrency) => {
   // Transform accounts to currencies format
   const currencies = useMemo(() => {
     if (accountLoading) {
-      console.log(
-        "⏳ useFixedCurrency - Still loading accounts, returning empty array"
-      );
+      
       return [];
     }
 
     if (accountError) {
-      console.log("❌ useFixedCurrency - Account error, returning empty array");
+      
       return [];
     }
 
     const safeAccounts = Array.isArray(accounts) ? accounts : [];
 
-    console.log(
-      "🔄 useFixedCurrency - Transforming accounts to currencies. Account count:",
-      safeAccounts.length
-    );
+    
 
     const transformed = safeAccounts.map((account, index) => {
       const currencyObj = {
@@ -138,23 +129,13 @@ const useFixedCurrency = (initialCurrency) => {
         ...account,
       };
 
-      console.log(`   Currency ${index + 1}:`, {
-        currency_code: currencyObj.currency_code,
-        currency: currencyObj.currency,
-        balance: currencyObj.available_balance,
-        account_name: currencyObj.account_name,
-      });
+      
 
       return currencyObj;
     });
 
-    console.log(
-      "✅ useFixedCurrency - Successfully transformed currencies:",
-      transformed.length
-    );
-    console.log(
-      "📋 Available currencies:",
-      transformed.map((c) => c.currency_code).join(", ")
+    
+     => c.currency_code).join(", ")
     );
 
     return transformed;
@@ -162,43 +143,24 @@ const useFixedCurrency = (initialCurrency) => {
 
   // Handle initial currency selection
   useEffect(() => {
-    console.log("🎯 useFixedCurrency - Initial currency effect:", {
-      initialCurrency,
-      currenciesCount: currencies.length,
-      currencies: currencies.map((c) => c.currency_code),
+     => c.currency_code),
     });
 
     if (initialCurrency && currencies.length > 0) {
       const exists = currencies.some(
         (currency) => currency.currency_code === initialCurrency
       );
-      console.log(
-        "🔍 useFixedCurrency - Initial currency exists:",
-        exists,
-        initialCurrency
-      );
+      
 
       if (exists) {
-        console.log(
-          "✅ useFixedCurrency - Initial currency is available:",
-          initialCurrency
-        );
+        
       } else {
-        console.log(
-          "⚠️ useFixedCurrency - Initial currency not found in available currencies:",
-          initialCurrency
-        );
+        
       }
     } else if (currencies.length > 0) {
-      console.log(
-        "ℹ️ useFixedCurrency - No initial currency provided, but",
-        currencies.length,
-        "currencies available"
-      );
+      
     } else {
-      console.log(
-        "📭 useFixedCurrency - No currencies available for initial selection"
-      );
+      
     }
   }, [initialCurrency, currencies]);
 
@@ -210,11 +172,7 @@ const useFixedCurrency = (initialCurrency) => {
       error: accountError,
     };
 
-    console.log("📦 useFixedCurrency - Returning state:", {
-      currenciesCount: state.currencies.length,
-      loading: state.loading,
-      error: state.error,
-    });
+    
 
     return state;
   }, [currencies, accountLoading, accountError]);
@@ -233,7 +191,7 @@ const useSafeCurrency = (initialCurrency) => {
       error: result.error || null,
     };
   } catch (error) {
-    console.error("Error in useCurrency hook:", error);
+    
     return {
       currencies: [],
       loading: false,
@@ -248,7 +206,7 @@ const useSafeDeposit = () => {
 
     // Enhanced safety check
     if (!result || typeof result !== "object") {
-      console.warn("useDeposit returned invalid result:", result);
+      
       return getDepositFallback();
     }
 
@@ -266,27 +224,27 @@ const useSafeDeposit = () => {
       manualAccountDetails: result.manualAccountDetails || null,
       setSelectedCurrency:
         result.setSelectedCurrency ||
-        (() => console.log("setSelectedCurrency called")),
+        (() => ),
       setPaymentMethod:
         result.setPaymentMethod ||
-        (() => console.log("setPaymentMethod called")),
-      setAmount: result.setAmount || (() => console.log("setAmount called")),
-      setPurpose: result.setPurpose || (() => console.log("setPurpose called")),
+        (() => ),
+      setAmount: result.setAmount || (() => ),
+      setPurpose: result.setPurpose || (() => ),
       setSelectedBankAccount:
         result.setSelectedBankAccount ||
-        (() => console.log("setSelectedBankAccount called")),
+        (() => ),
       handleSubmit:
         result.handleSubmit ||
         ((e) => {
           e.preventDefault();
-          console.log("handleSubmit called");
+          
         }),
       resetTransaction:
         result.resetTransaction ||
-        (() => console.log("resetTransaction called")),
+        (() => ),
     };
   } catch (error) {
-    console.error("Error in useDeposit hook:", error);
+    
     return getDepositFallback();
   }
 };
@@ -324,7 +282,7 @@ const useSafePaymentMethods = (selectedCurrency, currencies) => {
       methods: Array.isArray(result.methods) ? result.methods : [],
     };
   } catch (error) {
-    console.error("Error in usePaymentMethods hook:", error);
+    
     return {
       loading: false,
       error: "Failed to load payment methods",
@@ -368,18 +326,7 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       (state) => state.bankAccounts?.aedDetailsLoading || false
     );
 
-    console.log("🔄 useSafeBankAccounts - CORRECTED Redux state:", {
-      selectedCurrency,
-      paymentMethod,
-      // From deposit slice
-      manualAccountDetails,
-      manualDetailsLoading,
-      manualDetailsError,
-      manualDetailsCurrency: manualAccountDetails?.currency,
-      // From bankAccounts slice
-      usdBankAccountsCount: usdBankAccounts.length,
-      aedAccountDetails: !!aedAccountDetails,
-    });
+    
 
     // ✅ ENHANCED: Clear data immediately on currency mismatch
     let filteredManualDetails = manualAccountDetails;
@@ -388,9 +335,7 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       filteredManualDetails &&
       filteredManualDetails.currency !== selectedCurrency
     ) {
-      console.warn(
-        `🚨 Currency mismatch in manual details: Expected ${selectedCurrency}, got ${filteredManualDetails.currency}. Clearing data.`
-      );
+      
       filteredManualDetails = null;
     }
 
@@ -410,7 +355,7 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
 
     return safeResult;
   } catch (error) {
-    console.error("Error in useBankAccounts hook:", error);
+    
     return {
       usdBankAccounts: [],
       usdAccountsLoading: false,
@@ -521,10 +466,10 @@ const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
         currency: deposit.selectedCurrency,
       };
 
-      console.log("🚀 Navigating to card payment:", navigationState);
+      
       navigate("/card", { state: navigationState });
     } catch (error) {
-      console.error("❌ Error initiating card payment:", error);
+      
       toast.error("Failed to initiate card payment. Please try again.");
     }
   };
@@ -557,8 +502,8 @@ const DepositPageContent = () => {
   const customerId = params.customerId;
   const initialCurrency = params.currency;
 
-  console.log("🔍 ROUTE PARAMETERS:", { params, customerId, initialCurrency });
-  console.log("🔍 FULL REDUX STATE STRUCTURE:", fullReduxState);
+  
+  
 
   // Custom hooks with safe access
   const deposit = useSafeDeposit();
@@ -582,13 +527,13 @@ const DepositPageContent = () => {
 
   // ✅ Safe useEffect without useSelector calls
   useEffect(() => {
-    console.log("🔍 DEPOSIT PAGE DEBUG:");
-    console.log("Route params:", { customerId, initialCurrency });
-    console.log("Currency hook:", currency);
-    console.log("Deposit hook:", deposit);
-    console.log("Payment methods:", paymentMethods);
-    console.log("Bank accounts:", bankAccounts);
-    console.log("Full Redux state available:", !!fullReduxState);
+    
+    
+    
+    
+    
+    
+    
   }, [
     customerId,
     initialCurrency,
@@ -601,9 +546,7 @@ const DepositPageContent = () => {
 
   // Fixed currency auto-selection
   useEffect(() => {
-    console.log("🔄 CURRENCY AUTO-SELECTION:", {
-      hasCurrencies: currency.currencies?.length > 0,
-      currencies: currency.currencies?.map((c) => c.currency_code),
+     => c.currency_code),
       selectedCurrency: deposit.selectedCurrency,
       initialCurrency,
     });
@@ -621,15 +564,15 @@ const DepositPageContent = () => {
         currency.currencies.some((c) => c.currency_code === initialCurrency)
       ) {
         currencyToSelect = initialCurrency;
-        console.log("🎯 Using currency from URL params:", currencyToSelect);
+        
       } else {
         // Fallback to first available currency
         currencyToSelect = currency.currencies[0]?.currency_code;
-        console.log("🔄 Falling back to first currency:", currencyToSelect);
+        
       }
 
       if (currencyToSelect && deposit.setSelectedCurrency) {
-        console.log("✅ Setting selected currency:", currencyToSelect);
+        
         deposit.setSelectedCurrency(currencyToSelect);
       }
     }
@@ -642,27 +585,21 @@ const DepositPageContent = () => {
 
   // Critical Fixes for Manual Deposit Data
   useEffect(() => {
-    console.log("🎯 CURRENCY CHANGE HANDLER:", {
-      selectedCurrency: deposit.selectedCurrency,
-      paymentMethod: deposit.paymentMethod,
-      manualDetails: bankAccounts.manualAccountDetails,
-    });
+    
 
     // When currency changes and we're on manual deposit, ensure data reloads
     if (
       deposit.paymentMethod === "manual_deposit" &&
       deposit.selectedCurrency
     ) {
-      console.log(
-        `🔄 Manual deposit active for ${deposit.selectedCurrency}, ensuring data consistency`
-      );
+      
 
       // If we have manual details but they don't match, they'll be cleared by useSafeBankAccounts
       if (
         bankAccounts.manualAccountDetails &&
         bankAccounts.manualAccountDetails.currency !== deposit.selectedCurrency
       ) {
-        console.warn("🔄 Clearing mismatched manual deposit data");
+        
       }
     }
   }, [
@@ -672,43 +609,23 @@ const DepositPageContent = () => {
   ]);
 
   useEffect(() => {
-    console.log("🔄 PAYMENT METHOD CHANGE:", {
-      paymentMethod: deposit.paymentMethod,
-      selectedCurrency: deposit.selectedCurrency,
-    });
+    
 
     // Reset any manual deposit data if switching away from manual deposit
     if (deposit.paymentMethod !== "manual_deposit") {
-      console.log("🔄 Not manual deposit, manual data should be cleared");
+      
     }
   }, [deposit.paymentMethod, deposit.selectedCurrency]);
 
   useEffect(() => {
-    console.log("🔍 MANUAL DEPOSIT DATA FLOW:", {
-      selectedCurrency: deposit.selectedCurrency,
-      paymentMethod: deposit.paymentMethod,
-      manualAccountDetails: bankAccounts.manualAccountDetails,
-      manualDetailsLoading: bankAccounts.manualDetailsLoading,
-      manualDetailsError: bankAccounts.manualDetailsError,
-      manualDetailsCurrency: bankAccounts.manualAccountDetails?.currency,
-      currenciesMatch:
-        bankAccounts.manualAccountDetails?.currency ===
-        deposit.selectedCurrency,
-      shouldShowManual:
-        deposit.paymentMethod === "manual_deposit" && deposit.selectedCurrency,
-    });
+    
 
     // Log currency-specific data
     if (
       deposit.paymentMethod === "manual_deposit" &&
       bankAccounts.manualAccountDetails
     ) {
-      console.log("💰 MANUAL DEPOSIT ACCOUNT DATA:", {
-        currency: bankAccounts.manualAccountDetails.currency,
-        bankName: bankAccounts.manualAccountDetails.bank_name,
-        accountNumber: bankAccounts.manualAccountDetails.account_number,
-        iban: bankAccounts.manualAccountDetails.iban,
-      });
+      
     }
   }, [
     deposit.selectedCurrency,
@@ -721,35 +638,22 @@ const DepositPageContent = () => {
   // Also add this to see the account data structure
   useEffect(() => {
     if (currency.currencies && currency.currencies.length > 0) {
-      console.log("📋 CURRENCY DATA STRUCTURE:");
+      
       currency.currencies.forEach((curr, index) => {
-        console.log(`Currency ${index + 1}:`, {
-          currency_code: curr.currency_code,
-          currency: curr.currency,
-          available_balance: curr.available_balance,
-          account_number: curr.account_number,
-          keys: Object.keys(curr),
+        ,
         });
       });
     }
   }, [currency.currencies]);
 
   useEffect(() => {
-    console.log("🔄 PAYMENT METHOD TRIGGER - Manual deposit detection:", {
-      paymentMethod: deposit.paymentMethod,
-      selectedCurrency: deposit.selectedCurrency,
-      shouldFetch:
-        deposit.paymentMethod === "manual_deposit" && deposit.selectedCurrency,
-    });
+    
 
     if (
       deposit.paymentMethod === "manual_deposit" &&
       deposit.selectedCurrency
     ) {
-      console.log(
-        "🎯 Triggering manual account details fetch for:",
-        deposit.selectedCurrency
-      );
+      
 
       // Dispatch the action to fetch manual details
       dispatch(fetchManualAccountDetails(deposit.selectedCurrency));
@@ -757,14 +661,11 @@ const DepositPageContent = () => {
   }, [deposit.paymentMethod, deposit.selectedCurrency, dispatch]);
 
   useEffect(() => {
-    console.log("🎯 CURRENCY SELECTION DEBUG:");
-    console.log("Selected Currency:", deposit.selectedCurrency);
-    console.log("Safe Selected Currency:", deposit.selectedCurrency);
-    console.log(
-      "Should show payment methods:",
-      deposit.selectedCurrency && currency.currencies?.length > 0
-    );
-    console.log("Payment Methods hook state:", paymentMethods);
+    
+    
+    
+    
+    
   }, [deposit.selectedCurrency, currency.currencies?.length, paymentMethods]);
 
   // Text color styling
@@ -809,9 +710,7 @@ const DepositPageContent = () => {
   }
 
   if (safeCurrencies.length === 0 && !currency.loading) {
-    console.log(
-      "📭 DepositPage - No currencies available, showing empty state"
-    );
+    
     return <EmptyState navigate={navigate} />;
   }
 
@@ -911,7 +810,7 @@ const DepositPageContent = () => {
 
               <form
                 onSubmit={(e) => {
-                  console.log("🔍 Form onSubmit triggered");
+                  
                   deposit.handleSubmit(e);
                 }}
                 className="px-8 py-8"
@@ -1122,8 +1021,8 @@ const DepositPageContent = () => {
         <AnimatePresence>
           {ui.showCancelModal && (
             <CancelModal
-              onConfirm={ui.confirmCancel}
-              onCancel={ui.setShowCancelModal}
+              onConfirm={ui.confirmCancel} 
+              onCancel={ui.continueEditing}
             />
           )}
         </AnimatePresence>

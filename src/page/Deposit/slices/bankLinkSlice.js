@@ -7,13 +7,13 @@ export const fetchBankAccounts = createAsyncThunk(
   "bankLink/fetchBankAccounts",
   async (customerId, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching bank accounts for customer:", customerId);
+      
 
       const response = await api.post("/sila/sila-bank-details", {
         customerId: customerId,
       });
 
-      console.log("✅ Bank Accounts Response:", response.data);
+      
 
       // Handle response structure exactly like reference code
       let accounts = [];
@@ -27,10 +27,10 @@ export const fetchBankAccounts = createAsyncThunk(
         accounts = data.data || [];
       }
 
-      console.log(`✅ Found ${accounts.length} bank accounts`);
+      
       return accounts;
     } catch (error) {
-      console.error("❌ Error fetching bank accounts:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || "Failed to load bank accounts"
       );
@@ -43,7 +43,7 @@ export const deleteBankAccount = createAsyncThunk(
   "bankLink/deleteBankAccount",
   async ({ accountId, accountName, customerId }, { rejectWithValue }) => {
     try {
-      console.log("🔄 Deleting bank account:", { accountId, accountName });
+      
 
       const response = await api.post("/sila/delete-sila-linked-bank", {
         account_name: accountName,
@@ -58,7 +58,7 @@ export const deleteBankAccount = createAsyncThunk(
 
       return { accountId, message: data.message };
     } catch (error) {
-      console.error("❌ Error deleting bank account:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || error.message || "Failed to delete account"
       );
@@ -71,7 +71,7 @@ export const handleBankLinkSuccess = createAsyncThunk(
   "bankLink/handleBankLinkSuccess",
   async ({ response, customerId }, { rejectWithValue, dispatch }) => {
     try {
-      console.log("🔄 Handling bank link success:", response);
+      
 
       if (!response) {
         throw new Error("No response received from bank linking");
@@ -100,7 +100,7 @@ export const handleBankLinkSuccess = createAsyncThunk(
         message: "Bank account linked successfully"
       };
     } catch (error) {
-      console.error("❌ Error handling bank link success:", error);
+      
       return rejectWithValue(error.message || "Failed to process bank linking");
     }
   }

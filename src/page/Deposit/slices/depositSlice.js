@@ -8,7 +8,7 @@ export const submitDeposit = createAsyncThunk(
   "deposit/submitDeposit",
   async (depositData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Submitting deposit:", depositData);
+      
 
       const token = localStorage.getItem("authtoken");
       const customerId = localStorage.getItem("authcustomer_id");
@@ -22,10 +22,10 @@ export const submitDeposit = createAsyncThunk(
         customerId: customerId,
       });
 
-      console.log("✅ Deposit submission response:", response.data);
+      
       return response.data;
     } catch (error) {
-      console.error("❌ Deposit submission error:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || "Failed to submit deposit"
       );
@@ -38,7 +38,7 @@ export const fetchManualAccountDetails = createAsyncThunk(
   "deposit/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching manual account details for currency:", currency);
+      
 
       const token = localStorage.getItem("authtoken");
 
@@ -53,11 +53,7 @@ export const fetchManualAccountDetails = createAsyncThunk(
       // ✅ Use client-side filtering function
       const response = await depositAPI.getManualDetailsByCurrency(currency);
 
-      console.log("✅ Filtered manual account details:", {
-        currency: response.data.currency,
-        accountId: response.data.account_id,
-        bankName: response.data.bank_name,
-      });
+      
 
       // ✅ Ensure currency is set correctly
       const accountWithCurrency = {
@@ -67,7 +63,7 @@ export const fetchManualAccountDetails = createAsyncThunk(
 
       return accountWithCurrency;
     } catch (error) {
-      console.error("❌ Error fetching manual account details:", error);
+      
       return rejectWithValue(
         error.response?.data?.message ||
           error.message ||
@@ -82,12 +78,12 @@ export const fetchAllManualAccounts = createAsyncThunk(
   "deposit/fetchAllManualAccounts",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔍 Fetching all manual accounts for debugging");
+      
       const response = await depositAPI.getAllManualAccounts();
-      console.log("📊 All available accounts:", response.data);
+      
       return response.data;
     } catch (error) {
-      console.error("❌ Error fetching all accounts:", error);
+      
       return rejectWithValue(error.message);
     }
   }
@@ -262,23 +258,19 @@ const depositSlice = createSlice({
         state.manualDetailsLoading = false;
         state.manualAccountDetails = action.payload;
         state.formErrors.manualDetails = null;
-        console.log("✅ Manual details stored in Redux:", {
-          currency: action.payload.currency,
-          accountId: action.payload.account_id,
-          bankName: action.payload.bank_name,
-        });
+        
       })
       .addCase(fetchManualAccountDetails.rejected, (state, action) => {
         state.manualDetailsLoading = false;
         state.manualAccountDetails = null;
         state.formErrors.manualDetails = action.payload;
-        console.error("❌ Manual details error:", action.payload);
+        
       })
 
       // Debug: Fetch all accounts
       .addCase(fetchAllManualAccounts.fulfilled, (state, action) => {
         state.allAvailableAccounts = action.payload;
-        console.log("📊 All accounts stored for debugging");
+        
       });
   },
 });

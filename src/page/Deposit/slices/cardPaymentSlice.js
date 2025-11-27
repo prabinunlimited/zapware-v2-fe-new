@@ -8,11 +8,11 @@ export const createAdyenSession = createAsyncThunk(
   "cardPayment/createAdyenSession",
   async (paymentData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Creating Adyen session:", paymentData);
+      
 
       const response = await cardPaymentAPI.getAdyenSession(paymentData);
 
-      console.log("✅ Adyen session response:", response.data);
+      
 
       if (
         !response.data ||
@@ -34,15 +34,11 @@ export const createAdyenSession = createAsyncThunk(
         rawSession: sessionData,
       };
 
-      console.log("✅ Formatted Adyen session:", {
-        id: formattedSession.id,
-        hasSessionData: !!formattedSession.sessionData,
-        sessionDataLength: formattedSession.sessionData?.length,
-      });
+      
 
       return formattedSession;
     } catch (error) {
-      console.error("❌ Error creating Adyen session:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || "Failed to create payment session"
       );
@@ -54,7 +50,7 @@ export const createAdyenSessionIframe = createAsyncThunk(
   "cardPayment/createAdyenSessionIframe",
   async (paymentData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Creating Adyen session for iframe:", paymentData);
+      
 
       const response = await cardPaymentAPI.getAdyenSessionIframe(paymentData);
 
@@ -62,10 +58,10 @@ export const createAdyenSessionIframe = createAsyncThunk(
         throw new Error("Invalid session response from server");
       }
 
-      console.log("✅ Adyen iframe session created successfully");
+      
       return response.data;
     } catch (error) {
-      console.error("❌ Error creating Adyen iframe session:", error);
+      
       return rejectWithValue(
         error.response?.data?.message ||
           "Failed to create iframe payment session"
@@ -78,14 +74,14 @@ export const processPaymentResult = createAsyncThunk(
   "cardPayment/processPaymentResult",
   async (resultData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Processing payment result:", resultData);
+      
 
       const response = await cardPaymentAPI.processPaymentResult(resultData);
 
-      console.log("✅ Payment result processed successfully");
+      
       return response.data;
     } catch (error) {
-      console.error("❌ Error processing payment result:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || "Failed to process payment result"
       );
@@ -97,16 +93,16 @@ export const completePayment = createAsyncThunk(
   "cardPayment/completePayment",
   async (completionData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Completing payment:", completionData);
+      
 
       const response = await cardPaymentAPI.handlePaymentCompletion(
         completionData
       );
 
-      console.log("✅ Payment completed successfully");
+      
       return response.data;
     } catch (error) {
-      console.error("❌ Error completing payment:", error);
+      
       return rejectWithValue(
         error.response?.data?.message || "Failed to complete payment"
       );

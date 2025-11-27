@@ -1,4 +1,4 @@
-// src/store/store.js - UPDATED VERSION WITH CARD PAYMENT
+// src/store/store.js - CLEANED VERSION
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 
 // ===================== AUTH AND RELATED SLICES =====================
@@ -12,6 +12,7 @@ import downloadReducer from "../features/Auth/slices/downloadSlice";
 import forgotPasswordReducer from "../features/Auth/slices/forgotPasswordSlice";
 import signupReducer from "../features/Auth/slices/signupSlice";
 import institutionRegistrationReducer from "../features/Auth/slices/institutionRegistrationSlice";
+import currencyAccountsReducer from "../features/Auth/SignUp/SelectCurrencyAccount/currencyAccountsSlice"
 
 // ===================== DASHBOARD AND COMPONENTS =====================
 import headerReducer from "../components/Dashboard/Header/headerSlice";
@@ -36,7 +37,6 @@ import bankLinkReducer from "../page/Deposit/slices/bankLinkSlice";
 
 // ===================== CARD PAYMENT SLICES =====================
 import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
-
 
 // ===================== TEAM SLICES =====================
 import teamReducer from "../page/Team/Slice/teamSlice";
@@ -120,7 +120,7 @@ const customSerializableCheck = {
     "bankAccounts/fetchAEDAccountDetails/fulfilled",
     "bankAccounts/fetchAEDAccountDetails/rejected",
 
-    // ✅ ADDED: Card Payment actions
+    // Card Payment actions
     "cardPayment/createAdyenSession/pending",
     "cardPayment/createAdyenSession/fulfilled",
     "cardPayment/createAdyenSession/rejected",
@@ -180,7 +180,7 @@ const customSerializableCheck = {
     "bankAccounts.usdBankAccounts",
     "bankAccounts.aedAccountDetails",
 
-    // ✅ ADDED: Card Payment paths
+    // Card Payment paths
     "cardPayment.checkout",
     "cardPayment.currentPayment",
     "cardPayment.session",
@@ -203,6 +203,7 @@ export const store = configureStore({
     forgotPassword: forgotPasswordReducer,
     signup: signupReducer,
     institutionRegistration: institutionRegistrationReducer,
+    currencyAccounts: currencyAccountsReducer,
 
     // Dashboard and components
     header: headerReducer,
@@ -219,10 +220,10 @@ export const store = configureStore({
     uiDeposit: uiDepositReducer,
     bankLink: bankLinkReducer,
 
-    // ✅ ADDED: Card Payment slice
+    // Card Payment slice
     cardPayment: cardPaymentReducer,
 
-    // ===================== TEAM SLICE =====================
+    // Team slice
     team: teamReducer,
     teamMember: teamMemberReducer,
 
@@ -235,22 +236,19 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: customSerializableCheck,
       immutableCheck: {
-        warnAfter: 100, // Increase warning threshold for large state
+        warnAfter: 100,
       },
     }),
   devTools: process.env.NODE_ENV !== "production",
 });
 
 // ===================== STORE INITIALIZATION =====================
-// Initialize auth state from localStorage without causing circular dependencies
 const initializeAuthState = () => {
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("authtoken");
     const customerId = localStorage.getItem("authcustomer_id");
 
-    // Only initialize if we have valid tokens
     if (token && customerId) {
-      // Use a simple dispatch without importing thunks to avoid circular dependencies
       store.dispatch({
         type: "auth/setAuthState",
         payload: {
@@ -260,24 +258,17 @@ const initializeAuthState = () => {
           isInitialized: true,
         },
       });
-
-      console.log("✅ Auth state initialized from localStorage");
     } else {
-      // Mark as initialized even if no auth data exists
       store.dispatch({
         type: "auth/setInitialized",
         payload: true,
       });
-
-      console.log("🔄 Auth initialized - no existing session");
     }
 
-    // Sync any other localStorage states that might be needed
     syncAdditionalStorageStates();
   }
 };
 
-// Sync additional localStorage states to Redux
 const syncAdditionalStorageStates = () => {
   const statesToSync = [
     {
@@ -310,42 +301,8 @@ const syncAdditionalStorageStates = () => {
 };
 
 // ===================== STORE UTILITIES =====================
-// Store health check and utilities
 export const storeHealthCheck = () => {
   const state = store.getState();
-  console.group("🏥 Store Health Check");
-  console.log("Store State Structure:", Object.keys(state));
-  console.log("Auth State:", {
-    isAuthenticated: state.auth.isAuthenticated,
-    isInitialized: state.auth.isInitialized,
-    hasToken: !!state.auth.token,
-    hasCustomerId: !!state.auth.customerId,
-  });
-  
-  // Currency state check
-  console.log("Currency State:", {
-    currenciesCount: state.currency?.currencies?.length || 0,
-    paymentMethodsCount: state.currency?.paymentMethods?.length || 0,
-    usdAccountsCount: state.currency?.usdBankAccounts?.length || 0,
-    hasAEDDetails: !!state.currency?.aedAccountDetails,
-  });
-
-  // ✅ ADDED: Card Payment state check
-  console.log("Card Payment State:", {
-    hasSession: !!state.cardPayment?.session,
-    sessionLoading: state.cardPayment?.sessionLoading || false,
-    paymentProcessing: state.cardPayment?.paymentProcessing || false,
-    isPaymentCompleted: state.cardPayment?.isPaymentCompleted || false,
-    isPaymentFailed: state.cardPayment?.isPaymentFailed || false,
-    hasCheckout: !!state.cardPayment?.checkout,
-  });
-  
-  console.log("Store Configuration:", {
-    devTools: process.env.NODE_ENV !== "production",
-    hasMiddleware: true,
-    hasReducers: Object.keys(state).length > 0,
-  });
-  console.groupEnd();
 
   return {
     healthy: true,
@@ -365,10 +322,8 @@ export const storeHealthCheck = () => {
   };
 };
 
-// Reset store to initial state (useful for testing and error recovery)
 export const resetStore = () => {
   if (typeof window !== "undefined") {
-    // Clear all localStorage items related to auth
     const authKeys = [
       "authtoken",
       "authcustomer_id",
@@ -391,61 +346,20 @@ export const resetStore = () => {
     ];
 
     authKeys.forEach((key) => localStorage.removeItem(key));
-
-    console.log("🔄 Store reset - all auth data cleared");
   }
-
-  // Note: In a real app, you might want to reload the page or dispatch reset actions
-  // This is a lightweight reset that preserves the store structure
 };
 
 // ===================== STORE SUBSCRIPTIONS =====================
-// Subscribe to store changes for debugging and persistence
 if (process.env.NODE_ENV !== "production") {
   store.subscribe(() => {
     const state = store.getState();
-
-    // Log auth state changes for debugging
-    if (state.auth.isAuthenticated) {
-      console.debug("🔐 Auth State Updated:", {
-        isAuthenticated: state.auth.isAuthenticated,
-        customerId: state.auth.customerId,
-        kycStatus: state.auth.kycStatus,
-        bankStatus: state.auth.bankApproveStatus,
-      });
-    }
-
-    // Log currency state changes
-    if (state.currency.selectedCurrency) {
-      console.debug("💰 Currency State Updated:", {
-        selectedCurrency: state.currency.selectedCurrency,
-        currenciesCount: state.currency.currencies?.length,
-        paymentMethodsCount: state.currency.paymentMethods?.length,
-      });
-    }
-
-    // ✅ ADDED: Log card payment state changes
-    if (state.cardPayment.session || state.cardPayment.paymentProcessing) {
-      console.debug("💳 Card Payment State Updated:", {
-        hasSession: !!state.cardPayment.session,
-        sessionLoading: state.cardPayment.sessionLoading,
-        paymentProcessing: state.cardPayment.paymentProcessing,
-        isPaymentCompleted: state.cardPayment.isPaymentCompleted,
-        isPaymentFailed: state.cardPayment.isPaymentFailed,
-      });
-    }
-
-    // Auto-persist certain states to localStorage
     persistCriticalStates(state);
   });
 }
 
-// Persist critical states to localStorage
 const persistCriticalStates = (state) => {
-  // Only persist if we have a valid auth state
   if (state.auth.isAuthenticated && state.auth.token && state.auth.customerId) {
     try {
-      // Persist auth token and customer ID
       if (state.auth.token !== localStorage.getItem("authtoken")) {
         localStorage.setItem("authtoken", state.auth.token);
       }
@@ -453,35 +367,27 @@ const persistCriticalStates = (state) => {
         localStorage.setItem("authcustomer_id", state.auth.customerId);
       }
 
-      // Persist verification status
       if (state.auth.kycStatus) {
         localStorage.setItem("kyc_status", state.auth.kycStatus);
       }
       if (state.auth.bankApproveStatus) {
-        localStorage.setItem(
-          "bank_approve_status",
-          state.auth.bankApproveStatus
-        );
+        localStorage.setItem("bank_approve_status", state.auth.bankApproveStatus);
       }
 
-      // Persist owner login status
       if (state.auth.isOwnerLogin) {
         localStorage.setItem("is_owner_login", "1");
       }
     } catch (error) {
-      console.error("❌ Failed to persist state to localStorage:", error);
+      // Error handling without console log
     }
   }
 };
 
 // ===================== STORE INITIALIZATION CALL =====================
-// Initialize the store when this module is loaded
 if (typeof window !== "undefined") {
-  // Use setTimeout to ensure this runs after the store is fully configured
   setTimeout(() => {
     initializeAuthState();
-
-    // Run health check in development
+    
     if (process.env.NODE_ENV !== "production") {
       storeHealthCheck();
     }
@@ -495,12 +401,10 @@ export const getAuthToken = () => store.getState().auth.token;
 export const getCustomerId = () => store.getState().auth.customerId;
 export const isAuthenticated = () => store.getState().auth.isAuthenticated;
 
-// Currency state utilities
 export const getCurrencyState = () => store.getState().currency;
 export const getSelectedCurrency = () => store.getState().currency.selectedCurrency;
 export const getPaymentMethods = () => store.getState().currency.paymentMethods;
 
-// ✅ ADDED: Card Payment state utilities
 export const getCardPaymentState = () => store.getState().cardPayment;
 export const getCardPaymentSession = () => store.getState().cardPayment.session;
 export const isCardPaymentProcessing = () => 
@@ -508,5 +412,4 @@ export const isCardPaymentProcessing = () =>
 export const isPaymentCompleted = () => store.getState().cardPayment.isPaymentCompleted;
 export const isPaymentFailed = () => store.getState().cardPayment.isPaymentFailed;
 
-// Export store instance as default
 export default store;

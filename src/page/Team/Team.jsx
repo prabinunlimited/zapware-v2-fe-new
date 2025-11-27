@@ -24,7 +24,7 @@ const Team = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
 
-  console.log("Team component - customerId from params:", customerId);
+  
 
   // Redux state and actions
   const { teamMembers, loading, deletingId, isInitialized, error } =
@@ -86,7 +86,7 @@ const Team = () => {
   }, [error, resetError]);
 
   const handleAddMember = () => {
-    console.log("handleAddMember - customerId:", customerId);
+    
     if (!customerId) {
       toast.error("Customer ID is missing. Cannot add team member.");
       return;
@@ -108,7 +108,7 @@ const Team = () => {
       }
     } catch (error) {
       // Error is handled by Redux and displayed in the error effect
-      console.error("Delete failed:", error);
+      
     }
   };
 

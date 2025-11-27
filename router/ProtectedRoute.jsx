@@ -24,39 +24,18 @@ const ProtectedRoute = () => {
   const routeParams = useParams();
   const routeCustomerId = routeParams.customerId;
 
-  console.log("🔍 [ProtectedRoute] Debug:", {
-    token: !!token,
-    customerId,
-    isAuthenticated,
-    isInitialized,
-    routeCustomerId,
-    fullPath: location.pathname,
-    isChecking
-  });
-
   useEffect(() => {
-    console.log('🔄 [ProtectedRoute] useEffect running');
-
     const initializeAuth = async () => {
       try {
-        console.log('🔄 [ProtectedRoute] Calling syncLocalStorageState');
         await dispatch(syncLocalStorageState());
 
         // ✅ Additional validation
         const storedToken = localStorage.getItem("authtoken");
         const storedCustomerId = localStorage.getItem("authcustomer_id");
 
-        console.log('📦 [ProtectedRoute] LocalStorage validation:', {
-          storedToken: !!storedToken,
-          storedCustomerId,
-          isValidToken: storedToken && storedToken !== "undefined" && storedToken !== "null",
-          isValidCustomerId: storedCustomerId && storedCustomerId !== "undefined" && storedCustomerId !== "null"
-        });
-
         // ✅ If we have valid localStorage but Redux is out of sync, force update
         if (storedToken && storedCustomerId && storedCustomerId !== "undefined" && storedCustomerId !== "null") {
           if (!token || !customerId) {
-            console.log('🔄 [ProtectedRoute] Force updating Redux state from localStorage');
             dispatch(setAuthState({
               token: storedToken,
               customerId: storedCustomerId,
@@ -66,10 +45,9 @@ const ProtectedRoute = () => {
         }
 
       } catch (error) {
-        console.error('❌ [ProtectedRoute] Auth initialization error:', error);
+        // Error handling without console logging
       } finally {
         setIsChecking(false);
-        console.log('✅ [ProtectedRoute] Auth initialization complete');
       }
     };
 
@@ -78,7 +56,6 @@ const ProtectedRoute = () => {
 
   // ✅ Show loading while initializing - AFTER ALL HOOKS
   if (!isInitialized || isChecking) {
-    console.log('⏳ [ProtectedRoute] Still loading, showing spinner');
     return (
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 flex items-center justify-center">
@@ -92,24 +69,19 @@ const ProtectedRoute = () => {
 
   // ✅ Use the enhanced isAuthenticated selector
   if (!isAuthenticated) {
-    console.log('🔒 [ProtectedRoute] Not authenticated, redirecting to login');
     return <Navigate to="/" replace state={{ from: location }} />;
   }
 
   // Check for "undefined" in URL path
   if (location.pathname.includes('/undefined/')) {
-    console.log('🔄 [ProtectedRoute] Replacing undefined in URL with customerId:', customerId);
     const correctedPath = location.pathname.replace('/undefined/', `/${customerId}/`);
     return <Navigate to={correctedPath} replace />;
   }
 
   // Validate route customerId matches stored customerId
   if (routeCustomerId && routeCustomerId !== customerId.toString()) {
-    console.log('⚠️ [ProtectedRoute] Customer ID mismatch, redirecting to correct customer page');
     return <Navigate to={`/home/${customerId}`} replace />;
   }
-
-  console.log("✅ [ProtectedRoute] Authentication successful, rendering outlet");
 
   return (
     <div className="min-h-screen flex flex-col">

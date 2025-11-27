@@ -31,14 +31,14 @@ function HomeRemit() {
     const checkAuth = () => {
       if (isInitialized) {
         if (!isAuthenticated) {
-          console.log('Not authenticated, redirecting to login');
+          
           navigate('/', { replace: true });
           return;
         }
 
         // Validate customerId
         if (customerId && storedCustomerId && customerId !== storedCustomerId.toString()) {
-          console.log('Customer ID mismatch, redirecting to correct page');
+          
           navigate(`/home-remit/${storedCustomerId}`, { replace: true });
           return;
         }

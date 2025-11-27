@@ -23,11 +23,11 @@ const AccountType = () => {
   const currentStep = useCurrentStep(); // Get current step from hook
 
   const handleSelectAccount = (type) => {
-    console.log('🎯 [AccountType] handleSelectAccount called with:', type);
+    
     setSelectedAccount(type);
     // Simulate selection before navigation
     setTimeout(() => {
-      console.log('🔄 [AccountType] Navigating to opencurrencyaccount');
+      
       if (type === "partner") {
         navigate("/openpartneraccount");
       } else {
@@ -37,7 +37,7 @@ const AccountType = () => {
   };
 
   const handleCancel = () => {
-    console.log('🔙 [AccountType] handleCancel called, navigating to /');
+    
     navigate("/");
   };
 
@@ -79,8 +79,8 @@ const AccountType = () => {
     }] : [])
   ];
 
-  console.log('🔍 [AccountType] Component rendering');
-  console.log('🔍 [AccountType] Current path:', window.location.pathname);
+  
+  
 
   const closeModal = () => {
     setIsModalOpen(false);

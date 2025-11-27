@@ -72,7 +72,7 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
 
       return rejectWithValue("Invalid response structure");
     } catch (error) {
-      console.error("Partner config fetch error:", error);
+      
       
       // Fallback to cached config
       const cachedConfig = localStorage.getItem("partnerConfig");
@@ -80,7 +80,7 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
         try {
           return JSON.parse(cachedConfig);
         } catch (e) {
-          console.error("Failed to parse cached partner config:", e);
+          
         }
       }
       

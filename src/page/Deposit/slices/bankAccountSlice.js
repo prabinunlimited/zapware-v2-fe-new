@@ -6,8 +6,6 @@ export const fetchUSDBankAccounts = createAsyncThunk(
   "bankAccounts/fetchUSDBankAccounts",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching USD bank accounts from API...");
-
       // ✅ CORRECT: Get customerId from localStorage
       const customerId = localStorage.getItem("authcustomer_id");
 
@@ -17,10 +15,8 @@ export const fetchUSDBankAccounts = createAsyncThunk(
 
       // ✅ CORRECT: Send proper object with customerId
       const response = await api.post("/sila/manual-sila-bankdetails", {
-        customerId: customerId, // Send as object, not number
+        customerId: customerId,
       });
-
-      console.log("✅ USD Bank Accounts Response:", response.data);
 
       // ✅ Handle different response structures
       let accounts = [];
@@ -36,10 +32,8 @@ export const fetchUSDBankAccounts = createAsyncThunk(
         accounts = data.data || [];
       }
 
-      console.log(`✅ Found ${accounts.length} USD bank accounts`);
       return accounts;
     } catch (error) {
-      console.error("❌ Error fetching USD bank accounts:", error);
       return rejectWithValue(
         error.response?.data?.message || "Failed to load USD bank accounts"
       );
@@ -52,11 +46,7 @@ export const fetchAEDAccountDetails = createAsyncThunk(
   "bankAccounts/fetchAEDAccountDetails",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching AED account details...");
-
       const response = await api.get("/manualaccount-detail/AED");
-
-      console.log("✅ AED Account Details Response:", response.data);
 
       // Handle response structure
       let accountDetails = response.data;
@@ -68,7 +58,6 @@ export const fetchAEDAccountDetails = createAsyncThunk(
 
       return accountDetails;
     } catch (error) {
-      console.error("❌ Error fetching AED account details:", error);
       return rejectWithValue(
         error.response?.data?.message || "Failed to load AED account details"
       );
@@ -81,8 +70,6 @@ export const fetchUSDManualAccountDetails = createAsyncThunk(
   "bankAccounts/fetchUSDManualAccountDetails",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching USD manual account details...");
-
       const customerId = localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
@@ -94,8 +81,6 @@ export const fetchUSDManualAccountDetails = createAsyncThunk(
         customerId: customerId,
       });
 
-      console.log("✅ USD Manual Account Details Response:", response.data);
-
       // Handle response structure for manual details
       let accountDetails = response.data;
       if (response.data?.data) {
@@ -106,7 +91,6 @@ export const fetchUSDManualAccountDetails = createAsyncThunk(
 
       return accountDetails;
     } catch (error) {
-      console.error("❌ Error fetching USD manual account details:", error);
       return rejectWithValue(
         error.response?.data?.message || "Failed to load USD account details"
       );
@@ -119,8 +103,6 @@ export const fetchManualAccountDetails = createAsyncThunk(
   "bankAccounts/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching manual account details for currency:", currency);
-
       const customerId = localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
@@ -130,8 +112,6 @@ export const fetchManualAccountDetails = createAsyncThunk(
       // ✅ USE THE CORRECT ENDPOINT THAT WE KNOW WORKS:
       const response = await api.get(`/active-account-details/${customerId}`);
 
-      console.log("✅ Manual Account Details Response:", response.data);
-
       // Find the account for the selected currency
       const accounts = response.data.account_details || [];
       const accountForCurrency = accounts.find(
@@ -139,30 +119,18 @@ export const fetchManualAccountDetails = createAsyncThunk(
       );
 
       if (!accountForCurrency) {
-        console.warn(`❌ No ${currency} account found in response. Available accounts:`, 
-          accounts.map(acc => acc.currency));
         throw new Error(`No ${currency} account found`);
       }
-
-      console.log(`✅ Found ${currency} account:`, {
-        accountId: accountForCurrency.account_id,
-        currency: accountForCurrency.currency,
-        bankName: accountForCurrency.bank_name,
-        accountNumber: accountForCurrency.account_number,
-        iban: accountForCurrency.iban
-      });
 
       // ✅ RETURN the account data so Redux can store it
       return accountForCurrency;
     } catch (error) {
-      console.error("❌ Error fetching manual account details:", error);
       return rejectWithValue(
         error.response?.data?.message || `Failed to load ${currency} account details`
       );
     }
   }
 );
-
 
 // Bank Accounts Slice
 const bankAccountSlice = createSlice({
@@ -214,7 +182,6 @@ const bankAccountSlice = createSlice({
       state.manualAccountDetails = null;
       state.manualDetailsLoading = false;
       state.manualDetailsError = null;
-      console.log("✅ Redux: Manual account details cleared");
     },
     // ✅ CRITICAL FIX: Set currency and clear old data
     setCurrencyAndClearManualDetails: (state, action) => {
@@ -222,7 +189,6 @@ const bankAccountSlice = createSlice({
       
       // Only clear if currency is actually changing
       if (state.currentCurrency !== newCurrency) {
-        console.log(`🔄 Redux: Currency changing from ${state.currentCurrency} to ${newCurrency}, clearing manual details`);
         state.manualAccountDetails = null;
         state.manualDetailsLoading = false;
         state.manualDetailsError = null;
@@ -233,7 +199,6 @@ const bankAccountSlice = createSlice({
     forceClearManualDetailsForCurrency: (state, action) => {
       const expectedCurrency = action.payload;
       if (state.manualAccountDetails && state.manualAccountDetails.currency !== expectedCurrency) {
-        console.warn(`🚨 Redux: Force clearing manual details - expected ${expectedCurrency}, got ${state.manualAccountDetails.currency}`);
         state.manualAccountDetails = null;
         state.manualDetailsLoading = false;
         state.manualDetailsError = null;
@@ -295,12 +260,6 @@ const bankAccountSlice = createSlice({
         
         // Update current currency to match the loaded data
         state.currentCurrency = action.payload.currency;
-
-        console.log("✅ Redux: Manual Account Details stored:", {
-          currency: action.payload.currency,
-          accountId: action.payload.account_id,
-          bankName: action.payload.bank_name
-        });
       })
       .addCase(fetchManualAccountDetails.rejected, (state, action) => {
         state.manualDetailsLoading = false;

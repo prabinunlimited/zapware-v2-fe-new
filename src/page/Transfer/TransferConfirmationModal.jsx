@@ -25,7 +25,7 @@ const TransferConfirmationModal = ({
   React.useEffect(() => {
     // Reset any stuck loading state when modal opens
     if (transferLoading) {
-      console.log("🔄 Resetting stuck loading state");
+      
       // You might need to add a reset action to your slice
     }
   }, []);
@@ -35,19 +35,10 @@ const TransferConfirmationModal = ({
   const customerBankAccounts = useSelector(selectCustomerBankAccounts);
 
   // DEBUG: Add these logs
-  console.log(
-    "🔍 TransferConfirmationModal - transferLoading prop:",
-    transferLoading
-  );
-  console.log(
-    "🔍 TransferConfirmationModal - receiverDetails:",
-    receiverDetails
-  );
-  console.log(
-    "🔍 TransferConfirmationModal - selectedCurrency:",
-    selectedCurrency
-  );
-  console.log("🔍 TransferConfirmationModal - transferAmount:", transferAmount);
+  
+  
+  
+  
 
   const handleConfirmTransfer = async () => {
     const selectedAccount = customerBankAccounts.find(

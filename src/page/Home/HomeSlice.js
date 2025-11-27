@@ -8,19 +8,20 @@ const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL;
 const pendingRequests = new Map();
 
 const getRequestKey = (customerId, isRefresh = false) => {
-  return `account-${customerId}-${isRefresh ? 'refresh' : 'initial'}`;
+  return `account-${customerId}-${isRefresh ? "refresh" : "initial"}`;
 };
 
 // ✅ OPTIMIZED ASYNC THUNK WITH DEDUPLICATION
 export const fetchAccountDetails = createAsyncThunk(
   "home/fetchAccountDetails",
-  async ({ customerId, authtoken, isRefresh = false }, { getState, rejectWithValue }) => {
-    
+  async (
+    { customerId, authtoken, isRefresh = false },
+    { getState, rejectWithValue }
+  ) => {
     const requestKey = getRequestKey(customerId, isRefresh);
-    
+
     // Check if request already in progress
     if (pendingRequests.has(requestKey)) {
-      console.log("⏸️ Request already in progress, skipping duplicate...");
       return rejectWithValue("Request already in progress");
     }
 
@@ -28,8 +29,6 @@ export const fetchAccountDetails = createAsyncThunk(
     pendingRequests.set(requestKey, true);
 
     try {
-      console.log(`🔄 ${isRefresh ? 'Refreshing' : 'Fetching'} account details for customer:`, customerId);
-      
       const response = await axios.get(
         `${API_URL}/active-account-details/${customerId}`,
         {
@@ -39,23 +38,19 @@ export const fetchAccountDetails = createAsyncThunk(
       );
 
       if (response.data.message === "Unauthenticated.") {
-        console.log("🚫 Unauthenticated - redirecting to login");
         return rejectWithValue("Unauthenticated");
       }
 
-      console.log("✅ Account details fetched successfully");
       return response.data;
     } catch (error) {
-      console.error("❌ Error fetching account details:", error);
-      
-      if (error.code === 'ECONNABORTED') {
+      if (error.code === "ECONNABORTED") {
         return rejectWithValue("Request timeout - please try again");
       }
-      
+
       if (error.response?.status === 401) {
         return rejectWithValue("Unauthenticated");
       }
-      
+
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
@@ -70,18 +65,18 @@ const initialState = {
   accountData: { account_details: [] },
   selectedCurrency: "",
   currencyOptions: [],
-  
+
   // Loading states
   initialLoading: true,
   isLoading: false,
   refreshing: false,
   childComponentsLoading: 0,
-  
+
   // UI state
   lastUpdated: null,
   textColor: localStorage.getItem("text_color") || "#000000",
   hasFetchedAccount: false,
-  
+
   // Error state
   error: null,
 };
@@ -109,15 +104,19 @@ const homeSlice = createSlice({
       state.textColor = action.payload;
     },
     setError: (state, action) => {
-      state.error = typeof action.payload === 'string'
-        ? action.payload
-        : extractErrorMessage(action.payload);
+      state.error =
+        typeof action.payload === "string"
+          ? action.payload
+          : extractErrorMessage(action.payload);
     },
     startChildLoading: (state) => {
       state.childComponentsLoading += 1;
     },
     stopChildLoading: (state) => {
-      state.childComponentsLoading = Math.max(0, state.childComponentsLoading - 1);
+      state.childComponentsLoading = Math.max(
+        0,
+        state.childComponentsLoading - 1
+      );
     },
     resetChildLoading: (state) => {
       state.childComponentsLoading = 0;
@@ -146,8 +145,7 @@ const homeSlice = createSlice({
     builder
       .addCase(fetchAccountDetails.pending, (state, action) => {
         const isRefresh = action.meta.arg?.isRefresh;
-        console.log(`⏳ Fetch account details pending - isRefresh: ${isRefresh}`);
-        
+
         if (isRefresh) {
           state.refreshing = true;
         } else {
@@ -157,13 +155,13 @@ const homeSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchAccountDetails.fulfilled, (state, action) => {
-        console.log("✅ Fetch account details fulfilled");
-        
         state.accountData = action.payload;
-        
+
         if (action.payload.account_details?.length) {
           const currencies = [
-            ...new Set(action.payload.account_details.map((acc) => acc.currency)),
+            ...new Set(
+              action.payload.account_details.map((acc) => acc.currency)
+            ),
           ];
           state.currencyOptions = currencies;
 
@@ -178,24 +176,19 @@ const homeSlice = createSlice({
         state.refreshing = false;
         state.hasFetchedAccount = true;
         state.error = null;
-        
-        console.log("🏁 All loading states cleared");
       })
       .addCase(fetchAccountDetails.rejected, (state, action) => {
-        console.log("❌ Fetch account details rejected:", action.payload);
-        
         state.initialLoading = false;
         state.isLoading = false;
         state.refreshing = false;
-        
-        state.error = typeof action.payload === 'string'
-          ? action.payload
-          : extractErrorMessage(action.payload);
-        
+
+        state.error =
+          typeof action.payload === "string"
+            ? action.payload
+            : extractErrorMessage(action.payload);
+
         // Auto-reset child loading after error
         state.childComponentsLoading = 0;
-        
-        console.log("🔄 Loading states reset due to error");
       });
   },
 });
@@ -203,29 +196,36 @@ const homeSlice = createSlice({
 // Selectors
 export const selectHome = (state) => state.home;
 export const selectAccountData = (state) => state.home.accountData;
-export const selectAccounts = (state) => state.home.accountData?.account_details || [];
+export const selectAccounts = (state) =>
+  state.home.accountData?.account_details || [];
 export const selectSelectedCurrency = (state) => state.home.selectedCurrency;
 export const selectCurrencyOptions = (state) => state.home.currencyOptions;
 export const selectInitialLoading = (state) => state.home.initialLoading;
 export const selectIsLoading = (state) => state.home.isLoading;
-export const selectAccountLoading = (state) => state.home.initialLoading || state.home.isLoading;
+export const selectAccountLoading = (state) =>
+  state.home.initialLoading || state.home.isLoading;
 export const selectRefreshing = (state) => state.home.refreshing;
-export const selectChildComponentsLoading = (state) => state.home.childComponentsLoading;
+export const selectChildComponentsLoading = (state) =>
+  state.home.childComponentsLoading;
 export const selectLastUpdated = (state) => state.home.lastUpdated;
 export const selectTextColor = (state) => state.home.textColor;
 export const selectError = (state) => state.home.error;
 export const selectHasFetchedAccount = (state) => state.home.hasFetchedAccount;
 
 // Derived selectors
-export const selectIsAnyLoading = (state) => 
-  state.home.initialLoading || state.home.isLoading || state.home.childComponentsLoading > 0;
+export const selectIsAnyLoading = (state) =>
+  state.home.initialLoading ||
+  state.home.isLoading ||
+  state.home.childComponentsLoading > 0;
 
 export const selectAccountsByCurrency = (state) => {
   const { accountData, selectedCurrency } = state.home;
   if (accountData.account_details?.length > 0 && selectedCurrency) {
-    return accountData.account_details.filter(
-      (account) => account.currency === selectedCurrency
-    ) || [];
+    return (
+      accountData.account_details.filter(
+        (account) => account.currency === selectedCurrency
+      ) || []
+    );
   }
   return [];
 };

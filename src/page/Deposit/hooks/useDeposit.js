@@ -87,12 +87,12 @@ export const useDeposit = () => {
       return;
     }
 
-    console.log("🔄 Handling payment method:", paymentMethod);
+    
 
     switch (paymentMethod) {
       case "bank_deposit":
         // ✅ ENHANCED: Add state to pass data
-        console.log("📍 Navigating to linkbank page for customer:", customerId);
+        
         navigate(`/linkbank/${customerId}`, {
           replace: true,
           state: {
@@ -111,51 +111,48 @@ export const useDeposit = () => {
           amount: parseFloat(depositState.amount),
           currency: depositState.selectedCurrency,
         };
-        console.log("📍 Navigating to card page with state:", state);
+        
         navigate("/card", { state: state});
         break;
 
       case "manual_deposit":
-        console.log("ℹ️ Manual deposit - showing account details");
+        
         toast.info("Please use the account details provided below");
         break;
 
       default:
-        console.warn("Unknown payment method:", paymentMethod);
+        
         break;
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("🔄 Form submitted");
+    
 
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
-      console.log("❌ Form validation errors:", errors);
+      
       dispatch(setFormErrors(errors));
       toast.error("Please fix the form errors before submitting");
       return;
     }
 
-    console.log("✅ Form validated successfully");
+    
 
     // ✅ FIX: Handle navigation-based payment methods FIRST
     if (
       depositState.paymentMethod === "bank_deposit" ||
       depositState.paymentMethod === "card_deposit"
     ) {
-      console.log(
-        "🚀 Processing payment method action:",
-        depositState.paymentMethod
-      );
+      
       await handlePaymentMethodAction(depositState.paymentMethod);
       return; // ✅ CRITICAL: Stop further execution
     }
 
     // ✅ Only process API submissions for non-navigation methods
     if (depositState.paymentMethod === "manual_deposit") {
-      console.log("ℹ️ Manual deposit - no API submission needed");
+      
       dispatch(setFormErrors({}));
       toast.success("Account details loaded successfully!");
       return;
@@ -163,10 +160,7 @@ export const useDeposit = () => {
 
     // ✅ Handle other transaction types that need API submission
     try {
-      console.log(
-        "📤 Submitting deposit to API for payment method:",
-        depositState.paymentMethod
-      );
+      
       const depositData = {
         currency: depositState.selectedCurrency,
         payment_method: depositState.paymentMethod,
@@ -177,64 +171,56 @@ export const useDeposit = () => {
         }),
       };
 
-      console.log("📦 Deposit data:", depositData);
+      
       const result = await dispatch(submitDeposit(depositData)).unwrap();
 
       if (result.success) {
         toast.success("Deposit submitted successfully!");
       }
     } catch (error) {
-      console.error("Deposit submission error:", error);
+      
       toast.error(error.message || "Failed to submit deposit");
     }
   };
 
   // Enhanced fetchManualDetails function using the new API hook
   const fetchManualDetails = async (currency) => {
-    console.log(
-      `🔄 useDeposit - Fetching manual details for currency: ${currency}`
-    );
+    
 
     try {
       const details = await fetchManualDepositDetails(currency);
-      console.log(
-        "✅ useDeposit - Manual details fetched successfully:",
-        details
-      );
+      
       return details;
     } catch (error) {
-      console.error("❌ useDeposit - Error fetching manual details:", error);
+      
       throw error;
     }
   };
 
   // New function to fetch USD accounts
   const fetchUSDDetails = async () => {
-    console.log("🔄 useDeposit - Fetching USD accounts");
+    
 
     try {
       const accounts = await fetchUSDAccounts();
-      console.log(
-        "✅ useDeposit - USD accounts fetched successfully:",
-        accounts
-      );
+      
       return accounts;
     } catch (error) {
-      console.error("❌ useDeposit - Error fetching USD accounts:", error);
+      
       throw error;
     }
   };
 
   // New function to fetch AED details
   const fetchAEDDetailsData = async () => {
-    console.log("🔄 useDeposit - Fetching AED details");
+    
 
     try {
       const details = await fetchAEDDetails();
-      console.log("✅ useDeposit - AED details fetched successfully:", details);
+      
       return details;
     } catch (error) {
-      console.error("❌ useDeposit - Error fetching AED details:", error);
+      
       throw error;
     }
   };

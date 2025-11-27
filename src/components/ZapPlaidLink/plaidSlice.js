@@ -88,7 +88,7 @@ export const deleteLinkedBankAccount = createAsyncThunk(
             }
           }
         } catch (e) {
-          console.error("Error parsing Sila error:", e);
+          
         }
       }
 
@@ -110,7 +110,7 @@ const parsePlaidErrorMessage = (errorString) => {
     }
     return errorString;
   } catch (e) {
-    console.error("Error parsing error message:", e);
+    
     return errorString;
   }
 };

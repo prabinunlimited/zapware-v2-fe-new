@@ -16,10 +16,7 @@ export const fetchCustomerBankAccounts =
 
       // FIXED: Use import.meta.env for Vite instead of process.env
       const API_URL = import.meta.env.VITE_API_URL;
-      console.log(
-        "🔍 Fetching bank accounts from:",
-        `${API_URL}/bank-account-details/${customerId}`
-      );
+      
 
       const response = await fetch(
         `${API_URL}/bank-account-details/${customerId}`,
@@ -38,10 +35,10 @@ export const fetchCustomerBankAccounts =
       }
 
       const data = await response.json();
-      console.log("✅ Bank accounts response:", data);
+      
       dispatch(setCustomerBankAccounts(data.account_details || []));
     } catch (error) {
-      console.error("❌ Error fetching bank accounts:", error);
+      
       dispatch(setTransferError(error.message));
     }
   };
@@ -57,10 +54,7 @@ export const searchReceiverByMobile =
       const authtoken = auth.token || localStorage.getItem("authtoken");
 
       const API_URL = import.meta.env.VITE_API_URL;
-      console.log(
-        "🔍 Searching receiver:",
-        `${API_URL}/customers/by-mobile/${mobile}`
-      );
+      
 
       const response = await fetch(`${API_URL}/customers/by-mobile/${mobile}`, {
         headers: {
@@ -70,7 +64,7 @@ export const searchReceiverByMobile =
       });
 
       const data = await response.json();
-      console.log("✅ Receiver search response:", data);
+      
 
       if (data.success) {
         dispatch(setReceiverDetails(data.data));
@@ -85,7 +79,7 @@ export const searchReceiverByMobile =
       const errorMessage =
         error.response?.data?.message ||
         "Failed to fetch receiver. Please try again.";
-      console.error("❌ Error searching receiver:", error);
+      
       dispatch(setTransferError(errorMessage));
       // FIX: Make sure we return the error payload
       return { success: false, error: errorMessage };
@@ -95,7 +89,7 @@ export const searchReceiverByMobile =
   };
 
 export const executeTransfer = (transferData) => async (dispatch, getState) => {
-  console.log("🚀 executeTransfer thunk started");
+  
   dispatch(startTransferLoading());
 
   try {
@@ -103,7 +97,7 @@ export const executeTransfer = (transferData) => async (dispatch, getState) => {
     const authtoken = auth.token || localStorage.getItem("authtoken");
 
     const API_URL = import.meta.env.VITE_API_URL;
-    console.log("📤 Making API call to:", `${API_URL}/transfer`);
+    
 
     const response = await fetch(`${API_URL}/transfer`, {
       method: "POST",
@@ -115,19 +109,19 @@ export const executeTransfer = (transferData) => async (dispatch, getState) => {
     });
 
     const data = await response.json();
-    console.log("📥 API response:", data);
+    
 
     if (data.status === "Success") {
-      console.log("✅ Dispatching setTransferSuccess");
+      
       dispatch(setTransferSuccess());
       return { success: true, data };
     } else {
-      console.log("❌ Dispatching setTransferError:", data.message);
+      
       dispatch(setTransferError(data.message || "Transfer failed"));
       return { success: false, error: data.message };
     }
   } catch (error) {
-    console.log("💥 Dispatching setTransferError due to catch:", error.message);
+    
     const errorMessage = error.response?.data?.message || "An error occurred during transfer.";
     dispatch(setTransferError(errorMessage));
     return { success: false, error: errorMessage };
