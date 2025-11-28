@@ -40,27 +40,18 @@ const TransactionDetails = React.memo(
     // ✅ FIXED: SINGLE FETCH EFFECT WITH SUCCESS-BASED STOPPING
     useEffect(() => {
       if (!customerId || !selectedCurrencyCode || selectedCurrencyCode === "all") {
-        console.log("⏹️ Missing customerId or currency, skipping transaction fetch");
         return;
       }
 
       // ✅ STOP IF ALREADY HAVE SUCCESSFUL DATA
       if (hasSuccessfulData(customerId, selectedCurrencyCode)) {
-        console.log("✅ Already have transaction data, skipping fetch");
         return;
       }
 
       // ✅ PREVENT DUPLICATE INITIAL FETCH
       if (initialFetchDone) {
-        console.log("⏸️ Initial fetch already completed, skipping...");
         return;
       }
-
-      console.log("🔄 Initial transaction fetch triggered", {
-        customerId,
-        selectedCurrencyCode,
-        hasSuccessfulData: hasSuccessfulData(customerId, selectedCurrencyCode)
-      });
 
       setInitialFetchDone(true);
       fetchTransactions(customerId, selectedCurrencyCode);
@@ -74,7 +65,6 @@ const TransactionDetails = React.memo(
           transactions.length > 0 && 
           !loading && 
           !transactionCompletionNotified) {
-        console.log("✅ Transaction completion callback triggered (notification only)");
         setTransactionCompletionNotified(true);
         // Just notify completion without triggering refresh
         onTransactionComplete(false); // Pass false to indicate no refresh needed
@@ -157,7 +147,6 @@ const TransactionDetails = React.memo(
     const handleManualRefresh = useCallback(() => {
       if (!customerId || !selectedCurrencyCode) return;
       
-      console.log("🔄 Manual transaction refresh triggered");
       setInitialFetchDone(false); // Reset to allow new fetch
       setTransactionCompletionNotified(false); // Reset completion notification
       forceRefresh(customerId, selectedCurrencyCode);

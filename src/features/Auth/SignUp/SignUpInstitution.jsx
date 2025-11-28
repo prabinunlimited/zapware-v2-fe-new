@@ -230,40 +230,11 @@ const Institution = () => {
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
 
-  // === ADD THE ACCOUNT ANALYSIS USEEFFECT RIGHT HERE ===
-  useEffect(() => {
-    console.log("ACCOUNT TYPE ANALYSIS:");
-    console.log("- Selected Accounts:", selectedAccounts);
-    console.log("- Account Options:", accountOptions);
-    console.log("- isNamedAccount result:", isNamedAccount);
-
-    if (selectedAccounts && selectedAccounts.length > 0) {
-      selectedAccounts.forEach((account, index) => {
-        console.log(`Account ${index}:`, {
-          type: account.account_type,
-          currency: account.currency,
-          isNamed: account.account_type === "named",
-          isUSD: account.currency === "USD",
-        });
-      });
-    }
-  }, [selectedAccounts, accountOptions, isNamedAccount]);
-  // === END ACCOUNT ANALYSIS ===
-
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
     const isNamedAccount = useSelector(selectIsNamedAccount);
     const selectedAccounts = useSelector(selectSelectedAccounts);
     const accountOptions = useSelector(selectAccountOptions);
-
-    React.useEffect(() => {
-      console.log("SELECTOR DEBUG:", {
-        isNamedAccount,
-        selectedAccounts,
-        accountOptions,
-        selectedAccountsJSON: JSON.stringify(selectedAccounts),
-      });
-    }, [isNamedAccount, selectedAccounts, accountOptions]);
 
     return null;
   };
@@ -1079,18 +1050,6 @@ const Institution = () => {
           };
         }
 
-        // === ADD DEBUG FOR FORM ERRORS ===
-        console.log("🔍 ALL FORM ERRORS:", formErrors);
-        console.log(
-          "🔍 CURRENT VALUES:",
-          Object.keys(values)
-            .filter((k) => values[k])
-            .reduce((acc, key) => {
-              acc[key] = values[key];
-              return acc;
-            }, {})
-        );
-
         if (formErrors && typeof formErrors === "object" && !formErrors.then) {
           const stepComplete = isStepComplete(
             currentStep,
@@ -1099,24 +1058,11 @@ const Institution = () => {
             touchedFields
           );
 
-          console.log("🔍 STEP COMPLETE:", stepComplete);
-          console.log("🔍 FORM ERRORS COUNT:", Object.keys(formErrors).length);
-          console.log("🔍 FORM ERROR KEYS:", Object.keys(formErrors));
-
           if (!stepComplete || Object.keys(formErrors).length > 0) {
             const firstError = getFirstErrorMessage(
               formErrors,
               values,
               currentStep
-            );
-            console.log("🔍 FIRST ERROR MESSAGE:", firstError);
-            console.log(
-              "🔍 ERROR SOURCE:",
-              Object.keys(formErrors).find((key) => formErrors[key])
-            );
-            console.log(
-              "🔍 SPECIFIC ERROR DETAILS:",
-              Object.entries(formErrors).filter(([key, value]) => value)
             );
 
             dispatch(setErrorMessage(firstError));
@@ -1143,7 +1089,6 @@ const Institution = () => {
           dispatch(setShowPopup(true));
         }
       } catch (error) {
-        console.log("🔍 VALIDATION ERROR:", error);
         dispatch(
           setErrorMessage("An unexpected error occurred. Please try again.")
         );
@@ -3088,23 +3033,6 @@ const Institution = () => {
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
-
-                      {/* === SSN FIELD DEBUG === */}
-                      {console.log("=== SSN FIELD DEBUG ===") || true}
-                      {console.log("Current Step:", currentStep) || true}
-                      {console.log("isNamedAccount:", isNamedAccount) || true}
-                      {console.log("Account Type:", accountType) || true}
-                      {console.log("Selected Country ID:", values.country) ||
-                        true}
-                      {console.log("isNamedAccount value:", isNamedAccount) ||
-                        true}
-                      {console.log("isUS Country:", values.country === 186) ||
-                        true}
-                      {console.log(
-                        "Should Show SSN:",
-                        isNamedAccount && values.country === 186
-                      ) || true}
-                      {console.log("=======================") || true}
 
                       {/* FIXED: Check by country ID instead of name */}
                       {isNamedAccount && values.country === 186 && (

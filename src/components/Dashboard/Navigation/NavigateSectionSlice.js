@@ -1,21 +1,14 @@
+// src/components/Dashboard/NavigateSection/navigateSectionSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Async thunks
+// Async thunks using api.js
 export const fetchCustomerProfile = createAsyncThunk(
   "navigateSection/fetchCustomerProfile",
   async (customerId, { rejectWithValue }) => {
-    // 🎯 NAVIGATE SECTION PROFILE FETCH TRACKING
-    console.log("🧭 === NAVIGATE SECTION PROFILE FETCH ===", {
-      timestamp: new Date().toISOString(),
-      customerId,
-      slice: "NavigateSectionSlice",
-    });
-
     const stack = new Error().stack;
-    console.log("📞 NavigateSection call stack:");
-
     const stackLines = stack.split("\n");
     const relevantCallers = stackLines
       .slice(2, 6)
@@ -33,25 +26,19 @@ export const fetchCustomerProfile = createAsyncThunk(
         throw new Error("No authentication token found");
       }
 
-      console.log("🔍 NavigateSection fetching customer profile");
+      // ✅ USING api.js INSTEAD OF fetch
+      const response = await api.get(
+        `/customers/${customerId}/profile`,
+        {
+          headers: {
+            Authorization: `Bearer ${authtoken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-      const response = await fetch(`${API_URL}/customers/${customerId}/profile`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${authtoken}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("✅ NavigateSection profile fetch successful", data);
-
-      if (data.status === "success") {
-        return data;
+      if (response.data.status === "success") {
+        return response.data;
       } else {
         throw new Error("Failed to fetch profile - non-success status");
       }
@@ -65,16 +52,11 @@ export const fetchCustomerProfile = createAsyncThunk(
 export const fetchAllowedModules = createAsyncThunk(
   "navigateSection/fetchAllowedModules",
   async ({ partnerId, bearertoken }, { rejectWithValue }) => {
-    console.log("🧭 === FETCHING ALLOWED MODULES ===", {
-      partnerId,
-      hasBearertoken: !!bearertoken,
-    });
-
     try {
-      const response = await fetch(
-        `${API_URL}/partners/ourzap-modules/${partnerId}`,
+      // ✅ USING api.js INSTEAD OF fetch
+      const response = await api.get(
+        `/partners/ourzap-modules/${partnerId}`,
         {
-          method: "GET",
           headers: {
             Authorization: `Bearer ${bearertoken}`,
             "Content-Type": "application/json",
@@ -82,14 +64,7 @@ export const fetchAllowedModules = createAsyncThunk(
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("✅ Allowed modules fetch successful", data);
-
-      return data;
+      return response.data;
     } catch (error) {
       console.error("❌ Allowed modules fetch error:", error);
       return rejectWithValue(error.message);
@@ -100,28 +75,22 @@ export const fetchAllowedModules = createAsyncThunk(
 export const downloadUserManual = createAsyncThunk(
   "navigateSection/downloadUserManual",
   async ({ partnerId, placement }, { rejectWithValue }) => {
-    console.log("📥 === DOWNLOAD USER MANUAL ===", { partnerId, placement });
-
     try {
-      const response = await fetch(`${API_URL}/get-manuals`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // ✅ USING api.js INSTEAD OF fetch
+      const response = await api.post(
+        `/get-manuals`,
+        {
           partnerId: partnerId === undefined ? 0 : partnerId,
           placement,
-        }),
-      });
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("✅ User manual fetch successful", data);
-
-      return data;
+      return response.data;
     } catch (error) {
       console.error("❌ User manual fetch error:", error);
       return rejectWithValue(error.message);
@@ -142,10 +111,14 @@ const navigateSectionSlice = createSlice({
     showPlaidLink: false,
     manualLoading: false,
     profileLoading: false,
-    customerBankApprovedStatus: localStorage.getItem("bank_approve_status") || "0",
-    download_operation_manual: localStorage.getItem("download_operation_manual") || "N",
-    isWhiteLabelledPartner: localStorage.getItem("iswhitelabelledpartner") || "N",
-    whiteLabelledPartnerId: localStorage.getItem("whitelabelledpartnerid") || "0",
+    customerBankApprovedStatus:
+      localStorage.getItem("bank_approve_status") || "0",
+    download_operation_manual:
+      localStorage.getItem("download_operation_manual") || "N",
+    isWhiteLabelledPartner:
+      localStorage.getItem("iswhitelabelledpartner") || "N",
+    whiteLabelledPartnerId:
+      localStorage.getItem("whitelabelledpartnerid") || "0",
     hasFetchedProfile: false,
     hasFetchedModules: false,
     fetchError: null,
@@ -186,10 +159,14 @@ const navigateSectionSlice = createSlice({
       state.hasFetchedModules = action.payload;
     },
     updateLocalStorageState: (state) => {
-      state.customerBankApprovedStatus = localStorage.getItem("bank_approve_status") || "0";
-      state.download_operation_manual = localStorage.getItem("download_operation_manual") || "N";
-      state.isWhiteLabelledPartner = localStorage.getItem("iswhitelabelledpartner") || "N";
-      state.whiteLabelledPartnerId = localStorage.getItem("whitelabelledpartnerid") || "0";
+      state.customerBankApprovedStatus =
+        localStorage.getItem("bank_approve_status") || "0";
+      state.download_operation_manual =
+        localStorage.getItem("download_operation_manual") || "N";
+      state.isWhiteLabelledPartner =
+        localStorage.getItem("iswhitelabelledpartner") || "N";
+      state.whiteLabelledPartnerId =
+        localStorage.getItem("whitelabelledpartnerid") || "0";
     },
     clearFetchError: (state) => {
       state.fetchError = null;
@@ -218,13 +195,17 @@ const navigateSectionSlice = createSlice({
         state.profileLoading = false;
         state.hasFetchedProfile = true;
         state.fetchError = null;
-        
+
         if (action.payload.status === "success" && action.payload.profile) {
           state.customerStatus = action.payload.profile.active_status;
           // Update localStorage if needed
           if (action.payload.profile.bank_approve_status) {
-            localStorage.setItem("bank_approve_status", action.payload.profile.bank_approve_status);
-            state.customerBankApprovedStatus = action.payload.profile.bank_approve_status;
+            localStorage.setItem(
+              "bank_approve_status",
+              action.payload.profile.bank_approve_status
+            );
+            state.customerBankApprovedStatus =
+              action.payload.profile.bank_approve_status;
           }
         }
       })
@@ -242,7 +223,7 @@ const navigateSectionSlice = createSlice({
         state.profileLoading = false;
         state.hasFetchedModules = true;
         state.modulesError = null;
-        
+
         if (action.payload.status === "success") {
           state.allowedModules = action.payload.data || [];
         }
@@ -250,7 +231,8 @@ const navigateSectionSlice = createSlice({
       .addCase(fetchAllowedModules.rejected, (state, action) => {
         state.profileLoading = false;
         state.hasFetchedModules = false;
-        state.modulesError = action.payload || "Failed to fetch allowed modules";
+        state.modulesError =
+          action.payload || "Failed to fetch allowed modules";
       })
       // Download user manual
       .addCase(downloadUserManual.pending, (state) => {
@@ -260,11 +242,17 @@ const navigateSectionSlice = createSlice({
       .addCase(downloadUserManual.fulfilled, (state, action) => {
         state.manualLoading = false;
         state.manualError = null;
-        
+
         // Handle the manual download response
-        if (action.payload.status === "success" && action.payload.data?.file_path) {
+        if (
+          action.payload.status === "success" &&
+          action.payload.data?.file_path
+        ) {
           // The file path is available for download
-          console.log("User manual available at:", action.payload.data.file_path);
+          console.log(
+            "User manual available at:",
+            action.payload.data.file_path
+          );
         }
       })
       .addCase(downloadUserManual.rejected, (state, action) => {
@@ -291,28 +279,41 @@ export const {
 } = navigateSectionSlice.actions;
 
 // Selectors
-export const selectCustomerStatus = (state) => state.navigateSection.customerStatus;
-export const selectAllowedModules = (state) => state.navigateSection.allowedModules;
+export const selectCustomerStatus = (state) =>
+  state.navigateSection.customerStatus;
+export const selectAllowedModules = (state) =>
+  state.navigateSection.allowedModules;
 export const selectPopupData = (state) => state.navigateSection.popupData;
-export const selectShowPlaidLink = (state) => state.navigateSection.showPlaidLink;
-export const selectManualLoading = (state) => state.navigateSection.manualLoading;
-export const selectProfileLoading = (state) => state.navigateSection.profileLoading;
-export const selectCustomerBankApprovedStatus = (state) => state.navigateSection.customerBankApprovedStatus;
-export const selectDownloadOperationManual = (state) => state.navigateSection.download_operation_manual;
-export const selectIsWhiteLabelledPartner = (state) => state.navigateSection.isWhiteLabelledPartner;
-export const selectWhiteLabelledPartnerId = (state) => state.navigateSection.whiteLabelledPartnerId;
-export const selectHasFetchedProfile = (state) => state.navigateSection.hasFetchedProfile;
-export const selectHasFetchedModules = (state) => state.navigateSection.hasFetchedModules;
+export const selectShowPlaidLink = (state) =>
+  state.navigateSection.showPlaidLink;
+export const selectManualLoading = (state) =>
+  state.navigateSection.manualLoading;
+export const selectProfileLoading = (state) =>
+  state.navigateSection.profileLoading;
+export const selectCustomerBankApprovedStatus = (state) =>
+  state.navigateSection.customerBankApprovedStatus;
+export const selectDownloadOperationManual = (state) =>
+  state.navigateSection.download_operation_manual;
+export const selectIsWhiteLabelledPartner = (state) =>
+  state.navigateSection.isWhiteLabelledPartner;
+export const selectWhiteLabelledPartnerId = (state) =>
+  state.navigateSection.whiteLabelledPartnerId;
+export const selectHasFetchedProfile = (state) =>
+  state.navigateSection.hasFetchedProfile;
+export const selectHasFetchedModules = (state) =>
+  state.navigateSection.hasFetchedModules;
 export const selectFetchError = (state) => state.navigateSection.fetchError;
 export const selectModulesError = (state) => state.navigateSection.modulesError;
 export const selectManualError = (state) => state.navigateSection.manualError;
 
 // Combined loading selector
-export const selectIsLoading = (state) => 
+export const selectIsLoading = (state) =>
   state.navigateSection.profileLoading || state.navigateSection.manualLoading;
 
 // Combined error selector
 export const selectAnyError = (state) =>
-  state.navigateSection.fetchError || state.navigateSection.modulesError || state.navigateSection.manualError;
+  state.navigateSection.fetchError ||
+  state.navigateSection.modulesError ||
+  state.navigateSection.manualError;
 
 export default navigateSectionSlice.reducer;

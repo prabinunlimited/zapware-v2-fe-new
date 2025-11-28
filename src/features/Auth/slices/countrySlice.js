@@ -2383,15 +2383,6 @@ export const fetchCountries = createAsyncThunk(
   "countries/fetchCountries",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🌍 Using static countries data");
-      console.log("📊 Countries data structure:", {
-        total: countries.length,
-        firstCountry: countries[0],
-        keys: Object.keys(countries[0]),
-        hasPhoneCode: countries[0].hasOwnProperty("phone_code"),
-        hasPhoneCodeValue: countries[0].phone_code,
-        sampleData: countries.slice(0, 3), // First 3 countries
-      });
       return countries;
     } catch (error) {
       console.error("💥 Error loading countries:", error);
@@ -2472,17 +2463,10 @@ const countriesSlice = createSlice({
         state.countries = action.payload;
         state.error = null;
         state.lastUpdated = new Date().getTime();
-
-        console.log("✅ Countries loaded into Redux:", {
-          count: action.payload.length,
-          stateCount: state.countries.length,
-          sample: state.countries.slice(0, 2),
-        });
       })
       .addCase(fetchCountries.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || action.error.message;
-        console.error("❌ Countries fetch rejected:", state.error);
       })
       // Fetch single country
       .addCase(fetchCountry.pending, (state) => {
@@ -2531,13 +2515,6 @@ export const selectCountriesByRegion = (state, region) =>
 export const selectCountriesOptions = createSelector(
   [(state) => state.countries?.countries || []],
   (countries) => {
-    console.log("🔍 selectCountriesOptions - raw countries data:", {
-      countriesCount: countries.length,
-      isArray: Array.isArray(countries),
-      firstItem: countries[0],
-      allKeys: countries.length > 0 ? Object.keys(countries[0]) : "no data",
-    });
-
     if (!countries || !Array.isArray(countries)) {
       console.warn("⚠️ No countries data available for options");
       return [];
@@ -2552,12 +2529,6 @@ export const selectCountriesOptions = createSelector(
       flag: country.flag_url, // ✅ ADD THIS LINE - include the flag URL
       flag_url: country.flag_url, // ✅ ADD THIS LINE TOO for consistency
     }));
-
-    console.log("🔄 Processed country options:", {
-      optionsCount: options.length,
-      firstOption: options[0],
-      optionsStructure: options.slice(0, 3), // First 3 options
-    });
 
     return options;
   }

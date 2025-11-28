@@ -143,7 +143,7 @@ const initialState = {
   // User Data
   user: null,
   token: null,
-  bearertoken: null,  
+  bearertoken: null,
   customerId: null,
   tempAuthData: null,
 
@@ -151,6 +151,9 @@ const initialState = {
   hasFetchedData: false,
   hasFetchedProfile: false,
   hasFetchedModules: false,
+
+  //Redirect
+  isRedirecting: false,
 
   // Verification Status
   kycStatus: null,
@@ -254,6 +257,11 @@ const authSlice = createSlice({
       state.hasFetchedData = false;
       state.hasFetchedProfile = false;
       state.hasFetchedModules = false;
+    },
+
+    // =====================REDIRECTION ===============
+    setRedirecting: (state, action) => {
+      state.isRedirecting = action.payload;
     },
 
     // ===================== INITIALIZATION & STATE SYNC =====================
@@ -991,6 +999,7 @@ const authSlice = createSlice({
       .addCase("auth/login/fulfilled", (state, action) => {
         state.isLoading = false;
         state.error = null;
+        state.isRedirecting = true;
 
         if (action.payload?.is_owner_login) {
           state.isOwnerLogin = true;
@@ -1064,9 +1073,7 @@ const authSlice = createSlice({
   },
 });
 
-// ===================== SELECTORS (CLEAN - NO CONSOLE.LOG) =====================
 export const selectAuth = (state) => state.auth;
-
 
 // export const selectAuthToken = (state) => {
 //   const token = state.auth.token;
@@ -1182,6 +1189,8 @@ export const selectResendTimer = (state) => state.auth.resendTimer;
 export const selectResendAttempts = (state) => state.auth.resendAttempts;
 export const selectIsSubmitting = (state) => state.auth.isSubmitting;
 export const selectShowCustomerType = (state) => state.auth.showCustomerType;
+export const selectIsRedirecting = (state) => state.auth.isRedirecting;
+
 
 // Composite selectors
 export const selectAuthStatus = (state) => ({
@@ -1236,6 +1245,7 @@ export const selectIsValidSession = (state) => {
 // ===================== ACTIONS =====================
 export const {
   setHasFetchedData,
+  setRedirecting,
   setHasFetchedProfile,
   setHasFetchedModules,
   resetFetchFlags,

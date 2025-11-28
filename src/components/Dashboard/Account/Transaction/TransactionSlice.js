@@ -26,13 +26,11 @@ export const fetchTransactionDetails = createAsyncThunk(
     
     // ✅ STOP IF ALREADY HAVE SUCCESSFUL DATA
     if (hasSuccessfulTransactionFetch(customerId, currencyCode)) {
-      console.log("✅ Already have successful transaction data, skipping fetch");
       return rejectWithValue("Already have successful transaction data");
     }
 
     // ✅ PREVENT DUPLICATE REQUESTS
     if (transactionFetchInProgress) {
-      console.log("⏸️ Transaction fetch already in progress, skipping...");
       return rejectWithValue("Transaction fetch already in progress");
     }
 
@@ -42,8 +40,6 @@ export const fetchTransactionDetails = createAsyncThunk(
       const state = getState();
       const token = state.auth.token;
 
-      console.log(`🔄 Fetching transactions for ${customerId}/${currencyCode}`);
-
       const response = await axios.get(
         `${API_URL}/transactions/currency-transaction-details/${customerId}/${currencyCode}`,
         {
@@ -51,12 +47,6 @@ export const fetchTransactionDetails = createAsyncThunk(
           timeout: 30000,
         }
       );
-
-      console.log("✅ Transaction fetch successful:", {
-        customerId,
-        currencyCode,
-        count: response.data.transaction_details?.length || 0
-      });
 
       // ✅ MARK AS SUCCESSFUL FETCH
       if (response.data.status === "success") {
@@ -68,7 +58,6 @@ export const fetchTransactionDetails = createAsyncThunk(
 
       return response.data.transaction_details || [];
     } catch (error) {
-      console.error("❌ Error fetching transactions:", error);
       return rejectWithValue(error.message);
     } finally {
       setTimeout(() => {
@@ -162,10 +151,8 @@ const transactionSlice = createSlice({
       if (customerId && currencyCode) {
         const key = getTransactionRequestKey(customerId, currencyCode);
         successfulTransactionFetches.delete(key);
-        console.log("🧹 Cleared successful transaction fetch for:", key);
       } else {
         successfulTransactionFetches.clear();
-        console.log("🧹 Cleared all successful transaction fetches");
       }
     },
     // ✅ ADDED: Force refresh transactions
@@ -175,7 +162,6 @@ const transactionSlice = createSlice({
         const key = getTransactionRequestKey(customerId, currencyCode);
         successfulTransactionFetches.delete(key);
         state.hasFetchedTransactions = false;
-        console.log("🔄 Force refresh transactions for:", key);
       }
     },
     setHasFetchedTransactions: (state, action) => {
@@ -202,8 +188,6 @@ const transactionSlice = createSlice({
         
         if (!isAlreadyHaveData) {
           state.error = action.payload;
-        } else {
-          console.log("⏸️ Transaction fetch skipped - already have data");
         }
         
         state.loading = false;

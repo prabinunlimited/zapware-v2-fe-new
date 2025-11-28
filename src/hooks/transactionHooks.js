@@ -28,11 +28,15 @@ export const useTransactionData = () => {
 
     // ✅ Skip if already have successful data (unless force refresh)
     if (transactionUtils.hasSuccessfulTransactionFetch(customerId, currencyCode) && !forceRefresh) {
-      
+      console.log("✅ Already have transaction data, skipping fetch");
       return;
     }
 
-    
+    console.log("🔄 Fetching transactions...", {
+      customerId,
+      currencyCode,
+      forceRefresh,
+      hasSuccessfulData: transactionUtils.hasSuccessfulTransactionFetch(customerId, currencyCode)
     });
 
     dispatch(fetchTransactionDetails({ customerId, currencyCode }));

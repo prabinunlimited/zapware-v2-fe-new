@@ -1,12 +1,33 @@
+// src/components/Dashboard/Header/headerSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../../services/api"; // ✅ Use your custom api.js
+import api from "../../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// FX currencies thunk - USING api.js
+// Helper function to get API signature for coordination
+const getProfileSignature = (customerId) => {
+  return `GET-${API_URL}/customers/${customerId}/profile-{}`;
+};
+
+const getFxSignature = () => {
+  const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+  const partnerId =
+    isWhiteLabelled === "1"
+      ? localStorage.getItem("whitelabelledpartnerid") || "9"
+      : "9";
+  return `POST-${API_URL}/partner-fxcurrencies-{"partner_id":"${partnerId}"}`;
+};
+
+const getChargesSignature = (customerId) => {
+  return `GET-${API_URL}/get-charges/${customerId}-{}`;
+};
+
+// FX currencies thunk with coordination
 export const fetchPartnerFxCurrencies = createAsyncThunk(
   "header/fetchPartnerFxCurrencies",
   async (bearertoken, { rejectWithValue }) => {
+    const signature = getFxSignature();
+
     try {
       if (!bearertoken) {
         throw new Error("Bearer token missing");
@@ -18,7 +39,6 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
           ? localStorage.getItem("whitelabelledpartnerid") || "9"
           : "9";
 
-      // ✅ USING api.js INSTEAD OF RAW AXIOS
       const response = await api.post(
         `/partner-fxcurrencies?partner_id=${partnerId}`,
         {},
@@ -30,14 +50,16 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
         }
       );
 
-      return response.data.rates || [];
+      const rates = response.data.rates || [];
+      return rates;
     } catch (error) {
+      console.error("❌ fetchPartnerFxCurrencies error:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
-// Profile fetching thunk - USING api.js
+// Profile fetching thunk with coordination
 export const fetchUserProfile = createAsyncThunk(
   "header/fetchUserProfile",
   async ({ customerId, bearertoken }, { rejectWithValue }) => {
@@ -46,7 +68,6 @@ export const fetchUserProfile = createAsyncThunk(
         throw new Error("Missing token or customer ID");
       }
 
-      // Your existing API call
       const response = await api.get(`/customers/${customerId}/profile`, {
         headers: {
           Authorization: `Bearer ${bearertoken}`,
@@ -56,20 +77,27 @@ export const fetchUserProfile = createAsyncThunk(
 
       if (response.data.status === "success") {
         const profile = response.data.profile;
+
         localStorage.setItem("firstName", profile.first_name);
         localStorage.setItem("lastName", profile.last_name);
         localStorage.setItem("middleName", profile.middle_name || "");
+
         return profile;
       } else {
+        console.error(
+          "❌ Profile API returned non-success status:",
+          response.data
+        );
         throw new Error("Failed to fetch profile - non-success status");
       }
     } catch (error) {
+      console.error("❌ fetchUserProfile error:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
-// Charges data thunk - USING api.js
+// Charges data thunk with coordination
 export const fetchChargesData = createAsyncThunk(
   "header/fetchChargesData",
   async ({ customerId, authtoken }, { rejectWithValue }) => {
@@ -78,44 +106,27 @@ export const fetchChargesData = createAsyncThunk(
         throw new Error("Missing authentication token or customer ID");
       }
 
-      // ✅ USE ONLY api.js - NO FALLBACK
-      const apiEndpoints = [
-        `/get-charges/${customerId}`,
-        `/charges/${customerId}`,
-      ];
+      const response = await api.get(`/get-charges/${customerId}`, {
+        headers: {
+          Authorization: `Bearer ${authtoken}`,
+        },
+        timeout: 8000,
+      });
 
-      let lastError = null;
+      const chargesData =
+        response.data.charge_details ||
+        response.data.charges ||
+        response.data.data ||
+        [];
 
-      for (const endpoint of apiEndpoints) {
-        try {
-          const response = await api.get(endpoint, {
-            headers: {
-              Authorization: `Bearer ${authtoken}`,
-            },
-            timeout: 8000,
-          });
-
-          // Handle different response structures
-          const chargesData =
-            response.data.charge_details ||
-            response.data.charges ||
-            response.data.data ||
-            [];
-
-          if (chargesData.length > 0) {
-            return chargesData;
-          }
-        } catch (error) {
-          lastError = error;
-          continue;
-        }
+      if (chargesData.length > 0) {
+        return chargesData;
+      } else {
+        throw new Error("No charges data available");
       }
-
-      // If all endpoints failed
-      throw (
-        lastError || new Error("No charges data available from any endpoint")
-      );
     } catch (error) {
+      console.error("❌ fetchChargesData error:", error);
+
       let errorMessage = "Failed to fetch charges data";
 
       if (error.response) {
@@ -133,96 +144,24 @@ export const fetchChargesData = createAsyncThunk(
   }
 );
 
-// Logout thunk - USING api.js
-export const logoutUser = createAsyncThunk(
-  "header/logoutUser",
-  async (authtoken, { rejectWithValue }) => {
-    try {
-      // ✅ USING api.js for logout
-      const response = await api.post(
-        "/logout",
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${authtoken}`,
-          },
-          timeout: 10000,
-        }
-      );
-
-      // Clear all local storage
-      localStorage.removeItem("authtoken");
-      localStorage.removeItem("authcustomer_id");
-      localStorage.removeItem("bearertoken");
-      localStorage.removeItem("is_staff_login");
-      localStorage.removeItem("staff_role");
-      localStorage.removeItem("is_owner_login");
-      localStorage.removeItem("owner_id");
-      localStorage.removeItem("owner_role_name");
-      localStorage.removeItem("firstName");
-      localStorage.removeItem("lastName");
-      localStorage.removeItem("middleName");
-      localStorage.removeItem("isWhitelabelledCustomer");
-      localStorage.removeItem("whitelabelled_customer_partnerid");
-      localStorage.removeItem("isRemittanceOnlyCustomer");
-
-      return response.data;
-    } catch (error) {
-      // Even if API call fails, clear local storage
-      localStorage.removeItem("authtoken");
-      localStorage.removeItem("authcustomer_id");
-      localStorage.removeItem("bearertoken");
-      localStorage.removeItem("is_staff_login");
-      localStorage.removeItem("staff_role");
-      localStorage.removeItem("is_owner_login");
-      localStorage.removeItem("owner_id");
-      localStorage.removeItem("owner_role_name");
-      localStorage.removeItem("firstName");
-      localStorage.removeItem("lastName");
-      localStorage.removeItem("middleName");
-      localStorage.removeItem("isWhitelabelledCustomer");
-      localStorage.removeItem("whitelabelled_customer_partnerid");
-      localStorage.removeItem("isRemittanceOnlyCustomer");
-
-      return rejectWithValue(error.response?.data || error.message);
-    }
-  }
-);
-
 const initialState = {
-  // FX data states
   partnerFxCurrencies: [],
   hasFxData: false,
-
-  // Profile states
   profileData: null,
   profileLoading: false,
   profileError: null,
-
-  // Charges states
   chargesData: [],
   chargesLoading: false,
   chargesError: null,
   chargesLastFetched: null,
-
-  // Logout state
-  logoutLoading: false,
-  logoutError: null,
-
-  // UI state
   loading: false,
   error: null,
   isDropdownOpen: false,
-
-  // Fetch status tracking
   fetchStatus: {
     fx: "idle",
     profile: "idle",
     charges: "idle",
-    logout: "idle",
   },
-
-  // Local storage derived state
   headerColor: localStorage.getItem("header_color") || "bg-sky-800",
   isWhitelabelledCustomer:
     localStorage.getItem("isWhitelabelledCustomer") || "N",
@@ -237,8 +176,6 @@ const initialState = {
   isWhitelabelledCustomerPartnerId: localStorage.getItem(
     "whitelabelled_customer_partnerid"
   ),
-
-  // Timer state
   logoutTime: localStorage.getItem("logoutTime")
     ? parseInt(localStorage.getItem("logoutTime"), 10)
     : 180000,
@@ -254,7 +191,6 @@ const headerSlice = createSlice({
     setError: (state, action) => {
       state.error = action.payload;
     },
-    // Dropdown actions
     openDropdown: (state) => {
       state.isDropdownOpen = true;
     },
@@ -265,7 +201,6 @@ const headerSlice = createSlice({
       state.headerColor = action.payload;
     },
     updateLocalStorageState: (state) => {
-      // Sync with localStorage
       state.headerColor = localStorage.getItem("header_color") || "bg-sky-800";
       state.isWhitelabelledCustomer =
         localStorage.getItem("isWhitelabelledCustomer") || "N";
@@ -284,7 +219,6 @@ const headerSlice = createSlice({
       );
     },
     clearAuthData: (state) => {
-      // Clear all auth-related data
       state.authtoken = null;
       state.error = null;
       state.loading = false;
@@ -293,17 +227,14 @@ const headerSlice = createSlice({
         fx: "idle",
         profile: "idle",
         charges: "idle",
-        logout: "idle",
       };
     },
-    // Profile actions
     clearProfileData: (state) => {
       state.profileData = null;
       state.profileLoading = false;
       state.profileError = null;
       state.fetchStatus.profile = "idle";
     },
-    // Charges actions
     clearChargesData: (state) => {
       state.chargesData = [];
       state.chargesLoading = false;
@@ -317,66 +248,91 @@ const headerSlice = createSlice({
     resetChargesError: (state) => {
       state.chargesError = null;
     },
-    // Logout actions
-    setLogoutLoading: (state, action) => {
-      state.logoutLoading = action.payload;
-    },
-    resetLogoutError: (state) => {
-      state.logoutError = null;
-    },
     resetFetchStatus: (state) => {
       state.fetchStatus = {
         fx: "idle",
         profile: "idle",
         charges: "idle",
-        logout: "idle",
       };
     },
     resetHeaderState: () => initialState,
+    clearApiCache: (state) => {
+      // Cache clearing handled by api service
+    },
+    forceRefreshProfile: (state) => {
+      state.fetchStatus.profile = "idle";
+      state.profileData = null;
+    },
+    forceRefreshFx: (state) => {
+      state.fetchStatus.fx = "idle";
+      state.partnerFxCurrencies = [];
+      state.hasFxData = false;
+    },
+    forceRefreshCharges: (state) => {
+      state.fetchStatus.charges = "idle";
+      state.chargesData = [];
+    },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Partner FX Currencies
       .addCase(fetchPartnerFxCurrencies.pending, (state) => {
         state.loading = true;
         state.fetchStatus.fx = "loading";
+        state.error = null;
       })
       .addCase(fetchPartnerFxCurrencies.fulfilled, (state, action) => {
         state.loading = false;
         state.partnerFxCurrencies = action.payload;
         state.hasFxData = action.payload.length > 0;
         state.fetchStatus.fx = "succeeded";
+        state.error = null;
       })
       .addCase(fetchPartnerFxCurrencies.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        if (
+          action.payload !==
+          "FX fetch already in progress (global coordination)"
+        ) {
+          state.error = action.payload;
+          state.fetchStatus.fx = "failed";
+        } else {
+          state.fetchStatus.fx = "idle";
+        }
         state.hasFxData = false;
-        state.fetchStatus.fx = "failed";
       })
-
-      // Fetch User Profile
       .addCase(fetchUserProfile.pending, (state) => {
         state.profileLoading = true;
         state.fetchStatus.profile = "loading";
         state.profileError = null;
       })
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
+        console.log(
+          "✅ REDUX: Profile data received:",
+          action.payload?.first_name
+        );
         state.profileLoading = false;
         state.profileData = action.payload;
         state.fetchStatus.profile = "succeeded";
         state.profileError = null;
-
-        // Update localStorage state to reflect new firstName
         state.isWhitelabelledCustomer =
           localStorage.getItem("isWhitelabelledCustomer") || "N";
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
         state.profileLoading = false;
-        state.profileError = action.payload;
-        state.fetchStatus.profile = "failed";
+        if (
+          action.payload !==
+          "Profile fetch already in progress (global coordination)"
+        ) {
+          state.profileError = action.payload;
+          state.fetchStatus.profile = "failed";
+          console.error(
+            "❌ Profile fetch rejected in reducer:",
+            action.payload
+          );
+        } else {
+          state.fetchStatus.profile = "idle";
+        }
       })
-
-      // Fetch Charges Data
       .addCase(fetchChargesData.pending, (state) => {
         state.chargesLoading = true;
         state.chargesError = null;
@@ -391,69 +347,33 @@ const headerSlice = createSlice({
       })
       .addCase(fetchChargesData.rejected, (state, action) => {
         state.chargesLoading = false;
-        state.chargesError = action.payload;
+        if (
+          action.payload !==
+          "Charges fetch already in progress (global coordination)"
+        ) {
+          state.chargesError = action.payload;
+          state.fetchStatus.charges = "failed";
+          console.error("❌ Charges fetch failed:", action.payload);
+        } else {
+          state.fetchStatus.charges = "idle";
+        }
         state.chargesData = [];
-        state.fetchStatus.charges = "failed";
-      })
-
-      // Logout User
-      .addCase(logoutUser.pending, (state) => {
-        state.logoutLoading = true;
-        state.fetchStatus.logout = "loading";
-      })
-      .addCase(logoutUser.fulfilled, (state) => {
-        state.logoutLoading = false;
-        state.fetchStatus.logout = "succeeded";
-
-        // ✅ ONLY reset auth-related state, not everything
-        state.authtoken = null;
-        state.isStaffLogin = null;
-        state.staffRole = null;
-        state.isOwnerLogin = null;
-        state.ownerId = null;
-        state.ownerRoleName = null;
-        state.staffId = null;
-        state.isDropdownOpen = false;
-      })
-      .addCase(logoutUser.rejected, (state, action) => {
-        state.logoutLoading = false;
-        state.logoutError = action.payload;
-        state.fetchStatus.logout = "failed";
-
-        // ✅ ONLY reset auth-related state on failure too
-        state.authtoken = null;
-        state.isStaffLogin = null;
-        state.staffRole = null;
-        state.isOwnerLogin = null;
-        state.ownerId = null;
-        state.ownerRoleName = null;
-        state.staffId = null;
-        state.isDropdownOpen = false;
       });
   },
 });
 
-// Selectors
-
-// Header state selectors
 export const selectHeader = (state) => state.header;
 export const selectHeaderLoading = (state) => state.header.loading;
 export const selectHeaderError = (state) => state.header.error;
 export const selectIsDropdownOpen = (state) => state.header.isDropdownOpen;
 export const selectHeaderColor = (state) => state.header.headerColor;
 export const selectFetchStatus = (state) => state.header.fetchStatus;
-
-// FX data selectors
 export const selectPartnerFxCurrencies = (state) =>
   state.header.partnerFxCurrencies;
 export const selectHasFxData = (state) => state.header.hasFxData;
-
-// Profile selectors
 export const selectProfileData = (state) => state.header.profileData;
 export const selectProfileLoading = (state) => state.header.profileLoading;
 export const selectProfileError = (state) => state.header.profileError;
-
-// Charges selectors
 export const selectChargesData = (state) => state.header.chargesData;
 export const selectChargesLoading = (state) => state.header.chargesLoading;
 export const selectChargesError = (state) => state.header.chargesError;
@@ -461,12 +381,6 @@ export const selectChargesLastFetched = (state) =>
   state.header.chargesLastFetched;
 export const selectChargesFetchStatus = (state) =>
   state.header.fetchStatus.charges;
-
-// Logout selectors
-export const selectLogoutLoading = (state) => state.header.logoutLoading;
-export const selectLogoutError = (state) => state.header.logoutError;
-
-// Local storage derived selectors
 export const selectIsStaffLogin = (state) => state.header.isStaffLogin;
 export const selectStaffRole = (state) => state.header.staffRole;
 export const selectIsOwnerLogin = (state) => state.header.isOwnerLogin;
@@ -478,7 +392,6 @@ export const selectIsRemittanceOnlyCustomer = (state) =>
 export const selectIsWhitelabelledCustomerPartnerId = (state) =>
   state.header.isWhitelabelledCustomerPartnerId;
 
-// Actions
 export const {
   setLoading,
   setError,
@@ -491,10 +404,12 @@ export const {
   clearChargesData,
   setChargesLoading,
   resetChargesError,
-  setLogoutLoading,
-  resetLogoutError,
   resetFetchStatus,
   resetHeaderState,
+  clearApiCache,
+  forceRefreshProfile,
+  forceRefreshFx,
+  forceRefreshCharges,
 } = headerSlice.actions;
 
 export default headerSlice.reducer;

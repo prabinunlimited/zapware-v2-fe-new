@@ -12,34 +12,17 @@ export const tokenService = {
   setToken: (tokenData) => {
     const token = typeof tokenData === 'string' ? tokenData : tokenData?.token;
     
-    console.log('🔍 [setToken] Raw token received:', {
-      token: token,
-      type: typeof token,
-      length: token?.length,
-      first50: token?.substring(0, 50)
-    });
-    
     if (!token) {
-      console.error('❌ No token provided to setToken');
       return;
     }
 
     try {
       // Check if it's a valid JWT format
       const parts = token.split('.');
-      console.log('🔍 [setToken] Token parts:', {
-        partCount: parts.length,
-        parts: parts.map(part => ({
-          length: part.length,
-          first20: part.substring(0, 20)
-        }))
-      });
       
       if (parts.length !== 3) {
-        console.warn('⚠️ Token is not a valid JWT format - storing without validation');
         // Fallback: store without validation
         localStorage.setItem(TOKEN_KEY, token);
-        console.log('✅ Non-JWT token stored successfully');
         return;
       }
 
@@ -54,18 +37,12 @@ export const tokenService = {
         
         localStorage.setItem(TOKEN_KEY, token);
         localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
-        
-        console.log('✅ JWT token saved successfully, expires at:', new Date(expiryTime * 1000));
       } catch (jwtError) {
-        console.warn('⚠️ JWT parsing failed, storing token as-is:', jwtError);
         localStorage.setItem(TOKEN_KEY, token);
-        console.log('✅ Token stored without JWT validation');
       }
     } catch (error) {
-      console.error('❌ Critical error in setToken:', error);
       // Final fallback: store the token anyway
       localStorage.setItem(TOKEN_KEY, token);
-      console.log('✅ Token stored (emergency fallback)');
     }
   },
 
@@ -75,13 +52,11 @@ export const tokenService = {
       const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
       
       if (!token) {
-        console.log('❌ No token found in localStorage');
         return null;
       }
       
       // Validate token format
       if (!token || token === 'undefined' || token === 'null') {
-        console.log('❌ Invalid token value found');
         tokenService.clearToken();
         return null;
       }
@@ -92,21 +67,18 @@ export const tokenService = {
         const currentTime = Math.floor(Date.now() / 1000);
         
         if (currentTime > expiryTime) {
-          console.log('❌ Token expired, clearing...');
           tokenService.clearToken();
           return null;
         }
         
         // Check if token needs refresh (within buffer period)
         if (currentTime > (expiryTime - TOKEN_REFRESH_BUFFER)) {
-          console.log('⚠️ Token nearing expiry, consider refreshing');
+          // Token nearing expiry
         }
       }
       
-      console.log('✅ Token retrieved successfully');
       return token;
     } catch (error) {
-      console.error('❌ Error retrieving token:', error);
       return null;
     }
   },
@@ -115,9 +87,8 @@ export const tokenService = {
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_EXPIRY_KEY);
-      console.log('✅ Partner token cleared from localStorage');
     } catch (error) {
-      console.error('❌ Failed to clear token:', error);
+      // Silent fail
     }
   },
 
@@ -131,7 +102,6 @@ export const tokenService = {
       const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
       return expiry ? parseInt(expiry) : null;
     } catch (error) {
-      console.error('Error getting token expiry:', error);
       return null;
     }
   },
@@ -207,7 +177,6 @@ export const debouncedApiCall = async (cacheKey, apiCall, ttl = 60000) => {
   if (apiCallCache.has(cacheKey)) {
     const cached = apiCallCache.get(cacheKey);
     if (now - cached.timestamp < ttl) {
-      console.log('✅ Using cached API response for:', cacheKey);
       return cached.data;
     }
     apiCallCache.delete(cacheKey);
@@ -215,7 +184,6 @@ export const debouncedApiCall = async (cacheKey, apiCall, ttl = 60000) => {
   
   // Make API call and cache result
   try {
-    console.log('🔄 Making API call for:', cacheKey);
     const result = await apiCall();
     apiCallCache.set(cacheKey, {
       data: result,
@@ -224,7 +192,6 @@ export const debouncedApiCall = async (cacheKey, apiCall, ttl = 60000) => {
     return result;
   } catch (error) {
     // Don't cache errors
-    console.error('❌ API call failed for:', cacheKey, error);
     throw error;
   }
 };
@@ -238,21 +205,16 @@ export const partnerLogin = async () => {
     const existingToken = tokenService.getToken();
     if (existingToken) {
       const validation = tokenService.safeValidateToken(existingToken);
-      console.log('🔍 Existing token validation:', validation);
       
       if (validation.isValid && !validation.isExpired) {
-        console.log('✅ Using existing valid partner token from tokenService');
         return { 
           status: 'success', 
           data: { token: existingToken } 
         };
       } else {
-        console.log('🔄 Existing token invalid or expired, refreshing...');
         tokenService.clearToken();
       }
     }
-
-    console.log('🔄 No valid token found, making partner login request...');
     
     const response = await axios.post(
       `${import.meta.env.VITE_API_URL}/partner-login`,
@@ -268,23 +230,8 @@ export const partnerLogin = async () => {
       }
     );
 
-    console.log('🔍 Partner login API response:', {
-      status: response.status,
-      dataStructure: Object.keys(response.data),
-      hasToken: !!response.data?.data?.token,
-      tokenType: typeof response.data?.data?.token
-    });
-
     if (response.data.status === 'success' && response.data.data?.token) {
       const token = response.data.data.token;
-      
-      // Debug the token before storing
-      const tokenDebug = {
-        length: token.length,
-        first50: token.substring(0, 50),
-        isJWT: token.split('.').length === 3
-      };
-      console.log('🔍 Token debug info:', tokenDebug);
       
       // Store the token using our service
       tokenService.setToken(token);
@@ -292,23 +239,14 @@ export const partnerLogin = async () => {
       // Verify storage worked
       const storedToken = tokenService.getToken();
       if (storedToken === token) {
-        console.log('✅ Partner login successful, token stored and verified');
+        return response.data;
       } else {
-        console.error('❌ Token storage verification failed');
+        throw new Error('Token storage verification failed');
       }
-      
-      return response.data;
     } else {
-      console.error('❌ Partner login failed - invalid response structure:', response.data);
       throw new Error('Invalid response from partner login API');
     }
   } catch (error) {
-    console.error('❌ Partner login error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    
     // Clear any potentially corrupted token
     tokenService.clearToken();
     throw error;
@@ -320,19 +258,15 @@ export const getBearerToken = async (forceRefresh = false) => {
   const existingToken = tokenService.getToken();
   
   if (existingToken && !forceRefresh) {
-    console.log('✅ Using existing token from tokenService');
     return existingToken;
   }
 
   if (tokenRefreshPromise) {
-    console.log('🔄 Token refresh already in progress, waiting...');
     return tokenRefreshPromise;
   }
 
   tokenRefreshPromise = (async () => {
     try {
-      console.log("🔄 Refreshing partner token...");
-
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/partner-login`,
         {
@@ -345,31 +279,20 @@ export const getBearerToken = async (forceRefresh = false) => {
         }
       );
 
-      console.log('🔍 Token refresh response:', {
-        status: response.status,
-        hasData: !!response.data,
-        hasToken: !!response.data?.data?.token
-      });
-
       if (response.data?.data?.token) {
         const token = response.data.data.token;
         
         // Validate token before storing
         const validation = tokenService.safeValidateToken(token);
-        console.log('🔍 New token validation:', validation);
         
         // Use tokenService to store the token
         tokenService.setToken(token);
         
-        console.log("✅ Partner token refreshed successfully");
         return token;
       } else {
-        console.error('❌ Invalid token response structure:', response.data);
         throw new Error("Invalid token response structure");
       }
     } catch (error) {
-      console.error("❌ Token refresh failed:", error);
-      
       // Use tokenService to clear the token
       tokenService.clearToken();
       throw error;
@@ -384,18 +307,12 @@ export const getBearerToken = async (forceRefresh = false) => {
 // Initialize partner token on service load
 export const initializePartnerToken = async () => {
   try {
-    console.log('🔄 Initializing partner token...');
     const tokenDebug = tokenService.debugToken();
-    console.log('🔍 Current token state:', tokenDebug);
     
     if (!tokenDebug.exists) {
-      console.log('🔄 No token found, performing partner login...');
       await partnerLogin();
-    } else {
-      console.log('✅ Partner token already initialized');
     }
   } catch (error) {
-    console.error('❌ Failed to initialize partner token:', error);
     // Don't throw error here - let the app continue without partner token
   }
 };
@@ -673,13 +590,11 @@ export const checkTokenHealth = () => {
 // Clear all cached API responses
 export const clearApiCache = () => {
   apiCallCache.clear();
-  console.log('✅ API cache cleared');
 };
 
 // Clear cache for specific key
 export const clearCacheForKey = (key) => {
   apiCallCache.delete(key);
-  console.log(`✅ Cache cleared for key: ${key}`);
 };
 
 // ===================== EXPORT DEFAULT =====================

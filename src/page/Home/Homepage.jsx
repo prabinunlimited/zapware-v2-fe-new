@@ -1,3 +1,4 @@
+// src/components/Dashboard/Home/Homepage.js
 import React, {
   useEffect,
   useState,
@@ -13,7 +14,7 @@ import { RingLoader } from "react-spinners";
 
 // Import real components
 import NavigateSection from "../../components/Dashboard/Navigation/NavigateSection";
-// import AccountSummary from "../../components/Dashboard/Account/AccountSummary/AccountSummary";
+import AccountSummary from "../../components/Dashboard/Account/AccountSummary/AccountSummary";
 
 // Import real actions and selectors
 import { fetchAccountDetails } from "./HomeSlice";
@@ -27,10 +28,13 @@ import { selectAuthToken } from "../../store/selectors";
 import {
   selectAccounts,
   selectSelectedCurrency,
-  selectAccountLoading,
+  selectIsLoading as selectAccountLoading,
   selectLastUpdated,
   selectHasFetchedAccount,
 } from "./HomeSlice";
+
+// Import API Coordinator
+import { apiCoordinator } from "../../services/api";
 
 import {
   extractErrorMessage,
@@ -102,22 +106,7 @@ const safeArray = (data, fallback = []) => {
   return fallback;
 };
 
-// 🎯 API CALL COORDINATION
-let apiCallTracker = {
-  accountDetails: { called: false, timestamp: null },
-  userProfile: { called: false, timestamp: null },
-  fxCurrencies: { called: false, timestamp: null },
-};
-
-const resetApiTracker = () => {
-  apiCallTracker = {
-    accountDetails: { called: false, timestamp: null },
-    userProfile: { called: false, timestamp: null },
-    fxCurrencies: { called: false, timestamp: null },
-  };
-};
-
-// ✅ FIXED HOMEPAGE CONTENT
+// ✅ FIXED HOMEPAGE CONTENT WITH STRICT COORDINATION
 const HomepageContent = React.memo(() => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -153,23 +142,18 @@ const HomepageContent = React.memo(() => {
   // Refs for tracking
   const fetchCountRef = useRef(0);
   const initialFetchDoneRef = useRef(false);
-  const apiCallsInitiated = useRef(false);
+  const apiCallsCoordinatedRef = useRef(false);
 
   // Use the LoadingContext
   const { isLoading: contextLoading } = useLoading();
 
   // ✅ FIXED: Optimized loading calculation
   const isLoading = useMemo(() => {
-    const initialLoad = !hasFetchedAccount && customerId && authtoken;
-    return accountLoading || initialLoad || contextLoading || profileLoading;
-  }, [
-    accountLoading,
-    hasFetchedAccount,
-    customerId,
-    authtoken,
-    contextLoading,
-    profileLoading,
-  ]);
+    if (hasFetchedAccount) {
+      return false;
+    }
+    return accountLoading && !hasFetchedAccount;
+  }, [accountLoading, hasFetchedAccount]);
 
   // Get currency options from accounts with safety checks - memoized
   const currencyOptions = useMemo(() => {
@@ -182,97 +166,63 @@ const HomepageContent = React.memo(() => {
     );
   }, [accounts]);
 
-  // 🎯 CENTRALIZED API CALLS EFFECT
+  // ✅ FIXED: SINGLE COORDINATED API CALL
   useEffect(() => {
-    if (
-      !customerId ||
-      !authtoken ||
-      !bearertoken ||
-      apiCallsInitiated.current
-    ) {
+    if (!customerId || !authtoken || !bearertoken || apiCallsCoordinatedRef.current) {
       return;
     }
 
-    apiCallsInitiated.current = true;
+    console.log("🚀 Homepage: Starting coordinated API calls");
+    apiCallsCoordinatedRef.current = true;
+    fetchCountRef.current += 1;
 
-    // 1. Fetch Account Details
-    if (!apiCallTracker.accountDetails.called) {
-      apiCallTracker.accountDetails.called = true;
-      apiCallTracker.accountDetails.timestamp = new Date().toISOString();
+    // Generate signatures for coordination
+    const accountsSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`;
+    const profileSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
+    const fxSig = `POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`;
+
+    // Check if we need to fetch accounts
+    const shouldFetchAccounts = 
+      !hasFetchedAccount && 
+      !accountLoading && 
+      !apiCoordinator.isFetching(accountsSig) &&
+      !apiCoordinator.hasRecentData(accountsSig);
+
+    if (shouldFetchAccounts) {
+      console.log("📊 Homepage: Fetching account details");
       dispatch(fetchAccountDetails({ customerId, authtoken }));
     }
 
-    // 2. Fetch User Profile (only if not already fetched)
-    if (
-      !apiCallTracker.userProfile.called &&
-      !hasFetchedProfile &&
-      !profileLoading
-    ) {
-      apiCallTracker.userProfile.called = true;
-      apiCallTracker.userProfile.timestamp = new Date().toISOString();
+    // Check if we need to fetch profile
+    const hasProfileData = profileData?.first_name || localStorage.getItem("firstName");
+    const shouldFetchProfile = 
+      !hasFetchedProfile && 
+      !profileLoading && 
+      !hasProfileData && 
+      !apiCoordinator.isFetching(profileSig) &&
+      !apiCoordinator.hasRecentData(profileSig);
+
+    if (shouldFetchProfile) {
+      console.log("👤 Homepage: Fetching user profile");
       dispatch(fetchUserProfile({ customerId, bearertoken }));
     }
 
-    // 3. Fetch FX Currencies (only if not already fetched)
-    if (!apiCallTracker.fxCurrencies.called && !hasFxData) {
-      apiCallTracker.fxCurrencies.called = true;
-      apiCallTracker.fxCurrencies.timestamp = new Date().toISOString();
+    // Check if we need to fetch FX data
+    const shouldFetchFX = 
+      !hasFxData && 
+      !apiCoordinator.isFetching(fxSig) &&
+      !apiCoordinator.hasRecentData(fxSig);
+
+    if (shouldFetchFX) {
+      console.log("💱 Homepage: Fetching FX currencies");
       dispatch(fetchPartnerFxCurrencies(bearertoken));
     }
+
   }, [
-    customerId,
-    authtoken,
-    bearertoken,
-    dispatch,
-    hasFetchedProfile,
-    profileLoading,
-    hasFxData,
-  ]);
-
-  // 🎯 RETRY FAILED API CALLS
-  useEffect(() => {
-    if (!customerId || !authtoken || !bearertoken) return;
-
-    const retryFailedCalls = () => {
-      // Retry account details if not fetched after 5 seconds
-      if (
-        !hasFetchedAccount &&
-        !accountLoading &&
-        apiCallTracker.accountDetails.called
-      ) {
-        const timeSinceCall =
-          Date.now() -
-          new Date(apiCallTracker.accountDetails.timestamp).getTime();
-        if (timeSinceCall > 5000) {
-          dispatch(fetchAccountDetails({ customerId, authtoken }));
-        }
-      }
-
-      // Retry profile if not fetched after 5 seconds
-      if (
-        !hasFetchedProfile &&
-        !profileLoading &&
-        apiCallTracker.userProfile.called
-      ) {
-        const timeSinceCall =
-          Date.now() - new Date(apiCallTracker.userProfile.timestamp).getTime();
-        if (timeSinceCall > 5000) {
-          dispatch(fetchUserProfile({ customerId, bearertoken }));
-        }
-      }
-    };
-
-    const retryTimer = setTimeout(retryFailedCalls, 5000);
-    return () => clearTimeout(retryTimer);
-  }, [
-    customerId,
-    authtoken,
-    bearertoken,
-    dispatch,
-    hasFetchedAccount,
-    accountLoading,
-    hasFetchedProfile,
-    profileLoading,
+    customerId, authtoken, bearertoken, 
+    hasFetchedAccount, accountLoading,
+    hasFetchedProfile, profileLoading,
+    hasFxData, profileData, dispatch
   ]);
 
   // Setup background and text color - optimized
@@ -350,48 +300,34 @@ const HomepageContent = React.memo(() => {
       setEmergencyStop(false);
       fetchCountRef.current = 0;
       initialFetchDoneRef.current = false;
-      resetApiTracker();
-      apiCallsInitiated.current = false;
+      apiCallsCoordinatedRef.current = false;
     }
   }, [authtoken, customerId]);
 
   // Currency change handler - memoized
   const handleCurrencyChange = useCallback((currency) => {
     // This would dispatch setSelectedCurrency action
-    console.log("Currency changed to:", currency);
   }, []);
 
   // Role check - determine if navigation should be shown - memoized
   const shouldShowNavigation = useMemo(() => {
     const isStaffLogin = localStorage.getItem("is_staff_login");
     const isOwnerLogin = localStorage.getItem("is_owner_login");
-
-    console.log("Role check:", {
-      isStaffLogin,
-      isOwnerLogin,
-      ownerRoleName: localStorage.getItem("owner_role_name"),
-      ownerId: localStorage.getItem("owner_id"),
-    });
-
-    // Show navigation for regular customers (not staff or owner)
     const isStaff = isStaffLogin === "1";
     const isOwner = isOwnerLogin === "1";
     const isRegularCustomer = !isStaff && !isOwner;
 
     if (isRegularCustomer) {
-      return true; // Regular customers always see navigation
+      return true;
     }
 
-    // For staff, only show if they have admin privileges
     if (isStaff) {
       const staffRole = localStorage.getItem("staff_role") || "";
       return staffRole === "Administrator" || staffRole.includes("Admin");
     }
 
-    // For owners, show navigation by default
     if (isOwner) {
       const ownerRoleName = localStorage.getItem("owner_role_name");
-      // If owner role name is missing, empty, or null, show navigation
       if (
         !ownerRoleName ||
         ownerRoleName === "null" ||
@@ -399,7 +335,6 @@ const HomepageContent = React.memo(() => {
       ) {
         return true;
       }
-      // If role name exists, check for admin privileges
       return (
         ownerRoleName === "Admin (Owner)" || ownerRoleName.includes("Admin")
       );
@@ -427,13 +362,15 @@ const HomepageContent = React.memo(() => {
     setEmergencyStop(false);
     fetchCountRef.current = 0;
     initialFetchDoneRef.current = false;
-    resetApiTracker();
-    apiCallsInitiated.current = false;
+    apiCallsCoordinatedRef.current = false;
+
+    // Clear API cache
+    apiCoordinator.clear();
 
     // Small delay to allow state update
     setTimeout(() => {
       if (customerId && authtoken && bearertoken) {
-        apiCallsInitiated.current = false;
+        apiCallsCoordinatedRef.current = false;
       }
     }, 100);
   }, [customerId, authtoken, bearertoken]);
@@ -478,16 +415,15 @@ const HomepageContent = React.memo(() => {
             <p className="text-sm text-yellow-700">
               <strong>Debug Info:</strong>
               <br />
-              Account Details:{" "}
-              {apiCallTracker.accountDetails.called ? "Called" : "Not Called"}
+              Account Fetched: {hasFetchedAccount ? "Yes" : "No"}
               <br />
-              User Profile:{" "}
-              {apiCallTracker.userProfile.called ? "Called" : "Not Called"}
+              Profile Fetched: {hasFetchedProfile ? "Yes" : "No"}
               <br />
-              FX Currencies:{" "}
-              {apiCallTracker.fxCurrencies.called ? "Called" : "Not Called"}
+              FX Data: {hasFxData ? "Yes" : "No"}
               <br />
               Fetch Attempts: {fetchCountRef.current}
+              <br />
+              API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}
             </p>
           </div>
         </div>
@@ -529,6 +465,36 @@ const HomepageContent = React.memo(() => {
             </button>
           )}
 
+          {/* API Coordination Debug Panel */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="fixed top-4 left-4 z-50 bg-green-600 text-white p-3 rounded-lg text-xs max-w-xs">
+              <div className="font-bold mb-2">API Coordination</div>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span>Accounts:</span>
+                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`) ? '🔄' : '✅'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Profile:</span>
+                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`) ? '🔄' : '✅'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>FX:</span>
+                  <span>{apiCoordinator.isFetching(`POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`) ? '🔄' : '✅'}</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  apiCoordinator.clear();
+                  window.location.reload();
+                }}
+                className="mt-2 bg-red-500 px-2 py-1 rounded text-xs w-full"
+              >
+                Clear Cache & Reload
+              </button>
+            </div>
+          )}
+
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
             <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
@@ -544,10 +510,6 @@ const HomepageContent = React.memo(() => {
                     textColor={textColor}
                     selectedCurrencyCode={selectedCurrency}
                   />
-
-                  {/* <div className="p-4 bg-yellow-100 rounded-lg">
-                    Navigation temporarily disabled
-                  </div> */}
                 </motion.div>
               )}
 
@@ -564,21 +526,17 @@ const HomepageContent = React.memo(() => {
                   zIndex: "auto",
                 }}
               >
-                {/* <AccountSummary
+                <AccountSummary
                   textColor={textColor}
                   onCurrencyChange={handleCurrencyChange}
-                /> */}
-
-                <div className="p-4 bg-blue-100 rounded-lg">
-                  Account Summary temporarily disabled
-                </div>
+                />
               </motion.div>
             </div>
           </div>
 
           {/* Debug information - only in development */}
           {process.env.NODE_ENV === "development" && (
-            <div className="fixed top-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
+            <div className="fixed bottom-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
               <div>Accounts: {safeArray(accounts).length}</div>
               <div>
                 Navigation: {shouldShowNavigation ? "Visible" : "Hidden"}
@@ -589,6 +547,7 @@ const HomepageContent = React.memo(() => {
               <div>FX Data: {hasFxData ? "Yes" : "No"}</div>
               <div>Loading: {isLoading ? "Yes" : "No"}</div>
               <div>Emergency Stop: {emergencyStop ? "Yes" : "No"}</div>
+              <div>API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}</div>
             </div>
           )}
         </motion.div>

@@ -14,7 +14,7 @@ const getRequestKey = (customerId, isRefresh = false) => {
 
 // ✅ CORRECTED: Home-specific FX currencies thunk with "home/" prefix
 export const fetchPartnerFxCurrencies = createAsyncThunk(
-  "home/fetchPartnerFxCurrencies",  // ← CHANGED TO "home/" prefix
+  "home/fetchPartnerFxCurrencies", // ← CHANGED TO "home/" prefix
   async (bearertoken, { rejectWithValue }) => {
     try {
       if (!bearertoken) {
@@ -63,13 +63,11 @@ export const fetchAccountDetails = createAsyncThunk(
     pendingRequests.set(requestKey, true);
 
     try {
-      const response = await axios.get(
-        `${API_URL}/active-account-details/${customerId}`,
-        {
-          headers: { Authorization: `Bearer ${authtoken}` },
-          timeout: 30000,
-        }
-      );
+      // ✅ CHANGED: Use api.js instead of axios.get()
+      const response = await api.get(`/active-account-details/${customerId}`, {
+        headers: { Authorization: `Bearer ${authtoken}` },
+        timeout: 30000,
+      });
 
       if (response.data.message === "Unauthenticated.") {
         return rejectWithValue("Unauthenticated");
@@ -244,7 +242,7 @@ const homeSlice = createSlice({
         // Auto-reset child loading after error
         state.childComponentsLoading = 0;
       })
-      
+
       // ✅ ADD FX currencies cases
       .addCase(fetchPartnerFxCurrencies.pending, (state) => {
         state.fxLoading = true;
@@ -284,7 +282,8 @@ export const selectError = (state) => state.home.error;
 export const selectHasFetchedAccount = (state) => state.home.hasFetchedAccount;
 
 // ADD FX selectors
-export const selectPartnerFxCurrencies = (state) => state.home.partnerFxCurrencies;
+export const selectPartnerFxCurrencies = (state) =>
+  state.home.partnerFxCurrencies;
 export const selectHasFxData = (state) => state.home.hasFxData;
 export const selectFxLoading = (state) => state.home.fxLoading;
 export const selectFxError = (state) => state.home.fxError;

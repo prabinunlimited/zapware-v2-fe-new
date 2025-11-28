@@ -36,12 +36,8 @@ export const selectTermsModalOpen = (state) =>
 export const selectIsNamedAccount = createSelector(
   [selectSelectedAccounts, selectAccountOptions],
   (selectedAccounts, accountOptions) => {
-    // Debug logging
-    console.log('Selected accounts:', selectedAccounts);
-    console.log('Account options:', accountOptions);
 
     if (!selectedAccounts || selectedAccounts.length === 0) {
-      console.log('No selected accounts, returning false');
       return false;
     }
 
@@ -50,16 +46,13 @@ export const selectIsNamedAccount = createSelector(
       typeof account === 'string' ? account : account.id || account.toString()
     );
 
-    console.log('Selected account strings:', selectedAccountStrings);
 
     // Check if any selected account contains "named"
     const hasNamedAccount = selectedAccountStrings.some((accountStr) => {
       const isNamed = accountStr.includes('named');
-      console.log(`Account ${accountStr} is named: ${isNamed}`);
       return isNamed;
     });
 
-    console.log('Has named account:', hasNamedAccount);
     return hasNamedAccount;
   }
 );
