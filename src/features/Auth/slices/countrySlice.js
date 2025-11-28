@@ -755,7 +755,7 @@ export const countries = [
     country_code: "GM",
     flag_url: "https://flagicons.lipis.dev/flags/4x3/gm.svg",
     phone_code: "+220",
-    country_code3: "GMB",
+    country_code3: "GMD",
     continent_id: null,
     is_restricted: 0,
     continent: null,
