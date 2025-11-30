@@ -7,30 +7,30 @@ export const fetchBankAccounts = createAsyncThunk(
   "bankLink/fetchBankAccounts",
   async (customerId, { rejectWithValue }) => {
     try {
-      
-
       const response = await api.post("/sila/sila-bank-details", {
         customerId: customerId,
       });
 
-      
-
-      // Handle response structure exactly like reference code
+      // ✅ FIX: Handle the actual API response structure
       let accounts = [];
       const data = response.data;
 
-      if (Array.isArray(data)) {
+      if (data?.data && Array.isArray(data.data)) {
+        accounts = data.data; // This matches your API response
+      } else if (Array.isArray(data)) {
         accounts = data;
-      } else if (data?.data) {
-        accounts = Array.isArray(data.data) ? data.data : [data.data];
       } else if (data?.status === "success") {
         accounts = data.data || [];
       }
 
-      
+      console.log(
+        "✅ Bank accounts loaded from /sila-bank-details:",
+        accounts.length,
+        accounts
+      );
       return accounts;
     } catch (error) {
-      
+      console.error("❌ Failed to load bank accounts:", error);
       return rejectWithValue(
         error.response?.data?.message || "Failed to load bank accounts"
       );
@@ -43,8 +43,6 @@ export const deleteBankAccount = createAsyncThunk(
   "bankLink/deleteBankAccount",
   async ({ accountId, accountName, customerId }, { rejectWithValue }) => {
     try {
-      
-
       const response = await api.post("/sila/delete-sila-linked-bank", {
         account_name: accountName,
         account_id: accountId,
@@ -58,9 +56,10 @@ export const deleteBankAccount = createAsyncThunk(
 
       return { accountId, message: data.message };
     } catch (error) {
-      
       return rejectWithValue(
-        error.response?.data?.message || error.message || "Failed to delete account"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to delete account"
       );
     }
   }
@@ -71,8 +70,6 @@ export const handleBankLinkSuccess = createAsyncThunk(
   "bankLink/handleBankLinkSuccess",
   async ({ response, customerId }, { rejectWithValue, dispatch }) => {
     try {
-      
-
       if (!response) {
         throw new Error("No response received from bank linking");
       }
@@ -81,26 +78,27 @@ export const handleBankLinkSuccess = createAsyncThunk(
         (response.kyc_status && response.kyc_status === "pending") ||
         (response.message && response.message.includes("KYC"))
       ) {
-        return { 
-          type: "kyc_pending", 
-          message: response.message || "KYC verification in progress" 
+        return {
+          type: "kyc_pending",
+          message: response.message || "KYC verification in progress",
         };
       }
 
       if (!response.success) {
-        throw new Error(response.message || "Bank linking failed without error message");
+        throw new Error(
+          response.message || "Bank linking failed without error message"
+        );
       }
 
       // Refresh accounts after successful linking
       await dispatch(fetchBankAccounts(customerId));
 
-      return { 
-        type: "success", 
+      return {
+        type: "success",
         data: response,
-        message: "Bank account linked successfully"
+        message: "Bank account linked successfully",
       };
     } catch (error) {
-      
       return rejectWithValue(error.message || "Failed to process bank linking");
     }
   }
@@ -112,25 +110,25 @@ const initialState = {
   bankAccounts: [],
   loading: true,
   error: null,
-  
+
   // UI state (matching reference)
   showPlaidLink: false,
   showSuccessModal: false,
   apiResponse: null,
-  
+
   // Delete operations (matching reference)
   deletingAccountId: null,
   deleteError: null,
   deleteSuccess: null,
-  
+
   // Status messages (matching reference)
   kycStatus: null,
-  
+
   // Loading states (matching reference)
   isRefreshing: false,
   isAddingAccount: false,
   isProcessing: false,
-  
+
   // Pagination (matching reference)
   currentPage: 1,
   accountsPerPage: 5,
@@ -156,7 +154,7 @@ const bankLinkSlice = createSlice({
     setKycStatus: (state, action) => {
       state.kycStatus = action.payload;
     },
-    
+
     // Status management (matching reference)
     clearErrors: (state) => {
       state.error = null;
@@ -168,7 +166,7 @@ const bankLinkSlice = createSlice({
       state.deleteError = null;
       state.deleteSuccess = null;
     },
-    
+
     // Manual refresh (matching reference)
     startRefresh: (state) => {
       state.isRefreshing = true;
@@ -176,7 +174,7 @@ const bankLinkSlice = createSlice({
     endRefresh: (state) => {
       state.isRefreshing = false;
     },
-    
+
     // Reset state
     resetBankLinkState: () => initialState,
   },
@@ -199,7 +197,7 @@ const bankLinkSlice = createSlice({
         state.isRefreshing = false;
         state.error = action.payload;
       })
-      
+
       // Delete Bank Account (matching reference structure)
       .addCase(deleteBankAccount.pending, (state, action) => {
         state.isProcessing = true;
@@ -213,7 +211,7 @@ const bankLinkSlice = createSlice({
         state.deleteSuccess = action.payload.message;
         // Remove deleted account from list
         state.bankAccounts = state.bankAccounts.filter(
-          account => account.account_id !== action.payload.accountId
+          (account) => account.account_id !== action.payload.accountId
         );
       })
       .addCase(deleteBankAccount.rejected, (state, action) => {
@@ -221,7 +219,7 @@ const bankLinkSlice = createSlice({
         state.deletingAccountId = null;
         state.deleteError = action.payload;
       })
-      
+
       // Handle Bank Link Success (matching reference structure)
       .addCase(handleBankLinkSuccess.pending, (state) => {
         state.isAddingAccount = true;
@@ -229,7 +227,7 @@ const bankLinkSlice = createSlice({
       })
       .addCase(handleBankLinkSuccess.fulfilled, (state, action) => {
         state.isAddingAccount = false;
-        
+
         if (action.payload.type === "kyc_pending") {
           state.kycStatus = action.payload.message;
         } else if (action.payload.type === "success") {
@@ -264,9 +262,11 @@ export const selectBankAccounts = (state) => state.bankLink.bankAccounts;
 export const selectLoading = (state) => state.bankLink.loading;
 export const selectError = (state) => state.bankLink.error;
 export const selectShowPlaidLink = (state) => state.bankLink.showPlaidLink;
-export const selectShowSuccessModal = (state) => state.bankLink.showSuccessModal;
+export const selectShowSuccessModal = (state) =>
+  state.bankLink.showSuccessModal;
 export const selectApiResponse = (state) => state.bankLink.apiResponse;
-export const selectDeletingAccountId = (state) => state.bankLink.deletingAccountId;
+export const selectDeletingAccountId = (state) =>
+  state.bankLink.deletingAccountId;
 export const selectDeleteError = (state) => state.bankLink.deleteError;
 export const selectDeleteSuccess = (state) => state.bankLink.deleteSuccess;
 export const selectKycStatus = (state) => state.bankLink.kycStatus;
@@ -288,6 +288,7 @@ export const selectTotalPages = (state) => {
   return Math.ceil(bankAccounts.length / accountsPerPage);
 };
 
-export const selectHasAccounts = (state) => state.bankLink.bankAccounts.length > 0;
+export const selectHasAccounts = (state) =>
+  state.bankLink.bankAccounts.length > 0;
 
 export default bankLinkSlice.reducer;

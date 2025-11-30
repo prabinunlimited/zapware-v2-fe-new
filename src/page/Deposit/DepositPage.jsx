@@ -1,4 +1,4 @@
-// src/page/Deposit/DepositPage.jsx - COMPLETE FIXED VERSION WITH ADYEN INTEGRATION & LARGER UI
+// src/page/Deposit/DepositPage.jsx - COMPLETE FIXED VERSION
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -9,6 +9,7 @@ import { FiArrowLeft, FiInfo } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaCreditCard } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
+import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -16,7 +17,29 @@ import { useCurrency } from "./hooks/useCurrency";
 import { usePaymentMethods } from "./hooks/usePaymentMethods";
 import { useBankAccounts } from "./hooks/useBankAccounts";
 import { useUI } from "./hooks/useUI";
-import { fetchManualAccountDetails } from "./slices/depositSlice";
+
+// ✅ CORRECT: Import from depositSlice
+import {
+  fetchManualAccountDetails,
+  setShowPaymentInitiation,
+} from "./slices/depositSlice";
+
+// ✅ CORRECT: Import USD account actions and selectors from bankAccountSlice
+import {
+  fetchUSDBankAccounts,
+  fetchManualBankDetails,
+  selectUSDBankAccounts,
+  selectUSDAccountsLoading,
+  setUSDBankAccounts,
+} from "./slices/bankAccountSlice";
+
+// ✅ CORRECT: Import account selectors from AccountSlice (ONCE)
+import {
+  selectAccounts,
+  selectAccountLoading,
+  selectAccountError,
+} from "../../components/Dashboard/Account/AccountSummary/AccountSlice";
+
 import { tokenService } from "../../services/authService";
 
 // Components
@@ -36,13 +59,6 @@ import BankLink from "./components/BankLink";
 
 // Shared
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
-
-// Import account selectors
-import {
-  selectAccounts,
-  selectAccountLoading,
-  selectAccountError,
-} from "../../components/Dashboard/Account/AccountSummary/AccountSlice";
 
 // Fixed useCurrency hook that uses existing Redux account data
 const useFixedCurrency = (initialCurrency) => {
@@ -168,27 +184,15 @@ const useFixedCurrency = (initialCurrency) => {
       currencies: currencies.map((c) => c.currency_code),
     });
 
-    if (initialCurrency && currencies.length > 0) {
-      const exists = currencies.some(
-        (currency) => currency.currency_code === initialCurrency
-      );
+    if (
+      initialCurrency &&
+      currencies.length > 0 &&
+      currencies.some((c) => c.currency_code === initialCurrency)
+    ) {
       console.log(
-        "🔍 useFixedCurrency - Initial currency exists:",
-        exists,
+        "✅ useFixedCurrency - Initial currency is available:",
         initialCurrency
       );
-
-      if (exists) {
-        console.log(
-          "✅ useFixedCurrency - Initial currency is available:",
-          initialCurrency
-        );
-      } else {
-        console.log(
-          "⚠️ useFixedCurrency - Initial currency not found in available currencies:",
-          initialCurrency
-        );
-      }
     } else if (currencies.length > 0) {
       console.log(
         "ℹ️ useFixedCurrency - No initial currency provided, but",
@@ -333,10 +337,9 @@ const useSafePaymentMethods = (selectedCurrency, currencies) => {
   }
 };
 
-// FIXED useSafeBankAccounts Hook - CORRECT VERSION
+// FIXED useSafeBankAccounts Hook
 const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
   try {
-    // ✅ CORRECT: Read from deposit slice, not bankAccounts slice
     const manualAccountDetails = useSelector(
       (state) => state.deposit?.manualAccountDetails
     );
@@ -347,16 +350,21 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       (state) => state.deposit?.formErrors?.manualDetails || null
     );
 
-    // Get other bank account data from the correct slices
-    const usdBankAccounts = useSelector(
-      (state) => state.bankAccounts?.usdBankAccounts || []
-    );
-    const usdAccountsLoading = useSelector(
-      (state) => state.bankAccounts?.usdAccountsLoading || false
-    );
+    // ✅ CORRECTED: Use selectors from bankAccountSlice
+    const usdBankAccounts = useSelector(selectUSDBankAccounts);
+    const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
     const usdAccountsError = useSelector(
       (state) => state.bankAccounts?.usdAccountsError || null
     );
+
+    // ✅ ADD: Get bankLink accounts
+    const bankLinkAccounts = useSelector(
+      (state) => state.bankLink?.bankAccounts || []
+    );
+    const bankLinkLoading = useSelector(
+      (state) => state.bankLink?.loading || false
+    );
+    const bankLinkError = useSelector((state) => state.bankLink?.error || null);
 
     const aedAccountDetails = useSelector(
       (state) => state.bankAccounts?.aedAccountDetails || null
@@ -368,41 +376,61 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       (state) => state.bankAccounts?.aedDetailsLoading || false
     );
 
-    console.log("🔄 useSafeBankAccounts - CORRECTED Redux state:", {
-      selectedCurrency,
-      paymentMethod,
-      // From deposit slice
-      manualAccountDetails,
-      manualDetailsLoading,
-      manualDetailsError,
-      manualDetailsCurrency: manualAccountDetails?.currency,
-      // From bankAccounts slice
-      usdBankAccountsCount: usdBankAccounts.length,
-      aedAccountDetails: !!aedAccountDetails,
-    });
+    // ✅ COMBINE: USD accounts from all sources
+    const combinedUsdBankAccounts = useMemo(() => {
+      const allAccounts = [...usdBankAccounts, ...bankLinkAccounts];
 
-    // ✅ ENHANCED: Clear data immediately on currency mismatch
+      // Filter for USD accounts and active accounts
+      const usdAccounts = allAccounts.filter((account) => {
+        const isUSD = account.currency === "USD" || !account.currency;
+        const isActive = account.is_frozen !== 1 && account.status !== 1;
+        const isNotDeleted = account.is_deleted !== 1;
+        return isUSD && isActive && isNotDeleted;
+      });
+
+      // Remove duplicates by account number
+      const uniqueAccounts = usdAccounts.filter(
+        (account, index, self) =>
+          index ===
+          self.findIndex((a) => a.account_number === account.account_number)
+      );
+
+      console.log("🔍 COMBINED USD ACCOUNTS DEBUG:", {
+        bankAccountsCount: usdBankAccounts.length,
+        bankLinkCount: bankLinkAccounts.length,
+        combinedCount: uniqueAccounts.length,
+        accounts: uniqueAccounts.map((acc) => ({
+          id: acc.id,
+          account_name: acc.account_name,
+          bank: acc.bank || acc.provider,
+          currency: acc.currency,
+          account_number: acc.account_number,
+          is_frozen: acc.is_frozen,
+          status: acc.status,
+          is_deleted: acc.is_deleted,
+          source: acc.source || "unknown",
+        })),
+      });
+
+      return uniqueAccounts;
+    }, [usdBankAccounts, bankLinkAccounts]);
+
     let filteredManualDetails = manualAccountDetails;
 
     if (
       filteredManualDetails &&
       filteredManualDetails.currency !== selectedCurrency
     ) {
-      console.warn(
-        `🚨 Currency mismatch in manual details: Expected ${selectedCurrency}, got ${filteredManualDetails.currency}. Clearing data.`
-      );
       filteredManualDetails = null;
     }
 
     const safeResult = {
-      usdBankAccounts,
-      usdAccountsLoading,
-      usdAccountsError,
+      usdBankAccounts: combinedUsdBankAccounts, // ✅ Use combined accounts
+      usdAccountsLoading: usdAccountsLoading || bankLinkLoading,
+      usdAccountsError: usdAccountsError || bankLinkError,
       aedAccountDetails,
       aedDetailsError,
       aedDetailsLoading,
-
-      // ✅ Use filtered manual details from CORRECT Redux slice
       manualAccountDetails: filteredManualDetails,
       manualDetailsLoading,
       manualDetailsError,
@@ -548,10 +576,10 @@ const DepositPageContent = () => {
   const params = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const fullReduxState = useSelector((state) => state); // ✅ Moved from useEffect
+  const fullReduxState = useSelector((state) => state);
 
-  // ✅ TAB STATE - Add this at the top with other hooks
-  const [activeTab, setActiveTab] = useState("deposit"); // 'deposit' or 'bank-accounts'
+  // ✅ TAB STATE
+  const [activeTab, setActiveTab] = useState("deposit");
 
   // Safe parameter access with debugging
   const customerId = params.customerId;
@@ -573,6 +601,16 @@ const DepositPageContent = () => {
   );
   const ui = useUI();
 
+  // ✅ CORRECT: USD Account Selectors from bankAccountSlice
+  const allUsdBankAccounts = useSelector(selectUSDBankAccounts);
+  const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
+  const bankLinkAccounts = useSelector(
+    (state) => state.bankLink?.bankAccounts || []
+  );
+
+  // ✅ ADD: Sync state
+  const [syncInProgress, setSyncInProgress] = useState(false);
+
   // Partner config
   const authtoken = localStorage.getItem("authtoken");
   const config = usePartnerConfig(authtoken);
@@ -580,7 +618,128 @@ const DepositPageContent = () => {
     config?.header_color || localStorage.getItem("header_color");
   const textColor = config?.text_color || localStorage.getItem("text_color");
 
-  // ✅ Safe useEffect without useSelector calls
+  // ✅ ADD: Combined USD accounts sync function
+  const syncCombinedUSDAccounts = async () => {
+    try {
+      setSyncInProgress(true);
+      console.log("🔄 Syncing combined USD accounts...");
+
+      // Fetch from both sources
+      const [plaidAccounts, manualAccounts] = await Promise.all([
+        dispatch(fetchUSDBankAccounts())
+          .unwrap()
+          .catch(() => []),
+        dispatch(fetchManualBankDetails())
+          .unwrap()
+          .catch(() => []),
+      ]);
+
+      // Combine and filter accounts
+      const allAccounts = [
+        ...plaidAccounts,
+        ...manualAccounts,
+        ...bankLinkAccounts,
+      ];
+
+      const uniqueAccounts = allAccounts.filter(
+        (account, index, self) =>
+          index ===
+          self.findIndex((a) => a.account_number === account.account_number)
+      );
+
+      console.log("✅ Combined USD accounts:", uniqueAccounts.length);
+
+      // Update the state with combined accounts
+      dispatch(setUSDBankAccounts(uniqueAccounts));
+    } catch (error) {
+      console.error("❌ Failed to sync USD accounts:", error);
+    } finally {
+      setSyncInProgress(false);
+    }
+  };
+
+  // ✅ ADD: Auto-sync when component mounts
+  useEffect(() => {
+    console.log("🔄 Component mounted, syncing combined USD accounts");
+    syncCombinedUSDAccounts();
+  }, [dispatch]);
+
+  // ✅ FIXED: Auto-fetch based on payment method - Only for USD with correct methods
+  useEffect(() => {
+    console.log("🔄 Payment method change detected:", {
+      paymentMethod: deposit.paymentMethod,
+      selectedCurrency: deposit.selectedCurrency,
+      shouldFetchUSDPlaid:
+        deposit.selectedCurrency === "USD" &&
+        deposit.paymentMethod === "bank_deposit",
+      shouldFetchUSDManual:
+        deposit.selectedCurrency === "USD" &&
+        deposit.paymentMethod === "manual_deposit",
+      shouldInitiateOpenBanking:
+        (deposit.selectedCurrency === "EUR" ||
+          deposit.selectedCurrency === "GBP" ||
+          deposit.selectedCurrency === "DKK") &&
+        deposit.paymentMethod === "bank_transfer",
+    });
+
+    // ✅ FIXED: Only fetch USD accounts for USD bank_deposit (Sila/Plaid)
+    if (
+      deposit.selectedCurrency === "USD" &&
+      deposit.paymentMethod === "bank_deposit"
+    ) {
+      console.log("🔄 Fetching Plaid-linked accounts for USD bank deposit");
+      dispatch(fetchUSDBankAccounts());
+    } else if (
+      deposit.selectedCurrency === "USD" &&
+      deposit.paymentMethod === "manual_deposit"
+    ) {
+      console.log("🔄 Fetching manual bank details for USD manual deposit");
+      dispatch(fetchManualBankDetails());
+    }
+
+    // ✅ FIXED: For EUR/GBP/DKK bank_transfer, do NOT call Sila - this should trigger Open Banking
+    if (
+      (deposit.selectedCurrency === "EUR" ||
+        deposit.selectedCurrency === "GBP" ||
+        deposit.selectedCurrency === "DKK") &&
+      deposit.paymentMethod === "bank_transfer"
+    ) {
+      console.log(
+        "🎯 Open Banking Bank Transfer selected for:",
+        deposit.selectedCurrency
+      );
+      // This will be handled by your PaymentInitiation component
+      // Do NOT call Sila endpoints for Open Banking currencies
+    }
+  }, [deposit.paymentMethod, deposit.selectedCurrency, dispatch]);
+
+  // ✅ ADD: Sync for bankLink data
+  useEffect(() => {
+    if (bankLinkAccounts.length > 0 && allUsdBankAccounts.length === 0) {
+      console.log(
+        "🔄 BankLink accounts available but no USD accounts, triggering sync"
+      );
+      syncCombinedUSDAccounts();
+    }
+  }, [bankLinkAccounts.length, allUsdBankAccounts.length]);
+
+  // ✅ ADD: Debug logging for USD accounts
+  useEffect(() => {
+    console.log("🔍 USD ACCOUNTS STATE:", {
+      accountsCount: allUsdBankAccounts.length,
+      loading: usdAccountsLoading,
+      syncInProgress: syncInProgress,
+      accounts: allUsdBankAccounts.map((acc) => ({
+        id: acc.id,
+        name: acc.account_name,
+        bank: acc.bank,
+        currency: acc.currency,
+        source: acc.source || "unknown",
+      })),
+    });
+  }, [allUsdBankAccounts, usdAccountsLoading, syncInProgress]);
+
+  // Safe useEffect without useSelector calls
   useEffect(() => {
     console.log("🔍 DEPOSIT PAGE DEBUG:");
     console.log("Route params:", { customerId, initialCurrency });
@@ -798,6 +957,8 @@ const DepositPageContent = () => {
   // Check if card deposit is selected
   const isCardDeposit = deposit.paymentMethod === "card_deposit";
   const isManualDeposit = deposit.paymentMethod === "manual_deposit";
+  const isBankDeposit = deposit.paymentMethod === "bank_deposit";
+  const isBankTransfer = deposit.paymentMethod === "bank_transfer";
 
   // ✅ CONDITIONAL RENDERING AFTER ALL HOOKS
   if (currency.loading) {
@@ -818,6 +979,7 @@ const DepositPageContent = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 font-sans">
       <ToastContainer position="top-right" autoClose={5000} />
+      <PaymentInitiation />
       <DebugPanel />
       <ReceiptTemplate
         transactionSuccess={deposit.transactionSuccess}
@@ -1036,6 +1198,7 @@ const DepositPageContent = () => {
                 )}
 
                 {/* Form Actions */}
+                {/* Form Actions */}
                 {deposit.paymentMethod && (
                   <div className="mt-10 flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4">
                     <motion.button
@@ -1058,31 +1221,77 @@ const DepositPageContent = () => {
                         currency={currency}
                       />
                     ) : !isManualDeposit ? (
-                      // Regular submit button for other non-manual deposits
-                      <motion.button
-                        type="submit"
-                        disabled={deposit.isSubmitting}
-                        whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
-                        whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
-                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
-                      >
-                        {deposit.isSubmitting ? (
-                          <>
-                            <RingLoader
-                              color="#ffffff"
-                              size={20}
-                              speedMultiplier={1}
-                              className="mr-3"
-                            />
-                            Processing...
-                          </>
+                      // ✅ FIXED: Different buttons for USD vs EUR/GBP/DKK
+                      deposit.selectedCurrency === "USD" &&
+                      deposit.paymentMethod === "bank_deposit" ? (
+                        // ✅ USD BANK DEPOSIT: Show Link Bank Account button
+                        deposit.selectedBankAccount ? (
+                          // ✅ SHOW SUBMIT BUTTON FOR USD BANK DEPOSIT WITH SELECTED ACCOUNT
+                          <motion.button
+                            type="submit"
+                            disabled={deposit.isSubmitting}
+                            whileHover={{
+                              scale: deposit.isSubmitting ? 1 : 1.02,
+                            }}
+                            whileTap={{
+                              scale: deposit.isSubmitting ? 1 : 0.98,
+                            }}
+                            className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                          >
+                            {deposit.isSubmitting ? (
+                              <>
+                                <RingLoader
+                                  color="#ffffff"
+                                  size={20}
+                                  speedMultiplier={1}
+                                  className="mr-3"
+                                />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <FaCheck className="mr-3" />
+                                Submit Deposit
+                              </>
+                            )}
+                          </motion.button>
                         ) : (
-                          <>
-                            <FaCheck className="mr-3" />
-                            Submit Deposit
-                          </>
-                        )}
-                      </motion.button>
+                          // ✅ SHOW LINK BANK ACCOUNT BUTTON FOR USD BANK DEPOSIT WITHOUT SELECTED ACCOUNT
+                          <motion.button
+                            type="button"
+                            onClick={() => navigate(`/linkbank/${customerId}`)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-sans"
+                          >
+                            <FaUniversity className="mr-3" />
+                            Link Bank Account
+                          </motion.button>
+                        )
+                      ) : // ✅ EUR/GBP/DKK BANK TRANSFER: Show Connect Bank button for Open Banking
+                      (deposit.selectedCurrency === "EUR" ||
+                          deposit.selectedCurrency === "GBP" ||
+                          deposit.selectedCurrency === "DKK") &&
+                        deposit.paymentMethod === "bank_transfer" ? (
+                        <motion.button
+                          type="button"
+                          onClick={() => {
+                            console.log(
+                              "🚀 Initiating Open Banking flow for:",
+                              deposit.selectedCurrency
+                            );
+                            // This should trigger your PaymentInitiation component
+                            // You need to dispatch an action to show the PaymentInitiation
+                            dispatch(setShowPaymentInitiation(true));
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all font-sans"
+                        >
+                          <FaUniversity className="mr-3" />
+                          Connect Bank via Open Banking
+                        </motion.button>
+                      ) : null
                     ) : null}
                   </div>
                 )}

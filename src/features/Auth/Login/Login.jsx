@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faEyeSlash, faExternalLinkAlt } from "@fortawesome/free-solid-svg-icons";
 import { AiOutlineClose } from "react-icons/ai";
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
@@ -956,6 +956,7 @@ const Login = () => {
         passcode: passcode,
         password: values.password,
         sign_in_option: inputType,
+        context: "login_verification",
       };
 
       if (showCustomerType === "Y" && values.customerType) {

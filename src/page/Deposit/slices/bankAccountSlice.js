@@ -1,24 +1,140 @@
+// src/features/BankAccounts/slices/bankAccountSlice.js - COMPLETE
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
-// ✅ FIXED: USD Bank Accounts API Call
+// ✅ COMPLETE: USD Bank Accounts API Call
 export const fetchUSDBankAccounts = createAsyncThunk(
   "bankAccounts/fetchUSDBankAccounts",
-  async (_, { rejectWithValue }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
-      // ✅ CORRECT: Get customerId from localStorage
       const customerId = localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
         throw new Error("Customer ID not found");
       }
 
-      // ✅ CORRECT: Send proper object with customerId
+      // ✅ CORRECT ENDPOINT: Use sila-bank-details for Plaid-linked accounts
+      const response = await api.post("/sila/sila-bank-details", {
+        customerId: customerId,
+      });
+
+      let accounts = [];
+      const data = response.data;
+
+      if (data?.data && Array.isArray(data.data)) {
+        accounts = data.data; // This matches your API response structure
+      } else if (Array.isArray(data)) {
+        accounts = data;
+      } else if (data?.status === "success") {
+        accounts = data.data || [];
+      }
+
+      console.log("✅ Plaid-linked USD Bank Accounts loaded:", accounts.length);
+      return accounts;
+    } catch (error) {
+      console.error("❌ Failed to load Plaid-linked USD bank accounts:", error);
+
+      // Fallback to bankLink accounts if available
+      const state = getState();
+      const bankLinkAccounts = state.bankLink?.bankAccounts || [];
+      const usdBankLinkAccounts = bankLinkAccounts.filter(
+        (account) => account.currency === "USD" || !account.currency
+      );
+
+      if (usdBankLinkAccounts.length > 0) {
+        console.log(
+          "🔄 Using bankLink accounts as fallback:",
+          usdBankLinkAccounts.length
+        );
+        return usdBankLinkAccounts;
+      }
+
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load USD bank accounts"
+      );
+    }
+  }
+);
+
+export const fetchCombinedUSDAccounts = createAsyncThunk(
+  "bankAccounts/fetchCombinedUSDAccounts",
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      const customerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerId) {
+        throw new Error("Customer ID not found");
+      }
+
+      console.log("🔄 Fetching combined USD accounts...");
+
+      // Fetch both Plaid-linked and manual accounts in parallel
+      const [plaidResponse, manualResponse] = await Promise.allSettled([
+        api.post("/sila/sila-bank-details", { customerId }),
+        api.post("/sila/manual-sila-bankdetails", { customerId }),
+      ]);
+
+      let plaidAccounts = [];
+      let manualAccounts = [];
+
+      // Process Plaid accounts
+      if (plaidResponse.status === "fulfilled") {
+        const data = plaidResponse.value.data;
+        if (data?.data && Array.isArray(data.data)) {
+          plaidAccounts = data.data;
+        } else if (Array.isArray(data)) {
+          plaidAccounts = data;
+        } else if (data?.status === "success") {
+          plaidAccounts = data.data || [];
+        }
+        console.log("✅ Plaid-linked USD accounts:", plaidAccounts.length);
+      }
+
+      // Process Manual accounts
+      if (manualResponse.status === "fulfilled") {
+        const data = manualResponse.value.data;
+        if (Array.isArray(data)) {
+          manualAccounts = data;
+        } else if (data?.accounts) {
+          manualAccounts = data.accounts;
+        } else if (data?.data) {
+          manualAccounts = Array.isArray(data.data) ? data.data : [data.data];
+        } else if (data?.status === "success") {
+          manualAccounts = data.data || [];
+        }
+        console.log("✅ Manual USD accounts:", manualAccounts.length);
+      }
+
+      // Combine accounts (you might want to deduplicate or merge logic here)
+      const combinedAccounts = [...plaidAccounts, ...manualAccounts];
+
+      console.log("✅ Combined USD accounts total:", combinedAccounts.length);
+      return combinedAccounts;
+    } catch (error) {
+      console.error("❌ Failed to load combined USD accounts:", error);
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load combined USD accounts"
+      );
+    }
+  }
+);
+
+// ✅ ADD: Manual Bank Details API Call - For manual deposit accounts
+export const fetchManualBankDetails = createAsyncThunk(
+  "bankAccounts/fetchManualBankDetails",
+  async (_, { rejectWithValue }) => {
+    try {
+      const customerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerId) {
+        throw new Error("Customer ID not found");
+      }
+
+      // ✅ CORRECT ENDPOINT: Use manual-sila-bankdetails for manual accounts
       const response = await api.post("/sila/manual-sila-bankdetails", {
         customerId: customerId,
       });
 
-      // ✅ Handle different response structures
       let accounts = [];
       const data = response.data;
 
@@ -32,23 +148,24 @@ export const fetchUSDBankAccounts = createAsyncThunk(
         accounts = data.data || [];
       }
 
+      console.log("✅ Manual USD Bank Details loaded:", accounts.length);
       return accounts;
     } catch (error) {
+      console.error("❌ Failed to load manual bank details:", error);
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load USD bank accounts"
+        error.response?.data?.message || "Failed to load manual bank details"
       );
     }
   }
 );
 
-// ✅ FIXED: AED Account Details API Call
+// ✅ COMPLETE: AED Account Details API Call
 export const fetchAEDAccountDetails = createAsyncThunk(
   "bankAccounts/fetchAEDAccountDetails",
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get("/manualaccount-detail/AED");
 
-      // Handle response structure
       let accountDetails = response.data;
       if (response.data?.data) {
         accountDetails = response.data.data;
@@ -65,40 +182,7 @@ export const fetchAEDAccountDetails = createAsyncThunk(
   }
 );
 
-// ✅ ADD: USD Manual Account Details
-export const fetchUSDManualAccountDetails = createAsyncThunk(
-  "bankAccounts/fetchUSDManualAccountDetails",
-  async (_, { rejectWithValue }) => {
-    try {
-      const customerId = localStorage.getItem("authcustomer_id");
-
-      if (!customerId) {
-        throw new Error("Customer ID not found");
-      }
-
-      // Use the same endpoint but for manual deposit context
-      const response = await api.post("/sila/manual-sila-bankdetails", {
-        customerId: customerId,
-      });
-
-      // Handle response structure for manual details
-      let accountDetails = response.data;
-      if (response.data?.data) {
-        accountDetails = response.data.data;
-      } else if (response.data?.status === "success") {
-        accountDetails = response.data.data || response.data;
-      }
-
-      return accountDetails;
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to load USD account details"
-      );
-    }
-  }
-);
-
-// ✅ FIXED: Manual Account Details for all currencies (DKK, EUR, GBP, etc.)
+// ✅ COMPLETE: Manual Account Details for all currencies
 export const fetchManualAccountDetails = createAsyncThunk(
   "bankAccounts/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
@@ -109,10 +193,8 @@ export const fetchManualAccountDetails = createAsyncThunk(
         throw new Error("Customer ID not found");
       }
 
-      // ✅ USE THE CORRECT ENDPOINT THAT WE KNOW WORKS:
       const response = await api.get(`/active-account-details/${customerId}`);
 
-      // Find the account for the selected currency
       const accounts = response.data.account_details || [];
       const accountForCurrency = accounts.find(
         (account) => account.currency === currency
@@ -122,72 +204,63 @@ export const fetchManualAccountDetails = createAsyncThunk(
         throw new Error(`No ${currency} account found`);
       }
 
-      // ✅ RETURN the account data so Redux can store it
       return accountForCurrency;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || `Failed to load ${currency} account details`
+        error.response?.data?.message ||
+          `Failed to load ${currency} account details`
       );
     }
   }
 );
 
-// Bank Accounts Slice
+// ✅ COMPLETE: Bank Accounts Slice
 const bankAccountSlice = createSlice({
   name: "bankAccounts",
   initialState: {
-    // USD Bank Accounts
     usdBankAccounts: [],
     usdAccountsLoading: false,
     usdAccountsError: null,
 
-    // AED Account Details
+    combinedUSDAccounts: [],
+    combinedUSDAccountsLoading: false,
+    combinedUSDAccountsError: null,
+
     aedAccountDetails: null,
     aedDetailsLoading: false,
     aedDetailsError: null,
 
-    // USD Manual Account Details
-    usdManualAccountDetails: null,
-    usdManualDetailsLoading: false,
-    usdManualDetailsError: null,
-
-    // Manual Account Details for all currencies
     manualAccountDetails: null,
     manualDetailsLoading: false,
     manualDetailsError: null,
 
-    // Track current currency to prevent mismatches
     currentCurrency: null,
+    hasSilaAccounts: false,
   },
   reducers: {
     clearBankAccountErrors: (state) => {
       state.usdAccountsError = null;
       state.aedDetailsError = null;
-      state.usdManualDetailsError = null;
       state.manualDetailsError = null;
     },
     resetBankAccounts: (state) => {
       state.usdBankAccounts = [];
       state.aedAccountDetails = null;
-      state.usdManualAccountDetails = null;
       state.manualAccountDetails = null;
       state.usdAccountsError = null;
       state.aedDetailsError = null;
-      state.usdManualDetailsError = null;
       state.manualDetailsError = null;
       state.currentCurrency = null;
+      state.hasSilaAccounts = false;
     },
-    // ✅ CRITICAL FIX: Clear manual account details
     clearManualAccountDetails: (state) => {
       state.manualAccountDetails = null;
       state.manualDetailsLoading = false;
       state.manualDetailsError = null;
     },
-    // ✅ CRITICAL FIX: Set currency and clear old data
     setCurrencyAndClearManualDetails: (state, action) => {
       const newCurrency = action.payload;
-      
-      // Only clear if currency is actually changing
+
       if (state.currentCurrency !== newCurrency) {
         state.manualAccountDetails = null;
         state.manualDetailsLoading = false;
@@ -195,15 +268,22 @@ const bankAccountSlice = createSlice({
         state.currentCurrency = newCurrency;
       }
     },
-    // ✅ Force clear manual details for currency mismatch
     forceClearManualDetailsForCurrency: (state, action) => {
       const expectedCurrency = action.payload;
-      if (state.manualAccountDetails && state.manualAccountDetails.currency !== expectedCurrency) {
+      if (
+        state.manualAccountDetails &&
+        state.manualAccountDetails.currency !== expectedCurrency
+      ) {
         state.manualAccountDetails = null;
         state.manualDetailsLoading = false;
         state.manualDetailsError = null;
       }
-    }
+    },
+    // ✅ ADDED: Set USD accounts manually (for synchronization)
+    setUSDBankAccounts: (state, action) => {
+      state.usdBankAccounts = action.payload;
+      state.hasSilaAccounts = action.payload.length > 0;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -215,10 +295,12 @@ const bankAccountSlice = createSlice({
       .addCase(fetchUSDBankAccounts.fulfilled, (state, action) => {
         state.usdAccountsLoading = false;
         state.usdBankAccounts = action.payload;
+        state.hasSilaAccounts = action.payload.length > 0;
       })
       .addCase(fetchUSDBankAccounts.rejected, (state, action) => {
         state.usdAccountsLoading = false;
         state.usdAccountsError = action.payload;
+        state.hasSilaAccounts = false;
       })
 
       // AED Account Details
@@ -235,21 +317,7 @@ const bankAccountSlice = createSlice({
         state.aedDetailsError = action.payload;
       })
 
-      // USD Manual Account Details
-      .addCase(fetchUSDManualAccountDetails.pending, (state) => {
-        state.usdManualDetailsLoading = true;
-        state.usdManualDetailsError = null;
-      })
-      .addCase(fetchUSDManualAccountDetails.fulfilled, (state, action) => {
-        state.usdManualDetailsLoading = false;
-        state.usdManualAccountDetails = action.payload;
-      })
-      .addCase(fetchUSDManualAccountDetails.rejected, (state, action) => {
-        state.usdManualDetailsLoading = false;
-        state.usdManualDetailsError = action.payload;
-      })
-
-      // Manual Account Details for all currencies
+      // Manual Account Details
       .addCase(fetchManualAccountDetails.pending, (state) => {
         state.manualDetailsLoading = true;
         state.manualDetailsError = null;
@@ -257,8 +325,6 @@ const bankAccountSlice = createSlice({
       .addCase(fetchManualAccountDetails.fulfilled, (state, action) => {
         state.manualDetailsLoading = false;
         state.manualAccountDetails = action.payload;
-        
-        // Update current currency to match the loaded data
         state.currentCurrency = action.payload.currency;
       })
       .addCase(fetchManualAccountDetails.rejected, (state, action) => {
@@ -275,6 +341,35 @@ export const {
   clearManualAccountDetails,
   setCurrencyAndClearManualDetails,
   forceClearManualDetailsForCurrency,
+  setUSDBankAccounts,
 } = bankAccountSlice.actions;
+
+// ✅ COMPLETE: Selectors
+export const selectUSDBankAccounts = (state) =>
+  state.bankAccounts.usdBankAccounts;
+export const selectUSDAccountsLoading = (state) =>
+  state.bankAccounts.usdAccountsLoading;
+export const selectUSDAccountsError = (state) =>
+  state.bankAccounts.usdAccountsError;
+export const selectHasSilaAccounts = (state) =>
+  state.bankAccounts.hasSilaAccounts;
+export const selectAEDAccountDetails = (state) =>
+  state.bankAccounts.aedAccountDetails;
+export const selectAEDDetailsLoading = (state) =>
+  state.bankAccounts.aedDetailsLoading;
+export const selectAEDDetailsError = (state) =>
+  state.bankAccounts.aedDetailsError;
+export const selectManualAccountDetails = (state) =>
+  state.bankAccounts.manualAccountDetails;
+export const selectManualDetailsLoading = (state) =>
+  state.bankAccounts.manualDetailsLoading;
+export const selectManualDetailsError = (state) =>
+  state.bankAccounts.manualDetailsError;
+export const selectCombinedUSDAccounts = (state) =>
+  state.bankAccounts.combinedUSDAccounts;
+export const selectCombinedUSDAccountsLoading = (state) =>
+  state.bankAccounts.combinedUSDAccountsLoading;
+export const selectCombinedUSDAccountsError = (state) =>
+  state.bankAccounts.combinedUSDAccountsError;
 
 export default bankAccountSlice.reducer;
