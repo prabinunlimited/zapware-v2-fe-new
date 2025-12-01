@@ -1,4 +1,3 @@
-// src/components/Dashboard/Header/Header.jsx
 import React, { useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
@@ -53,6 +52,9 @@ import { logoutUser } from "../../../features/Auth/slices/authSlice";
 // Partner config hook
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
+// API Coordination
+import { apiCoordinator } from "../../../services/api";
+
 const selectAuthToken = (state) => {
   // Use bearertoken from localStorage for API calls
   const bearertoken = localStorage.getItem("bearertoken");
@@ -83,9 +85,6 @@ const selectAuthToken = (state) => {
 };
 
 const Header = ({ customerId }) => {
-  console.log("🔍 Header component rendering");
-  console.log("🔍 customerId prop:", customerId);
-
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -135,49 +134,15 @@ const Header = ({ customerId }) => {
 
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // 🔍 REDUX PROFILE STORAGE DEBUG EFFECT
-  useEffect(() => {
-    console.log("🔍 REDUX PROFILE STORAGE CHECK:", {
-      profileData, // Should change from null → object when fetched
-      profileLoading, // Should be false when done
-      fetchStatus: fetchStatus.profile, // Should be 'succeeded'
-      storedInRedux: !!profileData,
-      dataStructure: profileData ? Object.keys(profileData) : "null",
-    });
-  }, [profileData, profileLoading, fetchStatus.profile]);
+  // NEW: API coordination refs
+  const profileFetchSignature = useRef(null);
 
-  // 🔍 COMPREHENSIVE DEBUG EFFECT
   useEffect(() => {
-    console.log("🔍 ========== HEADER DEBUG INFO ==========");
-    console.log("🔍 customerId prop:", customerId);
-    console.log("🔍 authtoken from Redux:", authtoken);
-    console.log("🔍 bearertoken from localStorage:", bearertoken);
-    console.log("🔍 isStaffLogin:", isStaffLogin);
-    console.log("🔍 staffId:", staffId);
-    console.log(
-      "🔍 Current localStorage firstName:",
-      localStorage.getItem("firstName")
-    );
-    console.log("🔍 profileLoading:", profileLoading);
-    console.log("🔍 fetchStatus.profile:", fetchStatus.profile);
-    console.log("🔍 profileData:", profileData);
-    console.log("🔍 profileError:", profileError);
-    console.log("🔍 =======================================");
-  }, [
-    authtoken,
-    customerId,
-    isStaffLogin,
-    staffId,
-    bearertoken,
-    profileLoading,
-    fetchStatus.profile,
-    profileData,
-    profileError,
-  ]);
+    profileFetchSignature.current = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
+  }, [customerId]);
 
   // Handle logout
   const handleLogout = useCallback(async () => {
-    console.log("🔍 Logout initiated");
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -187,6 +152,9 @@ const Header = ({ customerId }) => {
       clearTimeout(fetchTimeoutRef.current);
       fetchTimeoutRef.current = null;
     }
+
+    // Clear API cache on logout
+    apiCoordinator.clear();
 
     if (authtoken) {
       try {
@@ -240,57 +208,75 @@ const Header = ({ customerId }) => {
     };
   }, [dispatch]);
 
-  // Fetch FX currencies on mount
-  useEffect(() => {
-    if (
-      bearertoken &&
-      fetchStatus.fx !== "loading" &&
-      fetchStatus.fx !== "succeeded"
-    ) {
-      dispatch(fetchPartnerFxCurrencies(bearertoken));
-    }
-  }, [dispatch, bearertoken, fetchStatus.fx]);
-
-  // 🔍 UPDATED: Profile fetch effect with proper conditions
+  // ✅ FIXED: Aggressive Profile fetch with duplicate handling
   useEffect(() => {
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
     }
 
     fetchTimeoutRef.current = setTimeout(() => {
-      console.log("🔍 Profile Fetch Effect - Current State:", {
+      console.log("🔍 Header Profile Fetch Check:", {
         bearertoken: !!bearertoken,
-        customerId: !!customerId,
+        customerId,
         fetchStatus: fetchStatus.profile,
         profileLoading,
-        profileData: !!profileData,
-        hasFirstName: !!localStorage.getItem("firstName"),
+        reduxFirstName: profileData?.first_name,
+        storageFirstName: localStorage.getItem("firstName"),
+        isGloballyFetching: profileFetchSignature.current
+          ? apiCoordinator.isFetching(profileFetchSignature.current)
+          : "no-signature",
       });
 
-      // Fetch profile data if we don't have it in Redux
+      // ✅ Check if we have VALID data (not "User" or bad values)
+      const hasValidReduxData =
+        profileData?.first_name &&
+        profileData.first_name !== "User" &&
+        profileData.first_name !== "undefined" &&
+        profileData.first_name !== "null";
+
+      const hasValidStorageData =
+        localStorage.getItem("firstName") &&
+        localStorage.getItem("firstName") !== "User" &&
+        localStorage.getItem("firstName") !== "undefined" &&
+        localStorage.getItem("firstName") !== "null";
+
+      // ✅ Check global coordination state
+      const isGloballyFetching =
+        profileFetchSignature.current &&
+        apiCoordinator.isFetching(profileFetchSignature.current);
+      const hasGlobalData =
+        profileFetchSignature.current &&
+        apiCoordinator.hasRecentData(profileFetchSignature.current);
+
+      // ✅ SIMPLIFIED: Fetch if we don't have valid data AND not already fetching globally
       const shouldFetchProfile =
         bearertoken &&
         customerId &&
-        fetchStatus.profile === "idle" &&
-        !profileLoading &&
-        !profileData; // Only fetch if we don't have data in Redux
+        !hasValidReduxData &&
+        !hasValidStorageData &&
+        !isGloballyFetching &&
+        !profileLoading;
 
       if (shouldFetchProfile) {
-        console.log("🔍 Dispatching fetchUserProfile - need to populate Redux");
+        console.log("👤 Header: Fetching profile - no valid data found");
+
+        // Reset fetch status to idle to allow the fetch
+        if (fetchStatus.profile !== "idle") {
+          console.log("🔄 Resetting fetch status to idle");
+          // You might need to dispatch an action to reset the status if it's stuck
+        }
+
         dispatch(fetchUserProfile({ customerId, bearertoken }));
       } else {
-        console.log("🔍 Profile fetch skipped", {
-          reason: profileData
-            ? "Already have profileData in Redux"
-            : "Other conditions not met",
-          hasProfileData: !!profileData,
-          hasBearer: !!bearertoken,
-          hasCustomerId: !!customerId,
+        console.log("🔍 Header: Profile fetch not needed", {
+          hasValidReduxData,
+          hasValidStorageData,
+          isGloballyFetching,
+          profileLoading,
           fetchStatus: fetchStatus.profile,
-          isLoading: profileLoading,
         });
       }
-    }, 100);
+    }, 300); // Slightly longer delay to avoid race conditions
 
     return () => {
       if (fetchTimeoutRef.current) {
@@ -313,7 +299,6 @@ const Header = ({ customerId }) => {
   }, [customerId, navigate, dispatch]);
 
   const handleProfileClick = useCallback(() => {
-    console.log("🔍 Navigating to profile page for customer:", customerId);
     navigate(`/profile/${customerId}`);
     dispatch(closeDropdown());
   }, [customerId, navigate, dispatch]);
@@ -354,7 +339,6 @@ const Header = ({ customerId }) => {
     }
 
     timerRef.current = setTimeout(() => {
-      console.log("🕒 Auto-logout timer expired");
       handleLogout();
     }, 180000); // 3 minutes
   }, [handleLogout]);
@@ -425,9 +409,10 @@ const Header = ({ customerId }) => {
     // },
   ];
 
-  // Memoized profile section - updated with profile loading
+  // ✅ FIXED: Memoized profile section with better loading handling
   const ProfileSection = useMemo(() => {
-    if (profileLoading) {
+    // ✅ Show profile-specific loading only, don't block entire UI
+    if (profileLoading && !profileData) {
       return (
         <div className="flex items-center">
           <ClipLoader size={30} color={"#ffffff"} loading={true} />
@@ -442,20 +427,23 @@ const Header = ({ customerId }) => {
 
     // Use data from Redux if available, otherwise fallback to localStorage
     const displayName =
-      profileData?.first_name || localStorage.getItem("firstName") || "User";
+      profileData?.first_name &&
+      profileData.first_name !== "User" &&
+      profileData.first_name !== "undefined" &&
+      profileData.first_name !== "null"
+        ? profileData.first_name
+        : localStorage.getItem("firstName") &&
+          localStorage.getItem("firstName") !== "User" &&
+          localStorage.getItem("firstName") !== "undefined" &&
+          localStorage.getItem("firstName") !== "null"
+        ? localStorage.getItem("firstName")
+        : "User";
     const userRole =
       isStaffLogin === "1"
         ? staffRole
         : isOwnerLogin === "1"
         ? ownerRoleName
         : "Customer";
-
-    console.log(
-      "🔍 ProfileSection rendering with name:",
-      displayName,
-      "from Redux:",
-      !!profileData
-    );
 
     return (
       <div

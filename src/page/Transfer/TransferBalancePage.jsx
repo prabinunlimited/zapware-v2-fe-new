@@ -1,3 +1,4 @@
+// src/features/Transfer/TransferBalancePage.jsx - COMPLETE WITH UPDATES
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
@@ -24,6 +25,7 @@ import {
   selectTransferAmount,
   selectSelectedCountryCode,
   selectSearchQuery,
+  selectIsFormReadyForSearch, // ✅ ADD: New selector
 } from "./transferSelectors";
 
 // Existing Redux
@@ -51,6 +53,7 @@ const TransferBalancePage = () => {
   const transferAmount = useSelector(selectTransferAmount);
   const selectedCountryCode = useSelector(selectSelectedCountryCode);
   const searchQuery = useSelector(selectSearchQuery);
+  const isFormReadyForSearch = useSelector(selectIsFormReadyForSearch); // ✅ ADD: Ready state
 
   // Existing selectors
   const countryOptions = useSelector(selectCountriesOptions) || [];
@@ -198,7 +201,8 @@ const TransferBalancePage = () => {
         theme="light"
       />
 
-      <div className="container mx-auto px-4 max-w-2xl">
+      {/* ✅ INCREASED WIDTH: Changed from max-w-2xl to max-w-4xl */}
+      <div className="container mx-auto px-4 max-w-4xl">
         {/* Header Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -278,6 +282,7 @@ const TransferBalancePage = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Find Receiver</h3>
               </div>
               
+              {/* ✅ PASS READY STATE TO COMPONENT */}
               <ReceiverSearchSection
                 searchQuery={searchQuery}
                 selectedCountryCode={selectedCountryCode}
@@ -287,6 +292,7 @@ const TransferBalancePage = () => {
                 onReceiverFound={handleReceiverFound}
                 headerColorProps={headerColorProps}
                 textColorProps={textColorProps}
+                isFormReady={isFormReadyForSearch}
               />
             </section>
           </div>
@@ -361,7 +367,6 @@ const TransferBalancePage = () => {
                 <p className="text-gray-600 text-xs">Competitive rates</p>
               </div>
             </div>
-            
           </div>
         </motion.div>
       </div>

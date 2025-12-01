@@ -25,7 +25,7 @@ const PlaidLink = () => {
         handlePlaidSuccess(event.data.publicToken);
         break;
       case 'ERROR':
-        console.error('Plaid error:', event.data.error);
+        
         break;
       default:
         break;

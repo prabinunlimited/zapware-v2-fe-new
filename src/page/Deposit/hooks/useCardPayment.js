@@ -49,7 +49,7 @@ export const useCardPayment = () => {
 
   // Actions
   const initializePayment = useCallback((paymentData, isIframe = false) => {
-    console.log("🔄 Initializing payment:", { paymentData, isIframe });
+    
     
     dispatch(setCurrentPayment(paymentData));
     dispatch(setShowPaymentForm(true));
@@ -62,7 +62,7 @@ export const useCardPayment = () => {
   }, [dispatch]);
 
   const handlePaymentCompleted = useCallback((resultCode, paymentData) => {
-    console.log("✅ Payment completed:", resultCode);
+    
     
     dispatch(setPaymentStatus({ completed: true, failed: false }));
     
@@ -93,7 +93,7 @@ export const useCardPayment = () => {
   }, [dispatch, navigate]);
 
   const handlePaymentFailed = useCallback((resultCode, paymentData) => {
-    console.log("❌ Payment failed:", resultCode);
+    
     
     dispatch(setPaymentStatus({ completed: false, failed: true }));
     
@@ -110,7 +110,7 @@ export const useCardPayment = () => {
   }, [dispatch, navigate]);
 
   const handlePaymentError = useCallback((error, paymentData) => {
-    console.error("🚨 Payment error:", error);
+    
     
     dispatch(setPaymentStatus({ completed: false, failed: true }));
     

@@ -51,14 +51,10 @@ const BankLink = () => {
   const shouldAutoOpenPlaid = location.state?.autoOpenBankTab;
 
   useEffect(() => {
-    console.log("🔍 BankLink Component Mounted:", {
-      customerId,
-      state: location.state,
-      shouldAutoOpenPlaid,
-    });
+    
 
     if (shouldAutoOpenPlaid) {
-      console.log("🔄 Auto-opening Plaid link for card deposit");
+      
       setTimeout(() => {
         dispatch(setShowPlaidLink(true));
       }, 500);

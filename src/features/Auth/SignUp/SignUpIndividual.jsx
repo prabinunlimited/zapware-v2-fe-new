@@ -18,6 +18,7 @@ import ErrorModal from "../../../components/PopupModal/ErrorModal";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 import RegistrationLayout from "../../../components/ProgressBar/RegistrationLayout";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
+import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
@@ -69,7 +70,6 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("Error caught by boundary:", error, errorInfo);
     this.setState({
       error: error?.toString() || "Unknown error",
     });
@@ -119,17 +119,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Debug component
-const ReduxStateDebug = () => {
-  const state = useSelector((state) => state);
-
-  useEffect(() => {
-    console.log("🔍 Current Redux State:", state);
-  }, [state]);
-
-  return null;
-};
-
 // Main component function
 function SignUpIndividualContent() {
   // State declarations
@@ -158,6 +147,25 @@ function SignUpIndividualContent() {
   const [idIssuedDate, setIdIssuedDate] = useState("");
   const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
+
+  useEffect(() => {
+    console.log("🔍 Token check on mount:", {
+      bearertoken: localStorage.getItem("bearertoken"),
+      tokenServiceToken: tokenService.getToken(),
+      authtoken: localStorage.getItem("authtoken"),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Also check partner-related localStorage items
+    console.log("🔍 Partner data check:", {
+      whitelabelledpartnerid: localStorage.getItem("whitelabelledpartnerid"),
+      iswhitelabelledpartner: localStorage.getItem("iswhitelabelledpartner"),
+      partner_name: localStorage.getItem("partner_name"),
+      beneficiary_portal_title: localStorage.getItem(
+        "beneficiary_portal_title"
+      ),
+    });
+  }, []);
 
   const dispatch = useDispatch();
   const location = useLocation();
@@ -347,7 +355,6 @@ function SignUpIndividualContent() {
 
         await handleFormSubmission(values);
       } catch (error) {
-        console.error("Form submission error:", error);
         setErrorMessage("An error occurred during form validation");
         setIsModalOpen(true);
       } finally {
@@ -383,34 +390,47 @@ function SignUpIndividualContent() {
         idIssuedDate: idIssuedDate,
       };
 
-      console.log("📤 Submitting form data:", {
-        mobile_number: updatedValues.mobile_number, // Already clean: "9813017273"
-        mobilenumber_countrycode: updatedValues.mobilenumber_countrycode,
-        full_mobile_number: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
-      });
+      // Use Redux action instead of direct fetch
+      const resultAction = await dispatch(
+        submitIndividualSignup(updatedValues)
+      );
 
-      const response = await fetch(`${API_URL}/customers/sign-up`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`,
-        },
-        body: JSON.stringify(updatedValues),
-      });
+      // Check if the action was successful
+      if (submitIndividualSignup.fulfilled.match(resultAction)) {
+        const responseData = resultAction.payload;
 
-      const responseData = await response.json();
+        setSuccessMessage(responseData.message || "Registration successful!");
+        setIsSuccessModalOpen(true);
 
-      if (!response.ok) {
-        console.error("❌ Submission failed:", responseData);
+        if (responseData.status === "success") {
+          toast.success(responseData.message || "Registration successful!");
 
-        if (responseData.message) {
-          setErrorMessage(responseData.message);
+          // Navigate to phone verification with clean mobile number
+          navigate("/phoneverification", {
+            state: {
+              mobileNumber: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
+              kyc_verify: kyc_verify,
+              customerData: responseData.data || null,
+            },
+          });
+        } else {
+          setErrorMessage(
+            responseData.message || "Something went wrong during registration!"
+          );
           setIsModalOpen(true);
-        } else if (responseData.errors) {
-          // Handle field-specific errors
+        }
+      } else {
+        // Handle rejection (error case)
+        const error = resultAction.payload;
+
+        if (error.message) {
+          setErrorMessage(error.message);
+          setIsModalOpen(true);
+        } else if (error.errors) {
+          // Handle field-specific errors from Redux
           const formattedErrors = {};
-          Object.keys(responseData.errors).forEach((key) => {
-            formattedErrors[key] = responseData.errors[key].join(", ");
+          Object.keys(error.errors).forEach((key) => {
+            formattedErrors[key] = error.errors[key].join(", ");
           });
           formik.setErrors(formattedErrors);
           toast.error("Please check the form for errors");
@@ -418,35 +438,8 @@ function SignUpIndividualContent() {
           setErrorMessage("Submission Error: Please check all the inputs");
           setIsModalOpen(true);
         }
-        setIsSubmitting(false);
-        setShowFullScreenLoader(false);
-        return;
-      }
-
-      console.log("✅ Registration successful:", responseData);
-
-      setSuccessMessage(responseData.message);
-      setIsSuccessModalOpen(true);
-
-      if (responseData.status === "success") {
-        toast.success(responseData.message || "Registration successful!");
-
-        // Navigate to phone verification with clean mobile number
-        navigate("/phoneverification", {
-          state: {
-            mobileNumber: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
-            kyc_verify: kyc_verify,
-            customerData: responseData.data || null,
-          },
-        });
-      } else {
-        setErrorMessage(
-          responseData.message || "Something went wrong during registration!"
-        );
-        setIsModalOpen(true);
       }
     } catch (error) {
-      console.error("🚨 Form submission error:", error);
       setErrorMessage(
         error.message ||
           "An error occurred during submission. Please try again."
@@ -470,6 +463,7 @@ function SignUpIndividualContent() {
     }
   };
 
+  // FIXED: Single useEffect without nesting
   useEffect(() => {
     setIsClient(true);
     let isMounted = true;
@@ -479,12 +473,48 @@ function SignUpIndividualContent() {
         setIsLoading(true);
         setInitializationError(null);
 
-        console.log("🟡 Starting initialization...");
-        console.log("➡️ Service Provider IDs:", service_provide_ids);
-        console.log("➡️ Countries already loaded:", countries.length);
-        console.log("➡️ Terms already fetched:", termsFetched);
+        console.log("🔍 [initializeData] Starting initialization", {
+          hasLocationState: !!location.state,
+          service_provide_ids: service_provide_ids,
+          accountOptions: accountOptions,
+        });
 
-        // Determine account types with error handling
+        // ✅ STEP 1: GET PARTNER TOKEN & ID FIRST (CRITICAL!)
+        try {
+          console.log("🔄 Attempting to get partner token...");
+
+          // Import getBearerToken dynamically to avoid import issues
+          const { getBearerToken } = await import(
+            "../../../services/authService"
+          );
+
+          const token = await getBearerToken();
+          console.log("✅ Partner token obtained:", token ? "Yes" : "No");
+
+          // Check what we got
+          const partnerId = localStorage.getItem("whitelabelledpartnerid");
+          const isWhiteLabelled = localStorage.getItem(
+            "iswhitelabelledpartner"
+          );
+          const storedToken = localStorage.getItem("bearertoken");
+
+          console.log("🔍 After token fetch:", {
+            partnerId,
+            isWhiteLabelled,
+            storedToken: storedToken ? "Exists" : "Missing",
+            allLocalStorageKeys: Object.keys(localStorage).filter(
+              (key) =>
+                key.includes("partner") ||
+                key.includes("bearer") ||
+                key.includes("token")
+            ),
+          });
+        } catch (tokenError) {
+          console.error("❌ Failed to get partner token:", tokenError.message);
+          // Don't throw - continue without token
+        }
+
+        // ✅ STEP 2: Determine account types
         let hasNamed = false;
         let hasUSD = false;
 
@@ -503,11 +533,15 @@ function SignUpIndividualContent() {
               );
               return account && account.currency === "USD";
             }) || false;
-
-          console.log("✅ Account type check complete:", { hasNamed, hasUSD });
         } catch (error) {
-          console.warn("⚠️ Error processing account types:", error);
+          console.error("❌ Error determining account types:", error);
         }
+
+        console.log("🔍 Account type analysis:", {
+          hasNamed,
+          hasUSD,
+          ssn_required,
+        });
 
         dispatch(
           setMetadataField({ field: "hasNamedAccounts", value: hasNamed })
@@ -520,81 +554,120 @@ function SignUpIndividualContent() {
           })
         );
 
-        // Create an array of promises for all API calls
+        // ✅ STEP 3: Create array of promises for all API calls
         const apiPromises = [];
 
         // ALWAYS fetch countries
-        console.log("🌍 Fetching countries...");
         apiPromises.push(
           dispatch(fetchCountries())
             .unwrap()
             .catch((error) => {
-              console.error("❌ Countries fetch failed:", error);
+              console.error("❌ Countries fetch error:", error);
               return [];
             })
         );
 
-        // Fetch nationalities
-        console.log("🗺️ Fetching nationalities...");
-        apiPromises.push(
-          dispatch(fetchNationalities())
-            .unwrap()
-            .catch((error) => {
-              console.error("❌ Nationalities fetch failed:", error);
-              return [];
-            })
-        );
-
-        // Fetch ID document types
-        console.log("🪪 Fetching ID document types...");
-        apiPromises.push(
-          dispatch(fetchIdDocumentTypes())
-            .unwrap()
-            .catch((error) => {
-              console.error("❌ ID document types fetch failed:", error);
-              return [];
-            })
-        );
-
-        // Fetch terms if needed
-        const bearertoken = localStorage.getItem("bearertoken");
-        if (bearertoken && !termsFetched) {
-          console.log("📄 Fetching terms and conditions...");
+        // ✅ Fetch nationalities ONLY if not already loaded
+        if (nationalities.length === 0) {
           apiPromises.push(
-            dispatch(fetchTermsAndConditions())
+            dispatch(fetchNationalities())
               .unwrap()
               .catch((error) => {
-                console.error("❌ Terms fetch failed:", error);
+                console.error("❌ Nationalities fetch error:", error);
                 return [];
               })
           );
+        } else {
+          console.log("✅ Nationalities already loaded:", nationalities.length);
         }
 
-        // Wait for all API calls with timeout
-        const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => resolve("timeout"), 30000)
-        );
-
-        const results = await Promise.race([
-          Promise.allSettled(apiPromises),
-          timeoutPromise,
-        ]);
-
-        if (results === "timeout") {
-          console.warn(
-            "⚠️ Initialization timeout, proceeding with available data"
+        // ✅ Fetch ID document types ONLY if not already loaded
+        if (idDocumentTypes.length === 0) {
+          apiPromises.push(
+            dispatch(fetchIdDocumentTypes())
+              .unwrap()
+              .catch((error) => {
+                console.error("❌ ID Document Types fetch error:", error);
+                return [];
+              })
           );
         } else {
-          console.log("📦 API call results:", results);
+          console.log(
+            "✅ ID Document Types already loaded:",
+            idDocumentTypes.length
+          );
+        }
+
+        // ✅ STEP 4: Fetch terms - NOW WITH PARTNER INFO AVAILABLE
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+        const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+        const bearertoken = localStorage.getItem("bearertoken");
+
+        console.log("🔍 Terms fetch check:", {
+          partnerId,
+          isWhiteLabelled,
+          hasBearerToken: !!bearertoken,
+          termsFetched,
+          shouldFetchTerms: !termsFetched,
+        });
+
+        // ✅ ALWAYS FETCH TERMS (they're public or use partner ID)
+        if (!termsFetched) {
+          console.log("📡 Fetching terms and conditions...");
+
+          apiPromises.push(
+            dispatch(fetchTermsAndConditions())
+              .unwrap()
+              .then((terms) => {
+                console.log(
+                  "✅ Terms fetched successfully:",
+                  terms?.length || 0
+                );
+                return terms;
+              })
+              .catch((error) => {
+                console.error("❌ Terms fetch error in component:", error);
+                // Return empty array so registration can continue
+                return [];
+              })
+          );
+        } else {
+          console.log("✅ Terms already fetched");
+        }
+
+        // ✅ STEP 5: Execute all API calls
+        if (apiPromises.length > 0) {
+          console.log("🚀 Executing", apiPromises.length, "API calls...");
+
+          // Wait for all API calls with timeout
+          const timeoutPromise = new Promise((resolve) =>
+            setTimeout(() => {
+              console.log("⏰ API timeout after 30 seconds");
+              resolve("timeout");
+            }, 30000)
+          );
+
+          const results = await Promise.race([
+            Promise.allSettled(apiPromises),
+            timeoutPromise,
+          ]);
+
+          if (results === "timeout") {
+            console.warn("⚠️ Some API calls timed out");
+          } else {
+            console.log("✅ All API calls completed:", results);
+          }
+        } else {
+          console.log("✅ No API calls needed - all data already loaded");
         }
 
         if (isMounted) {
           setIsLoading(false);
-          console.log("✅ Initialization completed successfully");
+          console.log("✅ Initialization complete");
         }
       } catch (error) {
+        console.error("❌ Initialization error:", error);
         if (isMounted) {
-          console.error("🚨 Initialization error:", error);
           setInitializationError(error.message);
           setIsLoading(false);
         }
@@ -613,6 +686,8 @@ function SignUpIndividualContent() {
     termsFetched,
     ssn_required,
     accountOptions,
+    nationalities.length,
+    idDocumentTypes.length,
   ]);
 
   // Handle errors
@@ -668,9 +743,7 @@ function SignUpIndividualContent() {
               deviceInfo.device.model || "Unknown Device"
             }`;
           }
-        } catch (deviceError) {
-          console.warn("Device fingerprinting failed, using fallback values");
-        }
+        } catch (deviceError) {}
 
         const termData = {
           accepted_at: currentDateTimeLocal,
@@ -687,7 +760,6 @@ function SignUpIndividualContent() {
           })
         );
       } catch (error) {
-        console.error("Error in handleCheckboxChange:", error);
         // Fallback without device fingerprinting
         dispatch(
           setTermsAccepted({
@@ -753,8 +825,8 @@ function SignUpIndividualContent() {
   // Phone number handler - NO DASHES
   const handlePhoneChange = (e) => {
     // Remove all non-numeric characters and limit to 10 digits
-    const rawValue = e.target.value.replace(/\D/g, '').slice(0, 10);
-    
+    const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+
     // Set the raw numeric value directly (no formatting)
     formik.setFieldValue("mobile_number", rawValue);
   };
@@ -1023,9 +1095,6 @@ function SignUpIndividualContent() {
           </div>
         )}
         <div className="max-w-6xl w-full bg-white rounded-2xl shadow-lg overflow-hidden relative border border-gray-100">
-          {/* Debug component - remove in production */}
-          <ReduxStateDebug />
-
           {isSubmitting && (
             <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
               <div className="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center">
@@ -2004,11 +2073,11 @@ function SignUpIndividualContent() {
                 </div>
               </section>
 
-              {/* Security Section */}
+              {/* Security Section - WITHOUT Terms & Conditions */}
               <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
-                    {showSSNField ? 4 : 3}
+                    4
                   </span>
                   Security
                 </h3>
@@ -2179,7 +2248,7 @@ function SignUpIndividualContent() {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(showSSNField ? 2 : 1)}
+                    onClick={() => setActiveSection(2)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2200,7 +2269,7 @@ function SignUpIndividualContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(showSSNField ? 4 : 3)}
+                    onClick={() => setActiveSection(4)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Terms & Conditions
@@ -2222,15 +2291,11 @@ function SignUpIndividualContent() {
                 </div>
               </section>
 
-              {/* Terms & Conditions Section */}
-              <section
-                className={`${
-                  activeSection !== (showSSNField ? 4 : 3) ? "hidden" : ""
-                }`}
-              >
+              {/* Terms & Conditions Section - SEPARATE TAB */}
+              <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
-                    {showSSNField ? 5 : 4}
+                    5
                   </span>
                   Terms & Conditions
                 </h3>
@@ -2275,7 +2340,7 @@ function SignUpIndividualContent() {
                   </div>
                 ) : termsConditions.length > 0 ? (
                   <>
-                    <div className="max-h-60 overflow-auto space-y-4 mb-8 p-1">
+                    <div className="max-h-96 overflow-auto space-y-4 mb-8 p-1 border border-gray-200 rounded-xl bg-gray-50/30">
                       {termsConditions.map((term) => (
                         <div
                           key={term.id}
@@ -2311,7 +2376,7 @@ function SignUpIndividualContent() {
                     <div className="bg-blue-50 p-4 rounded-lg mb-6">
                       <p className="text-blue-700 text-sm">
                         <strong>Note:</strong> You must accept all terms and
-                        conditions to continue.
+                        conditions to continue with registration.
                       </p>
                     </div>
                   </>
@@ -2327,7 +2392,7 @@ function SignUpIndividualContent() {
                 <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(showSSNField ? 3 : 2)}
+                    onClick={() => setActiveSection(3)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg

@@ -8,27 +8,90 @@ export const submitDeposit = createAsyncThunk(
   "deposit/submitDeposit",
   async (depositData, { rejectWithValue }) => {
     try {
-      console.log("🔄 Submitting deposit:", depositData);
-
       const token = localStorage.getItem("authtoken");
       const customerId = localStorage.getItem("authcustomer_id");
+      let partnerId = localStorage.getItem("whitelabelledpartnerid"); // ✅ Get partner_id
+
+      console.log("🔍 Deposit submission data:", {
+        customerId,
+        partnerId,
+        currency: depositData.currency,
+        paymentMethod: depositData.payment_method,
+      });
 
       if (!token || !customerId) {
         throw new Error("Authentication required");
       }
 
+      // ✅ IMPORTANT: Parse the partner ID and ensure it's a valid number
+      if (partnerId) {
+        partnerId = parseInt(partnerId, 10);
+        console.log("✅ Parsed partnerId from localStorage:", partnerId);
+      } else {
+        console.warn("⚠️ Partner ID missing from localStorage, using fallback");
+        partnerId = 9; // Default partner ID as number
+      }
+
+      // Handle USD bank deposit specifically
+      if (
+        depositData.currency === "USD" &&
+        depositData.payment_method === "bank_deposit"
+      ) {
+        const response = await api.post(
+          "/transactions/remittance-transaction",
+          {
+            customer_id: parseInt(customerId, 10), // Ensure customer_id is number
+            partner_id: partnerId, // ✅ Now this will be a valid number
+            send_amount: parseFloat(depositData.amount),
+            from_currency: depositData.currency,
+            payment_method: depositData.payment_method,
+            is_remit: "N",
+            sender_account_name: depositData.sender_account_name,
+            sender_bank_id: depositData.sender_bank_id,
+            purpose: depositData.purpose,
+            reference: depositData.reference,
+          }
+        );
+
+        console.log("✅ USD Bank Deposit response:", response.data);
+
+        return {
+          ...response.data,
+          success: true,
+          transactionType: "usd_bank_deposit",
+        };
+      }
+
+      // Default deposit submission for other currencies/methods
       const response = await api.post("/transactions/deposit", {
         ...depositData,
-        customerId: customerId,
+        customer_id: parseInt(customerId, 10), // Use customer_id instead of customerId
+        partner_id: partnerId, // ✅ Use the parsed partner_id
       });
 
-      console.log("✅ Deposit submission response:", response.data);
+      console.log("✅ Default Deposit response:", response.data);
+
       return response.data;
     } catch (error) {
-      console.error("❌ Deposit submission error:", error);
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to submit deposit"
-      );
+      console.error("❌ Deposit submission error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config, // This will show the request data
+      });
+
+      // More detailed error handling
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to submit deposit";
+
+      return rejectWithValue({
+        message: errorMessage,
+        details: error.response?.data,
+        status: error.response?.status,
+      });
     }
   }
 );
@@ -38,8 +101,6 @@ export const fetchManualAccountDetails = createAsyncThunk(
   "deposit/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching manual account details for currency:", currency);
-
       const token = localStorage.getItem("authtoken");
 
       if (!token) {
@@ -53,12 +114,6 @@ export const fetchManualAccountDetails = createAsyncThunk(
       // ✅ Use client-side filtering function
       const response = await depositAPI.getManualDetailsByCurrency(currency);
 
-      console.log("✅ Filtered manual account details:", {
-        currency: response.data.currency,
-        accountId: response.data.account_id,
-        bankName: response.data.bank_name,
-      });
-
       // ✅ Ensure currency is set correctly
       const accountWithCurrency = {
         ...response.data,
@@ -67,7 +122,6 @@ export const fetchManualAccountDetails = createAsyncThunk(
 
       return accountWithCurrency;
     } catch (error) {
-      console.error("❌ Error fetching manual account details:", error);
       return rejectWithValue(
         error.response?.data?.message ||
           error.message ||
@@ -82,13 +136,48 @@ export const fetchAllManualAccounts = createAsyncThunk(
   "deposit/fetchAllManualAccounts",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔍 Fetching all manual accounts for debugging");
       const response = await depositAPI.getAllManualAccounts();
-      console.log("📊 All available accounts:", response.data);
       return response.data;
     } catch (error) {
-      console.error("❌ Error fetching all accounts:", error);
       return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ✅ NEW: Thunk to check if user has Sila bank accounts
+export const checkSilaBankAccounts = createAsyncThunk(
+  "deposit/checkSilaBankAccounts",
+  async (customerId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("authtoken");
+
+      if (!token) {
+        throw new Error("Authentication required");
+      }
+
+      // This would call your Sila API endpoint to check for existing accounts
+      const response = await api.post(
+        "/sila/manual-sila-bankdetails",
+        { customerId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const accounts = response.data?.accounts || response.data?.data || [];
+
+      return {
+        hasSilaAccounts: accounts.length > 0,
+        silaAccounts: accounts,
+        count: accounts.length,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to check bank accounts"
+      );
     }
   }
 );
@@ -106,6 +195,7 @@ const initialState = {
   helpTooltips: {},
   showCancelModal: false,
   selectedBankAccount: null,
+  showPaymentInitiation: false,
 
   // Form validation
   formErrors: {},
@@ -119,9 +209,6 @@ const initialState = {
 
   // Manual account details
   manualAccountDetails: null,
-
-  // Step management
-  activeStep: 1,
 
   // Debug info
   allAvailableAccounts: null,
@@ -141,6 +228,9 @@ const depositSlice = createSlice({
       if (state.manualAccountDetails) {
         state.manualAccountDetails = null;
       }
+
+      // Clear bank account selection when currency changes
+      state.selectedBankAccount = null;
     },
 
     // Payment method actions
@@ -148,9 +238,23 @@ const depositSlice = createSlice({
       state.paymentMethod = action.payload;
       state.formErrors.paymentMethod = "";
 
-      if (action.payload) {
+      // Auto-advance to step 3 when payment method is selected
+      if (action.payload && state.selectedCurrency) {
         state.activeStep = 3;
       }
+
+      // Clear amount and purpose for manual deposits
+      if (action.payload === "manual_deposit") {
+        state.amount = "";
+        state.purpose = "";
+      }
+
+      // Clear bank account selection when payment method changes
+      state.selectedBankAccount = null;
+    },
+
+    setShowPaymentInitiation: (state, action) => {
+      state.showPaymentInitiation = action.payload;
     },
 
     // Amount actions
@@ -192,16 +296,20 @@ const depositSlice = createSlice({
     setIsAmountFocused: (state, action) => {
       state.isAmountFocused = action.payload;
     },
+
     setCopiedField: (state, action) => {
       state.copiedField = action.payload;
     },
+
     clearCopiedField: (state) => {
       state.copiedField = null;
     },
+
     setHelpTooltip: (state, action) => {
       const { field, visible } = action.payload;
       state.helpTooltips[field] = visible;
     },
+
     setShowCancelModal: (state, action) => {
       state.showCancelModal = action.payload;
     },
@@ -212,13 +320,15 @@ const depositSlice = createSlice({
       state.manualAccountDetails = null;
       state.isSubmitting = false;
       state.manualDetailsLoading = false;
+      state.selectedBankAccount = null;
+      state.formErrors = {};
     },
 
     // Reset entire form
     resetDepositForm: (state) => {
       return {
         ...initialState,
-        selectedCurrency: state.selectedCurrency,
+        selectedCurrency: state.selectedCurrency, // Keep currency selection
       };
     },
 
@@ -262,40 +372,70 @@ const depositSlice = createSlice({
         state.manualDetailsLoading = false;
         state.manualAccountDetails = action.payload;
         state.formErrors.manualDetails = null;
-        console.log("✅ Manual details stored in Redux:", {
-          currency: action.payload.currency,
-          accountId: action.payload.account_id,
-          bankName: action.payload.bank_name,
-        });
       })
       .addCase(fetchManualAccountDetails.rejected, (state, action) => {
         state.manualDetailsLoading = false;
         state.manualAccountDetails = null;
         state.formErrors.manualDetails = action.payload;
-        console.error("❌ Manual details error:", action.payload);
       })
 
       // Debug: Fetch all accounts
       .addCase(fetchAllManualAccounts.fulfilled, (state, action) => {
         state.allAvailableAccounts = action.payload;
-        console.log("📊 All accounts stored for debugging");
+      })
+
+      // ✅ ADDED: Check Sila bank accounts
+      .addCase(checkSilaBankAccounts.pending, (state) => {
+        state.silaAccountsLoading = true;
+        state.silaAccountsError = null;
+      })
+      .addCase(checkSilaBankAccounts.fulfilled, (state, action) => {
+        state.silaAccountsLoading = false;
+        state.silaBankAccounts = action.payload.silaAccounts;
+        state.hasSilaAccounts = action.payload.hasSilaAccounts;
+        state.silaAccountsError = null;
+      })
+      .addCase(checkSilaBankAccounts.rejected, (state, action) => {
+        state.silaAccountsLoading = false;
+        state.silaBankAccounts = [];
+        state.hasSilaAccounts = false;
+        state.silaAccountsError = action.payload;
       });
   },
 });
 
-// Export actions
+// ✅ CORRECT EXPORTS - Only export actions that actually exist
 export const {
+  // Form field actions
   setSelectedCurrency,
   setPaymentMethod,
   setAmount,
   setPurpose,
   setSelectedBankAccount,
+
+  // Form validation actions
   setFormErrors,
   clearFormError,
+
+  // Step management
   setActiveStep,
+
+  // UI state actions
+  setIsAmountFocused,
+  setCopiedField,
+  clearCopiedField,
+  setHelpTooltip,
+  setShowCancelModal,
+  setShowPaymentInitiation,
+
+  // Transaction actions
   resetTransaction,
   resetDepositForm,
+
+  // Manual deposit actions
   clearManualAccountDetails,
+
+  // Debug actions
   setAllAvailableAccounts,
 } = depositSlice.actions;
 
@@ -303,6 +443,8 @@ export const {
 export const selectDeposit = (state) => state.deposit;
 export const selectSelectedCurrency = (state) => state.deposit.selectedCurrency;
 export const selectPaymentMethod = (state) => state.deposit.paymentMethod;
+export const selectShowPaymentInitiation = (state) =>
+  state.deposit.showPaymentInitiation;
 export const selectAmount = (state) => state.deposit.amount;
 export const selectPurpose = (state) => state.deposit.purpose;
 export const selectSelectedBankAccount = (state) =>
@@ -318,5 +460,51 @@ export const selectManualAccountDetails = (state) =>
   state.deposit.manualAccountDetails;
 export const selectAllAvailableAccounts = (state) =>
   state.deposit.allAvailableAccounts;
+
+// ✅ ADDED: Selectors for Sila bank accounts
+export const selectSilaBankAccounts = (state) => state.deposit.silaBankAccounts;
+export const selectHasSilaAccounts = (state) => state.deposit.hasSilaAccounts;
+export const selectSilaAccountsLoading = (state) =>
+  state.deposit.silaAccountsLoading;
+export const selectSilaAccountsError = (state) =>
+  state.deposit.silaAccountsError;
+
+// ✅ ADDED: Computed selectors
+export const selectIsManualDeposit = (state) =>
+  state.deposit.paymentMethod === "manual_deposit";
+export const selectIsUSDBankDeposit = (state) =>
+  state.deposit.selectedCurrency === "USD" &&
+  state.deposit.paymentMethod === "bank_deposit";
+export const selectIsCardDeposit = (state) =>
+  state.deposit.paymentMethod === "card_deposit";
+export const selectIsBankTransfer = (state) =>
+  state.deposit.paymentMethod === "bank_transfer";
+
+// ✅ ADDED: Validation selectors
+export const selectIsFormValid = (state) => {
+  const {
+    selectedCurrency,
+    paymentMethod,
+    amount,
+    purpose,
+    selectedBankAccount,
+  } = state.deposit;
+
+  if (!selectedCurrency || !paymentMethod) return false;
+
+  if (paymentMethod !== "manual_deposit") {
+    if (!amount || parseFloat(amount) <= 0 || !purpose) return false;
+  }
+
+  if (
+    selectedCurrency === "USD" &&
+    paymentMethod === "bank_deposit" &&
+    !selectedBankAccount
+  ) {
+    return false;
+  }
+
+  return true;
+};
 
 export default depositSlice.reducer;

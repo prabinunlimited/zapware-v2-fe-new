@@ -9,7 +9,6 @@ export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching beneficiaries for customer:", customerId);
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/beneficiaries/${customerId}`,
@@ -28,7 +27,6 @@ export const fetchBeneficiaries = createAsyncThunk(
       const result = await response.json();
       return result.data || [];
     } catch (error) {
-      console.error("❌ Failed to fetch beneficiaries:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -39,7 +37,6 @@ export const deleteBeneficiary = createAsyncThunk(
   "beneficiaries/deleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
-      console.log("🔄 Deleting beneficiary:", { customerId, beneficiaryId });
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${
@@ -61,7 +58,6 @@ export const deleteBeneficiary = createAsyncThunk(
       const result = await response.json();
       return { beneficiaryId, message: result.message };
     } catch (error) {
-      console.error("❌ Failed to delete beneficiary:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -72,11 +68,6 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
   "beneficiaries/toggleBeneficiaryVisibility",
   async ({ customerId, beneficiaryId, isVisible }, { rejectWithValue }) => {
     try {
-      console.log("🔄 Toggling beneficiary visibility:", {
-        customerId,
-        beneficiaryId,
-        isVisible,
-      });
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${
@@ -101,7 +92,6 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
       const result = await response.json();
       return { beneficiaryId, isVisible, message: result.message };
     } catch (error) {
-      console.error("❌ Failed to update beneficiary visibility:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -115,7 +105,6 @@ export const updateBeneficiary = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      console.log("🔄 Updating beneficiary:", { customerId, beneficiaryId });
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${
@@ -142,7 +131,6 @@ export const updateBeneficiary = createAsyncThunk(
         message: result.message || "Beneficiary updated successfully",
       };
     } catch (error) {
-      console.error("❌ Failed to update beneficiary:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -156,11 +144,6 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      console.log("🔄 Creating beneficiary with banks:", {
-        customerId,
-        currency,
-      });
-
       const authtoken = localStorage.getItem("authtoken");
       const payload = {
         ...beneficiaryData,
@@ -375,10 +358,9 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("✅ Beneficiary created successfully");
+
       return result;
     } catch (error) {
-      console.error("❌ Failed to create beneficiary:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -389,7 +371,6 @@ export const fetchNationalities = createAsyncThunk(
   "beneficiaries/fetchNationalities",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching nationalities");
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/nationalities`,
@@ -408,7 +389,6 @@ export const fetchNationalities = createAsyncThunk(
       const result = await response.json();
       return result.data || result;
     } catch (error) {
-      console.error("❌ Failed to fetch nationalities:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -421,7 +401,6 @@ export const fetchBanksByCurrency = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      console.log("🔄 Fetching banks for currency:", { currency, bankType });
       const authtoken = localStorage.getItem("authtoken");
       const endpoint =
         bankType === "int-banks"
@@ -445,7 +424,6 @@ export const fetchBanksByCurrency = createAsyncThunk(
       const result = await response.json();
       return { currency, data: result.data || [], bankType };
     } catch (error) {
-      console.error("❌ Failed to fetch banks:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -455,7 +433,8 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
   "beneficiaries/fetchIdTypesByCurrency",
   async (currency, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching ID types for currency:", currency);
+      console.log(`API: Fetching ID types for currency: ${currency}`);
+
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/currency-id-type/${currency}`,
@@ -467,14 +446,19 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
         }
       );
 
+      console.log("API Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to fetch ID types");
+        throw new Error(`Failed to fetch ID types: ${response.status}`);
       }
 
       const result = await response.json();
-      return { currency, data: result.data || [] };
+      console.log("API Response data:", result);
+
+      // Return both currency and data
+      return { currency, data: result.data || result || [] };
     } catch (error) {
-      console.error("❌ Failed to fetch ID types:", error);
+      console.error("API Error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -484,7 +468,6 @@ export const fetchCitiesByCountry = createAsyncThunk(
   "beneficiaries/fetchCitiesByCountry",
   async (countryId, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching cities for country:", countryId);
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/cities/${countryId}`,
@@ -503,7 +486,6 @@ export const fetchCitiesByCountry = createAsyncThunk(
       const result = await response.json();
       return { countryId, data: result.success ? result.data : [] };
     } catch (error) {
-      console.error("❌ Failed to fetch cities:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -513,7 +495,6 @@ export const fetchBankBranches = createAsyncThunk(
   "beneficiaries/fetchBankBranches",
   async (bankCode, { rejectWithValue }) => {
     try {
-      console.log("🔄 Fetching bank branches for bank:", bankCode);
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/int-banks-branch/${bankCode}`,
@@ -532,7 +513,6 @@ export const fetchBankBranches = createAsyncThunk(
       const result = await response.json();
       return { bankCode, data: result.data || [] };
     } catch (error) {
-      console.error("❌ Failed to fetch bank branches:", error);
       return rejectWithValue(error.message);
     }
   }

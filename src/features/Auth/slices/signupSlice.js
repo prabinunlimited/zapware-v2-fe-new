@@ -1,98 +1,59 @@
 // src/features/Auth/slices/signupSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../../../services/api.js";
 
-// Create a simple API utility
-const api = {
-  get: async (url, options = {}) => {
-    const API_URL = import.meta.env.VITE_API_URL || "https://sandbox-zapware.unlimitedremit.com/api";
-    const fullUrl = `${API_URL}${url}`;
-    
-    const response = await fetch(fullUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  },
-  post: async (url, data, options = {}) => {
-    const API_URL = import.meta.env.VITE_API_URL || "https://sandbox-zapware.unlimitedremit.com/api";
-    const fullUrl = `${API_URL}${url}`;
-    
-    const response = await fetch(fullUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      body: JSON.stringify(data),
-      ...options,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-};
-
-// Async thunk for fetching terms and conditions
 export const fetchTermsAndConditions = createAsyncThunk(
   "signup/fetchTermsAndConditions",
   async (_, { rejectWithValue }) => {
     try {
-      const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
-      const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
+      console.log("🔍 [fetchTermsAndConditions] Starting...");
+
+      // ✅ EXACTLY LIKE NON-REDUX VERSION
+      const iswhitelabelledpartner = localStorage.getItem(
+        "iswhitelabelledpartner"
+      );
+      const whitelabelledpartnerid = localStorage.getItem(
+        "whitelabelledpartnerid"
+      );
       const bearertoken = localStorage.getItem("bearertoken");
 
-      const partnerId = iswhitelabelledpartner === "1" ? whitelabelledpartnerid : "0";
-
-      const response = await api.get(`/terms-by-partner/${partnerId}`, {
-        timeout: 15000,
-        headers: bearertoken ? {
-          Authorization: `Bearer ${bearertoken}`
-        } : {}
+      console.log("🔍 Partner config:", {
+        iswhitelabelledpartner,
+        whitelabelledpartnerid,
+        hasToken: !!bearertoken,
       });
 
-      // Handle various response structures
-      const termsData = response.data || response;
-
-      if (termsData && Array.isArray(termsData.terms)) {
-        return termsData.terms;
-      } else if (Array.isArray(termsData)) {
-        return termsData;
-      } else if (termsData && typeof termsData === 'object') {
-        // Try to extract terms from object
-        const termsArray = Object.values(termsData).find(Array.isArray);
-        return termsArray || [];
+      // ✅ USE /terms-by-partner/{id} LIKE NON-REDUX
+      let partnerId;
+      if (iswhitelabelledpartner === "1" && whitelabelledpartnerid) {
+        partnerId = whitelabelledpartnerid;
       } else {
-        console.warn("Unexpected terms response structure:", termsData);
-        return [];
+        partnerId = "0"; // Default partner ID
       }
+
+      console.log(`📡 Fetching terms from: /terms-by-partner/${partnerId}`);
+
+      // This will use api.js which should add Authorization header
+      const response = await api.get(`/terms-by-partner/${partnerId}`);
+
+      console.log("✅ Terms API response:", {
+        status: response.status,
+        hasTerms: !!response.data?.terms,
+        termsCount: response.data?.terms?.length || 0,
+      });
+
+      return response.data?.terms || [];
     } catch (error) {
-      console.error("Error fetching Terms and Conditions:", error);
+      console.error("❌ [fetchTermsAndConditions] Error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+      });
 
-      // Don't block registration if terms fail to load
-      if (error.message.includes("timeout") || error.code === 'ECONNABORTED') {
-        console.warn("Terms fetch timeout - continuing without terms");
-        return [];
-      }
-
-      // Handle 401 specifically
-      if (error.response?.status === 401) {
-        console.warn("Authentication failed for terms - continuing without terms");
-        return [];
-      }
-
-      return rejectWithValue(error.message);
+      // Fallback: Return empty array so registration can continue
+      console.log("⚠️ Returning empty terms array (registration can continue)");
+      return [];
     }
   }
 );
@@ -102,23 +63,25 @@ export const fetchNationalities = createAsyncThunk(
   "signup/fetchNationalities",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/nationalities', { timeout: 10000 });
+      // ✅ USE api.js - MUCH SIMPLER!
+      const response = await api.get("/nationalities");
 
       // Handle different response structures
-      const nationalitiesData = response.data || response.nationalities || response;
+      const nationalitiesData =
+        response.data || response.nationalities || response;
 
       if (Array.isArray(nationalitiesData)) {
         return nationalitiesData;
-      } else if (nationalitiesData && typeof nationalitiesData === 'object') {
+      } else if (nationalitiesData && typeof nationalitiesData === "object") {
         // Extract array from object if needed
-        const nationalitiesArray = Object.values(nationalitiesData).find(Array.isArray);
+        const nationalitiesArray = Object.values(nationalitiesData).find(
+          Array.isArray
+        );
         return nationalitiesArray || [];
       } else {
-        console.warn("Unexpected nationalities response structure:", nationalitiesData);
         return [];
       }
     } catch (error) {
-      console.error("Failed to fetch nationalities:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -129,23 +92,25 @@ export const fetchIdDocumentTypes = createAsyncThunk(
   "signup/fetchIdDocumentTypes",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/id-document-types', { timeout: 10000 });
+      // ✅ USE api.js - MUCH SIMPLER!
+      const response = await api.get("/id-document-types");
 
       // Handle different response structures
-      const documentTypesData = response.data || response.documentTypes || response;
+      const documentTypesData =
+        response.data || response.documentTypes || response;
 
       if (Array.isArray(documentTypesData)) {
         return documentTypesData;
-      } else if (documentTypesData && typeof documentTypesData === 'object') {
+      } else if (documentTypesData && typeof documentTypesData === "object") {
         // Extract array from object if needed
-        const documentTypesArray = Object.values(documentTypesData).find(Array.isArray);
+        const documentTypesArray = Object.values(documentTypesData).find(
+          Array.isArray
+        );
         return documentTypesArray || [];
       } else {
-        console.warn("Unexpected document types response structure:", documentTypesData);
         return [];
       }
     } catch (error) {
-      console.error("Failed to fetch ID document types:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -156,7 +121,8 @@ export const fetchGenders = createAsyncThunk(
   "signup/fetchGenders",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/genders', { timeout: 10000 });
+      // ✅ USE api.js - MUCH SIMPLER!
+      const response = await api.get("/genders");
 
       // Handle different response structures
       const gendersData = response.data || response.genders || response;
@@ -164,11 +130,9 @@ export const fetchGenders = createAsyncThunk(
       if (Array.isArray(gendersData)) {
         return gendersData;
       } else {
-        console.warn("Unexpected genders response structure:", gendersData);
         return [];
       }
     } catch (error) {
-      console.error("Failed to fetch genders:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -179,23 +143,16 @@ export const submitIndividualSignup = createAsyncThunk(
   "signup/submitIndividual",
   async (formData, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken");
+      // ✅ USE api.js - NO MORE MANUAL TOKEN HANDLING!
+      const response = await api.post("/customers/sign-up", formData);
 
-      const response = await api.post("/customers/sign-up", formData, {
-        headers: {
-          Authorization: bearertoken ? `Bearer ${bearertoken}` : "",
-        },
-        timeout: 30000,
-      });
-
-      return response;
+      return response.data;
     } catch (error) {
-      console.error("Signup submission error:", error);
-
       // Enhanced error handling
       let errorMessage = "Registration failed. Please try again.";
       let validationErrors = {};
 
+      // ✅ api.js already structures errors properly
       if (error.response) {
         const responseData = error.response.data;
         if (responseData.message) {
@@ -249,7 +206,7 @@ const initialState = {
     accept_fees: 0,
     terms_and_conditions: [],
   },
-  
+
   // API data - flattened structure
   nationalities: [],
   idDocumentTypes: [],
@@ -301,7 +258,7 @@ const signupSlice = createSlice({
         }
 
         // Clear SSN error when SSN field is updated
-        if (field === 'ssn' && state.ssnError) {
+        if (field === "ssn" && state.ssnError) {
           state.ssnError = "";
         }
       }
@@ -310,7 +267,7 @@ const signupSlice = createSlice({
     setMetadataField: (state, action) => {
       const { field, value } = action.payload;
       // Direct property access instead of nested metadata
-      if (field in state && field !== 'formData') {
+      if (field in state && field !== "formData") {
         state[field] = value;
       }
     },
@@ -331,8 +288,10 @@ const signupSlice = createSlice({
           });
         }
       } else {
-        state.formData.terms_and_conditions = 
-          state.formData.terms_and_conditions.filter(item => item.id !== termId);
+        state.formData.terms_and_conditions =
+          state.formData.terms_and_conditions.filter(
+            (item) => item.id !== termId
+          );
       }
     },
 
@@ -358,7 +317,10 @@ const signupSlice = createSlice({
     },
 
     setCurrentStep: (state, action) => {
-      state.currentStep = Math.max(0, Math.min(state.totalSteps - 1, action.payload));
+      state.currentStep = Math.max(
+        0,
+        Math.min(state.totalSteps - 1, action.payload)
+      );
     },
 
     nextStep: (state) => {
@@ -386,7 +348,7 @@ const signupSlice = createSlice({
 
     syncFormikToRedux: (state, action) => {
       const formikValues = action.payload;
-      Object.keys(formikValues).forEach(key => {
+      Object.keys(formikValues).forEach((key) => {
         if (key in state.formData) {
           state.formData[key] = formikValues[key];
         }
@@ -486,22 +448,29 @@ export const selectTermsConditions = (state) => state.signup.termsConditions;
 export const selectTermsLoading = (state) => state.signup.termsLoading;
 export const selectTermsError = (state) => state.signup.termsError;
 export const selectTermsFetched = (state) => state.signup.termsFetched;
-export const selectNationalitiesLoading = (state) => state.signup.nationalitiesLoading;
-export const selectNationalitiesError = (state) => state.signup.nationalitiesError;
-export const selectIdDocumentTypesLoading = (state) => state.signup.idDocumentTypesLoading;
-export const selectIdDocumentTypesError = (state) => state.signup.idDocumentTypesError;
+export const selectNationalitiesLoading = (state) =>
+  state.signup.nationalitiesLoading;
+export const selectNationalitiesError = (state) =>
+  state.signup.nationalitiesError;
+export const selectIdDocumentTypesLoading = (state) =>
+  state.signup.idDocumentTypesLoading;
+export const selectIdDocumentTypesError = (state) =>
+  state.signup.idDocumentTypesError;
 export const selectGendersLoading = (state) => state.signup.gendersLoading;
 export const selectGendersError = (state) => state.signup.gendersError;
-export const selectSubmissionLoading = (state) => state.signup.submissionLoading;
+export const selectSubmissionLoading = (state) =>
+  state.signup.submissionLoading;
 export const selectSubmissionError = (state) => state.signup.submissionError;
 
 // Business logic selectors
-export const selectAcceptedTerms = (state) => state.signup.formData.terms_and_conditions;
+export const selectAcceptedTerms = (state) =>
+  state.signup.formData.terms_and_conditions;
 export const selectShowSSNField = (state) => state.signup.showSSNField;
 export const selectHasNamedAccounts = (state) => state.signup.hasNamedAccounts;
 export const selectIsUSDSelected = (state) => state.signup.isUSDSelected;
 export const selectSSNError = (state) => state.signup.ssnError;
-export const selectShowSSNConfirmation = (state) => state.signup.showSSNConfirmation;
+export const selectShowSSNConfirmation = (state) =>
+  state.signup.showSSNConfirmation;
 
 // Validation and progress selectors
 export const selectValidationErrors = (state) => state.signup.validationErrors;
