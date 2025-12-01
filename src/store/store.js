@@ -45,6 +45,9 @@ import teamMemberReducer from "../page/Team/Slice/teamMemberSlice";
 // ===================== TEAM SLICES =====================
 import payoutReducer from "../page/Payout/slices/payoutSlice";
 
+//====================== Bank Letter =====================
+import bankLetterReducer from "../page/BankLetter/slices/bankLetterSlice";
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -239,6 +242,9 @@ export const store = configureStore({
 
     // payout
     payout: payoutReducer,
+
+    //bank letter
+    bankLetter: bankLetterReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

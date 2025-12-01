@@ -1,28 +1,111 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../../services/api";
+import api, {
+  apiCoordinator,
+  forceRefreshEndpoint,
+} from "../../../services/api";
 import { countries } from "../../../features/Auth/slices/countrySlice";
+import axios from "axios";
 
-// ===================== ASYNC THUNKS =====================
+// ===================== RETRY CONFIGURATION =====================
+const MAX_RETRY_ATTEMPTS = 2;
+const RETRY_DELAY = 1000; // 1 second
+
+// ===================== REQUEST SIGNATURE HELPERS =====================
+const getRequestSignature = (method, url, params = {}, data = {}) => {
+  return `${method}-${url}-${JSON.stringify(params)}-${JSON.stringify(data)}`;
+};
+
+// ===================== RETRY UTILITY =====================
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const executeWithRetry = async (
+  apiCall,
+  signature,
+  maxRetries = MAX_RETRY_ATTEMPTS
+) => {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // Clear previous cache for retry attempts
+      if (attempt > 0) {
+        apiCoordinator.clearSignature(signature);
+        await delay(RETRY_DELAY * attempt); // Exponential backoff
+      }
+
+      if (apiCoordinator.isFetching(signature)) {
+        throw new Error("Request already in progress");
+      }
+
+      apiCoordinator.setFetching(signature);
+      const result = await apiCall();
+      apiCoordinator.setCompleted(signature, result);
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry for certain error types
+      if (
+        error.response?.status === 400 ||
+        error.response?.status === 401 ||
+        error.response?.status === 403
+      ) {
+        break;
+      }
+
+      // Don't retry if max attempts reached
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      apiCoordinator.setFailed(signature);
+    }
+  }
+
+  apiCoordinator.setFailed(signature);
+  throw lastError;
+};
+
+// ===================== ENHANCED ASYNC THUNKS WITH AUTO-RETRY =====================
 export const fetchDestinationCurrencies = createAsyncThunk(
   "payout/fetchDestinationCurrencies",
-  async (_, { rejectWithValue, getState }) => {
+  async (_, { rejectWithValue }) => {
+    const signature = getRequestSignature("GET", "/partner-payout-currencies");
+
     try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
-      const partnerId =
-        isWhiteLabelled === "1"
-          ? localStorage.getItem("whitelabelledpartnerid")
-          : "0";
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
 
-      const response = await api.get(
-        `/partner-payout-currencies/${partnerId}`,
-        {
-          headers: { Authorization: `Bearer ${bearertoken}` },
-        }
-      );
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+        const partnerId =
+          isWhiteLabelled === "1"
+            ? localStorage.getItem("whitelabelledpartnerid")
+            : "0";
 
-      return response.data.data;
+        const response = await api.get(
+          `/partner-payout-currencies/${partnerId}`,
+          {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
+      if (axios.isCancel(error)) {
+        throw new Error("Request cancelled due to duplication");
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -31,17 +114,35 @@ export const fetchDestinationCurrencies = createAsyncThunk(
 export const fetchCustomerBankAccounts = createAsyncThunk(
   "payout/fetchCustomerBankAccounts",
   async (customerId, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.get(
-        `/active-approved-bank-accounts/${customerId}`,
-        {
-          headers: { Authorization: `Bearer ${bearertoken}` },
-        }
-      );
+    const signature = getRequestSignature(
+      "GET",
+      `/active-approved-bank-accounts/${customerId}`
+    );
 
-      return response.data.account_details;
+    try {
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
+
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(
+          `/active-approved-bank-accounts/${customerId}`,
+          {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.account_details;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -50,17 +151,35 @@ export const fetchCustomerBankAccounts = createAsyncThunk(
 export const fetchBeneficiaryAccounts = createAsyncThunk(
   "payout/fetchBeneficiaryAccounts",
   async ({ customerId, currencyCode }, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.get(
-        `/beneficiaries/customer-view/${customerId}/${currencyCode}`,
-        {
-          headers: { Authorization: `Bearer ${bearertoken}` },
-        }
-      );
+    const signature = getRequestSignature(
+      "GET",
+      `/beneficiaries/customer-view/${customerId}/${currencyCode}`
+    );
 
-      return response.data.data;
+    try {
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
+
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(
+          `/beneficiaries/customer-view/${customerId}/${currencyCode}`,
+          {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -72,20 +191,34 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
     { currency_code, beneficiaryId, payment_method },
     { rejectWithValue }
   ) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      let url = `/beneficiaries/benef-bank/${currency_code}/${beneficiaryId}`;
+    let url = `/beneficiaries/benef-bank/${currency_code}/${beneficiaryId}`;
+    if (currency_code === "USD" && payment_method) {
+      url += `/${payment_method}`;
+    }
 
-      if (currency_code === "USD" && payment_method) {
-        url += `/${payment_method}`;
+    const signature = getRequestSignature("GET", url);
+
+    try {
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
       }
 
-      const response = await api.get(url, {
-        headers: { Authorization: `Bearer ${bearertoken}` },
-      });
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(url, {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+          timeout: 30000,
+        });
 
-      return response.data.bank_accounts;
+        return response.data.bank_accounts;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -105,14 +238,32 @@ export const fetchCountries = createAsyncThunk(
 export const fetchCurrenciesForCountry = createAsyncThunk(
   "payout/fetchCurrenciesForCountry",
   async (country_id, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.get(`/currency-country/${country_id}`, {
-        headers: { Authorization: `Bearer ${bearertoken}` },
-      });
+    const signature = getRequestSignature(
+      "GET",
+      `/currency-country/${country_id}`
+    );
 
-      return response.data.data;
+    try {
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
+
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(`/currency-country/${country_id}`, {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+          timeout: 30000,
+        });
+
+        return response.data.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -121,17 +272,35 @@ export const fetchCurrenciesForCountry = createAsyncThunk(
 export const fetchServiceProvider = createAsyncThunk(
   "payout/fetchServiceProvider",
   async (currencyCode, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.get(
-        `/assigned-service-provider/${currencyCode}`,
-        {
-          headers: { Authorization: `Bearer ${bearertoken}` },
-        }
-      );
+    const signature = getRequestSignature(
+      "GET",
+      `/assigned-service-provider/${currencyCode}`
+    );
 
-      return response.data.service_provider_id;
+    try {
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
+
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(
+          `/assigned-service-provider/${currencyCode}`,
+          {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.service_provider_id;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -140,24 +309,40 @@ export const fetchServiceProvider = createAsyncThunk(
 export const fetchBalance = createAsyncThunk(
   "payout/fetchBalance",
   async ({ customer_id, currency_code }, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.post(
-        `/get-balance`,
-        {
-          customer_id,
-          currency_code,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${bearertoken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const signature = getRequestSignature(
+      "POST",
+      "/get-balance",
+      {},
+      { customer_id, currency_code }
+    );
 
-      return response.data.available_balance || "0.00";
+    try {
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.post(
+          `/get-balance`,
+          {
+            customer_id,
+            currency_code,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${bearertoken}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.available_balance || "0.00";
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -166,15 +351,19 @@ export const fetchBalance = createAsyncThunk(
 export const convertCurrency = createAsyncThunk(
   "payout/convertCurrency",
   async (payload, { rejectWithValue }) => {
+    const signature = getRequestSignature(
+      "POST",
+      "/exchange-rates",
+      {},
+      payload
+    );
+
     try {
-      // For same currency conversions, you might need different logic
       if (payload.from === payload.to) {
-        // Handle same currency conversion - no FX rate needed
         const sameCurrencyResponse = {
           status: "Success",
-          converted_value: payload.value, // Same amount
+          converted_value: payload.value,
           conversion_id: "same-currency-" + Date.now(),
-          // fxRate might be 1 or not included
           fxRate: 1,
           swiftOut: "0.00",
           payoutCharge: "0.00",
@@ -183,21 +372,30 @@ export const convertCurrency = createAsyncThunk(
         return sameCurrencyResponse;
       }
 
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.post(`/exchange-rates`, payload, {
-        headers: {
-          Authorization: `Bearer ${bearertoken}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.post(`/exchange-rates`, payload, {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        });
 
-      if (response.data.status === "Success") {
-        return response.data;
-      } else {
-        return rejectWithValue(response.data.message);
-      }
+        if (response.data.status === "Success") {
+          return response.data;
+        } else {
+          throw new Error(response.data.message);
+        }
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Currency conversion failed. Please try again.";
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -205,9 +403,23 @@ export const convertCurrency = createAsyncThunk(
 export const sendPasscode = createAsyncThunk(
   "payout/sendPasscode",
   async (customerId, { rejectWithValue }) => {
+    const signature = getRequestSignature(
+      "GET",
+      `/send-passcode/${customerId}`,
+      {},
+      { context: 'payout_send' }
+    );
+
     try {
-      const response = await api.get(`/send-passcode/${customerId}`);
-      return response.data;
+      const apiCall = async () => {
+        const response = await api.get(`/send-passcode/${customerId}`, {
+          timeout: 30000,
+          context: 'payout_send' // Add context
+        });
+        return response.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message);
     }
@@ -216,16 +428,50 @@ export const sendPasscode = createAsyncThunk(
 
 export const verifyPasscode = createAsyncThunk(
   "payout/verifyPasscode",
-  async ({ customer_id, passcode }, { rejectWithValue }) => {
-    try {
-      const response = await api.post(`/verify-passcode`, {
-        customer_id,
-        passcode,
-      });
+  async ({ customer_id, passcode, context = 'payout' }, { rejectWithValue }) => {
+    const signature = getRequestSignature(
+      "POST",
+      "/verify-passcode",
+      {},
+      { customer_id, passcode, context }
+    );
 
-      return response.data;
+    try {
+      // Clear any existing verification requests first
+      apiCoordinator.clearSignature(signature);
+      
+      const apiCall = async () => {
+        console.log("🔐 Verifying passcode for payout:", { customer_id, context });
+        
+        const response = await api.post(
+          `/verify-passcode`,
+          {
+            customer_id,
+            passcode,
+          },
+          {
+            timeout: 30000,
+            // ✅ Add context to config so interceptor can use it
+            context: context 
+          }
+        );
+
+        console.log("✅ Payout passcode verification response:", response.data);
+        return response.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      console.error("❌ Payout passcode verification failed:", error);
+      
+      // Always clear the signature on error to allow retry
+      apiCoordinator.clearSignature(signature);
+      
+      return rejectWithValue(
+        error.response?.data?.message || 
+        error.message || 
+        "Passcode verification failed. Please try again."
+      );
     }
   }
 );
@@ -233,18 +479,33 @@ export const verifyPasscode = createAsyncThunk(
 export const submitPayout = createAsyncThunk(
   "payout/submitPayout",
   async (formData, { rejectWithValue }) => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const response = await api.post(`/payout/remit-payout`, formData, {
-        headers: {
-          Authorization: `Bearer ${bearertoken}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
+    const signature = getRequestSignature(
+      "POST",
+      "/payout/remit-payout",
+      {},
+      formData
+    );
 
-      return response.data;
+    try {
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.post(`/payout/remit-payout`, formData, {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 45000,
+        });
+        return response.data;
+      };
+
+      return await executeWithRetry(apiCall, signature);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Payout submission failed. Please try again.";
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -296,9 +557,10 @@ const initialState = {
   availableBalance: null,
 
   // UI state
-  loading: false,
-  benefLoading: false,
-  verifying: false,
+  loading: false, // For transaction processing
+  initialLoading: false, // For initial data loading
+  benefLoading: false, // For beneficiary loading
+  verifying: false, // For verification
 
   // Modals
   showModal: false,
@@ -310,7 +572,7 @@ const initialState = {
   // Passcode
   passcode: "",
 
-  // Recurring payments (commented out in original)
+  // Recurring payments
   isRecurring: false,
   recurringFrequency: "",
   customDays: "",
@@ -324,6 +586,11 @@ const payoutSlice = createSlice({
   name: "payout",
   initialState,
   reducers: {
+    //loading actions
+    setInitialLoading: (state, action) => {
+      state.initialLoading = action.payload;
+    },
+
     // Form value updates
     setFormValue: (state, action) => {
       const { name, value } = action.payload;
@@ -380,8 +647,39 @@ const payoutSlice = createSlice({
       state.verifying = action.payload;
     },
 
+    // Cache management
+    clearApiCache: (state, action) => {
+      const pattern = action.payload;
+      if (pattern) {
+        forceRefreshEndpoint(pattern);
+      } else {
+        apiCoordinator.clear();
+      }
+    },
+
+    clearBeneficiaryCache: (state) => {
+      apiCoordinator.clear("/beneficiaries");
+      state.benefBankAccounts = [];
+      state.beneficiaryBanks = [];
+    },
+
+    clearCurrencyCache: (state) => {
+      apiCoordinator.clear("/currency");
+      apiCoordinator.clear("/exchange-rates");
+      state.currencies = [];
+      state.convertedValue = null;
+    },
+
     // Reset state
-    resetPayoutState: () => initialState,
+    resetPayoutState: (state) => {
+      return {
+        ...initialState,
+        formValues: {
+          ...initialState.formValues,
+          customer_id: state.formValues.customer_id,
+        },
+      };
+    },
 
     // Clear error
     clearError: (state) => {
@@ -391,16 +689,16 @@ const payoutSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
-      // Fetch Destination Currencies
+      // Fetch Destination Currencies - Use initialLoading
       .addCase(fetchDestinationCurrencies.pending, (state) => {
-        state.loading = true;
+        state.initialLoading = true;
       })
       .addCase(fetchDestinationCurrencies.fulfilled, (state, action) => {
-        state.loading = false;
+        state.initialLoading = false;
         state.destinationCurrencies = action.payload;
       })
       .addCase(fetchDestinationCurrencies.rejected, (state, action) => {
-        state.loading = false;
+        state.initialLoading = false;
         state.error = action.payload;
       })
 
@@ -438,9 +736,17 @@ const payoutSlice = createSlice({
         state.error = action.payload;
       })
 
-      // Fetch Countries
+      // Fetch Countries - Use initialLoading
+      .addCase(fetchCountries.pending, (state) => {
+        state.initialLoading = true;
+      })
       .addCase(fetchCountries.fulfilled, (state, action) => {
+        state.initialLoading = false;
         state.countries = action.payload;
+      })
+      .addCase(fetchCountries.rejected, (state, action) => {
+        state.initialLoading = false;
+        state.error = action.payload;
       })
 
       // Fetch Currencies for Country
@@ -521,6 +827,7 @@ const payoutSlice = createSlice({
           state.showModal = false;
           state.modalMessage = "Payout initiated successfully!";
           state.showSuccessModal = true;
+          apiCoordinator.clear("/get-balance");
         } else {
           state.modalMessage = action.payload.message;
           state.showErrorModal = true;
@@ -569,6 +876,7 @@ export const selectPasscode = (state) => state.payout.passcode;
 export const selectError = (state) => state.payout.error;
 export const selectServiceProviderInr = (state) =>
   state.payout.toServiceProviderInr;
+export const selectInitialLoading = (state) => state.payout.initialLoading;
 
 // ===================== ACTIONS =====================
 export const {
@@ -585,6 +893,9 @@ export const {
   setLoading,
   setBenefLoading,
   setVerifying,
+  clearApiCache,
+  clearBeneficiaryCache,
+  clearCurrencyCache,
   resetPayoutState,
   clearError,
 } = payoutSlice.actions;

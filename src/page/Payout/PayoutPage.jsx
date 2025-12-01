@@ -9,6 +9,7 @@ import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
 import { ClipLoader, RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
+import { apiCoordinator } from "../../services/api";
 
 // Redux imports
 import {
@@ -57,9 +58,11 @@ import {
   sendPasscode,
   verifyPasscode,
   submitPayout,
+  resetPayoutState,
+  selectInitialLoading,
 } from "./slices/payoutSlice";
 
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Step Indicator Component
 const StepIndicator = ({ activeStep }) => {
@@ -187,13 +190,13 @@ const CancelModal = ({ onConfirm, onCancel }) => (
 const safeArray = (data) => {
   if (!data) return [];
   if (Array.isArray(data)) return data;
-  if (typeof data === 'object' && data !== null) {
+  if (typeof data === "object" && data !== null) {
     // If it's an object, try to extract array from common properties
     if (data.data && Array.isArray(data.data)) return data.data;
     if (data.accounts && Array.isArray(data.accounts)) return data.accounts;
     if (data.items && Array.isArray(data.items)) return data.items;
   }
-  console.warn('Expected array but got:', typeof data, data);
+  console.warn("Expected array but got:", typeof data, data);
   return [];
 };
 
@@ -229,6 +232,7 @@ const PayoutPage = () => {
   const modalMessage = useSelector(selectModalMessage);
   const passcode = useSelector(selectPasscode);
   const toServiceProviderInr = useSelector(selectServiceProviderInr);
+  const initialLoading = useSelector(selectInitialLoading);
 
   // Local state for UI
   const [activeStep, setActiveStep] = useState(1);
@@ -240,9 +244,12 @@ const PayoutPage = () => {
 
   // Debug logging
   useEffect(() => {
-    console.log('🔍 customerBankAccounts:', customerBankAccounts);
-    console.log('🔍 Type of customerBankAccounts:', typeof customerBankAccounts);
-    console.log('🔍 Is array?', Array.isArray(customerBankAccounts));
+    console.log("🔍 customerBankAccounts:", customerBankAccounts);
+    console.log(
+      "🔍 Type of customerBankAccounts:",
+      typeof customerBankAccounts
+    );
+    console.log("🔍 Is array?", Array.isArray(customerBankAccounts));
   }, [customerBankAccounts]);
 
   // Initialize form with customerId
@@ -254,18 +261,18 @@ const PayoutPage = () => {
   useEffect(() => {
     const authtoken = localStorage.getItem("authtoken");
     if (customerId && authtoken) {
-      console.log('🔄 Fetching initial data for customer:', customerId);
+      console.log("🔄 Fetching initial data for customer:", customerId);
       dispatch(fetchCustomerBankAccounts(customerId))
         .unwrap()
         .then((result) => {
-          console.log('✅ Customer bank accounts loaded:', result);
+          console.log("✅ Customer bank accounts loaded:", result);
           setDataLoaded(true);
         })
         .catch((error) => {
-          console.error('❌ Failed to load customer bank accounts:', error);
+          console.error("❌ Failed to load customer bank accounts:", error);
           setDataLoaded(true);
         });
-      
+
       dispatch(fetchCountries());
       dispatch(fetchDestinationCurrencies());
     }
@@ -359,10 +366,12 @@ const PayoutPage = () => {
     }
 
     try {
+      // ✅ No need to manually clear signatures - api.js handles this automatically
       const res = await dispatch(
         verifyPasscode({
           customer_id: customerId,
           passcode: passcode,
+          context: "payout_verification", // This will be used in the signature
         })
       ).unwrap();
 
@@ -433,7 +442,7 @@ const PayoutPage = () => {
         dispatch(setShowErrorModal(true));
       }
     } catch (err) {
-      console.error("Passcode verification error:", err);
+      console.error("Payout passcode verification error:", err);
       dispatch(
         setModalMessage(
           err.response?.data?.message || err.message || "Verification failed"
@@ -508,11 +517,18 @@ const PayoutPage = () => {
     });
   };
 
+  useEffect(() => {
+    return () => {
+      dispatch(resetPayoutState());
+    };
+  }, [dispatch]);
+
   const handleCancel = () => {
     setShowCancelModal(true);
   };
 
   const confirmCancel = () => {
+    dispatch(resetPayoutState());
     navigate(-1);
   };
 
@@ -640,8 +656,8 @@ const PayoutPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 font-sans">
       <ToastContainer position="top-right" autoClose={5000} />
 
-      {/* Loading states */}
-      {(loading || benefLoading) && (
+      {/* Loading states - Context-aware loaders */}
+      {(loading || initialLoading || benefLoading) && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex justify-center items-center">
           <div className="bg-white rounded-xl shadow-lg p-6 max-w-xs w-full mx-4 border border-gray-200">
             <div className="text-center">
@@ -649,12 +665,18 @@ const PayoutPage = () => {
                 <RingLoader color="#3B82F6" size={60} />
               </div>
               <h3 className="text-lg font-medium text-gray-800 mb-2 font-sans">
-                {loading ? "Processing..." : "Loading..."}
+                {loading
+                  ? "Processing Transaction..."
+                  : initialLoading
+                  ? "Loading Data..."
+                  : "Loading Beneficiaries..."}
               </h3>
               <p className="text-sm text-gray-600 font-sans">
                 {loading
                   ? "Your transaction is being processed"
-                  : "Please wait a moment"}
+                  : initialLoading
+                  ? "Please wait while we load your data"
+                  : "Loading beneficiary information..."}
               </p>
             </div>
           </div>
@@ -725,7 +747,7 @@ const PayoutPage = () => {
                   {safeCustomerBankAccounts.length > 0 ? (
                     safeCustomerBankAccounts.map((account) => (
                       <option key={account.id} value={account.currency_code}>
-                        {account.currency_code} 
+                        {account.currency_code}
                       </option>
                     ))
                   ) : (
@@ -1271,7 +1293,7 @@ const PayoutPage = () => {
         </div>
       </div>
 
-     {/* Conversion Modal */}
+      {/* Conversion Modal */}
       <AnimatePresence>
         {showModal && (
           <motion.div
