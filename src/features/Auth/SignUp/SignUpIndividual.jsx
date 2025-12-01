@@ -18,6 +18,7 @@ import ErrorModal from "../../../components/PopupModal/ErrorModal";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 import RegistrationLayout from "../../../components/ProgressBar/RegistrationLayout";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
+import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
@@ -69,7 +70,6 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    
     this.setState({
       error: error?.toString() || "Unknown error",
     });
@@ -147,6 +147,25 @@ function SignUpIndividualContent() {
   const [idIssuedDate, setIdIssuedDate] = useState("");
   const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
+
+  useEffect(() => {
+    console.log("🔍 Token check on mount:", {
+      bearertoken: localStorage.getItem("bearertoken"),
+      tokenServiceToken: tokenService.getToken(),
+      authtoken: localStorage.getItem("authtoken"),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Also check partner-related localStorage items
+    console.log("🔍 Partner data check:", {
+      whitelabelledpartnerid: localStorage.getItem("whitelabelledpartnerid"),
+      iswhitelabelledpartner: localStorage.getItem("iswhitelabelledpartner"),
+      partner_name: localStorage.getItem("partner_name"),
+      beneficiary_portal_title: localStorage.getItem(
+        "beneficiary_portal_title"
+      ),
+    });
+  }, []);
 
   const dispatch = useDispatch();
   const location = useLocation();
@@ -336,7 +355,6 @@ function SignUpIndividualContent() {
 
         await handleFormSubmission(values);
       } catch (error) {
-        
         setErrorMessage("An error occurred during form validation");
         setIsModalOpen(true);
       } finally {
@@ -372,8 +390,6 @@ function SignUpIndividualContent() {
         idIssuedDate: idIssuedDate,
       };
 
-      
-
       // Use Redux action instead of direct fetch
       const resultAction = await dispatch(
         submitIndividualSignup(updatedValues)
@@ -382,7 +398,6 @@ function SignUpIndividualContent() {
       // Check if the action was successful
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
         const responseData = resultAction.payload;
-        
 
         setSuccessMessage(responseData.message || "Registration successful!");
         setIsSuccessModalOpen(true);
@@ -407,7 +422,6 @@ function SignUpIndividualContent() {
       } else {
         // Handle rejection (error case)
         const error = resultAction.payload;
-        
 
         if (error.message) {
           setErrorMessage(error.message);
@@ -426,7 +440,6 @@ function SignUpIndividualContent() {
         }
       }
     } catch (error) {
-      
       setErrorMessage(
         error.message ||
           "An error occurred during submission. Please try again."
@@ -460,14 +473,48 @@ function SignUpIndividualContent() {
         setIsLoading(true);
         setInitializationError(null);
 
-        
-        
-        
-        
-        
-        
+        console.log("🔍 [initializeData] Starting initialization", {
+          hasLocationState: !!location.state,
+          service_provide_ids: service_provide_ids,
+          accountOptions: accountOptions,
+        });
 
-        // Determine account types with error handling
+        // ✅ STEP 1: GET PARTNER TOKEN & ID FIRST (CRITICAL!)
+        try {
+          console.log("🔄 Attempting to get partner token...");
+
+          // Import getBearerToken dynamically to avoid import issues
+          const { getBearerToken } = await import(
+            "../../../services/authService"
+          );
+
+          const token = await getBearerToken();
+          console.log("✅ Partner token obtained:", token ? "Yes" : "No");
+
+          // Check what we got
+          const partnerId = localStorage.getItem("whitelabelledpartnerid");
+          const isWhiteLabelled = localStorage.getItem(
+            "iswhitelabelledpartner"
+          );
+          const storedToken = localStorage.getItem("bearertoken");
+
+          console.log("🔍 After token fetch:", {
+            partnerId,
+            isWhiteLabelled,
+            storedToken: storedToken ? "Exists" : "Missing",
+            allLocalStorageKeys: Object.keys(localStorage).filter(
+              (key) =>
+                key.includes("partner") ||
+                key.includes("bearer") ||
+                key.includes("token")
+            ),
+          });
+        } catch (tokenError) {
+          console.error("❌ Failed to get partner token:", tokenError.message);
+          // Don't throw - continue without token
+        }
+
+        // ✅ STEP 2: Determine account types
         let hasNamed = false;
         let hasUSD = false;
 
@@ -486,11 +533,15 @@ function SignUpIndividualContent() {
               );
               return account && account.currency === "USD";
             }) || false;
-
-          
         } catch (error) {
-          
+          console.error("❌ Error determining account types:", error);
         }
+
+        console.log("🔍 Account type analysis:", {
+          hasNamed,
+          hasUSD,
+          ssn_required,
+        });
 
         dispatch(
           setMetadataField({ field: "hasNamedAccounts", value: hasNamed })
@@ -503,70 +554,97 @@ function SignUpIndividualContent() {
           })
         );
 
-        // Create an array of promises for all API calls
+        // ✅ STEP 3: Create array of promises for all API calls
         const apiPromises = [];
 
         // ALWAYS fetch countries
-        
         apiPromises.push(
           dispatch(fetchCountries())
             .unwrap()
             .catch((error) => {
-              
+              console.error("❌ Countries fetch error:", error);
               return [];
             })
         );
 
-        // ✅ ADD DATA EXISTENCE CHECKS HERE:
-        // Fetch nationalities ONLY if not already loaded
+        // ✅ Fetch nationalities ONLY if not already loaded
         if (nationalities.length === 0) {
-          
           apiPromises.push(
             dispatch(fetchNationalities())
               .unwrap()
               .catch((error) => {
-                
+                console.error("❌ Nationalities fetch error:", error);
                 return [];
               })
           );
         } else {
-          
+          console.log("✅ Nationalities already loaded:", nationalities.length);
         }
 
-        // Fetch ID document types ONLY if not already loaded
+        // ✅ Fetch ID document types ONLY if not already loaded
         if (idDocumentTypes.length === 0) {
-          
           apiPromises.push(
             dispatch(fetchIdDocumentTypes())
               .unwrap()
               .catch((error) => {
-                
+                console.error("❌ ID Document Types fetch error:", error);
                 return [];
               })
           );
         } else {
-          
-        }
-
-        // Fetch terms if needed
-        const bearertoken = localStorage.getItem("bearertoken");
-        if (bearertoken && !termsFetched) {
-          
-          apiPromises.push(
-            dispatch(fetchTermsAndConditions())
-              .unwrap()
-              .catch((error) => {
-                
-                return [];
-              })
+          console.log(
+            "✅ ID Document Types already loaded:",
+            idDocumentTypes.length
           );
         }
 
-        // Only wait for promises if we actually have API calls to make
+        // ✅ STEP 4: Fetch terms - NOW WITH PARTNER INFO AVAILABLE
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+        const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+        const bearertoken = localStorage.getItem("bearertoken");
+
+        console.log("🔍 Terms fetch check:", {
+          partnerId,
+          isWhiteLabelled,
+          hasBearerToken: !!bearertoken,
+          termsFetched,
+          shouldFetchTerms: !termsFetched,
+        });
+
+        // ✅ ALWAYS FETCH TERMS (they're public or use partner ID)
+        if (!termsFetched) {
+          console.log("📡 Fetching terms and conditions...");
+
+          apiPromises.push(
+            dispatch(fetchTermsAndConditions())
+              .unwrap()
+              .then((terms) => {
+                console.log(
+                  "✅ Terms fetched successfully:",
+                  terms?.length || 0
+                );
+                return terms;
+              })
+              .catch((error) => {
+                console.error("❌ Terms fetch error in component:", error);
+                // Return empty array so registration can continue
+                return [];
+              })
+          );
+        } else {
+          console.log("✅ Terms already fetched");
+        }
+
+        // ✅ STEP 5: Execute all API calls
         if (apiPromises.length > 0) {
+          console.log("🚀 Executing", apiPromises.length, "API calls...");
+
           // Wait for all API calls with timeout
           const timeoutPromise = new Promise((resolve) =>
-            setTimeout(() => resolve("timeout"), 30000)
+            setTimeout(() => {
+              console.log("⏰ API timeout after 30 seconds");
+              resolve("timeout");
+            }, 30000)
           );
 
           const results = await Promise.race([
@@ -575,21 +653,21 @@ function SignUpIndividualContent() {
           ]);
 
           if (results === "timeout") {
-            
+            console.warn("⚠️ Some API calls timed out");
           } else {
-            
+            console.log("✅ All API calls completed:", results);
           }
         } else {
-          
+          console.log("✅ No API calls needed - all data already loaded");
         }
 
         if (isMounted) {
           setIsLoading(false);
-          
+          console.log("✅ Initialization complete");
         }
       } catch (error) {
+        console.error("❌ Initialization error:", error);
         if (isMounted) {
-          
           setInitializationError(error.message);
           setIsLoading(false);
         }
@@ -665,9 +743,7 @@ function SignUpIndividualContent() {
               deviceInfo.device.model || "Unknown Device"
             }`;
           }
-        } catch (deviceError) {
-          
-        }
+        } catch (deviceError) {}
 
         const termData = {
           accepted_at: currentDateTimeLocal,
@@ -684,7 +760,6 @@ function SignUpIndividualContent() {
           })
         );
       } catch (error) {
-        
         // Fallback without device fingerprinting
         dispatch(
           setTermsAccepted({
@@ -1020,7 +1095,6 @@ function SignUpIndividualContent() {
           </div>
         )}
         <div className="max-w-6xl w-full bg-white rounded-2xl shadow-lg overflow-hidden relative border border-gray-100">
-
           {isSubmitting && (
             <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
               <div className="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center">

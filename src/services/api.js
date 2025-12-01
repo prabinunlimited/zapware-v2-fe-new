@@ -1,5 +1,5 @@
 import axios from "axios";
-import { tokenService } from "./authService";
+import { tokenService, getBearerToken } from "./authService"; // ✅ Import getBearerToken
 
 // ===================== CONFIG =====================
 const api = axios.create({
@@ -18,29 +18,33 @@ const globalFetchState = new Map();
 
 // List of endpoints that should bypass coordination (always unique)
 const BYPASS_COORDINATION_ENDPOINTS = [
-  'verify-passcode',
-  'send-passcode',
-  'generate-passcode',
-  'request-passcode-login',
-  'payout/remit-payout'
+  "verify-passcode",
+  "send-passcode",
+  "generate-passcode",
+  "request-passcode-login",
+  "payout/remit-payout",
 ];
 
 // Enhanced request signature with better context awareness
 const getRequestSignature = (config) => {
-  const method = config.method?.toUpperCase() || 'GET';
+  const method = config.method?.toUpperCase() || "GET";
   const url = new URL(config.url, config.baseURL);
-  const pathname = url.pathname.replace(/\/$/, '');
-  
+  const pathname = url.pathname.replace(/\/$/, "");
+
   // Normalize parameters
-  const params = config.params ? Object.keys(config.params).sort().reduce((acc, key) => {
-    acc[key] = String(config.params[key]).toLowerCase();
-    return acc;
-  }, {}) : {};
-  
+  const params = config.params
+    ? Object.keys(config.params)
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = String(config.params[key]).toLowerCase();
+          return acc;
+        }, {})
+    : {};
+
   // Normalize request data
-  let data = '';
+  let data = "";
   if (config.data) {
-    if (typeof config.data === 'string') {
+    if (typeof config.data === "string") {
       try {
         const parsed = JSON.parse(config.data);
         data = JSON.stringify(parsed, Object.keys(parsed).sort());
@@ -51,63 +55,70 @@ const getRequestSignature = (config) => {
       data = JSON.stringify(config.data, Object.keys(config.data).sort());
     }
   }
-  
+
   // ✅ ENHANCED FIX: For passcode endpoints, include context and timestamp
-  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(endpoint => 
-    pathname.includes(endpoint)
+  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(
+    (endpoint) => pathname.includes(endpoint)
   );
-  
+
   if (shouldBypassCoordination) {
-    const context = config.context || 'default';
+    const context = config.context || "default";
     const uniqueId = config.uniqueId || Date.now();
-    return `${method}-${pathname}-${context}-${uniqueId}-${JSON.stringify(params)}-${data}`;
+    return `${method}-${pathname}-${context}-${uniqueId}-${JSON.stringify(
+      params
+    )}-${data}`;
   }
-  
+
   // For other endpoints, use context if provided
-  const context = config.context ? `-${config.context}` : '';
+  const context = config.context ? `-${config.context}` : "";
   return `${method}-${pathname}${context}-${JSON.stringify(params)}-${data}`;
 };
 
 // ✅ ENHANCED: Improved duplicate check with bypass support
 const checkAndRegisterRequest = (config) => {
   const signature = getRequestSignature(config);
-  
+
   // Check if this endpoint should bypass coordination
-  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(endpoint => 
-    config.url.includes(endpoint)
+  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(
+    (endpoint) => config.url.includes(endpoint)
   );
-  
+
   if (shouldBypassCoordination) {
     // For passcode endpoints, always allow the request but still track it
-    globalFetchState.set(signature, 'fetching');
+    globalFetchState.set(signature, "fetching");
     requestThrottle.set(signature, Date.now());
     return { isDuplicate: false, signature, bypassed: true };
   }
-  
+
   // Atomic check: if signature exists in globalFetchState, it's a duplicate
   if (globalFetchState.has(signature)) {
     const state = globalFetchState.get(signature);
-    if (state === 'fetching') {
-      return { isDuplicate: true, reason: 'global-in-progress', signature };
+    if (state === "fetching") {
+      return { isDuplicate: true, reason: "global-in-progress", signature };
     }
   }
-  
+
   // Check throttle window (non-critical, can have small race condition)
   const lastRequest = requestThrottle.get(signature);
   if (lastRequest && Date.now() - lastRequest < 3000) {
-    return { isDuplicate: true, reason: 'throttled', signature };
+    return { isDuplicate: true, reason: "throttled", signature };
   }
-  
+
   // Check for recent cached response
   const completed = completedRequests.get(signature);
   if (completed && Date.now() - completed.timestamp < 10000) {
-    return { isDuplicate: true, reason: 'cached', signature, data: completed.data };
+    return {
+      isDuplicate: true,
+      reason: "cached",
+      signature,
+      data: completed.data,
+    };
   }
-  
+
   // ✅ ATOMIC: Register the request immediately
-  globalFetchState.set(signature, 'fetching');
+  globalFetchState.set(signature, "fetching");
   requestThrottle.set(signature, Date.now());
-  
+
   return { isDuplicate: false, signature };
 };
 
@@ -115,9 +126,11 @@ const checkAndRegisterRequest = (config) => {
 export const clearApiCache = (urlPattern = null) => {
   if (urlPattern) {
     const patterns = Array.isArray(urlPattern) ? urlPattern : [urlPattern];
-    
+
     for (const [signature] of globalFetchState) {
-      const shouldDelete = patterns.some(pattern => signature.includes(pattern));
+      const shouldDelete = patterns.some((pattern) =>
+        signature.includes(pattern)
+      );
       if (shouldDelete) {
         globalFetchState.delete(signature);
         completedRequests.delete(signature);
@@ -134,38 +147,7 @@ export const clearApiCache = (urlPattern = null) => {
 };
 
 // ===================== TOKEN MANAGEMENT =====================
-export const getBearerToken = async (forceRefresh = false) => {
-  let token = tokenService.getToken();
-  
-  if (token && !forceRefresh) {
-    return token;
-  }
-
-  try {
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/partner-login`,
-      {
-        client_id: "HK6V7709",
-        client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-      },
-      {
-        headers: { "Content-Type": "application/json" },
-        timeout: 10000
-      }
-    );
-
-    if (response.data?.data?.token) {
-      const newToken = response.data.data.token;
-      tokenService.setToken(newToken);
-      return newToken;
-    } else {
-      throw new Error("Invalid token response structure");
-    }
-  } catch (error) {
-    tokenService.clearToken();
-    throw error;
-  }
-};
+// ❌ REMOVED: The duplicate getBearerToken function is now imported from authService.js
 
 // ===================== ENHANCED REQUEST INTERCEPTOR =====================
 api.interceptors.request.use(
@@ -175,36 +157,38 @@ api.interceptors.request.use(
 
     // ✅ ENHANCED: Better duplicate check with bypass support
     const duplicateCheck = checkAndRegisterRequest(config);
-    
+
     if (duplicateCheck.isDuplicate && !duplicateCheck.bypassed) {
       const { reason, signature, data } = duplicateCheck;
-      
+
       switch (reason) {
-        case 'global-in-progress':
+        case "global-in-progress":
           console.log(`🔄 Request cancelled (duplicate): ${config.url}`);
-          return Promise.reject(new axios.Cancel('Duplicate request - globally coordinated'));
-          
-        case 'throttled':
+          return Promise.reject(
+            new axios.Cancel("Duplicate request - globally coordinated")
+          );
+
+        case "throttled":
           console.log(`🚦 Request throttled: ${config.url}`);
-          return Promise.reject(new axios.Cancel('Request throttled'));
-          
-        case 'cached':
+          return Promise.reject(new axios.Cancel("Request throttled"));
+
+        case "cached":
           console.log(`💾 Serving cached response: ${config.url}`);
           const fakeResponse = {
             data: data,
             status: 200,
-            statusText: 'OK',
+            statusText: "OK",
             headers: {},
             config: config,
-            request: {}
+            request: {},
           };
           return Promise.reject({
             __isCachedResponse: true,
-            response: fakeResponse
+            response: fakeResponse,
           });
-          
+
         default:
-          return Promise.reject(new axios.Cancel('Duplicate request'));
+          return Promise.reject(new axios.Cancel("Duplicate request"));
       }
     }
 
@@ -215,19 +199,18 @@ api.interceptors.request.use(
       config: config,
       requestId: requestId,
       url: config.url,
-      method: config.method
+      method: config.method,
     });
 
     let urlPath = config.url;
     if (config.baseURL && urlPath.startsWith(config.baseURL)) {
       urlPath = urlPath.replace(config.baseURL, "");
     }
-    urlPath = urlPath.split('?')[0];
+    urlPath = urlPath.split("?")[0];
 
     const publicEndpoints = [
       "/",
       "/register",
-      "/terms-condition",
       "/partner-login",
       "/request-passcode-login",
       "/generate-passcode",
@@ -236,7 +219,6 @@ api.interceptors.request.use(
       "/verify-otp",
       "/forgot-password",
       "/reset-password",
-      "/terms-by-partner",
       "/get-manuals",
       "/gif-images",
       "/logout-time",
@@ -247,13 +229,15 @@ api.interceptors.request.use(
       "/login",
       "/kyc",
       "/kycs",
-      "/kyc/initiate"
+      "/kyc/initiate",
     ];
 
-    const isPublicEndpoint = publicEndpoints.some(endpoint => {
-      return urlPath === endpoint ||
-        urlPath.startsWith(endpoint + '/') ||
-        (endpoint !== '/' && urlPath.includes(endpoint));
+    const isPublicEndpoint = publicEndpoints.some((endpoint) => {
+      return (
+        urlPath === endpoint ||
+        urlPath.startsWith(endpoint + "/") ||
+        (endpoint !== "/" && urlPath.includes(endpoint))
+      );
     });
 
     if (isPublicEndpoint) {
@@ -273,7 +257,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('❌ Request interceptor error:', error);
+    console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
@@ -282,28 +266,28 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     const signature = getRequestSignature(response.config);
-    
+
     // ✅ ENHANCED: Better cleanup and caching logic
     if (response.status >= 200 && response.status < 300) {
       // Don't cache passcode verification responses (they're time-sensitive)
-      const shouldNotCache = BYPASS_COORDINATION_ENDPOINTS.some(endpoint => 
+      const shouldNotCache = BYPASS_COORDINATION_ENDPOINTS.some((endpoint) =>
         response.config.url.includes(endpoint)
       );
-      
+
       if (!shouldNotCache && JSON.stringify(response.data).length < 100000) {
         completedRequests.set(signature, {
           timestamp: Date.now(),
-          data: response.data
+          data: response.data,
         });
       }
-      globalFetchState.set(signature, 'completed');
+      globalFetchState.set(signature, "completed");
     } else {
       globalFetchState.delete(signature);
     }
-    
+
     // Clean up active requests
     activeRequests.delete(signature);
-    
+
     return response;
   },
   async (error) => {
@@ -317,26 +301,26 @@ api.interceptors.response.use(
       const signature = getRequestSignature(error.config);
       globalFetchState.delete(signature);
       activeRequests.delete(signature);
-      
+
       // Don't throttle failed requests for passcode endpoints
-      const shouldBypassThrottle = BYPASS_COORDINATION_ENDPOINTS.some(endpoint => 
-        error.config.url.includes(endpoint)
+      const shouldBypassThrottle = BYPASS_COORDINATION_ENDPOINTS.some(
+        (endpoint) => error.config.url.includes(endpoint)
       );
-      
+
       if (shouldBypassThrottle) {
         requestThrottle.delete(signature);
       }
     }
 
     if (axios.isCancel(error)) {
-      console.log('⚠️ Request cancelled:', error.message);
+      console.log("⚠️ Request cancelled:", error.message);
       return Promise.reject(error);
     }
 
     const originalRequest = error.config;
 
     if (!error.response) {
-      if (error.code === 'ECONNABORTED') {
+      if (error.code === "ECONNABORTED") {
         error.message = "Request timeout. Please check your connection.";
       } else {
         error.message = "Network error. Please check your internet connection.";
@@ -345,10 +329,11 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      const isLoginEndpoint = originalRequest.url.includes('/login');
+      const isLoginEndpoint = originalRequest.url.includes("/login");
 
       if (isLoginEndpoint && !originalRequest._retry) {
-        error.message = "Invalid email or passcode. Please check your credentials.";
+        error.message =
+          "Invalid email or passcode. Please check your credentials.";
         return Promise.reject(error);
       }
 
@@ -356,7 +341,7 @@ api.interceptors.response.use(
         originalRequest._retry = true;
 
         try {
-          const newToken = await getBearerToken(true);
+          const newToken = await getBearerToken(true); // ✅ Uses imported function
           if (newToken) {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             clearApiCache(originalRequest.url);
@@ -370,14 +355,18 @@ api.interceptors.response.use(
             clearApiCache();
             window.location.href = "/";
           }
-          return Promise.reject(new Error("Session expired. Please login again."));
+          return Promise.reject(
+            new Error("Session expired. Please login again.")
+          );
         }
       }
     }
 
     // Enhanced error messages
     if (error.response.status === 400) {
-      error.message = error.response.data?.message || "Invalid request. Please check your input.";
+      error.message =
+        error.response.data?.message ||
+        "Invalid request. Please check your input.";
     } else if (error.response.status === 403) {
       error.message = "You don't have permission to access this resource.";
     } else if (error.response.status === 404) {
@@ -395,41 +384,41 @@ api.interceptors.response.use(
 // Enhanced global coordination methods
 export const apiCoordinator = {
   setFetching: (signature) => {
-    globalFetchState.set(signature, 'fetching');
+    globalFetchState.set(signature, "fetching");
   },
-  
+
   setCompleted: (signature, data = null) => {
-    globalFetchState.set(signature, 'completed');
+    globalFetchState.set(signature, "completed");
     if (data) {
       completedRequests.set(signature, {
         timestamp: Date.now(),
-        data: data
+        data: data,
       });
     }
   },
-  
+
   setFailed: (signature) => {
     globalFetchState.delete(signature);
   },
-  
+
   isFetching: (signature) => {
-    return globalFetchState.get(signature) === 'fetching';
+    return globalFetchState.get(signature) === "fetching";
   },
-  
+
   hasRecentData: (signature) => {
     const completed = completedRequests.get(signature);
     return completed && Date.now() - completed.timestamp < 10000;
   },
-  
+
   getRecentData: (signature) => {
     const completed = completedRequests.get(signature);
     return completed?.data || null;
   },
-  
+
   clear: (pattern = null) => {
     clearApiCache(pattern);
   },
-  
+
   // ✅ ENHANCED: Force clear a specific signature
   clearSignature: (signature) => {
     globalFetchState.delete(signature);
@@ -437,20 +426,22 @@ export const apiCoordinator = {
     requestThrottle.delete(signature);
     activeRequests.delete(signature);
   },
-  
+
   // ✅ NEW: Get current state for debugging
   getState: () => {
     return {
       active: Array.from(activeRequests.entries()),
       completed: Array.from(completedRequests.entries()),
-      global: Array.from(globalFetchState.entries())
+      global: Array.from(globalFetchState.entries()),
     };
   },
-  
+
   // ✅ NEW: Check if endpoint bypasses coordination
   shouldBypassCoordination: (url) => {
-    return BYPASS_COORDINATION_ENDPOINTS.some(endpoint => url.includes(endpoint));
-  }
+    return BYPASS_COORDINATION_ENDPOINTS.some((endpoint) =>
+      url.includes(endpoint)
+    );
+  },
 };
 
 export const forceRefreshEndpoint = (endpointPattern) => {
@@ -459,16 +450,16 @@ export const forceRefreshEndpoint = (endpointPattern) => {
 
 // Enhanced debug utility
 export const debugApiState = () => {
-  console.group('🔧 API Coordinator State');
-  console.log('Active Requests:', activeRequests.size);
-  console.log('Completed Requests:', completedRequests.size);
-  console.log('Global Fetch State:', globalFetchState.size);
-  console.log('Bypass Endpoints:', BYPASS_COORDINATION_ENDPOINTS);
-  
+  console.group("🔧 API Coordinator State");
+  console.log("Active Requests:", activeRequests.size);
+  console.log("Completed Requests:", completedRequests.size);
+  console.log("Global Fetch State:", globalFetchState.size);
+  console.log("Bypass Endpoints:", BYPASS_COORDINATION_ENDPOINTS);
+
   activeRequests.forEach((value, key) => {
     console.log(`Active: ${key}`, value);
   });
-  
+
   console.groupEnd();
 };
 

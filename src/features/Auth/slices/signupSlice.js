@@ -6,50 +6,54 @@ export const fetchTermsAndConditions = createAsyncThunk(
   "signup/fetchTermsAndConditions",
   async (_, { rejectWithValue }) => {
     try {
+      console.log("🔍 [fetchTermsAndConditions] Starting...");
+
+      // ✅ EXACTLY LIKE NON-REDUX VERSION
       const iswhitelabelledpartner = localStorage.getItem(
         "iswhitelabelledpartner"
       );
       const whitelabelledpartnerid = localStorage.getItem(
         "whitelabelledpartnerid"
       );
+      const bearertoken = localStorage.getItem("bearertoken");
 
-      const partnerId =
-        iswhitelabelledpartner === "1" ? whitelabelledpartnerid : "0";
+      console.log("🔍 Partner config:", {
+        iswhitelabelledpartner,
+        whitelabelledpartnerid,
+        hasToken: !!bearertoken,
+      });
 
-      // ✅ USE api.js - MUCH SIMPLER!
+      // ✅ USE /terms-by-partner/{id} LIKE NON-REDUX
+      let partnerId;
+      if (iswhitelabelledpartner === "1" && whitelabelledpartnerid) {
+        partnerId = whitelabelledpartnerid;
+      } else {
+        partnerId = "0"; // Default partner ID
+      }
+
+      console.log(`📡 Fetching terms from: /terms-by-partner/${partnerId}`);
+
+      // This will use api.js which should add Authorization header
       const response = await api.get(`/terms-by-partner/${partnerId}`);
 
-      // Handle various response structures
-      const termsData = response.data || response;
+      console.log("✅ Terms API response:", {
+        status: response.status,
+        hasTerms: !!response.data?.terms,
+        termsCount: response.data?.terms?.length || 0,
+      });
 
-      if (termsData && Array.isArray(termsData.terms)) {
-        return termsData.terms;
-      } else if (Array.isArray(termsData)) {
-        return termsData;
-      } else if (termsData && typeof termsData === "object") {
-        // Try to extract terms from object
-        const termsArray = Object.values(termsData).find(Array.isArray);
-        return termsArray || [];
-      } else {
-        
-        return [];
-      }
+      return response.data?.terms || [];
     } catch (error) {
-      
+      console.error("❌ [fetchTermsAndConditions] Error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+      });
 
-      // Don't block registration if terms fail to load
-      if (error.message?.includes("timeout") || error.code === "ECONNABORTED") {
-        
-        return [];
-      }
-
-      // Handle 401 specifically
-      if (error.response?.status === 401) {
-        
-        return [];
-      }
-
-      return rejectWithValue(error.message);
+      // Fallback: Return empty array so registration can continue
+      console.log("⚠️ Returning empty terms array (registration can continue)");
+      return [];
     }
   }
 );
@@ -75,11 +79,9 @@ export const fetchNationalities = createAsyncThunk(
         );
         return nationalitiesArray || [];
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       return rejectWithValue(error.message);
     }
   }
@@ -106,11 +108,9 @@ export const fetchIdDocumentTypes = createAsyncThunk(
         );
         return documentTypesArray || [];
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       return rejectWithValue(error.message);
     }
   }
@@ -130,11 +130,9 @@ export const fetchGenders = createAsyncThunk(
       if (Array.isArray(gendersData)) {
         return gendersData;
       } else {
-        
         return [];
       }
     } catch (error) {
-      
       return rejectWithValue(error.message);
     }
   }
@@ -150,8 +148,6 @@ export const submitIndividualSignup = createAsyncThunk(
 
       return response.data;
     } catch (error) {
-      
-
       // Enhanced error handling
       let errorMessage = "Registration failed. Please try again.";
       let validationErrors = {};

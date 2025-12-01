@@ -1,5 +1,6 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import api, { getBearerToken } from "../../services/api";
+import { getBearerToken } from "../../services/authService";
+import api from "../../services/api";
 import axios from "axios";
 import { openModal } from "./slices/uiSlice";
 import { extractErrorMessage } from "../../utils/errorHandling";

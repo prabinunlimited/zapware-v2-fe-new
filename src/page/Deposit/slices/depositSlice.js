@@ -10,43 +10,88 @@ export const submitDeposit = createAsyncThunk(
     try {
       const token = localStorage.getItem("authtoken");
       const customerId = localStorage.getItem("authcustomer_id");
+      let partnerId = localStorage.getItem("whitelabelledpartnerid"); // ✅ Get partner_id
+
+      console.log("🔍 Deposit submission data:", {
+        customerId,
+        partnerId,
+        currency: depositData.currency,
+        paymentMethod: depositData.payment_method,
+      });
 
       if (!token || !customerId) {
         throw new Error("Authentication required");
       }
 
+      // ✅ IMPORTANT: Parse the partner ID and ensure it's a valid number
+      if (partnerId) {
+        partnerId = parseInt(partnerId, 10);
+        console.log("✅ Parsed partnerId from localStorage:", partnerId);
+      } else {
+        console.warn("⚠️ Partner ID missing from localStorage, using fallback");
+        partnerId = 9; // Default partner ID as number
+      }
+
       // Handle USD bank deposit specifically
-      if (depositData.currency === "USD" && depositData.payment_method === "bank_deposit") {
-        const response = await api.post("/transactions/remittance-transaction", {
-          customer_id: customerId,
-          send_amount: parseFloat(depositData.amount),
-          from_currency: depositData.currency,
-          payment_method: depositData.payment_method,
-          is_remit: "N",
-          sender_account_name: depositData.sender_account_name,
-          sender_bank_id: depositData.sender_bank_id,
-          purpose: depositData.purpose,
-          reference: depositData.reference,
-        });
+      if (
+        depositData.currency === "USD" &&
+        depositData.payment_method === "bank_deposit"
+      ) {
+        const response = await api.post(
+          "/transactions/remittance-transaction",
+          {
+            customer_id: parseInt(customerId, 10), // Ensure customer_id is number
+            partner_id: partnerId, // ✅ Now this will be a valid number
+            send_amount: parseFloat(depositData.amount),
+            from_currency: depositData.currency,
+            payment_method: depositData.payment_method,
+            is_remit: "N",
+            sender_account_name: depositData.sender_account_name,
+            sender_bank_id: depositData.sender_bank_id,
+            purpose: depositData.purpose,
+            reference: depositData.reference,
+          }
+        );
+
+        console.log("✅ USD Bank Deposit response:", response.data);
 
         return {
           ...response.data,
           success: true,
-          transactionType: "usd_bank_deposit"
+          transactionType: "usd_bank_deposit",
         };
       }
 
       // Default deposit submission for other currencies/methods
       const response = await api.post("/transactions/deposit", {
         ...depositData,
-        customerId: customerId,
+        customer_id: parseInt(customerId, 10), // Use customer_id instead of customerId
+        partner_id: partnerId, // ✅ Use the parsed partner_id
       });
+
+      console.log("✅ Default Deposit response:", response.data);
 
       return response.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to submit deposit"
-      );
+      console.error("❌ Deposit submission error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config, // This will show the request data
+      });
+
+      // More detailed error handling
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to submit deposit";
+
+      return rejectWithValue({
+        message: errorMessage,
+        details: error.response?.data,
+        status: error.response?.status,
+      });
     }
   }
 );
@@ -123,11 +168,11 @@ export const checkSilaBankAccounts = createAsyncThunk(
       );
 
       const accounts = response.data?.accounts || response.data?.data || [];
-      
+
       return {
         hasSilaAccounts: accounts.length > 0,
         silaAccounts: accounts,
-        count: accounts.length
+        count: accounts.length,
       };
     } catch (error) {
       return rejectWithValue(
@@ -251,20 +296,20 @@ const depositSlice = createSlice({
     setIsAmountFocused: (state, action) => {
       state.isAmountFocused = action.payload;
     },
-    
+
     setCopiedField: (state, action) => {
       state.copiedField = action.payload;
     },
-    
+
     clearCopiedField: (state) => {
       state.copiedField = null;
     },
-    
+
     setHelpTooltip: (state, action) => {
       const { field, visible } = action.payload;
       state.helpTooltips[field] = visible;
     },
-    
+
     setShowCancelModal: (state, action) => {
       state.showCancelModal = action.payload;
     },
@@ -367,14 +412,14 @@ export const {
   setAmount,
   setPurpose,
   setSelectedBankAccount,
-  
+
   // Form validation actions
   setFormErrors,
   clearFormError,
-  
+
   // Step management
   setActiveStep,
-  
+
   // UI state actions
   setIsAmountFocused,
   setCopiedField,
@@ -382,14 +427,14 @@ export const {
   setHelpTooltip,
   setShowCancelModal,
   setShowPaymentInitiation,
-  
+
   // Transaction actions
   resetTransaction,
   resetDepositForm,
-  
+
   // Manual deposit actions
   clearManualAccountDetails,
-  
+
   // Debug actions
   setAllAvailableAccounts,
 } = depositSlice.actions;
@@ -398,29 +443,37 @@ export const {
 export const selectDeposit = (state) => state.deposit;
 export const selectSelectedCurrency = (state) => state.deposit.selectedCurrency;
 export const selectPaymentMethod = (state) => state.deposit.paymentMethod;
-export const selectShowPaymentInitiation = (state) => state.deposit.showPaymentInitiation;
+export const selectShowPaymentInitiation = (state) =>
+  state.deposit.showPaymentInitiation;
 export const selectAmount = (state) => state.deposit.amount;
 export const selectPurpose = (state) => state.deposit.purpose;
-export const selectSelectedBankAccount = (state) => state.deposit.selectedBankAccount;
+export const selectSelectedBankAccount = (state) =>
+  state.deposit.selectedBankAccount;
 export const selectFormErrors = (state) => state.deposit.formErrors;
 export const selectIsSubmitting = (state) => state.deposit.isSubmitting;
-export const selectTransactionSuccess = (state) => state.deposit.transactionSuccess;
+export const selectTransactionSuccess = (state) =>
+  state.deposit.transactionSuccess;
 export const selectActiveStep = (state) => state.deposit.activeStep;
-export const selectManualDetailsLoading = (state) => state.deposit.manualDetailsLoading;
-export const selectManualAccountDetails = (state) => state.deposit.manualAccountDetails;
-export const selectAllAvailableAccounts = (state) => state.deposit.allAvailableAccounts;
+export const selectManualDetailsLoading = (state) =>
+  state.deposit.manualDetailsLoading;
+export const selectManualAccountDetails = (state) =>
+  state.deposit.manualAccountDetails;
+export const selectAllAvailableAccounts = (state) =>
+  state.deposit.allAvailableAccounts;
 
 // ✅ ADDED: Selectors for Sila bank accounts
 export const selectSilaBankAccounts = (state) => state.deposit.silaBankAccounts;
 export const selectHasSilaAccounts = (state) => state.deposit.hasSilaAccounts;
-export const selectSilaAccountsLoading = (state) => state.deposit.silaAccountsLoading;
-export const selectSilaAccountsError = (state) => state.deposit.silaAccountsError;
+export const selectSilaAccountsLoading = (state) =>
+  state.deposit.silaAccountsLoading;
+export const selectSilaAccountsError = (state) =>
+  state.deposit.silaAccountsError;
 
 // ✅ ADDED: Computed selectors
-export const selectIsManualDeposit = (state) => 
+export const selectIsManualDeposit = (state) =>
   state.deposit.paymentMethod === "manual_deposit";
 export const selectIsUSDBankDeposit = (state) =>
-  state.deposit.selectedCurrency === "USD" && 
+  state.deposit.selectedCurrency === "USD" &&
   state.deposit.paymentMethod === "bank_deposit";
 export const selectIsCardDeposit = (state) =>
   state.deposit.paymentMethod === "card_deposit";
@@ -429,18 +482,28 @@ export const selectIsBankTransfer = (state) =>
 
 // ✅ ADDED: Validation selectors
 export const selectIsFormValid = (state) => {
-  const { selectedCurrency, paymentMethod, amount, purpose, selectedBankAccount } = state.deposit;
-  
+  const {
+    selectedCurrency,
+    paymentMethod,
+    amount,
+    purpose,
+    selectedBankAccount,
+  } = state.deposit;
+
   if (!selectedCurrency || !paymentMethod) return false;
-  
+
   if (paymentMethod !== "manual_deposit") {
     if (!amount || parseFloat(amount) <= 0 || !purpose) return false;
   }
-  
-  if (selectedCurrency === "USD" && paymentMethod === "bank_deposit" && !selectedBankAccount) {
+
+  if (
+    selectedCurrency === "USD" &&
+    paymentMethod === "bank_deposit" &&
+    !selectedBankAccount
+  ) {
     return false;
   }
-  
+
   return true;
 };
 

@@ -6,7 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo } from "react-icons/fi";
-import { FaCheck, FaUniversity, FaTimes, FaCreditCard } from "react-icons/fa";
+import {
+  FaCheck,
+  FaUniversity,
+  FaTimes,
+  FaCreditCard,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
 import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
@@ -476,40 +482,77 @@ const DebugPanel = () => {
 // Loading State Component
 const LoadingState = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-    <div className="text-center">
-      <RingLoader
-        color="#3B82F6"
-        size={80}
-        speedMultiplier={1}
-        className="mx-auto mb-4"
-      />
-      <p className="text-gray-700 font-medium font-sans">
-        Loading your accounts...
-      </p>
-      <p className="text-gray-500 text-sm mt-2 font-sans">
-        Fetching your account information
-      </p>
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="text-center"
+    >
+      <div className="relative">
+        <RingLoader
+          color="#3B82F6"
+          size={80}
+          speedMultiplier={1}
+          className="mx-auto mb-4"
+        />
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 border-4 border-blue-200 border-t-blue-500 rounded-full"
+        />
+      </div>
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="text-gray-700 font-medium text-lg mb-2"
+      >
+        Loading your accounts
+      </motion.p>
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="text-gray-500 text-sm"
+      >
+        Preparing your deposit experience...
+      </motion.p>
+    </motion.div>
   </div>
 );
 
 // Error State Component
-const ErrorState = ({ error }) => (
+const ErrorState = ({ error, onRetry }) => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-    <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-lg font-sans">
-      <h2 className="text-xl font-bold text-red-600 mb-4 font-sans">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="text-center max-w-md p-8 bg-white rounded-2xl shadow-xl"
+    >
+      <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <FaExclamationTriangle className="text-red-500 text-2xl" />
+      </div>
+      <h2 className="text-xl font-bold text-red-600 mb-3">
         Unable to Load Accounts
       </h2>
-      <p className="text-gray-700 mb-4 font-sans">
-        {error || "Failed to load your account information. Please try again."}
+      <p className="text-gray-700 mb-6 leading-relaxed">
+        {error ||
+          "We encountered an issue while loading your account information."}
       </p>
-      <button
-        onClick={() => window.location.reload()}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-sans"
-      >
-        Try Again
-      </button>
-    </div>
+      <div className="space-y-3">
+        <button
+          onClick={onRetry}
+          className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
+        >
+          Try Again
+        </button>
+        <button
+          onClick={() => (window.location.href = "/dashboard")}
+          className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    </motion.div>
   </div>
 );
 
@@ -966,19 +1009,26 @@ const DepositPageContent = () => {
   }
 
   if (currency.error) {
-    return <ErrorState error={currency.error} />;
+    return (
+      <ErrorState
+        error={currency.error}
+        onRetry={() => window.location.reload()}
+      />
+    );
   }
 
   if (safeCurrencies.length === 0 && !currency.loading) {
-    console.log(
-      "📭 DepositPage - No currencies available, showing empty state"
-    );
     return <EmptyState navigate={navigate} />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 font-sans">
-      <ToastContainer position="top-right" autoClose={5000} />
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        toastClassName="font-sans"
+        progressClassName="bg-gradient-to-r from-blue-500 to-blue-600"
+      />
       <PaymentInitiation />
       <DebugPanel />
       <ReceiptTemplate
@@ -1081,7 +1131,7 @@ const DepositPageContent = () => {
                 {/* ✅ UPDATED: Changed grid layout to use more columns for wider layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Currency Selection */}
-                  {safeCurrencies.length > 0 ? (
+                  {safeCurrencies.length > 0 && (
                     <div className="lg:col-span-2">
                       <CurrencySelection
                         currencies={safeCurrencies}
@@ -1090,12 +1140,6 @@ const DepositPageContent = () => {
                         loading={currency.loading}
                         error={deposit.formErrors.currency}
                       />
-                    </div>
-                  ) : (
-                    <div className="lg:col-span-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-yellow-700 font-sans">
-                        No currencies available. Please contact support.
-                      </p>
                     </div>
                   )}
 
@@ -1332,7 +1376,7 @@ const DepositPageContent = () => {
           {ui.showCancelModal && (
             <CancelModal
               onConfirm={ui.confirmCancel}
-              onCancel={ui.setShowCancelModal}
+              onCancel={() => ui.setShowCancelModal(false)}
             />
           )}
         </AnimatePresence>
