@@ -2,10 +2,10 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 
 // ===================== ACTION CREATOR IMPORTS =====================
-import { 
-  setAuthState, 
-  setInitialized, 
-  setVerificationStatus 
+import {
+  setAuthState,
+  setInitialized,
+  setVerificationStatus,
 } from "../features/Auth/slices/authSlice";
 
 // ===================== AUTH AND RELATED SLICES =====================
@@ -19,7 +19,7 @@ import downloadReducer from "../features/Auth/slices/downloadSlice";
 import forgotPasswordReducer from "../features/Auth/slices/forgotPasswordSlice";
 import signupReducer from "../features/Auth/slices/signupSlice";
 import institutionRegistrationReducer from "../features/Auth/slices/institutionRegistrationSlice";
-import currencyAccountsReducer from "../features/Auth/SignUp/SelectCurrencyAccount/currencyAccountsSlice"
+import currencyAccountsReducer from "../features/Auth/SignUp/SelectCurrencyAccount/currencyAccountsSlice";
 
 // ===================== DASHBOARD AND COMPONENTS =====================
 import headerReducer from "../components/Dashboard/Header/headerSlice";
@@ -52,7 +52,7 @@ import teamMemberReducer from "../page/Team/Slice/teamMemberSlice";
 // ===================== PAYOUT SLICES =====================
 import payoutReducer from "../page/Payout/slices/payoutSlice";
 
-//====================== Bank Letter =====================
+//======================Bank letter======================
 import bankLetterReducer from "../page/BankLetter/slices/bankLetterSlice";
 
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
@@ -74,7 +74,7 @@ const customSerializableCheck = {
     "beneficiaries/toggleBeneficiaryVisibility/fulfilled",
     "modal/showDeleteModal",
     "modal/hideDeleteModal",
-    
+
     // Auth thunk actions to ignore
     "auth/initializeApp/pending",
     "auth/initializeApp/fulfilled",
@@ -111,7 +111,7 @@ const customSerializableCheck = {
     "deposit/fetchManualAccountDetails/pending",
     "deposit/fetchManualAccountDetails/fulfilled",
     "deposit/fetchManualAccountDetails/rejected",
-    
+
     // Currency slice actions
     "currency/fetchCurrencyOptions/pending",
     "currency/fetchCurrencyOptions/fulfilled",
@@ -125,7 +125,7 @@ const customSerializableCheck = {
     "currency/fetchPaymentMethodsByCurrency/pending",
     "currency/fetchPaymentMethodsByCurrency/fulfilled",
     "currency/fetchPaymentMethodsByCurrency/rejected",
-    
+
     "bankAccounts/fetchUSDBankAccounts/pending",
     "bankAccounts/fetchUSDBankAccounts/fulfilled",
     "bankAccounts/fetchUSDBankAccounts/rejected",
@@ -150,7 +150,13 @@ const customSerializableCheck = {
     "cardPayment/setPaymentStatus",
     "cardPayment/setCurrentPayment",
     "cardPayment/setShowPaymentForm",
-    "payout/setFileValue"
+    "payout/setFileValue",
+
+    //bank letter actions
+    "bankLetter/fetchPartnerProfile/fulfilled",
+    "bankLetter/fetchPartnerProfile/rejected",
+    "bankLetter/generateBankLetterPDF/fulfilled",
+    "bankLetter/generateBankLetterPDF/rejected",
   ],
   ignoredPaths: [
     "kyc.plaid",
@@ -168,7 +174,7 @@ const customSerializableCheck = {
     "transaction",
     "beneficiaries.beneficiaries",
     "modal.deleteModal",
-    
+
     // Auth paths that might contain non-serializable data
     "auth.error",
     "auth.user",
@@ -183,14 +189,14 @@ const customSerializableCheck = {
 
     // Deposit related paths
     "deposit.transactionSuccess",
-    
+
     // Currency slice paths
     "currency.currencies",
     "currency.paymentMethods",
-    "currency.usdBankAccounts", 
+    "currency.usdBankAccounts",
     "currency.aedAccountDetails",
     "currency.rawData",
-    
+
     "bankAccounts.usdBankAccounts",
     "bankAccounts.aedAccountDetails",
 
@@ -200,7 +206,11 @@ const customSerializableCheck = {
     "cardPayment.session",
     "cardPayment.paymentResult",
 
-    "payout.formValues.invoice_file"
+    "payout.formValues.invoice_file",
+
+    //bank letter paths
+    "bankLetter.partnerProfileData",
+    "bankLetter.accountData",
   ],
 };
 
@@ -272,12 +282,14 @@ const initializeAuthState = () => {
 
     if (token && customerId) {
       // ✅ FIXED: Use action creator instead of string type
-      store.dispatch(setAuthState({
-        token,
-        customerId,
-        isAuthenticated: true,
-        isInitialized: true,
-      }));
+      store.dispatch(
+        setAuthState({
+          token,
+          customerId,
+          isAuthenticated: true,
+          isInitialized: true,
+        })
+      );
     } else {
       // ✅ FIXED: Use action creator instead of string type
       store.dispatch(setInitialized(true));
@@ -333,8 +345,10 @@ export const storeHealthCheck = () => {
     },
     cardPayment: {
       hasSession: !!state.cardPayment?.session,
-      isProcessing: state.cardPayment?.sessionLoading || state.cardPayment?.paymentProcessing,
-    }
+      isProcessing:
+        state.cardPayment?.sessionLoading ||
+        state.cardPayment?.paymentProcessing,
+    },
   };
 };
 
@@ -387,7 +401,10 @@ const persistCriticalStates = (state) => {
         localStorage.setItem("kyc_status", state.auth.kycStatus);
       }
       if (state.auth.bankApproveStatus) {
-        localStorage.setItem("bank_approve_status", state.auth.bankApproveStatus);
+        localStorage.setItem(
+          "bank_approve_status",
+          state.auth.bankApproveStatus
+        );
       }
 
       if (state.auth.isOwnerLogin) {
@@ -403,7 +420,7 @@ const persistCriticalStates = (state) => {
 if (typeof window !== "undefined") {
   setTimeout(() => {
     initializeAuthState();
-    
+
     if (process.env.NODE_ENV !== "production") {
       storeHealthCheck();
     }
@@ -418,14 +435,18 @@ export const getCustomerId = () => store.getState().auth.customerId;
 export const isAuthenticated = () => store.getState().auth.isAuthenticated;
 
 export const getCurrencyState = () => store.getState().currency;
-export const getSelectedCurrency = () => store.getState().currency.selectedCurrency;
+export const getSelectedCurrency = () =>
+  store.getState().currency.selectedCurrency;
 export const getPaymentMethods = () => store.getState().currency.paymentMethods;
 
 export const getCardPaymentState = () => store.getState().cardPayment;
 export const getCardPaymentSession = () => store.getState().cardPayment.session;
-export const isCardPaymentProcessing = () => 
-  store.getState().cardPayment.sessionLoading || store.getState().cardPayment.paymentProcessing;
-export const isPaymentCompleted = () => store.getState().cardPayment.isPaymentCompleted;
-export const isPaymentFailed = () => store.getState().cardPayment.isPaymentFailed;
+export const isCardPaymentProcessing = () =>
+  store.getState().cardPayment.sessionLoading ||
+  store.getState().cardPayment.paymentProcessing;
+export const isPaymentCompleted = () =>
+  store.getState().cardPayment.isPaymentCompleted;
+export const isPaymentFailed = () =>
+  store.getState().cardPayment.isPaymentFailed;
 
 export default store;
