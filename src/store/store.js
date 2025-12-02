@@ -55,6 +55,9 @@ import payoutReducer from "../page/Payout/slices/payoutSlice";
 //======================Bank letter======================
 import bankLetterReducer from "../page/BankLetter/slices/bankLetterSlice";
 
+//====================== Location Slice ======================
+import locationReducer from '../features/Auth/slices/locationSlice';
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -263,6 +266,8 @@ export const store = configureStore({
 
     //bank letter
     bankLetter: bankLetterReducer,
+    //location
+    location: locationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
