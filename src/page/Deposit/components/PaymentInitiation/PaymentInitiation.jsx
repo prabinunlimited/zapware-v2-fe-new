@@ -1,4 +1,4 @@
-// src/page/Deposit/components/PaymentInitiation.jsx
+// src/page/Deposit/components/PaymentInitiation.jsx - DEBUG VERSION
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { usePlaidLink } from "react-plaid-link";
@@ -10,64 +10,110 @@ import { useNavigate } from "react-router-dom";
 const PaymentInitiation = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  
-  // Get state from Redux
-  const { selectedCurrency, amount, purpose, showPaymentInitiation } = useSelector(
-    (state) => state.deposit
-  );
+
+  const { 
+    selectedCurrency, 
+    amount, 
+    purpose, 
+    paymentMethod,
+    selectedBankAccount,
+    showPaymentInitiation 
+  } = useSelector((state) => state.deposit);
 
   const [linkToken, setLinkToken] = useState(null);
   const [transId, setTransId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api";
-  const customerId = localStorage.getItem("customerId") || localStorage.getItem("authcustomer_id");
-  const authToken = localStorage.getItem("authToken") || localStorage.getItem("authtoken");
+  // Debug: Log all values
+  console.log("🔍 PaymentInitiation - Current state:", {
+    selectedCurrency,
+    amount,
+    purpose,
+    paymentMethod,
+    selectedBankAccount,
+    showPaymentInitiation
+  });
 
-  // Fetch Plaid link token
+  const authcustomer_id = localStorage.getItem("customerId") || 
+                         localStorage.getItem("authcustomer_id");
+  const authToken = localStorage.getItem("authToken") || 
+                   localStorage.getItem("authtoken");
+
   useEffect(() => {
     const fetchLinkToken = async () => {
-      if (!showPaymentInitiation || !selectedCurrency || !amount) return;
+      if (!showPaymentInitiation || !selectedCurrency || !amount) {
+        console.log("❌ Missing required fields");
+        return;
+      }
 
       setLoading(true);
       try {
+        // Create payload EXACTLY like PaymentInitiationEuropeUK
+        const payload = {
+          customerId: authcustomer_id,
+          amount: {
+            currency: selectedCurrency,
+            value: amount.toString(),
+            paymentType: paymentMethod || null, // Try passing paymentMethod instead of null
+            bank_id: selectedBankAccount || null,
+            benef_account: null,
+            benef_bank_account: null
+          }
+        };
+
+        console.log("📤 Sending to /plaidtoken:", JSON.stringify(payload, null, 2));
+
+        // Try WITHOUT Authorization header first (like working component)
         const response = await axios.post(
           "https://zapware.unlimitedremit.com/api/plaidtoken",
-          {
-            customerId: customerId,
-            amount: {
-              currency: selectedCurrency,
-              value: parseFloat(amount),
-              paymentType: null,
-              bank_id: null,
-              benef_account: null,
-              benef_bank_account: null,
-            },
-          },
+          payload,
           {
             headers: {
-              Authorization: `Bearer ${authToken}`,
               "Content-Type": "application/json",
-            },
+            }
           }
         );
 
-        const { link_token, transactionId } = response.data.data.original;
-        setLinkToken(link_token);
-        setTransId(transactionId);
+        console.log("✅ Response:", response.data);
+
+        if (response.data?.data?.original) {
+          const { link_token, transactionId } = response.data.data.original;
+          setLinkToken(link_token);
+          setTransId(transactionId);
+        } else {
+          console.error("Invalid structure:", response.data);
+          throw new Error("Invalid response");
+        }
       } catch (error) {
-        console.error("Error fetching Plaid token:", error);
-        toast.error("Failed to initialize payment connection");
+        console.error("❌ Error details:", {
+          message: error.message,
+          response: error.response?.data,
+          fullError: error.response
+        });
+        
+        // Try to see the full Plaid error
+        if (error.response?.data?.data?.original?.message) {
+          const plaidError = error.response.data.data.original.message;
+          console.error("🔍 Full Plaid error:", plaidError);
+          
+          // Check what fields Plaid says are missing
+          if (plaidError.includes("MISSING_FIELDS")) {
+            toast.error("Plaid requires additional fields. Check console.");
+          }
+        }
+        
+        toast.error("Payment connection failed");
         handleClose();
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLinkToken();
-  }, [showPaymentInitiation, selectedCurrency, amount, customerId, authToken]);
+    if (showPaymentInitiation) {
+      fetchLinkToken();
+    }
+  }, [showPaymentInitiation, selectedCurrency, amount, authcustomer_id]);
 
-  // Plaid Link configuration
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess: async (public_token, metadata) => {
@@ -77,54 +123,31 @@ const PaymentInitiation = () => {
           transId,
         };
 
-        await axios.post(`${API_URL}/payment-status`, dataToSend, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        });
+        await axios.post("https://zapware.unlimitedremit.com/api/payment-status", dataToSend);
 
-        // Redirect on success
-        if (customerId) {
-          navigate(`/newhomepage/${customerId}`);
+        if (authcustomer_id) {
+          navigate(`/home/${authcustomer_id}`);
         } else {
           navigate("/");
         }
       } catch (error) {
-        console.error("Error checking payment status:", error);
+        console.error("Payment status error:", error);
         toast.error("Payment processing failed");
         handleClose();
       }
     },
     onExit: async (err, metadata) => {
-      try {
-        await axios.post(
-          `${API_URL}/transactions/status-update`,
-          {
-            transactionUuid: transId,
-            status: "cancelled",
-            remarks: "Plaid Deposit Cancelled",
-            user_type: "customer",
-            user_id: customerId,
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${authToken}`,
-            },
-          }
-        );
-      } catch (error) {
-        console.error("Failed to cancel transaction:", error);
-      }
-
+      console.log("Plaid exited:", err, metadata);
       handleClose();
-      toast.info("Payment initiation cancelled");
+      if (authcustomer_id) {
+        navigate(`/home/${authcustomer_id}`);
+      }
     },
   });
 
-  // Open Plaid when ready
   useEffect(() => {
     if (ready && linkToken && showPaymentInitiation && !loading) {
+      console.log("✅ Opening Plaid");
       open();
     }
   }, [ready, linkToken, showPaymentInitiation, loading, open]);
@@ -136,19 +159,13 @@ const PaymentInitiation = () => {
     setLoading(false);
   };
 
-  // Don't render anything if not active
-  if (!showPaymentInitiation) {
-    return null;
-  }
+  if (!showPaymentInitiation) return null;
 
-  // Show loading state
   if (loading || !linkToken || !ready) {
     return (
       <div className="bank-loader">
         <div className="bank-icon">🏦</div>
-        <div className="bank-text">
-          Connecting to your bank securely via Open Banking
-        </div>
+        <div className="bank-text">Connecting to bank via Open Banking</div>
         <style>{`
           .bank-loader {
             position: fixed;
@@ -184,7 +201,6 @@ const PaymentInitiation = () => {
     );
   }
 
-  // This component doesn't render visible content when Plaid is open
   return null;
 };
 

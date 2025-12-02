@@ -173,7 +173,7 @@ export const initializeApp = createAsyncThunk(
 
       // 7. Fetch logout time
       try {
-        const logoutTimeResponse = await api.get("/logout-time", {
+        const logoutTimeResponse = await api.get("/logout", {
           headers: {
             Authorization: `Bearer ${bearerToken}`,
           },
