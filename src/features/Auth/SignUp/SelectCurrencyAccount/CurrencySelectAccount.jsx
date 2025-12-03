@@ -28,6 +28,7 @@ import {
   faShieldAlt,
   faExchangeAlt,
   faFilter,
+  faCircleInfo,
 } from "@fortawesome/free-solid-svg-icons";
 import { ClipLoader } from "react-spinners";
 import PropTypes from "prop-types";
@@ -107,19 +108,17 @@ const CurrencySelectAccount = () => {
   });
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoType, setInfoType] = useState("");
+
   const API_BASE_URL = import.meta.env.VITE_API_URL;
   const API_URL = `${API_BASE_URL}`;
   // 🎉 NO MORE bearertoken variable needed!
   const currentStep = useCurrentStep();
 
-  
-  
-  
-
   // Handle missing accountType on component mount
   useEffect(() => {
     if (!accountType) {
-      
       setModalMessage(
         "Account type is not defined. Please go back and select an account type."
       );
@@ -131,14 +130,12 @@ const CurrencySelectAccount = () => {
   // ✅ SIMPLIFIED: Fetch data when accountType is available
   useEffect(() => {
     if (accountType && accountOptions.length === 0) {
-      
       dispatch(fetchAccountOptions({ accountType, API_URL }))
         .unwrap()
         .then(() => {
           setIsInitialLoading(false);
         })
         .catch((error) => {
-          
           setIsInitialLoading(false);
         });
     } else {
@@ -201,6 +198,11 @@ const CurrencySelectAccount = () => {
       ...prev,
       [section]: !prev[section],
     }));
+  };
+
+  const handleShowInfo = (type) => {
+    setInfoType(type);
+    setShowInfoModal(true);
   };
 
   const handleSubmit = async () => {
@@ -574,7 +576,6 @@ const CurrencySelectAccount = () => {
                           <button
                             key={tab.id}
                             onClick={() => {
-                              
                               dispatch(setActiveTab(tab.id));
                             }}
                             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -678,6 +679,21 @@ const CurrencySelectAccount = () => {
                           <FontAwesomeIcon icon={faUser} />
                         </div>
                         Named Accounts
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowInfo("named");
+                          }}
+                          className="ml-2 text-blue-500 hover:text-blue-700 transition-colors"
+                          aria-label="What are Named Accounts?"
+                        >
+                          {" "}
+                          <FontAwesomeIcon
+                            icon={faCircleInfo}
+                            className="text-sm"
+                          />
+                        </button>
                         <span className="ml-3 text-xs font-medium text-blue-800 bg-blue-100 border border-blue-200 px-3 py-0.5 rounded-full">
                           {filteredNamedAccounts.length} options
                         </span>
@@ -738,6 +754,20 @@ const CurrencySelectAccount = () => {
                           <FontAwesomeIcon icon={faUsers} />
                         </div>
                         Pooled Accounts
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowInfo("pooled");
+                          }}
+                          className="ml-2 text-indigo-500 hover:text-indigo-700 transition-colors"
+                          aria-label="What are Pooled Accounts?"
+                        >
+                          <FontAwesomeIcon
+                            icon={faCircleInfo}
+                            className="text-sm"
+                          />
+                        </button>
                         <span className="ml-3 text-xs font-medium text-indigo-800 bg-indigo-100 border border-indigo-200 px-3 py-0.5 rounded-full">
                           {filteredPooledAccounts.length} options
                         </span>
@@ -987,6 +1017,71 @@ const CurrencySelectAccount = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Info Modal */}
+        {showInfoModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                  {infoType === "named" ? (
+                    <>
+                      <FontAwesomeIcon
+                        icon={faUser}
+                        className="mr-2 text-blue-500"
+                      />
+                      Named Accounts
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon
+                        icon={faUsers}
+                        className="mr-2 text-indigo-500"
+                      />
+                      Pooled Accounts
+                    </>
+                  )}
+                </h3>
+                <button
+                  onClick={() => setShowInfoModal(false)}
+                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {infoType === "named" ? (
+                  <>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-gray-700">
+                        A Named Account is a dedicated bank account issued in the customer’s name. All transactions are processed directly through this account, allowing funds to be received and sent in the customer's own identity. This provides higher transparency, better reconciliation, and improved trust for business and high-volume customers.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-indigo-50 p-4 rounded-lg">
+                      <p className="text-gray-700">
+                        A Pooled Account is a shared account operated by the platform on behalf of multiple customers. Individual customer balances are maintained virtually within the system, while actual transactions are settled through the pooled account. This allows faster onboarding and efficient handling for customers who do not require a dedicated bank account.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowInfoModal(false)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+                >
+                  Got it
+                </button>
+              </div>
             </div>
           </div>
         )}

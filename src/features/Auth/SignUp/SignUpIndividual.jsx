@@ -156,6 +156,8 @@ function SignUpIndividualContent() {
   const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
 
+  const [showSSN, setShowSSN] = useState(false);
+
   useEffect(() => {
     console.log("🔍 Token check on mount:", {
       bearertoken: localStorage.getItem("bearertoken"),
@@ -1512,6 +1514,47 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
+                  {/* ZIP Code */}
+                  <div>
+                    <label
+                      htmlFor="zip_code"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      ZIP/Postal Code *
+                    </label>
+                    <input
+                      id="zip_code"
+                      name="zip_code"
+                      type="text"
+                      placeholder="12345"
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      value={formik.values.zip_code}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        formik.touched.zip_code && formik.errors.zip_code
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                    />
+                    {formik.touched.zip_code && formik.errors.zip_code ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.zip_code}
+                      </p>
+                    ) : null}
+                  </div>
+
                   {/* State Field - Hybrid: Dropdown if hasStates, Input field if not */}
                   <div>
                     <label
@@ -1792,46 +1835,7 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* ZIP Code */}
-                  <div>
-                    <label
-                      htmlFor="zip_code"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      ZIP/Postal Code *
-                    </label>
-                    <input
-                      id="zip_code"
-                      name="zip_code"
-                      type="text"
-                      placeholder="12345"
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      value={formik.values.zip_code}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        formik.touched.zip_code && formik.errors.zip_code
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                    />
-                    {formik.touched.zip_code && formik.errors.zip_code ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.zip_code}
-                      </p>
-                    ) : null}
-                  </div>
+                  
 
                   {/* Street Address 1 */}
                   <div>
@@ -1882,7 +1886,7 @@ function SignUpIndividualContent() {
                       htmlFor="street_address_2"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
-                      Street Address 2 (Optional)
+                      Street Address 2/Suite Address (Optional)
                     </label>
                     <input
                       id="street_address_2"
@@ -2057,8 +2061,659 @@ function SignUpIndividualContent() {
                 </div>
               </section>
 
-              {/* Rest of the sections (Identity Verification, Security, Terms & Conditions) remain the same */}
-              {/* ... Keep all other sections exactly as they were ... */}
+              {/* Identity Verification Section */}
+              <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
+                    3
+                  </span>
+                  Identity Verification
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* SSN Field */}
+                  {showSSNField && (
+                    <div className="md:col-span-2">
+                      <label
+                        htmlFor="ssn"
+                        className="block text-sm font-medium text-gray-700 mb-2.5"
+                      >
+                        Social Security Number (SSN){" "}
+                        {hasNamedAccounts && (
+                          <span className="text-red-500">*</span>
+                        )}
+                        {!hasNamedAccounts && (
+                          <span className="text-gray-500 text-xs ml-2">
+                            (optional for pooled accounts)
+                          </span>
+                        )}
+                      </label>
+                      
+                      <div className="relative">
+                        <input
+                          type={showSSN ? "text" : "password"}
+                          id="ssn"
+                          name="ssn"
+                          onChange={handleSSNChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.ssn}
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                            (formik.touched.ssn && formik.errors.ssn) || ssnError
+                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                          placeholder="XXX-XX-XXXX"
+                          maxLength={11}
+                        />
+                        
+                        {/* Eye toggle button */}
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                          onClick={() => setShowSSN(!showSSN)}
+                          tabIndex={-1}
+                          aria-label={showSSN ? "Hide SSN" : "Show SSN"}
+                        >
+                          <FontAwesomeIcon icon={showSSN ? faEyeSlash : faEye} />
+                        </button>
+                      </div>
+                      
+                      {(formik.touched.ssn && formik.errors.ssn) || ssnError ? (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.ssn || ssnError}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Document Type *
+                    </label>
+
+                    {isLoadingDocumentTypes ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <ClipLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">
+                          Loading document types...
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          !selectedIdDocumentType
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        value={selectedIdDocumentType}
+                        onChange={(e) =>
+                          setSelectedIdDocumentType(e.target.value)
+                        }
+                        required
+                      >
+                        <option value="">-- Select ID Document Type --</option>
+                        {idDocumentTypes.map((docType) => (
+                          <option key={docType.name} value={docType.name}>
+                            {docType.name}
+                          </option>
+                        ))}
+                        <option value="other">Other</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Other Document Type Input */}
+                  {selectedIdDocumentType === "other" && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                        ID Document Type (Other) *
+                      </label>
+                      <input
+                        type="text"
+                        value={idDocumentTypeOther}
+                        onChange={(e) => setIdDocumentTypeOther(e.target.value)}
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                        placeholder="Specify document type"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Document Number */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Document Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={idDocumentNumber}
+                      onChange={(e) => setIdDocumentNumber(e.target.value)}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idDocumentNumber
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      placeholder="Enter document number"
+                      required
+                    />
+                  </div>
+
+                  {/* Issuing Country */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Issuing Country *
+                    </label>
+                    <select
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedCountryCode
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      value={idIssuedCountryCode}
+                      onChange={(e) => setIdIssuedCountryCode(e.target.value)}
+                      required
+                    >
+                      <option value="">Select Country</option>
+                      {countries.map((country) => (
+                        <option key={country.id} value={country.country_code}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Issue Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Expiry Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={idIssuedDate}
+                      onChange={(e) => setIdIssuedDate(e.target.value)}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedDate
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between mt-10">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(1)}
+                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(3)}
+                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                  >
+                    Next: Security
+                    <svg
+                      className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </section>
+
+              {/* Security Section - WITHOUT Terms & Conditions */}
+              <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
+                    4
+                  </span>
+                  Security
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      htmlFor="password"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={passwordVisible ? "text" : "password"}
+                        id="password"
+                        name="password"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.password}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.password && formik.errors.password
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Create a strong password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                        onClick={() => setPasswordVisible(!passwordVisible)}
+                        tabIndex={-1}
+                      >
+                        <FontAwesomeIcon
+                          icon={passwordVisible ? faEyeSlash : faEye}
+                        />
+                      </button>
+                    </div>
+                    {formik.touched.password && formik.errors.password && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.password}
+                      </p>
+                    )}
+
+                    <div className="mt-6 bg-blue-50/60 p-5 rounded-xl border border-blue-100">
+                      <p className="text-sm font-medium text-gray-700 mb-3">
+                        Password Requirements:
+                      </p>
+                      <ul className="text-sm text-gray-600 space-y-2.5">
+                        {validationRules.map((rule, idx) => (
+                          <li
+                            key={idx}
+                            className={`flex items-center ${
+                              isRuleMet(rule.regex)
+                                ? "text-green-600"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {isRuleMet(rule.regex) ? (
+                              <FontAwesomeIcon
+                                icon={faCheckCircle}
+                                className="mr-2.5 text-green-500"
+                              />
+                            ) : (
+                              <svg
+                                className="w-4 h-4 mr-2.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            )}
+                            {rule.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="confirmPassword"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Confirm Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={confirmPasswordVisible ? "text" : "password"}
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.confirmPassword}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.confirmPassword &&
+                          formik.errors.confirmPassword
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Confirm your password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                        onClick={() =>
+                          setConfirmPasswordVisible(!confirmPasswordVisible)
+                        }
+                        tabIndex={-1}
+                      >
+                        <FontAwesomeIcon
+                          icon={confirmPasswordVisible ? faEyeSlash : faEye}
+                        />
+                      </button>
+                    </div>
+                    {formik.touched.confirmPassword &&
+                      formik.errors.confirmPassword && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.confirmPassword}
+                        </p>
+                      )}
+                    {formik.values.password &&
+                      formik.values.confirmPassword &&
+                      formik.values.password ===
+                        formik.values.confirmPassword && (
+                        <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
+                          <FontAwesomeIcon
+                            icon={faCheckCircle}
+                            className="mr-2"
+                          />
+                          Passwords match
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between mt-10">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(2)}
+                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(4)}
+                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                  >
+                    Next: Terms & Conditions
+                    <svg
+                      className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </section>
+
+              {/* Terms & Conditions Section - SEPARATE TAB */}
+              <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
+                    5
+                  </span>
+                  Terms & Conditions
+                </h3>
+
+                {termsLoading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <ClipLoader color="#3b82f6" size={30} />
+                    <span className="ml-3 text-gray-600">
+                      Loading terms and conditions...
+                    </span>
+                  </div>
+                ) : termsError ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center">
+                      <svg
+                        className="w-5 h-5 text-yellow-600 mr-2"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <div>
+                        <p className="text-yellow-700 text-sm font-medium">
+                          Unable to load terms and conditions
+                        </p>
+                        <p className="text-yellow-600 text-xs mt-1">
+                          You can still proceed with registration. Please
+                          contact support if you need to review the terms.
+                        </p>
+                        <button
+                          onClick={() => dispatch(fetchTermsAndConditions())}
+                          className="text-yellow-700 underline text-xs mt-2"
+                        >
+                          Try Again
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : termsConditions.length > 0 ? (
+                  <>
+                    <div className="max-h-96 overflow-auto space-y-4 mb-8 p-1 border border-gray-200 rounded-xl bg-gray-50/30">
+                      {termsConditions.map((term) => (
+                        <div
+                          key={term.id}
+                          className="flex items-start bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`term-${term.id}`}
+                            checked={acceptedTerms.some(
+                              (item) => item.id === term.id
+                            )}
+                            onChange={() => handleCheckboxChange(term.id)}
+                            className="mt-1 mr-4 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label
+                            htmlFor={`term-${term.id}`}
+                            className="text-sm text-gray-700 flex-1"
+                          >
+                            <span className="font-medium">{term.title}</span> -{" "}
+                            <a
+                              href={term.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                            >
+                              View Details
+                            </a>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                      <p className="text-blue-700 text-sm">
+                        <strong>Note:</strong> You must accept all terms and
+                        conditions to continue with registration.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-green-50 p-4 rounded-lg mb-6">
+                    <p className="text-green-700 text-sm">
+                      <strong>No additional terms required:</strong> You can
+                      proceed with registration.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(3)}
+                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    Previous
+                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      disabled={isSubmitting}
+                      className="px-6 py-3.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    >
+                      {isCancelling ? (
+                        <>
+                          <ClipLoader
+                            size={20}
+                            color="#ffffff"
+                            className="mr-2"
+                          />
+                          Cancelling...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-5 h-5 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                          Cancel
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={
+                        isSubmitting ||
+                        (termsConditions.length > 0 &&
+                          acceptedTerms.length === 0)
+                      }
+                      className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <ClipLoader
+                            size={20}
+                            color="#ffffff"
+                            className="mr-2"
+                          />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Create Account
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </section>
             </form>
 
             <ToastContainer
