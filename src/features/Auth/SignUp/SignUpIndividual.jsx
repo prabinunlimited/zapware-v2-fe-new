@@ -1,5 +1,4 @@
-// src/features/Auth/SignUp/SignUpIndividual.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef  } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -22,23 +21,17 @@ import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
+
 import {
   fetchCountries,
-  fetchStates,
-  fetchCities,
   setSelectedCountry,
-  setSelectedState,
-  setSelectedCity,
+  clearZipLookupData,
+  fetchLocationByZip, 
   selectCountries,
-  selectStates,
-  selectCities,
   selectSelectedCountry,
-  selectSelectedState,
-  selectSelectedCity,
   selectLocationLoading,
-  selectHasStates,
-  selectHasCities,
-} from "../slices/locationSlice"; // Update this import
+  selectZipLookup,
+} from "../slices/locationSlice";
 
 // Import from the slice file
 import {
@@ -52,7 +45,6 @@ import {
   setTermsAccepted,
   selectAcceptedTerms,
   clearTermsError,
-  setFormField,
   setMetadataField,
   selectNationalities,
   selectIdDocumentTypes,
@@ -68,7 +60,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Error Boundary Component (keep as is)
+// Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -155,8 +147,10 @@ function SignUpIndividualContent() {
   const [idIssuedDate, setIdIssuedDate] = useState("");
   const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
-
   const [showSSN, setShowSSN] = useState(false);
+
+  const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
+  const [isZipLoading, setIsZipLoading] = useState(false);
 
   useEffect(() => {
     console.log("🔍 Token check on mount:", {
@@ -170,18 +164,14 @@ function SignUpIndividualContent() {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
+  const countryCodeRef = useRef('');
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
-  const states = useSelector(selectStates) || [];
-  const cities = useSelector(selectCities) || [];
   const selectedCountry = useSelector(selectSelectedCountry);
-  const selectedState = useSelector(selectSelectedState);
-  const selectedCity = useSelector(selectSelectedCity);
   const {
     countries: loadingCountries,
-    states: loadingStates,
-    cities: loadingCities,
+  
   } = useSelector(selectLocationLoading);
 
   // Other Redux selectors
@@ -199,12 +189,10 @@ function SignUpIndividualContent() {
   const ssnError = useSelector(selectSSNError);
   const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
 
-  // Use proper selectors
   const isLoadingNationalities = useSelector(selectNationalitiesLoading);
   const isLoadingDocumentTypes = useSelector(selectIdDocumentTypesLoading);
 
-  const hasStates = useSelector(selectHasStates);
-  const hasCities = useSelector(selectHasCities);
+  const zipLookup = useSelector(selectZipLookup);
 
   // Extract location state with defaults
   const {
@@ -254,7 +242,6 @@ function SignUpIndividualContent() {
     mobile_number: Yup.string()
       .required("Phone number is required")
       .matches(/^\d{10}$/, "Phone number must be 10 digits"),
-    resident_country: Yup.string().required("Resident country is required"),
     street_address_1: Yup.string().required("Street address is required"),
     city: Yup.string().required("City is required"),
     state: Yup.string().required("State/Province is required"),
@@ -274,12 +261,10 @@ function SignUpIndividualContent() {
       function (value) {
         const { showSSNField, hasNamedAccounts } = this.parent;
 
-        // If SSN is not required, don't validate
         if (!showSSNField || !hasNamedAccounts) {
           return true;
         }
 
-        // If SSN is required, validate format
         if (!value) {
           return this.createError({
             message: "SSN is required for named accounts",
@@ -290,6 +275,7 @@ function SignUpIndividualContent() {
         return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
       }
     ),
+    mobilenumber_countrycode: Yup.string().required("Country code is required"),
   });
 
   // Enhanced formik configuration
@@ -299,7 +285,6 @@ function SignUpIndividualContent() {
       first_name: "",
       last_name: "",
       email: "",
-      resident_country: "",
       mobilenumber_countrycode: "",
       flag_url: "",
       service_providers: service_provide_ids,
@@ -320,11 +305,16 @@ function SignUpIndividualContent() {
       dob: "",
       ssn: "",
       house_number: "",
+      idDocumentType: "",
+      idDocumentNumber: "",
+      idIssuedDate: "",
+      idIssuedCountryCode: "US",
+      idDocumentTypeOther: "",
+      ssnIssuedState: "NY",
       accept_sms: 0,
       accept_privacy_policy: 0,
       accept_disclosure: 0,
       accept_fees: 0,
-      // Add metadata fields for validation
       showSSNField: showSSNField,
       hasNamedAccounts: hasNamedAccounts,
     },
@@ -336,10 +326,8 @@ function SignUpIndividualContent() {
         setIsSubmitting(true);
         setShowFullScreenLoader(true);
 
-        // Clear any previous SSN error
         dispatch(setMetadataField({ field: "ssnError", value: "" }));
 
-        // Check if terms are accepted
         if (
           termsFetched &&
           termsConditions.length > 0 &&
@@ -352,7 +340,38 @@ function SignUpIndividualContent() {
           return;
         }
 
-        // Show SSN confirmation for named accounts
+        if (!selectedIdDocumentType) {
+          setErrorMessage("Please select an ID document type");
+          setIsModalOpen(true);
+          setIsSubmitting(false);
+          setShowFullScreenLoader(false);
+          return;
+        }
+
+        if (!idDocumentNumber) {
+          setErrorMessage("Please enter ID document number");
+          setIsModalOpen(true);
+          setIsSubmitting(false);
+          setShowFullScreenLoader(false);
+          return;
+        }
+
+        if (!idIssuedDate) {
+          setErrorMessage("Please select ID expiry date");
+          setIsModalOpen(true);
+          setIsSubmitting(false);
+          setShowFullScreenLoader(false);
+          return;
+        }
+
+        if (!idIssuedCountryCode) {
+          setErrorMessage("Please select issuing country");
+          setIsModalOpen(true);
+          setIsSubmitting(false);
+          setShowFullScreenLoader(false);
+          return;
+        }
+
         if (
           showSSNField &&
           hasNamedAccounts &&
@@ -363,6 +382,7 @@ function SignUpIndividualContent() {
             setMetadataField({ field: "showSSNConfirmation", value: true })
           );
           setIsSubmitting(false);
+          setShowFullScreenLoader(false);
           return;
         }
 
@@ -370,13 +390,13 @@ function SignUpIndividualContent() {
       } catch (error) {
         setErrorMessage("An error occurred during form validation");
         setIsModalOpen(true);
-      } finally {
         setIsSubmitting(false);
+        setShowFullScreenLoader(false);
       }
     },
   });
 
-  // Handle form submission (keep as is)
+  // Handle form submission
   const handleFormSubmission = async (values) => {
     try {
       setShowFullScreenLoader(true);
@@ -401,7 +421,6 @@ function SignUpIndividualContent() {
         idIssuedDate: idIssuedDate,
       };
 
-      // Use Redux action instead of direct fetch
       const resultAction = await dispatch(
         submitIndividualSignup(updatedValues)
       );
@@ -458,7 +477,7 @@ function SignUpIndividualContent() {
     }
   };
 
-  // Handle SSN confirmation (keep as is)
+  // Handle SSN confirmation
   const handleSSNConfirmation = (confirmed) => {
     dispatch(setMetadataField({ field: "showSSNConfirmation", value: false }));
     if (confirmed) {
@@ -468,7 +487,7 @@ function SignUpIndividualContent() {
     }
   };
 
-  // FIXED: Single useEffect without nesting
+  // Initialize data
   useEffect(() => {
     setIsClient(true);
     let isMounted = true;
@@ -484,22 +503,17 @@ function SignUpIndividualContent() {
           accountOptions: accountOptions,
         });
 
-        // ✅ STEP 1: GET PARTNER TOKEN & ID FIRST (CRITICAL!)
         try {
           console.log("🔄 Attempting to get partner token...");
-
-          // Import getBearerToken dynamically to avoid import issues
           const { getBearerToken } = await import(
             "../../../services/authService"
           );
-
           const token = await getBearerToken();
           console.log("✅ Partner token obtained:", token ? "Yes" : "No");
         } catch (tokenError) {
           console.error("❌ Failed to get partner token:", tokenError.message);
         }
 
-        // ✅ STEP 2: Determine account types
         let hasNamed = false;
         let hasUSD = false;
 
@@ -539,10 +553,8 @@ function SignUpIndividualContent() {
           })
         );
 
-        // ✅ STEP 3: Create array of promises for all API calls
         const apiPromises = [];
 
-        // ALWAYS fetch countries
         if (countries.length === 0) {
           apiPromises.push(
             dispatch(fetchCountries())
@@ -556,7 +568,6 @@ function SignUpIndividualContent() {
           console.log("✅ Countries already loaded:", countries.length);
         }
 
-        // ✅ Fetch nationalities ONLY if not already loaded
         if (nationalities.length === 0) {
           apiPromises.push(
             dispatch(fetchNationalities())
@@ -570,7 +581,6 @@ function SignUpIndividualContent() {
           console.log("✅ Nationalities already loaded:", nationalities.length);
         }
 
-        // ✅ Fetch ID document types ONLY if not already loaded
         if (idDocumentTypes.length === 0) {
           apiPromises.push(
             dispatch(fetchIdDocumentTypes())
@@ -587,10 +597,8 @@ function SignUpIndividualContent() {
           );
         }
 
-        // ✅ STEP 4: Fetch terms
         if (!termsFetched) {
           console.log("📡 Fetching terms and conditions...");
-
           apiPromises.push(
             dispatch(fetchTermsAndConditions())
               .unwrap()
@@ -610,10 +618,8 @@ function SignUpIndividualContent() {
           console.log("✅ Terms already fetched");
         }
 
-        // ✅ STEP 5: Execute all API calls
         if (apiPromises.length > 0) {
           console.log("🚀 Executing", apiPromises.length, "API calls...");
-
           const timeoutPromise = new Promise((resolve) =>
             setTimeout(() => {
               console.log("⏰ API timeout after 30 seconds");
@@ -678,9 +684,18 @@ function SignUpIndividualContent() {
     }
   }, [isModalOpen, termsError, dispatch]);
 
-  // NEW: Country change handler with state/city fetching
+  useEffect(() => {
+    return () => {
+      if (zipDebounceTimer) {
+        clearTimeout(zipDebounceTimer);
+      }
+    };
+  }, [zipDebounceTimer]);
+
+  // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
-    const countryId = selectedOption?.value || "";
+    const countryId = selectedOption?.value || '';
+    const countryCode = selectedOption?.country_code || '';
 
     // Update Redux state
     dispatch(setSelectedCountry(selectedOption));
@@ -689,73 +704,85 @@ function SignUpIndividualContent() {
     formik.setFieldValue("country", countryId);
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
-
-    // Auto-set SSN field for US residents
-    if (selectedOption?.label === "United States") {
-      dispatch(setMetadataField({ field: "showSSNField", value: true }));
-    }
-
-    // Fetch states if country is selected
-    if (countryId) {
-      dispatch(fetchStates(countryId));
-    }
-  };
-
-  // NEW: State change handler with city fetching
-  const handleStateSelect = async (selectedOption) => {
-    const stateId = selectedOption?.value || "";
-
-    // Update Redux state
-    dispatch(setSelectedState(selectedOption));
-
-    // Update formik values
-    formik.setFieldValue("state", stateId);
-    formik.setFieldValue("city", "");
-
-    // Fetch cities if state is selected
-    if (stateId) {
-      dispatch(fetchCities(stateId));
-    }
-  };
-
-  // NEW: City change handler
-  const handleCitySelect = (selectedOption) => {
-    const cityId = selectedOption?.value || "";
-
-    // Update Redux state
-    dispatch(setSelectedCity(selectedOption));
-
-    // Update formik value
-    formik.setFieldValue("city", cityId);
-  };
-
-  const handleStateInputChange = (e) => {
-    formik.setFieldValue("state", e.target.value);
-    // Clear selected state from dropdown
-    dispatch(setSelectedState(null));
-  };
-
-  const handleCityInputChange = (e) => {
-    formik.setFieldValue("city", e.target.value);
-    // Clear selected city from dropdown
-    dispatch(setSelectedCity(null));
-  };
-
-  // Other handler functions (keep as is)
-  const handleResidentCountrySelect = (selectedOption) => {
-    formik.setFieldValue("resident_country", selectedOption?.value || "");
-    formik.setFieldValue(
-      "mobilenumber_countrycode",
-      selectedOption?.phoneCode || ""
-    );
-    formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
-    setSelectedPhoneCode(selectedOption || null);
+    formik.setFieldValue("zip_code", "");
+    
+    // Store country code for ZIP lookup
+    countryCodeRef.current = countryCode;
+    
+    // Clear ZIP lookup data
+    dispatch(clearZipLookupData());
 
     // Auto-set SSN field for US residents
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
   };
+
+  const handleZipCodeChange = (e) => {
+    const zipCode = e.target.value;
+    formik.handleChange(e);
+    
+    const countryCode = selectedCountry?.country_code || countryCodeRef.current;
+    
+    // Clear previous timer
+    if (zipDebounceTimer) {
+      clearTimeout(zipDebounceTimer);
+    }
+    
+    // Set new timer for debounced lookup
+    const timer = setTimeout(() => {
+      if (zipCode && countryCode && zipCode.length >= 3) {
+        handleZipCodeLookup(zipCode, countryCode);
+      }
+    }, 1000);
+    
+    setZipDebounceTimer(timer);
+  };
+
+  const handleZipCodeLookup = useCallback(async (zipCode, countryCode) => {
+    if (!zipCode || !countryCode || zipCode.length < 3) {
+      return;
+    }
+
+    try {
+      setIsZipLoading(true);
+      
+      // Use Redux action to fetch location by ZIP
+      const resultAction = await dispatch(
+        fetchLocationByZip({ countryCode, zipCode })
+      );
+      
+      if (fetchLocationByZip.fulfilled.match(resultAction)) {
+        const data = resultAction.payload;
+        console.log("✅ ZIP lookup success:", data);
+        
+        if (data.success) {
+          // Update form values from API response
+          if (data.state) {
+            formik.setFieldValue('state', data.state);
+          }
+          
+          if (data.city) {
+            formik.setFieldValue('city', data.city);
+          }
+          
+          // Show success message
+          const locationMsg = data.city && data.state 
+            ? `${data.city}, ${data.state}`
+            : data.city || data.state || 'location';
+          toast.success(`Auto-filled ${locationMsg} from ZIP code`);
+        }
+      } else if (fetchLocationByZip.rejected.match(resultAction)) {
+        console.log("❌ ZIP lookup failed:", resultAction.payload);
+        // Don't show error - just let user enter manually
+      }
+    } catch (error) {
+      console.error('ZIP code lookup error:', error);
+      // Don't show error - just let user enter manually
+    } finally {
+      setIsZipLoading(false);
+    }
+  }, [dispatch, formik]);
 
   const handleCountryCodeSelect = (selectedOption) => {
     formik.setFieldValue(
@@ -801,7 +828,6 @@ function SignUpIndividualContent() {
     formattedValue = formattedValue.slice(0, 11);
     formik.setFieldValue("ssn", formattedValue);
 
-    // Clear SSN error when user types
     if (ssnError) {
       dispatch(setMetadataField({ field: "ssnError", value: "" }));
     }
@@ -817,14 +843,12 @@ function SignUpIndividualContent() {
         let device = "Unknown";
 
         try {
-          // Fetch IP address
           const ipResponse = await fetch("https://api.ipify.org?format=json");
           if (ipResponse.ok) {
             const ipData = await ipResponse.json();
             ip = ipData.ip;
           }
 
-          // Fetch location data based on IP
           if (ip !== "Unknown") {
             const locationResponse = await fetch(
               `https://ipapi.co/${ip}/json/`
@@ -837,7 +861,6 @@ function SignUpIndividualContent() {
             }
           }
 
-          // Get device details
           if (typeof UAParser !== "undefined") {
             const parser = new UAParser();
             const deviceInfo = parser.getResult();
@@ -862,7 +885,6 @@ function SignUpIndividualContent() {
           })
         );
       } catch (error) {
-        // Fallback without device fingerprinting
         dispatch(
           setTermsAccepted({
             termId,
@@ -891,60 +913,174 @@ function SignUpIndividualContent() {
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
 
-  // Enhanced progress calculation
+  // FIXED PROGRESS CALCULATION - Using let instead of const for mutable variables
   useEffect(() => {
     const calculateProgress = () => {
-      const personalFields = [
-        "first_name",
-        "last_name",
-        "email",
-        "dob",
-        "nationality",
-        "gender",
+      const fieldChecks = [
+        {
+          name: "first_name",
+          value: formik.values.first_name,
+          filled: formik.values.first_name && formik.values.first_name.trim(),
+        },
+        {
+          name: "last_name",
+          value: formik.values.last_name,
+          filled: formik.values.last_name && formik.values.last_name.trim(),
+        },
+        {
+          name: "email",
+          value: formik.values.email,
+          filled: formik.values.email && formik.values.email.trim(),
+        },
+        {
+          name: "dob",
+          value: formik.values.dob,
+          filled: formik.values.dob && formik.values.dob.trim(),
+        },
+        {
+          name: "nationality",
+          value: formik.values.nationality,
+          filled:
+            formik.values.nationality &&
+            formik.values.nationality.toString().trim(),
+        },
+        {
+          name: "gender",
+          value: formik.values.gender,
+          filled:
+            formik.values.gender && formik.values.gender.toString().trim(),
+        },
+        {
+          name: "mobilenumber_countrycode",
+          value: formik.values.mobilenumber_countrycode,
+          filled:
+            formik.values.mobilenumber_countrycode &&
+            formik.values.mobilenumber_countrycode.toString().trim(),
+        },
+        {
+          name: "mobile_number",
+          value: formik.values.mobile_number,
+          filled:
+            formik.values.mobile_number && formik.values.mobile_number.trim(),
+        },
+        {
+          name: "street_address_1",
+          value: formik.values.street_address_1,
+          filled:
+            formik.values.street_address_1 &&
+            formik.values.street_address_1.trim(),
+        },
+        {
+          name: "city",
+          value: formik.values.city,
+          filled: formik.values.city && formik.values.city.toString().trim(),
+        },
+        {
+          name: "state",
+          value: formik.values.state,
+          filled: formik.values.state && formik.values.state.toString().trim(),
+        },
+        {
+          name: "zip_code",
+          value: formik.values.zip_code,
+          filled: formik.values.zip_code && formik.values.zip_code.trim(),
+        },
+        {
+          name: "country",
+          value: formik.values.country,
+          filled:
+            formik.values.country && formik.values.country.toString().trim(),
+        },
+        {
+          name: "idDocumentType",
+          value: selectedIdDocumentType,
+          filled: selectedIdDocumentType && selectedIdDocumentType.trim(),
+        },
+        {
+          name: "idDocumentNumber",
+          value: idDocumentNumber,
+          filled: idDocumentNumber && idDocumentNumber.trim(),
+        },
+        {
+          name: "idIssuedDate",
+          value: idIssuedDate,
+          filled: idIssuedDate && idIssuedDate.trim(),
+        },
+        {
+          name: "idIssuedCountryCode",
+          value: idIssuedCountryCode,
+          filled: idIssuedCountryCode && idIssuedCountryCode.trim(),
+        },
+        {
+          name: "password",
+          value: formik.values.password,
+          filled: formik.values.password && formik.values.password.trim(),
+        },
+        {
+          name: "confirmPassword",
+          value: formik.values.confirmPassword,
+          filled:
+            formik.values.confirmPassword &&
+            formik.values.confirmPassword.trim(),
+        },
       ];
-      const contactFields = [
-        "resident_country",
-        "mobile_number",
-        "street_address_1",
-        "city",
-        "state",
-        "zip_code",
-        "country",
-      ];
-      const identityFields = showSSNField && hasNamedAccounts ? ["ssn"] : [];
-      const securityFields = ["password", "confirmPassword"];
 
-      let completed = 0,
-        total = 0;
+      if (showSSNField && hasNamedAccounts) {
+        fieldChecks.push({
+          name: "ssn",
+          value: formik.values.ssn,
+          filled: formik.values.ssn && formik.values.ssn.trim(),
+        });
+      }
 
-      total += personalFields.length;
-      completed += personalFields.filter(
-        (f) => formik.values[f] && formik.values[f].toString().trim()
-      ).length;
+      let filledFields = fieldChecks.filter((field) => field.filled).length;
+      const totalFields = fieldChecks.length;
 
-      total += contactFields.length;
-      completed += contactFields.filter(
-        (f) => formik.values[f] && formik.values[f].toString().trim()
-      ).length;
+      let termsField = 0;
+      if (termsConditions.length > 0) {
+        termsField = 1;
+        if (acceptedTerms.length > 0) {
+          filledFields += 1;
+        }
+      }
 
-      total += identityFields.length;
-      completed += identityFields.filter(
-        (f) => formik.values[f] && formik.values[f].toString().trim()
-      ).length;
+      const totalWithTerms = totalFields + termsField;
+      const percentage =
+        totalWithTerms > 0
+          ? Math.round((filledFields / totalWithTerms) * 100)
+          : 0;
 
-      total += securityFields.length;
-      completed += securityFields.filter(
-        (f) => formik.values[f] && formik.values[f].toString().trim()
-      ).length;
-
-      total += 1;
-      completed += acceptedTerms.length > 0 ? 1 : 0;
-
-      return total > 0 ? Math.round((completed / total) * 100) : 0;
+      return percentage;
     };
 
     setProgress(calculateProgress());
-  }, [formik.values, acceptedTerms, showSSNField, hasNamedAccounts]);
+  }, [
+    formik.values,
+    acceptedTerms,
+    showSSNField,
+    hasNamedAccounts,
+    selectedIdDocumentType,
+    idDocumentNumber,
+    idIssuedDate,
+    idIssuedCountryCode,
+    termsConditions.length,
+    formik.values.first_name,
+    formik.values.last_name,
+    formik.values.email,
+    formik.values.dob,
+    formik.values.nationality,
+    formik.values.gender,
+    formik.values.mobilenumber_countrycode,
+    formik.values.mobile_number,
+    formik.values.street_address_1,
+    formik.values.city,
+    formik.values.state,
+    formik.values.zip_code,
+    formik.values.country,
+    formik.values.password,
+    formik.values.confirmPassword,
+    formik.values.ssn,
+  ]);
 
   // Options for selects with safe defaults
   const countryOptions = countries.map((country) => ({
@@ -953,16 +1089,6 @@ function SignUpIndividualContent() {
     flag_url: country.flag_url,
     phoneCode: country.phone_code,
     country_code: country.country_code,
-  }));
-
-  const stateOptions = states.map((state) => ({
-    value: state.id,
-    label: state.name,
-  }));
-
-  const cityOptions = cities.map((city) => ({
-    value: city.id,
-    label: city.name,
   }));
 
   const nationalityOptions = nationalities.map((nat) => ({
@@ -975,11 +1101,6 @@ function SignUpIndividualContent() {
     { value: "2", label: "Female" },
     { value: "3", label: "Other" },
   ];
-
-  const idDocumentTypeOptions = idDocumentTypes.map((docType) => ({
-    value: docType.name,
-    label: docType.name,
-  }));
 
   // Custom styles for react-select
   const customStyles = {
@@ -1185,7 +1306,11 @@ function SignUpIndividualContent() {
             </div>
 
             {/* Form */}
-            <form onSubmit={formik.handleSubmit} className="space-y-8">
+            <form
+              onSubmit={formik.handleSubmit}
+              className="space-y-8"
+              noValidate
+            >
               {/* Personal Information Section */}
               <section className={`${activeSection !== 0 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
@@ -1441,8 +1566,7 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
-
-              {/* Contact Information Section - UPDATED WITH STATE/CITY DROPDOWNS */}
+              {/* // Contact Information Section - ZIP CODE BASED ONLY (Nodropdowns) */}
               <section className={`${activeSection !== 1 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
@@ -1468,29 +1592,7 @@ function SignUpIndividualContent() {
                       onBlur={formik.handleBlur}
                       className="basic-single"
                       classNamePrefix="select"
-                      styles={{
-                        ...customStyles,
-                        control: (provided, state) => ({
-                          ...provided,
-                          minHeight: "52px",
-                          borderRadius: "12px",
-                          borderColor:
-                            formik.touched.country && formik.errors.country
-                              ? "#f87171"
-                              : "#e5e7eb",
-                          boxShadow: state.isFocused
-                            ? formik.touched.country && formik.errors.country
-                              ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                              : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                            : "none",
-                          "&:hover": {
-                            borderColor:
-                              formik.touched.country && formik.errors.country
-                                ? "#ef4444"
-                                : "#3b82f6",
-                          },
-                        }),
-                      }}
+                      styles={customStyles}
                       placeholder="Select Country"
                       value={selectedCountry}
                       isLoading={loadingCountries}
@@ -1501,7 +1603,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1514,35 +1615,67 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* ZIP Code */}
+                  {/* ZIP Code - Auto-fills State and City */}
                   <div>
                     <label
                       htmlFor="zip_code"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       ZIP/Postal Code *
+                      {selectedCountry && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Will auto-fill state & city
+                        </span>
+                      )}
                     </label>
-                    <input
-                      id="zip_code"
-                      name="zip_code"
-                      type="text"
-                      placeholder="12345"
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      value={formik.values.zip_code}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        formik.touched.zip_code && formik.errors.zip_code
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                    />
+                    <div className="relative">
+                      <input
+                        id="zip_code"
+                        name="zip_code"
+                        type="text"
+                        placeholder={
+                          selectedCountry?.label === "United States"
+                            ? "e.g., 10155"
+                            : "Postal code"
+                        }
+                        onChange={handleZipCodeChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.zip_code}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.zip_code && formik.errors.zip_code
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                      />
+
+                      {/* Loading indicator for ZIP lookup */}
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <ClipLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                      {(isZipLoading || zipLookup.loading) && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <ClipLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+
+                      {/* Success indicator */}
+                      {!zipLookup.loading &&
+                        formik.values.state &&
+                        formik.values.city && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500">
+                            <FontAwesomeIcon icon={faCheckCircle} />
+                          </div>
+                        )}
+                    </div>
+
                     {formik.touched.zip_code && formik.errors.zip_code ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1553,126 +1686,67 @@ function SignUpIndividualContent() {
                         {formik.errors.zip_code}
                       </p>
                     ) : null}
+
+                    {zipLookup.error && (
+                      <p className="text-yellow-600 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {zipLookup.error.message}
+                      </p>
+                    )}
+
+                    {selectedCountry && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter your {selectedCountry.label} ZIP/postal code to
+                        auto-fill state and city
+                      </p>
+                    )}
                   </div>
 
-                  {/* State Field - Hybrid: Dropdown if hasStates, Input field if not */}
+                  {/* State Field - Auto-filled by ZIP code API */}
                   <div>
                     <label
                       htmlFor="state"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       State/Province *
-                      {selectedCountry && (
-                        <span className="ml-2 text-xs text-gray-500 font-normal">
-                          {hasStates
-                            ? "(Select from list)"
-                            : "(Enter manually)"}
+                      {formik.values.state && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
                         </span>
                       )}
                     </label>
-
-                    {!selectedCountry ? (
-                      // Show disabled input when no country selected
+                    <div className="relative">
                       <input
                         type="text"
                         id="state"
                         name="state"
-                        disabled
-                        placeholder="Select country first"
-                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-400 shadow-sm"
-                      />
-                    ) : loadingStates ? (
-                      // Show loading when fetching states
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <ClipLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">
-                          Checking for states...
-                        </span>
-                      </div>
-                    ) : hasStates ? (
-                      // Show dropdown if country has states
-                      <Select
-                        id="state"
-                        name="state"
-                        options={stateOptions}
-                        onChange={handleStateSelect}
+                        onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select State/Province"
-                        styles={{
-                          ...customStyles,
-                          control: (provided, state) => ({
-                            ...provided,
-                            minHeight: "52px",
-                            borderRadius: "12px",
-                            borderColor:
-                              formik.touched.state && formik.errors.state
-                                ? "#f87171"
-                                : "#e5e7eb",
-                            boxShadow: state.isFocused
-                              ? formik.touched.state && formik.errors.state
-                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                              : "none",
-                            "&:hover": {
-                              borderColor:
-                                formik.touched.state && formik.errors.state
-                                  ? "#ef4444"
-                                  : "#3b82f6",
-                            },
-                          }),
-                        }}
-                        value={selectedState}
-                        isClearable={true}
-                        onClear={() => {
-                          dispatch(setSelectedState(null));
-                          formik.setFieldValue("state", "");
-                        }}
+                        value={formik.values.state}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.state && formik.errors.state
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false} // Allow manual editing if needed
                       />
-                    ) : (
-                      // Show input field if country has no states
-                      <div className="relative">
-                        <input
-                          type="text"
-                          id="state"
-                          name="state"
-                          onChange={handleStateInputChange}
-                          onBlur={formik.handleBlur}
-                          value={formik.values.state}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                            formik.touched.state && formik.errors.state
-                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
-                          placeholder="Enter state/province"
-                        />
+                      {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
+                          <ClipLoader size={16} color="#3b82f6" />
                         </div>
-                      </div>
-                    )}
-
-                    {/* Show info message about state availability */}
-                    {selectedCountry && !loadingStates && (
-                      <p className="text-xs mt-2 text-gray-500">
-                        {hasStates
-                          ? `✓ This country has ${states.length} states/provinces available`
-                          : `⚠ No pre-defined states found. Please enter manually.`}
-                      </p>
-                    )}
+                      )}
+                    </div>
 
                     {formik.touched.state && formik.errors.state ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -1680,7 +1754,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1693,128 +1766,41 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* City Field - Hybrid: Dropdown if hasCities, Input field if not */}
+                  {/* City Field - Auto-filled by ZIP code API */}
                   <div>
                     <label
                       htmlFor="city"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       City *
-                      {selectedState && (
-                        <span className="ml-2 text-xs text-gray-500 font-normal">
-                          {hasCities
-                            ? "(Select from list)"
-                            : "(Enter manually)"}
+                      {formik.values.city && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
                         </span>
                       )}
                     </label>
-
-                    {!selectedState && !formik.values.state ? (
-                      // Show disabled input when no state selected/entered
+                    <div className="relative">
                       <input
                         type="text"
                         id="city"
                         name="city"
-                        disabled
-                        placeholder={
-                          selectedCountry && !hasStates
-                            ? "Enter state first"
-                            : "Select state first"
-                        }
-                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-400 shadow-sm"
-                      />
-                    ) : loadingCities && hasStates ? (
-                      // Show loading when fetching cities (only if using dropdown)
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <ClipLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">
-                          Checking for cities...
-                        </span>
-                      </div>
-                    ) : hasCities && hasStates ? (
-                      // Show dropdown if state has cities (and we're using state dropdown)
-                      <Select
-                        id="city"
-                        name="city"
-                        options={cityOptions}
-                        onChange={handleCitySelect}
+                        onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select City"
-                        styles={{
-                          ...customStyles,
-                          control: (provided, state) => ({
-                            ...provided,
-                            minHeight: "52px",
-                            borderRadius: "12px",
-                            borderColor:
-                              formik.touched.city && formik.errors.city
-                                ? "#f87171"
-                                : "#e5e7eb",
-                            boxShadow: state.isFocused
-                              ? formik.touched.city && formik.errors.city
-                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                              : "none",
-                            "&:hover": {
-                              borderColor:
-                                formik.touched.city && formik.errors.city
-                                  ? "#ef4444"
-                                  : "#3b82f6",
-                            },
-                          }),
-                        }}
-                        value={selectedCity}
-                        isClearable={true}
-                        onClear={() => {
-                          dispatch(setSelectedCity(null));
-                          formik.setFieldValue("city", "");
-                        }}
+                        value={formik.values.city}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.city && formik.errors.city
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false} // Allow manual editing if needed
                       />
-                    ) : (
-                      // Show input field (either no cities OR manual state entry)
-                      <div className="relative">
-                        <input
-                          type="text"
-                          id="city"
-                          name="city"
-                          onChange={handleCityInputChange}
-                          onBlur={formik.handleBlur}
-                          value={formik.values.city}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                            formik.touched.city && formik.errors.city
-                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
-                          placeholder="Enter city name"
-                        />
+                      {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
+                          <ClipLoader size={16} color="#3b82f6" />
                         </div>
-                      </div>
-                    )}
-
-                    {/* Show info message about city availability */}
-                    {selectedState && !loadingCities && hasStates && (
-                      <p className="text-xs mt-2 text-gray-500">
-                        {hasCities
-                          ? `✓ This state has ${cities.length} cities available`
-                          : `⚠ No pre-defined cities found. Please enter manually.`}
-                      </p>
-                    )}
+                      )}
+                    </div>
 
                     {formik.touched.city && formik.errors.city ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -1822,7 +1808,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1834,8 +1819,6 @@ function SignUpIndividualContent() {
                       </p>
                     ) : null}
                   </div>
-
-                  
 
                   {/* Street Address 1 */}
                   <div>
@@ -1867,7 +1850,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1918,32 +1900,7 @@ function SignUpIndividualContent() {
                           onBlur={formik.handleBlur}
                           className="basic-single"
                           classNamePrefix="select"
-                          styles={{
-                            ...customStyles,
-                            control: (provided, state) => ({
-                              ...provided,
-                              minHeight: "52px",
-                              borderRadius: "12px",
-                              borderColor:
-                                formik.touched.mobilenumber_countrycode &&
-                                formik.errors.mobilenumber_countrycode
-                                  ? "#f87171"
-                                  : "#e5e7eb",
-                              boxShadow: state.isFocused
-                                ? formik.touched.mobilenumber_countrycode &&
-                                  formik.errors.mobilenumber_countrycode
-                                  ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                  : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                                : "none",
-                              "&:hover": {
-                                borderColor:
-                                  formik.touched.mobilenumber_countrycode &&
-                                  formik.errors.mobilenumber_countrycode
-                                    ? "#ef4444"
-                                    : "#3b82f6",
-                              },
-                            }),
-                          }}
+                          styles={customStyles}
                           placeholder="Country Code"
                           value={selectedPhoneCode}
                           formatOptionLabel={({ phoneCode, label }) => (
@@ -1962,7 +1919,6 @@ function SignUpIndividualContent() {
                               className="w-3.5 h-3.5 mr-1"
                               fill="currentColor"
                               viewBox="0 0 20 20"
-                              xmlns="http://www.w3.org/2000/svg"
                             >
                               <path
                                 fillRule="evenodd"
@@ -1999,7 +1955,6 @@ function SignUpIndividualContent() {
                               className="w-3.5 h-3.5 mr-1"
                               fill="currentColor"
                               viewBox="0 0 20 20"
-                              xmlns="http://www.w3.org/2000/svg"
                             >
                               <path
                                 fillRule="evenodd"
@@ -2026,7 +1981,6 @@ function SignUpIndividualContent() {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
                     >
                       <path
                         strokeLinecap="round"
@@ -2048,7 +2002,6 @@ function SignUpIndividualContent() {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
                     >
                       <path
                         strokeLinecap="round"
@@ -2060,7 +2013,6 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
-
               {/* Identity Verification Section */}
               <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
@@ -2088,7 +2040,7 @@ function SignUpIndividualContent() {
                           </span>
                         )}
                       </label>
-                      
+
                       <div className="relative">
                         <input
                           type={showSSN ? "text" : "password"}
@@ -2098,14 +2050,15 @@ function SignUpIndividualContent() {
                           onBlur={formik.handleBlur}
                           value={formik.values.ssn}
                           className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                            (formik.touched.ssn && formik.errors.ssn) || ssnError
+                            (formik.touched.ssn && formik.errors.ssn) ||
+                            ssnError
                               ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                               : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                           } shadow-sm`}
                           placeholder="XXX-XX-XXXX"
                           maxLength={11}
                         />
-                        
+
                         {/* Eye toggle button */}
                         <button
                           type="button"
@@ -2114,10 +2067,12 @@ function SignUpIndividualContent() {
                           tabIndex={-1}
                           aria-label={showSSN ? "Hide SSN" : "Show SSN"}
                         >
-                          <FontAwesomeIcon icon={showSSN ? faEyeSlash : faEye} />
+                          <FontAwesomeIcon
+                            icon={showSSN ? faEyeSlash : faEye}
+                          />
                         </button>
                       </div>
-                      
+
                       {(formik.touched.ssn && formik.errors.ssn) || ssnError ? (
                         <p className="text-red-500 text-xs mt-2 flex items-center">
                           <svg
@@ -2152,6 +2107,7 @@ function SignUpIndividualContent() {
                       </div>
                     ) : (
                       <select
+                        name="idDocumentType"
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
                           !selectedIdDocumentType
                             ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
@@ -2161,7 +2117,6 @@ function SignUpIndividualContent() {
                         onChange={(e) =>
                           setSelectedIdDocumentType(e.target.value)
                         }
-                        required
                       >
                         <option value="">-- Select ID Document Type --</option>
                         {idDocumentTypes.map((docType) => (
@@ -2186,7 +2141,6 @@ function SignUpIndividualContent() {
                         onChange={(e) => setIdDocumentTypeOther(e.target.value)}
                         className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
                         placeholder="Specify document type"
-                        required
                       />
                     </div>
                   )}
@@ -2198,6 +2152,7 @@ function SignUpIndividualContent() {
                     </label>
                     <input
                       type="text"
+                      name="idDocumentNumber"
                       value={idDocumentNumber}
                       onChange={(e) => setIdDocumentNumber(e.target.value)}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
@@ -2206,7 +2161,6 @@ function SignUpIndividualContent() {
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
                       placeholder="Enter document number"
-                      required
                     />
                   </div>
 
@@ -2223,7 +2177,6 @@ function SignUpIndividualContent() {
                       } shadow-sm`}
                       value={idIssuedCountryCode}
                       onChange={(e) => setIdIssuedCountryCode(e.target.value)}
-                      required
                     >
                       <option value="">Select Country</option>
                       {countries.map((country) => (
@@ -2241,6 +2194,7 @@ function SignUpIndividualContent() {
                     </label>
                     <input
                       type="date"
+                      name="idIssuedDate"
                       value={idIssuedDate}
                       onChange={(e) => setIdIssuedDate(e.target.value)}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
@@ -2248,7 +2202,6 @@ function SignUpIndividualContent() {
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
-                      required
                     />
                   </div>
                 </div>
@@ -2298,8 +2251,7 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
-
-              {/* Security Section - WITHOUT Terms & Conditions */}
+              {/* Security Section */}
               <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
@@ -2516,8 +2468,7 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
-
-              {/* Terms & Conditions Section - SEPARATE TAB */}
+              {/* Terms & Conditions Section */}
               <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
@@ -2677,6 +2628,7 @@ function SignUpIndividualContent() {
                       type="submit"
                       disabled={
                         isSubmitting ||
+                        progress < 100 ||
                         (termsConditions.length > 0 &&
                           acceptedTerms.length === 0)
                       }

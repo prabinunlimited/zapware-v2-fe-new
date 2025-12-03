@@ -1,11 +1,10 @@
-// src/features/location/locationSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { countries } from "../../../features/Auth/slices/countrySlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Async Thunks
+// Async Thunks - Keep only countries and ZIP lookup
 export const fetchCountries = createAsyncThunk(
   "location/fetchCountries",
   async (_, { rejectWithValue }) => {
@@ -17,67 +16,57 @@ export const fetchCountries = createAsyncThunk(
   }
 );
 
-export const fetchStates = createAsyncThunk(
-  "location/fetchStates",
-  async (countryId, { getState, rejectWithValue }) => {
+// Fetch location by ZIP code using Zippopotam API
+export const fetchLocationByZip = createAsyncThunk(
+  "location/fetchLocationByZip",
+  async ({ countryCode, zipCode }, { rejectWithValue }) => {
     try {
-      const { auth } = getState();
-      const token = auth.bearerToken || localStorage.getItem("bearertoken");
+      // Clean and validate inputs
+      const cleanCountryCode = countryCode?.toUpperCase()?.trim() || '';
+      const cleanZipCode = zipCode?.trim() || '';
+      
+      if (!cleanCountryCode || !cleanZipCode) {
+        return rejectWithValue("Country code and ZIP code are required");
+      }
 
+      console.log(`🔍 Fetching location for ${cleanCountryCode}/${cleanZipCode}`);
+      
       const response = await axios.get(
-        `${API_URL}/country-states/${countryId}`,
+        `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 8000,
+          timeout: 5000,
         }
       );
 
-      const statesData = response.data.data || [];
-
+      const data = response.data;
+      console.log("✅ ZIP API Response:", data);
+      
+      // Extract state and city from the API response
+      const place = data.places?.[0];
+      const state = place?.state || '';
+      const city = place?.["place name"] || '';
+      const stateAbbr = place?.["state abbreviation"] || '';
+      
       return {
-        countryId,
-        states: statesData,
-        hasStates: statesData.length > 0,
-        message:
-          statesData.length > 0
-            ? `Found ${statesData.length} states`
-            : "No states found for this country",
+        state,
+        city,
+        stateAbbr,
+        country: data.country || '',
+        countryAbbr: data["country abbreviation"] || '',
+        postCode: data["post code"] || cleanZipCode,
+        places: data.places || [],
+        zipCode: cleanZipCode,
+        success: true,
+        rawData: data
       };
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch states"
-      );
-    }
-  }
-);
-
-export const fetchCities = createAsyncThunk(
-  "location/fetchCities",
-  async (stateId, { getState, rejectWithValue }) => {
-    try {
-      const { auth } = getState();
-      const token = auth.bearerToken || localStorage.getItem("bearertoken");
-
-      const response = await axios.get(`${API_URL}/state-cities/${stateId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: 8000,
+      console.error('❌ Zippopotam API error:', error.message);
+      return rejectWithValue({
+        message: "Invalid ZIP code or no data found for this location",
+        zipCode,
+        countryCode,
+        error: error.message
       });
-
-      const citiesData = response.data.data || [];
-
-      return {
-        stateId,
-        cities: citiesData,
-        hasCities: citiesData.length > 0, // Add this flag
-        message:
-          citiesData.length > 0
-            ? `Found ${citiesData.length} cities`
-            : "No cities found for this state",
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch cities"
-      );
     }
   }
 );
@@ -85,30 +74,17 @@ export const fetchCities = createAsyncThunk(
 // Initial State
 const initialState = {
   countries: [],
-  states: [],
-  cities: [],
   selectedCountry: null,
-  selectedState: null,
-  selectedCity: null,
-  // Add these flags
-  hasStates: false,
-  hasCities: false,
-  lastUpdated: null,
+  zipLookup: {
+    loading: false,
+    data: null,
+    error: null
+  },
   loading: {
     countries: false,
-    states: false,
-    cities: false,
-    refresh: false,
   },
   error: {
     countries: null,
-    states: null,
-    cities: null,
-  },
-  metadata: {
-    countriesCount: 0,
-    lastFetchTimestamp: null,
-    cacheStatus: "fresh",
   },
 };
 
@@ -119,21 +95,19 @@ const locationSlice = createSlice({
   reducers: {
     setSelectedCountry: (state, action) => {
       state.selectedCountry = action.payload;
-      state.states = [];
-      state.cities = [];
-      state.selectedState = null;
-      state.selectedCity = null;
-    },
-    setSelectedState: (state, action) => {
-      state.selectedState = action.payload;
-      state.cities = [];
-      state.selectedCity = null;
-    },
-    setSelectedCity: (state, action) => {
-      state.selectedCity = action.payload;
+      // Clear ZIP lookup data when country changes
+      state.zipLookup.data = null;
+      state.zipLookup.error = null;
     },
     clearLocationData: (state) => {
       return initialState;
+    },
+    clearZipLookupData: (state) => {
+      state.zipLookup = {
+        loading: false,
+        data: null,
+        error: null
+      };
     },
   },
   extraReducers: (builder) => {
@@ -152,36 +126,20 @@ const locationSlice = createSlice({
         state.error.countries = action.payload;
       })
 
-      // States
-      .addCase(fetchStates.pending, (state) => {
-        state.loading.states = true;
-        state.error.states = null;
+      // ZIP Code Lookup
+      .addCase(fetchLocationByZip.pending, (state) => {
+        state.zipLookup.loading = true;
+        state.zipLookup.error = null;
       })
-      .addCase(fetchStates.fulfilled, (state, action) => {
-        state.loading.states = false;
-        state.states = action.payload.states;
-        state.hasStates = action.payload.hasStates; 
-        state.lastUpdated = Date.now();
+      .addCase(fetchLocationByZip.fulfilled, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.data = action.payload;
+        state.zipLookup.error = null;
       })
-      .addCase(fetchStates.rejected, (state, action) => {
-        state.loading.states = false;
-        state.error.states = action.payload;
-      })
-
-      // Cities
-      .addCase(fetchCities.pending, (state) => {
-        state.loading.cities = true;
-        state.error.cities = null;
-      })
-      .addCase(fetchCities.fulfilled, (state, action) => {
-        state.loading.cities = false;
-        state.cities = action.payload.cities;
-        state.hasCities = action.payload.hasCities; 
-        state.lastUpdated = Date.now();
-      })
-      .addCase(fetchCities.rejected, (state, action) => {
-        state.loading.cities = false;
-        state.error.cities = action.payload;
+      .addCase(fetchLocationByZip.rejected, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.error = action.payload;
+        state.zipLookup.data = null;
       });
   },
 });
@@ -189,20 +147,13 @@ const locationSlice = createSlice({
 // Export actions and selectors
 export const {
   setSelectedCountry,
-  setSelectedState,
-  setSelectedCity,
   clearLocationData,
+  clearZipLookupData,
 } = locationSlice.actions;
 
 export const selectCountries = (state) => state.location.countries;
-export const selectStates = (state) => state.location.states;
-export const selectCities = (state) => state.location.cities;
 export const selectSelectedCountry = (state) => state.location.selectedCountry;
-export const selectSelectedState = (state) => state.location.selectedState;
-export const selectSelectedCity = (state) => state.location.selectedCity;
 export const selectLocationLoading = (state) => state.location.loading;
-export const selectLocationError = (state) => state.location.error;
-export const selectHasStates = (state) => state.location.hasStates;
-export const selectHasCities = (state) => state.location.hasCities;
+export const selectZipLookup = (state) => state.location.zipLookup;
 
 export default locationSlice.reducer;
