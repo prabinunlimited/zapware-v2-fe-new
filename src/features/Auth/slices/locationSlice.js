@@ -23,25 +23,58 @@ export const fetchLocationByZip = createAsyncThunk(
     try {
       // Clean and validate inputs
       const cleanCountryCode = countryCode?.toUpperCase()?.trim() || '';
-      const cleanZipCode = zipCode?.trim() || '';
+      const cleanZipCode = zipCode?.trim()?.replace(/\s+/g, '') || '';
       
       if (!cleanCountryCode || !cleanZipCode) {
         return rejectWithValue("Country code and ZIP code are required");
       }
-
-      console.log(`🔍 Fetching location for ${cleanCountryCode}/${cleanZipCode}`);
       
-      const response = await axios.get(
-        `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
-        {
-          timeout: 5000,
+      // Try Zippopotam API first
+      let response;
+      try {
+        response = await axios.get(
+          `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
+          { timeout: 3000 }
+        );
+      } catch (zippoError) {
+        console.log('❌ Zippopotam API failed, trying fallback...');
+        
+        if (cleanCountryCode === 'GB') {
+          try {
+            const ukResponse = await axios.get(
+              `https://api.postcodes.io/postcodes/${cleanZipCode}`,
+              { timeout: 3000 }
+            );
+            
+            const ukData = ukResponse.data;
+            if (ukData.result) {
+              return {
+                state: ukData.result.region || '',
+                city: ukData.result.admin_district || ukData.result.admin_ward || '',
+                stateAbbr: '',
+                country: 'United Kingdom',
+                countryAbbr: 'GB',
+                postCode: ukData.result.postcode || cleanZipCode,
+                places: [],
+                zipCode: cleanZipCode,
+                originalZipCode: zipCode,
+                success: true,
+                source: 'postcodes.io',
+                rawData: ukData
+              };
+            }
+          } catch (ukError) {
+            console.log('❌ UK postcodes.io also failed');
+          }
         }
-      );
+        
+        // If all APIs fail, check if it's a valid format but no data
+        throw zippoError;
+      }
 
+      // Zippopotam succeeded
       const data = response.data;
-      console.log("✅ ZIP API Response:", data);
       
-      // Extract state and city from the API response
       const place = data.places?.[0];
       const state = place?.state || '';
       const city = place?.["place name"] || '';
@@ -56,16 +89,21 @@ export const fetchLocationByZip = createAsyncThunk(
         postCode: data["post code"] || cleanZipCode,
         places: data.places || [],
         zipCode: cleanZipCode,
+        originalZipCode: zipCode,
         success: true,
+        source: 'zippopotam.us',
         rawData: data
       };
+      
     } catch (error) {
-      console.error('❌ Zippopotam API error:', error.message);
+      console.error('❌ All location APIs failed:', error.message);
+      
       return rejectWithValue({
-        message: "Invalid ZIP code or no data found for this location",
+        message: "Invalid postal code format or no data available",
         zipCode,
         countryCode,
-        error: error.message
+        error: error.message,
+        suggestion: "Please check the postal code format or enter location manually"
       });
     }
   }
