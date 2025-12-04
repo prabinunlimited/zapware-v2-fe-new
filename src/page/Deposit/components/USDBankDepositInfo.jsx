@@ -44,7 +44,8 @@ const USDBankDepositInfo = ({
   const [showAccountDetails, setShowAccountDetails] = useState(null);
 
   // Only show for USD bank deposits
-  const isUSDBankDeposit = selectedCurrency === "USD" && paymentMethod === "bank_deposit";
+  const isUSDBankDeposit =
+    selectedCurrency === "USD" && paymentMethod === "bank_deposit";
 
   // Normalize account data structure
   const safeUsdBankAccounts = Array.isArray(bankAccounts)
@@ -64,7 +65,9 @@ const USDBankDepositInfo = ({
         isLinkedOnSila: account.isLinkedOnSila,
         isPlaid: account.isPlaid,
         balance: account.balance || Math.random() * 10000,
-        last_used: account.last_used || new Date(Date.now() - Math.random() * 86400000 * 30),
+        last_used:
+          account.last_used ||
+          new Date(Date.now() - Math.random() * 86400000 * 30),
         originalIndex: account.originalIndex || Math.random(), // Add stable identifier
         ...account,
       }))
@@ -72,9 +75,10 @@ const USDBankDepositInfo = ({
 
   // Use stable sorting that doesn't change order when selecting
   const filteredAccounts = useMemo(() => {
-    const filtered = safeUsdBankAccounts.filter(account => 
-      account.bank_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      account.account_name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filtered = safeUsdBankAccounts.filter(
+      (account) =>
+        account.bank_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        account.account_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const sorted = [...filtered].sort((a, b) => {
@@ -94,7 +98,7 @@ const USDBankDepositInfo = ({
     });
 
     return sorted;
-  }, [safeUsdBankAccounts, searchTerm, sortBy]); 
+  }, [safeUsdBankAccounts, searchTerm, sortBy]);
 
   const handleAddBankAccount = () => {
     console.log("🔄 Switching to bank accounts tab to add new account");
@@ -106,42 +110,47 @@ const USDBankDepositInfo = ({
   };
 
   const selectedAccount = selectedBankAccount
-    ? safeUsdBankAccounts.find((acc) => acc && acc.id === selectedBankAccount)
+    ? safeUsdBankAccounts.find(
+        (acc) => acc && acc.id === selectedBankAccount.id
+      )
     : null;
 
   const getBankLogo = (bankName) => {
     const logos = {
-      'chase': '🔵',
-      'bank of america': '🔴',
-      'wells fargo': '🟡',
-      'citi': '🔵',
-      'capital one': '🔴',
-      'american express': '🔵',
-      'us bank': '🟢',
-      'td bank': '🟢',
-      'pnc': '🟡',
-      'truist': '🟣'
+      chase: "🔵",
+      "bank of america": "🔴",
+      "wells fargo": "🟡",
+      citi: "🔵",
+      "capital one": "🔴",
+      "american express": "🔵",
+      "us bank": "🟢",
+      "td bank": "🟢",
+      pnc: "🟡",
+      truist: "🟣",
     };
-    
+
     const lowerName = bankName.toLowerCase();
     for (const [key, logo] of Object.entries(logos)) {
       if (lowerName.includes(key)) return logo;
     }
-    return '🏦';
+    return "🏦";
   };
 
   const formatBalance = (balance) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
     }).format(balance || 0);
   };
 
   const getAccountStatus = (account) => {
-    if (account.is_frozen) return { text: 'Frozen', color: 'text-red-500', bg: 'bg-red-50' };
-    if (account.status === 'verified') return { text: 'Verified', color: 'text-green-500', bg: 'bg-green-50' };
-    if (account.status === 'pending') return { text: 'Pending', color: 'text-yellow-500', bg: 'bg-yellow-50' };
-    return { text: 'Active', color: 'text-blue-500', bg: 'bg-blue-50' };
+    if (account.is_frozen)
+      return { text: "Frozen", color: "text-red-500", bg: "bg-red-50" };
+    if (account.status === "verified")
+      return { text: "Verified", color: "text-green-500", bg: "bg-green-50" };
+    if (account.status === "pending")
+      return { text: "Pending", color: "text-yellow-500", bg: "bg-yellow-50" };
+    return { text: "Active", color: "text-blue-500", bg: "bg-blue-50" };
   };
 
   if (!isUSDBankDeposit) {
@@ -160,8 +169,12 @@ const USDBankDepositInfo = ({
         <div className="p-6">
           <div className="flex flex-col items-center justify-center py-12">
             <ClipLoader color="#3B82F6" size={40} className="mb-4" />
-            <p className="text-gray-600 font-medium">Loading your bank accounts...</p>
-            <p className="text-gray-400 text-sm mt-2">Securely fetching your linked accounts</p>
+            <p className="text-gray-600 font-medium">
+              Loading your bank accounts...
+            </p>
+            <p className="text-gray-400 text-sm mt-2">
+              Securely fetching your linked accounts
+            </p>
           </div>
         </div>
       </div>
@@ -182,9 +195,12 @@ const USDBankDepositInfo = ({
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <FaExclamationTriangle className="text-red-500 text-2xl" />
             </div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">Unable to Load Accounts</h4>
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">
+              Unable to Load Accounts
+            </h4>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              {error || "We encountered an issue while loading your bank accounts. Please try again."}
+              {error ||
+                "We encountered an issue while loading your bank accounts. Please try again."}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
@@ -220,7 +236,9 @@ const USDBankDepositInfo = ({
                 <FaUniversity className="text-white text-xl" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">USD Bank Accounts</h3>
+                <h3 className="text-xl font-bold text-white">
+                  USD Bank Accounts
+                </h3>
                 <p className="text-blue-100 text-sm mt-1">
                   Select a linked bank account for deposits
                 </p>
@@ -229,7 +247,8 @@ const USDBankDepositInfo = ({
             <div className="flex items-center space-x-3">
               <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1">
                 <span className="text-white text-sm font-medium">
-                  {filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}
+                  {filteredAccounts.length} account
+                  {filteredAccounts.length !== 1 ? "s" : ""}
                 </span>
               </div>
               <button
@@ -259,7 +278,7 @@ const USDBankDepositInfo = ({
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 />
               </div>
-              
+
               {/* Sort Dropdown */}
               <div className="relative">
                 <select
@@ -283,7 +302,9 @@ const USDBankDepositInfo = ({
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
               <div className="flex items-center">
                 <FaExclamationTriangle className="text-red-500 mr-3" />
-                <p className="text-red-700 font-medium">{formErrors.bankAccount}</p>
+                <p className="text-red-700 font-medium">
+                  {formErrors.bankAccount}
+                </p>
               </div>
             </div>
           )}
@@ -294,18 +315,27 @@ const USDBankDepositInfo = ({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredAccounts.map((account) => {
                   const status = getAccountStatus(account);
-                  const isSelected = selectedBankAccount === account.id;
-                  
+                  const isSelected =
+                    selectedBankAccount &&
+                    selectedBankAccount.id === account.id;
+
                   return (
                     <div
                       key={account.id}
                       className={`relative cursor-pointer transition-all duration-300 rounded-2xl border-2 ${
                         isSelected
-                          ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg shadow-blue-100'
-                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                          ? "border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg shadow-blue-100"
+                          : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
                       }`}
-                      onClick={() => onBankAccountSelect(account.id)}
-                      style={{ minHeight: '180px' }}
+                      onClick={() => {
+                        console.log("🔍 Selecting bank account:", {
+                          id: account.id,
+                          account_name: account.account_name,
+                          full_object: account,
+                        });
+                        onBankAccountSelect(account); // Pass full object, not just ID
+                      }}
+                      style={{ minHeight: "180px" }}
                     >
                       {/* Selection Indicator */}
                       {isSelected && (
@@ -330,9 +360,11 @@ const USDBankDepositInfo = ({
                               </p>
                             </div>
                           </div>
-                          
+
                           {/* Status Badge */}
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}
+                          >
                             {status.text}
                           </span>
                         </div>
@@ -340,9 +372,11 @@ const USDBankDepositInfo = ({
                         {/* Account Details */}
                         <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                           <div>
-                            <span className="text-gray-500">Account Number</span>
+                            <span className="text-gray-500">
+                              Account Number
+                            </span>
                             <p className="font-mono text-gray-900 font-semibold">
-                              ••••{account.account_number?.slice(-4) || 'N/A'}
+                              ••••{account.account_number?.slice(-4) || "N/A"}
                             </p>
                           </div>
                           <div>
@@ -367,12 +401,16 @@ const USDBankDepositInfo = ({
                               </span>
                             )}
                           </div>
-                          
+
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowAccountDetails(showAccountDetails === account.id ? null : account.id);
+                              setShowAccountDetails(
+                                showAccountDetails === account.id
+                                  ? null
+                                  : account.id
+                              );
                             }}
                             className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center hover:scale-105 transition-transform"
                           >
@@ -388,25 +426,31 @@ const USDBankDepositInfo = ({
                               <div>
                                 <span className="text-gray-500">Type</span>
                                 <p className="font-medium text-gray-900 capitalize">
-                                  {account.account_type || 'Checking'}
+                                  {account.account_type || "Checking"}
                                 </p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Routing</span>
                                 <p className="font-mono text-gray-900">
-                                  {account.routing_number ? `•••${account.routing_number.slice(-3)}` : 'N/A'}
+                                  {account.routing_number
+                                    ? `•••${account.routing_number.slice(-3)}`
+                                    : "N/A"}
                                 </p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Last Used</span>
                                 <p className="font-medium text-gray-900">
-                                  {new Date(account.last_used).toLocaleDateString()}
+                                  {new Date(
+                                    account.last_used
+                                  ).toLocaleDateString()}
                                 </p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Linked</span>
                                 <p className="font-medium text-gray-900">
-                                  {account.isLinkedOnSila ? 'Verified' : 'Pending'}
+                                  {account.isLinkedOnSila
+                                    ? "Verified"
+                                    : "Pending"}
                                 </p>
                               </div>
                             </div>
@@ -422,29 +466,44 @@ const USDBankDepositInfo = ({
                 <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
                   <FaUniversity className="text-blue-500 text-3xl" />
                 </div>
-                
+
                 <h4 className="text-xl font-bold text-gray-900 mb-3">
                   No Bank Accounts Linked
                 </h4>
-                
+
                 <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                  Connect your US bank account to enable secure USD deposits. 
-                  We use bank-level security through Plaid to keep your information safe.
+                  Connect your US bank account to enable secure USD deposits. We
+                  use bank-level security through Plaid to keep your information
+                  safe.
                 </p>
 
                 {/* Security Features */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
                   {[
-                    { icon: FaShieldAlt, text: 'Bank-Level Security', color: 'text-green-500' },
-                    { icon: FaLock, text: '256-bit Encryption', color: 'text-blue-500' },
-                    { icon: FaRegCheckCircle, text: 'Instant Verification', color: 'text-purple-500' }
+                    {
+                      icon: FaShieldAlt,
+                      text: "Bank-Level Security",
+                      color: "text-green-500",
+                    },
+                    {
+                      icon: FaLock,
+                      text: "256-bit Encryption",
+                      color: "text-blue-500",
+                    },
+                    {
+                      icon: FaRegCheckCircle,
+                      text: "Instant Verification",
+                      color: "text-purple-500",
+                    },
                   ].map((feature, index) => (
                     <div
                       key={index}
                       className="flex items-center justify-center space-x-2 p-3 bg-gray-50 rounded-xl"
                     >
                       <feature.icon className={`${feature.color} text-lg`} />
-                      <span className="text-sm text-gray-700 font-medium">{feature.text}</span>
+                      <span className="text-sm text-gray-700 font-medium">
+                        {feature.text}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -465,7 +524,9 @@ const USDBankDepositInfo = ({
             ) : (
               <div className="text-center py-12">
                 <FaSearch className="text-4xl text-gray-300 mx-auto mb-4" />
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">No matching accounts</h4>
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                  No matching accounts
+                </h4>
                 <p className="text-gray-600">Try adjusting your search terms</p>
               </div>
             )}
@@ -488,7 +549,9 @@ const USDBankDepositInfo = ({
                     </div>
                   </div>
                   <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1">
-                    <span className="text-white text-sm font-medium">Active</span>
+                    <span className="text-white text-sm font-medium">
+                      Active
+                    </span>
                   </div>
                 </div>
               </div>
@@ -504,19 +567,27 @@ const USDBankDepositInfo = ({
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Bank:</span>
-                        <span className="font-semibold text-gray-900">{selectedAccount.bank_name}</span>
+                        <span className="font-semibold text-gray-900">
+                          {selectedAccount.bank_name}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Account:</span>
-                        <span className="font-mono text-gray-900">••••{selectedAccount.account_number?.slice(-4)}</span>
+                        <span className="font-mono text-gray-900">
+                          ••••{selectedAccount.account_number?.slice(-4)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Type:</span>
-                        <span className="font-semibold text-gray-900 capitalize">{selectedAccount.account_type || 'Checking'}</span>
+                        <span className="font-semibold text-gray-900 capitalize">
+                          {selectedAccount.account_type || "Checking"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Status:</span>
-                        <span className="font-semibold text-green-600">Verified</span>
+                        <span className="font-semibold text-green-600">
+                          Verified
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -550,7 +621,8 @@ const USDBankDepositInfo = ({
                     <FaShieldAlt className="text-green-500 mr-3 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm text-gray-700 font-medium">
-                        Your financial information is protected with bank-level security
+                        Your financial information is protected with bank-level
+                        security
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
                         All data is encrypted and never stored on our servers

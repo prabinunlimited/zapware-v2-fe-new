@@ -8,7 +8,6 @@ export const fetchTermsAndConditions = createAsyncThunk(
     try {
       console.log("🔍 [fetchTermsAndConditions] Starting...");
 
-      // ✅ EXACTLY LIKE NON-REDUX VERSION
       const iswhitelabelledpartner = localStorage.getItem(
         "iswhitelabelledpartner"
       );
@@ -23,17 +22,15 @@ export const fetchTermsAndConditions = createAsyncThunk(
         hasToken: !!bearertoken,
       });
 
-      // ✅ USE /terms-by-partner/{id} LIKE NON-REDUX
       let partnerId;
       if (iswhitelabelledpartner === "1" && whitelabelledpartnerid) {
         partnerId = whitelabelledpartnerid;
       } else {
-        partnerId = "0"; // Default partner ID
+        partnerId = "0";
       }
 
       console.log(`📡 Fetching terms from: /terms-by-partner/${partnerId}`);
 
-      // This will use api.js which should add Authorization header
       const response = await api.get(`/terms-by-partner/${partnerId}`);
 
       console.log("✅ Terms API response:", {
@@ -51,29 +48,24 @@ export const fetchTermsAndConditions = createAsyncThunk(
         url: error.config?.url,
       });
 
-      // Fallback: Return empty array so registration can continue
       console.log("⚠️ Returning empty terms array (registration can continue)");
       return [];
     }
   }
 );
 
-// Async thunk for fetching nationalities
 export const fetchNationalities = createAsyncThunk(
   "signup/fetchNationalities",
   async (_, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js - MUCH SIMPLER!
       const response = await api.get("/nationalities");
 
-      // Handle different response structures
       const nationalitiesData =
         response.data || response.nationalities || response;
 
       if (Array.isArray(nationalitiesData)) {
         return nationalitiesData;
       } else if (nationalitiesData && typeof nationalitiesData === "object") {
-        // Extract array from object if needed
         const nationalitiesArray = Object.values(nationalitiesData).find(
           Array.isArray
         );
@@ -87,22 +79,18 @@ export const fetchNationalities = createAsyncThunk(
   }
 );
 
-// Async thunk for fetching ID document types
 export const fetchIdDocumentTypes = createAsyncThunk(
   "signup/fetchIdDocumentTypes",
   async (_, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js - MUCH SIMPLER!
       const response = await api.get("/id-document-types");
 
-      // Handle different response structures
       const documentTypesData =
         response.data || response.documentTypes || response;
 
       if (Array.isArray(documentTypesData)) {
         return documentTypesData;
       } else if (documentTypesData && typeof documentTypesData === "object") {
-        // Extract array from object if needed
         const documentTypesArray = Object.values(documentTypesData).find(
           Array.isArray
         );
@@ -116,15 +104,12 @@ export const fetchIdDocumentTypes = createAsyncThunk(
   }
 );
 
-// Async thunk for fetching genders
 export const fetchGenders = createAsyncThunk(
   "signup/fetchGenders",
   async (_, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js - MUCH SIMPLER!
       const response = await api.get("/genders");
 
-      // Handle different response structures
       const gendersData = response.data || response.genders || response;
 
       if (Array.isArray(gendersData)) {
@@ -138,21 +123,16 @@ export const fetchGenders = createAsyncThunk(
   }
 );
 
-// Async thunk for submitting individual signup
 export const submitIndividualSignup = createAsyncThunk(
   "signup/submitIndividual",
   async (formData, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js - NO MORE MANUAL TOKEN HANDLING!
       const response = await api.post("/customers/sign-up", formData);
-
       return response.data;
     } catch (error) {
-      // Enhanced error handling
       let errorMessage = "Registration failed. Please try again.";
       let validationErrors = {};
 
-      // ✅ api.js already structures errors properly
       if (error.response) {
         const responseData = error.response.data;
         if (responseData.message) {
@@ -176,7 +156,6 @@ export const submitIndividualSignup = createAsyncThunk(
 );
 
 const initialState = {
-  // Form data
   formData: {
     customer_type: "individual",
     first_name: "",
@@ -207,13 +186,11 @@ const initialState = {
     terms_and_conditions: [],
   },
 
-  // API data - flattened structure
   nationalities: [],
   idDocumentTypes: [],
   genders: [],
   termsConditions: [],
 
-  // Loading states
   nationalitiesLoading: false,
   nationalitiesError: null,
   idDocumentTypesLoading: false,
@@ -226,18 +203,15 @@ const initialState = {
   submissionLoading: false,
   submissionError: null,
 
-  // Business logic flags
   showSSNField: false,
   hasNamedAccounts: false,
   isUSDSelected: false,
   ssnError: "",
   showSSNConfirmation: false,
 
-  // Validation
   validationErrors: {},
   isFormValid: false,
 
-  // Steps and progress
   currentStep: 0,
   totalSteps: 5,
   formProgress: 0,
@@ -249,15 +223,19 @@ const signupSlice = createSlice({
   reducers: {
     setFormField: (state, action) => {
       const { field, value } = action.payload;
-      if (field in state.formData) {
-        state.formData[field] = value;
 
-        // Clear specific errors when field is updated
+      if (field in state.formData) {
+        state.formData = {
+          ...state.formData,
+          [field]: value,
+        };
+
         if (state.validationErrors[field]) {
-          delete state.validationErrors[field];
+          const newValidationErrors = { ...state.validationErrors };
+          delete newValidationErrors[field];
+          state.validationErrors = newValidationErrors;
         }
 
-        // Clear SSN error when SSN field is updated
         if (field === "ssn" && state.ssnError) {
           state.ssnError = "";
         }
@@ -266,7 +244,6 @@ const signupSlice = createSlice({
 
     setMetadataField: (state, action) => {
       const { field, value } = action.payload;
-      // Direct property access instead of nested metadata
       if (field in state && field !== "formData") {
         state[field] = value;
       }
@@ -274,12 +251,19 @@ const signupSlice = createSlice({
 
     setTermsAccepted: (state, action) => {
       const { termId, accepted, metadata } = action.payload;
+
+      // Ensure terms_and_conditions exists
+      const currentTerms = state.formData.terms_and_conditions 
+        ? [...state.formData.terms_and_conditions] 
+        : [];
+
       if (accepted) {
-        const existingIndex = state.formData.terms_and_conditions.findIndex(
+        const existingIndex = currentTerms.findIndex(
           (item) => item.id === termId
         );
         if (existingIndex === -1) {
-          state.formData.terms_and_conditions.push({
+          // Add new term
+          currentTerms.push({
             id: termId,
             accepted_at: metadata?.accepted_at || new Date().toISOString(),
             ip: metadata?.ip || "Unknown",
@@ -287,11 +271,13 @@ const signupSlice = createSlice({
             device: metadata?.device || "Unknown",
           });
         }
+        // Update state with new array
+        state.formData.terms_and_conditions = currentTerms;
       } else {
-        state.formData.terms_and_conditions =
-          state.formData.terms_and_conditions.filter(
-            (item) => item.id !== termId
-          );
+        // Remove term
+        const filteredTerms = currentTerms.filter((item) => item.id !== termId);
+        // Update state with new array
+        state.formData.terms_and_conditions = filteredTerms;
       }
     },
 
@@ -357,7 +343,6 @@ const signupSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Terms and Conditions
       .addCase(fetchTermsAndConditions.pending, (state) => {
         state.termsLoading = true;
         state.termsError = null;
@@ -374,7 +359,6 @@ const signupSlice = createSlice({
         state.termsConditions = [];
       })
 
-      // Nationalities
       .addCase(fetchNationalities.pending, (state) => {
         state.nationalitiesLoading = true;
         state.nationalitiesError = null;
@@ -389,7 +373,6 @@ const signupSlice = createSlice({
         state.nationalities = [];
       })
 
-      // ID Document Types
       .addCase(fetchIdDocumentTypes.pending, (state) => {
         state.idDocumentTypesLoading = true;
         state.idDocumentTypesError = null;
@@ -404,7 +387,6 @@ const signupSlice = createSlice({
         state.idDocumentTypes = [];
       })
 
-      // Genders
       .addCase(fetchGenders.pending, (state) => {
         state.gendersLoading = true;
         state.gendersError = null;
@@ -419,7 +401,6 @@ const signupSlice = createSlice({
         state.genders = [];
       })
 
-      // Signup Submission
       .addCase(submitIndividualSignup.pending, (state) => {
         state.submissionLoading = true;
         state.submissionError = null;
@@ -437,14 +418,12 @@ const signupSlice = createSlice({
   },
 });
 
-// Selectors - updated for flat structure
 export const selectFormData = (state) => state.signup.formData;
 export const selectNationalities = (state) => state.signup.nationalities;
 export const selectIdDocumentTypes = (state) => state.signup.idDocumentTypes;
 export const selectGenders = (state) => state.signup.genders;
 export const selectTermsConditions = (state) => state.signup.termsConditions;
 
-// Loading selectors
 export const selectTermsLoading = (state) => state.signup.termsLoading;
 export const selectTermsError = (state) => state.signup.termsError;
 export const selectTermsFetched = (state) => state.signup.termsFetched;
@@ -462,7 +441,6 @@ export const selectSubmissionLoading = (state) =>
   state.signup.submissionLoading;
 export const selectSubmissionError = (state) => state.signup.submissionError;
 
-// Business logic selectors
 export const selectAcceptedTerms = (state) =>
   state.signup.formData.terms_and_conditions;
 export const selectShowSSNField = (state) => state.signup.showSSNField;
@@ -472,21 +450,18 @@ export const selectSSNError = (state) => state.signup.ssnError;
 export const selectShowSSNConfirmation = (state) =>
   state.signup.showSSNConfirmation;
 
-// Validation and progress selectors
 export const selectValidationErrors = (state) => state.signup.validationErrors;
 export const selectIsFormValid = (state) => state.signup.isFormValid;
 export const selectCurrentStep = (state) => state.signup.currentStep;
 export const selectFormProgress = (state) => state.signup.formProgress;
 export const selectTotalSteps = (state) => state.signup.totalSteps;
 
-// Combined loading selector for initialization
 export const selectIsInitializing = (state) =>
   state.signup.nationalitiesLoading ||
   state.signup.idDocumentTypesLoading ||
   state.signup.gendersLoading ||
   state.signup.termsLoading;
 
-// Combined error selector
 export const selectAnyErrors = (state) =>
   state.signup.nationalitiesError ||
   state.signup.idDocumentTypesError ||

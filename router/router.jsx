@@ -35,6 +35,7 @@ import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIf
 import Team from "../src/page/Team/Team";
 import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
+import BankLetter from './../src/page/BankLetter/BankLetter';
 import Remittance from "../src/page/Remittance/remittance";
 
 const ProtectedLayout = () => {
@@ -150,6 +151,10 @@ const router = createBrowserRouter([
       {
         path: "remittance/:customerId",
         element: <Remittance />,
+      },
+      {
+       path: "/bankletter/:accountId",
+        element: <BankLetter />,
       },
     ],
   },

@@ -1,38 +1,44 @@
-// src/components/Dashboard/Account/AccountSummary/AccountSlice.js - CLEAN VERSION
+// src/components/Dashboard/Account/AccountSummary/AccountSlice.js - FIXED VERSION
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../../../utils/errorHandling";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ✅ ENHANCED: Global request coordination with SUCCESS TRACKING
+// ✅ FIXED: Enhanced request coordination with proper cleanup
 let globalFetchInProgress = false;
-const GLOBAL_FETCH_COOLDOWN = 10000; // 10 seconds
+const GLOBAL_FETCH_COOLDOWN = 10000;
 const pendingRequests = new Map();
-const successfulFetches = new Map(); // Track successful fetches by customerId
+const successfulFetches = new Map();
 
 const getRequestKey = (customerId, isRefresh = false) => {
   return `account-${customerId}-${isRefresh ? 'refresh' : 'initial'}`;
 };
 
-// ✅ CHECK IF SUCCESSFUL FETCH EXISTS
 const hasSuccessfulFetch = (customerId) => {
   return successfulFetches.has(customerId);
 };
 
-// ✅ OPTIMIZED ASYNC THUNK WITH SUCCESS-BASED STOPPING
+// ✅ FIXED: Optimized thunk with better state management
 export const fetchAccountDetails = createAsyncThunk(
   "account/fetchAccountDetails",
-  async ({ customerId, authtoken, isRefresh = false }, { getState, rejectWithValue }) => {
+  async ({ customerId, authtoken, isRefresh = false }, { getState, rejectWithValue, signal }) => {
     
     const requestKey = getRequestKey(customerId, isRefresh);
     
-    // ✅ ENHANCED: Stop if we already have a successful fetch (unless force refresh)
+    // ✅ FIXED: Only skip if we have recent successful data
     if (!isRefresh && hasSuccessfulFetch(customerId)) {
-      return rejectWithValue("Already have successful data");
+      const successData = successfulFetches.get(customerId);
+      const now = Date.now();
+      const TEN_MINUTES = 10 * 60 * 1000;
+      
+      // Only skip if data is less than 10 minutes old
+      if (now - successData.timestamp < TEN_MINUTES) {
+        return rejectWithValue("Already have recent data");
+      }
     }
 
-    // Enhanced duplicate request check with global coordination
+    // Prevent duplicate requests
     if (pendingRequests.has(requestKey) || globalFetchInProgress) {
       return rejectWithValue("Request already in progress");
     }
@@ -42,32 +48,42 @@ export const fetchAccountDetails = createAsyncThunk(
     globalFetchInProgress = true;
 
     try {
+      // Add AbortController for cleanup
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const response = await axios.get(
         `${API_URL}/active-account-details/${customerId}`,
         {
           headers: { Authorization: `Bearer ${authtoken}` },
-          timeout: 30000,
+          signal: controller.signal,
         }
       );
 
+      clearTimeout(timeoutId);
 
-      // ✅ MARK AS SUCCESSFUL FETCH
-      if (response.data.count_account_details > 0) {
+      // ✅ FIXED: Handle empty response gracefully
+      if (response.data?.count_account_details > 0) {
         successfulFetches.set(customerId, {
           timestamp: Date.now(),
-          count: response.data.count_account_details
+          count: response.data.count_account_details,
+          data: response.data.account_details
         });
         return response.data.account_details;
       } else {
+        // Clear successful fetch if no data
+        successfulFetches.delete(customerId);
         return rejectWithValue("No accounts found");
       }
     } catch (error) {
-      console.error("❌ Error fetching account details:", error);
+      // Don't log aborted requests
+      if (error.name !== 'AbortError' && error.code !== 'ECONNABORTED') {
+        console.error("❌ Error fetching account details:", error);
+      }
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
-      // Remove from tracking after a delay to prevent immediate re-requests
+      // Clean up
       setTimeout(() => {
         pendingRequests.delete(requestKey);
         globalFetchInProgress = false;
@@ -80,7 +96,6 @@ export const updateAccountBalance = createAsyncThunk(
   "account/updateAccountBalance",
   async ({ customerId, authtoken }, { rejectWithValue }) => {
     try {
-      
       const updateResponse = await axios.get(`${API_URL}/transaction-balance`, {
         headers: { Authorization: `Bearer ${authtoken}` },
       });
@@ -96,14 +111,15 @@ export const updateAccountBalance = createAsyncThunk(
         }
       );
 
-      if (balanceResponse.data.count_account_details > 0) {
-        // ✅ UPDATE SUCCESSFUL FETCH TRACKING
+      if (balanceResponse.data?.count_account_details > 0) {
         successfulFetches.set(customerId, {
           timestamp: Date.now(),
-          count: balanceResponse.data.count_account_details
+          count: balanceResponse.data.count_account_details,
+          data: balanceResponse.data.account_details
         });
         return balanceResponse.data.account_details;
       } else {
+        successfulFetches.delete(customerId);
         throw new Error("No account details found after updating balance");
       }
     } catch (error) {
@@ -114,7 +130,7 @@ export const updateAccountBalance = createAsyncThunk(
   }
 );
 
-// Enhanced initial state with debugging
+// Enhanced initial state with proper defaults
 const initialState = {
   accounts: [],
   selectedAccount: null,
@@ -125,9 +141,11 @@ const initialState = {
   lastUpdated: null,
   accountDropdownOpen: false,
   hasFetchedAccount: false,
+  fetchAttempted: false, // ✅ ADDED: Track if we've attempted fetch
   _debug: {
     sliceName: "account",
-    storePath: "state.account"
+    storePath: "state.account",
+    version: "2.0"
   }
 };
 
@@ -179,13 +197,15 @@ const accountSlice = createSlice({
     setHasFetchedAccount: (state, action) => {
       state.hasFetchedAccount = action.payload;
     },
-    debugAccountState: (state) => {},
-    // ✅ ADDED: Reset fetch coordination (for emergency recovery)
+    setFetchAttempted: (state, action) => {
+      state.fetchAttempted = action.payload;
+    },
+    // ✅ FIXED: Reset coordination properly
     resetFetchCoordination: () => {
       globalFetchInProgress = false;
       pendingRequests.clear();
+      successfulFetches.clear();
     },
-    // ✅ ADDED: Clear successful fetch tracking (for logout or manual refresh)
     clearSuccessfulFetch: (state, action) => {
       const customerId = action.payload;
       if (customerId) {
@@ -193,14 +213,25 @@ const accountSlice = createSlice({
       } else {
         successfulFetches.clear();
       }
+      state.hasFetchedAccount = false;
+      state.fetchAttempted = false;
     },
-    // ✅ ADDED: Force refresh by clearing successful status
     forceRefreshAccounts: (state, action) => {
       const customerId = action.payload;
       if (customerId) {
         successfulFetches.delete(customerId);
-        state.hasFetchedAccount = false;
       }
+      state.hasFetchedAccount = false;
+      state.fetchAttempted = false;
+    },
+    debugAccountState: (state) => {
+      console.log("🔍 Account State:", {
+        accountsCount: state.accounts.length,
+        selectedAccount: state.selectedAccount,
+        loading: state.accountLoading,
+        hasFetched: state.hasFetchedAccount,
+        attempted: state.fetchAttempted
+      });
     }
   },
   extraReducers: (builder) => {
@@ -208,15 +239,21 @@ const accountSlice = createSlice({
       .addCase(fetchAccountDetails.pending, (state) => {
         state.accountLoading = true;
         state.accountError = null;
+        state.fetchAttempted = true;
       })
       .addCase(fetchAccountDetails.fulfilled, (state, action) => {
         state.accountLoading = false;
         state.accounts = Array.isArray(action.payload) ? action.payload : [];
         state.lastUpdated = new Date().toISOString();
         state.hasFetchedAccount = true;
+        state.accountError = null;
         
+        // Set selected account if not set or if current selection is invalid
         if (state.accounts.length > 0) {
-          if (!state.selectedAccount) {
+          const needsNewSelection = !state.selectedAccount || 
+            !state.accounts.some(acc => acc.currency === state.selectedAccount.currency);
+          
+          if (needsNewSelection) {
             state.selectedAccount = {
               ...state.accounts[0],
               available_balance: state.accounts[0].available_balance || 0,
@@ -229,35 +266,34 @@ const accountSlice = createSlice({
         }
       })
       .addCase(fetchAccountDetails.rejected, (state, action) => {
-        // ✅ DON'T set error for "already have data" cases
-        const isAlreadyHaveData = action.payload === "Already have successful data";
+        const isAlreadyHaveData = action.payload === "Already have recent data";
         
         if (!isAlreadyHaveData) {
-          console.error("❌ Failed to fetch account details:", action.payload);
           state.accountError = typeof action.payload === 'string'
             ? action.payload
             : extractErrorMessage(action.payload);
+          state.hasFetchedAccount = false;
         } else {
-          console.log("⏸️ Fetch skipped - already have data");
+          // Keep existing data if we have it
+          state.hasFetchedAccount = state.accounts.length > 0;
         }
         
         state.accountLoading = false;
-        state.hasFetchedAccount = isAlreadyHaveData ? true : false;
       })
       .addCase(updateAccountBalance.pending, (state) => {
-        console.log("⏳ Updating account balance...");
         state.balanceLoading = true;
         state.accountError = null;
       })
       .addCase(updateAccountBalance.fulfilled, (state, action) => {
-        console.log("✅ Account balance updated successfully:", action.payload);
         state.balanceLoading = false;
-        state.accounts = Array.isArray(action.payload) ? action.payload : [];
+        const newAccounts = Array.isArray(action.payload) ? action.payload : [];
         
-        if (state.selectedAccount && state.accounts.length > 0) {
-          const updatedAccount = state.accounts.find(
+        // Preserve selected account if possible
+        if (state.selectedAccount && newAccounts.length > 0) {
+          const updatedAccount = newAccounts.find(
             (account) => account.currency === state.selectedAccount.currency
           );
+          
           if (updatedAccount) {
             state.selectedAccount = {
               ...state.selectedAccount,
@@ -267,10 +303,10 @@ const accountSlice = createSlice({
           }
         }
         
+        state.accounts = newAccounts;
         state.lastUpdated = new Date().toISOString();
       })
       .addCase(updateAccountBalance.rejected, (state, action) => {
-        console.error("❌ Failed to update account balance:", action.payload);
         state.balanceLoading = false;
         state.accountError = typeof action.payload === 'string'
           ? action.payload
@@ -279,30 +315,60 @@ const accountSlice = createSlice({
   },
 });
 
-// Enhanced selectors with debugging and safety
+// Enhanced selectors with memoization
 export const selectAccounts = (state) => {
-  const accounts = state.account?.accounts;
-  return Array.isArray(accounts) ? accounts : [];
+  return state.account?.accounts || [];
 };
 
-export const selectSelectedAccount = (state) => state.account?.selectedAccount || null;
-export const selectSelectedCurrency = (state) => state.account?.selectedCurrency || "all";
-export const selectAccountLoading = (state) => state.account?.accountLoading || false;
-export const selectBalanceLoading = (state) => state.account?.balanceLoading || false;
-export const selectAccountError = (state) => state.account?.accountError || null;
-export const selectLastUpdated = (state) => state.account?.lastUpdated || null;
-export const selectHasFetchedAccount = (state) => state.account?.hasFetchedAccount || false;
+export const selectSelectedAccount = (state) => 
+  state.account?.selectedAccount || null;
+
+export const selectSelectedCurrency = (state) => 
+  state.account?.selectedCurrency || "all";
+
+export const selectAccountLoading = (state) => 
+  state.account?.accountLoading || false;
+
+export const selectBalanceLoading = (state) => 
+  state.account?.balanceLoading || false;
+
+export const selectAccountError = (state) => 
+  state.account?.accountError || null;
+
+export const selectLastUpdated = (state) => 
+  state.account?.lastUpdated || null;
+
+export const selectHasFetchedAccount = (state) => 
+  state.account?.hasFetchedAccount || false;
+
+export const selectFetchAttempted = (state) =>
+  state.account?.fetchAttempted || false;
+
 export const selectAccountDropdown = (state) => ({
   isOpen: state.account?.accountDropdownOpen || false,
 });
 
-// Utility selectors
+// Memoized utility selectors
 export const selectCurrencyOptions = (state) => {
   const accounts = selectAccounts(state);
   return [...new Set(accounts.map(account => account.currency))].filter(Boolean);
 };
 
-export const selectHasAccounts = (state) => selectAccounts(state).length > 0;
+export const selectHasAccounts = (state) => 
+  selectAccounts(state).length > 0;
+
+export const selectAccountState = (state) => ({
+  accounts: selectAccounts(state),
+  selectedAccount: selectSelectedAccount(state),
+  selectedCurrency: selectSelectedCurrency(state),
+  accountLoading: selectAccountLoading(state),
+  balanceLoading: selectBalanceLoading(state),
+  accountError: selectAccountError(state),
+  hasFetchedAccount: selectHasFetchedAccount(state),
+  fetchAttempted: selectFetchAttempted(state),
+  lastUpdated: selectLastUpdated(state),
+  accountDropdown: selectAccountDropdown(state),
+});
 
 export const {
   setSelectedAccount,
@@ -315,10 +381,11 @@ export const {
   resetAccountState,
   refreshLastUpdated,
   setHasFetchedAccount,
+  setFetchAttempted,
   debugAccountState,
   resetFetchCoordination,
   clearSuccessfulFetch,
   forceRefreshAccounts,
 } = accountSlice.actions;
 
-export default accountSlice.reducer;  
+export default accountSlice.reducer;

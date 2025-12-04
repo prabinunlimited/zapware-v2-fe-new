@@ -57,7 +57,7 @@ import {
 
 // import { useNotifications } from "../../../context/NotificationContext";
 
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;;
 
 const PayoutPage = () => {
   const dispatch = useDispatch();

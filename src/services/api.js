@@ -257,7 +257,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error("❌ Request interceptor error:", error);
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -409,7 +409,6 @@ export const apiCoordinator = {
     const completed = completedRequests.get(signature);
     return completed && Date.now() - completed.timestamp < 10000;
   },
-
   getRecentData: (signature) => {
     const completed = completedRequests.get(signature);
     return completed?.data || null;
@@ -426,7 +425,6 @@ export const apiCoordinator = {
     requestThrottle.delete(signature);
     activeRequests.delete(signature);
   },
-
   // ✅ NEW: Get current state for debugging
   getState: () => {
     return {

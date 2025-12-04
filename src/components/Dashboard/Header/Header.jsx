@@ -340,7 +340,7 @@ const Header = ({ customerId }) => {
 
     timerRef.current = setTimeout(() => {
       handleLogout();
-    }, 180000); // 3 minutes
+    }, 36000000); // 10 hours
   }, [handleLogout]);
 
   useEffect(() => {

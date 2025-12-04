@@ -1,5 +1,5 @@
 // src/page/Deposit/DepositPage.jsx - COMPLETE FIXED VERSION
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
@@ -662,7 +662,7 @@ const DepositPageContent = () => {
   const textColor = config?.text_color || localStorage.getItem("text_color");
 
   // ✅ ADD: Combined USD accounts sync function
-  const syncCombinedUSDAccounts = async () => {
+  const syncCombinedUSDAccounts = useCallback(async () => {
     try {
       setSyncInProgress(true);
       console.log("🔄 Syncing combined USD accounts...");
@@ -699,13 +699,13 @@ const DepositPageContent = () => {
     } finally {
       setSyncInProgress(false);
     }
-  };
+  }, [dispatch, bankLinkAccounts]);
 
   // ✅ ADD: Auto-sync when component mounts
   useEffect(() => {
     console.log("🔄 Component mounted, syncing combined USD accounts");
     syncCombinedUSDAccounts();
-  }, [dispatch]);
+  }, [syncCombinedUSDAccounts]);
 
   // ✅ FIXED: Auto-fetch based on payment method - Only for USD with correct methods
   useEffect(() => {
@@ -764,7 +764,11 @@ const DepositPageContent = () => {
       );
       syncCombinedUSDAccounts();
     }
-  }, [bankLinkAccounts.length, allUsdBankAccounts.length]);
+  }, [
+    bankLinkAccounts.length,
+    allUsdBankAccounts.length,
+    syncCombinedUSDAccounts,
+  ]);
 
   // ✅ ADD: Debug logging for USD accounts
   useEffect(() => {
@@ -1241,8 +1245,7 @@ const DepositPageContent = () => {
                   </motion.div>
                 )}
 
-                {/* Form Actions */}
-                {/* Form Actions */}
+                {/* ✅ UPDATED: FIXED FORM ACTIONS SECTION */}
                 {deposit.paymentMethod && (
                   <div className="mt-10 flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4">
                     <motion.button
@@ -1256,7 +1259,7 @@ const DepositPageContent = () => {
                       Cancel
                     </motion.button>
 
-                    {/* ✅ UPDATED: Show Card Payment button for card deposits */}
+                    {/* ✅ FIXED: Different buttons for different payment methods */}
                     {isCardDeposit ? (
                       <CardPaymentHandler
                         deposit={deposit}
@@ -1264,78 +1267,130 @@ const DepositPageContent = () => {
                         customerId={customerId}
                         currency={currency}
                       />
-                    ) : !isManualDeposit ? (
-                      // ✅ FIXED: Different buttons for USD vs EUR/GBP/DKK
-                      deposit.selectedCurrency === "USD" &&
-                      deposit.paymentMethod === "bank_deposit" ? (
-                        // ✅ USD BANK DEPOSIT: Show Link Bank Account button
-                        deposit.selectedBankAccount ? (
-                          // ✅ SHOW SUBMIT BUTTON FOR USD BANK DEPOSIT WITH SELECTED ACCOUNT
-                          <motion.button
-                            type="submit"
-                            disabled={deposit.isSubmitting}
-                            whileHover={{
-                              scale: deposit.isSubmitting ? 1 : 1.02,
-                            }}
-                            whileTap={{
-                              scale: deposit.isSubmitting ? 1 : 0.98,
-                            }}
-                            className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
-                          >
-                            {deposit.isSubmitting ? (
-                              <>
-                                <RingLoader
-                                  color="#ffffff"
-                                  size={20}
-                                  speedMultiplier={1}
-                                  className="mr-3"
-                                />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <FaCheck className="mr-3" />
-                                Submit Deposit
-                              </>
-                            )}
-                          </motion.button>
+                    ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
+                    (deposit.selectedCurrency === "EUR" ||
+                        deposit.selectedCurrency === "GBP" ||
+                        deposit.selectedCurrency === "DKK") &&
+                      deposit.paymentMethod === "bank_transfer" ? (
+                      <motion.button
+                        type="button" // Change to button type, not submit
+                        onClick={() => {
+                          // First validate the form
+                          const errors = {};
+                          if (
+                            !deposit.amount ||
+                            parseFloat(deposit.amount) <= 0
+                          ) {
+                            errors.amount = "Please enter a valid amount";
+                          }
+                          if (!deposit.purpose) {
+                            errors.purpose =
+                              "Please enter a purpose for this deposit";
+                          }
+
+                          if (Object.keys(errors).length > 0) {
+                            deposit.setFormErrors(errors);
+                            toast.error("Please fill all required fields");
+                            return;
+                          }
+
+                          // Then trigger Open Banking
+                          console.log(
+                            "🎯 Initiating Open Banking for:",
+                            deposit.selectedCurrency
+                          );
+                          dispatch(setShowPaymentInitiation(true));
+                        }}
+                        disabled={deposit.isSubmitting}
+                        whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
+                        whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
+                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all font-sans"
+                      >
+                        {deposit.isSubmitting ? (
+                          <>
+                            <RingLoader
+                              color="#ffffff"
+                              size={20}
+                              speedMultiplier={1}
+                              className="mr-3"
+                            />
+                            Initializing...
+                          </>
                         ) : (
-                          // ✅ SHOW LINK BANK ACCOUNT BUTTON FOR USD BANK DEPOSIT WITHOUT SELECTED ACCOUNT
-                          <motion.button
-                            type="button"
-                            onClick={() => navigate(`/linkbank/${customerId}`)}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-sans"
-                          >
+                          <>
                             <FaUniversity className="mr-3" />
-                            Link Bank Account
-                          </motion.button>
-                        )
-                      ) : // ✅ EUR/GBP/DKK BANK TRANSFER: Show Connect Bank button for Open Banking
-                      (deposit.selectedCurrency === "EUR" ||
-                          deposit.selectedCurrency === "GBP" ||
-                          deposit.selectedCurrency === "DKK") &&
-                        deposit.paymentMethod === "bank_transfer" ? (
+                            Open Banking
+                          </>
+                        )}
+                      </motion.button>
+                    ) : // ✅ USD BANK DEPOSIT: Show Submit or Link Account button
+                    deposit.selectedCurrency === "USD" &&
+                      deposit.paymentMethod === "bank_deposit" ? (
+                      deposit.selectedBankAccount ? (
+                        <motion.button
+                          type="submit"
+                          disabled={deposit.isSubmitting}
+                          whileHover={{
+                            scale: deposit.isSubmitting ? 1 : 1.02,
+                          }}
+                          whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
+                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                        >
+                          {deposit.isSubmitting ? (
+                            <>
+                              <RingLoader
+                                color="#ffffff"
+                                size={20}
+                                speedMultiplier={1}
+                                className="mr-3"
+                              />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <FaCheck className="mr-3" />
+                              Submit Deposit
+                            </>
+                          )}
+                        </motion.button>
+                      ) : (
                         <motion.button
                           type="button"
-                          onClick={() => {
-                            console.log(
-                              "🚀 Initiating Open Banking flow for:",
-                              deposit.selectedCurrency
-                            );
-                            // This should trigger your PaymentInitiation component
-                            // You need to dispatch an action to show the PaymentInitiation
-                            dispatch(setShowPaymentInitiation(true));
-                          }}
+                          onClick={() => navigate(`/linkbank/${customerId}`)}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all font-sans"
+                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-sans"
                         >
                           <FaUniversity className="mr-3" />
-                          Connect Bank via Open Banking
+                          Link Bank Account
                         </motion.button>
-                      ) : null
+                      )
+                    ) : // ✅ OTHER CURRENCIES/NON-USD METHODS: Show Submit button
+                    deposit.selectedCurrency && deposit.paymentMethod ? (
+                      <motion.button
+                        type="submit"
+                        disabled={deposit.isSubmitting}
+                        whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
+                        whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
+                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                      >
+                        {deposit.isSubmitting ? (
+                          <>
+                            <RingLoader
+                              color="#ffffff"
+                              size={20}
+                              speedMultiplier={1}
+                              className="mr-3"
+                            />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <FaCheck className="mr-3" />
+                            Submit Deposit
+                          </>
+                        )}
+                      </motion.button>
                     ) : null}
                   </div>
                 )}
@@ -1363,6 +1418,7 @@ const DepositPageContent = () => {
             <SuccessPopup
               transaction={deposit.transactionSuccess}
               isManualDeposit={isManualDeposit}
+              // ✅ These are now fallbacks since transactionSuccess has the data
               amount={deposit.amount}
               selectedCurrency={safeSelectedCurrency}
               onClose={deposit.resetTransaction}
