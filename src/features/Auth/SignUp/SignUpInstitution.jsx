@@ -322,7 +322,6 @@ const Institution = () => {
       controller_street_address_1: "",
       controller_street_address_2: "",
       controller_zip_code: "",
-      controller_house_number: "",
       controller_gender: "",
       controller_dob: "",
       controller_designation: "",
@@ -1241,7 +1240,6 @@ const Institution = () => {
           ),
           controllerCountry: findCountryId(finalFormData.controller_country),
 
-          house_number: finalFormData.house_number,
           mobilenumber_countrycode: finalFormData.mobilenumber_countrycode,
           hostname: window.location.hostname,
           terms_and_conditions: finalFormData.terms_and_conditions || [],
@@ -1252,7 +1250,6 @@ const Institution = () => {
           controllerCity: finalFormData.controller_city,
           controllerZipCode: finalFormData.controller_zip_code,
           controllerState: finalFormData.controller_state,
-          controllerHouseNumber: finalFormData.controller_house_number,
           controllerDesignation: finalFormData.controller_designation,
           controllerDob: finalFormData.controller_dob,
           controllerEmail: finalFormData.controller_email,
@@ -1530,7 +1527,6 @@ const Institution = () => {
           controller_street_address_1: values.street_address_1,
           controller_street_address_2: values.street_address_2,
           controller_zip_code: values.zip_code,
-          controller_house_number: values.house_number,
           controller_gender: values.gender,
           controller_dob: values.dob,
           controller_designation: values.designation,
@@ -1567,7 +1563,6 @@ const Institution = () => {
             "controller_street_address_1",
             "controller_street_address_2",
             "controller_zip_code",
-            "controller_house_number",
             "controller_gender",
             "controller_dob",
             "controller_designation",
@@ -1958,23 +1953,8 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 9: House Number & Gender */}
-              <FormField
-                id="controller_house_number"
-                label="House Number"
-                name="controller_house_number"
-                value={values.controller_house_number || ""}
-                onChange={enhancedHandleChange(
-                  "controller_house_number",
-                  setFieldValue
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_house_number}
-                error={errors.controller_house_number}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
-              />
+              {/* Row 9: Gender */}
+          
               <SelectField
                 id="controller_gender"
                 label="Gender"
@@ -2213,21 +2193,6 @@ const Institution = () => {
                     <h2 className="text-xl font-semibold mb-4">
                       Business Information
                     </h2>
-                    {accountType && (
-                      <div
-                        className={`mb-4 p-3 rounded-lg ${
-                          accountType === "named"
-                            ? "bg-green-50 border border-green-200"
-                            : "bg-blue-50 border border-blue-200"
-                        }`}
-                      >
-                        <p className="text-sm font-medium">
-                          Account Type:{" "}
-                          <span className="capitalize">{accountType}</span>
-                          {isNamedAccount && " - Business Alias Required"}
-                        </p>
-                      </div>
-                    )}
 
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -3193,26 +3158,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* House Number on full row */}
-                      <div className="mb-4">
-                        <FormField
-                          id="house_number"
-                          label="House Number"
-                          name="house_number"
-                          value={values.house_number || ""}
-                          onChange={enhancedHandleChange(
-                            "house_number",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("house_number")}
-                          touched={touched.house_number}
-                          error={errors.house_number}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
                     </div>
 
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">

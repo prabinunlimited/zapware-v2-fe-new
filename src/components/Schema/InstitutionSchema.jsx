@@ -320,7 +320,6 @@ const institutionSchema = (currentStep, options = {}) => {
       /^[A-Z0-9\s-]+$/,
       "Invalid ZIP/postal code format"
     ),
-    house_number: requiredString,
     gender: requiredString,
     dob: dateOfBirth,
     designation: requiredString,
@@ -409,7 +408,6 @@ const institutionSchema = (currentStep, options = {}) => {
             /^[A-Z0-9\s-]+$/,
             "Invalid ZIP/postal code format"
           ),
-          controller_house_number: requiredString,
           controller_gender: requiredString,
           controller_dob: dateOfBirth,
           controller_designation: requiredString,
