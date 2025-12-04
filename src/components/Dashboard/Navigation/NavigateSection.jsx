@@ -1,4 +1,4 @@
-// src/components/NavigateSection.js - RESPONSIVE IMPLEMENTATION WITH ERROR BOUNDARY
+// src/components/NavigateSection.js - UPDATED WITH POPUP
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -11,8 +11,7 @@ import linkImg from "../../../assets/images/icon/Checkout-Img.png";
 import remitImg from "../../../assets/images/icon/Remit-Img.png";
 import addImg from "../../../assets/images/icon/AddAccount.png";
 import { MdAccountBalance } from "react-icons/md";
-// import FeatureUnavailablePopup from "../../components/FeatureUnavailablePopup";
-// import NavigationPopup from "../Popup/NavigationPopup";
+import FeatureComingSoonPopup from "../../PopupModal/FeatureComingSoonPopup"; // NEW IMPORT
 import ZapPlaidLink from "../../ZapPlaidLink/ZapPlaidLink";
 import { Download } from "lucide-react";
 import PropTypes from "prop-types";
@@ -20,7 +19,6 @@ import ClipLoader from "react-spinners/ClipLoader";
 
 // Import Error Boundary
 import ErrorBoundary from "../../ErrorBoundary/ErrorBoundary";
-import { SafeErrorDisplay } from "../../../utils/errorHandling";
 
 // Redux imports
 import {
@@ -109,6 +107,10 @@ function NavigateSectionContent({
   const [isPopupVisible, setIsPopupVisible] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [featurePopup, setFeaturePopup] = useState({
+    isOpen: false,
+    featureName: ""
+  }); // NEW STATE
 
   // Refs for performance optimization
   const hasFetchBeenCalled = useRef(false);
@@ -232,6 +234,22 @@ function NavigateSectionContent({
     }
   };
 
+  // NEW: Open feature coming soon popup
+  const openFeaturePopup = (featureName) => {
+    setFeaturePopup({
+      isOpen: true,
+      featureName
+    });
+  };
+
+  // NEW: Close feature popup
+  const closeFeaturePopup = () => {
+    setFeaturePopup({
+      isOpen: false,
+      featureName: ""
+    });
+  };
+
   const handleTransferClick = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -270,6 +288,7 @@ function NavigateSectionContent({
     }
   };
 
+  // UPDATED: Handle Convert click - show coming soon popup
   const handleConversionClick = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -284,7 +303,9 @@ function NavigateSectionContent({
         );
         return;
       }
-      navigate(`/conversion/${customerId}`);
+      // Instead of navigating, show coming soon popup
+      openFeaturePopup("Currency Conversion");
+      // navigate(`/conversion/${customerId}`); // Commented out for now
     } catch (error) {
       setLocalError("Failed to navigate to conversion");
     }
@@ -304,13 +325,16 @@ function NavigateSectionContent({
     navigate(`/payout/${customerId}`);
   };
 
+  // UPDATED: Handle Remit click - show coming soon popup
   const handleRemitClick = () => {
     try {
       if (customerStatus === "Deactivated") {
         showPopup("Your account is deactivated. You cannot remit money.");
         return;
       }
-      navigate(`/remittance/${customerId}`);
+      // Instead of navigating, show coming soon popup
+      openFeaturePopup("Remittance");
+      // navigate(`/remittance/${customerId}`); // Commented out for now
     } catch (error) {
       setLocalError("Failed to navigate to remittance");
     }
@@ -415,288 +439,318 @@ function NavigateSectionContent({
   }
 
   return (
-    <div
-      className="px-2 sm:px-4 md:px-6 w-full max-w-md lg:max-w-lg xl:max-w-xl mx-auto lg:mx-0 lg:ml-4"
-      style={{ color: textColor }}
-    >
-      <div className="w-full flex flex-col gap-3 sm:gap-4">
-        {/* Transfer Money */}
-        {allowedModules.some((module) => module.module_name === "Transfer") &&
-          (hostName === "localhost" ||
-          hostName === "ourzap.unlimitedremit.com" ||
-          hostName === "sandbox-ourzap.unlimitedremit.com" ? (
-            <div
-              onClick={handleTransferClick}
-              className="w-full cursor-pointer"
-            >
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={depositImg}
-                    alt="Transfer Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Transfer
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Transfer Money
-                    </p>
-                  </div>
-                </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-              </div>
-            </div>
-          ) : (
-            <div
-              onClick={() => navigate(`/transfer/${customerId}`)}
-              className="w-full cursor-pointer"
-            >
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={depositImg}
-                    alt="Internal Transfer Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Internal Transfer
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Transfer Money
-                    </p>
-                  </div>
-                </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-              </div>
-            </div>
-          ))}
-
-        {/* Deposit */}
-        {allowedModules.some((module) => module.module_name === "Deposit") && (
-          <div onClick={handleDepositClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <img
-                  src={depositImg}
-                  alt="Deposit Icon"
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Deposit
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Deposit Money
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* Convert */}
-        {(allowedModules.some((module) => module.module_name === "Convert") ||
-          hostName === "ourzap.unlimitedremit.com") && (
-          <div
-            onClick={handleConversionClick}
-            className="w-full cursor-pointer"
-          >
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <img
-                  src={convertImg}
-                  alt="Convert Icon"
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Convert
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Global currency conversion
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* Payout */}
-        {allowedModules.some((module) => module.module_name === "Payout") && (
-          <div onClick={handlePayoutClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <img
-                  src={remitImg}
-                  alt="Payout Icon"
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Payout
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Send money WorldWide
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* Remittance */}
-        {allowedModules.some(
-          (module) => module.module_name === "Remittance"
-        ) && (
-          <div onClick={handleRemitClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <img
-                  src={remitImg}
-                  alt="Remittance Icon"
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Remittance
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Send money globally
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* Add More Accounts */}
-        {allowedModules.some(
-          (module) => module.module_name === "Add More Accounts"
-        ) && (
-          <div
-            onClick={() => navigate(`/addaccount/${customerId}`)}
-            className="w-full cursor-pointer"
-          >
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <img
-                  src={addImg}
-                  alt="Add Account Icon"
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Add More Accounts
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Enhance accessibility
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* Link Bank */}
-        {isRemittanceOnlyCustomer === "Y" && selectedCurrencyCode === "USD" && (
-          <div onClick={handleLinkBankClick} className="w-full cursor-pointer">
-            <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-              <div className="flex items-center space-x-3 sm:space-x-4">
-                <MdAccountBalance className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                    Link Bank
-                  </h2>
-                  <p
-                    className="text-xs text-gray-500 truncate"
-                    {...textColorProps}
-                  >
-                    Connect your bank
-                  </p>
-                </div>
-              </div>
-              <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </div>
-        )}
-
-        {/* User Manual */}
-        {download_operation_manual === "Y" && (
-          <div className="w-full flex justify-center mt-2">
-            <div
-              onClick={handleUserManualClick}
-              className="w-full sm:w-3/4 cursor-pointer"
-            >
-              <div className="rounded-2xl border flex justify-center items-center border-stroke h-14 sm:h-16 text-white bg-gray-800 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-700 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                {manualLoading ? (
-                  <div className="flex justify-center items-center">
-                    <ClipLoader color="#36d7b7" size={25} />
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-3">
-                    <Download className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                    <div className="text-center sm:text-left">
-                      <h2 className="text-sm sm:text-base font-semibold">
-                        User Manual
+    <>
+      <div
+        className="px-2 sm:px-4 md:px-6 w-full max-w-md lg:max-w-lg xl:max-w-xl mx-auto lg:mx-0 lg:ml-4"
+        style={{ color: textColor }}
+      >
+        <div className="w-full flex flex-col gap-3 sm:gap-4">
+          {/* Transfer Money */}
+          {allowedModules.some((module) => module.module_name === "Transfer") &&
+            (hostName === "localhost" ||
+            hostName === "ourzap.unlimitedremit.com" ||
+            hostName === "sandbox-ourzap.unlimitedremit.com" ? (
+              <div
+                onClick={handleTransferClick}
+                className="w-full cursor-pointer"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={depositImg}
+                      alt="Transfer Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Transfer
                       </h2>
-                      <p className="text-xs text-gray-300">
-                        Download user guide
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Transfer Money
                       </p>
                     </div>
                   </div>
-                )}
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => navigate(`/transfer/${customerId}`)}
+                className="w-full cursor-pointer"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={depositImg}
+                      alt="Internal Transfer Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Internal Transfer
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Transfer Money
+                      </p>
+                    </div>
+                  </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                </div>
+              </div>
+            ))}
+
+          {/* Deposit */}
+          {allowedModules.some((module) => module.module_name === "Deposit") && (
+            <div onClick={handleDepositClick} className="w-full cursor-pointer">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={depositImg}
+                    alt="Deposit Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Deposit
+                    </h2>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Deposit Money
+                    </p>
+                  </div>
+                </div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Convert - UPDATED with Coming Soon indicator */}
+          {(allowedModules.some((module) => module.module_name === "Convert") ||
+            hostName === "ourzap.unlimitedremit.com") && (
+            <div
+              onClick={handleConversionClick}
+              className="w-full cursor-pointer relative group"
+            >
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-gradient-to-r from-white to-blue-50 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-blue-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={convertImg}
+                    alt="Convert Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Convert
+                      </h2>
+                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full font-medium">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Global currency conversion
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <div className="animate-pulse bg-blue-500 w-2 h-2 rounded-full mr-2"></div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0" />
+                </div>
+              </div>
+              {/* Hover Tooltip */}
+              <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                Feature coming soon - Click to learn more
+                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Payout */}
+          {allowedModules.some((module) => module.module_name === "Payout") && (
+            <div onClick={handlePayoutClick} className="w-full cursor-pointer">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={remitImg}
+                    alt="Payout Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Payout
+                    </h2>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Send money WorldWide
+                    </p>
+                  </div>
+                </div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+              </div>
+            </div>
+          )}
+
+          {/* Remittance - UPDATED with Coming Soon indicator */}
+          {allowedModules.some(
+            (module) => module.module_name === "Remittance"
+          ) && (
+            <div onClick={handleRemitClick} className="w-full cursor-pointer relative group">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-gradient-to-r from-white to-purple-50 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-purple-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={remitImg}
+                    alt="Remittance Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Remittance
+                      </h2>
+                      <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full font-medium">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Send money globally
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <div className="animate-pulse bg-purple-500 w-2 h-2 rounded-full mr-2"></div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 flex-shrink-0" />
+                </div>
+              </div>
+              {/* Hover Tooltip */}
+              <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                Feature coming soon - Click to learn more
+                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Add More Accounts */}
+          {allowedModules.some(
+            (module) => module.module_name === "Add More Accounts"
+          ) && (
+            <div
+              onClick={() => navigate(`/addaccount/${customerId}`)}
+              className="w-full cursor-pointer"
+            >
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={addImg}
+                    alt="Add Account Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Add More Accounts
+                    </h2>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Enhance accessibility
+                    </p>
+                  </div>
+                </div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+              </div>
+            </div>
+          )}
+
+          {/* Link Bank */}
+          {isRemittanceOnlyCustomer === "Y" && selectedCurrencyCode === "USD" && (
+            <div onClick={handleLinkBankClick} className="w-full cursor-pointer">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <MdAccountBalance className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Link Bank
+                    </h2>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Connect your bank
+                    </p>
+                  </div>
+                </div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+              </div>
+            </div>
+          )}
+
+          {/* User Manual */}
+          {download_operation_manual === "Y" && (
+            <div className="w-full flex justify-center mt-2">
+              <div
+                onClick={handleUserManualClick}
+                className="w-full sm:w-3/4 cursor-pointer"
+              >
+                <div className="rounded-2xl border flex justify-center items-center border-stroke h-14 sm:h-16 text-white bg-gray-800 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-700 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  {manualLoading ? (
+                    <div className="flex justify-center items-center">
+                      <ClipLoader color="#36d7b7" size={25} />
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-3">
+                      <Download className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      <div className="text-center sm:text-left">
+                        <h2 className="text-sm sm:text-base font-semibold">
+                          User Manual
+                        </h2>
+                        <p className="text-xs text-gray-300">
+                          Download user guide
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation Popup */}
+        {/* {popupData.show && (
+          <NavigationPopup
+            message={popupData.message}
+            onClose={() => dispatch(setPopupData({ show: false, message: "", onConfirm: null }))}
+            onConfirm={() => {
+              dispatch(setPopupData({ show: false, message: "", onConfirm: null }));
+              if (popupData.onConfirm) popupData.onConfirm();
+            }}
+          />
+        )} */}
       </div>
 
-      {/* Navigation Popup */}
-      {/* {popupData.show && (
-        <NavigationPopup
-          message={popupData.message}
-          onClose={() => dispatch(setPopupData({ show: false, message: "", onConfirm: null }))}
-          onConfirm={() => {
-            dispatch(setPopupData({ show: false, message: "", onConfirm: null }));
-            if (popupData.onConfirm) popupData.onConfirm();
-          }}
-        />
-      )} */}
-
-      {/* Show Popup when isPopupVisible is true */}
-      {/* {isPopupVisible && (
-        <FeatureUnavailablePopup onClose={handlePopupToggle} />
-      )} */}
-    </div>
+      {/* Feature Coming Soon Popup */}
+      <FeatureComingSoonPopup
+        isOpen={featurePopup.isOpen}
+        onClose={closeFeaturePopup}
+        featureName={featurePopup.featureName}
+      />
+    </>
   );
 }
 
