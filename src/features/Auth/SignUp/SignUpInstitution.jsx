@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -26,6 +26,10 @@ import {
   fetchCountries,
   selectCountriesOptions,
   selectCountriesLoading,
+  fetchLocationByZip,
+  selectZipLookup,
+  selectLocationLoading,
+  clearZipLookupData,
 } from "../../../features/Auth/slices/countrySlice";
 
 import {
@@ -221,6 +225,8 @@ const Institution = () => {
   const institutionState = useSelector(selectInstitutionRegistration);
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
+  const zipLookup = useSelector(selectZipLookup);
+  const locationLoading = useSelector(selectLocationLoading); 
 
   const isNamedAccount = useSelector(selectIsNamedAccount);
   const selectedAccounts = useSelector(selectSelectedAccounts);
@@ -229,6 +235,14 @@ const Institution = () => {
   const termsConditions = useSelector(selectTermsConditions);
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
+
+   // ADD THESE STATE VARIABLES:
+  const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
+  const [isZipLoading, setIsZipLoading] = useState(false);
+  const [zipApiError, setZipApiError] = useState(null);
+  const countryCodeRef = useRef('');
+
+  
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
@@ -552,6 +566,14 @@ const Institution = () => {
       }, 1000);
     }
   }, [dispatch]);
+
+  useEffect(() => {
+    return () => {
+      if (zipDebounceTimer) {
+        clearTimeout(zipDebounceTimer);
+      }
+    };
+  }, [zipDebounceTimer]);
 
   const validateEIN = useCallback(
     (ein) => {
@@ -1117,6 +1139,8 @@ const Institution = () => {
     setPendingNextStep(false);
   }, []);
 
+
+
   const handleSubmit = useCallback(
     async (values, { setSubmitting, setErrors }) => {
       try {
@@ -1507,6 +1531,9 @@ const Institution = () => {
       enhancedSelectChange,
       passwordValidationRules,
       formatTaxId,
+      handleControllerZipLookup,
+      isZipLoading,
+      activeField, 
     }) => {
       const dispatch = useDispatch();
       const syncControllerFromPrimary = useCallback(() => {
@@ -1841,7 +1868,7 @@ const Institution = () => {
                 </div>
               </div>
 
-              {/* Row 6: Country & State */}
+              {/* Row 6: Country & Zip */}
               <SelectField
                 id="controller_country"
                 label="Country"
@@ -1874,10 +1901,25 @@ const Institution = () => {
                 label="ZIP/Postal Code"
                 name="controller_zip_code"
                 value={values.controller_zip_code || ""}
-                onChange={enhancedHandleChange(
-                  "controller_zip_code",
-                  setFieldValue
-                )}
+                onChange={(e) => {
+                  const zipCode = e.target.value;
+                  enhancedHandleChange("controller_zip_code", setFieldValue)(e);
+                  
+                  // Clear previous timer
+                  if (zipDebounceTimer) {
+                    clearTimeout(zipDebounceTimer);
+                  }
+                  
+                  // Set debounced lookup
+                  const timer = setTimeout(() => {
+                    const countryId = values.controller_country;
+                    if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                      handleControllerZipLookup(zipCode, countryId);
+                    }
+                  }, 1000);
+                  
+                  setZipDebounceTimer(timer);
+                }}
                 onBlur={handleBlur}
                 touched={touched.controller_zip_code}
                 error={errors.controller_zip_code}
@@ -1885,6 +1927,11 @@ const Institution = () => {
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
+              {isZipLoading && activeField === "controller_zip_code" && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <ClipLoader size={16} color="#3b82f6" />
+                </div>
+              )}
               <FormField
                 id="controller_state"
                 label="State/Province"
@@ -2146,6 +2193,100 @@ const Institution = () => {
           setTouched,
           isSubmitting,
         }) => {
+          React.useEffect(() => {
+            setFormValues(values);
+          }, [values]);
+
+           // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
+          const handleBusinessZipLookup = useCallback(async (zipCode, countryId) => {
+            const country = countryOptions.find(opt => opt.value === countryId);
+            if (!country || !country.country_code) {
+              console.log('❌ Country code not found for ID:', countryId);
+              return;
+            }
+            
+            setIsZipLoading(true);
+            setZipApiError(null);
+            
+            try {
+              const result = await dispatch(fetchLocationByZip({
+                countryCode: country.country_code,
+                zipCode: zipCode
+              })).unwrap();
+              
+              if (result.success) {
+                // Auto-fill city and state for business address
+                if (result.city) {
+                  setFieldValue('registered_address_street_city', result.city);
+                }
+                if (result.state) {
+                  setFieldValue('registered_address_street_state', result.state);
+                }
+              }
+            } catch (error) {
+              console.log('❌ ZIP lookup failed:', error.message);
+              setZipApiError(error.message || 'Unable to fetch location data');
+            } finally {
+              setIsZipLoading(false);
+            }
+          }, [dispatch, countryOptions, setFieldValue]); // Now setFieldValue is in scope!
+
+          const handleResponsiblePersonZipLookup = useCallback(async (zipCode, countryId) => {
+            const country = countryOptions.find(opt => opt.value === countryId);
+            if (!country || !country.country_code) return;
+            
+            setIsZipLoading(true);
+            setZipApiError(null);
+            
+            try {
+              const result = await dispatch(fetchLocationByZip({
+                countryCode: country.country_code,
+                zipCode: zipCode
+              })).unwrap();
+              
+              if (result.success) {
+                if (result.city) {
+                  setFieldValue('city', result.city);
+                }
+                if (result.state) {
+                  setFieldValue('state', result.state);
+                }
+              }
+            } catch (error) {
+              console.log('❌ ZIP lookup failed:', error.message);
+            } finally {
+              setIsZipLoading(false);
+            }
+          }, [dispatch, countryOptions, setFieldValue]);
+
+          const handleControllerZipLookup = useCallback(async (zipCode, countryId) => {
+            const country = countryOptions.find(opt => opt.value === countryId);
+            if (!country || !country.country_code) return;
+            
+            setIsZipLoading(true);
+            setZipApiError(null);
+            
+            try {
+              const result = await dispatch(fetchLocationByZip({
+                countryCode: country.country_code,
+                zipCode: zipCode
+              })).unwrap();
+              
+              if (result.success) {
+                if (result.city) {
+                  setFieldValue('controller_city', result.city);
+                }
+                if (result.state) {
+                  setFieldValue('controller_state', result.state);
+                }
+              }
+            } catch (error) {
+              console.log('❌ ZIP lookup failed:', error.message);
+            } finally {
+              setIsZipLoading(false);
+            }
+          }, [dispatch, countryOptions, setFieldValue]);
+
           React.useEffect(() => {
             setFormValues(values);
           }, [values]);
@@ -2504,25 +2645,46 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                        <FormField
+                       <FormField
                           id="registered_address_street_zip"
                           label="ZIP/Postal Code"
                           name="registered_address_street_zip"
                           value={values.registered_address_street_zip || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_zip",
-                            setFieldValue
-                          )}
+                          onChange={(e) => {
+                            const zipCode = e.target.value;
+                            enhancedHandleChange(
+                              "registered_address_street_zip",
+                              setFieldValue
+                            )(e);
+                            
+                            // Clear previous timer
+                            if (zipDebounceTimer) {
+                              clearTimeout(zipDebounceTimer);
+                            }
+                            
+                            // Set debounced lookup
+                            const timer = setTimeout(() => {
+                              const countryId = values.registered_address_street_country;
+                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                                handleBusinessZipLookup(zipCode, countryId);
+                              }
+                            }, 1000);
+                            
+                            setZipDebounceTimer(timer);
+                          }}
                           onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_zip")
-                          }
+                          onFocus={() => setActiveField("registered_address_street_zip")}
                           touched={touched.registered_address_street_zip}
                           error={errors.registered_address_street_zip}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
+                        {isZipLoading && activeField === "registered_address_street_zip" && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <ClipLoader size={16} color="#3b82f6" />
+                          </div>
+                        )}
                        
                       </div>
 
@@ -3069,15 +3231,30 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                           <FormField
+                        <FormField
                           id="zip_code"
                           label="ZIP/Postal Code"
                           name="zip_code"
                           value={values.zip_code || ""}
-                          onChange={enhancedHandleChange(
-                            "zip_code",
-                            setFieldValue
-                          )}
+                          onChange={(e) => {
+                            const zipCode = e.target.value;
+                            enhancedHandleChange("zip_code", setFieldValue)(e);
+                            
+                            // Clear previous timer
+                            if (zipDebounceTimer) {
+                              clearTimeout(zipDebounceTimer);
+                            }
+                            
+                            // Set debounced lookup
+                            const timer = setTimeout(() => {
+                              const countryId = values.country;
+                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                                handleResponsiblePersonZipLookup(zipCode, countryId);
+                              }
+                            }, 1000);
+                            
+                            setZipDebounceTimer(timer);
+                          }}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("zip_code")}
                           touched={touched.zip_code}
@@ -3085,6 +3262,7 @@ const Institution = () => {
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
+                          loading={isZipLoading && activeField === "zip_code"}
                         />
                       </div>
 
@@ -3294,6 +3472,9 @@ const Institution = () => {
                       enhancedSelectChange={enhancedSelectChange}
                       passwordValidationRules={passwordValidationRules}
                       formatTaxId={formatTaxId}
+                      handleControllerZipLookup={handleControllerZipLookup}
+                      isZipLoading={isZipLoading} 
+                      activeField={activeField}
                     />
                   </motion.div>
                 )}
@@ -3528,15 +3709,7 @@ const Institution = () => {
                   onConfirm={handleSSNConfirm}
                 />
               )}
-              {Object.keys(errors).length > 0 &&
-                Object.keys(touched).length > 0 && (
-                  <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-50 flex items-center animate-bounce">
-                    <i className="fas fa-exclamation-triangle mr-2"></i>
-                    <span className="text-sm font-medium">
-                      Please correct the errors in the form
-                    </span>
-                  </div>
-                )}
+              
             </Form>
           );
         }}
