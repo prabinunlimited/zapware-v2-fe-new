@@ -1,11 +1,10 @@
-// src/features/location/locationSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { countries } from "../../../features/Auth/slices/countrySlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Async Thunks
+// Async Thunks - Keep only countries and ZIP lookup
 export const fetchCountries = createAsyncThunk(
   "location/fetchCountries",
   async (_, { rejectWithValue }) => {
@@ -17,67 +16,95 @@ export const fetchCountries = createAsyncThunk(
   }
 );
 
-export const fetchStates = createAsyncThunk(
-  "location/fetchStates",
-  async (countryId, { getState, rejectWithValue }) => {
+// Fetch location by ZIP code using Zippopotam API
+export const fetchLocationByZip = createAsyncThunk(
+  "location/fetchLocationByZip",
+  async ({ countryCode, zipCode }, { rejectWithValue }) => {
     try {
-      const { auth } = getState();
-      const token = auth.bearerToken || localStorage.getItem("bearertoken");
-
-      const response = await axios.get(
-        `${API_URL}/country-states/${countryId}`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 8000,
+      // Clean and validate inputs
+      const cleanCountryCode = countryCode?.toUpperCase()?.trim() || '';
+      const cleanZipCode = zipCode?.trim()?.replace(/\s+/g, '') || '';
+      
+      if (!cleanCountryCode || !cleanZipCode) {
+        return rejectWithValue("Country code and ZIP code are required");
+      }
+      
+      // Try Zippopotam API first
+      let response;
+      try {
+        response = await axios.get(
+          `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
+          { timeout: 3000 }
+        );
+      } catch (zippoError) {
+        console.log('❌ Zippopotam API failed, trying fallback...');
+        
+        if (cleanCountryCode === 'GB') {
+          try {
+            const ukResponse = await axios.get(
+              `https://api.postcodes.io/postcodes/${cleanZipCode}`,
+              { timeout: 3000 }
+            );
+            
+            const ukData = ukResponse.data;
+            if (ukData.result) {
+              return {
+                state: ukData.result.region || '',
+                city: ukData.result.admin_district || ukData.result.admin_ward || '',
+                stateAbbr: '',
+                country: 'United Kingdom',
+                countryAbbr: 'GB',
+                postCode: ukData.result.postcode || cleanZipCode,
+                places: [],
+                zipCode: cleanZipCode,
+                originalZipCode: zipCode,
+                success: true,
+                source: 'postcodes.io',
+                rawData: ukData
+              };
+            }
+          } catch (ukError) {
+            console.log('❌ UK postcodes.io also failed');
+          }
         }
-      );
+        
+        // If all APIs fail, check if it's a valid format but no data
+        throw zippoError;
+      }
 
-      const statesData = response.data.data || [];
-
+      // Zippopotam succeeded
+      const data = response.data;
+      
+      const place = data.places?.[0];
+      const state = place?.state || '';
+      const city = place?.["place name"] || '';
+      const stateAbbr = place?.["state abbreviation"] || '';
+      
       return {
-        countryId,
-        states: statesData,
-        hasStates: statesData.length > 0,
-        message:
-          statesData.length > 0
-            ? `Found ${statesData.length} states`
-            : "No states found for this country",
+        state,
+        city,
+        stateAbbr,
+        country: data.country || '',
+        countryAbbr: data["country abbreviation"] || '',
+        postCode: data["post code"] || cleanZipCode,
+        places: data.places || [],
+        zipCode: cleanZipCode,
+        originalZipCode: zipCode,
+        success: true,
+        source: 'zippopotam.us',
+        rawData: data
       };
+      
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch states"
-      );
-    }
-  }
-);
-
-export const fetchCities = createAsyncThunk(
-  "location/fetchCities",
-  async (stateId, { getState, rejectWithValue }) => {
-    try {
-      const { auth } = getState();
-      const token = auth.bearerToken || localStorage.getItem("bearertoken");
-
-      const response = await axios.get(`${API_URL}/state-cities/${stateId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: 8000,
+      console.error('❌ All location APIs failed:', error.message);
+      
+      return rejectWithValue({
+        message: "Invalid postal code format or no data available",
+        zipCode,
+        countryCode,
+        error: error.message,
+        suggestion: "Please check the postal code format or enter location manually"
       });
-
-      const citiesData = response.data.data || [];
-
-      return {
-        stateId,
-        cities: citiesData,
-        hasCities: citiesData.length > 0, // Add this flag
-        message:
-          citiesData.length > 0
-            ? `Found ${citiesData.length} cities`
-            : "No cities found for this state",
-      };
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch cities"
-      );
     }
   }
 );
@@ -85,30 +112,17 @@ export const fetchCities = createAsyncThunk(
 // Initial State
 const initialState = {
   countries: [],
-  states: [],
-  cities: [],
   selectedCountry: null,
-  selectedState: null,
-  selectedCity: null,
-  // Add these flags
-  hasStates: false,
-  hasCities: false,
-  lastUpdated: null,
+  zipLookup: {
+    loading: false,
+    data: null,
+    error: null
+  },
   loading: {
     countries: false,
-    states: false,
-    cities: false,
-    refresh: false,
   },
   error: {
     countries: null,
-    states: null,
-    cities: null,
-  },
-  metadata: {
-    countriesCount: 0,
-    lastFetchTimestamp: null,
-    cacheStatus: "fresh",
   },
 };
 
@@ -119,21 +133,19 @@ const locationSlice = createSlice({
   reducers: {
     setSelectedCountry: (state, action) => {
       state.selectedCountry = action.payload;
-      state.states = [];
-      state.cities = [];
-      state.selectedState = null;
-      state.selectedCity = null;
-    },
-    setSelectedState: (state, action) => {
-      state.selectedState = action.payload;
-      state.cities = [];
-      state.selectedCity = null;
-    },
-    setSelectedCity: (state, action) => {
-      state.selectedCity = action.payload;
+      // Clear ZIP lookup data when country changes
+      state.zipLookup.data = null;
+      state.zipLookup.error = null;
     },
     clearLocationData: (state) => {
       return initialState;
+    },
+    clearZipLookupData: (state) => {
+      state.zipLookup = {
+        loading: false,
+        data: null,
+        error: null
+      };
     },
   },
   extraReducers: (builder) => {
@@ -152,36 +164,20 @@ const locationSlice = createSlice({
         state.error.countries = action.payload;
       })
 
-      // States
-      .addCase(fetchStates.pending, (state) => {
-        state.loading.states = true;
-        state.error.states = null;
+      // ZIP Code Lookup
+      .addCase(fetchLocationByZip.pending, (state) => {
+        state.zipLookup.loading = true;
+        state.zipLookup.error = null;
       })
-      .addCase(fetchStates.fulfilled, (state, action) => {
-        state.loading.states = false;
-        state.states = action.payload.states;
-        state.hasStates = action.payload.hasStates; 
-        state.lastUpdated = Date.now();
+      .addCase(fetchLocationByZip.fulfilled, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.data = action.payload;
+        state.zipLookup.error = null;
       })
-      .addCase(fetchStates.rejected, (state, action) => {
-        state.loading.states = false;
-        state.error.states = action.payload;
-      })
-
-      // Cities
-      .addCase(fetchCities.pending, (state) => {
-        state.loading.cities = true;
-        state.error.cities = null;
-      })
-      .addCase(fetchCities.fulfilled, (state, action) => {
-        state.loading.cities = false;
-        state.cities = action.payload.cities;
-        state.hasCities = action.payload.hasCities; 
-        state.lastUpdated = Date.now();
-      })
-      .addCase(fetchCities.rejected, (state, action) => {
-        state.loading.cities = false;
-        state.error.cities = action.payload;
+      .addCase(fetchLocationByZip.rejected, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.error = action.payload;
+        state.zipLookup.data = null;
       });
   },
 });
@@ -189,20 +185,13 @@ const locationSlice = createSlice({
 // Export actions and selectors
 export const {
   setSelectedCountry,
-  setSelectedState,
-  setSelectedCity,
   clearLocationData,
+  clearZipLookupData,
 } = locationSlice.actions;
 
 export const selectCountries = (state) => state.location.countries;
-export const selectStates = (state) => state.location.states;
-export const selectCities = (state) => state.location.cities;
 export const selectSelectedCountry = (state) => state.location.selectedCountry;
-export const selectSelectedState = (state) => state.location.selectedState;
-export const selectSelectedCity = (state) => state.location.selectedCity;
 export const selectLocationLoading = (state) => state.location.loading;
-export const selectLocationError = (state) => state.location.error;
-export const selectHasStates = (state) => state.location.hasStates;
-export const selectHasCities = (state) => state.location.hasCities;
+export const selectZipLookup = (state) => state.location.zipLookup;
 
 export default locationSlice.reducer;

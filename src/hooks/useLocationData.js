@@ -1,46 +1,42 @@
-import { useEffect } from 'react';
+import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchCountries,
-  fetchStates,
-  fetchCities,
+  fetchLocationByZip,
+  clearZipLookupData,
   selectCountries,
-  selectStates,
-  selectCities,
-  selectLocationLoading
+  selectLocationLoading,
+  selectZipLookup
 } from '../features/Auth/slices/locationSlice';
 
-export const useLocationData = (countryId, stateId) => {
+export const useLocationData = () => {
   const dispatch = useDispatch();
   const countries = useSelector(selectCountries);
-  const states = useSelector(selectStates);
-  const cities = useSelector(selectCities);
   const loading = useSelector(selectLocationLoading);
+  const zipLookup = useSelector(selectZipLookup);
 
-  useEffect(() => {
+  const loadCountries = useCallback(() => {
     if (countries.length === 0) {
       dispatch(fetchCountries());
     }
   }, [dispatch, countries.length]);
 
-  useEffect(() => {
-    if (countryId) {
-      dispatch(fetchStates(countryId));
+  const lookupByZipCode = useCallback((countryCode, zipCode) => {
+    if (countryCode && zipCode && zipCode.length >= 3) {
+      dispatch(fetchLocationByZip({ countryCode, zipCode }));
     }
-  }, [dispatch, countryId]);
+  }, [dispatch]);
 
-  useEffect(() => {
-    if (stateId) {
-      dispatch(fetchCities(stateId));
-    }
-  }, [dispatch, stateId]);
+  const clearZipData = useCallback(() => {
+    dispatch(clearZipLookupData());
+  }, [dispatch]);
 
   return {
     countries,
-    states,
-    cities,
     loading,
-    hasStates: states.length > 0,
-    hasCities: cities.length > 0
+    zipLookup,
+    lookupByZipCode,
+    clearZipData,
+    loadCountries
   };
 };

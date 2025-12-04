@@ -1,4 +1,3 @@
-// src/features/Auth/slices/signupSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api.js";
 

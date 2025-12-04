@@ -1,5 +1,4 @@
-// src/features/Auth/SignUp/SignUpIndividual.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef  } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -22,19 +21,14 @@ import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
+
 import {
   fetchCountries,
-  fetchStates,
-  fetchCities,
   setSelectedCountry,
-  setSelectedState,
-  setSelectedCity,
+  clearZipLookupData,
+  fetchLocationByZip, 
   selectCountries,
-  selectStates,
-  selectCities,
   selectSelectedCountry,
-  selectSelectedState,
-  selectSelectedCity,
   selectLocationLoading,
   selectHasStates,
   selectHasCities,
@@ -52,7 +46,6 @@ import {
   setTermsAccepted,
   selectAcceptedTerms,
   clearTermsError,
-  setFormField,
   setMetadataField,
   selectNationalities,
   selectIdDocumentTypes,
@@ -169,18 +162,14 @@ function SignUpIndividualContent() {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
+  const countryCodeRef = useRef('');
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
-  const states = useSelector(selectStates) || [];
-  const cities = useSelector(selectCities) || [];
   const selectedCountry = useSelector(selectSelectedCountry);
-  const selectedState = useSelector(selectSelectedState);
-  const selectedCity = useSelector(selectSelectedCity);
   const {
     countries: loadingCountries,
-    states: loadingStates,
-    cities: loadingCities,
+  
   } = useSelector(selectLocationLoading);
 
   // Other Redux selectors
@@ -201,8 +190,7 @@ function SignUpIndividualContent() {
   const isLoadingNationalities = useSelector(selectNationalitiesLoading);
   const isLoadingDocumentTypes = useSelector(selectIdDocumentTypesLoading);
 
-  const hasStates = useSelector(selectHasStates);
-  const hasCities = useSelector(selectHasCities);
+  const zipLookup = useSelector(selectZipLookup);
 
   // Extract location state with defaults
   const {
@@ -252,7 +240,6 @@ function SignUpIndividualContent() {
     mobile_number: Yup.string()
       .required("Phone number is required")
       .matches(/^\d{10}$/, "Phone number must be 10 digits"),
-    resident_country: Yup.string().required("Resident country is required"),
     street_address_1: Yup.string().required("Street address is required"),
     city: Yup.string().required("City is required"),
     state: Yup.string().required("State/Province is required"),
@@ -296,7 +283,6 @@ function SignUpIndividualContent() {
       first_name: "",
       last_name: "",
       email: "",
-      resident_country: "",
       mobilenumber_countrycode: "",
       flag_url: "",
       service_providers: service_provide_ids,
@@ -698,13 +684,21 @@ function SignUpIndividualContent() {
 
   // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
-    const countryId = selectedOption?.value || "";
+    const countryId = selectedOption?.value || '';
+    const countryCode = selectedOption?.country_code || '';
 
     dispatch(setSelectedCountry(selectedOption));
 
     formik.setFieldValue("country", countryId);
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
+    formik.setFieldValue("zip_code", "");
+    
+    // Store country code for ZIP lookup
+    countryCodeRef.current = countryCode;
+    
+    // Clear ZIP lookup data
+    dispatch(clearZipLookupData());
 
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
@@ -727,6 +721,15 @@ function SignUpIndividualContent() {
     if (stateId) {
       dispatch(fetchCities(stateId));
     }
+    
+    // Set new timer for debounced lookup
+    const timer = setTimeout(() => {
+      if (zipCode && countryCode && zipCode.length >= 3) {
+        handleZipCodeLookup(zipCode, countryCode);
+      }
+    }, 1000);
+    
+    setZipDebounceTimer(timer);
   };
 
   // City change handler
@@ -761,7 +764,7 @@ function SignUpIndividualContent() {
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
-  };
+  }, [dispatch, formik]);
 
   const handleCountryCodeSelect = (selectedOption) => {
     formik.setFieldValue(
@@ -980,16 +983,6 @@ function SignUpIndividualContent() {
     flag_url: country.flag_url,
     phoneCode: country.phone_code,
     country_code: country.country_code,
-  }));
-
-  const stateOptions = states.map((state) => ({
-    value: state.id,
-    label: state.name,
-  }));
-
-  const cityOptions = cities.map((city) => ({
-    value: city.id,
-    label: city.name,
   }));
 
   const nationalityOptions = nationalities.map((nat) => ({
@@ -1563,29 +1556,7 @@ function SignUpIndividualContent() {
                       onBlur={formik.handleBlur}
                       className="basic-single"
                       classNamePrefix="select"
-                      styles={{
-                        ...customStyles,
-                        control: (provided, state) => ({
-                          ...provided,
-                          minHeight: "52px",
-                          borderRadius: "12px",
-                          borderColor:
-                            formik.touched.country && formik.errors.country
-                              ? "#f87171"
-                              : "#e5e7eb",
-                          boxShadow: state.isFocused
-                            ? formik.touched.country && formik.errors.country
-                              ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                              : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                            : "none",
-                          "&:hover": {
-                            borderColor:
-                              formik.touched.country && formik.errors.country
-                                ? "#ef4444"
-                                : "#3b82f6",
-                          },
-                        }),
-                      }}
+                      styles={customStyles}
                       placeholder="Select Country"
                       value={selectedCountry}
                       isLoading={loadingCountries}
@@ -1596,7 +1567,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1612,27 +1582,35 @@ function SignUpIndividualContent() {
                   {/* State Field */}
                   <div>
                     <label
-                      htmlFor="state"
+                      htmlFor="zip_code"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
-                      State/Province *
+                      ZIP/Postal Code *
                       {selectedCountry && (
-                        <span className="ml-2 text-xs text-gray-500 font-normal">
-                          {hasStates
-                            ? "(Select from list)"
-                            : "(Enter manually)"}
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Will auto-fill state & city
                         </span>
                       )}
                     </label>
 
                     {!selectedCountry ? (
                       <input
+                        id="zip_code"
+                        name="zip_code"
                         type="text"
-                        id="state"
-                        name="state"
-                        disabled
-                        placeholder="Select country first"
-                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-400 shadow-sm"
+                        placeholder={
+                          selectedCountry?.label === "United States"
+                            ? "e.g., 10155"
+                            : "Postal code"
+                        }
+                        onChange={handleZipCodeChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.zip_code}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.zip_code && formik.errors.zip_code
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                       />
                     ) : loadingStates ? (
                       <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
@@ -1645,41 +1623,16 @@ function SignUpIndividualContent() {
                       <Select
                         id="state"
                         name="state"
-                        options={stateOptions}
-                        onChange={handleStateSelect}
+                        onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select State/Province"
-                        styles={{
-                          ...customStyles,
-                          control: (provided, state) => ({
-                            ...provided,
-                            minHeight: "52px",
-                            borderRadius: "12px",
-                            borderColor:
-                              formik.touched.state && formik.errors.state
-                                ? "#f87171"
-                                : "#e5e7eb",
-                            boxShadow: state.isFocused
-                              ? formik.touched.state && formik.errors.state
-                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                              : "none",
-                            "&:hover": {
-                              borderColor:
-                                formik.touched.state && formik.errors.state
-                                  ? "#ef4444"
-                                  : "#3b82f6",
-                            },
-                          }),
-                        }}
-                        value={selectedState}
-                        isClearable={true}
-                        onClear={() => {
-                          dispatch(setSelectedState(null));
-                          formik.setFieldValue("state", "");
-                        }}
+                        value={formik.values.state}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.state && formik.errors.state
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false} // Allow manual editing if needed
                       />
                     ) : (
                       <div className="relative">
@@ -1698,19 +1651,7 @@ function SignUpIndividualContent() {
                           placeholder="Enter state/province"
                         />
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
+                          <ClipLoader size={16} color="#3b82f6" />
                         </div>
                       </div>
                     )}
@@ -1721,7 +1662,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1741,11 +1681,9 @@ function SignUpIndividualContent() {
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       City *
-                      {selectedState && (
-                        <span className="ml-2 text-xs text-gray-500 font-normal">
-                          {hasCities
-                            ? "(Select from list)"
-                            : "(Enter manually)"}
+                      {formik.values.city && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
                         </span>
                       )}
                     </label>
@@ -1777,38 +1715,14 @@ function SignUpIndividualContent() {
                         options={cityOptions}
                         onChange={handleCitySelect}
                         onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select City"
-                        styles={{
-                          ...customStyles,
-                          control: (provided, state) => ({
-                            ...provided,
-                            minHeight: "52px",
-                            borderRadius: "12px",
-                            borderColor:
-                              formik.touched.city && formik.errors.city
-                                ? "#f87171"
-                                : "#e5e7eb",
-                            boxShadow: state.isFocused
-                              ? formik.touched.city && formik.errors.city
-                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                              : "none",
-                            "&:hover": {
-                              borderColor:
-                                formik.touched.city && formik.errors.city
-                                  ? "#ef4444"
-                                  : "#3b82f6",
-                            },
-                          }),
-                        }}
-                        value={selectedCity}
-                        isClearable={true}
-                        onClear={() => {
-                          dispatch(setSelectedCity(null));
-                          formik.setFieldValue("city", "");
-                        }}
+                        value={formik.values.city}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.city && formik.errors.city
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false} // Allow manual editing if needed
                       />
                     ) : (
                       <div className="relative">
@@ -1827,19 +1741,7 @@ function SignUpIndividualContent() {
                           placeholder="Enter city name"
                         />
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
+                          <ClipLoader size={16} color="#3b82f6" />
                         </div>
                       </div>
                     )}
@@ -1850,7 +1752,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1859,47 +1760,6 @@ function SignUpIndividualContent() {
                           />
                         </svg>
                         {formik.errors.city}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* ZIP Code */}
-                  <div>
-                    <label
-                      htmlFor="zip_code"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      ZIP/Postal Code *
-                    </label>
-                    <input
-                      id="zip_code"
-                      name="zip_code"
-                      type="text"
-                      placeholder="12345"
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      value={formik.values.zip_code}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        formik.touched.zip_code && formik.errors.zip_code
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                    />
-                    {formik.touched.zip_code && formik.errors.zip_code ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.zip_code}
                       </p>
                     ) : null}
                   </div>
@@ -1934,7 +1794,6 @@ function SignUpIndividualContent() {
                           className="w-3.5 h-3.5 mr-1"
                           fill="currentColor"
                           viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             fillRule="evenodd"
@@ -1953,7 +1812,7 @@ function SignUpIndividualContent() {
                       htmlFor="street_address_2"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
-                      Street Address 2 (Optional)
+                      Street Address 2/Suite Address (Optional)
                     </label>
                     <input
                       id="street_address_2"
@@ -1985,32 +1844,7 @@ function SignUpIndividualContent() {
                           onBlur={formik.handleBlur}
                           className="basic-single"
                           classNamePrefix="select"
-                          styles={{
-                            ...customStyles,
-                            control: (provided, state) => ({
-                              ...provided,
-                              minHeight: "52px",
-                              borderRadius: "12px",
-                              borderColor:
-                                formik.touched.mobilenumber_countrycode &&
-                                formik.errors.mobilenumber_countrycode
-                                  ? "#f87171"
-                                  : "#e5e7eb",
-                              boxShadow: state.isFocused
-                                ? formik.touched.mobilenumber_countrycode &&
-                                  formik.errors.mobilenumber_countrycode
-                                  ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
-                                  : "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                                : "none",
-                              "&:hover": {
-                                borderColor:
-                                  formik.touched.mobilenumber_countrycode &&
-                                  formik.errors.mobilenumber_countrycode
-                                    ? "#ef4444"
-                                    : "#3b82f6",
-                              },
-                            }),
-                          }}
+                          styles={customStyles}
                           placeholder="Country Code"
                           value={selectedPhoneCode}
                           formatOptionLabel={({ phoneCode, label }) => (
@@ -2029,7 +1863,6 @@ function SignUpIndividualContent() {
                               className="w-3.5 h-3.5 mr-1"
                               fill="currentColor"
                               viewBox="0 0 20 20"
-                              xmlns="http://www.w3.org/2000/svg"
                             >
                               <path
                                 fillRule="evenodd"
@@ -2066,7 +1899,6 @@ function SignUpIndividualContent() {
                               className="w-3.5 h-3.5 mr-1"
                               fill="currentColor"
                               viewBox="0 0 20 20"
-                              xmlns="http://www.w3.org/2000/svg"
                             >
                               <path
                                 fillRule="evenodd"
@@ -2093,7 +1925,6 @@ function SignUpIndividualContent() {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
                     >
                       <path
                         strokeLinecap="round"
@@ -2115,6 +1946,243 @@ function SignUpIndividualContent() {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </section>
+              {/* Identity Verification Section */}
+              <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
+                    3
+                  </span>
+                  Identity Verification
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* SSN Field */}
+                  {showSSNField && (
+                    <div className="md:col-span-2">
+                      <label
+                        htmlFor="ssn"
+                        className="block text-sm font-medium text-gray-700 mb-2.5"
+                      >
+                        Social Security Number (SSN){" "}
+                        {hasNamedAccounts && (
+                          <span className="text-red-500">*</span>
+                        )}
+                        {!hasNamedAccounts && (
+                          <span className="text-gray-500 text-xs ml-2">
+                            (optional for pooled accounts)
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showSSN ? "text" : "password"}
+                          id="ssn"
+                          name="ssn"
+                          onChange={handleSSNChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.ssn}
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                            (formik.touched.ssn && formik.errors.ssn) ||
+                            ssnError
+                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                          placeholder="XXX-XX-XXXX"
+                          maxLength={11}
+                        />
+
+                        {/* Eye toggle button */}
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                          onClick={() => setShowSSN(!showSSN)}
+                          tabIndex={-1}
+                          aria-label={showSSN ? "Hide SSN" : "Show SSN"}
+                        >
+                          <FontAwesomeIcon
+                            icon={showSSN ? faEyeSlash : faEye}
+                          />
+                        </button>
+                      </div>
+
+                      {(formik.touched.ssn && formik.errors.ssn) || ssnError ? (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.ssn || ssnError}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Document Type *
+                    </label>
+
+                    {isLoadingDocumentTypes ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <ClipLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">
+                          Loading document types...
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        name="idDocumentType"
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          !selectedIdDocumentType
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        value={selectedIdDocumentType}
+                        onChange={(e) =>
+                          setSelectedIdDocumentType(e.target.value)
+                        }
+                      >
+                        <option value="">-- Select ID Document Type --</option>
+                        {idDocumentTypes.map((docType) => (
+                          <option key={docType.name} value={docType.name}>
+                            {docType.name}
+                          </option>
+                        ))}
+                        <option value="other">Other</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Other Document Type Input */}
+                  {selectedIdDocumentType === "other" && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                        ID Document Type (Other) *
+                      </label>
+                      <input
+                        type="text"
+                        value={idDocumentTypeOther}
+                        onChange={(e) => setIdDocumentTypeOther(e.target.value)}
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                        placeholder="Specify document type"
+                      />
+                    </div>
+                  )}
+
+                  {/* Document Number */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Document Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="idDocumentNumber"
+                      value={idDocumentNumber}
+                      onChange={(e) => setIdDocumentNumber(e.target.value)}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idDocumentNumber
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      placeholder="Enter document number"
+                    />
+                  </div>
+
+                  {/* Issuing Country */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Issuing Country *
+                    </label>
+                    <select
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedCountryCode
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      value={idIssuedCountryCode}
+                      onChange={(e) => setIdIssuedCountryCode(e.target.value)}
+                    >
+                      <option value="">Select Country</option>
+                      {countries.map((country) => (
+                        <option key={country.id} value={country.country_code}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Issue Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      ID Expiry Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="idIssuedDate"
+                      value={idIssuedDate}
+                      onChange={(e) => setIdIssuedDate(e.target.value)}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !idIssuedDate
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between mt-10">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(1)}
+                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(3)}
+                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                  >
+                    Next: Security
+                    <svg
+                      className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                       xmlns="http://www.w3.org/2000/svg"
                     >
                       <path
@@ -2127,6 +2195,177 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
+              {/* Security Section */}
+              <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
+                    4
+                  </span>
+                  Security
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      htmlFor="password"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={passwordVisible ? "text" : "password"}
+                        id="password"
+                        name="password"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.password}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.password && formik.errors.password
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Create a strong password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                        onClick={() => setPasswordVisible(!passwordVisible)}
+                        tabIndex={-1}
+                      >
+                        <FontAwesomeIcon
+                          icon={passwordVisible ? faEyeSlash : faEye}
+                        />
+                      </button>
+                    </div>
+                    {formik.touched.password && formik.errors.password && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.password}
+                      </p>
+                    )}
+
+                    <div className="mt-6 bg-blue-50/60 p-5 rounded-xl border border-blue-100">
+                      <p className="text-sm font-medium text-gray-700 mb-3">
+                        Password Requirements:
+                      </p>
+                      <ul className="text-sm text-gray-600 space-y-2.5">
+                        {validationRules.map((rule, idx) => (
+                          <li
+                            key={idx}
+                            className={`flex items-center ${
+                              isRuleMet(rule.regex)
+                                ? "text-green-600"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {isRuleMet(rule.regex) ? (
+                              <FontAwesomeIcon
+                                icon={faCheckCircle}
+                                className="mr-2.5 text-green-500"
+                              />
+                            ) : (
+                              <svg
+                                className="w-4 h-4 mr-2.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            )}
+                            {rule.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="confirmPassword"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Confirm Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={confirmPasswordVisible ? "text" : "password"}
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.confirmPassword}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                          formik.touched.confirmPassword &&
+                          formik.errors.confirmPassword
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Confirm your password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                        onClick={() =>
+                          setConfirmPasswordVisible(!confirmPasswordVisible)
+                        }
+                        tabIndex={-1}
+                      >
+                        <FontAwesomeIcon
+                          icon={confirmPasswordVisible ? faEyeSlash : faEye}
+                        />
+                      </button>
+                    </div>
+                    {formik.touched.confirmPassword &&
+                      formik.errors.confirmPassword && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.confirmPassword}
+                        </p>
+                      )}
+                    {formik.values.password &&
+                      formik.values.confirmPassword &&
+                      formik.values.password ===
+                        formik.values.confirmPassword && (
+                        <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
+                          <FontAwesomeIcon
+                            icon={faCheckCircle}
+                            className="mr-2"
+                          />
+                          Passwords match
+                        </div>
+                      )}
+                  </div>
+                </div>
 
               {/* Identity Verification Section */}
               <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
