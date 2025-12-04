@@ -1870,6 +1870,22 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
               <FormField
+                id="controller_zip_code"
+                label="ZIP/Postal Code"
+                name="controller_zip_code"
+                value={values.controller_zip_code || ""}
+                onChange={enhancedHandleChange(
+                  "controller_zip_code",
+                  setFieldValue
+                )}
+                onBlur={handleBlur}
+                touched={touched.controller_zip_code}
+                error={errors.controller_zip_code}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                fieldStyles={FIELD_STYLES}
+              />
+              <FormField
                 id="controller_state"
                 label="State/Province"
                 name="controller_state"
@@ -1923,7 +1939,7 @@ const Institution = () => {
               {/* Row 8: Street Address 2 & ZIP Code */}
               <FormField
                 id="controller_street_address_2"
-                label="Street Address 2 (Optional)"
+                label="Street Address 2/ Suite Address (Optional)"
                 name="controller_street_address_2"
                 value={values.controller_street_address_2 || ""}
                 onChange={enhancedHandleChange(
@@ -1933,22 +1949,6 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_street_address_2}
                 error={errors.controller_street_address_2}
-                disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
-              />
-              <FormField
-                id="controller_zip_code"
-                label="ZIP/Postal Code"
-                name="controller_zip_code"
-                value={values.controller_zip_code || ""}
-                onChange={enhancedHandleChange(
-                  "controller_zip_code",
-                  setFieldValue
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_zip_code}
-                error={errors.controller_zip_code}
-                required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
@@ -2481,6 +2481,94 @@ const Institution = () => {
                         Registered Address
                       </h3>
 
+                      {/* ZIP/Postal Code and Registered Address Country on same row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                         <SelectField
+                          id="registered_address_street_country"
+                          label="Country"
+                          options={countryOptions}
+                          onChange={enhancedSelectChange(
+                            "registered_address_street_country",
+                            setFieldValue
+                          )}
+                          value={countryOptions.find(
+                            (opt) =>
+                              opt.value ===
+                              values.registered_address_street_country
+                          )}
+                          touched={touched.registered_address_street_country}
+                          error={errors.registered_address_street_country}
+                          required
+                          isLoading={countriesLoading}
+                          fieldStyles={FIELD_STYLES}
+                          isCountryField={true}
+                          showPhoneCode={false}
+                        />
+                        <FormField
+                          id="registered_address_street_zip"
+                          label="ZIP/Postal Code"
+                          name="registered_address_street_zip"
+                          value={values.registered_address_street_zip || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_zip",
+                            setFieldValue
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_zip")
+                          }
+                          touched={touched.registered_address_street_zip}
+                          error={errors.registered_address_street_zip}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                       
+                      </div>
+
+                      {/* City and State/Province on same row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                         <FormField
+                          id="registered_address_street_state"
+                          label="State/Province"
+                          name="registered_address_street_state"
+                          value={values.registered_address_street_state || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_state",
+                            setFieldValue
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_state")
+                          }
+                          touched={touched.registered_address_street_state}
+                          error={errors.registered_address_street_state}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        <FormField
+                          id="registered_address_street_city"
+                          label="City"
+                          name="registered_address_street_city"
+                          value={values.registered_address_street_city || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_city",
+                            setFieldValue
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_city")
+                          }
+                          touched={touched.registered_address_street_city}
+                          error={errors.registered_address_street_city}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                       
+                      </div>
+
                       {/* Street Address and Street Address 2 on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <FormField
@@ -2504,7 +2592,7 @@ const Institution = () => {
                         />
                         <FormField
                           id="registered_address_street_2"
-                          label="Street Address 2 (Optional)"
+                          label="Street Address 2/ Suite Address (Optional)"
                           name="registered_address_street_2"
                           value={values.registered_address_street_2 || ""}
                           onChange={enhancedHandleChange(
@@ -2519,92 +2607,6 @@ const Institution = () => {
                           error={errors.registered_address_street_2}
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* City and State/Province on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <FormField
-                          id="registered_address_street_city"
-                          label="City"
-                          name="registered_address_street_city"
-                          value={values.registered_address_street_city || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_city",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_city")
-                          }
-                          touched={touched.registered_address_street_city}
-                          error={errors.registered_address_street_city}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="registered_address_street_state"
-                          label="State/Province"
-                          name="registered_address_street_state"
-                          value={values.registered_address_street_state || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_state",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_state")
-                          }
-                          touched={touched.registered_address_street_state}
-                          error={errors.registered_address_street_state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* ZIP/Postal Code and Registered Address Country on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <FormField
-                          id="registered_address_street_zip"
-                          label="ZIP/Postal Code"
-                          name="registered_address_street_zip"
-                          value={values.registered_address_street_zip || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_zip",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_zip")
-                          }
-                          touched={touched.registered_address_street_zip}
-                          error={errors.registered_address_street_zip}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <SelectField
-                          id="registered_address_street_country"
-                          label="Registered Address Country"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "registered_address_street_country",
-                            setFieldValue
-                          )}
-                          value={countryOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.registered_address_street_country
-                          )}
-                          touched={touched.registered_address_street_country}
-                          error={errors.registered_address_street_country}
-                          required
-                          isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
-                          isCountryField={true}
-                          showPhoneCode={false}
                         />
                       </div>
 
@@ -3067,6 +3069,27 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
+                           <FormField
+                          id="zip_code"
+                          label="ZIP/Postal Code"
+                          name="zip_code"
+                          value={values.zip_code || ""}
+                          onChange={enhancedHandleChange(
+                            "zip_code",
+                            setFieldValue
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("zip_code")}
+                          touched={touched.zip_code}
+                          error={errors.zip_code}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* City and Street Address 1 on same row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
                           id="state"
                           label="State/Province"
@@ -3084,10 +3107,6 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                      </div>
-
-                      {/* City and Street Address 1 on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
                           id="city"
                           label="City"
@@ -3102,7 +3121,12 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        <FormField
+                     
+                      </div>
+
+                      {/* Street Address 2 and ZIP/Postal Code on same row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                         <FormField
                           id="street_address_1"
                           label="Street Address 1"
                           name="street_address_1"
@@ -3119,13 +3143,9 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                      </div>
-
-                      {/* Street Address 2 and ZIP/Postal Code on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
                           id="street_address_2"
-                          label="Street Address 2 (Optional)"
+                          label="Street Address 2/ Suite Address (Optional)"
                           name="street_address_2"
                           value={values.street_address_2 || ""}
                           onChange={enhancedHandleChange(
@@ -3139,23 +3159,7 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        <FormField
-                          id="zip_code"
-                          label="ZIP/Postal Code"
-                          name="zip_code"
-                          value={values.zip_code || ""}
-                          onChange={enhancedHandleChange(
-                            "zip_code",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("zip_code")}
-                          touched={touched.zip_code}
-                          error={errors.zip_code}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
+                       
                       </div>
 
                     </div>
