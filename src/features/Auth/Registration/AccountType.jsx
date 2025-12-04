@@ -23,11 +23,11 @@ const AccountType = () => {
   const currentStep = useCurrentStep(); // Get current step from hook
 
   const handleSelectAccount = (type) => {
-    console.log('🎯 [AccountType] handleSelectAccount called with:', type);
+    
     setSelectedAccount(type);
     // Simulate selection before navigation
     setTimeout(() => {
-      console.log('🔄 [AccountType] Navigating to opencurrencyaccount');
+      
       if (type === "partner") {
         navigate("/openpartneraccount");
       } else {
@@ -37,7 +37,7 @@ const AccountType = () => {
   };
 
   const handleCancel = () => {
-    console.log('🔙 [AccountType] handleCancel called, navigating to /');
+    
     navigate("/");
   };
 
@@ -69,18 +69,10 @@ const AccountType = () => {
       color: "purple",
       features: ["Multi-user access", "Bulk transactions", "Reporting tools", "Admin controls", "Dedicated account manager"]
     },
-    ...(hostName === 'localhost' || hostName === 'ourzap.unlimitedremit.com' ? [{
-      id: "partner",
-      title: "Partner Account",
-      description: "Register as a partner to access exclusive features, collaborations, and business opportunities.",
-      icon: partnerIcon,
-      color: "green",
-      features: ["Partner dashboard", "Revenue sharing", "Marketing tools", "API access", "Business growth resources"]
-    }] : [])
   ];
 
-  console.log('🔍 [AccountType] Component rendering');
-  console.log('🔍 [AccountType] Current path:', window.location.pathname);
+  
+  
 
   const closeModal = () => {
     setIsModalOpen(false);

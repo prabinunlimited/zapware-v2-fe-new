@@ -4,35 +4,19 @@ import * as XLSX from "xlsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ✅ TRANSACTION REQUEST COORDINATION
+// ✅ SIMPLIFIED: Remove complex coordination logic
 let transactionFetchInProgress = false;
-const TRANSACTION_FETCH_COOLDOWN = 10000; // 10 seconds
-const successfulTransactionFetches = new Map();
-
-const getTransactionRequestKey = (customerId, currencyCode) => {
-  return `transactions-${customerId}-${currencyCode}`;
-};
-
-const hasSuccessfulTransactionFetch = (customerId, currencyCode) => {
-  return successfulTransactionFetches.has(getTransactionRequestKey(customerId, currencyCode));
-};
 
 // Async thunks
 export const fetchTransactionDetails = createAsyncThunk(
   "transaction/fetchTransactionDetails",
   async ({ customerId, currencyCode }, { rejectWithValue, getState }) => {
     
-    const requestKey = getTransactionRequestKey(customerId, currencyCode);
+    // ✅ REMOVED: Success-based stopping logic
+    // ✅ ALWAYS FETCH when called
     
-    // ✅ STOP IF ALREADY HAVE SUCCESSFUL DATA
-    if (hasSuccessfulTransactionFetch(customerId, currencyCode)) {
-      console.log("✅ Already have successful transaction data, skipping fetch");
-      return rejectWithValue("Already have successful transaction data");
-    }
-
-    // ✅ PREVENT DUPLICATE REQUESTS
+    // ✅ SIMPLE DUPLICATE REQUEST PREVENTION ONLY
     if (transactionFetchInProgress) {
-      console.log("⏸️ Transaction fetch already in progress, skipping...");
       return rejectWithValue("Transaction fetch already in progress");
     }
 
@@ -42,7 +26,7 @@ export const fetchTransactionDetails = createAsyncThunk(
       const state = getState();
       const token = state.auth.token;
 
-      console.log(`🔄 Fetching transactions for ${customerId}/${currencyCode}`);
+      console.log("🔄 TRANSACTION SLICE: Fetching transactions for", currencyCode);
 
       const response = await axios.get(
         `${API_URL}/transactions/currency-transaction-details/${customerId}/${currencyCode}`,
@@ -52,28 +36,15 @@ export const fetchTransactionDetails = createAsyncThunk(
         }
       );
 
-      console.log("✅ Transaction fetch successful:", {
-        customerId,
-        currencyCode,
-        count: response.data.transaction_details?.length || 0
-      });
-
-      // ✅ MARK AS SUCCESSFUL FETCH
-      if (response.data.status === "success") {
-        successfulTransactionFetches.set(requestKey, {
-          timestamp: Date.now(),
-          count: response.data.transaction_details?.length || 0
-        });
-      }
+      console.log("✅ TRANSACTION SLICE: Fetch successful for", currencyCode);
 
       return response.data.transaction_details || [];
     } catch (error) {
-      console.error("❌ Error fetching transactions:", error);
+      console.error("❌ TRANSACTION SLICE: Fetch failed for", currencyCode, error);
       return rejectWithValue(error.message);
     } finally {
-      setTimeout(() => {
-        transactionFetchInProgress = false;
-      }, TRANSACTION_FETCH_COOLDOWN);
+      // Reset immediately after request completes
+      transactionFetchInProgress = false;
     }
   }
 );
@@ -156,27 +127,10 @@ const transactionSlice = createSlice({
       state.error = null;
     },
     resetTransactionState: () => initialState,
-    // ✅ ADDED: Clear successful transaction fetch
-    clearSuccessfulTransactionFetch: (state, action) => {
-      const { customerId, currencyCode } = action.payload;
-      if (customerId && currencyCode) {
-        const key = getTransactionRequestKey(customerId, currencyCode);
-        successfulTransactionFetches.delete(key);
-        console.log("🧹 Cleared successful transaction fetch for:", key);
-      } else {
-        successfulTransactionFetches.clear();
-        console.log("🧹 Cleared all successful transaction fetches");
-      }
-    },
-    // ✅ ADDED: Force refresh transactions
-    forceRefreshTransactions: (state, action) => {
-      const { customerId, currencyCode } = action.payload;
-      if (customerId && currencyCode) {
-        const key = getTransactionRequestKey(customerId, currencyCode);
-        successfulTransactionFetches.delete(key);
-        state.hasFetchedTransactions = false;
-        console.log("🔄 Force refresh transactions for:", key);
-      }
+    // ✅ SIMPLIFIED: Remove complex cache management
+    forceRefreshTransactions: (state) => {
+      // Just reset the local state, no complex cache clearing needed
+      state.hasFetchedTransactions = false;
     },
     setHasFetchedTransactions: (state, action) => {
       state.hasFetchedTransactions = action.payload;
@@ -186,10 +140,12 @@ const transactionSlice = createSlice({
     builder
       // Fetch Transaction Details
       .addCase(fetchTransactionDetails.pending, (state) => {
+        console.log("🔄 TRANSACTION SLICE: Fetch pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchTransactionDetails.fulfilled, (state, action) => {
+        console.log("✅ TRANSACTION SLICE: Fetch fulfilled", action.payload.length, "transactions");
         state.loading = false;
         state.transactions = action.payload;
         state.lastFetched = new Date().toISOString();
@@ -197,17 +153,14 @@ const transactionSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchTransactionDetails.rejected, (state, action) => {
-        // ✅ Don't set error for "already have data" cases
-        const isAlreadyHaveData = action.payload === "Already have successful transaction data";
+        console.log("❌ TRANSACTION SLICE: Fetch rejected", action.payload);
         
-        if (!isAlreadyHaveData) {
+        // ✅ Don't treat "request in progress" as a real error
+        if (action.payload !== "Transaction fetch already in progress") {
           state.error = action.payload;
-        } else {
-          console.log("⏸️ Transaction fetch skipped - already have data");
         }
         
         state.loading = false;
-        state.hasFetchedTransactions = isAlreadyHaveData ? true : state.hasFetchedTransactions;
       })
       // Export to Excel
       .addCase(exportTransactionsToExcel.pending, (state) => {
@@ -229,7 +182,6 @@ export const {
   setLoading,
   clearError,
   resetTransactionState,
-  clearSuccessfulTransactionFetch,
   forceRefreshTransactions,
   setHasFetchedTransactions,
 } = transactionSlice.actions;
@@ -242,18 +194,10 @@ export const selectTransactionError = (state) => state.transaction.error;
 export const selectLastFetched = (state) => state.transaction.lastFetched;
 export const selectHasFetchedTransactions = (state) => state.transaction.hasFetchedTransactions;
 
-// ✅ EXPORT UTILITY FUNCTIONS FOR HOOKS
+// ✅ SIMPLIFIED UTILITY FUNCTIONS
 export const transactionUtils = {
-  getTransactionRequestKey,
-  hasSuccessfulTransactionFetch,
-  clearTransactionSuccessCache: (customerId, currencyCode) => {
-    if (customerId && currencyCode) {
-      const key = getTransactionRequestKey(customerId, currencyCode);
-      successfulTransactionFetches.delete(key);
-    } else {
-      successfulTransactionFetches.clear();
-    }
-  }
+  hasSuccessfulTransactionFetch: () => false, // Always return false to allow fetching
+  clearTransactionSuccessCache: () => {} // No-op since we removed caching
 };
 
 export default transactionSlice.reducer;

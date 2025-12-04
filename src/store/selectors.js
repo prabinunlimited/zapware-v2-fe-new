@@ -1,4 +1,4 @@
-// src/store/selectors.js
+// src/store/selectors.js - CLEANED VERSION
 
 // ✅ CENTRALIZED AUTH SELECTORS
 export const selectAuthToken = (state) => {
@@ -73,3 +73,6 @@ export const selectAccounts = (state) => {
 };
 
 export const selectHasAccounts = (state) => selectAccounts(state).length > 0;
+
+// ✅ REMOVED: All the duplicate AccountSlice code that was copied here
+// This should only be in src/components/Dashboard/Account/AccountSummary/AccountSlice.js

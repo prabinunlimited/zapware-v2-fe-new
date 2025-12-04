@@ -24,15 +24,7 @@ const ManualDepositInfo = ({
   onTooltipHide,
   textColorProps,
 }) => {
-  console.log("🔍 ManualDepositInfo - Props received:", {
-    paymentMethod,
-    selectedCurrency,
-    manualDetailsLoading,
-    manualAccountDetails,
-    manualDetailsError,
-    manualAccountDetailsCurrency: manualAccountDetails?.currency,
-    currenciesMatch: manualAccountDetails?.currency === selectedCurrency,
-  });
+  
 
   // Only show for manual deposit
   if (paymentMethod !== "manual_deposit") {
@@ -105,8 +97,8 @@ const ManualDepositInfo = ({
 
   // Enhanced currency validation with detailed logging
   if (manualAccountDetails.currency !== selectedCurrency) {
-    console.warn(`🚨 Currency mismatch in ManualDepositInfo: Expected ${selectedCurrency}, got ${manualAccountDetails.currency}`);
-    console.log("🔍 ManualDepositInfo - Full account details:", manualAccountDetails);
+    
+    
     
     return (
       <motion.div
@@ -129,12 +121,7 @@ const ManualDepositInfo = ({
     );
   }
 
-  console.log("✅ ManualDepositInfo - Displaying correct currency:", {
-    selectedCurrency,
-    accountCurrency: manualAccountDetails.currency,
-    accountId: manualAccountDetails.account_id,
-    bankName: manualAccountDetails.bank_name,
-  });
+  
 
   return (
     <motion.div

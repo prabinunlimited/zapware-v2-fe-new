@@ -101,7 +101,7 @@ function PhoneVerification() {
   // ========== PLAID HANDLER FUNCTIONS ==========
 
   const handleKycVerification = async (response) => {
-    console.log("🔄 Handling KYC verification:", response);
+    
 
     // If Plaid URL is provided, show modal for KYC verification
     if (response.plaid_url && response.plaid_url !== "") {
@@ -233,14 +233,14 @@ function PhoneVerification() {
         otp: otp.join(""),
       };
 
-      console.log("🔄 Starting OTP validation with:", loginData);
+      
 
       try {
         const result = await dispatch(validateOtp(loginData));
 
         if (result.payload) {
           const data = result.payload;
-          console.log("✅ OTP validation response:", data);
+          
 
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
@@ -278,7 +278,7 @@ function PhoneVerification() {
           toast.error(errorMessage);
         }
       } catch (error) {
-        console.error("💥 Unexpected error during OTP validation:", error);
+        
         toast.error("An unexpected error occurred. Please try again.");
       }
     },
@@ -354,7 +354,7 @@ function PhoneVerification() {
       await dispatch(sendOtp(storedMobileNumber)).unwrap();
       toast.success("Verification code has been sent to your phone!");
     } catch (error) {
-      console.error("Error generating OTP:", error);
+      
       toast.error("Failed to send OTP. Please try again.");
     }
   };
@@ -380,7 +380,7 @@ function PhoneVerification() {
       otp: otp.join(""),
     };
 
-    console.log("📤 PhoneVerification sending:", loginData);
+    
 
     formikSubmit();
   };

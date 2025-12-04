@@ -44,10 +44,10 @@ export default function CardPaymentIframe() {
         script.integrity = 'sha384-dz1P4aPx9IJddp7nzXw5Xq5X7CBiT+zP/6BGoO2KJ0J0p3+qj1tZ9X7CBiT+zP/6';
         script.crossOrigin = 'anonymous';
         script.onload = () => setAdyenLoaded(true);
-        script.onerror = () => console.error('Failed to load Adyen SDK');
+        script.onerror = () => 
         document.head.appendChild(script);
       } catch (error) {
-        console.error('Error loading Adyen:', error);
+        
       }
     };
 
@@ -56,7 +56,7 @@ export default function CardPaymentIframe() {
 
   useEffect(() => {
     if (state) {
-      console.log("🔄 CardPaymentIframe - Initializing with state:", state);
+      
       initializePayment(state, true); // true for iframe
     }
   }, [state, initializePayment]);
@@ -88,15 +88,15 @@ export default function CardPaymentIframe() {
           },
         },
         onPaymentCompleted: (result, component) => {
-          console.info("onPaymentCompleted", result, component);
+          
           handlePaymentCompleted(result.resultCode, state);
         },
         onPaymentFailed: (result, component) => {
-          console.info("onPaymentFailed", result, component);
+          
           handlePaymentFailed(result.resultCode, state);
         },
         onError: (error, component) => {
-          console.error("onError", error.name, error.message, error.stack, component);
+          
           handlePaymentError(error, state);
         },
       });
@@ -119,7 +119,7 @@ export default function CardPaymentIframe() {
       }).mount("#component-Card");
 
     } catch (error) {
-      console.error("❌ Error creating Adyen checkout for iframe:", error);
+      
       handlePaymentError(error, state);
     }
   };

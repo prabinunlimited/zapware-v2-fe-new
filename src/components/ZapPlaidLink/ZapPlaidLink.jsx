@@ -70,7 +70,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
       }
       return errorString;
     } catch (e) {
-      console.error("Error parsing error message:", e);
+      
       return errorString;
     }
   };
@@ -100,7 +100,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error("Error saving Plaid data:", err);
+      
       showApiResponsePopup({
         status: 500,
         data: { error: err.message },
@@ -111,7 +111,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
   const handlePlaidExit = (err) => {
     if (err) {
-      console.error("Plaid Exit Error:", err);
+      
       showApiResponsePopup({
         status: 400,
         data: { error: err },
@@ -136,7 +136,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
       linkHandlerRef.current.open();
     } catch (error) {
-      console.error("Error initializing Plaid:", error);
+      
       showApiResponsePopup({
         status: 500,
         data: { error: error.message },
@@ -163,7 +163,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error("Error deleting account:", err);
+      
       showApiResponsePopup({
         status: 500,
         data: { error: err.message },

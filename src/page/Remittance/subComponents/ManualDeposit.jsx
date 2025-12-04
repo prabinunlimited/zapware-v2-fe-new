@@ -1,0 +1,768 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams } from "react-router-dom";
+import {
+  FaUniversity,
+  FaFileUpload,
+  FaExclamationTriangle,
+  FaSearch,
+  FaUpload,
+  FaUser,
+  FaInfoCircle,
+  FaBriefcase,
+  FaMoneyBillWave,
+  FaPlus,
+} from "react-icons/fa";
+import { ClipLoader } from "react-spinners";
+import Select from "react-select";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import axios from "axios";
+
+// Import Redux actions
+import { setFormField } from "../slices/remittanceSlice";
+import {
+  selectBeneficiaries,
+  setSelectedBeneficiary,
+  setSelectedBank,
+  fetchBeneficiaryBanks,
+  fetchBeneficiaryByCode,
+  selectRemittanceReadyBeneficiaries,
+  selectRemittanceReadyBanks,
+  selectBeneficiariesLoading,
+  fetchBeneficiaries, // ADD THIS LINE
+} from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
+
+const ManualDeposit = ({
+  formData,
+  manualAccountDetails,
+  manualAccountError,
+  manualDetailsLoading,
+  onFileUpload,
+  filePreview,
+  selectedBeneficiary,
+  selectedBank,
+  onBeneficiarySelect,
+  onBankSelect,
+  onFieldChange,
+  purposeOptions = [],
+  incomeSourceOptions = [],
+  relationOptions = [],
+  paymentOptions = [],
+}) => {
+  const dispatch = useDispatch();
+  const { customerId: paramCustomerId } = useParams();
+
+  const allBeneficiaries = useSelector(selectBeneficiaries);
+  const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
+
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  // Transform for dropdown
+  const beneficiaries = useMemo(() => {
+    return allBeneficiaries
+      .filter((benef) => benef.status === 1 && benef.active_status === 1)
+      .map((benef) => ({
+        ...benef,
+        value: benef.id,
+        label: `${benef.name} (${
+          benef.full_phone_number || benef.phone_number || benef.benef_uuid
+        })`,
+        formattedName: `${benef.name} (${
+          benef.phone_number || benef.email || benef.benef_uuid
+        })`,
+      }));
+  }, [allBeneficiaries]);
+
+  // FETCH BENEFICIARIES ON MOUNT
+  useEffect(() => {
+    const customerId =
+      paramCustomerId || localStorage.getItem("customerId") || "1720";
+
+    if (customerId && allBeneficiaries.length === 0 && !beneficiariesLoading) {
+      console.log(
+        "🔄 ManualDeposit: Fetching beneficiaries for customer:",
+        customerId
+      );
+      dispatch(fetchBeneficiaries(customerId));
+    }
+  }, [
+    dispatch,
+    paramCustomerId,
+    allBeneficiaries.length,
+    beneficiariesLoading,
+  ]);
+  const beneficiaryBanks = useSelector(selectRemittanceReadyBanks);
+
+  // ADD THESE LOGS HERE:
+  console.log("All beneficiaries from Redux:", allBeneficiaries);
+  console.log("Remittance ready beneficiaries:", beneficiaries);
+  console.log("Number of all beneficiaries:", allBeneficiaries.length);
+  console.log(
+    "Number of remittance ready beneficiaries:",
+    beneficiaries.length
+  );
+  console.log("Beneficiaries loading state:", beneficiariesLoading);
+
+  // Local state
+  const [beneficiaryCode, setBeneficiaryCode] = useState("");
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [occupations, setOccupations] = useState([]);
+  const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
+
+  // Default payout options
+  const defaultPayoutOptions = useMemo(
+    () => [
+      { value: "bank_deposit", label: "Bank Deposit" },
+      { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
+      { value: "fcy_deposit", label: "FCY Deposit" },
+    ],
+    []
+  );
+
+  const payoutMethodOptions =
+    paymentOptions.length > 0 ? paymentOptions : defaultPayoutOptions;
+
+  // Custom select styles
+  const selectStyles = useMemo(
+    () => ({
+      control: (base) => ({
+        ...base,
+        minHeight: "56px",
+        borderRadius: "0.5rem",
+        borderColor: "#e5e7eb",
+        boxShadow: "none",
+        "&:hover": { borderColor: "#9ca3af" },
+      }),
+      option: (base, { isSelected }) => ({
+        ...base,
+        backgroundColor: isSelected ? "#f3f4f6" : "white",
+        color: isSelected ? "#111827" : "#4b5563",
+        "&:hover": { backgroundColor: "#f3f4f6" },
+        padding: "12px 16px",
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: "0.5rem",
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+      }),
+    }),
+    []
+  );
+
+  // Helper function to find matching option
+  const findMatchingOption = useCallback((options, value) => {
+    if (!value || !options || options.length === 0) return null;
+
+    const valueStr = String(value).toLowerCase();
+    return (
+      options.find(
+        (option) =>
+          String(option.value).toLowerCase() === valueStr ||
+          String(option.label).toLowerCase() === valueStr ||
+          String(option.originalName || "").toLowerCase() === valueStr
+      ) || null
+    );
+  }, []);
+
+  // Fetch occupations on component mount
+  useEffect(() => {
+    const fetchOccupations = async () => {
+      setIsLoadingOccupations(true);
+      try {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await axios.get(`${API_URL}/fetch-occupation`, {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+        });
+
+        if (response.data.success) {
+          const transformedOccupations = response.data.data.map(
+            (occupation) => ({
+              value: occupation.name,
+              label: occupation.name,
+            })
+          );
+          setOccupations(transformedOccupations);
+        }
+      } catch (error) {
+        console.error("Error fetching occupations:", error);
+        // Set default occupations
+        setOccupations([
+          { value: "Business", label: "Business" },
+          { value: "Employee", label: "Employee" },
+          { value: "Student", label: "Student" },
+          { value: "Retired", label: "Retired" },
+          { value: "Unemployed", label: "Unemployed" },
+        ]);
+      } finally {
+        setIsLoadingOccupations(false);
+      }
+    };
+
+    fetchOccupations();
+  }, [API_URL]);
+
+  // Auto-select first beneficiary if none selected
+  useEffect(() => {
+    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
+      const firstBeneficiary = beneficiaries[0];
+      handleBeneficiarySelect(firstBeneficiary);
+    }
+  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
+
+  // Handle beneficiary selection
+  const handleBeneficiarySelect = useCallback(
+    async (selectedOption) => {
+      console.log("ManualDeposit: Beneficiary selected:", selectedOption);
+
+      if (!selectedOption) {
+        onBeneficiarySelect(null);
+        onBankSelect(null);
+        onFieldChange("purpose", null);
+        onFieldChange("incomeSource", null);
+        onFieldChange("relation", null);
+        onFieldChange("occupation", "");
+        onFieldChange("payout_method", null);
+        setShowCodeInput(false);
+        return;
+      }
+
+      setShowCodeInput(false);
+      onBeneficiarySelect(selectedOption);
+
+      // Fetch beneficiary banks
+      try {
+        console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
+        await dispatch(fetchBeneficiaryBanks(selectedOption.id)).unwrap();
+
+        console.log("📋 Banks API Response:", banksResult);
+        console.log("📋 Type of response:", typeof banksResult);
+
+        // Check what's in Redux after fetch
+        console.log("📋 beneficiaryBanks from Redux:", beneficiaryBanks);
+        console.log(
+          "📋 Raw Redux state:",
+          useSelector((state) => state.beneficiaries?.beneficiaryBanks)
+        );
+
+        // Find matching options
+        const matchedPurpose = findMatchingOption(
+          purposeOptions,
+          selectedOption.transfer_purpose
+        );
+
+        const matchedIncomeSource = findMatchingOption(
+          incomeSourceOptions,
+          selectedOption.income_source
+        );
+
+        const matchedRelation = findMatchingOption(
+          relationOptions,
+          selectedOption.relationtobenef
+        );
+
+        const payoutMethodValue =
+          selectedOption.payout_method || selectedOption.payment_method;
+        const matchedPayoutMethod = findMatchingOption(
+          payoutMethodOptions,
+          payoutMethodValue
+        );
+
+        // Update all form fields
+        if (matchedPurpose) onFieldChange("purpose", matchedPurpose);
+        if (matchedIncomeSource)
+          onFieldChange("incomeSource", matchedIncomeSource);
+        if (matchedRelation) onFieldChange("relation", matchedRelation);
+        if (matchedPayoutMethod)
+          onFieldChange("payout_method", matchedPayoutMethod);
+
+        // Set occupation
+        if (selectedOption.occupation) {
+          onFieldChange("occupation", selectedOption.occupation);
+        }
+
+        toast.success("Beneficiary details loaded successfully!");
+      } catch (error) {
+        console.error("Error fetching beneficiary banks:", error);
+        console.error("Error details:", error.message, error.response?.data);
+        toast.error("Failed to load beneficiary bank details");
+      }
+    },
+    [
+      dispatch,
+      onBeneficiarySelect,
+      onBankSelect,
+      onFieldChange,
+      purposeOptions,
+      incomeSourceOptions,
+      relationOptions,
+      payoutMethodOptions,
+      findMatchingOption,
+    ]
+  );
+
+  // Handle beneficiary code lookup
+  const handleBeneficiaryCodeLookupInternal = async () => {
+    if (!beneficiaryCode.trim()) {
+      toast.error("Please enter a beneficiary code");
+      return;
+    }
+
+    try {
+      setIsLoadingCode(true);
+      const result = await dispatch(
+        fetchBeneficiaryByCode(beneficiaryCode)
+      ).unwrap();
+
+      if (result.data) {
+        const beneficiaryData = result.data;
+
+        const transformedBeneficiary = {
+          value: beneficiaryData.id,
+          id: beneficiaryData.id,
+          label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
+          name: beneficiaryData.name,
+          benef_uuid: beneficiaryData.benef_uuid,
+          occupation: beneficiaryData.occupation,
+          relationtobenef: beneficiaryData.relationtobenef,
+          transfer_purpose: beneficiaryData.transfer_purpose,
+          income_source: beneficiaryData.income_source,
+          payout_method:
+            beneficiaryData.payout_method || beneficiaryData.payment_method,
+          ...beneficiaryData,
+        };
+
+        await handleBeneficiarySelect(transformedBeneficiary);
+        toast.success("Beneficiary details loaded successfully!");
+      }
+    } catch (error) {
+      console.error("Error fetching beneficiary by code:", error);
+      if (error.response?.status === 404) {
+        toast.error("No beneficiary found with this code");
+      } else {
+        toast.error("Failed to fetch beneficiary details");
+      }
+    } finally {
+      setIsLoadingCode(false);
+    }
+  };
+
+  // Handle beneficiary code input change
+  const handleBeneficiaryCodeInputChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setBeneficiaryCode(value);
+      setShowCodeInput(value.trim().length > 0);
+
+      // If clearing the code input, enable dropdown
+      if (!value.trim() && selectedBeneficiary) {
+        handleBeneficiarySelect(selectedBeneficiary);
+      }
+    },
+    [selectedBeneficiary, handleBeneficiarySelect]
+  );
+
+  // Handle file upload
+  const handleFileUploadInternal = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      onFileUpload(file);
+      toast.success("Document uploaded successfully");
+    }
+  };
+
+  // Handle occupation change
+  const handleOccupationChange = (selectedOption) => {
+    onFieldChange("occupation", selectedOption?.value || "");
+  };
+
+  // Bank Detail Item component
+  const BankDetailItem = ({ icon, label, value }) => (
+    <div className="flex items-start gap-2">
+      <div className="text-gray-500 mt-0.5 text-sm">{icon}</div>
+      <div className="flex-1">
+        <div className="flex items-center gap-1 mb-1">
+          <p className="text-xs text-gray-500 font-medium">{label}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-gray-800 break-all">
+            {value || "Not available"}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Add New Beneficiary button
+  const handleAddNewBeneficiary = () => {
+    toast.info("Redirecting to add new beneficiary...");
+    // You can implement navigation to beneficiary creation page
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Main container */}
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Manual Deposit Details
+        </h3>
+
+        <div className="space-y-4">
+          {/* Beneficiary Selection - SINGLE SOURCE */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Select Beneficiary
+              </label>
+              <button
+                type="button"
+                onClick={handleAddNewBeneficiary}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                <FaPlus className="w-3 h-3" />
+                Add New Beneficiary
+              </button>
+            </div>
+            <Select
+              options={beneficiaries}
+              value={selectedBeneficiary}
+              onChange={handleBeneficiarySelect}
+              isLoading={beneficiariesLoading} // ✅ Use Redux loading state
+              isDisabled={beneficiariesLoading || showCodeInput}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder={
+                beneficiariesLoading
+                  ? "Loading beneficiaries..."
+                  : showCodeInput
+                  ? "Disabled - Using beneficiary code"
+                  : "Select beneficiary..."
+              }
+              isSearchable
+              getOptionLabel={(option) =>
+                option.formattedName ||
+                `${option.name} (${option.phone_number || option.benef_uuid})`
+              }
+              getOptionValue={(option) => option.id}
+            />
+          </div>
+
+          {/* OR Separator */}
+          <div className="flex items-center my-4">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
+
+          {/* Enter Beneficiary Code Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter Beneficiary Code
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={beneficiaryCode}
+                onChange={handleBeneficiaryCodeInputChange}
+                placeholder="Enter beneficiary code"
+                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoadingCode}
+              />
+              <button
+                type="button"
+                onClick={handleBeneficiaryCodeLookupInternal}
+                disabled={isLoadingCode || !beneficiaryCode.trim()}
+                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                <FaSearch className="mr-2" />
+                {isLoadingCode ? "Loading..." : "Search"}
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Enter the beneficiary code to load their details automatically
+            </p>
+          </div>
+
+          {/* Payout Method */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Payout Method
+            </label>
+            <Select
+              options={payoutMethodOptions}
+              value={formData.payout_method}
+              onChange={(value) => onFieldChange("payout_method", value)}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder="Select payout method..."
+            />
+          </div>
+
+          {/* Purpose of Transfer */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Purpose of Transfer *
+            </label>
+            <Select
+              options={purposeOptions}
+              value={formData.purpose}
+              onChange={(value) => onFieldChange("purpose", value)}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder="Select purpose..."
+            />
+          </div>
+
+          {/* Source of Income */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Source of Income *
+            </label>
+            <Select
+              options={incomeSourceOptions}
+              value={formData.incomeSource}
+              onChange={(value) => onFieldChange("incomeSource", value)}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder="Select income source..."
+            />
+          </div>
+
+          {/* Occupation Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Occupation
+            </label>
+            <div className="flex gap-2">
+              <Select
+                options={occupations}
+                value={
+                  occupations.find(
+                    (opt) => opt.value === formData.occupation
+                  ) || null
+                }
+                onChange={handleOccupationChange}
+                isLoading={isLoadingOccupations}
+                classNamePrefix="select"
+                styles={selectStyles}
+                placeholder={
+                  isLoadingOccupations
+                    ? "Loading occupations..."
+                    : "Select occupation..."
+                }
+                className="flex-1"
+              />
+              <input
+                type="text"
+                value={formData.occupation || ""}
+                onChange={(e) => onFieldChange("occupation", e.target.value)}
+                placeholder="Or enter custom occupation"
+                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Beneficiary Bank */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Beneficiary Bank
+            </label>
+            <Select
+              options={beneficiaryBanks}
+              value={selectedBank}
+              onChange={onBankSelect}
+              isLoading={false}
+              isDisabled={!selectedBeneficiary || beneficiaryBanks.length === 0}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder={
+                !selectedBeneficiary
+                  ? "Select a beneficiary first"
+                  : beneficiaryBanks.length === 0
+                  ? "No bank accounts found for this beneficiary"
+                  : "Select beneficiary bank..."
+              }
+              getOptionLabel={(option) => {
+                // Use the correct field names from your API response
+                const bankName = option.bank_name || "Unknown Bank";
+                const accountNumber =
+                  option.bank_acc_no || option.account_number || "No Account";
+                const rails = option.rails || "";
+                const accountType = option.account_type || "";
+
+                let label = `${bankName} - ${accountNumber}`;
+                if (rails) label += ` (${rails})`;
+                if (accountType) label += ` [${accountType}]`;
+
+                return label;
+              }}
+              getOptionValue={(option) => option.id || option.benef_banks_uuid}
+            />
+            {selectedBeneficiary && beneficiaryBanks.length > 0 && (
+              <p className="mt-1 text-sm text-gray-500">
+                {beneficiaryBanks.length} bank account(s) available
+              </p>
+            )}
+          </div>
+
+          {/* Beneficiary Bank */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Beneficiary Bank
+            </label>
+            <Select
+              options={beneficiaryBanks}
+              value={selectedBank}
+              onChange={onBankSelect}
+              isLoading={false} // Loading handled by parent
+              isDisabled={!selectedBeneficiary}
+              classNamePrefix="select"
+              styles={selectStyles}
+              placeholder={
+                !selectedBeneficiary
+                  ? "Select a beneficiary first"
+                  : "Select beneficiary bank..."
+              }
+              getOptionLabel={(option) =>
+                `${option.bank_name} (${
+                  option.account_number || option.bank_acc_no
+                }) - ${option.rails || option.bank_type || ""}`
+              }
+              getOptionValue={(option) => option.id}
+            />
+          </div>
+
+          {/* Compliance Note */}
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <p className="text-sm text-gray-700">
+              <span className="font-semibold">Note:</span> For compliance
+              purposes, we require information about the purpose of your
+              transfer and source of funds. All information is kept confidential
+              and secure.
+            </p>
+          </div>
+
+          {/* Bank Details Display Section */}
+          <div className="mt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-1">
+              <FaUniversity className="text-blue-500" />
+              Bank account for deposit
+            </h3>
+
+            {manualDetailsLoading ? (
+              <div className="flex justify-center py-3">
+                <ClipLoader color="#2563eb" size={16} />
+                <span className="ml-2 text-sm text-gray-600">
+                  Loading bank details...
+                </span>
+              </div>
+            ) : manualAccountDetails ? (
+              <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <BankDetailItem
+                    icon={<FaUniversity className="text-gray-400" />}
+                    label="Bank Name"
+                    value={manualAccountDetails.bank_name}
+                  />
+                  <BankDetailItem
+                    icon={<FaUser className="text-gray-400" />}
+                    label="Account Name"
+                    value={manualAccountDetails.account_name}
+                  />
+                  <BankDetailItem
+                    icon={<FaInfoCircle className="text-gray-400" />}
+                    label="Account Number"
+                    value={manualAccountDetails.account_number}
+                  />
+                  <BankDetailItem
+                    icon={<FaInfoCircle className="text-gray-400" />}
+                    label="IBAN"
+                    value={manualAccountDetails.iban}
+                  />
+                </div>
+              </div>
+            ) : manualAccountError || manualAccountDetails?.status === 404 ? (
+              <div className="bg-red-50 p-3 rounded border border-red-200">
+                <div className="flex items-start gap-2">
+                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-medium text-red-800 mb-1">
+                      Bank Details Not Found
+                    </h4>
+                    <p className="text-xs text-red-700">
+                      {typeof manualAccountError === "string"
+                        ? manualAccountError
+                        : "Unable to load bank details"}
+                    </p>
+                    <p className="text-xs text-red-600 mt-2">
+                      Please select a different payment method or contact
+                      support.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                <div className="flex items-start gap-2">
+                  <FaExclamationTriangle className="text-yellow-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-medium text-yellow-800 mb-1">
+                      Bank Details Not Available
+                    </h4>
+                    <p className="text-xs text-yellow-700">
+                      Unable to load bank details for manual deposit with{" "}
+                      {formData.sendCurrency?.value || "USD"}. Please select a
+                      different payment method or contact support.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Document Upload Section */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Bank Deposit Proof *
+            </label>
+            <div className="flex items-center">
+              <label className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                <div className="flex flex-col items-center justify-center">
+                  <FaUpload className="w-8 h-8 mb-2 text-gray-500" />
+                  <p className="text-sm text-gray-500">
+                    {formData.document
+                      ? formData.document.name || "Document uploaded"
+                      : "Click to upload document (PDF, JPG, PNG)"}
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  id="manual-deposit-document"
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileUploadInternal}
+                  required
+                />
+              </label>
+            </div>
+            {filePreview && (
+              <div className="mt-2">
+                <img
+                  src={filePreview}
+                  alt="Document preview"
+                  className="h-full object-contain border rounded"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ToastContainer position="bottom-right" autoClose={5000} />
+    </div>
+  );
+};
+
+export default ManualDeposit;

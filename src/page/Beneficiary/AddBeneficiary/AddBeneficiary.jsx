@@ -211,7 +211,6 @@ const AddBeneficiary = () => {
     initialValues: {
       name: "",
       country_id: "",
-      phone_code_country_id: "",
       country_phone_code: "+1",
       phone_number: "",
       email: "",
@@ -242,7 +241,6 @@ const AddBeneficiary = () => {
         name: values.name,
         email: values.email,
         country_id: values.country_id,
-        country_phone_code: values.country_phone_code,
         phone_number: values.phone_number,
         state: values.state,
         city: values.city,
@@ -279,15 +277,7 @@ const AddBeneficiary = () => {
     },
   });
 
-  useEffect(() => {
-    console.log("🔍 Environment Debug:", {
-      VITE_API_URL: import.meta.env.VITE_API_URL,
-      customerId: customerId,
-      fullURL: `${
-        import.meta.env.VITE_API_URL
-      }/beneficiaries/customer-view/${customerId}`,
-    });
-  }, [customerId]);
+  useEffect(() => {}, [customerId]);
 
   // Fetch initial data
   useEffect(() => {
@@ -328,11 +318,22 @@ const AddBeneficiary = () => {
   }, [formik.values.country_id, dispatch]);
 
   // Debug countries data
+  useEffect(() => {}, [countriesOptions, countries, phoneCodeOptions]);
+
+  // Debug useEffect to track Redux state changes
   useEffect(() => {
-    console.log("🌍 Countries Options:", countriesOptions);
-    console.log("🌍 Countries Data:", countries);
-    console.log("🌍 Phone Code Options:", phoneCodeOptions);
-  }, [countriesOptions, countries, phoneCodeOptions]);
+    console.log("=== REDUX STATE UPDATE ===");
+    console.log("Current currency:", currency);
+    console.log("All ID types in Redux:", idTypes);
+    console.log("ID types for current currency:", idTypes[currency]);
+    console.log("Type of idTypes[currency]:", typeof idTypes[currency]);
+
+    if (idTypes[currency]) {
+      console.log("Is array?", Array.isArray(idTypes[currency]));
+      console.log("Array length:", idTypes[currency].length);
+      console.log("First item:", idTypes[currency][0]);
+    }
+  }, [currency, idTypes]);
 
   // Get cities for selected country
   const getCitiesForCountry = () => {
@@ -356,14 +357,8 @@ const AddBeneficiary = () => {
       if (formik.values.relationtobenef === "") return false;
     }
 
-    // Additional checks for specific currencies
-    if (
-      currency === "BDT" ||
-      currency === "INR" ||
-      currency === "PKR" ||
-      currency === "AUD" ||
-      currency === "LKR"
-    ) {
+    // ✅ FIXED: Only check ID fields for BDT, INR, PKR
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (
         formik.values.beneficiary_id_type === "" ||
         formik.values.beneficiary_id_number === ""
@@ -378,15 +373,57 @@ const AddBeneficiary = () => {
 
   const handleCurrencyChange = async (e) => {
     const newCurrency = e.target.value;
-    console.log("new currencies", newCurrency);
+
+    console.log("=== CURRENCY CHANGE START ===");
+    console.log("New currency selected:", newCurrency);
+    console.log("Previous currency:", currency);
+
     setCurrency(newCurrency);
 
-    // Fetch ID types for the currency
-    if (["BDT", "INR", "PKR", "AUD", "LKR"].includes(newCurrency)) {
-      dispatch(fetchIdTypesByCurrency(newCurrency));
+    // ✅ FIX: Reset form values when currency changes
+    console.log("Resetting form ID fields...");
+    formik.setFieldValue("beneficiary_id_type", "");
+    formik.setFieldValue("beneficiary_id_number", "");
+
+    // ✅ FIX: Always fetch ID types for BDT, INR, PKR when selected
+    console.log("Checking if currency requires ID types:", newCurrency);
+    console.log(
+      "Should fetch ID types?",
+      ["BDT", "INR", "PKR"].includes(newCurrency)
+    );
+
+    if (["BDT", "INR", "PKR"].includes(newCurrency)) {
+      console.log(`Dispatching fetchIdTypesByCurrency for ${newCurrency}...`);
+
+      // Store the promise to see the result
+      const idTypesPromise = dispatch(fetchIdTypesByCurrency(newCurrency));
+
+      idTypesPromise
+        .then((result) => {
+          console.log(
+            `fetchIdTypesByCurrency SUCCESS for ${newCurrency}:`,
+            result
+          );
+          console.log("Payload data:", result.payload);
+          console.log("Meta:", result.meta);
+        })
+        .catch((error) => {
+          console.error(
+            `fetchIdTypesByCurrency ERROR for ${newCurrency}:`,
+            error
+          );
+        });
+    } else {
+      console.log(`Currency ${newCurrency} does not require ID types`);
     }
 
     // Fetch banks for the currency
+    console.log("Fetching banks for currency:", newCurrency);
+    console.log(
+      "Is int-bank currency?",
+      ["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)
+    );
+
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
         fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
@@ -401,12 +438,15 @@ const AddBeneficiary = () => {
     }
 
     // Update currency for all existing bank accounts
+    console.log("Updating bank accounts currency to:", newCurrency);
     setBankAccounts((prevAccounts) =>
       prevAccounts.map((account) => ({
         ...account,
         currency: newCurrency,
       }))
     );
+
+    console.log("=== CURRENCY CHANGE END ===");
   };
 
   const handleCancel = () => {
@@ -414,7 +454,8 @@ const AddBeneficiary = () => {
   };
 
   const nextStep = () => {
-    if (currency === "BDT" || currency === "INR") {
+    // ✅ FIXED: Only validate ID fields for BDT, INR, PKR
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       const countryInput = formik.values.country_id;
       if (countryInput === "" || countryInput === " ") {
         alert(`Country Required for Currency: ${currency}`);
@@ -433,7 +474,7 @@ const AddBeneficiary = () => {
 
       const idNumber = formik.values.beneficiary_id_number;
       if (idNumber === "" || streetInput === " ") {
-        alert(`ID Number Required for Currency: BDT`);
+        alert(`ID Number Required for Currency: ${currency}`);
         return false;
       }
 
@@ -475,13 +516,7 @@ const AddBeneficiary = () => {
     e.preventDefault();
     setLoading(true);
 
-    if (
-      currency === "BDT" ||
-      currency === "INR" ||
-      currency === "PKR" ||
-      currency === "AUD" ||
-      currency === "LKR"
-    ) {
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (!formik.values.beneficiary_id_type) {
         toast.error("Beneficiary ID Type is required");
         setLoading(false);
@@ -510,7 +545,6 @@ const AddBeneficiary = () => {
     const beneficiaryData = {
       name: formik.values.name,
       country_id: formik.values.country_id,
-      country_phone_code: formik.values.country_phone_code,
       phone_number: formik.values.phone_number,
       email: formik.values.email,
       beneftype: formik.values.beneftype,
@@ -540,7 +574,6 @@ const AddBeneficiary = () => {
 
       resetForm();
     } catch (error) {
-      console.error("Failed to create beneficiary:", error);
     } finally {
       setLoading(false);
     }
@@ -611,7 +644,42 @@ const AddBeneficiary = () => {
 
   // Get ID types for current currency
   const getIdTypesForCurrency = () => {
-    return idTypes[currency] || [];
+    console.log("=== GET ID TYPES CALLED ===");
+    console.log("Current currency:", currency);
+    console.log("All ID types object:", idTypes);
+
+    const types = idTypes[currency];
+    console.log("Raw types for currency:", types);
+
+    if (!types) {
+      console.log("No ID types found for currency");
+      return [];
+    }
+
+    // Check what format the data is in
+    console.log("Type of types:", typeof types);
+    console.log("Is array?", Array.isArray(types));
+
+    if (Array.isArray(types)) {
+      console.log("Returning array of length:", types.length);
+      return types;
+    }
+
+    // Check if it's an object with data property
+    if (types && types.data && Array.isArray(types.data)) {
+      console.log("Returning types.data array of length:", types.data.length);
+      return types.data;
+    }
+
+    // Try to convert object to array
+    if (types && typeof types === "object") {
+      const array = Object.values(types);
+      console.log("Converted object to array of length:", array.length);
+      return array;
+    }
+
+    console.log("Falling back to empty array");
+    return [];
   };
 
   // Get bank branches for selected bank
@@ -634,10 +702,7 @@ const AddBeneficiary = () => {
             "country_phone_code",
             selectedOption?.value || ""
           );
-          formik.setFieldValue(
-            "phone_code_country_id",
-            selectedOption?.country?.id || ""
-          );
+          // ✅ No need to set phone_code_country_id anymore
         }}
         value={phoneCodeOptions.find(
           (option) => option.value === formik.values.country_phone_code
@@ -663,13 +728,31 @@ const AddBeneficiary = () => {
   const renderCountryDropdown = () => (
     <select
       className="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      onChange={formik.handleChange}
+      onChange={(e) => {
+        const selectedCountryId = e.target.value;
+        const selectedCountry = countries.find(
+          (country) => country.id === parseInt(selectedCountryId)
+        );
+
+        // ✅ Set the country ID (numeric) not the name
+        formik.setFieldValue("country_id", selectedCountryId);
+
+        // ✅ Automatically set the phone code when country is selected
+        if (selectedCountry) {
+          formik.setFieldValue(
+            "country_phone_code",
+            selectedCountry.phone_code || "+1"
+          );
+        }
+      }}
       value={formik.values.country_id}
       name="country_id"
     >
       <option value="">Select Country</option>
       {countriesOptions.map((country) => (
-        <option key={country.value} value={country.value}>
+        <option key={country.value} value={country.id}>
+          {" "}
+          {/* ✅ Use country.id here */}
           {country.label} ({country.country_code})
         </option>
       ))}
@@ -762,10 +845,8 @@ const AddBeneficiary = () => {
 
         {/* Currency-Specific ID Fields */}
         {(accountCurrency === "BDT" ||
-          accountCurrency === "PKR" ||
           accountCurrency === "INR" ||
-          accountCurrency === "AUD" ||
-          accountCurrency === "LKR") && (
+          accountCurrency === "PKR") && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-medium mb-1">
@@ -1744,9 +1825,7 @@ const AddBeneficiary = () => {
                     {/* Beneficiary ID Type (for specific currencies) */}
                     {(currency === "BDT" ||
                       currency === "INR" ||
-                      currency === "PKR" ||
-                      currency === "AUD" ||
-                      currency === "LKR") && (
+                      currency === "PKR") && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Beneficiary ID Type
@@ -1758,11 +1837,26 @@ const AddBeneficiary = () => {
                           name="beneficiary_id_type"
                         >
                           <option value="">Select ID Type</option>
-                          {getIdTypesForCurrency().map((idType) => (
-                            <option key={idType.name} value={idType.name}>
-                              {idType.name}
-                            </option>
-                          ))}
+                          {(() => {
+                            const idTypeOptions = getIdTypesForCurrency();
+                            console.log(
+                              "Rendering dropdown with options:",
+                              idTypeOptions
+                            );
+                            console.log("Options count:", idTypeOptions.length);
+
+                            return idTypeOptions.map((idType) => {
+                              console.log("Mapping ID type:", idType);
+                              const value = idType.name || idType.id || idType;
+                              const label = idType.name || idType.id || idType;
+
+                              return (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              );
+                            });
+                          })()}
                         </select>
                       </div>
                     )}
@@ -1770,9 +1864,7 @@ const AddBeneficiary = () => {
                     {/* Beneficiary ID Number (for specific currencies) */}
                     {(currency === "BDT" ||
                       currency === "INR" ||
-                      currency === "PKR" ||
-                      currency === "AUD" ||
-                      currency === "LKR") && (
+                      currency === "PKR") && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Beneficiary ID Number

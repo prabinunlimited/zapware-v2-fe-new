@@ -10,7 +10,7 @@ import Login from "../src/features/Auth/Login/Login";
 import SignUpIndividual from "../src/features/Auth/SignUp/SignUpIndividual";
 import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
-import OpenCurrencyAccount from "../src/features/Auth/Registration/CurrencySelectAccount";
+import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
 import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
@@ -34,6 +34,9 @@ import CardPayment from "../src/page/Deposit/components/Card/CardPayment";
 import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIframe";
 import Team from "../src/page/Team/Team";
 import AddTeamMember from "../src/page/Team/AddNewMember";
+import PayoutPage from "../src/page/Payout/PayoutPage";
+import BankLetter from './../src/page/BankLetter/BankLetter';
+import Remittance from "../src/page/Remittance/remittance";
 
 const ProtectedLayout = () => {
   return (
@@ -140,6 +143,18 @@ const router = createBrowserRouter([
       {
         path: "profile/:customerId",
         element: <Profile />,
+      },
+      {
+        path: "payout/:customerId",
+        element: <PayoutPage />,
+      },
+      {
+        path: "remittance/:customerId",
+        element: <Remittance />,
+      },
+      {
+       path: "/bankletter/:accountId",
+        element: <BankLetter />,
       },
     ],
   },
