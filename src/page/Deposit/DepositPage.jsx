@@ -940,27 +940,27 @@ const DepositPageContent = () => {
     }
   }, [currency.currencies]);
 
-  useEffect(() => {
-    console.log("🔄 PAYMENT METHOD TRIGGER - Manual deposit detection:", {
-      paymentMethod: deposit.paymentMethod,
-      selectedCurrency: deposit.selectedCurrency,
-      shouldFetch:
-        deposit.paymentMethod === "manual_deposit" && deposit.selectedCurrency,
-    });
+  // useEffect(() => {
+  //   console.log("🔄 PAYMENT METHOD TRIGGER - Manual deposit detection:", {
+  //     paymentMethod: deposit.paymentMethod,
+  //     selectedCurrency: deposit.selectedCurrency,
+  //     shouldFetch:
+  //       deposit.paymentMethod === "manual_deposit" && deposit.selectedCurrency,
+  //   });
 
-    if (
-      deposit.paymentMethod === "manual_deposit" &&
-      deposit.selectedCurrency
-    ) {
-      console.log(
-        "🎯 Triggering manual account details fetch for:",
-        deposit.selectedCurrency
-      );
+  //   if (
+  //     deposit.paymentMethod === "manual_deposit" &&
+  //     deposit.selectedCurrency
+  //   ) {
+  //     console.log(
+  //       "🎯 Triggering manual account details fetch for:",
+  //       deposit.selectedCurrency
+  //     );
 
-      // Dispatch the action to fetch manual details
-      dispatch(fetchManualAccountDetails(deposit.selectedCurrency));
-    }
-  }, [deposit.paymentMethod, deposit.selectedCurrency, dispatch]);
+  //     // Dispatch the action to fetch manual details
+  //     dispatch(fetchManualAccountDetails(deposit.selectedCurrency));
+  //   }
+  // }, [deposit.paymentMethod, deposit.selectedCurrency, dispatch]);
 
   useEffect(() => {
     console.log("🎯 CURRENCY SELECTION DEBUG:");

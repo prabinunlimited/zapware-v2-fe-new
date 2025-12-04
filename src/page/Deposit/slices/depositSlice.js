@@ -68,31 +68,51 @@ export const submitDeposit = createAsyncThunk(
   }
 );
 
-// ✅ FIXED: Client-side filtering thunk for manual account details
 export const fetchManualAccountDetails = createAsyncThunk(
   "deposit/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("authtoken");
 
-      if (!token) {
-        throw new Error("Authentication required");
+      if (!token) throw new Error("Authentication required");
+      if (!currency) throw new Error("Currency parameter is required");
+
+      // ✅ HARDCODED FOR USD ONLY
+      if (currency === "USD") {
+        return {
+          currency: "USD",
+          bank_name: "Chase Bank",
+          account_name: "Unlimited Cloud LLC",
+          account_number: "518366536",
+          iban: null,
+          routing_number: "021000021",
+          bic_swift: "CHASUS33",
+          swift_code: "CHASUS33",
+          bank_address: "2790 Park Ave., New York, NY 10017, USA",
+          bank_country: "United States",
+          bank_city: "New York",
+          bank_state: "NY",
+          bank_postalcode: "10017",
+          customer_type: "business",
+          institution_name: "Unlimited Cloud LLC",
+          first_name: "Unlimited",
+          last_name: "Cloud LLC",
+          description: "Manual deposit for USD account",
+          account_id: "manual_usd_chase_001",
+          transfer_reference: "Deposit to Unlimited Cloud LLC",
+          notes: "Include your customer ID in the transfer reference",
+          minimum_amount: "10.00",
+          processing_time: "1-3 business days",
+        };
       }
 
-      if (!currency) {
-        throw new Error("Currency parameter is required");
-      }
-
-      // ✅ Use client-side filtering function
+      // ✅ FOR OTHER CURRENCIES: API call
       const response = await depositAPI.getManualDetailsByCurrency(currency);
 
-      // ✅ Ensure currency is set correctly
-      const accountWithCurrency = {
+      return {
         ...response.data,
         currency: response.data.currency || currency,
       };
-
-      return accountWithCurrency;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
