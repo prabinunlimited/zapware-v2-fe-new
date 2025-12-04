@@ -1,6 +1,12 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaCheck, FaDownload, FaTimes, FaPrint, FaInfoCircle } from 'react-icons/fa';
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FaCheck,
+  FaDownload,
+  FaTimes,
+  FaPrint,
+  FaInfoCircle,
+} from "react-icons/fa";
 
 const SuccessPopup = ({
   transaction,
@@ -8,10 +14,16 @@ const SuccessPopup = ({
   amount,
   selectedCurrency,
   onClose,
-  onDownload
+  onDownload,
 }) => {
   if (!transaction) return null;
 
+  // ✅ Safe extraction with fallbacks
+  const displayAmount = transaction.amount || amount || "0.00";
+  const displayCurrency = transaction.currency || selectedCurrency || "USD";
+
+  // ✅ Safe formatting
+  const formattedAmount = parseFloat(displayAmount) || 0;
   return (
     <AnimatePresence>
       <motion.div
@@ -42,26 +54,25 @@ const SuccessPopup = ({
                 <FaCheck className="text-white text-3xl" />
               </motion.div>
             </motion.div>
-            
+
             <motion.h2
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
               className="text-2xl font-bold text-white mb-2"
             >
-              {isManualDeposit ? 'Instructions Sent' : 'Deposit Successful!'}
+              {isManualDeposit ? "Instructions Sent" : "Deposit Successful!"}
             </motion.h2>
-            
+
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
               className="text-green-100"
             >
-              {isManualDeposit 
-                ? 'Check your email for deposit instructions'
-                : `${selectedCurrency} ${parseFloat(amount).toLocaleString()} deposited successfully`
-              }
+              {isManualDeposit
+                ? "Check your email for deposit instructions"
+                : `${displayCurrency} ${formattedAmount.toLocaleString()} deposited successfully`}
             </motion.p>
           </div>
 
@@ -75,12 +86,14 @@ const SuccessPopup = ({
             >
               {/* Transaction Summary */}
               <div className="bg-gray-50 rounded-xl p-4">
-                <h4 className="font-semibold text-gray-900 mb-3">Transaction Summary</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Transaction Summary
+                </h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-gray-600">Amount:</span>
                     <p className="font-semibold text-gray-900">
-                      {selectedCurrency} {parseFloat(amount).toLocaleString()}
+                      {displayCurrency} {formattedAmount.toLocaleString()}
                     </p>
                   </div>
                   <div>
@@ -98,7 +111,7 @@ const SuccessPopup = ({
                   <div>
                     <span className="text-gray-600">Status:</span>
                     <p className="font-semibold text-green-600">
-                      {isManualDeposit ? 'Pending' : 'Completed'}
+                      {isManualDeposit ? "Pending" : "Completed"}
                     </p>
                   </div>
                 </div>
@@ -152,7 +165,7 @@ const SuccessPopup = ({
                 <FaTimes className="mr-2" />
                 Close
               </button>
-              
+
               <button
                 onClick={() => onDownload(transaction)}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-medium transition-colors flex items-center justify-center"

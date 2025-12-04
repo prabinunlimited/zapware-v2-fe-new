@@ -53,23 +53,31 @@ export const fetchPaymentMethodsByCurrency = createAsyncThunk(
       );
 
       let methodsData = [];
-      
+
       if (Array.isArray(response.data)) {
         methodsData = response.data;
       } else if (response.data?.data && Array.isArray(response.data.data)) {
         methodsData = response.data.data;
-      } else if (response.data?.methods && Array.isArray(response.data.methods)) {
+      } else if (
+        response.data?.methods &&
+        Array.isArray(response.data.methods)
+      ) {
         methodsData = response.data.methods;
-      } else if (response.data?.deposit_types && Array.isArray(response.data.deposit_types)) {
+      } else if (
+        response.data?.deposit_types &&
+        Array.isArray(response.data.deposit_types)
+      ) {
         methodsData = response.data.deposit_types;
-      } else if (response.data?.status === "success" && Array.isArray(response.data.data)) {
+      } else if (
+        response.data?.status === "success" &&
+        Array.isArray(response.data.data)
+      ) {
         methodsData = response.data.data;
       } else {
         return [];
       }
 
       return methodsData;
-
     } catch (error) {
       if (error.response?.status === 401) {
         tokenService.clearToken();
@@ -120,7 +128,7 @@ const currencySlice = createSlice({
       .addCase(fetchPaymentMethodsByCurrency.fulfilled, (state, action) => {
         state.paymentMethodsLoading = false;
         state.paymentMethodsError = null;
-        
+
         if (Array.isArray(action.payload)) {
           state.paymentMethods = action.payload;
         } else {
@@ -135,12 +143,12 @@ const currencySlice = createSlice({
   },
 });
 
-export const {
-  clearPaymentMethods,
-} = currencySlice.actions;
+export const { clearPaymentMethods } = currencySlice.actions;
 
 export const selectPaymentMethods = (state) => state.currency.paymentMethods;
-export const selectPaymentMethodsLoading = (state) => state.currency.paymentMethodsLoading;
-export const selectPaymentMethodsError = (state) => state.currency.paymentMethodsError;
+export const selectPaymentMethodsLoading = (state) =>
+  state.currency.paymentMethodsLoading;
+export const selectPaymentMethodsError = (state) =>
+  state.currency.paymentMethodsError;
 
 export default currencySlice.reducer;

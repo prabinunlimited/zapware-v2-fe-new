@@ -1,5 +1,5 @@
-// src/store/store.js - COMPLETE FIXED VERSION
-import { configureStore, combineReducers } from "@reduxjs/toolkit";
+// src/store/store.js - UPDATED VERSION WITH REMITTANCE SLICES
+import { configureStore } from "@reduxjs/toolkit";
 
 // ===================== ACTION CREATOR IMPORTS =====================
 import {
@@ -52,11 +52,15 @@ import teamMemberReducer from "../page/Team/Slice/teamMemberSlice";
 // ===================== PAYOUT SLICES =====================
 import payoutReducer from "../page/Payout/slices/payoutSlice";
 
-//======================Bank letter======================
+// ===================== BANK LETTER ======================
 import bankLetterReducer from "../page/BankLetter/slices/bankLetterSlice";
 
-//====================== Location Slice ======================
-import locationReducer from '../features/Auth/slices/locationSlice';
+// ===================== LOCATION SLICE ======================
+import locationReducer from "../features/Auth/slices/locationSlice";
+
+// ===================== REMITTANCE SLICES (NEW) =====================
+import remittanceReducer from "../page/Remittance/slices/remittanceSlice";
+import remittanceStaticDataReducer from "../page/Remittance/slices/staticDataSlice";
 
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
@@ -78,7 +82,7 @@ const customSerializableCheck = {
     "modal/showDeleteModal",
     "modal/hideDeleteModal",
 
-    // Auth thunk actions to ignore
+    // Auth thunk actions
     "auth/initializeApp/pending",
     "auth/initializeApp/fulfilled",
     "auth/initializeApp/rejected",
@@ -107,7 +111,7 @@ const customSerializableCheck = {
     "auth/logout/fulfilled",
     "auth/logout/rejected",
 
-    // Deposit related actions
+    // Deposit actions
     "deposit/submitDeposit/pending",
     "deposit/submitDeposit/fulfilled",
     "deposit/submitDeposit/rejected",
@@ -115,7 +119,7 @@ const customSerializableCheck = {
     "deposit/fetchManualAccountDetails/fulfilled",
     "deposit/fetchManualAccountDetails/rejected",
 
-    // Currency slice actions
+    // Currency actions
     "currency/fetchCurrencyOptions/pending",
     "currency/fetchCurrencyOptions/fulfilled",
     "currency/fetchCurrencyOptions/rejected",
@@ -132,11 +136,8 @@ const customSerializableCheck = {
     "bankAccounts/fetchUSDBankAccounts/pending",
     "bankAccounts/fetchUSDBankAccounts/fulfilled",
     "bankAccounts/fetchUSDBankAccounts/rejected",
-    "bankAccounts/fetchAEDAccountDetails/pending",
-    "bankAccounts/fetchAEDAccountDetails/fulfilled",
-    "bankAccounts/fetchAEDAccountDetails/rejected",
 
-    // Card Payment actions
+    // Card payment actions
     "cardPayment/createAdyenSession/pending",
     "cardPayment/createAdyenSession/fulfilled",
     "cardPayment/createAdyenSession/rejected",
@@ -153,14 +154,76 @@ const customSerializableCheck = {
     "cardPayment/setPaymentStatus",
     "cardPayment/setCurrentPayment",
     "cardPayment/setShowPaymentForm",
+
     "payout/setFileValue",
 
-    //bank letter actions
+    // Bank Letter actions
     "bankLetter/fetchPartnerProfile/fulfilled",
     "bankLetter/fetchPartnerProfile/rejected",
     "bankLetter/generateBankLetterPDF/fulfilled",
     "bankLetter/generateBankLetterPDF/rejected",
+
+    // ===================== REMITTANCE ACTIONS (NEW) =====================
+    "remittance/fetchExchangeRate/pending",
+    "remittance/fetchExchangeRate/fulfilled",
+    "remittance/fetchExchangeRate/rejected",
+    "remittance/fetchBankAccounts/pending",
+    "remittance/fetchBankAccounts/fulfilled",
+    "remittance/fetchBankAccounts/rejected",
+    "remittance/fetchPayoutCurrencies/pending",
+    "remittance/fetchPayoutCurrencies/fulfilled",
+    "remittance/fetchPayoutCurrencies/rejected",
+    "remittance/submitTransaction/pending",
+    "remittance/submitTransaction/fulfilled",
+    "remittance/submitTransaction/rejected",
+    "remittance/fetchManualAccountDetails/pending",
+    "remittance/fetchManualAccountDetails/fulfilled",
+    "remittance/fetchManualAccountDetails/rejected",
+    "remittance/validatePromoCode/pending",
+    "remittance/validatePromoCode/fulfilled",
+    "remittance/validatePromoCode/rejected",
+    "remittance/sendVerificationCode/pending",
+    "remittance/sendVerificationCode/fulfilled",
+    "remittance/sendVerificationCode/rejected",
+    "remittance/verifyPasscode/pending",
+    "remittance/verifyPasscode/fulfilled",
+    "remittance/verifyPasscode/rejected",
+    "remittance/setDocument",
+    "remittance/setStep",
+    "remittance/setFormField",
+    "remittance/resetForm",
+
+    // Remittance beneficiary actions
+    "remittanceBeneficiary/fetchBeneficiaries/pending",
+    "remittanceBeneficiary/fetchBeneficiaries/fulfilled",
+    "remittanceBeneficiary/fetchBeneficiaries/rejected",
+    "remittanceBeneficiary/fetchBeneficiaryByCode/pending",
+    "remittanceBeneficiary/fetchBeneficiaryByCode/fulfilled",
+    "remittanceBeneficiary/fetchBeneficiaryByCode/rejected",
+    "remittanceBeneficiary/fetchBeneficiaryBanks/pending",
+    "remittanceBeneficiary/fetchBeneficiaryBanks/fulfilled",
+    "remittanceBeneficiary/fetchBeneficiaryBanks/rejected",
+    "remittanceBeneficiary/addBeneficiary/pending",
+    "remittanceBeneficiary/addBeneficiary/fulfilled",
+    "remittanceBeneficiary/addBeneficiary/rejected",
+    "remittanceBeneficiary/setSelectedBeneficiary",
+    "remittanceBeneficiary/setSelectedBank",
+
+    // Remittance static data actions
+    "remittanceStatic/fetchPurposes/pending",
+    "remittanceStatic/fetchPurposes/fulfilled",
+    "remittanceStatic/fetchPurposes/rejected",
+    "remittanceStatic/fetchIncomeSources/pending",
+    "remittanceStatic/fetchIncomeSources/fulfilled",
+    "remittanceStatic/fetchIncomeSources/rejected",
+    "remittanceStatic/fetchOccupations/pending",
+    "remittanceStatic/fetchOccupations/fulfilled",
+    "remittanceStatic/fetchOccupations/rejected",
+    "remittanceStatic/fetchPaymentMethods/pending",
+    "remittanceStatic/fetchPaymentMethods/fulfilled",
+    "remittanceStatic/fetchPaymentMethods/rejected",
   ],
+
   ignoredPaths: [
     "kyc.plaid",
     "auth.plaidStatus",
@@ -178,7 +241,7 @@ const customSerializableCheck = {
     "beneficiaries.beneficiaries",
     "modal.deleteModal",
 
-    // Auth paths that might contain non-serializable data
+    // Auth
     "auth.error",
     "auth.user",
     "auth.ownerDetails",
@@ -190,37 +253,59 @@ const customSerializableCheck = {
     "home",
     "navigateSection",
 
-    // Deposit related paths
+    // Deposit
     "deposit.transactionSuccess",
 
-    // Currency slice paths
+    // Currency
     "currency.currencies",
     "currency.paymentMethods",
     "currency.usdBankAccounts",
     "currency.aedAccountDetails",
     "currency.rawData",
 
+    // Bank accounts
     "bankAccounts.usdBankAccounts",
     "bankAccounts.aedAccountDetails",
 
-    // Card Payment paths
+    // Card Payment
     "cardPayment.checkout",
     "cardPayment.currentPayment",
     "cardPayment.session",
     "cardPayment.paymentResult",
 
+    // Payout
     "payout.formValues.invoice_file",
 
-    //bank letter paths
+    // Bank Letter
     "bankLetter.partnerProfileData",
     "bankLetter.accountData",
+
+    // ===================== REMITTANCE PATHS (NEW) =====================
+    "remittance.formData.document",
+    "remittance.transactionResult",
+    "remittance.manualAccountDetails",
+    "remittance.exchangeRateCache",
+    "remittance.promoCodeValidation",
+    "remittance.verification",
+
+    // Remittance beneficiary
+    "remittanceBeneficiary.beneficiaries",
+    "remittanceBeneficiary.beneficiaryBanks",
+    "remittanceBeneficiary.selectedBeneficiary",
+    "remittanceBeneficiary.selectedBank",
+
+    // Remittance static data
+    "remittanceStatic.purposes",
+    "remittanceStatic.incomeSources",
+    "remittanceStatic.occupations",
+    "remittanceStatic.paymentMethods",
   ],
 };
 
 // ===================== STORE CONFIGURATION =====================
 export const store = configureStore({
   reducer: {
-    // Auth and core functionality
+    // Auth and related slices
     auth: authReducer,
     kyc: kycReducer,
     countries: countryReducer,
@@ -242,17 +327,17 @@ export const store = configureStore({
     account: accountReducer,
     transaction: transactionReducer,
 
-    // Deposit slices
+    // Deposit
     deposit: depositReducer,
     currency: currencyReducer,
     bankAccounts: bankAccountReducer,
     uiDeposit: uiDepositReducer,
     bankLink: bankLinkReducer,
 
-    // Card Payment slice
+    // Card payment
     cardPayment: cardPaymentReducer,
 
-    // Team slice
+    // Team
     team: teamReducer,
     teamMember: teamMemberReducer,
 
@@ -261,21 +346,26 @@ export const store = configureStore({
     addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
 
-    // payout
+    // Payout
     payout: payoutReducer,
 
-    //bank letter
+    // Bank letter
     bankLetter: bankLetterReducer,
-    //location
+
+    // Location
     location: locationReducer,
+
+    // ===================== REMITTANCE REDUCERS (NEW) =====================
+    remittance: remittanceReducer,
+    remittanceStatic: remittanceStaticDataReducer,
   },
+
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: customSerializableCheck,
-      immutableCheck: {
-        warnAfter: 100,
-      },
+      immutableCheck: { warnAfter: 100 },
     }),
+
   devTools: process.env.NODE_ENV !== "production",
 });
 
@@ -286,7 +376,6 @@ const initializeAuthState = () => {
     const customerId = localStorage.getItem("authcustomer_id");
 
     if (token && customerId) {
-      // ✅ FIXED: Use action creator instead of string type
       store.dispatch(
         setAuthState({
           token,
@@ -296,7 +385,6 @@ const initializeAuthState = () => {
         })
       );
     } else {
-      // ✅ FIXED: Use action creator instead of string type
       store.dispatch(setInitialized(true));
     }
 
@@ -308,17 +396,17 @@ const syncAdditionalStorageStates = () => {
   const statesToSync = [
     {
       key: "kyc_status",
-      action: setVerificationStatus, // ✅ FIXED: Use action creator
+      action: setVerificationStatus,
       transform: (value) => ({ kycStatus: value }),
     },
     {
       key: "bank_approve_status",
-      action: setVerificationStatus, // ✅ FIXED: Use action creator
+      action: setVerificationStatus,
       transform: (value) => ({ bankStatus: value }),
     },
     {
       key: "is_owner_login",
-      action: setVerificationStatus, // ✅ FIXED: Use action creator
+      action: setVerificationStatus,
       transform: (value) => ({ isOwnerLogin: value === "1" }),
     },
   ];
@@ -326,9 +414,7 @@ const syncAdditionalStorageStates = () => {
   statesToSync.forEach(({ key, action, transform }) => {
     const value = localStorage.getItem(key);
     if (value !== null) {
-      const payload = transform ? transform(value) : value;
-      // ✅ FIXED: Use action creator instead of string type
-      store.dispatch(action(payload));
+      store.dispatch(action(transform(value)));
     }
   });
 };
@@ -336,7 +422,6 @@ const syncAdditionalStorageStates = () => {
 // ===================== STORE UTILITIES =====================
 export const storeHealthCheck = () => {
   const state = store.getState();
-
   return {
     healthy: true,
     reducers: Object.keys(state),
@@ -353,6 +438,20 @@ export const storeHealthCheck = () => {
       isProcessing:
         state.cardPayment?.sessionLoading ||
         state.cardPayment?.paymentProcessing,
+    },
+    // ===================== REMITTANCE HEALTH CHECK (NEW) =====================
+    remittance: {
+      step: state.remittance?.step || 1,
+      hasExchangeRate: !!state.remittance?.formData?.exchangeRate,
+      hasBankAccounts: state.remittance?.bankAccounts?.length > 0,
+    },
+    remittanceBeneficiary: {
+      beneficiariesCount: state.beneficiaries?.beneficiaries?.length || 0,
+      hasSelectedBeneficiary: !!state.beneficiaries?.selectedBeneficiary,
+    },
+    remittanceStatic: {
+      purposesCount: state.remittanceStatic?.purposes?.length || 0,
+      incomeSourcesCount: state.remittanceStatic?.incomeSources?.length || 0,
     },
   };
 };
@@ -415,9 +514,7 @@ const persistCriticalStates = (state) => {
       if (state.auth.isOwnerLogin) {
         localStorage.setItem("is_owner_login", "1");
       }
-    } catch (error) {
-      // Error handling without console log
-    }
+    } catch (error) {}
   }
 };
 
@@ -425,7 +522,6 @@ const persistCriticalStates = (state) => {
 if (typeof window !== "undefined") {
   setTimeout(() => {
     initializeAuthState();
-
     if (process.env.NODE_ENV !== "production") {
       storeHealthCheck();
     }
@@ -446,12 +542,39 @@ export const getPaymentMethods = () => store.getState().currency.paymentMethods;
 
 export const getCardPaymentState = () => store.getState().cardPayment;
 export const getCardPaymentSession = () => store.getState().cardPayment.session;
+
 export const isCardPaymentProcessing = () =>
   store.getState().cardPayment.sessionLoading ||
   store.getState().cardPayment.paymentProcessing;
+
 export const isPaymentCompleted = () =>
   store.getState().cardPayment.isPaymentCompleted;
+
 export const isPaymentFailed = () =>
   store.getState().cardPayment.isPaymentFailed;
+
+// ===================== REMITTANCE UTILITIES (NEW) =====================
+export const getRemittanceState = () => store.getState().remittance;
+export const getRemittanceBeneficiaryState = () =>
+  store.getState().remittanceBeneficiary;
+export const getRemittanceStaticState = () => store.getState().remittanceStatic;
+
+export const getRemittanceFormData = () => store.getState().remittance.formData;
+export const getRemittanceStep = () => store.getState().remittance.step;
+export const getRemittanceLoading = () => store.getState().remittance.loading;
+
+export const getRemittanceBeneficiaries = () =>
+  store.getState().remittanceBeneficiary.beneficiaries;
+export const getSelectedRemittanceBeneficiary = () =>
+  store.getState().remittanceBeneficiary.selectedBeneficiary;
+export const getSelectedRemittanceBank = () =>
+  store.getState().remittanceBeneficiary.selectedBank;
+
+export const getRemittancePurposes = () =>
+  store.getState().remittanceStatic.purposes;
+export const getRemittanceIncomeSources = () =>
+  store.getState().remittanceStatic.incomeSources;
+export const getRemittanceOccupations = () =>
+  store.getState().remittanceStatic.occupations;
 
 export default store;

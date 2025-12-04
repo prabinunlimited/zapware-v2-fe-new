@@ -698,7 +698,7 @@ export const logout = async () => {
 };
 
 export const getLogoutTime = async () => {
-  return debouncedApiCall("logout-time", () => api.get("/logout-time"));
+  return debouncedApiCall("logout-time", () => api.get("/logout"));
 };
 
 export const getPartnerConfig = async (partnerId) => {

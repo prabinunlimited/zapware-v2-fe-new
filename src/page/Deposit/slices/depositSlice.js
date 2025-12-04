@@ -3,82 +3,54 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 import { depositAPI } from "../api/depositAPI";
 
-// ✅ Async thunk for submitting deposit
+// ✅ FIXED: Async thunk for submitting deposit with correct endpoint
 export const submitDeposit = createAsyncThunk(
   "deposit/submitDeposit",
-  async (depositData, { rejectWithValue }) => {
+  async (depositData, { rejectWithValue, signal }) => {
+    // ✅ ADD signal parameter
     try {
       const token = localStorage.getItem("authtoken");
-      const customerId = localStorage.getItem("authcustomer_id");
-      let partnerId = localStorage.getItem("whitelabelledpartnerid"); // ✅ Get partner_id
 
-      console.log("🔍 Deposit submission data:", {
-        customerId,
-        partnerId,
-        currency: depositData.currency,
-        paymentMethod: depositData.payment_method,
-      });
+      console.log("🔍 Submitting deposit with data:", depositData);
 
-      if (!token || !customerId) {
+      if (!token) {
         throw new Error("Authentication required");
       }
 
-      // ✅ IMPORTANT: Parse the partner ID and ensure it's a valid number
-      if (partnerId) {
-        partnerId = parseInt(partnerId, 10);
-        console.log("✅ Parsed partnerId from localStorage:", partnerId);
-      } else {
-        console.warn("⚠️ Partner ID missing from localStorage, using fallback");
-        partnerId = 9; // Default partner ID as number
-      }
+      const response = await api.post(
+        "/transactions/remittance-transaction",
+        depositData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          signal: signal, // ✅ PASS signal to axios
+        }
+      );
 
-      // Handle USD bank deposit specifically
-      if (
-        depositData.currency === "USD" &&
-        depositData.payment_method === "bank_deposit"
-      ) {
-        const response = await api.post(
-          "/transactions/remittance-transaction",
-          {
-            customer_id: parseInt(customerId, 10), // Ensure customer_id is number
-            partner_id: partnerId, // ✅ Now this will be a valid number
-            send_amount: parseFloat(depositData.amount),
-            from_currency: depositData.currency,
-            payment_method: depositData.payment_method,
-            is_remit: "N",
-            sender_account_name: depositData.sender_account_name,
-            sender_bank_id: depositData.sender_bank_id,
-            purpose: depositData.purpose,
-            reference: depositData.reference,
-          }
-        );
-
-        console.log("✅ USD Bank Deposit response:", response.data);
-
-        return {
-          ...response.data,
-          success: true,
-          transactionType: "usd_bank_deposit",
-        };
-      }
-
-      // Default deposit submission for other currencies/methods
-      const response = await api.post("/transactions/deposit", {
-        ...depositData,
-        customer_id: parseInt(customerId, 10), // Use customer_id instead of customerId
-        partner_id: partnerId, // ✅ Use the parsed partner_id
-      });
-
-      console.log("✅ Default Deposit response:", response.data);
-
+      console.log("✅ Deposit response:", response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Deposit submission error:", {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        config: error.config, // This will show the request data
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data,
+        },
       });
+
+      // ✅ HANDLE ABORT ERRORS SPECIFICALLY
+      // if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
+      //   console.log("✅ Request was cancelled");
+      //   return rejectWithValue({
+      //     message: "Request cancelled",
+      //     cancelled: true,
+      //   });
+      // }
 
       // More detailed error handling
       const errorMessage =
@@ -212,6 +184,12 @@ const initialState = {
 
   // Debug info
   allAvailableAccounts: null,
+
+  // Sila accounts state
+  silaBankAccounts: [],
+  hasSilaAccounts: false,
+  silaAccountsLoading: false,
+  silaAccountsError: null,
 };
 
 // Deposit slice
@@ -352,7 +330,18 @@ const depositSlice = createSlice({
       })
       .addCase(submitDeposit.fulfilled, (state, action) => {
         state.isSubmitting = false;
-        state.transactionSuccess = action.payload;
+
+        // ✅ Store ALL relevant data in transactionSuccess
+        state.transactionSuccess = {
+          ...action.payload, // API response
+          amount: state.amount, // Preserve amount
+          currency: state.selectedCurrency, // Preserve currency
+          purpose: state.purpose, // Preserve purpose
+          payment_method: state.paymentMethod, // Preserve payment method
+          timestamp: new Date().toISOString(), // Add timestamp
+        };
+
+        // Clear form fields (optional)
         state.amount = "";
         state.purpose = "";
         state.selectedBankAccount = null;
@@ -360,7 +349,8 @@ const depositSlice = createSlice({
       })
       .addCase(submitDeposit.rejected, (state, action) => {
         state.isSubmitting = false;
-        state.formErrors.submission = action.payload;
+        state.formErrors.submission =
+          action.payload?.message || "Submission failed";
       })
 
       // Fetch manual account details (with client-side filtering)

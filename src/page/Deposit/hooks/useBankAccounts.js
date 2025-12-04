@@ -33,10 +33,75 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ COMPLETE: Cleanup function
   const cleanupPendingRequests = useCallback(() => {
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+      try {
+        // Simple abort without complex checks
+        abortControllerRef.current.abort();
+      } catch (error) {
+        // Ignore abort errors - they're expected
+        console.debug("Cleanup completed:", error?.message);
+      } finally {
+        abortControllerRef.current = null;
+      }
     }
   }, []);
+
+  // Also simplify the fetch effect:
+  useEffect(() => {
+    const fetchManualDetails = async () => {
+      // Clean up any existing requests
+      cleanupPendingRequests();
+
+      // Create new controller
+      abortControllerRef.current = new AbortController();
+
+      if (paymentMethod === "manual_deposit" && selectedCurrency) {
+        const isDuplicateCall =
+          prevFetchRef.current.currency === selectedCurrency &&
+          prevFetchRef.current.paymentMethod === paymentMethod;
+
+        if (isDuplicateCall) {
+          return;
+        }
+
+        prevFetchRef.current = { currency: selectedCurrency, paymentMethod };
+
+        try {
+          if (
+            manualAccountDetails &&
+            manualAccountDetails.currency !== selectedCurrency
+          ) {
+            dispatch(clearManualAccountDetails());
+          }
+
+          const resultAction = await dispatch(
+            fetchManualAccountDetails(selectedCurrency)
+          );
+
+          if (fetchManualAccountDetails.fulfilled.match(resultAction)) {
+            console.log("✅ Manual details loaded for:", selectedCurrency);
+          }
+        } catch (error) {
+          // Don't check for AbortError - Redux Toolkit doesn't pass it
+          console.error("❌ Manual details fetch error:", error);
+        }
+      } else if (paymentMethod !== "manual_deposit" && manualAccountDetails) {
+        dispatch(clearManualAccountDetails());
+      }
+    };
+
+    const timer = setTimeout(fetchManualDetails, 300);
+
+    return () => {
+      clearTimeout(timer);
+      cleanupPendingRequests();
+    };
+  }, [
+    paymentMethod,
+    selectedCurrency,
+    dispatch,
+    manualAccountDetails,
+    cleanupPendingRequests,
+  ]);
 
   // ✅ COMPLETE: Reset states when currency changes
   useEffect(() => {
@@ -60,28 +125,49 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ COMPLETE: Fetch manual deposit details
   useEffect(() => {
     const fetchManualDetails = async () => {
+      // ✅ SAFE: Clean up any existing requests first
       cleanupPendingRequests();
-      abortControllerRef.current = new AbortController();
+
+      // ✅ SAFE: Create new controller with validation
+      try {
+        abortControllerRef.current = new AbortController();
+        console.log("✅ Created new AbortController");
+      } catch (error) {
+        console.warn("Failed to create AbortController:", error);
+        return;
+      }
 
       if (paymentMethod === "manual_deposit" && selectedCurrency) {
-        const isDuplicateCall = 
+        const isDuplicateCall =
           prevFetchRef.current.currency === selectedCurrency &&
           prevFetchRef.current.paymentMethod === paymentMethod;
 
         if (isDuplicateCall) {
+          // ✅ SAFE: Clean up the controller we just created since we won't use it
+          abortControllerRef.current = null;
           return;
         }
 
         prevFetchRef.current = { currency: selectedCurrency, paymentMethod };
 
         try {
-          if (manualAccountDetails && manualAccountDetails.currency !== selectedCurrency) {
+          if (
+            manualAccountDetails &&
+            manualAccountDetails.currency !== selectedCurrency
+          ) {
             dispatch(clearManualAccountDetails());
           }
 
-          const resultAction = await dispatch(fetchManualAccountDetails(selectedCurrency));
-          
-          if (abortControllerRef.current.signal.aborted) {
+          const resultAction = await dispatch(
+            fetchManualAccountDetails(selectedCurrency)
+          );
+
+          // ✅ SAFE: Check if controller still exists before checking signal
+          if (
+            abortControllerRef.current &&
+            abortControllerRef.current.signal.aborted
+          ) {
+            console.log("✅ Request was aborted, ignoring result");
             return;
           }
 
@@ -89,9 +175,15 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
             console.log("✅ Manual details loaded for:", selectedCurrency);
           }
         } catch (error) {
-          if (error.name !== 'AbortError') {
+          // ✅ SAFE: Handle abort errors gracefully
+          if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
+            console.log("✅ Request cancelled (expected):", error.message);
+          } else {
             console.error("❌ Manual details fetch error:", error);
           }
+        } finally {
+          // ✅ SAFE: Nullify the ref after request completes
+          abortControllerRef.current = null;
         }
       } else if (paymentMethod !== "manual_deposit" && manualAccountDetails) {
         dispatch(clearManualAccountDetails());
@@ -99,12 +191,19 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
     };
 
     const timer = setTimeout(fetchManualDetails, 300);
-    
+
     return () => {
       clearTimeout(timer);
+      // ✅ SAFE: Clean up on unmount
       cleanupPendingRequests();
     };
-  }, [paymentMethod, selectedCurrency, dispatch, manualAccountDetails, cleanupPendingRequests]);
+  }, [
+    paymentMethod,
+    selectedCurrency,
+    dispatch,
+    manualAccountDetails,
+    cleanupPendingRequests,
+  ]);
 
   // ✅ COMPLETE: Cleanup on unmount
   useEffect(() => {
@@ -119,7 +218,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
       cleanupPendingRequests();
       dispatch(clearManualAccountDetails());
       prevFetchRef.current = { currency: null, paymentMethod: null };
-      
+
       setTimeout(() => {
         dispatch(fetchManualAccountDetails(selectedCurrency));
       }, 100);
@@ -129,17 +228,17 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // ✅ COMPLETE: Utility functions
   const shouldShowUSDBankSelection = useCallback(() => {
     return (
-      selectedCurrency === "USD" && 
-      paymentMethod === "bank_deposit" && 
-      usdBankAccounts && 
+      selectedCurrency === "USD" &&
+      paymentMethod === "bank_deposit" &&
+      usdBankAccounts &&
       usdBankAccounts.length > 0
     );
   }, [selectedCurrency, paymentMethod, usdBankAccounts]);
 
   const shouldRedirectToLinkBank = useCallback(() => {
     return (
-      selectedCurrency === "USD" && 
-      paymentMethod === "bank_deposit" && 
+      selectedCurrency === "USD" &&
+      paymentMethod === "bank_deposit" &&
       (!usdBankAccounts || usdBankAccounts.length === 0) &&
       !usdAccountsLoading
     );
@@ -151,37 +250,41 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
     manualAccountDetails,
     manualDetailsLoading,
     manualDetailsError,
-    
+
     // USD bank accounts
     usdBankAccounts: usdBankAccounts || [],
     usdAccountsLoading,
     usdAccountsError,
-    
+
     // AED account details
     aedAccountDetails,
     aedDetailsLoading,
     aedDetailsError,
-    
+
     // Utility functions
     refreshManualDetails,
     shouldShowUSDBankSelection,
     shouldRedirectToLinkBank,
-    
+
     // Derived state
-    hasManualAccount: !!manualAccountDetails && manualAccountDetails.currency === selectedCurrency,
+    hasManualAccount:
+      !!manualAccountDetails &&
+      manualAccountDetails.currency === selectedCurrency,
     hasUSDAccounts: usdBankAccounts && usdBankAccounts.length > 0,
     hasAEDAccount: !!aedAccountDetails,
     hasSilaAccounts,
-    
+
     // Payment method specific states
     isManualDeposit: paymentMethod === "manual_deposit",
-    isUSDBankDeposit: selectedCurrency === "USD" && paymentMethod === "bank_deposit",
-    isAEDManualDeposit: selectedCurrency === "AED" && paymentMethod === "manual_deposit",
-    
+    isUSDBankDeposit:
+      selectedCurrency === "USD" && paymentMethod === "bank_deposit",
+    isAEDManualDeposit:
+      selectedCurrency === "AED" && paymentMethod === "manual_deposit",
+
     // Loading states summary
     isLoading: manualDetailsLoading || usdAccountsLoading || aedDetailsLoading,
     hasError: manualDetailsError || usdAccountsError || aedDetailsError,
-    
+
     // Current selection info
     currentCurrency: selectedCurrency,
     currentPaymentMethod: paymentMethod,

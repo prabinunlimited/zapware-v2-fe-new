@@ -221,7 +221,7 @@ api.interceptors.request.use(
       "/reset-password",
       "/get-manuals",
       "/gif-images",
-      "/logout-time",
+      "/logout",
       "/send-otp-login",
       "/countries",
       "/partners/get-partner-detail",

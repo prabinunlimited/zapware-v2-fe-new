@@ -129,7 +129,7 @@ export const useDeposit = () => {
     return errors;
   }, [selectedCurrency, paymentMethod, amount, purpose, selectedBankAccount]);
 
-  // ✅ Form submission handler
+  // ✅ FIXED: Form submission handler with correct payload structure
   const handleSubmit = useCallback(
     async (e) => {
       if (e) e.preventDefault();
@@ -167,15 +167,69 @@ export const useDeposit = () => {
       try {
         console.log("✅ useDeposit: Form validation passed, submitting...");
 
+        // ✅ FIXED: Get authentication data
+        const customerId = localStorage.getItem("authcustomer_id");
+        let partnerId = localStorage.getItem("whitelabelledpartnerid");
+
+        // ✅ Parse partner ID properly
+        if (partnerId) {
+          partnerId = parseInt(partnerId, 10);
+          console.log("✅ Parsed partnerId:", partnerId);
+        } else {
+          console.warn("⚠️ Partner ID missing, using default");
+          partnerId = 9; // Default fallback
+        }
+
+        // ✅ FIXED: Build payload matching exact structure
         const depositData = {
-          currency: selectedCurrency,
-          payment_method: paymentMethod,
-          amount: parseFloat(amount),
-          purpose: purpose,
-          ...(selectedBankAccount && { bank_account_id: selectedBankAccount }),
+          customer_id: customerId, // ✅ Keep as string, NOT parseInt
+          send_amount: parseFloat(amount), // ✅ Numeric value from user
+          from_currency: selectedCurrency, // ✅ 3-letter currency code
+          payment_method: paymentMethod, // ✅ Method type (e.g., "bank_deposit")
+          is_remit: "N", // ✅ Hardcoded as "N"
+          purpose: purpose, // ✅ Purpose from dropdown
         };
 
-        console.log("📦 useDeposit: Deposit data prepared", depositData);
+        // ✅ Add sender details ONLY for USD bank deposits
+        if (
+          selectedCurrency === "USD" &&
+          paymentMethod === "bank_deposit" &&
+          selectedBankAccount
+        ) {
+          // Make sure we have the correct field names from selectedBankAccount
+          depositData.sender_account_name = selectedBankAccount.account_name;
+          depositData.sender_bank_id = selectedBankAccount.id;
+
+          console.log("✅ Added sender details for SILA:", {
+            sender_account_name: depositData.sender_account_name,
+            sender_bank_id: depositData.sender_bank_id,
+            full_account_object: selectedBankAccount, // Debug what's in the object
+          });
+        }
+
+        console.log("🔍 FINAL PAYLOAD FOR API:", depositData);
+
+        // ✅ Add sender details only for USD bank deposits
+        if (
+          selectedCurrency === "USD" &&
+          paymentMethod === "bank_deposit" &&
+          selectedBankAccount
+        ) {
+          depositData.sender_account_name = selectedBankAccount.account_name;
+          depositData.sender_bank_id = selectedBankAccount.id;
+
+          console.log("✅ Added sender details:", {
+            sender_account_name: selectedBankAccount.account_name,
+            sender_bank_id: selectedBankAccount.id,
+          });
+        }
+
+        console.log("📦 useDeposit: Final deposit payload", depositData);
+        console.log("🔍 useDeposit: Selected bank account details", {
+          account_name: selectedBankAccount?.account_name,
+          account_id: selectedBankAccount?.id,
+          full_account: selectedBankAccount,
+        });
 
         const result = await dispatch(submitDeposit(depositData)).unwrap();
 
@@ -196,6 +250,8 @@ export const useDeposit = () => {
           errorMessage = error;
         } else if (error?.message) {
           errorMessage = error.message;
+        } else if (error?.payload?.message) {
+          errorMessage = error.payload.message;
         }
 
         dispatch(setFormErrors({ submission: errorMessage }));
@@ -280,10 +336,17 @@ export const useDeposit = () => {
     [dispatch, formErrors]
   );
 
+  // ✅ FIXED: Accept full account object instead of just accountId
   const setSelectedBankAccountHandler = useCallback(
-    (accountId) => {
-      console.log("🔄 useDeposit: Setting selected bank account to", accountId);
-      dispatch(setSelectedBankAccount(accountId));
+    (account) => {
+      console.log("🔄 useDeposit: Setting selected bank account", {
+        account_name: account?.account_name,
+        account_id: account?.id,
+        full_account: account,
+      });
+
+      // ✅ Store the full account object, not just the ID
+      dispatch(setSelectedBankAccount(account));
 
       // Clear form errors
       if (formErrors.bankAccount) {
@@ -330,7 +393,11 @@ export const useDeposit = () => {
       paymentMethod,
       amount,
       purpose,
-      selectedBankAccount,
+      selectedBankAccount: {
+        account_name: selectedBankAccount?.account_name,
+        account_id: selectedBankAccount?.id,
+        has_full_object: !!selectedBankAccount,
+      },
       activeStep,
       isSubmitting,
       hasTransactionSuccess: !!transactionSuccess,

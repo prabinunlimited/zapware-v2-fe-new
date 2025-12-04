@@ -36,6 +36,7 @@ import Team from "../src/page/Team/Team";
 import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from './../src/page/BankLetter/BankLetter';
+import Remittance from "../src/page/Remittance/remittance";
 
 const ProtectedLayout = () => {
   return (
@@ -148,7 +149,11 @@ const router = createBrowserRouter([
         element: <PayoutPage />,
       },
       {
-        path: "/bankletter/:accountId",
+        path: "remittance/:customerId",
+        element: <Remittance />,
+      },
+      {
+       path: "/bankletter/:accountId",
         element: <BankLetter />,
       },
     ],
