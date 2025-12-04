@@ -18,26 +18,33 @@ export const fetchManualAccountDetails = createAsyncThunk(
     try {
       const token = localStorage.getItem("bearertoken");
 
-      // For USD currency, use Sila endpoint
+      // For USD currency, use hardcoded details instead of Sila API
       if (currencyCode === "USD") {
-        const formData = new FormData();
-        formData.append("currency", "USD");
-        formData.append("amount", amount || "0");
-        formData.append("customerId", parseInt(customerId));
-
-        const response = await axios.post(
-          `${API_URL}/sila/manual-sila-bankdetails`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "multipart/form-data",
-            },
-          }
-        );
-        return response.data;
+        // Hardcoded bank details as requested
+        const hardcodedDetails = {
+          status: 200,
+          message: "Bank details fetched successfully",
+          account_name: "Unlimited Cloud LLC",
+          account_number: "518366536",
+          bank_name: "Chase Bank",
+          bank_address: "2790 Park Ave., New York, NY 10017, USA",
+          routing_number: "021000021",
+          swift_code: "CHASUS33",
+          account_type: "Checking",
+          beneficiary_address: {
+            street: "2790 Park Ave.",
+            postalCode: "10017",
+            city: "New York",
+            state: "NY",
+            zipCode: "10017",
+            country: "USA",
+          },
+        };
+        
+        console.log("Using hardcoded manual account details for USD:", hardcodedDetails);
+        return hardcodedDetails;
       } else {
-        // For other currencies
+        // For other currencies, use the original endpoint
         const response = await axios.get(
           `${API_URL}/manualaccount-detail/${bankId}`,
           {
@@ -47,7 +54,25 @@ export const fetchManualAccountDetails = createAsyncThunk(
         return response.data;
       }
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      // If there's an error with other currencies, reject with value
+      if (currencyCode !== "USD") {
+        return rejectWithValue(error.response?.data || error.message);
+      }
+      
+      // For USD, return the hardcoded details even if there's an error
+      console.warn("Error fetching manual details, using hardcoded fallback for USD");
+      const fallbackDetails = {
+        status: 200,
+        message: "Using fallback bank details",
+        account_name: "Unlimited Cloud LLC",
+        account_number: "518366536",
+        bank_name: "Chase Bank",
+        bank_address: "2790 Park Ave., New York, NY 10017, USA",
+        routing_number: "021000021",
+        swift_code: "CHASUS33",
+        account_type: "Checking",
+      };
+      return fallbackDetails;
     }
   }
 );

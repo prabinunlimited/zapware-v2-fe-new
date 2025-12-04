@@ -31,6 +31,8 @@ import {
   selectRemittanceReadyBanks,
   selectBeneficiariesLoading,
   fetchBeneficiaries, // ADD THIS LINE
+  selectBeneficiaryBanks,
+  selectBanksLoading,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 const ManualDeposit = ({
@@ -55,6 +57,7 @@ const ManualDeposit = ({
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
   const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
+  const banksLoading = useSelector(selectBanksLoading);
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -92,7 +95,7 @@ const ManualDeposit = ({
     allBeneficiaries.length,
     beneficiariesLoading,
   ]);
-  const beneficiaryBanks = useSelector(selectRemittanceReadyBanks);
+  const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
 
   // ADD THESE LOGS HERE:
   console.log("All beneficiaries from Redux:", allBeneficiaries);
@@ -212,6 +215,16 @@ const ManualDeposit = ({
     }
   }, [beneficiaries, selectedBeneficiary, showCodeInput]);
 
+  // Auto-select first bank when banks are loaded
+  useEffect(() => {
+    if (beneficiaryBanks.length > 0 && selectedBeneficiary && !selectedBank) {
+      const firstBank = beneficiaryBanks[0];
+      if (firstBank) {
+        onBankSelect(firstBank);
+      }
+    }
+  }, [beneficiaryBanks, selectedBeneficiary, selectedBank, onBankSelect]);
+
   // Handle beneficiary selection
   const handleBeneficiarySelect = useCallback(
     async (selectedOption) => {
@@ -232,20 +245,19 @@ const ManualDeposit = ({
       setShowCodeInput(false);
       onBeneficiarySelect(selectedOption);
 
+      // Clear any existing selected bank
+      onBankSelect(null);
+
       // Fetch beneficiary banks
       try {
         console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
-        await dispatch(fetchBeneficiaryBanks(selectedOption.id)).unwrap();
 
-        console.log("📋 Banks API Response:", banksResult);
-        console.log("📋 Type of response:", typeof banksResult);
+        // Wait for the bank fetch to complete
+        const result = await dispatch(
+          fetchBeneficiaryBanks(selectedOption.id)
+        ).unwrap();
 
-        // Check what's in Redux after fetch
-        console.log("📋 beneficiaryBanks from Redux:", beneficiaryBanks);
-        console.log(
-          "📋 Raw Redux state:",
-          useSelector((state) => state.beneficiaries?.beneficiaryBanks)
-        );
+        console.log("📋 Banks fetched successfully:", result);
 
         // Find matching options
         const matchedPurpose = findMatchingOption(
@@ -283,7 +295,19 @@ const ManualDeposit = ({
           onFieldChange("occupation", selectedOption.occupation);
         }
 
-        toast.success("Beneficiary details loaded successfully!");
+        // Auto-select first bank if available
+        if (result.length > 0) {
+          // Wait a moment for the Redux state to update
+          setTimeout(() => {
+            const firstBank = beneficiaryBanks[0];
+            if (firstBank) {
+              onBankSelect(firstBank);
+              toast.success("Beneficiary details loaded successfully!");
+            }
+          }, 100);
+        } else {
+          toast.warning("No bank accounts found for this beneficiary");
+        }
       } catch (error) {
         console.error("Error fetching beneficiary banks:", error);
         console.error("Error details:", error.message, error.response?.data);
@@ -300,6 +324,7 @@ const ManualDeposit = ({
       relationOptions,
       payoutMethodOptions,
       findMatchingOption,
+      beneficiaryBanks, // Keep this dependency
     ]
   );
 
@@ -573,65 +598,51 @@ const ManualDeposit = ({
               options={beneficiaryBanks}
               value={selectedBank}
               onChange={onBankSelect}
-              isLoading={false}
-              isDisabled={!selectedBeneficiary || beneficiaryBanks.length === 0}
+              isLoading={banksLoading}
+              isDisabled={
+                !selectedBeneficiary ||
+                banksLoading ||
+                beneficiaryBanks.length === 0
+              }
               classNamePrefix="select"
               styles={selectStyles}
               placeholder={
-                !selectedBeneficiary
+                banksLoading
+                  ? "Loading banks..."
+                  : !selectedBeneficiary
                   ? "Select a beneficiary first"
                   : beneficiaryBanks.length === 0
                   ? "No bank accounts found for this beneficiary"
                   : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
-                // Use the correct field names from your API response
                 const bankName = option.bank_name || "Unknown Bank";
                 const accountNumber =
-                  option.bank_acc_no || option.account_number || "No Account";
+                  option.bank_acc_no ||
+                  option.account_number ||
+                  option.bank_acc_no ||
+                  "No Account";
+                const accountHolder =
+                  option.nameInBankAc || option.account_name || "";
                 const rails = option.rails || "";
                 const accountType = option.account_type || "";
 
                 let label = `${bankName} - ${accountNumber}`;
-                if (rails) label += ` (${rails})`;
-                if (accountType) label += ` [${accountType}]`;
+                if (accountHolder) label += ` (${accountHolder})`;
+                if (rails) label += ` [${rails}]`;
+                if (accountType) label += ` - ${accountType}`;
 
                 return label;
               }}
               getOptionValue={(option) => option.id || option.benef_banks_uuid}
             />
-            {selectedBeneficiary && beneficiaryBanks.length > 0 && (
-              <p className="mt-1 text-sm text-gray-500">
-                {beneficiaryBanks.length} bank account(s) available
-              </p>
-            )}
-          </div>
-
-          {/* Beneficiary Bank */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Beneficiary Bank
-            </label>
-            <Select
-              options={beneficiaryBanks}
-              value={selectedBank}
-              onChange={onBankSelect}
-              isLoading={false} // Loading handled by parent
-              isDisabled={!selectedBeneficiary}
-              classNamePrefix="select"
-              styles={selectStyles}
-              placeholder={
-                !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : "Select beneficiary bank..."
-              }
-              getOptionLabel={(option) =>
-                `${option.bank_name} (${
-                  option.account_number || option.bank_acc_no
-                }) - ${option.rails || option.bank_type || ""}`
-              }
-              getOptionValue={(option) => option.id}
-            />
+            {selectedBeneficiary &&
+              !banksLoading &&
+              beneficiaryBanks.length > 0 && (
+                <p className="mt-1 text-sm text-gray-500">
+                  {beneficiaryBanks.length} bank account(s) available
+                </p>
+              )}
           </div>
 
           {/* Compliance Note */}

@@ -8,6 +8,7 @@ import {
   FaExchangeAlt,
   FaUniversity,
   FaFileUpload,
+  FaUser,
 } from "react-icons/fa";
 
 const Step3Confirm = ({
@@ -169,7 +170,8 @@ const Step3Confirm = ({
                   <div className="text-right">
                     <span className="font-bold text-gray-900">
                       1 {formData.sendCurrency?.value} ={" "}
-                      {exchangeRateData?.fxRate?.toFixed(4) || formData.exchangeRate?.toFixed(4)}{" "}
+                      {exchangeRateData?.fxRate?.toFixed(4) ||
+                        formData.exchangeRate?.toFixed(4)}{" "}
                       {formData.receiveCurrency?.value}
                     </span>
                     <div className="text-xs text-green-600 mt-1">
