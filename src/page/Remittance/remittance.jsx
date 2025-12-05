@@ -109,6 +109,9 @@ const Remittance = () => {
   const [copiedField, setCopiedField] = useState(null);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
 
+  const [showOpenBanking, setShowOpenBanking] = useState(false);
+  const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
+
   // Professional payment method options
   const paymentOptions = useMemo(
     () => [

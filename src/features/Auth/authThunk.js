@@ -511,19 +511,44 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, customer_type },
+    { phone_code, mobile_number, password, customer_type },
     { dispatch, rejectWithValue }
   ) => {
     try {
+      // ✅ DEBUG: Log the received parameters
+      console.log("🔍 generateOTP thunk received:", {
+        phone_code,
+        mobile_number,
+        hasPassword: !!password,
+        passwordLength: password?.length,
+        passwordValue: password ? "***" + password.slice(-3) : "NO PASSWORD",
+        customer_type,
+      });
+
+      // ✅ Validate that password is provided
+      if (!password || password.trim() === "") {
+        console.error("❌ Password validation failed - empty or missing");
+        return rejectWithValue("Password is required for OTP generation");
+      }
+
       const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
       const cleanPhoneCode = phone_code.replace(/\D/g, "");
 
       const token = await getBearerToken();
+
+      // ✅ Password is ALWAYS included - NO CONDITION
       const payload = {
         country_code: cleanPhoneCode,
         mobile_number: cleanPhoneNumber,
+        password: password, // ✅ ALWAYS INCLUDED
         hostname: window.location.hostname,
       };
+
+      // ✅ DEBUG: Log the final payload
+      console.log("🔍 generateOTP sending payload:", {
+        ...payload,
+        password: "***" + password.slice(-3), // Hide full password in logs
+      });
 
       if (customer_type) {
         payload.customer_type = customer_type;

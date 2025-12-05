@@ -5,7 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash, faExternalLinkAlt } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faExternalLinkAlt,
+} from "@fortawesome/free-solid-svg-icons";
 import { AiOutlineClose } from "react-icons/ai";
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
@@ -568,6 +572,7 @@ const Login = () => {
               generateOTP({
                 phone_code: values.phone_code,
                 mobile_number: values.mobile_number,
+                password: values.password,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
                     customer_type: values.customerType,
@@ -793,25 +798,50 @@ const Login = () => {
     }
 
     try {
-      if (!values.phone_code || !values.mobile_number) {
+      // ✅ DEBUG: Log form values
+      console.log("🔍 handleGenerateOTP form values:", {
+        phone_code: values.phone_code,
+        mobile_number: values.mobile_number,
+        password: values.password
+          ? "***" + values.password.slice(-3)
+          : "NO PASSWORD",
+        passwordLength: values.password?.length,
+        showCustomerType,
+        customerType: values.customerType,
+      });
+
+      // ✅ Check that ALL required fields are filled
+      if (!values.phone_code || !values.mobile_number || !values.password) {
+        console.error("❌ Missing fields:", {
+          hasPhoneCode: !!values.phone_code,
+          hasMobileNumber: !!values.mobile_number,
+          hasPassword: !!values.password,
+        });
         dispatch(
           openModal({
             title: "Error",
-            message: "Please enter both country code and mobile number",
+            message: "Please enter country code, mobile number, AND password",
             type: "error",
           })
         );
         return;
       }
 
+      // ✅ Password is ALWAYS included
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
+        password: values.password, // ✅ REQUIRED - NO CONDITIONAL
         ...(showCustomerType === "Y" &&
           values.customerType && {
             customer_type: values.customerType,
           }),
       };
+
+      console.log("🔍 handleGenerateOTP dispatching with payload:", {
+        ...payload,
+        password: "***" + values.password.slice(-3),
+      });
 
       const result = await dispatch(generateOTP(payload)).unwrap();
 
