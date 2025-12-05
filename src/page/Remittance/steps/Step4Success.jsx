@@ -117,13 +117,6 @@ const Step4Success = ({
         <p className="text-gray-600 text-lg">
           Your money is on its way to {selectedBeneficiary?.name}
         </p>
-
-        <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-          <FaClock className="w-4 h-4" />
-          {formData.paymentMethod === "manual" 
-            ? "Complete deposit within 24 hours" 
-            : "Estimated delivery: 1-2 business days"}
-        </div>
       </motion.div>
 
       {/* Transaction Card */}

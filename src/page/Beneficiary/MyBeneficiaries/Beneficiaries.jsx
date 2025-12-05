@@ -4,6 +4,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { RingLoader } from "react-spinners";
+import BankDetailsPopup from "../../../components/PopupModal/BankDetailsPopup";
+
 import {
   fetchBeneficiaries,
   deleteBeneficiary,
@@ -20,6 +22,9 @@ import {
   selectBeneficiariesSuccess,
   selectSearchQuery,
   selectFilterVisibility,
+  fetchBeneficiaryBanks,
+  selectBeneficiaryBanks,
+  selectBanksLoading,
 } from "./BeneficiariesSlice";
 
 const Beneficiaries = () => {
@@ -42,6 +47,9 @@ const Beneficiaries = () => {
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [statusFilter, setStatusFilter] = useState(filterVisibility);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [selectedBeneficiaryForBank, setSelectedBeneficiaryForBank] =
+    useState(null);
 
   // Fetch beneficiaries on component mount
   useEffect(() => {
@@ -466,7 +474,7 @@ const Beneficiaries = () => {
                 No beneficiaries found
               </h3>
               <p className="mt-2 text-gray-500">
-                {searchQuery || statusFilter !== "all" 
+                {searchQuery || statusFilter !== "all"
                   ? "Try adjusting your filters to see more results."
                   : "Get started by adding your first beneficiary."}
               </p>
@@ -578,6 +586,35 @@ const Beneficiaries = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => {
+                              setSelectedBeneficiaryForBank({
+                                id: beneficiary.id,
+                                name: beneficiary.name,
+                              });
+                              setShowBankDetails(true);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-900 transition-colors relative group"
+                            title="View Bank Details"
+                          >
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center hover:bg-indigo-200 transition-colors">
+                              <svg
+                                className="w-4 h-4 text-indigo-600"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                                <path
+                                  fillRule="evenodd"
+                                  d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                              View Bank Details
+                            </div>
+                          </button>
                           <button
                             onClick={() =>
                               handleViewBeneficiary(beneficiary.id)
@@ -725,6 +762,18 @@ const Beneficiaries = () => {
           </div>
         )}
       </div>
+
+      {/* Bank Details Popup */}
+      {showBankDetails && selectedBeneficiaryForBank && (
+        <BankDetailsPopup
+          beneficiaryId={selectedBeneficiaryForBank.id}
+          beneficiaryName={selectedBeneficiaryForBank.name}
+          onClose={() => {
+            setShowBankDetails(false);
+            setSelectedBeneficiaryForBank(null);
+          }}
+        />
+      )}
 
       {/* Toast Container */}
       <ToastContainer

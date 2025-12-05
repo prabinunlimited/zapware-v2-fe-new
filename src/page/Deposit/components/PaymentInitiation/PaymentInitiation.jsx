@@ -1,32 +1,32 @@
-// src/page/Deposit/components/PaymentInitiation/PaymentInitiation.jsx - FIXED VERSION
+// src/page/Deposit/components/PaymentInitiation/PaymentInitiation.jsx
 import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { usePlaidLink } from "react-plaid-link";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { setShowPaymentInitiation } from "../../slices/depositSlice";
 import { useNavigate } from "react-router-dom";
 
-const PaymentInitiation = () => {
-  const dispatch = useDispatch();
+const PaymentInitiation = ({
+  selectedCurrency,
+  amount,
+  purpose,
+  paymentMethod,
+  selectedBankAccount,
+  selectedBeneficiaryBank,
+  selectedBeneficiary,
+  customerId: propCustomerId,
+  showPaymentInitiation,
+  onClose,
+  onSuccess,
+}) => {
   const navigate = useNavigate();
-
-  const {
-    selectedCurrency,
-    amount,
-    purpose,
-    paymentMethod,
-    selectedBankAccount,
-    showPaymentInitiation,
-  } = useSelector((state) => state.deposit);
 
   const [linkToken, setLinkToken] = useState(null);
   const [transId, setTransId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Get customer ID and token
-  const customerId = localStorage.getItem("authcustomer_id");
+  // Get customer ID and token - use prop if provided, otherwise from localStorage
+  const customerId = propCustomerId || localStorage.getItem("authcustomer_id");
   const authToken = localStorage.getItem("authtoken");
 
   useEffect(() => {
@@ -42,21 +42,21 @@ const PaymentInitiation = () => {
       if (!selectedCurrency) {
         console.log("❌ No currency selected");
         toast.error("Please select a currency");
-        handleClose();
+        onClose();
         return;
       }
 
       if (!openBankingCurrencies.includes(selectedCurrency)) {
         console.log(`❌ ${selectedCurrency} is not an Open Banking currency`);
         toast.error(`Open Banking is not available for ${selectedCurrency}`);
-        handleClose();
+        onClose();
         return;
       }
 
       if (!amount || parseFloat(amount) <= 0) {
         console.log("❌ Invalid amount");
         toast.error("Please enter a valid amount");
-        handleClose();
+        onClose();
         return;
       }
 
@@ -72,20 +72,30 @@ const PaymentInitiation = () => {
       try {
         console.log("🔄 Fetching Plaid Link token for Open Banking...");
 
-        // Simplified payload - match what your backend expects
+        // Get bank_id from selectedBankAccount
+        const bank_id = selectedBankAccount?.bank_id || "";
+        
+        // Get beneficiary account details
+        const benef_account = selectedBeneficiary?.id || "";
+        const benef_bank_account = selectedBeneficiaryBank?.id || "";
+
+        // Complete payload
         const payload = {
           customerId: customerId,
           amount: {
-            currency: selectedCurrency, // ✅ Currency inside amount object
-            value: parseFloat(amount), // ✅ Value inside amount object
-            paymentType: "bank_transfer", // ✅ Add paymentType
-            bank_id: "", // Need to populate this
-            benef_account: "", // Need to populate this
-            benef_bank_account: "", // Need to populate this
+            currency: selectedCurrency,
+            value: parseFloat(amount),
+            paymentType: "bank_transfer",
+            bank_id: bank_id,
+            benef_account: benef_account,
+            benef_bank_account: benef_bank_account,
           },
+          purpose: purpose || "remittance",
+          beneficiary_name: selectedBeneficiary?.name,
+          beneficiary_bank_name: selectedBeneficiaryBank?.bank_name,
         };
 
-        console.log("📤 Request payload:", payload);
+        console.log("📤 Request payload for /plaidtoken:", payload);
 
         // Use your API endpoint for Open Banking
         const response = await axios.post(
@@ -99,7 +109,7 @@ const PaymentInitiation = () => {
           }
         );
 
-        console.log("✅ Response received:", response.data);
+        console.log("✅ Response received from /plaidtoken:", response.data);
 
         // Handle different response structures
         let link_token, transactionId;
@@ -149,7 +159,7 @@ const PaymentInitiation = () => {
           toast.error("Failed to connect to banking service");
         }
 
-        handleClose();
+        onClose();
       } finally {
         setLoading(false);
       }
@@ -165,6 +175,10 @@ const PaymentInitiation = () => {
     customerId,
     authToken,
     purpose,
+    selectedBankAccount,
+    selectedBeneficiary,
+    selectedBeneficiaryBank,
+    onClose,
   ]);
 
   // Plaid Link configuration
@@ -179,9 +193,14 @@ const PaymentInitiation = () => {
           metadata,
           transactionId: transId,
           customerId,
-          amount,
+          amount: parseFloat(amount),
           currency: selectedCurrency,
+          purpose: purpose || "remittance",
+          beneficiary: selectedBeneficiary?.id,
+          beneficiary_bank: selectedBeneficiaryBank?.id,
         };
+
+        console.log("📤 Sending Open Banking success to backend:", dataToSend);
 
         // Send success to backend
         await axios.post(
@@ -197,19 +216,46 @@ const PaymentInitiation = () => {
 
         toast.success("Open Banking payment initiated successfully!");
 
-        // Navigate back
-        navigate(`/dashboard/${customerId}`, {
-          state: {
+        // Call onSuccess callback
+        if (onSuccess) {
+          onSuccess({
             success: true,
-            message: "Open Banking payment initiated",
-          },
-        });
+            transactionId: transId,
+            currency: selectedCurrency,
+            amount: amount,
+          });
+        }
+
+        // Navigate back
+        if (customerId) {
+          navigate(`/home/${customerId}`, {
+            state: {
+              success: true,
+              message: "Open Banking payment initiated",
+            },
+          });
+        } else {
+          navigate("/home");
+        }
       } catch (error) {
         console.error("❌ Failed to process Open Banking success:", error);
         toast.error("Payment initiated but confirmation failed");
-        navigate(`/dashboard/${customerId}`);
+        
+        // Still call onSuccess but with error flag
+        if (onSuccess) {
+          onSuccess({
+            success: false,
+            error: error.message,
+          });
+        }
+        
+        if (customerId) {
+          navigate(`/home/${customerId}`);
+        } else {
+          navigate("/home");
+        }
       } finally {
-        handleClose();
+        onClose();
       }
     },
     onExit: (err, metadata) => {
@@ -222,13 +268,13 @@ const PaymentInitiation = () => {
         console.log("User exited Plaid Link");
       }
 
-      handleClose();
+      onClose();
 
       // Navigate back to dashboard
       if (customerId) {
-        navigate(`/dashboard/${customerId}`);
+        navigate(`/home/${customerId}`);
       } else {
-        navigate("/dashboard");
+        navigate("/home");
       }
     },
     onEvent: (eventName, metadata) => {
@@ -267,7 +313,7 @@ const PaymentInitiation = () => {
     if (plaidError) {
       console.error("Plaid Link initialization error:", plaidError);
       toast.error("Failed to initialize bank connection");
-      handleClose();
+      onClose();
     }
   }, [
     ready,
@@ -280,7 +326,7 @@ const PaymentInitiation = () => {
   ]);
 
   const handleClose = () => {
-    dispatch(setShowPaymentInitiation(false));
+    if (onClose) onClose();
     setLinkToken(null);
     setTransId(null);
     setLoading(false);

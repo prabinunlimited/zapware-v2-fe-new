@@ -151,7 +151,10 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
 
       const result = await response.json();
       console.log("🔍 Bank API Result:", result);
-      return result?.bank_accounts || [];
+
+      // FIX: The API returns { "bank_accounts": [...] } directly
+      // Not nested under data property
+      return result.bank_accounts || [];
     } catch (error) {
       return rejectWithValue(error.message);
     }

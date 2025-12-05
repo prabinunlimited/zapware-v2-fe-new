@@ -1,4 +1,6 @@
 import React from "react";
+import Select from "react-select";
+
 import {
   FaUser,
   FaUniversity,
@@ -91,15 +93,16 @@ const Step2Details = ({
               <span className="text-gray-600">Exchange Rate:</span>
               <span className="font-bold text-gray-900">
                 1 {formData.sendCurrency?.value} ={" "}
-                {exchangeRateData?.fxRate?.toFixed(4) || formData.exchangeRate?.toFixed(4) || "0.0000"}{" "}
+                {exchangeRateData?.fxRate?.toFixed(4) ||
+                  formData.exchangeRate?.toFixed(4) ||
+                  "0.0000"}{" "}
                 {formData.receiveCurrency?.value}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Transfer Fee:</span>
               <span className="font-bold text-gray-900">
-                {formData.sendCurrency?.value}{" "}
-                {fee?.toFixed(2) || "0.00"}
+                {formData.sendCurrency?.value} {fee?.toFixed(2) || "0.00"}
               </span>
             </div>
           </div>
@@ -171,11 +174,9 @@ const Step2Details = ({
             Complete the details for your selected payment method
           </p>
         </div>
-        
+
         {/* This includes the beneficiary selection for ManualDeposit */}
-        <div className="p-6">
-          {paymentMethodComponent}
-        </div>
+        <div className="p-6">{paymentMethodComponent}</div>
       </div>
 
       {/* Selected Beneficiary Summary - READ ONLY */}
@@ -188,11 +189,15 @@ const Step2Details = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-gray-700">Full Name</p>
-              <p className="text-lg font-semibold text-gray-900">{selectedBeneficiary.name}</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {selectedBeneficiary.name}
+              </p>
             </div>
             {selectedBeneficiary.phone_number && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-700">Phone Number</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Phone Number
+                </p>
                 <p className="text-lg font-semibold text-gray-900">
                   {selectedBeneficiary.phone_number}
                 </p>
@@ -200,7 +205,9 @@ const Step2Details = ({
             )}
             {selectedBeneficiary.benef_uuid && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-700">Beneficiary Code</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Beneficiary Code
+                </p>
                 <p className="text-lg font-semibold text-gray-900">
                   {selectedBeneficiary.benef_uuid}
                 </p>
@@ -209,12 +216,16 @@ const Step2Details = ({
             {selectedBeneficiary.email && (
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-700">Email</p>
-                <p className="text-lg font-semibold text-gray-900">{selectedBeneficiary.email}</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {selectedBeneficiary.email}
+                </p>
               </div>
             )}
             {selectedBank && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-700">Bank Account</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Bank Account
+                </p>
                 <p className="text-lg font-semibold text-gray-900">
                   {selectedBank.bank_name}
                 </p>
@@ -225,78 +236,14 @@ const Step2Details = ({
             )}
             {selectedBeneficiary.relationtobenef && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-700">Relationship</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Relationship
+                </p>
                 <p className="text-lg font-semibold text-gray-900">
                   {selectedBeneficiary.relationtobenef}
                 </p>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Additional Information (Only if not in ManualDeposit for manual payment) */}
-      {formData.paymentMethod !== "manual" && (
-        <div className="space-y-6">
-          <h3 className="text-lg font-semibold text-gray-900">Additional Information</h3>
-          
-          {/* Purpose and Source */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Purpose of Transfer *
-              </label>
-              <Select
-                options={purposeOptions}
-                value={formData.purpose}
-                onChange={(value) => onFieldChange("purpose", value)}
-                placeholder="Select purpose..."
-                styles={selectStyles}
-                isSearchable
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Source of Income *
-              </label>
-              <Select
-                options={incomeSourceOptions}
-                value={formData.incomeSource}
-                onChange={(value) => onFieldChange("incomeSource", value)}
-                placeholder="Select income source..."
-                styles={selectStyles}
-                isSearchable
-              />
-            </div>
-          </div>
-
-          {/* Additional Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Occupation
-              </label>
-              <input
-                type="text"
-                value={formData.occupation || ""}
-                onChange={(e) => onFieldChange("occupation", e.target.value)}
-                placeholder="Enter occupation"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Relationship to Recipient
-              </label>
-              <Select
-                options={relationOptions}
-                value={formData.relation}
-                onChange={(value) => onFieldChange("relation", value)}
-                placeholder="Select relationship..."
-                styles={selectStyles}
-                isSearchable
-              />
-            </div>
           </div>
         </div>
       )}
@@ -308,11 +255,14 @@ const Step2Details = ({
             <FaShieldAlt className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h4 className="text-lg font-bold text-gray-900 mb-2">Compliance & Security</h4>
+            <h4 className="text-lg font-bold text-gray-900 mb-2">
+              Compliance & Security
+            </h4>
             <p className="text-gray-700">
-              For compliance purposes, we require information about the purpose of your transfer 
-              and source of funds. All information is kept confidential and secure. This helps us 
-              ensure the security and legitimacy of all transactions in compliance with international 
+              For compliance purposes, we require information about the purpose
+              of your transfer and source of funds. All information is kept
+              confidential and secure. This helps us ensure the security and
+              legitimacy of all transactions in compliance with international
               financial regulations.
             </p>
           </div>

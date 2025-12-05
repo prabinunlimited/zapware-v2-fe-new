@@ -12,16 +12,19 @@ export const fetchPurposes = createAsyncThunk(
       const response = await axios.get(`${API_URL}/transactions/get-purposes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       // Transform API response to consistent format
-      const purposes = Array.isArray(response.data) 
-        ? response.data 
+      const purposes = Array.isArray(response.data)
+        ? response.data
         : response.data?.data || response.data?.purposes || [];
-      
+
       return purposes.map((purpose) => ({
-        value: purpose.value || purpose.id || purpose.name?.toLowerCase().replace(/\s+/g, '_'),
+        value:
+          purpose.value ||
+          purpose.id ||
+          purpose.name?.toLowerCase().replace(/\s+/g, "_"),
         label: purpose.label || purpose.name || purpose.description,
-        description: purpose.description || '',
+        description: purpose.description || "",
       }));
     } catch (error) {
       console.error("Error fetching purposes:", error);
@@ -38,11 +41,14 @@ export const fetchIncomeSources = createAsyncThunk(
       const response = await axios.get(`${API_URL}/fetch-income`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const data = response.data?.data || response.data || [];
-      
+
       return data.map((source) => ({
-        value: source.name?.toLowerCase().replace(/\s+/g, '_') || source.value || source.id,
+        value:
+          source.name?.toLowerCase().replace(/\s+/g, "_") ||
+          source.value ||
+          source.id,
         label: source.name || source.label,
         originalName: source.name || source.label,
       }));
@@ -61,16 +67,16 @@ export const fetchOccupations = createAsyncThunk(
       const response = await axios.get(`${API_URL}/fetch-occupation`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const data = response.data?.data || response.data || [];
-      
+
       return data.map((occupation) => ({
         value: occupation.name || occupation.value || occupation.id,
         label: occupation.name || occupation.label,
       }));
     } catch (error) {
       console.error("Error fetching occupations:", error);
-      
+
       // Return fallback occupations if API fails
       return [
         { value: "business", label: "Business" },
@@ -93,11 +99,14 @@ export const fetchPaymentMethods = createAsyncThunk(
       const response = await axios.get(`${API_URL}/payment-methods`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const data = response.data?.data || response.data || [];
-      
+
       return data.map((method) => ({
-        value: method.value || method.id || method.name?.toLowerCase().replace(/\s+/g, '_'),
+        value:
+          method.value ||
+          method.id ||
+          method.name?.toLowerCase().replace(/\s+/g, "_"),
         label: method.label || method.name,
         icon: method.icon,
         description: method.description,
@@ -109,10 +118,28 @@ export const fetchPaymentMethods = createAsyncThunk(
   }
 );
 
+const CACHE_DURATION = 5 * 60 * 1000;
+
 // Fetch all static data at once
 export const fetchAllStaticData = createAsyncThunk(
   "static/fetchAllStaticData",
-  async (_, { dispatch, rejectWithValue }) => {
+  async (_, { getState, dispatch, rejectWithValue }) => {
+    const state = getState().remittanceStatic;
+
+    // Check if we have valid cached data
+    if (state.lastFetched) {
+      const timeSinceLastFetch =
+        Date.now() - new Date(state.lastFetched).getTime();
+      if (
+        timeSinceLastFetch < CACHE_DURATION &&
+        state.purposes.length > 0 &&
+        state.incomeSources.length > 0
+      ) {
+        console.log("Using cached static data");
+        return { success: true, cached: true };
+      }
+    }
+
     try {
       await Promise.all([
         dispatch(fetchPurposes()),
@@ -120,7 +147,7 @@ export const fetchAllStaticData = createAsyncThunk(
         dispatch(fetchOccupations()),
         dispatch(fetchPaymentMethods()),
       ]);
-      return { success: true };
+      return { success: true, cached: false };
     } catch (error) {
       return rejectWithValue("Failed to fetch static data");
     }
@@ -179,7 +206,7 @@ const staticDataSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Fetch purposes
       .addCase(fetchPurposes.pending, (state) => {
         state.loading = true;
@@ -192,7 +219,7 @@ const staticDataSlice = createSlice({
       .addCase(fetchPurposes.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to fetch purposes";
-        
+
         // Set fallback purposes
         state.purposes = [
           { value: "family_support", label: "Family Support" },
@@ -203,7 +230,7 @@ const staticDataSlice = createSlice({
           { value: "other", label: "Other" },
         ];
       })
-      
+
       // Fetch income sources
       .addCase(fetchIncomeSources.pending, (state) => {
         state.loading = true;
@@ -216,18 +243,30 @@ const staticDataSlice = createSlice({
       .addCase(fetchIncomeSources.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        
+
         // Set fallback income sources
         state.incomeSources = [
           { value: "salary", label: "Salary", originalName: "Salary" },
-          { value: "business", label: "Business Income", originalName: "Business Income" },
-          { value: "investment", label: "Investment Income", originalName: "Investment Income" },
+          {
+            value: "business",
+            label: "Business Income",
+            originalName: "Business Income",
+          },
+          {
+            value: "investment",
+            label: "Investment Income",
+            originalName: "Investment Income",
+          },
           { value: "gift", label: "Gift", originalName: "Gift" },
-          { value: "inheritance", label: "Inheritance", originalName: "Inheritance" },
+          {
+            value: "inheritance",
+            label: "Inheritance",
+            originalName: "Inheritance",
+          },
           { value: "other", label: "Other", originalName: "Other" },
         ];
       })
-      
+
       // Fetch occupations
       .addCase(fetchOccupations.fulfilled, (state, action) => {
         state.occupations = action.payload;
@@ -235,7 +274,7 @@ const staticDataSlice = createSlice({
       .addCase(fetchOccupations.rejected, (state) => {
         // Fallback occupations already returned in thunk
       })
-      
+
       // Fetch payment methods
       .addCase(fetchPaymentMethods.fulfilled, (state, action) => {
         state.paymentMethods = action.payload;
@@ -251,22 +290,25 @@ const staticDataSlice = createSlice({
   },
 });
 
-export const { 
-  clearError, 
-  setPurposes, 
-  setIncomeSources, 
-  setOccupations, 
+export const {
+  clearError,
+  setPurposes,
+  setIncomeSources,
+  setOccupations,
   setPaymentMethods,
-  resetStaticData 
+  resetStaticData,
 } = staticDataSlice.actions;
 
 // Selectors
-export const selectPurposes = (state) => state.staticData.purposes;
-export const selectIncomeSources = (state) => state.staticData.incomeSources;
-export const selectOccupations = (state) => state.staticData.occupations;
-export const selectPaymentMethods = (state) => state.staticData.paymentMethods;
-export const selectStaticDataLoading = (state) => state.staticData.loading;
-export const selectStaticDataError = (state) => state.staticData.error;
-export const selectLastFetched = (state) => state.staticData.lastFetched;
+export const selectPurposes = (state) => state.remittanceStatic.purposes;
+export const selectIncomeSources = (state) =>
+  state.remittanceStatic.incomeSources;
+export const selectOccupations = (state) => state.remittanceStatic.occupations;
+export const selectPaymentMethods = (state) =>
+  state.remittanceStatic.paymentMethods;
+export const selectStaticDataLoading = (state) =>
+  state.remittanceStatic.loading;
+export const selectStaticDataError = (state) => state.remittanceStatic.error;
+export const selectLastFetched = (state) => state.remittanceStatic.lastFetched;
 
 export default staticDataSlice.reducer;

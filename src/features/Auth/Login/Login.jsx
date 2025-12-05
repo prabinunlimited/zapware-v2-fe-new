@@ -5,7 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash, faExternalLinkAlt } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faExternalLinkAlt,
+} from "@fortawesome/free-solid-svg-icons";
 import { AiOutlineClose } from "react-icons/ai";
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
@@ -793,20 +797,23 @@ const Login = () => {
     }
 
     try {
-      if (!values.phone_code || !values.mobile_number) {
+      // ✅ Check that ALL required fields are filled
+      if (!values.phone_code || !values.mobile_number || !values.password) {
         dispatch(
           openModal({
             title: "Error",
-            message: "Please enter both country code and mobile number",
+            message: "Please enter country code, mobile number, AND password",
             type: "error",
           })
         );
         return;
       }
 
+      // ✅ Password is ALWAYS included
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
+        password: values.password, // ✅ REQUIRED - NO CONDITIONAL
         ...(showCustomerType === "Y" &&
           values.customerType && {
             customer_type: values.customerType,
