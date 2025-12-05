@@ -511,17 +511,25 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, customer_type },
+    { phone_code, mobile_number, password, customer_type }, // ✅ password is required parameter
     { dispatch, rejectWithValue }
   ) => {
     try {
+      // ✅ Validate that password is provided
+      if (!password || password.trim() === "") {
+        return rejectWithValue("Password is required for OTP generation");
+      }
+
       const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
       const cleanPhoneCode = phone_code.replace(/\D/g, "");
 
       const token = await getBearerToken();
+
+      // ✅ Password is ALWAYS included - NO CONDITION
       const payload = {
         country_code: cleanPhoneCode,
         mobile_number: cleanPhoneNumber,
+        password: password, // ✅ ALWAYS INCLUDED
         hostname: window.location.hostname,
       };
 

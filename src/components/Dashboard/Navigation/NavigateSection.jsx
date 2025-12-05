@@ -109,7 +109,7 @@ function NavigateSectionContent({
   const [localError, setLocalError] = useState(null);
   const [featurePopup, setFeaturePopup] = useState({
     isOpen: false,
-    featureName: ""
+    featureName: "",
   }); // NEW STATE
 
   // Refs for performance optimization
@@ -238,7 +238,7 @@ function NavigateSectionContent({
   const openFeaturePopup = (featureName) => {
     setFeaturePopup({
       isOpen: true,
-      featureName
+      featureName,
     });
   };
 
@@ -246,7 +246,7 @@ function NavigateSectionContent({
   const closeFeaturePopup = () => {
     setFeaturePopup({
       isOpen: false,
-      featureName: ""
+      featureName: "",
     });
   };
 
@@ -332,9 +332,7 @@ function NavigateSectionContent({
         showPopup("Your account is deactivated. You cannot remit money.");
         return;
       }
-      // Instead of navigating, show coming soon popup
-      openFeaturePopup("Remittance");
-      // navigate(`/remittance/${customerId}`); // Commented out for now
+      navigate(`/remittance/${customerId}`);
     } catch (error) {
       setLocalError("Failed to navigate to remittance");
     }
@@ -355,7 +353,9 @@ function NavigateSectionContent({
   const handleLinkBankClick = () => {
     try {
       if (customerStatus === "Deactivated") {
-        showPopup("Your account is deactivated. You cannot link a bank account.");
+        showPopup(
+          "Your account is deactivated. You cannot link a bank account."
+        );
         return;
       }
       navigate(`/linkbank/${customerId}`);
@@ -412,8 +412,18 @@ function NavigateSectionContent({
       <div className="w-full px-2 sm:px-4 flex justify-center items-center min-h-[200px]">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-md w-full text-center">
           <div className="text-red-600 mb-2">
-            <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-8 h-8 mx-auto mb-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
             <p className="font-semibold">Navigation Error</p>
           </div>
@@ -506,7 +516,9 @@ function NavigateSectionContent({
             ))}
 
           {/* Deposit */}
-          {allowedModules.some((module) => module.module_name === "Deposit") && (
+          {allowedModules.some(
+            (module) => module.module_name === "Deposit"
+          ) && (
             <div onClick={handleDepositClick} className="w-full cursor-pointer">
               <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                 <div className="flex items-center space-x-3 sm:space-x-4">
@@ -607,8 +619,8 @@ function NavigateSectionContent({
           {allowedModules.some(
             (module) => module.module_name === "Remittance"
           ) && (
-            <div onClick={handleRemitClick} className="w-full cursor-pointer relative group">
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-gradient-to-r from-white to-purple-50 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-purple-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+            <div onClick={handleRemitClick} className="w-full cursor-pointer">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                 <div className="flex items-center space-x-3 sm:space-x-4">
                   <img
                     src={remitImg}
@@ -616,14 +628,10 @@ function NavigateSectionContent({
                     className="w-5 h-5 sm:w-6 sm:h-6"
                   />
                   <div className="min-w-0">
-                    <div className="flex items-center">
-                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                        Remittance
-                      </h2>
-                      <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full font-medium">
-                        Coming Soon
-                      </span>
-                    </div>
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Remittance
+                    </h2>
+                    {/* REMOVE THE COMING SOON BADGE */}
                     <p
                       className="text-xs text-gray-500 truncate"
                       {...textColorProps}
@@ -632,19 +640,11 @@ function NavigateSectionContent({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <div className="animate-pulse bg-purple-500 w-2 h-2 rounded-full mr-2"></div>
-                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 flex-shrink-0" />
-                </div>
-              </div>
-              {/* Hover Tooltip */}
-              <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                Feature coming soon - Click to learn more
-                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                {/* REMOVE THE PULSING DOT */}
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
           )}
-
           {/* Add More Accounts */}
           {allowedModules.some(
             (module) => module.module_name === "Add More Accounts"
@@ -678,27 +678,31 @@ function NavigateSectionContent({
           )}
 
           {/* Link Bank */}
-          {isRemittanceOnlyCustomer === "Y" && selectedCurrencyCode === "USD" && (
-            <div onClick={handleLinkBankClick} className="w-full cursor-pointer">
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <MdAccountBalance className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Link Bank
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Connect your bank
-                    </p>
+          {isRemittanceOnlyCustomer === "Y" &&
+            selectedCurrencyCode === "USD" && (
+              <div
+                onClick={handleLinkBankClick}
+                className="w-full cursor-pointer"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <MdAccountBalance className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Link Bank
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Connect your bank
+                      </p>
+                    </div>
                   </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                 </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
-            </div>
-          )}
+            )}
 
           {/* User Manual */}
           {download_operation_manual === "Y" && (
