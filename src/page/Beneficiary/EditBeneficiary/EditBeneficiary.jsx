@@ -7,6 +7,7 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { ClipLoader } from "react-spinners";
 import {
+  // From BeneficiariesSlice
   fetchBeneficiaryById,
   updateBeneficiary,
   clearError,
@@ -17,11 +18,22 @@ import {
   selectEditBeneficiaryError,
   selectBeneficiariesSuccess,
   selectBeneficiariesError,
-  fetchNationalities,
-  fetchCitiesByCountry,
-  selectNationalities,
-  selectCitiesForCountry,
 } from "../MyBeneficiaries/BeneficiariesSlice";
+
+import {
+  // From AddBeneficiarySlice
+  fetchNationalities,
+  selectNationalities,
+  selectDropdownLoading,
+  selectDropdownError,
+} from "../AddBeneficiary/addBeneficiarySlice";
+
+// Import from countrySlice
+import {
+  selectCountriesOptionsSafe,
+  selectPhoneCodeOptions,
+} from "../../../features/Auth/slices/countrySlice";
+
 import {
   FaArrowLeft,
   FaSave,
@@ -34,26 +46,43 @@ import {
   FaBirthdayCake,
   FaVenusMars,
   FaUniversity,
-  FaSpinner,
 } from "react-icons/fa";
 
 const EditBeneficiaryPage = () => {
-  const { customerId, beneficiaryId } = useParams();
+  const { beneficiaryId } = useParams();
+  const customerId = localStorage.getItem("authcustomer_id");
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Selectors
+  // Selectors from BeneficiariesSlice
   const beneficiaryDetails = useSelector(selectBeneficiaryDetails);
   const loading = useSelector(selectEditBeneficiaryLoading);
   const error = useSelector(selectEditBeneficiaryError);
   const updateSuccess = useSelector(selectBeneficiariesSuccess);
   const updateError = useSelector(selectBeneficiariesError);
+
+  // Selectors from AddBeneficiarySlice
   const nationalities = useSelector(selectNationalities);
+  const dropdownLoading = useSelector(selectDropdownLoading);
+  const dropdownError = useSelector(selectDropdownError);
+
+  // Selectors from countrySlice
+  const countries = useSelector(selectCountriesOptionsSafe);
+  const phoneCodeOptions = useSelector(selectPhoneCodeOptions);
+
+  // State for phone number
+  const [phoneData, setPhoneData] = useState({
+    country_phone_code: "",
+    phone_number: "",
+    full_phone_number: "",
+  });
+
+  // State for beneficiary banks
+  const [beneficiaryBanks, setBeneficiaryBanks] = useState([]);
 
   // Dropdown options state
   const [dropdowns, setDropdowns] = useState({
-    countries: [],
-    nationalities: [],
     idTypes: [
       { id: "passport", name: "Passport" },
       { id: "national_id", name: "National ID" },
@@ -65,21 +94,15 @@ const EditBeneficiaryPage = () => {
       { id: "2", name: "Female" },
       { id: "3", name: "Other" },
     ],
-    occupations: [],
-    incomeSources: [],
-    transferPurposes: [],
     relationships: [
       { id: "friend", name: "Friend" },
       { id: "family", name: "Family" },
       { id: "business", name: "Business" },
       { id: "other", name: "Other" },
     ],
-    cities: [],
   });
 
-  const [dropdownLoading, setDropdownLoading] = useState(true);
-
-  // Form state
+  // Form state - with all fields from API
   const [formData, setFormData] = useState({
     first_name: "",
     middle_name: "",
@@ -87,6 +110,7 @@ const EditBeneficiaryPage = () => {
     email: "",
     phone_number: "",
     full_phone_number: "",
+    country_phone_code: "",
     street: "",
     city: "",
     state: "",
@@ -97,8 +121,8 @@ const EditBeneficiaryPage = () => {
     gender_id: "",
     beneficiary_id_type: "",
     beneficiary_id_number: "",
-    beneficiary_id_date_of_expiry: "",
     beneficiary_id_date_of_issue: "",
+    beneficiary_id_date_of_expiry: "",
     occupation: "",
     income_source: "",
     transfer_purpose: "",
@@ -112,38 +136,14 @@ const EditBeneficiaryPage = () => {
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        setDropdownLoading(true);
-        
-        // Fetch nationalities
+        // Fetch nationalities from AddBeneficiarySlice
         await dispatch(fetchNationalities()).unwrap();
-        
-        // TODO: Fetch other dropdown data
-        // These would need additional API endpoints
-        // For now, using static data or API if available
-        
-        // Sample countries (in real app, fetch from API)
-        const sampleCountries = [
-          { id: 123, name: "Nepal", code: "NP" },
-          { id: 1, name: "United States", code: "US" },
-          { id: 44, name: "United Kingdom", code: "GB" },
-          { id: 91, name: "India", code: "IN" },
-          // Add more as needed
-        ];
-        
-        setDropdowns(prev => ({
-          ...prev,
-          countries: sampleCountries,
-          nationalities: sampleCountries, // Using same for demo
-        }));
-        
       } catch (error) {
         console.error("Error fetching dropdown data:", error);
         toast.error("Failed to load dropdown options");
-      } finally {
-        setDropdownLoading(false);
       }
     };
-    
+
     fetchDropdownData();
   }, [dispatch]);
 
@@ -159,23 +159,14 @@ const EditBeneficiaryPage = () => {
     };
   }, [beneficiaryId, dispatch]);
 
-  // Fetch cities when country changes
-  useEffect(() => {
-    if (formData.country_id) {
-      dispatch(fetchCitiesByCountry(formData.country_id));
-    }
-  }, [formData.country_id, dispatch]);
-
   // Populate form when beneficiary details are fetched
   useEffect(() => {
-    if (beneficiaryDetails && !dropdownLoading) {
-      console.log("Setting form data from beneficiaryDetails:", beneficiaryDetails);
-      
-      // Get country name from dropdown options
-      const country = dropdowns.countries.find(c => c.id === parseInt(beneficiaryDetails.country_id));
-      const nationality = dropdowns.nationalities.find(n => n.id === parseInt(beneficiaryDetails.nationality_id));
-      const relationship = dropdowns.relationships.find(r => r.id === beneficiaryDetails.relationtobenef);
-      
+    if (beneficiaryDetails) {
+      console.log(
+        "Setting form data from beneficiaryDetails:",
+        beneficiaryDetails
+      );
+
       // Map API response to form fields
       const newFormData = {
         first_name: beneficiaryDetails.first_name || "",
@@ -184,22 +175,31 @@ const EditBeneficiaryPage = () => {
         email: beneficiaryDetails.email || "",
         phone_number: beneficiaryDetails.phone_number || "",
         full_phone_number: beneficiaryDetails.full_phone_number || "",
+        country_phone_code: beneficiaryDetails.country_phone_code || "",
         street: beneficiaryDetails.street || "",
         city: beneficiaryDetails.city || "",
         state: beneficiaryDetails.state || "",
         postalcode: beneficiaryDetails.postalcode || "",
-        country_id: beneficiaryDetails.country_id ? String(beneficiaryDetails.country_id) : "",
-        nationality_id: beneficiaryDetails.nationality_id ? String(beneficiaryDetails.nationality_id) : "",
+        country_id: beneficiaryDetails.country_id
+          ? String(beneficiaryDetails.country_id)
+          : "",
+        nationality_id: beneficiaryDetails.nationality_id
+          ? String(beneficiaryDetails.nationality_id)
+          : "",
         dob: beneficiaryDetails.dob ? beneficiaryDetails.dob.split(" ")[0] : "",
-        gender_id: beneficiaryDetails.gender_id ? String(beneficiaryDetails.gender_id) : "",
+        gender_id: beneficiaryDetails.gender_id
+          ? String(beneficiaryDetails.gender_id)
+          : "",
         beneficiary_id_type: beneficiaryDetails.beneficiary_id_type || "",
         beneficiary_id_number: beneficiaryDetails.beneficiary_id_number || "",
-        beneficiary_id_date_of_expiry: beneficiaryDetails.beneficiary_id_date_of_expiry
-          ? beneficiaryDetails.beneficiary_id_date_of_expiry.split(" ")[0]
-          : "",
-        beneficiary_id_date_of_issue: beneficiaryDetails.beneficiary_id_date_of_issue
-          ? beneficiaryDetails.beneficiary_id_date_of_issue.split(" ")[0]
-          : "",
+        beneficiary_id_date_of_issue:
+          beneficiaryDetails.beneficiary_id_date_of_issue
+            ? beneficiaryDetails.beneficiary_id_date_of_issue.split(" ")[0]
+            : "",
+        beneficiary_id_date_of_expiry:
+          beneficiaryDetails.beneficiary_id_date_of_expiry
+            ? beneficiaryDetails.beneficiary_id_date_of_expiry.split(" ")[0]
+            : "",
         occupation: beneficiaryDetails.occupation || "",
         income_source: beneficiaryDetails.income_source || "",
         transfer_purpose: beneficiaryDetails.transfer_purpose || "",
@@ -208,11 +208,26 @@ const EditBeneficiaryPage = () => {
         status: beneficiaryDetails.status || 1,
         is_visible: beneficiaryDetails.status === 1,
       };
-      
+
       console.log("New form data to set:", newFormData);
       setFormData(newFormData);
+
+      // Set phone data
+      setPhoneData({
+        country_phone_code: beneficiaryDetails.country_phone_code || "",
+        phone_number: beneficiaryDetails.phone_number || "",
+        full_phone_number: beneficiaryDetails.full_phone_number || "",
+      });
+
+      // Set beneficiary banks if available
+      if (
+        beneficiaryDetails.benef_banks &&
+        Array.isArray(beneficiaryDetails.benef_banks)
+      ) {
+        setBeneficiaryBanks(beneficiaryDetails.benef_banks);
+      }
     }
-  }, [beneficiaryDetails, dropdowns, dropdownLoading]);
+  }, [beneficiaryDetails]);
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -221,6 +236,76 @@ const EditBeneficiaryPage = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+
+    // Handle phone number changes
+    if (name === "phone_number") {
+      const fullPhoneNumber = phoneData.country_phone_code
+        ? `${phoneData.country_phone_code}${value}`
+        : value;
+      setFormData((prev) => ({
+        ...prev,
+        full_phone_number: fullPhoneNumber,
+      }));
+      setPhoneData((prev) => ({
+        ...prev,
+        phone_number: value,
+        full_phone_number: fullPhoneNumber,
+      }));
+    }
+  };
+
+  // Handle phone country code change
+  const handlePhoneCodeChange = (e) => {
+    const countryPhoneCode = e.target.value;
+    const fullPhoneNumber = countryPhoneCode
+      ? `${countryPhoneCode}${formData.phone_number}`
+      : formData.phone_number;
+
+    setPhoneData({
+      country_phone_code: countryPhoneCode,
+      phone_number: formData.phone_number,
+      full_phone_number: fullPhoneNumber,
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      country_phone_code: countryPhoneCode,
+      full_phone_number: fullPhoneNumber,
+    }));
+  };
+
+  // Handle country change for country dropdown
+  const handleCountryChange = (e) => {
+    const countryId = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      country_id: countryId,
+    }));
+
+    // Find the selected country to get its phone code
+    const selectedCountry = countries.find(
+      (country) =>
+        country.id === parseInt(countryId) ||
+        country.value === parseInt(countryId)
+    );
+
+    if (selectedCountry && selectedCountry.phoneCode) {
+      const fullPhoneNumber = selectedCountry.phoneCode
+        ? `${selectedCountry.phoneCode}${formData.phone_number}`
+        : formData.phone_number;
+
+      setPhoneData((prev) => ({
+        ...prev,
+        country_phone_code: selectedCountry.phoneCode,
+        full_phone_number: fullPhoneNumber,
+      }));
+
+      setFormData((prev) => ({
+        ...prev,
+        country_phone_code: selectedCountry.phoneCode,
+        full_phone_number: fullPhoneNumber,
+      }));
+    }
   };
 
   // Handle form submission
@@ -230,37 +315,55 @@ const EditBeneficiaryPage = () => {
     try {
       // Prepare data for API update
       const updateData = {
+        // Personal info
         first_name: formData.first_name,
-        middle_name: formData.middle_name,
+        middle_name: formData.middle_name || null,
         last_name: formData.last_name,
         name: `${formData.first_name} ${formData.last_name}`.trim(),
-        email: formData.email,
+        email: formData.email || null,
         phone_number: formData.phone_number,
         full_phone_number: formData.full_phone_number,
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        postalcode: formData.postalcode,
+        country_phone_code: formData.country_phone_code,
+
+        // Address info
+        street: formData.street || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        postalcode: formData.postalcode || null,
         country_id: formData.country_id ? parseInt(formData.country_id) : null,
-        nationality_id: formData.nationality_id ? parseInt(formData.nationality_id) : null,
+
+        // Identification
+        nationality_id: formData.nationality_id
+          ? parseInt(formData.nationality_id)
+          : null,
         dob: formData.dob || null,
         gender_id: formData.gender_id ? parseInt(formData.gender_id) : null,
         beneficiary_id_type: formData.beneficiary_id_type || null,
         beneficiary_id_number: formData.beneficiary_id_number || null,
-        beneficiary_id_date_of_expiry: formData.beneficiary_id_date_of_expiry || null,
-        beneficiary_id_date_of_issue: formData.beneficiary_id_date_of_issue || null,
+        beneficiary_id_date_of_issue:
+          formData.beneficiary_id_date_of_issue || null,
+        beneficiary_id_date_of_expiry:
+          formData.beneficiary_id_date_of_expiry || null,
+
+        // Additional info
         occupation: formData.occupation || null,
         income_source: formData.income_source || null,
         transfer_purpose: formData.transfer_purpose || null,
         relationtobenef: formData.relationtobenef || null,
-        beneftype: formData.beneftype,
-        status: formData.status,
+        beneftype: formData.beneftype || "individual",
+        status: formData.status || 1,
+
+        // Include customer_id as required by the API
+        customer_id: customerId,
+        beneficiary_id: beneficiaryId,
       };
+
+      console.log("📤 Submitting update data:", updateData);
 
       await dispatch(
         updateBeneficiary({
-          customerId,
-          beneficiaryId,
+          customerId, // Pass customerId here
+          beneficiaryId: beneficiaryId, // Pass beneficiaryId here
           beneficiaryData: updateData,
         })
       ).unwrap();
@@ -272,6 +375,7 @@ const EditBeneficiaryPage = () => {
         navigate(`/beneficiaries/${customerId}`);
       }, 1500);
     } catch (error) {
+      console.error("❌ Update error:", error);
       toast.error(error.message || "Failed to update beneficiary");
     }
   };
@@ -281,15 +385,26 @@ const EditBeneficiaryPage = () => {
     navigate(`/beneficiaries/${customerId}`);
   };
 
-  // Helper function to get display value for dropdowns
-  const getDisplayValue = (id, options, fieldName) => {
-    if (!id) return "";
-    const option = options.find(opt => String(opt.id) === String(id));
-    return option ? option.name : id;
-  };
+  // Handle errors and success messages
+  useEffect(() => {
+    if (error) {
+      toast.error(`Error: ${error}`);
+      dispatch(clearError());
+    }
 
-  // Show loading state for dropdowns
-  if (dropdownLoading || (loading && !beneficiaryDetails)) {
+    if (updateError) {
+      toast.error(`Update Error: ${updateError}`);
+      dispatch(clearError());
+    }
+
+    if (updateSuccess) {
+      toast.success("Beneficiary updated successfully!");
+      dispatch(clearSuccess());
+    }
+  }, [error, updateError, updateSuccess, dispatch]);
+
+  // Show loading state
+  if (loading && !beneficiaryDetails) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex flex-col items-center justify-center">
         <ClipLoader color="#3B82F6" size={60} />
@@ -351,6 +466,103 @@ const EditBeneficiaryPage = () => {
           </div>
         </motion.div>
 
+        {/* Bank Account Information Section */}
+        {beneficiaryBanks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="mb-8 bg-blue-50 rounded-xl shadow-lg overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="flex items-center mb-6">
+                <div className="p-3 bg-blue-100 rounded-lg mr-3">
+                  <FaUniversity className="text-blue-600 text-xl" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Bank Account Information
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                {beneficiaryBanks.map((bank, index) => (
+                  <div
+                    key={bank.id}
+                    className="bg-white p-4 rounded-lg border border-blue-200"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank Name
+                        </label>
+                        <div className="text-gray-900 bg-gray-50 p-2 rounded">
+                          {bank.bank_name || "N/A"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Account Number
+                        </label>
+                        <div className="text-gray-900 bg-gray-50 p-2 rounded">
+                          {bank.bank_acc_no || "N/A"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank Branch
+                        </label>
+                        <div className="text-gray-900 bg-gray-50 p-2 rounded">
+                          {bank.bank_branch_name || bank.bank_branch || "N/A"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Rails/Transfer Method
+                        </label>
+                        <div className="text-gray-900 bg-gray-50 p-2 rounded">
+                          {bank.rails || "N/A"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Currency
+                        </label>
+                        <div className="text-gray-900 bg-gray-50 p-2 rounded">
+                          {bank.currency_code || "N/A"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Status
+                        </label>
+                        <div
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
+                            bank.status === 1
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {bank.status === 1 ? "Active" : "Inactive"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-4">
+                      Note: Bank account details can only be edited through the
+                      bank account management section.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Form */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -395,6 +607,7 @@ const EditBeneficiaryPage = () => {
                     value={formData.middle_name}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Optional"
                   />
                 </div>
 
@@ -426,6 +639,7 @@ const EditBeneficiaryPage = () => {
                       value={formData.email}
                       onChange={handleInputChange}
                       className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="example@domain.com"
                     />
                   </div>
                 </div>
@@ -434,19 +648,43 @@ const EditBeneficiaryPage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Phone Number *
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaPhone className="text-gray-400" />
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-4">
+                      <select
+                        value={formData.country_phone_code}
+                        onChange={handlePhoneCodeChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Code</option>
+                        {phoneCodeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <input
-                      type="tel"
-                      name="full_phone_number"
-                      value={formData.full_phone_number}
-                      onChange={handleInputChange}
-                      className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
+                    <div className="col-span-8">
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FaPhone className="text-gray-400" />
+                        </div>
+                        <input
+                          type="tel"
+                          name="phone_number"
+                          value={formData.phone_number}
+                          onChange={handleInputChange}
+                          className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                          placeholder="Phone number"
+                        />
+                      </div>
+                    </div>
                   </div>
+                  {formData.full_phone_number && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Full: {formData.full_phone_number}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -484,21 +722,19 @@ const EditBeneficiaryPage = () => {
                   <select
                     name="country_id"
                     value={formData.country_id}
-                    onChange={handleInputChange}
+                    onChange={handleCountryChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Country</option>
-                    {dropdowns.countries.map(country => (
-                      <option key={country.id} value={country.id}>
-                        {country.name} ({country.code})
+                    {countries.map((country) => (
+                      <option
+                        key={country.id || country.value}
+                        value={country.id || country.value}
+                      >
+                        {country.label}
                       </option>
                     ))}
                   </select>
-                  {formData.country_id && (
-                    <p className="mt-1 text-xs text-green-600">
-                      ✓ {getDisplayValue(formData.country_id, dropdowns.countries, "country")}
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -531,7 +767,7 @@ const EditBeneficiaryPage = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Postal Code
+                    Postal/Zip Code
                   </label>
                   <input
                     type="text"
@@ -539,7 +775,7 @@ const EditBeneficiaryPage = () => {
                     value={formData.postalcode}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter postal code"
+                    placeholder="Enter postal/zip code"
                   />
                 </div>
               </div>
@@ -568,7 +804,7 @@ const EditBeneficiaryPage = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select ID Type</option>
-                    {dropdowns.idTypes.map(idType => (
+                    {dropdowns.idTypes.map((idType) => (
                       <option key={idType.id} value={idType.id}>
                         {idType.name}
                       </option>
@@ -641,17 +877,12 @@ const EditBeneficiaryPage = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Nationality</option>
-                    {dropdowns.nationalities.map(nationality => (
+                    {nationalities.map((nationality) => (
                       <option key={nationality.id} value={nationality.id}>
-                        {nationality.name}
+                        {nationality.name || nationality.nationality_name}
                       </option>
                     ))}
                   </select>
-                  {formData.nationality_id && (
-                    <p className="mt-1 text-xs text-green-600">
-                      ✓ {getDisplayValue(formData.nationality_id, dropdowns.nationalities, "nationality")}
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -687,7 +918,7 @@ const EditBeneficiaryPage = () => {
                       className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Select Gender</option>
-                      {dropdowns.genders.map(gender => (
+                      {dropdowns.genders.map((gender) => (
                         <option key={gender.id} value={gender.id}>
                           {gender.name}
                         </option>
@@ -749,17 +980,12 @@ const EditBeneficiaryPage = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Relationship</option>
-                    {dropdowns.relationships.map(relationship => (
+                    {dropdowns.relationships.map((relationship) => (
                       <option key={relationship.id} value={relationship.id}>
                         {relationship.name}
                       </option>
                     ))}
                   </select>
-                  {formData.relationtobenef && (
-                    <p className="mt-1 text-xs text-green-600">
-                      ✓ {getDisplayValue(formData.relationtobenef, dropdowns.relationships, "relationship")}
-                    </p>
-                  )}
                 </div>
 
                 <div>
