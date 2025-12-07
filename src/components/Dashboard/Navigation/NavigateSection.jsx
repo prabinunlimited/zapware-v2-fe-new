@@ -1,4 +1,4 @@
-// src/components/NavigateSection.js - UPDATED WITH POPUP
+// src/components/NavigateSection.js - UPDATED WITH CONVERT ROUTING
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -288,7 +288,7 @@ function NavigateSectionContent({
     }
   };
 
-  // UPDATED: Handle Convert click - show coming soon popup
+  // UPDATED: Handle Convert click - route to convert page
   const handleConversionClick = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -303,9 +303,8 @@ function NavigateSectionContent({
         );
         return;
       }
-      // Instead of navigating, show coming soon popup
-      openFeaturePopup("Currency Conversion");
-      // navigate(`/conversion/${customerId}`); // Commented out for now
+      // Route to convert page
+      navigate(`/convert/${customerId}`);
     } catch (error) {
       setLocalError("Failed to navigate to conversion");
     }
@@ -325,7 +324,7 @@ function NavigateSectionContent({
     navigate(`/payout/${customerId}`);
   };
 
-  // UPDATED: Handle Remit click - show coming soon popup
+  // UPDATED: Handle Remit click - route to remittance page
   const handleRemitClick = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -544,14 +543,14 @@ function NavigateSectionContent({
             </div>
           )}
 
-          {/* Convert - UPDATED with Coming Soon indicator */}
+          {/* Convert - UPDATED: Remove Coming Soon indicators */}
           {(allowedModules.some((module) => module.module_name === "Convert") ||
             hostName === "ourzap.unlimitedremit.com") && (
             <div
               onClick={handleConversionClick}
-              className="w-full cursor-pointer relative group"
+              className="w-full cursor-pointer"
             >
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-gradient-to-r from-white to-blue-50 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-blue-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                 <div className="flex items-center space-x-3 sm:space-x-4">
                   <img
                     src={convertImg}
@@ -559,14 +558,9 @@ function NavigateSectionContent({
                     className="w-5 h-5 sm:w-6 sm:h-6"
                   />
                   <div className="min-w-0">
-                    <div className="flex items-center">
-                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                        Convert
-                      </h2>
-                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full font-medium">
-                        Coming Soon
-                      </span>
-                    </div>
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Convert
+                    </h2>
                     <p
                       className="text-xs text-gray-500 truncate"
                       {...textColorProps}
@@ -575,15 +569,7 @@ function NavigateSectionContent({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <div className="animate-pulse bg-blue-500 w-2 h-2 rounded-full mr-2"></div>
-                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0" />
-                </div>
-              </div>
-              {/* Hover Tooltip */}
-              <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                Feature coming soon - Click to learn more
-                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
           )}
@@ -615,7 +601,7 @@ function NavigateSectionContent({
             </div>
           )}
 
-          {/* Remittance - UPDATED with Coming Soon indicator */}
+          {/* Remittance - UPDATED: Remove Coming Soon indicators */}
           {allowedModules.some(
             (module) => module.module_name === "Remittance"
           ) && (
@@ -631,7 +617,6 @@ function NavigateSectionContent({
                     <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                       Remittance
                     </h2>
-                    {/* REMOVE THE COMING SOON BADGE */}
                     <p
                       className="text-xs text-gray-500 truncate"
                       {...textColorProps}
@@ -640,7 +625,6 @@ function NavigateSectionContent({
                     </p>
                   </div>
                 </div>
-                {/* REMOVE THE PULSING DOT */}
                 <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
             </div>
@@ -748,7 +732,7 @@ function NavigateSectionContent({
         )} */}
       </div>
 
-      {/* Feature Coming Soon Popup */}
+      {/* Feature Coming Soon Popup - Now only used for other features, not Convert */}
       <FeatureComingSoonPopup
         isOpen={featurePopup.isOpen}
         onClose={closeFeaturePopup}

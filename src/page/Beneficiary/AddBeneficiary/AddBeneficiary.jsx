@@ -227,57 +227,19 @@ const AddBeneficiary = () => {
       beneficiary_id_type: "",
       beneficiary_id_number: "",
     },
-    onSubmit: async (values) => {
-      setIsLoading(true);
-
-      const finalRelationship =
-        values.relationtobenef === "other" &&
-        values.otherRelationship.trim() !== ""
-          ? values.otherRelationship.trim()
-          : values.relationtobenef;
-
-      const beneficiaryData = {
-        beneftype: values.beneftype,
-        name: values.name,
-        email: values.email,
-        country_id: values.country_id,
-        phone_number: values.phone_number,
-        state: values.state,
-        city: values.city,
-        street: values.street,
-        postalcode: values.postalcode,
-        relationtobenef: finalRelationship,
-        nationality_id: values.nationality_id,
-        status: values.status,
-        bic_ncc_code: values.bic_ncc_code,
-        beneficiary_id_type: values.beneficiary_id_type,
-        beneficiary_id_number: values.beneficiary_id_number,
-      };
-
-      try {
-        await dispatch(
-          createBeneficiaryWithBanks({
-            customerId,
-            beneficiaryData,
-            bankAccounts,
-            currency,
-          })
-        ).unwrap();
-
-        setMessage("Beneficiary added successfully!");
-        setStep(2);
-      } catch (error) {
-        setMessage("Error adding beneficiary: " + error.message);
-      } finally {
-        setIsLoading(false);
-        setTimeout(() => {
-          setMessage("");
-        }, 3000);
-      }
+    onSubmit: () => {
+      // Empty function - we'll handle submission in Step 2
     },
   });
 
-  useEffect(() => {}, [customerId]);
+  // Component mount debug
+  useEffect(() => {
+    console.log("🔍 AddBeneficiary Component mounted with:");
+    console.log("   customerId:", customerId);
+    console.log("   location.state:", location.state);
+    console.log("   is_payout:", is_payout);
+    console.log("   current pathname:", window.location.pathname);
+  }, [customerId, location.state, is_payout]);
 
   // Fetch initial data
   useEffect(() => {
@@ -285,23 +247,60 @@ const AddBeneficiary = () => {
     dispatch(fetchCountries()); // Ensure countries are loaded
   }, [dispatch]);
 
-  // Handle errors and success
+  // Handle errors and success with navigation
   useEffect(() => {
+    console.log("=== NAVIGATION DEBUG ===");
+    console.log("🔍 createSuccess value:", createSuccess);
+    console.log("🔍 is_payout value:", is_payout);
+    console.log("🔍 customerId from params:", customerId);
+    console.log(
+      "🔍 Will navigate to:",
+      is_payout === "y" ? "Previous page (-1)" : `/mybeneficiary/${customerId}`
+    );
+    console.log("🔍 createLoading state:", createLoading);
+
     if (createError) {
+      console.error("❌ Create Error:", createError);
       toast.error(createError);
       dispatch(clearCreateError());
     }
 
     if (createSuccess) {
+      console.log("✅ SUCCESS: Beneficiary created, preparing to navigate...");
       toast.success("Beneficiary created successfully!");
       dispatch(clearCreateSuccess());
-      if (is_payout === "y") {
-        navigate(-1);
-      } else {
-        navigate(`/mybeneficiary/${customerId}`);
-      }
+
+      // Add a small delay to ensure toast is visible
+      setTimeout(() => {
+        if (is_payout === "y") {
+          console.log("📤 Navigating back (is_payout = y)");
+          navigate(-1);
+        } else {
+          const targetPath = `/mybeneficiary/${customerId}`;
+          console.log("📤 Navigating to:", targetPath);
+          navigate(targetPath);
+        }
+      }, 1500);
     }
-  }, [createError, createSuccess, dispatch, is_payout, navigate, customerId]);
+  }, [
+    createError,
+    createSuccess,
+    dispatch,
+    is_payout,
+    navigate,
+    customerId,
+    createLoading,
+  ]);
+
+  // Redux state debug
+  useEffect(() => {
+    console.log("🔍 Redux beneficiaries state:", {
+      createSuccess,
+      createLoading,
+      createError,
+      beneficiaryCount: nationalities.length,
+    });
+  }, [createSuccess, createLoading, createError, nationalities]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -514,7 +513,15 @@ const AddBeneficiary = () => {
 
   const handleSubmitBankDetails = async (e) => {
     e.preventDefault();
+    console.log("🔄 Starting beneficiary creation...");
     setLoading(true);
+
+    const isRailsMissing = bankAccounts.some((account) => !account.rails);
+    if (isRailsMissing) {
+      toast.error("Please select rails for all bank accounts.");
+      setLoading(false);
+      return;
+    }
 
     if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (!formik.values.beneficiary_id_type) {
@@ -527,13 +534,6 @@ const AddBeneficiary = () => {
         setLoading(false);
         return;
       }
-    }
-
-    const isRailsMissing = bankAccounts.some((account) => !account.rails);
-    if (isRailsMissing) {
-      toast.error("Please select rails for all bank accounts.");
-      setLoading(false);
-      return;
     }
 
     const finalRelationship =
@@ -561,9 +561,14 @@ const AddBeneficiary = () => {
       nic_bcc_code: formik.values.nic_bcc_code,
     };
 
+    console.log("📤 Submitting beneficiary data:", beneficiaryData);
+    console.log("📤 Submitting bank accounts:", bankAccounts);
+    console.log("📤 Currency:", currency);
+
     // Use Redux action to create beneficiary with banks
     try {
-      await dispatch(
+      console.log("📤 Dispatching createBeneficiaryWithBanks...");
+      const result = await dispatch(
         createBeneficiaryWithBanks({
           customerId,
           beneficiaryData,
@@ -572,8 +577,11 @@ const AddBeneficiary = () => {
         })
       ).unwrap();
 
+      console.log("✅ Dispatch successful, result:", result);
       resetForm();
     } catch (error) {
+      console.error("❌ Dispatch error:", error.message || error);
+      toast.error(error.message || "Failed to create beneficiary");
     } finally {
       setLoading(false);
     }
@@ -642,8 +650,13 @@ const AddBeneficiary = () => {
     return banks[currency] || [];
   };
 
-  // Get ID types for current currency
+  // Get ID types for current currency - OPTIMIZED VERSION
   const getIdTypesForCurrency = () => {
+    // Add a check to prevent logging on every render
+    if (Object.keys(idTypes).length === 0) {
+      return [];
+    }
+
     console.log("=== GET ID TYPES CALLED ===");
     console.log("Current currency:", currency);
     console.log("All ID types object:", idTypes);
@@ -759,8 +772,7 @@ const AddBeneficiary = () => {
     </select>
   );
 
-  // Render bank account fields
-  // Render bank account fields - COMPLETE VERSION
+  // Render bank account fields - OPTIMIZED VERSION
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
@@ -1605,7 +1617,13 @@ const AddBeneficiary = () => {
 
         <div className="flex-1 overflow-auto p-8">
           {step === 1 && (
-            <form onSubmit={formik.handleSubmit} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                nextStep();
+              }}
+              className="space-y-6"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Beneficiary Type */}
                 <div className="md:col-span-2">

@@ -16,10 +16,12 @@ import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
 import HomeRemit from "../src/page/Home/HomeRemit";
+import Convert from "../src/page/Conversion/Convert";
 
 // Import Beneficiary Components (ONLY existing files)
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
 import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiary";
+import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
 
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
@@ -35,7 +37,7 @@ import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIf
 import Team from "../src/page/Team/Team";
 import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
-import BankLetter from './../src/page/BankLetter/BankLetter';
+import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
 
 const ProtectedLayout = () => {
@@ -106,6 +108,10 @@ const router = createBrowserRouter([
         element: <DepositPage />,
       },
       {
+        path: "convert/:customerId",
+        element: <Convert />,
+      },
+      {
         path: "linkbank/:customerId",
         element: <BankLink />,
       },
@@ -125,9 +131,7 @@ const router = createBrowserRouter([
         path: "team/:customerId",
         element: <Team />,
       },
-      {path: "addteam/:customerId",
-        element: <AddTeamMember />,
-      },
+      { path: "addteam/:customerId", element: <AddTeamMember /> },
       {
         path: "homeremit/:customerId",
         element: <HomeRemit />,
@@ -139,6 +143,10 @@ const router = createBrowserRouter([
       {
         path: "addbeneficiary/:customerId",
         element: <AddBeneficiary />,
+      },
+      {
+        path: "editbeneficiary/:beneficiaryId",
+        element: <EditBeneficiary />,
       },
       {
         path: "profile/:customerId",
@@ -153,7 +161,7 @@ const router = createBrowserRouter([
         element: <Remittance />,
       },
       {
-       path: "/bankletter/:accountId",
+        path: "/bankletter/:accountId",
         element: <BankLetter />,
       },
     ],

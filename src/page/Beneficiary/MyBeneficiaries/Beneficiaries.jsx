@@ -5,14 +5,14 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { RingLoader } from "react-spinners";
 import BankDetailsPopup from "../../../components/PopupModal/BankDetailsPopup";
+import DeleteConfirmationModal from "./DeleteConfirmationModal";
 
 import {
   fetchBeneficiaries,
   deleteBeneficiary,
   toggleBeneficiaryVisibility,
-  // ✅ FIXED: Use the actual filter actions that exist in your slice
-  setSearchQuery, // This is the actual search filter action
-  setFilterVisibility, // This is the actual status filter action
+  setSearchQuery,
+  setFilterVisibility,
   setSelectedBeneficiary,
   clearError,
   clearSuccess,
@@ -27,10 +27,15 @@ import {
   selectBanksLoading,
 } from "./BeneficiariesSlice";
 
+import { showDeleteModal, showBulkDeleteModal } from "./ModalSlice";
+
 const Beneficiaries = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   // Selectors - using the actual exported selector names
   const beneficiaries = useSelector(selectFilteredBeneficiaries);
@@ -72,11 +77,13 @@ const Beneficiaries = () => {
     dispatch(setFilterVisibility(statusFilter));
   }, [statusFilter, dispatch]);
 
-  // Handle type filter changes - you'll need to add this functionality to your slice
+  // Reset select all when beneficiaries change
   useEffect(() => {
-    // If you need type filtering, add it to your slice
-    // For now, we'll just ignore this since it's not in your slice
-  }, [typeFilter, dispatch]);
+    if (selectAll && beneficiaries.length === 0) {
+      setSelectAll(false);
+      setSelectedBeneficiaries([]);
+    }
+  }, [beneficiaries, selectAll]);
 
   // Handle errors and success messages
   useEffect(() => {
@@ -96,7 +103,7 @@ const Beneficiaries = () => {
   };
 
   const handleEditBeneficiary = (beneficiaryId) => {
-    navigate(`/edit-beneficiary/${customerId}/${beneficiaryId}`);
+    navigate(`/editbeneficiary/${beneficiaryId}`);
   };
 
   const handleViewBeneficiary = (beneficiaryId) => {
@@ -104,14 +111,69 @@ const Beneficiaries = () => {
   };
 
   const handleDeleteBeneficiary = (beneficiaryId, beneficiaryName) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete beneficiary "${beneficiaryName}"? This action cannot be undone.`
-      )
-    ) {
-      dispatch(deleteBeneficiary({ customerId, beneficiaryId }));
-    }
+    dispatch(showDeleteModal({ id: beneficiaryId, name: beneficiaryName }));
   };
+
+  // Bulk delete handler
+  const handleBulkDelete = () => {
+    if (selectedBeneficiaries.length === 0) return;
+
+    dispatch(
+      showBulkDeleteModal({
+        ids: selectedBeneficiaries,
+        count: selectedBeneficiaries.length,
+      })
+    );
+  };
+
+  // Handle individual beneficiary selection
+  const handleSelectBeneficiary = (beneficiaryId) => {
+    setSelectedBeneficiaries((prevSelected) => {
+      if (prevSelected.includes(beneficiaryId)) {
+        return prevSelected.filter((id) => id !== beneficiaryId);
+      } else {
+        return [...prevSelected, beneficiaryId];
+      }
+    });
+  };
+
+  // Handle select all beneficiaries
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedBeneficiaries([]);
+    } else {
+      const allIds = beneficiaries.map((beneficiary) => beneficiary.id);
+      setSelectedBeneficiaries(allIds);
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Check if a beneficiary is selected
+  const isSelected = (beneficiaryId) => {
+    return selectedBeneficiaries.includes(beneficiaryId);
+  };
+
+  const renderDeleteButton = (beneficiary) => (
+    <button
+      onClick={() => handleDeleteBeneficiary(beneficiary.id, beneficiary.name)}
+      className="text-red-600 hover:text-red-900 transition-colors"
+      title="Delete beneficiary"
+    >
+      <svg
+        className="w-4 h-4"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+        />
+      </svg>
+    </button>
+  );
 
   const handleToggleVisibility = (
     beneficiaryId,
@@ -140,6 +202,8 @@ const Beneficiaries = () => {
     setLocalSearch("");
     setStatusFilter("all");
     setTypeFilter("all");
+    setSelectedBeneficiaries([]);
+    setSelectAll(false);
     // Clear the actual filters in the slice
     dispatch(setSearchQuery(""));
     dispatch(setFilterVisibility("all"));
@@ -385,6 +449,23 @@ const Beneficiaries = () => {
           </div>
         </div>
 
+        {/* Add selection notification */}
+        {selectedBeneficiaries.length > 0 && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-yellow-800">
+                {selectedBeneficiaries.length} beneficiaries selected
+              </span>
+              <button
+                onClick={handleBulkDelete}
+                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete Selected ({selectedBeneficiaries.length})
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Filters Section - Updated to match your actual filter structure */}
         <div className="bg-white rounded-lg shadow mb-6 p-6">
           <div className="flex flex-col lg:flex-row gap-4 items-end">
@@ -423,26 +504,6 @@ const Beneficiaries = () => {
                 <option value="hidden">Inactive</option>
               </select>
             </div>
-
-            {/* Remove type filter for now since it's not in your slice */}
-            {/* <div className="w-full lg:w-48">
-              <label
-                htmlFor="type"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Type
-              </label>
-              <select
-                id="type"
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Types</option>
-                <option value="individual">Individual</option>
-                <option value="institution">Institution</option>
-              </select>
-            </div> */}
 
             <button
               onClick={handleClearFilters}
@@ -496,7 +557,15 @@ const Beneficiaries = () => {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
-                      Beneficiary
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectAll}
+                          onChange={handleSelectAll}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
+                        />
+                        Beneficiary
+                      </div>
                     </th>
                     <th
                       scope="col"
@@ -532,20 +601,33 @@ const Beneficiaries = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {beneficiaries.map((beneficiary) => (
-                    <tr key={beneficiary.id} className="hover:bg-gray-50">
+                    <tr
+                      key={beneficiary.id}
+                      className={`hover:bg-gray-50 ${
+                        isSelected(beneficiary.id) ? "bg-blue-50" : ""
+                      }`}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-medium">
-                              {beneficiary.name?.charAt(0).toUpperCase() || "B"}
-                            </span>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {beneficiary.name}
+                          <input
+                            type="checkbox"
+                            checked={isSelected(beneficiary.id)}
+                            onChange={() => handleSelectBeneficiary(beneficiary.id)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-3"
+                          />
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 font-medium">
+                                {beneficiary.name?.charAt(0).toUpperCase() || "B"}
+                              </span>
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {beneficiary.email}
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {beneficiary.name}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {beneficiary.email}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -774,6 +856,9 @@ const Beneficiaries = () => {
           }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal />
 
       {/* Toast Container */}
       <ToastContainer

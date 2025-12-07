@@ -4,6 +4,8 @@ import {
   createSelector,
 } from "@reduxjs/toolkit";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 // ===================== BENEFICIARY LIST ASYNC THUNKS =====================
 export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
@@ -12,9 +14,7 @@ export const fetchBeneficiaries = createAsyncThunk(
       const authtoken = localStorage.getItem("authtoken");
 
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/customer-view/${customerId}`,
+        `${API_URL}/beneficiaries/customer-view/${customerId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -35,32 +35,271 @@ export const fetchBeneficiaries = createAsyncThunk(
   }
 );
 
+export const fetchBeneficiaryById = createAsyncThunk(
+  "beneficiaries/fetchBeneficiaryById",
+  async (beneficiaryId, { rejectWithValue }) => {
+    try {
+      const token =
+        localStorage.getItem("bearertoken") ||
+        localStorage.getItem("authtoken");
+
+      // Use fetch() instead of axios
+      const response = await fetch(
+        `${API_URL}/beneficiaries/benef-view/${beneficiaryId}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch beneficiary details");
+      }
+
+      const result = await response.json();
+
+      // Handle the response structure based on the non-Redux version
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        return result.data[0]; // Return first item from array
+      }
+
+      return result.data || result;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const deleteBeneficiary = createAsyncThunk(
   "beneficiaries/deleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
+
+      // Match the non-redux version API endpoint and payload
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/${customerId}/${beneficiaryId}`,
+        `${API_URL}/delete-beneficiary/${beneficiaryId}`, // ✅ Changed endpoint
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
+          body: JSON.stringify({
+            customer_id: customerId, // ✅ Match payload field name
+            current_date_time: new Date()
+              .toISOString()
+              .replace("T", " ")
+              .split(".")[0], // ✅ Match date format
+          }),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to delete beneficiary");
+        const errorResult = await response.json();
+        throw new Error(
+          errorResult.message ||
+            errorResult.error ||
+            "Failed to delete beneficiary"
+        );
       }
 
       const result = await response.json();
-      return { beneficiaryId, message: result.message };
+      return {
+        beneficiaryId,
+        message: result.message || "Beneficiary deleted successfully!",
+      };
     } catch (error) {
       return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Update bulkDeleteBeneficiaries to use the same endpoint
+export const bulkDeleteBeneficiaries = createAsyncThunk(
+  "beneficiaries/bulkDeleteBeneficiaries",
+  async ({ customerId, beneficiaryIds }, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const currentDateTime = new Date()
+        .toISOString()
+        .replace("T", " ")
+        .split(".")[0];
+
+      // Loop through single deletions using the correct endpoint
+      const promises = beneficiaryIds.map((beneficiaryId) =>
+        fetch(`${API_URL}/delete-beneficiary/${beneficiaryId}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify({
+            customer_id: customerId,
+            current_date_time: currentDateTime,
+          }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(
+              errorResult.message ||
+                `Failed to delete beneficiary ${beneficiaryId}`
+            );
+          }
+          return response.json();
+        })
+      );
+
+      const results = await Promise.all(promises);
+
+      return {
+        beneficiaryIds,
+        results,
+        message: `Successfully deleted ${beneficiaryIds.length} beneficiaries`,
+      };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Update deleteBeneficiaryWithUndo to use the same endpoint
+export const deleteBeneficiaryWithUndo = createAsyncThunk(
+  "beneficiaries/deleteBeneficiaryWithUndo",
+  async (
+    { customerId, beneficiaryId, beneficiaryName },
+    { rejectWithValue, getState }
+  ) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Store for potential undo
+      const state = getState();
+      const beneficiary = state.beneficiaries.beneficiaries.find(
+        (b) => b.id === beneficiaryId
+      );
+
+      if (beneficiary) {
+        localStorage.setItem(
+          `undo_beneficiary_${beneficiaryId}`,
+          JSON.stringify({
+            ...beneficiary,
+            deletedAt: new Date().toISOString(),
+          })
+        );
+      }
+
+      // Use the correct endpoint and payload
+      const response = await fetch(
+        `${API_URL}/delete-beneficiary/${beneficiaryId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify({
+            customer_id: customerId,
+            current_date_time: new Date()
+              .toISOString()
+              .replace("T", " ")
+              .split(".")[0],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(
+          errorResult.message ||
+            errorResult.error ||
+            "Failed to delete beneficiary"
+        );
+      }
+
+      const result = await response.json();
+      return {
+        beneficiaryId,
+        beneficiaryName,
+        message: result.message || "Beneficiary deleted successfully!",
+        undoAvailable: true,
+      };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ===================== UNDO DELETE THUNK =====================
+export const undoDeleteBeneficiary = createAsyncThunk(
+  "beneficiaries/undoDeleteBeneficiary",
+  async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
+    try {
+      // Retrieve stored beneficiary data
+      const storedData = localStorage.getItem(
+        `undo_beneficiary_${beneficiaryId}`
+      );
+      if (!storedData) {
+        throw new Error("Undo data not found or expired");
+      }
+
+      const beneficiaryData = JSON.parse(storedData);
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Restore the beneficiary (you'll need a restore endpoint or use create endpoint)
+      const response = await fetch(
+        `${API_URL}/beneficiaries/restore/${customerId}/${beneficiaryId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(beneficiaryData),
+        }
+      );
+
+      if (!response.ok) {
+        // If no restore endpoint, try to create a new one
+        const createResponse = await fetch(
+          `${API_URL}/beneficiaries/create-benef/${customerId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authtoken}`,
+            },
+            body: JSON.stringify(beneficiaryData),
+          }
+        );
+
+        if (!createResponse.ok) {
+          throw new Error("Failed to restore beneficiary");
+        }
+
+        const result = await createResponse.json();
+        return {
+          beneficiaryId: result.beneficiary_id || beneficiaryId,
+          beneficiaryData,
+          message: "Beneficiary restored successfully",
+          restored: true,
+        };
+      }
+
+      const result = await response.json();
+      return {
+        beneficiaryId,
+        beneficiaryData,
+        message: result.message || "Beneficiary restored successfully",
+        restored: true,
+      };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    } finally {
+      // Clean up stored data
+      localStorage.removeItem(`undo_beneficiary_${beneficiaryId}`);
     }
   }
 );
@@ -71,9 +310,7 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/${customerId}/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/${customerId}/${beneficiaryId}`,
         {
           method: "PUT",
           headers: {
@@ -105,9 +342,7 @@ export const fetchBeneficiaryByCode = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/fetch-benef/${beneficiaryCode}`,
+        `${API_URL}/beneficiaries/fetch-benef/${beneficiaryCode}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -134,9 +369,7 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/benef-all-bank/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/benef-all-bank/${beneficiaryId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -150,10 +383,6 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("🔍 Bank API Result:", result);
-
-      // FIX: The API returns { "bank_accounts": [...] } directly
-      // Not nested under data property
       return result.bank_accounts || [];
     } catch (error) {
       return rejectWithValue(error.message);
@@ -171,11 +400,9 @@ export const updateBeneficiary = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/update/${customerId}/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/update/${customerId}/${beneficiaryId}`,
         {
-          method: "PUT",
+          method: "POST", // Or PUT if this endpoint supports PUT
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
@@ -185,7 +412,12 @@ export const updateBeneficiary = createAsyncThunk(
       );
 
       if (!response.ok) {
-        throw new Error("Failed to update beneficiary");
+        const errorResult = await response.json();
+        throw new Error(
+          errorResult.message ||
+            errorResult.error ||
+            "Failed to update beneficiary"
+        );
       }
 
       const result = await response.json();
@@ -380,9 +612,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
       };
 
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/beneficiaries/create-benef/${customerId}`,
+        `${API_URL}/beneficiaries/create-benef/${customerId}`,
         {
           method: "POST",
           headers: {
@@ -411,15 +641,12 @@ export const fetchNationalities = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/nationalities`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/nationalities`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch nationalities");
@@ -446,15 +673,12 @@ export const fetchBanksByCurrency = createAsyncThunk(
           ? `/int-banks/${currency}`
           : `/currency-payout-banks/${currency}`;
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}${endpoint}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch banks");
@@ -473,15 +697,12 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
   async (currency, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/currency-id-type/${currency}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/currency-id-type/${currency}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch ID types");
@@ -500,15 +721,12 @@ export const fetchCitiesByCountry = createAsyncThunk(
   async (countryId, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/cities/${countryId}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/cities/${countryId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch cities");
@@ -527,15 +745,12 @@ export const fetchBankBranches = createAsyncThunk(
   async (bankCode, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/int-banks-branch/${bankCode}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/int-banks-branch/${bankCode}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch bank branches");
@@ -557,21 +772,37 @@ const initialState = {
   error: null,
   success: false,
 
+  editLoading: false,
+  editError: null,
+  beneficiaryDetails: null,
+
   // Selected beneficiary (for both beneficiary list and remittance)
   selectedBeneficiary: null,
-  selectedBank: null, // NEW: For remittance
+  selectedBank: null,
 
   // Remittance-specific state
-  beneficiaryBanks: [], // NEW: Banks for selected beneficiary
-  codeLookupLoading: false, // NEW: Loading for code lookup
-  codeLookupError: null, // NEW: Error for code lookup
-  banksLoading: false, // NEW: Loading for banks fetch
+  beneficiaryBanks: [],
+  codeLookupLoading: false,
+  codeLookupError: null,
+  banksLoading: false,
 
   // Search/filter state
   searchQuery: "",
   filterVisibility: "all",
   currentPage: 1,
-  deleteLoading: false,
+
+  // Delete state
+  deleteState: {
+    loadingIds: [],
+    pendingDeletions: [],
+    lastDeleted: null,
+    error: null,
+    undoAvailable: false,
+    undoData: null,
+    bulkDeleteInProgress: false,
+    bulkDeleteProgress: 0,
+    bulkDeleteTotal: 0,
+  },
 
   // Create beneficiary state
   createLoading: false,
@@ -602,7 +833,8 @@ const beneficiarySlice = createSlice({
       state.error = null;
       state.createError = null;
       state.dropdownError = null;
-      state.codeLookupError = null; // NEW
+      state.codeLookupError = null;
+      state.deleteState.error = null;
     },
 
     // Clear success messages
@@ -619,12 +851,18 @@ const beneficiarySlice = createSlice({
       state.createLoading = false;
       state.createError = null;
       state.createSuccess = false;
+      state.deleteState.error = null;
+    },
+
+    clearEditState: (state) => {
+      state.editLoading = false;
+      state.editError = null;
+      state.beneficiaryDetails = null;
     },
 
     // Selected beneficiary management
     setSelectedBeneficiary: (state, action) => {
       state.selectedBeneficiary = action.payload;
-      // Reset related state when beneficiary changes
       state.selectedBank = null;
       state.beneficiaryBanks = [];
     },
@@ -635,7 +873,7 @@ const beneficiarySlice = createSlice({
       state.beneficiaryBanks = [];
     },
 
-    // NEW: Selected bank management for remittance
+    // Selected bank management for remittance
     setSelectedBank: (state, action) => {
       state.selectedBank = action.payload;
     },
@@ -648,7 +886,7 @@ const beneficiarySlice = createSlice({
       state.beneficiaryBanks = [];
     },
 
-    // NEW: Clear code lookup error
+    // Clear code lookup error
     clearCodeLookupError: (state) => {
       state.codeLookupError = null;
     },
@@ -660,13 +898,13 @@ const beneficiarySlice = createSlice({
       state.error = null;
       state.success = false;
       state.selectedBeneficiary = null;
-      state.selectedBank = null; // NEW
-      state.beneficiaryBanks = []; // NEW
+      state.selectedBank = null;
+      state.beneficiaryBanks = [];
       state.lastUpdated = null;
       state.searchQuery = "";
       state.filterVisibility = "all";
       state.currentPage = 1;
-      state.deleteLoading = false;
+      state.deleteState = initialState.deleteState;
     },
 
     // Update beneficiary in list
@@ -759,6 +997,36 @@ const beneficiarySlice = createSlice({
     clearIdTypesData: (state) => {
       state.idTypes = {};
     },
+
+    // Delete state actions
+    addToDeleteQueue: (state, action) => {
+      state.deleteState.pendingDeletions.push(action.payload);
+    },
+
+    removeFromDeleteQueue: (state, action) => {
+      state.deleteState.pendingDeletions =
+        state.deleteState.pendingDeletions.filter(
+          (id) => id !== action.payload
+        );
+    },
+
+    clearDeleteQueue: (state) => {
+      state.deleteState.pendingDeletions = [];
+    },
+
+    updateBulkDeleteProgress: (state, action) => {
+      state.deleteState.bulkDeleteProgress = action.payload.progress;
+      state.deleteState.bulkDeleteTotal = action.payload.total;
+    },
+
+    clearDeleteState: (state) => {
+      state.deleteState = initialState.deleteState;
+    },
+
+    clearUndoState: (state) => {
+      state.deleteState.undoAvailable = false;
+      state.deleteState.undoData = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -769,17 +1037,13 @@ const beneficiarySlice = createSlice({
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
         state.loading = false;
-
-        // Check if the response has the nested data structure
         const beneficiariesData = Array.isArray(action.payload)
           ? action.payload
           : action.payload.data || [];
-
         state.beneficiaries = beneficiariesData;
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
-        // Auto-select first beneficiary if none selected
         if (beneficiariesData.length > 0 && !state.selectedBeneficiary) {
           state.selectedBeneficiary = beneficiariesData[0];
         }
@@ -789,33 +1053,161 @@ const beneficiarySlice = createSlice({
         state.error = action.payload;
       })
 
+      // ===================== FETCH BENEFICIARY BY ID (FOR EDIT) =====================
+      .addCase(fetchBeneficiaryById.pending, (state) => {
+        state.editLoading = true;
+        state.editError = null;
+        state.beneficiaryDetails = null;
+      })
+      .addCase(fetchBeneficiaryById.fulfilled, (state, action) => {
+        state.editLoading = false;
+        state.beneficiaryDetails = action.payload;
+        state.editError = null;
+      })
+      .addCase(fetchBeneficiaryById.rejected, (state, action) => {
+        state.editLoading = false;
+        state.editError = action.payload;
+        state.beneficiaryDetails = null;
+      })
+
       // ===================== DELETE BENEFICIARY =====================
-      .addCase(deleteBeneficiary.pending, (state) => {
-        state.loading = true;
+      .addCase(deleteBeneficiary.pending, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        state.deleteState.loadingIds.push(beneficiaryId);
         state.error = null;
-        state.deleteLoading = true;
       })
       .addCase(deleteBeneficiary.fulfilled, (state, action) => {
-        state.loading = false;
+        const { beneficiaryId } = action.payload;
+        state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
+          (id) => id !== beneficiaryId
+        );
         state.beneficiaries = state.beneficiaries.filter(
-          (beneficiary) => beneficiary.id !== action.payload.beneficiaryId
+          (beneficiary) => beneficiary.id !== beneficiaryId
         );
         state.success = true;
         state.error = null;
-        state.deleteLoading = false;
         state.lastUpdated = new Date().toISOString();
 
-        // Clear selected beneficiary if it was deleted
-        if (state.selectedBeneficiary?.id === action.payload.beneficiaryId) {
+        if (state.selectedBeneficiary?.id === beneficiaryId) {
           state.selectedBeneficiary = null;
           state.selectedBank = null;
           state.beneficiaryBanks = [];
         }
       })
       .addCase(deleteBeneficiary.rejected, (state, action) => {
-        state.loading = false;
+        const { beneficiaryId } = action.meta.arg;
+        state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
+          (id) => id !== beneficiaryId
+        );
         state.error = action.payload;
-        state.deleteLoading = false;
+      })
+
+      // ===================== DELETE BENEFICIARY WITH UNDO =====================
+      .addCase(deleteBeneficiaryWithUndo.pending, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        state.deleteState.loadingIds.push(beneficiaryId);
+        state.deleteState.error = null;
+      })
+      .addCase(deleteBeneficiaryWithUndo.fulfilled, (state, action) => {
+        const { beneficiaryId } = action.payload;
+        state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
+          (id) => id !== beneficiaryId
+        );
+        state.beneficiaries = state.beneficiaries.filter(
+          (beneficiary) => beneficiary.id !== beneficiaryId
+        );
+        state.deleteState.lastDeleted = action.payload;
+        state.deleteState.undoAvailable = true;
+        state.deleteState.undoData = {
+          id: beneficiaryId,
+          name: action.payload.beneficiaryName,
+        };
+        state.success = true;
+        state.error = null;
+        state.lastUpdated = new Date().toISOString();
+
+        if (state.selectedBeneficiary?.id === beneficiaryId) {
+          state.selectedBeneficiary = null;
+          state.selectedBank = null;
+          state.beneficiaryBanks = [];
+        }
+      })
+      .addCase(deleteBeneficiaryWithUndo.rejected, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
+          (id) => id !== beneficiaryId
+        );
+        state.deleteState.error = action.payload;
+      })
+
+      // ===================== BULK DELETE BENEFICIARIES =====================
+      .addCase(bulkDeleteBeneficiaries.pending, (state, action) => {
+        const { beneficiaryIds } = action.meta.arg;
+        state.deleteState.loadingIds = [
+          ...state.deleteState.loadingIds,
+          ...beneficiaryIds,
+        ];
+        state.deleteState.bulkDeleteInProgress = true;
+        state.deleteState.bulkDeleteProgress = 0;
+        state.deleteState.bulkDeleteTotal = beneficiaryIds.length;
+        state.error = null;
+      })
+      .addCase(bulkDeleteBeneficiaries.fulfilled, (state, action) => {
+        const { beneficiaryIds } = action.payload;
+        state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
+          (id) => !beneficiaryIds.includes(id)
+        );
+        state.beneficiaries = state.beneficiaries.filter(
+          (beneficiary) => !beneficiaryIds.includes(beneficiary.id)
+        );
+        state.deleteState.bulkDeleteInProgress = false;
+        state.deleteState.bulkDeleteProgress = 100;
+        state.success = true;
+        state.error = null;
+        state.lastUpdated = new Date().toISOString();
+
+        // Clear selected beneficiary if it was deleted
+        if (
+          state.selectedBeneficiary &&
+          beneficiaryIds.includes(state.selectedBeneficiary.id)
+        ) {
+          state.selectedBeneficiary = null;
+          state.selectedBank = null;
+          state.beneficiaryBanks = [];
+        }
+      })
+      .addCase(bulkDeleteBeneficiaries.rejected, (state, action) => {
+        state.deleteState.loadingIds = [];
+        state.deleteState.bulkDeleteInProgress = false;
+        state.error = action.payload;
+      })
+
+      // ===================== UNDO DELETE BENEFICIARY =====================
+      .addCase(undoDeleteBeneficiary.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(undoDeleteBeneficiary.fulfilled, (state, action) => {
+        state.loading = false;
+        const { beneficiaryId, beneficiaryData } = action.payload;
+
+        // Add the restored beneficiary back to the list
+        if (beneficiaryData) {
+          state.beneficiaries.unshift(beneficiaryData);
+        }
+
+        state.deleteState.undoAvailable = false;
+        state.deleteState.undoData = null;
+        state.deleteState.lastDeleted = null;
+        state.success = true;
+        state.error = null;
+        state.lastUpdated = new Date().toISOString();
+      })
+      .addCase(undoDeleteBeneficiary.rejected, (state, action) => {
+        state.loading = false;
+        state.deleteState.undoAvailable = false;
+        state.deleteState.undoData = null;
+        state.error = action.payload;
       })
 
       // ===================== TOGGLE VISIBILITY =====================
@@ -831,7 +1223,6 @@ const beneficiarySlice = createSlice({
         );
         if (beneficiary) {
           beneficiary.status = isVisible ? 1 : 0;
-          // Also update the is_visible and isVisible fields for consistency
           beneficiary.is_visible = isVisible;
           beneficiary.isVisible = isVisible;
         }
@@ -844,7 +1235,7 @@ const beneficiarySlice = createSlice({
         state.error = action.payload;
       })
 
-      // ===================== NEW: FETCH BENEFICIARY BY CODE (REMITTANCE) =====================
+      // ===================== FETCH BENEFICIARY BY CODE =====================
       .addCase(fetchBeneficiaryByCode.pending, (state) => {
         state.codeLookupLoading = true;
         state.codeLookupError = null;
@@ -852,11 +1243,8 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaryByCode.fulfilled, (state, action) => {
         state.codeLookupLoading = false;
         if (action.payload.data) {
-          // Update selected beneficiary
           state.selectedBeneficiary = action.payload.data;
-          // Update beneficiary banks from response
           state.beneficiaryBanks = action.payload.data.benef_banks || [];
-          // Auto-select first bank if available
           if (state.beneficiaryBanks.length > 0 && !state.selectedBank) {
             state.selectedBank = state.beneficiaryBanks[0];
           }
@@ -868,14 +1256,13 @@ const beneficiarySlice = createSlice({
         state.codeLookupError = action.payload;
       })
 
-      // ===================== NEW: FETCH BENEFICIARY BANKS (REMITTANCE) =====================
+      // ===================== FETCH BENEFICIARY BANKS =====================
       .addCase(fetchBeneficiaryBanks.pending, (state) => {
         state.banksLoading = true;
       })
       .addCase(fetchBeneficiaryBanks.fulfilled, (state, action) => {
         state.banksLoading = false;
         state.beneficiaryBanks = action.payload;
-        // Auto-select first bank if available and none selected
         if (action.payload.length > 0 && !state.selectedBank) {
           state.selectedBank = action.payload[0];
         }
@@ -910,7 +1297,6 @@ const beneficiarySlice = createSlice({
             };
           }
 
-          // Update selected beneficiary if it's the same
           if (state.selectedBeneficiary?.id === beneficiaryId) {
             state.selectedBeneficiary = {
               ...state.selectedBeneficiary,
@@ -938,7 +1324,6 @@ const beneficiarySlice = createSlice({
         state.createError = null;
         state.lastUpdated = new Date().toISOString();
 
-        // Add the new beneficiary to the list immediately
         if (action.payload.beneficiary) {
           if (Array.isArray(state.beneficiaries)) {
             state.beneficiaries.unshift(action.payload.beneficiary);
@@ -946,7 +1331,6 @@ const beneficiarySlice = createSlice({
             state.beneficiaries = [action.payload.beneficiary];
           }
 
-          // Auto-select the newly created beneficiary
           state.selectedBeneficiary = action.payload.beneficiary;
         }
       })
@@ -1038,6 +1422,7 @@ export const {
   clearError,
   clearSuccess,
   resetState,
+  clearEditState,
   setSelectedBeneficiary,
   clearSelectedBeneficiary,
   setSelectedBank,
@@ -1058,6 +1443,12 @@ export const {
   clearDropdownData,
   clearBanksData,
   clearIdTypesData,
+  addToDeleteQueue,
+  removeFromDeleteQueue,
+  clearDeleteQueue,
+  updateBulkDeleteProgress,
+  clearDeleteState,
+  clearUndoState,
 } = beneficiarySlice.actions;
 
 // ===================== SELECTORS =====================
@@ -1072,6 +1463,13 @@ export const selectBeneficiariesSuccess = (state) =>
   state.beneficiaries.success;
 export const selectBeneficiariesLastUpdated = (state) =>
   state.beneficiaries.lastUpdated;
+
+export const selectEditBeneficiaryLoading = (state) =>
+  state.beneficiaries.editLoading || false;
+export const selectEditBeneficiaryError = (state) =>
+  state.beneficiaries.editError;
+export const selectBeneficiaryDetails = (state) =>
+  state.beneficiaries.beneficiaryDetails;
 
 // Selected beneficiary selectors
 export const selectSelectedBeneficiary = (state) =>
@@ -1092,7 +1490,23 @@ export const selectSearchQuery = (state) => state.beneficiaries.searchQuery;
 export const selectFilterVisibility = (state) =>
   state.beneficiaries.filterVisibility;
 export const selectCurrentPage = (state) => state.beneficiaries.currentPage;
-export const selectDeleteLoading = (state) => state.beneficiaries.deleteLoading;
+
+// Delete state selectors
+export const selectDeleteState = (state) => state.beneficiaries.deleteState;
+export const selectDeleteLoadingIds = (state) =>
+  state.beneficiaries.deleteState.loadingIds;
+export const selectIsDeleting = (beneficiaryId) => (state) =>
+  state.beneficiaries.deleteState.loadingIds.includes(beneficiaryId);
+export const selectBulkDeleteInProgress = (state) =>
+  state.beneficiaries.deleteState.bulkDeleteInProgress;
+export const selectBulkDeleteProgress = (state) => ({
+  progress: state.beneficiaries.deleteState.bulkDeleteProgress,
+  total: state.beneficiaries.deleteState.bulkDeleteTotal,
+});
+export const selectUndoAvailable = (state) =>
+  state.beneficiaries.deleteState.undoAvailable;
+export const selectUndoData = (state) =>
+  state.beneficiaries.deleteState.undoData;
 
 // Create beneficiary selectors
 export const selectCreateLoading = (state) => state.beneficiaries.createLoading;
@@ -1143,7 +1557,6 @@ export const selectFilteredBeneficiaries = createSelector(
   (beneficiaries, searchQuery, filterVisibility) => {
     let filtered = beneficiaries;
 
-    // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -1156,7 +1569,6 @@ export const selectFilteredBeneficiaries = createSelector(
       );
     }
 
-    // Apply visibility filter
     if (filterVisibility === "visible") {
       filtered = filtered.filter(
         (beneficiary) =>
@@ -1191,6 +1603,17 @@ export const selectPaginatedBeneficiaries = createSelector(
 export const selectTotalPages = createSelector(
   [selectFilteredBeneficiaries],
   (filteredBeneficiaries) => Math.ceil(filteredBeneficiaries.length / 10)
+);
+
+// Beneficiaries with deletion status
+export const selectBeneficiariesWithDeleteStatus = createSelector(
+  [selectBeneficiaries, selectDeleteLoadingIds],
+  (beneficiaries, loadingIds) => {
+    return beneficiaries.map((beneficiary) => ({
+      ...beneficiary,
+      isDeleting: loadingIds.includes(beneficiary.id),
+    }));
+  }
 );
 
 // ===================== REMITTANCE-SPECIFIC SELECTORS =====================
