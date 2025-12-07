@@ -57,6 +57,107 @@ export const fetchAllowedModules = createAsyncThunk(
   }
 );
 
+// ===================== LOGOUT USER ASYNC THUNK =====================
+export const logoutUser = createAsyncThunk(
+  "auth/logoutUser",
+  async (token, { rejectWithValue, dispatch }) => {
+    try {
+      // Store logout attempt timestamp
+      const logoutTimestamp = Date.now();
+      localStorage.setItem("logout_time", logoutTimestamp.toString());
+
+      // Store partner/system tokens BEFORE any cleanup
+      const systemTokensToPreserve = {
+        bearertoken: localStorage.getItem("bearertoken"),
+        whitelabelled_customer: localStorage.getItem("whitelabelled_customer"),
+        whitelabelled_customer_partnerid: localStorage.getItem("whitelabelled_customer_partnerid"),
+        whitelabelled_customer_partnername: localStorage.getItem("whitelabelled_customer_partnername"),
+        isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
+        header_color: localStorage.getItem("header_color"),
+        partner_config: localStorage.getItem("partner_config"),
+        partner_fx_currencies: localStorage.getItem("partner_fx_currencies"),
+      };
+
+      // Get customer ID for logout API
+      const customerId = localStorage.getItem("authcustomer_id");
+
+      if (!token) {
+        console.warn(
+          "No token provided for logout, performing local logout only"
+        );
+        // Still preserve partner tokens
+        clearAuthStorage(); // This now preserves partner tokens
+        return {
+          message: "Local logout completed",
+          timestamp: logoutTimestamp,
+          apiSuccess: false,
+        };
+      }
+
+      // Prepare headers for API call (using USER token, not partner token)
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+
+      // Make API call to logout endpoint
+      let apiResponse = null;
+      let apiSuccess = false;
+
+      try {
+        const response = await fetch(`/api/auth/logout`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            customer_id: customerId,
+            logout_timestamp: logoutTimestamp,
+            device_info: navigator.userAgent,
+            logout_reason: "user_initiated",
+          }),
+        });
+
+        if (response.ok) {
+          apiResponse = await response.json();
+          apiSuccess = true;
+          console.log("✅ Logout API success:", apiResponse);
+        } else {
+          console.warn(
+            `Logout API returned ${response.status}, but continuing with local cleanup`
+          );
+        }
+      } catch (apiError) {
+        // Non-blocking: API call failure shouldn't prevent local logout
+        console.warn(
+          "Logout API error (proceeding with local cleanup):",
+          apiError.message
+        );
+      }
+
+      // Clear auth storage (which now preserves partner tokens)
+      clearAuthStorage();
+
+      // Always return success
+      return {
+        success: true,
+        apiResponse,
+        apiSuccess,
+        timestamp: logoutTimestamp,
+        message: "Logout completed successfully",
+        partnerTokenPreserved: !!systemTokensToPreserve.bearertoken,
+      };
+    } catch (error) {
+      console.error("❌ Logout process error:", error);
+      // Even on error, clear auth storage (which preserves partner tokens)
+      clearAuthStorage();
+      return rejectWithValue({
+        message: "Logout process error",
+        error: error.message,
+        proceedWithCleanup: true,
+      });
+    }
+  }
+);
+
 // ===================== CONSTANTS =====================
 const KYC_STATUS = {
   PENDING: "0",
@@ -107,28 +208,32 @@ const setLocalStorageItem = (key, value) => {
 
 const clearAuthStorage = () => {
   if (typeof window !== "undefined") {
-    const authKeys = [
-      "authtoken",
-      "authcustomer_id",
-      "is_staff_login",
-      "staff_id",
-      "staff_role",
-      "whitelabelled_customer",
-      "whitelabelled_customer_partnerid",
-      "whitelabelled_customer_partnername",
-      "hasSilaBankAccount",
-      "customerUuid",
-      "plaidStatus",
-      "ownerDetails",
-      "userEmail",
-      "kyc_status",
-      "bank_approve_status",
-      "is_owner_login",
-      "bearertoken",
-      "refreshtoken",
-      "logoutTime",
-    ];
-    authKeys.forEach((key) => localStorage.removeItem(key));
+    // Store partner/system tokens BEFORE clearing
+    const systemTokensToPreserve = {
+      bearertoken: localStorage.getItem("bearertoken"),
+      whitelabelled_customer: localStorage.getItem("whitelabelled_customer"),
+      whitelabelled_customer_partnerid: localStorage.getItem("whitelabelled_customer_partnerid"),
+      whitelabelled_customer_partnername: localStorage.getItem("whitelabelled_customer_partnername"),
+      isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
+      header_color: localStorage.getItem("header_color"),
+      partner_config: localStorage.getItem("partner_config"),
+      partner_fx_currencies: localStorage.getItem("partner_fx_currencies"),
+    };
+
+    // Clear ALL storage first
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // IMMEDIATELY restore system/partner tokens
+    Object.entries(systemTokensToPreserve).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        localStorage.setItem(key, value);
+      }
+    });
+
+    console.log("✅ User tokens cleared, system tokens preserved:", 
+      Object.keys(systemTokensToPreserve).filter(k => systemTokensToPreserve[k]).length, "tokens"
+    );
   }
 };
 
@@ -152,7 +257,7 @@ const initialState = {
   hasFetchedProfile: false,
   hasFetchedModules: false,
 
-  //Redirect
+  // Redirect
   isRedirecting: false,
 
   // Verification Status
@@ -233,6 +338,15 @@ const initialState = {
   // Profile Data
   userProfile: null,
   allowedModules: null,
+
+  // Logout State
+  logoutState: {
+    loading: false,
+    error: null,
+    success: false,
+    timestamp: null,
+    partnerTokensPreserved: false,
+  },
 };
 
 // ===================== AUTH SLICE =====================
@@ -259,7 +373,7 @@ const authSlice = createSlice({
       state.hasFetchedModules = false;
     },
 
-    // =====================REDIRECTION ===============
+    // ===================== REDIRECTION =====================
     setRedirecting: (state, action) => {
       state.isRedirecting = action.payload;
     },
@@ -408,7 +522,9 @@ const authSlice = createSlice({
       };
     },
 
-    logoutUser: (state) => {
+    // Note: The logoutUser reducer is now handled by the async thunk
+    // This sync action is kept for backward compatibility
+    logoutUserSync: (state) => {
       state.user = null;
       state.token = null;
       state.customerId = null;
@@ -429,7 +545,13 @@ const authSlice = createSlice({
       state.userProfile = null;
       state.allowedModules = null;
 
+      // This now preserves partner tokens
       clearAuthStorage();
+      
+      // Update logout state
+      state.logoutState.success = true;
+      state.logoutState.timestamp = Date.now();
+      state.logoutState.partnerTokensPreserved = true;
     },
 
     // ===================== OTP & PASSCODE MANAGEMENT =====================
@@ -714,6 +836,19 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.token = null;
       clearAuthStorage();
+    },
+
+    // ===================== LOGOUT STATE MANAGEMENT =====================
+    setLogoutLoading: (state, action) => {
+      state.logoutState.loading = action.payload;
+    },
+
+    setLogoutError: (state, action) => {
+      state.logoutState.error = action.payload;
+    },
+
+    clearLogoutState: (state) => {
+      state.logoutState = initialState.logoutState;
     },
   },
 
@@ -1032,14 +1167,6 @@ const authSlice = createSlice({
         state.error = action.payload?.message || "Login failed";
       })
 
-      // Logout
-      .addCase("auth/logout/fulfilled", (state) => {
-        return {
-          ...initialState,
-          isInitialized: true,
-        };
-      })
-
       // ===================== DATA FETCHING ASYNC THUNKS =====================
       .addCase(fetchUserProfile.pending, (state) => {
         state.loading.profile = true;
@@ -1069,63 +1196,114 @@ const authSlice = createSlice({
         state.loading.modules = false;
         state.hasFetchedModules = false;
         state.error = action.payload;
+      })
+
+      // ===================== LOGOUT USER ASYNC THUNK =====================
+      .addCase(logoutUser.pending, (state) => {
+        state.logoutState.loading = true;
+        state.logoutState.error = null;
+        state.logoutState.success = false;
+        state.isLoading = true;
+        state.isSubmitting = true;
+      })
+      .addCase(logoutUser.fulfilled, (state, action) => {
+        console.log("✅ Logout successful, resetting state");
+        state.logoutState.loading = false;
+        state.logoutState.success = true;
+        state.logoutState.timestamp = action.payload.timestamp;
+        state.logoutState.apiSuccess = action.payload.apiSuccess;
+        state.logoutState.partnerTokensPreserved = action.payload.partnerTokenPreserved;
+
+        // Reset the entire auth state
+        return {
+          ...initialState,
+          isInitialized: true,
+          logoutState: {
+            ...state.logoutState,
+            loading: false,
+          },
+        };
+      })
+      .addCase(logoutUser.rejected, (state, action) => {
+        console.warn("⚠️ Logout rejected:", action.payload);
+        state.logoutState.loading = false;
+        state.logoutState.error = action.payload?.message || "Logout failed";
+        state.logoutState.success = false;
+        state.isLoading = false;
+        state.isSubmitting = false;
+
+        // Even if rejected, check if we should still clean up
+        if (action.payload?.proceedWithCleanup !== false) {
+          console.log("🔄 Proceeding with local cleanup despite API failure");
+          // Partner tokens are preserved by clearAuthStorage()
+          return {
+            ...initialState,
+            isInitialized: true,
+            logoutState: {
+              ...state.logoutState,
+              loading: false,
+              partnerTokensPreserved: true,
+            },
+          };
+        }
       });
   },
 });
 
+// ===================== SELECTORS =====================
 export const selectAuth = (state) => state.auth;
 
-// export const selectAuthToken = (state) => {
-//   const token = state.auth.token;
+export const selectAuthToken = (state) => {
+  const token = state.auth.token;
 
-//   const isValidToken =
-//     token &&
-//     token !== "undefined" &&
-//     token !== "null" &&
-//     token !== "false" &&
-//     typeof token === "string" &&
-//     token.length > 10;
+  const isValidToken =
+    token &&
+    token !== "undefined" &&
+    token !== "null" &&
+    token !== "false" &&
+    typeof token === "string" &&
+    token.length > 10;
 
-//   if (isValidToken) {
-//     return token;
-//   }
+  if (isValidToken) {
+    return token;
+  }
 
-//   const tempAuthData = state.auth.tempAuthData;
-//   if (tempAuthData?.token) {
-//     return tempAuthData.token;
-//   }
+  const tempAuthData = state.auth.tempAuthData;
+  if (tempAuthData?.token) {
+    return tempAuthData.token;
+  }
 
-//   try {
-//     const sessionTempAuth = sessionStorage.getItem("temp_auth_data");
-//     if (sessionTempAuth) {
-//       const tempAuth = JSON.parse(sessionTempAuth);
-//       if (
-//         tempAuth.token &&
-//         tempAuth.timestamp &&
-//         Date.now() - tempAuth.timestamp < 300000
-//       ) {
-//         return tempAuth.token;
-//       }
-//     }
-//   } catch (e) {
-//     // Silent catch
-//   }
+  try {
+    const sessionTempAuth = sessionStorage.getItem("temp_auth_data");
+    if (sessionTempAuth) {
+      const tempAuth = JSON.parse(sessionTempAuth);
+      if (
+        tempAuth.token &&
+        tempAuth.timestamp &&
+        Date.now() - tempAuth.timestamp < 300000
+      ) {
+        return tempAuth.token;
+      }
+    }
+  } catch (e) {
+    // Silent catch
+  }
 
-//   const storedToken = localStorage.getItem("authtoken");
-//   const isValidStoredToken =
-//     storedToken &&
-//     storedToken !== "undefined" &&
-//     storedToken !== "null" &&
-//     storedToken !== "false" &&
-//     typeof storedToken === "string" &&
-//     storedToken.length > 10;
+  const storedToken = localStorage.getItem("authtoken");
+  const isValidStoredToken =
+    storedToken &&
+    storedToken !== "undefined" &&
+    storedToken !== "null" &&
+    storedToken !== "false" &&
+    typeof storedToken === "string" &&
+    storedToken.length > 10;
 
-//   if (isValidStoredToken) {
-//     return storedToken;
-//   }
+  if (isValidStoredToken) {
+    return storedToken;
+  }
 
-//   return null;
-// };
+  return null;
+};
 
 export const selectIsAuthenticated = (state) => {
   const token = selectAuthToken(state);
@@ -1191,6 +1369,15 @@ export const selectIsSubmitting = (state) => state.auth.isSubmitting;
 export const selectShowCustomerType = (state) => state.auth.showCustomerType;
 export const selectIsRedirecting = (state) => state.auth.isRedirecting;
 
+// Logout Selectors
+export const selectLogoutState = (state) => state.auth.logoutState;
+export const selectLogoutLoading = (state) => state.auth.logoutState.loading;
+export const selectLogoutError = (state) => state.auth.logoutState.error;
+export const selectLogoutSuccess = (state) => state.auth.logoutState.success;
+export const selectLogoutTimestamp = (state) =>
+  state.auth.logoutState.timestamp;
+export const selectPartnerTokensPreserved = (state) =>
+  state.auth.logoutState.partnerTokensPreserved;
 
 // Composite selectors
 export const selectAuthStatus = (state) => ({
@@ -1277,7 +1464,7 @@ export const {
   resetPasscodeState,
   resetOtpState,
   resetPlaidState,
-  logoutUser,
+  logoutUserSync,
   setIsGeneratingPasscode,
   setModalData,
   openModal,
@@ -1297,6 +1484,9 @@ export const {
   updateAuthState,
   refreshToken,
   invalidateSession,
+  setLogoutLoading,
+  setLogoutError,
+  clearLogoutState,
 } = authSlice.actions;
 
 export default authSlice.reducer;

@@ -136,7 +136,6 @@ export const updateBeneficiary = createAsyncThunk(
   }
 );
 
-// Async thunk for creating beneficiary with banks
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
@@ -144,200 +143,182 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
-      const payload = {
-        ...beneficiaryData,
-        banks: bankAccounts.map((account) => {
-          let bankDetails = {
-            rails: account.rails,
-            currency_code: account.currency || currency,
-            payment_method: account.paymentMethod,
-            benef_iban: account.iban,
-            swift_code: account.swift,
-            intermediary_bank_swift: account.intermediarySwift,
-            routing_number: account.routingNumber,
-            bank_acc_no: account.accountNumber,
-            sort_code: account.sortCode,
-            bank_name: account.bankName,
-            ifsc: account.ifsc,
-            bankCode: account.bankCode,
-            branchCode: account.branchCode,
-            bankState: account.bankState,
-            account_name: account.accountName,
-            account_title: account.accountTitle,
-            wallet_provider:
-              account.walletProvider === "Other"
-                ? account.otherProvider
-                : account.walletProvider,
-            mobile_number: account.mobileNumber,
-            account_type: account.accountType,
-          };
+      console.log("🔧 Creating beneficiary with banks...");
+      console.log("🔧 Customer ID:", customerId);
+      console.log("🔧 Beneficiary Data:", beneficiaryData);
+      console.log("🔧 Bank Accounts:", bankAccounts);
+      console.log("🔧 Currency:", currency);
 
-          // Transform based on rails type
-          if (account.rails === "Swift") {
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Validate that all bank accounts have rails
+      const missingRailsAccounts = bankAccounts.filter(
+        (account) => !account.rails || account.rails.trim() === ""
+      );
+      if (missingRailsAccounts.length > 0) {
+        console.error("❌ Missing rails in accounts:", missingRailsAccounts);
+        throw new Error("All bank accounts must have a rails selection");
+      }
+
+      // Transform bank accounts for API
+      const banksPayload = bankAccounts.map((account, index) => {
+        // Ensure rails is provided
+        if (!account.rails) {
+          console.error(`❌ ERROR: rails is missing for bank account ${index}`);
+          throw new Error(
+            `Bank account ${index + 1} is missing rails selection`
+          );
+        }
+
+        let bankDetails = {
+          rails: account.rails, // This is REQUIRED
+          currency_code: account.currency || currency,
+          payment_method: account.paymentMethod || "",
+          benef_iban: account.iban || "",
+          swift_code: account.swift || "",
+          intermediary_bank_swift: account.intermediarySwift || "",
+          routing_number: account.routingNumber || "",
+          bank_acc_no: account.accountNumber || "",
+          sort_code: account.sortCode || "",
+          bank_name: account.bankName || "",
+          ifsc: account.ifsc || "",
+          bankCode: account.bankCode || "",
+          branchCode: account.branchCode || "",
+          bankState: account.bankState || "",
+          account_name: account.accountName || "",
+          account_title: account.accountTitle || "",
+          wallet_provider: account.walletProvider || "",
+          mobile_number: account.mobileNumber || "",
+          account_type: account.accountType || "",
+          other_provider: account.otherProvider || "",
+        };
+
+        // Debug the account rails
+        console.log(
+          `📝 Processing bank account ${index} with rails: "${account.rails}"`
+        );
+
+        // Transform based on rails type - ensure required fields are present
+        if (account.rails === "Swift") {
+          bankDetails = {
+            ...bankDetails,
+            rails: "Swift",
+            currency_code: account.currency || currency,
+            payment_method: "swift",
+            benef_iban: account.iban || "",
+            swift_code: account.swift || "",
+            intermediary_bank_swift: account.intermediarySwift || "",
+          };
+        } else if (account.rails === "Local") {
+          // Handle different currencies for local transfers
+          if (currency === "USD") {
             bankDetails = {
-              benef_id: beneficiaryData.beneficiary_id,
-              rails: "Swift",
-              currency_code: account.currency || currency,
-              payment_method: "swift",
-              benef_iban: account.iban,
-              swift_code: account.swift,
-              intermediary_bank_swift: account.intermediarySwift,
-            };
-          } else if (account.rails === "Local") {
-            // Handle different currencies for local transfers
-            if (currency === "INR") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                account_type: account.accountType,
-                bank_name: account.bankName,
-                ifsc: account.ifsc,
-              };
-            } else if (currency === "USD") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: account.paymentMethod,
-                routing_number: account.routingNumber,
-                bank_acc_no: account.accountNumber,
-                account_type: account.accountType,
-                bankCode: account.routingNumber,
-                swift_code: account.swift,
-              };
-            } else if (currency === "AED") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                benef_iban: account.iban,
-                bic_code: account.swift,
-              };
-            } else if (currency === "NPR") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_name: account.bankName,
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-              };
-            } else if (currency === "KES") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-              };
-            } else if (currency === "NGN") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                account_name: account.accountName,
-              };
-            } else if (currency === "BDT") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "LKR") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "AUD") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "PKR") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-                benef_iban: account.iban,
-                account_title: account.accountTitle,
-              };
-            } else if (currency === "EUR") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                benef_iban: account.iban,
-              };
-            } else if (currency === "GBP" || currency === "DKK") {
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                sort_code: account.sortCode,
-              };
-            } else {
-              // Default local transfer structure
-              bankDetails = {
-                benef_id: beneficiaryData.beneficiary_id,
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bank_name: account.bankName,
-              };
-            }
-          } else if (account.rails === "Mobile") {
-            bankDetails = {
-              benef_id: beneficiaryData.beneficiary_id,
-              rails: "Mobile",
+              ...bankDetails,
+              rails: "Local",
               currency_code: currency,
-              payment_method: "mobile",
-              mobile_number: account.mobileNumber,
-              wallet_provider:
-                account.walletProvider === "Other"
-                  ? account.otherProvider
-                  : account.walletProvider,
+              payment_method: account.paymentMethod || "ACH",
+              routing_number: account.routingNumber || "",
+              bank_acc_no: account.accountNumber || "",
+              account_type: account.accountType || "",
+              bankCode: account.routingNumber || "",
+              swift_code: account.swift || "",
+            };
+          } else if (currency === "INR") {
+            bankDetails = {
+              ...bankDetails,
+              rails: "Local",
+              currency_code: currency,
+              payment_method: "",
+              bank_acc_no: account.accountNumber || "",
+              account_type: account.accountType || "",
+              bank_name: account.bankName || "",
+              ifsc: account.ifsc || "",
+            };
+          } else if (currency === "AED") {
+            bankDetails = {
+              ...bankDetails,
+              rails: "Local",
+              currency_code: currency,
+              payment_method: "",
+              benef_iban: account.iban || "",
+              bic_code: account.swift || "",
+            };
+          } else if (currency === "EUR") {
+            bankDetails = {
+              ...bankDetails,
+              rails: "Local",
+              currency_code: currency,
+              payment_method: "",
+              benef_iban: account.iban || "",
+            };
+          } else if (currency === "GBP" || currency === "DKK") {
+            bankDetails = {
+              ...bankDetails,
+              rails: "Local",
+              currency_code: currency,
+              payment_method: "",
+              bank_acc_no: account.accountNumber || "",
+              sort_code: account.sortCode || "",
+            };
+          } else {
+            // Default local transfer structure for other currencies
+            bankDetails = {
+              ...bankDetails,
+              rails: "Local",
+              currency_code: currency,
+              payment_method: "",
+              bank_acc_no: account.accountNumber || "",
+              bank_name: account.bankName || "",
+              bankCode: account.bankCode || "",
+              branchCode: account.branchCode || "",
+              bankState: account.bankState || "",
             };
           }
+        } else if (account.rails === "Mobile") {
+          bankDetails = {
+            ...bankDetails,
+            rails: "Mobile",
+            currency_code: currency,
+            payment_method: "mobile",
+            mobile_number: account.mobileNumber || "",
+            wallet_provider: account.walletProvider || "",
+            other_provider: account.otherProvider || "",
+          };
+        }
 
-          return bankDetails;
-        }),
+        // Ensure rails is always included
+        if (!bankDetails.rails) {
+          console.error(
+            `❌ ERROR: rails field is missing in bankDetails for account ${index}!`
+          );
+          // Set a default if missing
+          bankDetails.rails = "Local";
+        }
+
+        console.log(
+          `✅ Bank account ${index} prepared: rails="${bankDetails.rails}"`
+        );
+        return bankDetails;
+      });
+
+      // Log the transformed banks payload
+      console.log("📦 Transformed banks payload:", banksPayload);
+
+      const payload = {
+        ...beneficiaryData,
+        banks: banksPayload,
       };
+
+      console.log(
+        "📡 Final payload to send:",
+        JSON.stringify(payload, null, 2)
+      );
+      console.log(
+        "📡 API URL:",
+        `${
+          import.meta.env.VITE_API_URL
+        }/beneficiaries/create-benef/${customerId}`
+      );
 
       const response = await fetch(
         `${
@@ -353,19 +334,36 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("📡 API Response text:", responseText);
+
       if (!response.ok) {
-        throw new Error("Failed to create beneficiary");
+        console.error("❌ API Error Response:", responseText);
+
+        // Try to parse the error message
+        try {
+          const errorData = JSON.parse(responseText);
+          if (errorData.errors && errorData.errors["banks.0.rails"]) {
+            throw new Error("Please select rails for all bank accounts.");
+          }
+          throw new Error(errorData.message || "Failed to create beneficiary");
+        } catch (parseError) {
+          throw new Error("Failed to create beneficiary");
+        }
       }
 
-      const result = await response.json();
+      const result = JSON.parse(responseText);
+      console.log("✅ API Success Response:", result);
 
       return result;
     } catch (error) {
+      console.error("❌ createBeneficiaryWithBanks error:", error);
       return rejectWithValue(error.message);
     }
   }
 );
-
 // Dropdown data async thunks
 export const fetchNationalities = createAsyncThunk(
   "beneficiaries/fetchNationalities",
@@ -733,22 +731,30 @@ const beneficiariesSlice = createSlice({
 
       // Create beneficiary with banks
       .addCase(createBeneficiaryWithBanks.pending, (state) => {
+        console.log("⏳ createBeneficiaryWithBanks PENDING");
         state.createLoading = true;
         state.createError = null;
         state.createSuccess = false;
       })
       .addCase(createBeneficiaryWithBanks.fulfilled, (state, action) => {
+        console.log("✅ createBeneficiaryWithBanks FULFILLED");
+        console.log("✅ Action payload:", action.payload);
         state.createLoading = false;
         state.createSuccess = true;
-        state.beneficiaryId = action.payload.beneficiary_id;
+        state.beneficiaryId =
+          action.payload.beneficiary_id || action.payload.benef_id;
         state.createError = null;
 
-        // Add the new beneficiary to the list
+        // Add the new beneficiary to the list if available
         if (action.payload.beneficiary) {
           state.beneficiaries.unshift(action.payload.beneficiary);
         }
       })
       .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
+        console.error(
+          "❌ createBeneficiaryWithBanks REJECTED:",
+          action.payload
+        );
         state.createLoading = false;
         state.createError = action.payload;
         state.createSuccess = false;

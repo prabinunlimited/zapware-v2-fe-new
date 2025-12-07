@@ -42,6 +42,9 @@ import bankAccountReducer from "../page/Deposit/slices/bankAccountSlice";
 import uiDepositReducer from "../page/Deposit/slices/uiSlice";
 import bankLinkReducer from "../page/Deposit/slices/bankLinkSlice";
 
+// ===================== CONVERSION SLICES =====================
+import conversionReducer from "../page/Conversion/slice/ConversionSlice"
+
 // ===================== CARD PAYMENT SLICES =====================
 import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
 
@@ -340,6 +343,9 @@ export const store = configureStore({
     // Team
     team: teamReducer,
     teamMember: teamMemberReducer,
+
+    //Convert
+    conversion: conversionReducer,
 
     // Beneficiaries
     beneficiaries: beneficiariesReducer,
