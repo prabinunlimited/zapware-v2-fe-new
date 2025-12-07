@@ -54,6 +54,9 @@ import {
   setSelectedBank,
   fetchBeneficiaryBanks,
   fetchBeneficiaryByCode,
+  selectBeneficiaryBanks, // ADD THIS
+  selectBanksLoading, // ADD THIS
+  selectBeneficiaries, // ADD THIS if needed
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;

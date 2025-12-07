@@ -8,24 +8,33 @@ import BankDetailsPopup from "../../../components/PopupModal/BankDetailsPopup";
 import DeleteConfirmationModal from "./DeleteConfirmationModal";
 
 import {
-  fetchBeneficiaries,
-  deleteBeneficiary,
-  toggleBeneficiaryVisibility,
-  setSearchQuery,
-  setFilterVisibility,
-  setSelectedBeneficiary,
-  clearError,
-  clearSuccess,
+  // Selectors (ALL THESE ARE EXPORTED IN YOUR SLICE)
+  selectBeneficiaries,
   selectFilteredBeneficiaries,
   selectBeneficiariesLoading,
   selectBeneficiariesError,
   selectBeneficiariesSuccess,
   selectSearchQuery,
   selectFilterVisibility,
-  fetchBeneficiaryBanks,
   selectBeneficiaryBanks,
   selectBanksLoading,
-} from "./BeneficiariesSlice";
+  // For your statistics calculations, you might also want:
+  selectVisibleBeneficiaries,
+  selectBeneficiariesCount,
+
+  // Actions/Reducers
+  setSearchQuery,
+  setFilterVisibility,
+  setSelectedBeneficiary,
+  clearError,
+  clearSuccess,
+
+  // Async thunks
+  fetchBeneficiaries,
+  deleteBeneficiary,
+  toggleBeneficiaryVisibility,
+  fetchBeneficiaryBanks,
+} from "../MyBeneficiaries/BeneficiariesSlice";
 
 import { showDeleteModal, showBulkDeleteModal } from "./ModalSlice";
 
@@ -38,12 +47,20 @@ const Beneficiaries = () => {
   const [selectAll, setSelectAll] = useState(false);
 
   // Selectors - using the actual exported selector names
-  const beneficiaries = useSelector(selectFilteredBeneficiaries);
+  const beneficiaries = useSelector(selectFilteredBeneficiaries); // ✓ This selector exists in your slice
+
+  // If you need ALL beneficiaries (for stats, etc.)
+  const allBeneficiaries = useSelector(selectBeneficiaries);
+
   const loading = useSelector(selectBeneficiariesLoading);
   const error = useSelector(selectBeneficiariesError);
   const operationSuccess = useSelector(selectBeneficiariesSuccess);
   const searchQuery = useSelector(selectSearchQuery);
   const filterVisibility = useSelector(selectFilterVisibility);
+
+  // Additional selectors for statistics
+  const visibleBeneficiaries = useSelector(selectVisibleBeneficiaries);
+  const totalCount = useSelector(selectBeneficiariesCount);
 
   // Use the same loading state for both initial load and operations
   const operationLoading = loading;
@@ -612,13 +629,16 @@ const Beneficiaries = () => {
                           <input
                             type="checkbox"
                             checked={isSelected(beneficiary.id)}
-                            onChange={() => handleSelectBeneficiary(beneficiary.id)}
+                            onChange={() =>
+                              handleSelectBeneficiary(beneficiary.id)
+                            }
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-3"
                           />
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
                               <span className="text-blue-600 font-medium">
-                                {beneficiary.name?.charAt(0).toUpperCase() || "B"}
+                                {beneficiary.name?.charAt(0).toUpperCase() ||
+                                  "B"}
                               </span>
                             </div>
                             <div className="ml-4">
