@@ -143,6 +143,7 @@ const Header = ({ customerId }) => {
 
   // Handle logout
   const handleLogout = useCallback(async () => {
+    // Clear timers
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -156,29 +157,33 @@ const Header = ({ customerId }) => {
     // Clear API cache on logout
     apiCoordinator.clear();
 
-    if (authtoken) {
-      try {
-        await dispatch(logoutUser(authtoken)).unwrap();
-        navigate("/");
-      } catch (error) {
-        console.error("Logout error:", error);
-        // Even if API call fails, clear local storage and redirect
-        localStorage.removeItem("authtoken");
-        localStorage.removeItem("authcustomer_id");
-        localStorage.removeItem("bearertoken");
-        localStorage.removeItem("is_staff_login");
-        localStorage.removeItem("staff_role");
-        localStorage.removeItem("is_owner_login");
-        localStorage.removeItem("owner_id");
-        localStorage.removeItem("owner_role_name");
-        localStorage.removeItem("firstName");
-        localStorage.removeItem("lastName");
-        localStorage.removeItem("middleName");
-        navigate("/");
+    // Get any available token
+    const tokenToUse =
+      authtoken ||
+      localStorage.getItem("authtoken") ||
+      localStorage.getItem("bearertoken");
+
+    try {
+      // Call the NEW async thunk
+      if (tokenToUse) {
+        await dispatch(logoutUser(tokenToUse)).unwrap();
+      } else {
+        // If no token, just clear local state
+        dispatch(logoutUserSync()); // Use the sync version as fallback
       }
-    } else {
-      // No token, just redirect to login
-      navigate("/");
+
+      // Navigate to login
+      navigate("/", { replace: true });
+
+      // Force reload to clear any cached state
+      window.location.reload();
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Even if API fails, clear local storage and redirect
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate("/", { replace: true });
+      window.location.reload();
     }
   }, [authtoken, dispatch, navigate]);
 
