@@ -27,6 +27,8 @@ import { MdAccountBalance, MdSecurity } from "react-icons/md";
 import { TbTransfer } from "react-icons/tb";
 import Select from "react-select";
 
+import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
+
 // Redux actions (unchanged)
 import {
   setStep,
@@ -585,29 +587,162 @@ const Remittance = () => {
     }
   }, [step, dispatch]);
 
+  const isOpenBankingAvailable = useCallback(() => {
+    const openBankingCurrencies = ["EUR", "GBP", "DKK"];
+    const sendCurrency = formData.sendCurrency?.value;
+    return (
+      step === 3 &&
+      formData.paymentMethod === "bank" &&
+      sendCurrency &&
+      openBankingCurrencies.includes(sendCurrency)
+    );
+  }, [step, formData.paymentMethod, formData.sendCurrency]);
+
+  const handleInitiateOpenBanking = useCallback(() => {
+    console.log("🚀 User clicked Open Banking button!");
+    if (!formData.agreeToTerms) {
+      toast.error("Please agree to terms first!");
+      return;
+    }
+    if (!selectedBeneficiary) {
+      toast.error("Please select a beneficiary!");
+      return;
+    }
+    if (!selectedBank) {
+      toast.error("Please select a bank!");
+      return;
+    }
+    if (!formData.sendAmount || parseFloat(formData.sendAmount) <= 0) {
+      toast.error("Please enter an amount!");
+      return;
+    }
+    setOpenBankingProcessing(true);
+    setShowOpenBanking(true);
+    console.log("✅ Everything is ready for Open Banking!");
+  }, [
+    formData.agreeToTerms,
+    selectedBeneficiary,
+    selectedBank,
+    formData.sendAmount,
+  ]);
+
+  const handleOpenBankingClose = useCallback(() => {
+    setShowOpenBanking(false);
+    setOpenBankingProcessing(false);
+  }, []);
+
+  const handleOpenBankingSuccess = useCallback(
+    (result) => {
+      console.log("🎉 Open Banking payment worked!", result);
+      setShowOpenBanking(false);
+      setOpenBankingProcessing(false);
+      toast.success("Open Banking payment started successfully!");
+
+      dispatch(setStep(4));
+    },
+    [dispatch]
+  );
+
   const handleSubmitTransaction = useCallback(() => {
+    // Debug: Check what we have
+    console.log("🔍 Debug - Current state:");
+    console.log("formData.sendCurrency:", formData.sendCurrency);
+    console.log("formData.receiveCurrency:", formData.receiveCurrency);
+    console.log("selectedBeneficiary:", selectedBeneficiary);
+    console.log("selectedBank:", selectedBank);
+
     const transactionData = {
-      customer_id: parseInt(customerId),
-      send_amount: parseFloat(formData.sendAmount),
-      receive_amount: parseFloat(formData.receiveAmount),
+      // REQUIRED: Currency fields
       from_currency: formData.sendCurrency?.value,
       to_currency: formData.receiveCurrency?.value,
-      exchange_rate: exchangeRateData?.fxRate || 0,
-      fee: 0,
-      conversion_id: exchangeRateData?.conversion_id,
-      beneficiary_id: selectedBeneficiary?.id,
-      bank_id: selectedBank?.id,
-      purpose: formData.purpose?.value,
-      income_source: formData.incomeSource?.value,
-      occupation: formData.occupation,
-      relation: formData.relation?.value,
-      payout_method: formData.payout_method?.value || formData.paymentMethod, // Add this
+
+      // REQUIRED: Amount fields
+      send_amount: parseFloat(formData.sendAmount),
+      receive_amount: parseFloat(formData.receiveAmount),
+      exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
+
+      // REQUIRED: Customer
+      customer_id: parseInt(customerId),
+
+      // REQUIRED: Payment
       payment_method: formData.paymentMethod,
+      conversion_id: exchangeRateData?.conversion_id,
+
+      // REQUIRED: Beneficiary (ID as string)
+      beneficiary: selectedBeneficiary?.id?.toString(), // ← MUST BE STRING
+      beneficiary_bank_id: selectedBank?.id, // ← MUST HAVE THIS
+
+      // Optional but good to include
+      beneficiary_name: selectedBeneficiary?.name,
+      beneficiary_bank_name: selectedBank?.bank_name,
+      beneficiary_account_number:
+        selectedBank?.account_number || selectedBank?.bank_acc_no,
+
+      // REQUIRED: is_remit flag
+      is_remit: "Y",
+
+      // Compliance fields
+      purpose: formData.purpose?.value || formData.purpose,
+      income_source: formData.incomeSource?.value || formData.incomeSource,
+      occupation: formData.occupation || "",
+      relation: formData.relation?.value || formData.relation || "",
+      payout_method: formData.payout_method?.value || formData.paymentMethod,
+
+      // Document
       document: formData.document,
-      agree_to_terms: formData.agreeToTerms,
+      agree_to_terms: formData.agreeToTerms ? "1" : "0",
+
+      // Additional
+      rails: "Local",
     };
 
-    dispatch(submitTransaction(transactionData));
+    // Remove undefined/null fields
+    const cleanData = {};
+    Object.keys(transactionData).forEach((key) => {
+      if (transactionData[key] !== null && transactionData[key] !== undefined) {
+        cleanData[key] = transactionData[key];
+      }
+    });
+
+    console.log("📤 Sending transaction data:", cleanData);
+    console.log("📤 Missing required fields check:");
+    console.log(
+      "- from_currency:",
+      !!cleanData.from_currency,
+      cleanData.from_currency
+    );
+    console.log(
+      "- to_currency:",
+      !!cleanData.to_currency,
+      cleanData.to_currency
+    );
+    console.log(
+      "- beneficiary:",
+      !!cleanData.beneficiary,
+      cleanData.beneficiary
+    );
+    console.log(
+      "- beneficiary_bank_id:",
+      !!cleanData.beneficiary_bank_id,
+      cleanData.beneficiary_bank_id
+    );
+    console.log("- is_remit:", !!cleanData.is_remit, cleanData.is_remit);
+
+    // Validate required fields
+    const required = [
+      "from_currency",
+      "to_currency",
+      "beneficiary",
+      "beneficiary_bank_id",
+    ];
+    const missing = required.filter((field) => !cleanData[field]);
+
+    if (missing.length > 0) {
+      alert(`Missing required fields: ${missing.join(", ")}`);
+      return;
+    }
+
+    dispatch(submitTransaction(cleanData));
   }, [
     customerId,
     formData,
@@ -838,11 +973,19 @@ const Remittance = () => {
       case "bank":
         return (
           <BankTransfer
+            formData={formData} // ADD THIS
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
             beneficiaryBanks={beneficiaryBanks}
             beneficiaryLoading={beneficiaryLoading}
+            onBeneficiarySelect={handleBeneficiarySelect} // ADD THIS
             onBankSelect={handleBankSelect}
+            onFieldChange={handleFieldChange} // ADD THIS
+            purposeOptions={purposeOptions} // ADD THIS
+            incomeSourceOptions={incomeSourceOptions} // ADD THIS
+            relationOptions={relationOptions} // ADD THIS
+            paymentOptions={paymentOptions} // ADD THIS
+            onFileUpload={handleFileUpload} // ADD THIS IF NEEDED
           />
         );
       case "card":
@@ -1564,6 +1707,7 @@ const Remittance = () => {
             onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
             onSubmit={handleSubmitTransaction}
             loading={loading}
+            paymentMethod={formData.paymentMethod}
           />
         );
 
@@ -1633,6 +1777,7 @@ const Remittance = () => {
         )}
 
         {/* Professional Navigation Buttons */}
+        {/* Professional Navigation Buttons */}
         {step < 4 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1640,6 +1785,7 @@ const Remittance = () => {
             transition={{ delay: 0.1 }}
             className="flex flex-col sm:flex-row gap-4"
           >
+            {/* Back/Cancel button - UNCHANGED */}
             {step > 1 ? (
               <button
                 onClick={handlePreviousStep}
@@ -1658,77 +1804,144 @@ const Remittance = () => {
               </button>
             )}
 
-            <button
-              onClick={handleNextStep}
-              disabled={
-                (step === 1 &&
-                  (!formData.sendAmount ||
-                    parseFloat(formData.sendAmount) < 5 ||
-                    !exchangeRateData?.fxRate)) ||
-                (step === 1 &&
-                  formData.paymentMethod === "manual" &&
-                  (!manualAccountDetails || manualAccountError)) ||
-                (step === 2 &&
-                  (!selectedBeneficiary ||
-                    !formData.purpose ||
-                    !formData.incomeSource ||
-                    (formData.paymentMethod === "manual" &&
-                      !formData.document) ||
-                    (formData.paymentMethod === "bank" && !selectedBank))) ||
-                (step === 3 && !formData.agreeToTerms) ||
-                loading ||
-                exchangeRateLoading ||
-                manualDetailsLoading ||
-                beneficiaryLoading
-              }
-              className={`flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg ${
-                step === 3
-                  ? "bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white shadow-emerald-200"
-                  : "bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200"
-              } ${
-                (step === 1 &&
-                  (!formData.sendAmount ||
-                    parseFloat(formData.sendAmount) < 5 ||
-                    !exchangeRateData?.fxRate)) ||
-                (step === 1 &&
-                  formData.paymentMethod === "manual" &&
-                  (!manualAccountDetails || manualAccountError)) ||
-                (step === 2 &&
-                  (!selectedBeneficiary ||
-                    !formData.purpose ||
-                    !formData.incomeSource ||
-                    (formData.paymentMethod === "manual" &&
-                      !formData.document) ||
-                    (formData.paymentMethod === "bank" && !selectedBank))) ||
-                (step === 3 && !formData.agreeToTerms) ||
-                loading ||
-                exchangeRateLoading ||
-                manualDetailsLoading ||
-                beneficiaryLoading
-                  ? "opacity-50 cursor-not-allowed grayscale"
-                  : "hover:shadow-xl hover:-translate-y-0.5"
-              }`}
-            >
-              {loading ? (
-                <>
-                  <ClipLoader color="#ffffff" size={18} />
-                  <span>Processing Transaction...</span>
-                </>
-              ) : step === 3 ? (
-                <>
-                  <FiSend className="w-5 h-5" />
-                  <span>Confirm & Send Transfer</span>
-                </>
-              ) : (
-                <>
-                  <span>Continue to Next Step</span>
-                  <FaArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </button>
+            {/* STEP 1 & 2: Continue to Next Step */}
+            {step < 3 && (
+              <button
+                onClick={handleNextStep}
+                disabled={
+                  (step === 1 &&
+                    (!formData.sendAmount ||
+                      parseFloat(formData.sendAmount) < 5 ||
+                      !exchangeRateData?.fxRate ||
+                      (formData.paymentMethod === "manual" &&
+                        (!manualAccountDetails || manualAccountError)))) ||
+                  (step === 2 &&
+                    (!selectedBeneficiary ||
+                      !formData.purpose ||
+                      !formData.incomeSource ||
+                      (formData.paymentMethod === "manual" &&
+                        !formData.document) ||
+                      (formData.paymentMethod === "bank" && !selectedBank))) ||
+                  loading ||
+                  exchangeRateLoading ||
+                  manualDetailsLoading ||
+                  beneficiaryLoading ||
+                  openBankingProcessing
+                }
+                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed grayscale"
+              >
+                {loading ? (
+                  <>
+                    <ClipLoader color="#ffffff" size={18} />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Continue to Next Step</span>
+                    <FaArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* STEP 3: Different buttons based on payment method */}
+            {step === 3 && (
+              <>
+                {/* BANK TRANSFER: Continue to Next Step (for Open Banking) */}
+                {formData.paymentMethod === "bank" && (
+                  <button
+                    onClick={handleInitiateOpenBanking}
+                    disabled={
+                      !formData.agreeToTerms ||
+                      loading ||
+                      openBankingProcessing ||
+                      !selectedBeneficiary ||
+                      !selectedBank ||
+                      !formData.sendAmount ||
+                      parseFloat(formData.sendAmount) <= 0
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {openBankingProcessing ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Initializing Open Banking...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Continue to Next Step</span>
+                        <FaArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* MANUAL DEPOSIT: Confirm & Send Transfer */}
+                {formData.paymentMethod === "manual" && (
+                  <button
+                    onClick={handleSubmitTransaction}
+                    disabled={
+                      !formData.agreeToTerms || loading || openBankingProcessing
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-emerald-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Processing Transaction...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiSend className="w-5 h-5" />
+                        <span>Confirm & Send Transfer</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* CARD PAYMENT: Confirm & Pay */}
+                {formData.paymentMethod === "card" && (
+                  <button
+                    onClick={handleSubmitTransaction}
+                    disabled={
+                      !formData.agreeToTerms || loading || openBankingProcessing
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-purple-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Processing Transaction...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiCreditCard className="w-5 h-5" />
+                        <span>Confirm & Pay</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            )}
           </motion.div>
         )}
       </main>
+
+      {showOpenBanking && (
+        <PaymentInitiation
+          selectedCurrency={formData.sendCurrency?.value}
+          amount={formData.sendAmount}
+          purpose={formData.purpose?.value || "remittance"}
+          paymentMethod="bank"
+          selectedBankAccount={formData.sendCurrency}
+          selectedBeneficiaryBank={selectedBank}
+          selectedBeneficiary={selectedBeneficiary}
+          customerId={customerId} // Pass customerId directly
+          showPaymentInitiation={showOpenBanking}
+          onClose={handleOpenBankingClose}
+          onSuccess={handleOpenBankingSuccess}
+        />
+      )}
     </div>
   );
 };

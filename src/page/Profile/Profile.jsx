@@ -86,28 +86,16 @@ const Profile = () => {
   const chargesLoading = useSelector(selectChargesLoading);
   const chargesError = useSelector(selectChargesError);
 
-  // Function to handle text color style
-  const getTextColorStyle = () => {
-    if (textColor && textColor.startsWith("text-")) {
-      return { className: textColor };
-    } else if (textColor && textColor.startsWith("#")) {
-      return { style: { color: textColor } };
-    }
-    return {};
-  };
-
-  // Function to handle header color style
-  const getHeaderColorStyle = () => {
-    if (headerColor && headerColor.startsWith("bg-")) {
-      return { className: headerColor };
-    } else if (headerColor && headerColor.startsWith("#")) {
-      return { style: { backgroundColor: headerColor } };
-    }
-    return { className: "bg-blue-600" };
-  };
-
-  const textColorProps = getTextColorStyle();
-  const headerColorProps = getHeaderColorStyle();
+  // Debug logging
+  console.log("🔍 Profile Debug:", {
+    profileData: profileData,
+    profileLoading: profileLoading,
+    profileError: profileError,
+    customerId: customerId,
+    hasBearerToken: !!bearertoken,
+    hasProfileFirstName: profileData?.first_name,
+    hasLocalStorageFirstName: localStorage.getItem("firstName")
+  });
 
   // Local state for editing and additional data
   const [saveLoading, setSaveLoading] = useState(false);
@@ -152,13 +140,61 @@ const Profile = () => {
     }
   }, [isModalOpen]);
 
+  // =============== FIX: Fetch profile data if missing in Redux ===============
+  useEffect(() => {
+    const fetchProfileIfNeeded = async () => {
+      // Check if we have necessary tokens and customerId
+      if (!bearertoken || !customerId) {
+        console.log("❌ Profile: Missing token or customerId", {
+          bearertoken: !!bearertoken,
+          customerId: customerId
+        });
+        return;
+      }
+
+      // If we already have data, no need to fetch
+      if (profileData) {
+        console.log("✅ Profile: Already have data in Redux", {
+          firstName: profileData.first_name,
+          lastName: profileData.last_name
+        });
+        return;
+      }
+
+      // If we're already loading, wait
+      if (profileLoading) {
+        console.log("⏳ Profile: Already loading from Redux");
+        return;
+      }
+
+      // If there's an error, don't try to fetch
+      if (profileError) {
+        console.log("❌ Profile: Error in Redux", profileError);
+        return;
+      }
+
+      // No data and not loading/error - fetch the profile
+      console.log("🚀 Profile: Fetching profile data (missing in Redux)");
+      
+      try {
+        await dispatch(fetchUserProfile({ customerId, bearertoken }));
+        console.log("✅ Profile: Successfully dispatched fetch");
+      } catch (error) {
+        console.error("❌ Profile: Failed to fetch profile", error);
+      }
+    };
+
+    fetchProfileIfNeeded();
+  }, [profileData, profileLoading, profileError, customerId, bearertoken, dispatch]);
+  // =============== END FIX ===============
+
   // Fetch additional profile data that's not in Redux
   useEffect(() => {
     const fetchAdditionalProfileData = async () => {
       if (!profileData || !customerId) return;
 
       try {
-        
+        console.log("📸 Profile: Fetching additional profile data");
 
         const [imageResponse, termsResponse, statusLogResponse] =
           await Promise.all([
@@ -173,7 +209,7 @@ const Profile = () => {
             }),
           ]);
 
-        
+        console.log("✅ Profile: Additional data fetched successfully");
 
         setProfilePicture(imageResponse.data.profile_picture);
         setCroppedImage(imageResponse.data.document_picture_front);
@@ -187,8 +223,7 @@ const Profile = () => {
 
         setStatusHistory(statusLogResponse.data);
       } catch (err) {
-        
-        
+        console.error("❌ Profile: Failed to fetch additional data", err);
       }
     };
 
@@ -202,7 +237,7 @@ const Profile = () => {
     const fetchTabData = async () => {
       // Don't fetch ANY tab data for individual accounts
       if (isIndividualAccount) {
-        
+        console.log("👤 Profile: Individual account, skipping tab data fetch");
         return;
       }
 
@@ -210,7 +245,7 @@ const Profile = () => {
 
       try {
         setTabLoading(true);
-        
+        console.log(`📊 Profile: Fetching ${activeTab} data`);
 
         let response;
         let endpoint = "";
@@ -239,7 +274,7 @@ const Profile = () => {
             break;
           case "Owner Details":
             // Add your Owner Details API endpoint here if needed
-            
+            console.log("👑 Profile: Owner Details tab selected");
             break;
           case "Uploaded Documents":
             endpoint = `${API_URL}/customers/uploaded-documents/${uuid}`;
@@ -252,10 +287,9 @@ const Profile = () => {
             break;
         }
 
-        
+        console.log(`✅ Profile: ${activeTab} data fetched successfully`);
       } catch (err) {
-        
-        
+        console.error(`❌ Profile: Failed to fetch ${activeTab} data`, err);
       } finally {
         setTabLoading(false);
       }
@@ -267,6 +301,7 @@ const Profile = () => {
   // Initialize editableData when profileData changes
   useEffect(() => {
     if (profileData) {
+      console.log("🔄 Profile: Initializing editableData from profileData");
       setEditableData({
         first_name: profileData.first_name || "",
         last_name: profileData.last_name || "",
@@ -287,7 +322,7 @@ const Profile = () => {
       if (!bearertoken) return;
 
       try {
-        
+        console.log("👥 Profile: Fetching genders and nationalities");
 
         const [gendersRes, nationalitiesRes] = await Promise.all([
           axios.get(`${API_URL}/genders`, {
@@ -298,17 +333,39 @@ const Profile = () => {
           }),
         ]);
 
-        
+        console.log("✅ Profile: Genders and nationalities fetched");
         setGenders(gendersRes.data);
         setNationalities(nationalitiesRes.data);
       } catch (err) {
-        
-        
+        console.error("❌ Profile: Failed to fetch genders/nationalities", err);
       }
     };
 
     fetchData();
   }, [bearertoken]);
+
+  // Function to handle text color style
+  const getTextColorStyle = () => {
+    if (textColor && textColor.startsWith("text-")) {
+      return { className: textColor };
+    } else if (textColor && textColor.startsWith("#")) {
+      return { style: { color: textColor } };
+    }
+    return {};
+  };
+
+  // Function to handle header color style
+  const getHeaderColorStyle = () => {
+    if (headerColor && headerColor.startsWith("bg-")) {
+      return { className: headerColor };
+    } else if (headerColor && headerColor.startsWith("#")) {
+      return { style: { backgroundColor: headerColor } };
+    }
+    return { className: "bg-blue-600" };
+  };
+
+  const textColorProps = getTextColorStyle();
+  const headerColorProps = getHeaderColorStyle();
 
   const formatSSN = (value) => {
     if (!value) return "";
@@ -348,13 +405,13 @@ const Profile = () => {
 
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
-      
+      console.error("❌ Profile: Missing auth token or customer ID for save");
       return;
     }
 
     setSaveLoading(true);
     try {
-      
+      console.log("💾 Profile: Saving changes", editableData);
 
       const requestData = {
         customer_id: customerId,
@@ -378,7 +435,7 @@ const Profile = () => {
       );
 
       if (response.data.status === "success") {
-        
+        console.log("✅ Profile: Updated successfully");
 
         // Refresh profile data in Redux
         if (bearertoken) {
@@ -395,8 +452,7 @@ const Profile = () => {
         setIsModalOpen(true);
       }
     } catch (err) {
-      
-      
+      console.error("❌ Profile: Failed to update", err);
 
       setModalData({
         isOpen: true,
@@ -1106,6 +1162,7 @@ const Profile = () => {
     }
   };
 
+  // =============== LOADING STATE ===============
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1119,6 +1176,7 @@ const Profile = () => {
     );
   }
 
+  // =============== ERROR STATE ===============
   if (profileError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1139,6 +1197,7 @@ const Profile = () => {
     );
   }
 
+  // =============== NO DATA STATE ===============
   if (!profileData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1151,17 +1210,26 @@ const Profile = () => {
             Profile information is not available. Please try refreshing the
             page.
           </p>
-          <button
-            onClick={handleBackClick}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors block w-full"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={handleBackClick}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors block w-full"
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // =============== MAIN RENDER ===============
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {isModalOpen && (

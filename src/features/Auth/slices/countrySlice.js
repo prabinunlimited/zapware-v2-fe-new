@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 import {
   createAsyncThunk,
   createSlice,
@@ -2391,6 +2393,99 @@ export const fetchCountries = createAsyncThunk(
   }
 );
 
+// Fetch location by ZIP code using Zippopotam API
+export const fetchLocationByZip = createAsyncThunk(
+  "countries/fetchLocationByZip",
+  async ({ countryCode, zipCode }, { rejectWithValue }) => {
+    try {
+      // Clean and validate inputs
+      const cleanCountryCode = countryCode?.toUpperCase()?.trim() || '';
+      const cleanZipCode = zipCode?.trim()?.replace(/\s+/g, '') || '';
+      
+      if (!cleanCountryCode || !cleanZipCode) {
+        return rejectWithValue("Country code and ZIP code are required");
+      }
+      
+      // Try Zippopotam API first
+      let response;
+      try {
+        response = await axios.get(
+          `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
+          { timeout: 3000 }
+        );
+      } catch (zippoError) {
+        console.log('❌ Zippopotam API failed, trying fallback...');
+        
+        if (cleanCountryCode === 'GB') {
+          try {
+            const ukResponse = await axios.get(
+              `https://api.postcodes.io/postcodes/${cleanZipCode}`,
+              { timeout: 3000 }
+            );
+            
+            const ukData = ukResponse.data;
+            if (ukData.result) {
+              return {
+                state: ukData.result.region || '',
+                city: ukData.result.admin_district || ukData.result.admin_ward || '',
+                stateAbbr: '',
+                country: 'United Kingdom',
+                countryAbbr: 'GB',
+                postCode: ukData.result.postcode || cleanZipCode,
+                places: [],
+                zipCode: cleanZipCode,
+                originalZipCode: zipCode,
+                success: true,
+                source: 'postcodes.io',
+                rawData: ukData
+              };
+            }
+          } catch (ukError) {
+            console.log('❌ UK postcodes.io also failed');
+          }
+        }
+        
+        // If all APIs fail, check if it's a valid format but no data
+        throw zippoError;
+      }
+
+      // Zippopotam succeeded
+      const data = response.data;
+      
+      const place = data.places?.[0];
+      const state = place?.state || '';
+      const city = place?.["place name"] || '';
+      const stateAbbr = place?.["state abbreviation"] || '';
+      
+      return {
+        state,
+        city,
+        stateAbbr,
+        country: data.country || '',
+        countryAbbr: data["country abbreviation"] || '',
+        postCode: data["post code"] || cleanZipCode,
+        places: data.places || [],
+        zipCode: cleanZipCode,
+        originalZipCode: zipCode,
+        success: true,
+        source: 'zippopotam.us',
+        rawData: data
+      };
+      
+    } catch (error) {
+      console.error('❌ All location APIs failed:', error.message);
+      
+      return rejectWithValue({
+        message: "Invalid postal code format or no data available",
+        zipCode,
+        countryCode,
+        error: error.message,
+        suggestion: "Please check the postal code format or enter location manually"
+      });
+    }
+  }
+);
+
 // Async thunk for fetching a single country
 export const fetchCountry = createAsyncThunk(
   "countries/fetchCountry",
@@ -2413,6 +2508,11 @@ const initialState = {
   countries: countries, // Initialize with the static data
   selectedCountry: null,
   loading: false,
+  zipLookup: {
+    loading: false,
+    data: null,
+    error: null
+  },
   error: null,
   lastUpdated: null,
 };
@@ -2423,6 +2523,9 @@ const countriesSlice = createSlice({
   reducers: {
     setSelectedCountry: (state, action) => {
       state.selectedCountry = action.payload;
+      // Clear ZIP lookup data when country changes
+      state.zipLookup.data = null;
+      state.zipLookup.error = null;
     },
     clearError: (state) => {
       state.error = null;
@@ -2450,6 +2553,13 @@ const countriesSlice = createSlice({
       state.countries = countries;
     },
     resetCountriesState: () => initialState,
+    clearZipLookupData: (state) => {
+      state.zipLookup = {
+        loading: false,
+        data: null,
+        error: null
+      };
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -2481,6 +2591,21 @@ const countriesSlice = createSlice({
       .addCase(fetchCountry.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // ZIP Code Lookup
+      .addCase(fetchLocationByZip.pending, (state) => {
+        state.zipLookup.loading = true;
+        state.zipLookup.error = null;
+      })
+      .addCase(fetchLocationByZip.fulfilled, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.data = action.payload;
+        state.zipLookup.error = null;
+      })
+      .addCase(fetchLocationByZip.rejected, (state, action) => {
+        state.zipLookup.loading = false;
+        state.zipLookup.error = action.payload;
+        state.zipLookup.data = null;
       });
   },
 });
@@ -2494,6 +2619,7 @@ export const {
   removeCountry,
   refreshCountries,
   resetCountriesState,
+  clearZipLookupData,
 } = countriesSlice.actions;
 
 // Selectors
@@ -2503,6 +2629,8 @@ export const selectCountriesLoading = (state) => state.countries.loading;
 export const selectCountriesError = (state) => state.countries.error;
 export const selectCountriesLastUpdated = (state) =>
   state.countries.lastUpdated;
+export const selectZipLookup = (state) => state.countries.zipLookup;
+export const selectLocationLoading = (state) => state.countries.zipLookup.loading;
 
 // Additional useful selectors
 export const selectCountryById = (state, countryId) =>

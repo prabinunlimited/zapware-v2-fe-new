@@ -572,7 +572,6 @@ const Login = () => {
               generateOTP({
                 phone_code: values.phone_code,
                 mobile_number: values.mobile_number,
-                password: values.password,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
                     customer_type: values.customerType,
@@ -798,25 +797,8 @@ const Login = () => {
     }
 
     try {
-      // ✅ DEBUG: Log form values
-      console.log("🔍 handleGenerateOTP form values:", {
-        phone_code: values.phone_code,
-        mobile_number: values.mobile_number,
-        password: values.password
-          ? "***" + values.password.slice(-3)
-          : "NO PASSWORD",
-        passwordLength: values.password?.length,
-        showCustomerType,
-        customerType: values.customerType,
-      });
-
       // ✅ Check that ALL required fields are filled
       if (!values.phone_code || !values.mobile_number || !values.password) {
-        console.error("❌ Missing fields:", {
-          hasPhoneCode: !!values.phone_code,
-          hasMobileNumber: !!values.mobile_number,
-          hasPassword: !!values.password,
-        });
         dispatch(
           openModal({
             title: "Error",
@@ -837,11 +819,6 @@ const Login = () => {
             customer_type: values.customerType,
           }),
       };
-
-      console.log("🔍 handleGenerateOTP dispatching with payload:", {
-        ...payload,
-        password: "***" + values.password.slice(-3),
-      });
 
       const result = await dispatch(generateOTP(payload)).unwrap();
 
