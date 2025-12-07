@@ -15,17 +15,26 @@ import {
 
 // Import Redux actions and selectors
 import {
-  createBeneficiaryWithBanks,
-  fetchNationalities,
-  fetchBanksByCurrency,
-  fetchIdTypesByCurrency,
-  fetchCitiesByCountry,
-  fetchBankBranches,
-  clearError,
-  clearCreateError,
-  clearCreateSuccess,
+  selectCreateLoading,
+  selectCreateError,
+  selectCreateSuccess,
+  selectNationalities,
+  selectBanks,
+  selectIdTypes,
+  selectCities,
+  selectBankBranches,
+  selectDropdownLoading,
+  fetchNationalities, 
+  fetchBanksByCurrency, 
+  fetchIdTypesByCurrency, 
+  fetchCitiesByCountry, 
+  fetchBankBranches, 
+  createBeneficiaryWithBanks, 
+  clearCreateError, 
+  clearCreateSuccess, 
   resetCreateState,
 } from "../AddBeneficiary/addBeneficiarySlice";
+
 import {
   selectCountriesOptionsSafe,
   selectCountries,
@@ -83,15 +92,16 @@ const AddBeneficiary = () => {
     bankBranches,
     dropdownLoading,
   } = useSelector((state) => ({
-    createLoading: state.beneficiaries?.createLoading || false,
-    createError: state.beneficiaries?.createError || null,
-    createSuccess: state.beneficiaries?.createSuccess || false,
-    nationalities: state.beneficiaries?.nationalities || [],
-    banks: state.beneficiaries?.banks || {},
-    idTypes: state.beneficiaries?.idTypes || {},
-    cities: state.beneficiaries?.cities || {},
-    bankBranches: state.beneficiaries?.bankBranches || {},
-    dropdownLoading: state.beneficiaries?.dropdownLoading || false,
+    // These come from addBeneficiary slice (form creation)
+    createLoading: state.addBeneficiary?.createLoading || false,
+    createError: state.addBeneficiary?.createError || null,
+    createSuccess: state.addBeneficiary?.createSuccess || false,
+    nationalities: state.addBeneficiary?.nationalities || [],
+    banks: state.addBeneficiary?.banks || {},
+    idTypes: state.addBeneficiary?.idTypes || {},
+    cities: state.addBeneficiary?.cities || {},
+    bankBranches: state.addBeneficiary?.bankBranches || {},
+    dropdownLoading: state.addBeneficiary?.dropdownLoading || false,
   }));
 
   // Countries from Redux
