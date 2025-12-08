@@ -1,0 +1,1986 @@
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FaArrowRight,
+  FaArrowLeft,
+  FaInfoCircle,
+  FaExchangeAlt,
+  FaUniversity,
+  FaCopy,
+  FaCheck,
+  FaShieldAlt,
+  FaLock,
+  FaClock,
+  FaGlobe,
+  FaUser,
+  FaBuilding,
+  FaArrowUp,
+  FaIdCard,
+  FaArrowDown,
+  FaMoneyCheckAlt,
+} from "react-icons/fa";
+import { FiSend, FiCreditCard, FiCheck } from "react-icons/fi";
+import { HiCurrencyDollar, HiOutlineBanknotes } from "react-icons/hi2";
+import { MdAccountBalance, MdSecurity } from "react-icons/md";
+import { TbTransfer } from "react-icons/tb";
+import Select from "react-select";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
+import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
+
+// Redux actions (unchanged)
+import {
+  setStep,
+  setSendAmount,
+  setReceiveAmount,
+  setSendCurrency,
+  setReceiveCurrency,
+  setPaymentMethod,
+  setFormField,
+  resetForm,
+  fetchExchangeRate,
+  fetchBankAccounts,
+  fetchPayoutCurrencies,
+  submitTransaction,
+  fetchManualAccountDetails,
+} from "./slices/remittanceSlice";
+
+import { fetchAllStaticData } from "./slices/staticDataSlice";
+
+// Import beneficiary actions (unchanged)
+import {
+  setSelectedBeneficiary,
+  setSelectedBank,
+  fetchBeneficiaryBanks,
+  fetchBeneficiaryByCode,
+  selectBeneficiaryBanks, // ADD THIS
+  selectBanksLoading, // ADD THIS
+  selectBeneficiaries, // ADD THIS if needed
+} from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
+
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Import child components (unchanged)
+import ManualDeposit from "./subComponents/ManualDeposit";
+import BankTransfer from "./subComponents/BankTransfer";
+import CardPayment from "./subComponents/CardPayment";
+import Step2Details from "./steps/Step2Details";
+import Step3Confirm from "./steps/Step3Confirm";
+import Step4Success from "./steps/Step4Success";
+
+import { RingLoader, ClipLoader } from "react-spinners";
+
+const Remittance = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { customerId } = useParams();
+
+  // Select state from Redux store (unchanged)
+  const {
+    step,
+    formData,
+    currencies,
+    bankAccounts,
+    loading,
+    error,
+    transactionResult,
+    manualAccountDetails,
+  } = useSelector((state) => state.remittance);
+
+  const {
+    beneficiaries,
+    beneficiaryBanks,
+    selectedBeneficiary,
+    selectedBank,
+    loading: beneficiaryLoading,
+  } = useSelector((state) => state.beneficiaries);
+
+  const { purposes, incomeSources, occupations, paymentMethods } = useSelector(
+    (state) => state.remittanceStatic // ✅ This matches your store configuration
+  );
+
+  // Local state for UI
+  const [filePreview, setFilePreview] = useState(null);
+  const [beneficiaryCode, setBeneficiaryCode] = useState("");
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [exchangeRateData, setExchangeRateData] = useState(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [manualAccountError, setManualAccountError] = useState(null);
+  const [manualDetailsLoading, setManualDetailsLoading] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+
+  const [showOpenBanking, setShowOpenBanking] = useState(false);
+  const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
+
+  // Professional payment method options
+  const paymentOptions = useMemo(
+    () => [
+      {
+        value: "bank",
+        label: "Bank Transfer",
+        description: "Direct wire transfer",
+        icon: <MdAccountBalance className="w-6 h-6" />,
+        color: "from-blue-600 to-blue-700",
+        bgColor: "bg-gradient-to-br from-blue-50 to-blue-100",
+        borderColor: "border-blue-200",
+      },
+      {
+        value: "manual",
+        label: "Cash Deposit",
+        description: "Bank branch deposit",
+        icon: <HiOutlineBanknotes className="w-6 h-6" />,
+        color: "from-emerald-600 to-emerald-700",
+        bgColor: "bg-gradient-to-br from-emerald-50 to-emerald-100",
+        borderColor: "border-emerald-200",
+      },
+      {
+        value: "card",
+        label: "Card Payment",
+        description: "Secure card payment",
+        icon: <FiCreditCard className="w-6 h-6" />,
+        color: "from-purple-600 to-purple-700",
+        bgColor: "bg-gradient-to-br from-purple-50 to-purple-100",
+        borderColor: "border-purple-200",
+      },
+    ],
+    []
+  );
+
+  const purposeOptions = useMemo(
+    () =>
+      Array.isArray(purposes)
+        ? purposes.map((purpose) => ({
+            value: purpose.value,
+            label: purpose.label,
+            description: purpose.description,
+          }))
+        : [
+            { value: "family_support", label: "Family Support" },
+            { value: "education", label: "Education Fees" },
+            { value: "medical", label: "Medical Expenses" },
+            { value: "business", label: "Business Investment" },
+            { value: "savings", label: "Savings" },
+            { value: "other", label: "Other" },
+          ],
+    [purposes]
+  );
+
+  const incomeSourceOptions = useMemo(
+    () =>
+      Array.isArray(incomeSources)
+        ? incomeSources.map((source) => ({
+            value: source.value,
+            label: source.label,
+          }))
+        : [
+            { value: "salary", label: "Salary" },
+            { value: "business", label: "Business Income" },
+            { value: "investment", label: "Investment Income" },
+            { value: "gift", label: "Gift" },
+            { value: "inheritance", label: "Inheritance" },
+            { value: "other", label: "Other" },
+          ],
+    [incomeSources]
+  );
+
+  const relationOptions = useMemo(
+    () => [
+      { value: "brother", label: "Brother" },
+      { value: "sister", label: "Sister" },
+      { value: "father", label: "Father" },
+      { value: "mother", label: "Mother" },
+      { value: "spouse", label: "Spouse" },
+      { value: "friend", label: "Friend" },
+      { value: "other", label: "Other" },
+    ],
+    []
+  );
+
+  // Memoized currency options (unchanged)
+  const sendCurrencyOptions = useMemo(
+    () =>
+      (bankAccounts || []).map((account) => ({
+        value: account.currency_code,
+        label: account.currency_code,
+        bank_id: account.id,
+        icon: account.icon,
+      })),
+    [bankAccounts]
+  );
+
+  const receiveCurrencyOptions = useMemo(
+    () => currencies?.receiveOptions || [],
+    [currencies?.receiveOptions]
+  );
+
+  // Copy to clipboard function
+  const copyToClipboard = useCallback((text, fieldName) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  }, []);
+
+  // All existing hooks and functions remain unchanged
+  // (Initialize data, fetch exchange rate, manual account details, handlers, etc.)
+
+  // Initialize data (unchanged)
+  useEffect(() => {
+    const initializeData = async () => {
+      if (customerId) {
+        try {
+          await Promise.all([
+            dispatch(fetchBankAccounts(customerId)),
+            dispatch(fetchPayoutCurrencies()),
+            dispatch(fetchAllStaticData()), // Add this line
+          ]);
+        } catch (error) {
+          console.error("Failed to initialize data:", error);
+        } finally {
+          setInitialLoading(false);
+        }
+      } else {
+        setInitialLoading(false);
+      }
+    };
+
+    initializeData();
+  }, [customerId, dispatch]);
+
+  // Reset exchange rate data when currencies change (unchanged)
+  useEffect(() => {
+    if (formData.sendCurrency?.value || formData.receiveCurrency?.value) {
+      setExchangeRateData(null);
+      setExchangeRateError(null);
+      if (formData.sendAmount) {
+        dispatch(setReceiveAmount(""));
+      }
+    }
+  }, [
+    formData.sendCurrency,
+    formData.receiveCurrency,
+    formData.sendAmount,
+    dispatch,
+  ]);
+
+  // Fetch exchange rate with cleanup (unchanged)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRate = async () => {
+      const sendCurrencyValue = formData.sendCurrency?.value;
+      const receiveCurrencyValue = formData.receiveCurrency?.value;
+      const sendAmountValue = parseFloat(formData.sendAmount);
+
+      if (sendCurrencyValue && receiveCurrencyValue && sendAmountValue > 0) {
+        const payload = {
+          fromCurrency: sendCurrencyValue,
+          toCurrency: receiveCurrencyValue,
+          amount: sendAmountValue,
+          bankId: formData.sendCurrency?.bank_id,
+          customerId,
+        };
+
+        if (isMounted) {
+          setExchangeRateLoading(true);
+          setExchangeRateError(null);
+        }
+
+        try {
+          const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+          if (isMounted && response && response.converted_value) {
+            dispatch(setReceiveAmount(response.converted_value));
+            setExchangeRateData(response);
+            setExchangeRateError(null);
+          } else if (isMounted) {
+            setExchangeRateError("Unable to fetch exchange rate");
+            setExchangeRateData(null);
+            dispatch(setReceiveAmount(""));
+          }
+        } catch (error) {
+          if (isMounted) {
+            console.error("Failed to fetch exchange rate:", error);
+            setExchangeRateError("Unable to fetch exchange rate");
+            setExchangeRateData(null);
+            dispatch(setReceiveAmount(""));
+          }
+        } finally {
+          if (isMounted) {
+            setExchangeRateLoading(false);
+          }
+        }
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      fetchRate();
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(debounceTimer);
+    };
+  }, [
+    formData.sendCurrency?.value,
+    formData.receiveCurrency?.value,
+    formData.sendAmount,
+    customerId,
+    dispatch,
+  ]);
+
+  // Fetch manual account details with cleanup (unchanged)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDetails = async () => {
+      if (
+        formData.paymentMethod === "manual" &&
+        formData.sendCurrency?.bank_id &&
+        formData.sendCurrency?.value
+      ) {
+        if (isMounted) {
+          setManualDetailsLoading(true);
+          setManualAccountError(null);
+        }
+
+        try {
+          const result = await dispatch(
+            fetchManualAccountDetails({
+              bankId: formData.sendCurrency.bank_id,
+              currencyCode: formData.sendCurrency.value,
+              amount: formData.sendAmount || "0",
+              customerId: parseInt(customerId),
+            })
+          ).unwrap();
+
+          if (isMounted) {
+            if (
+              result?.status &&
+              result.status !== 200 &&
+              result.status !== 201
+            ) {
+              setManualAccountError(
+                result.message || "Bank details unavailable"
+              );
+            } else if (result && Object.keys(result).length > 0) {
+              setManualAccountError(null);
+            } else {
+              setManualAccountError("Bank details unavailable");
+            }
+          }
+        } catch (error) {
+          if (isMounted) {
+            let errorMessage = "Bank details unavailable";
+
+            if (error?.data?.message) {
+              errorMessage = error.data.message;
+            } else if (error?.message) {
+              errorMessage = error.message;
+            } else if (error?.statusText) {
+              errorMessage = error.statusText;
+            } else if (typeof error === "string") {
+              errorMessage = error;
+            } else if (error?.data) {
+              errorMessage = JSON.stringify(error.data);
+            }
+
+            setManualAccountError(errorMessage);
+          }
+        } finally {
+          if (isMounted) {
+            setManualDetailsLoading(false);
+          }
+        }
+      } else if (isMounted) {
+        setManualAccountError(null);
+      }
+    };
+
+    fetchDetails();
+  }, [
+    formData.paymentMethod,
+    formData.sendCurrency?.bank_id,
+    formData.sendCurrency?.value,
+    formData.sendAmount,
+    customerId,
+    dispatch,
+  ]);
+
+  // All other handlers remain unchanged
+  const handleSendAmountChange = useCallback(
+    (value) => {
+      dispatch(setSendAmount(value));
+      if (value && exchangeRateData?.fxRate) {
+        const receiveAmount = (
+          parseFloat(value) * exchangeRateData.fxRate
+        ).toFixed(2);
+        dispatch(setReceiveAmount(receiveAmount));
+      } else {
+        dispatch(setReceiveAmount(""));
+      }
+    },
+    [dispatch, exchangeRateData]
+  );
+
+  const handleSendCurrencyChange = useCallback(
+    (option) => {
+      dispatch(setSendCurrency(option));
+      setExchangeRateData(null);
+      setExchangeRateError(null);
+    },
+    [dispatch]
+  );
+
+  const handleReceiveCurrencyChange = useCallback(
+    (option) => {
+      dispatch(setReceiveCurrency(option));
+      setExchangeRateData(null);
+      setExchangeRateError(null);
+    },
+    [dispatch]
+  );
+
+  const handlePaymentMethodChange = useCallback(
+    (method) => {
+      dispatch(setPaymentMethod(method));
+    },
+    [dispatch]
+  );
+
+  const handleFieldChange = useCallback(
+    (field, value) => {
+      dispatch(setFormField({ field, value }));
+    },
+    [dispatch]
+  );
+
+  const handleFileUpload = useCallback(
+    (file) => {
+      dispatch(setFormField({ field: "document", value: file }));
+      if (file && file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (e) => setFilePreview(e.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+    },
+    [dispatch]
+  );
+
+  const handleBeneficiarySelect = useCallback(
+    (beneficiary) => {
+      dispatch(setSelectedBeneficiary(beneficiary));
+      if (beneficiary?.id) {
+        dispatch(fetchBeneficiaryBanks(beneficiary.id));
+      }
+    },
+    [dispatch]
+  );
+
+  const handleBankSelect = useCallback(
+    (bank) => {
+      dispatch(setSelectedBank(bank));
+    },
+    [dispatch]
+  );
+
+  const handleBeneficiaryCodeLookup = useCallback(async () => {
+    if (!beneficiaryCode.trim()) return;
+    setIsLoadingCode(true);
+    try {
+      const result = await dispatch(
+        fetchBeneficiaryByCode(beneficiaryCode)
+      ).unwrap();
+      if (result.data) {
+        handleBeneficiarySelect(result.data);
+      }
+    } catch (error) {
+      console.error("Error fetching beneficiary:", error);
+    } finally {
+      setIsLoadingCode(false);
+    }
+  }, [beneficiaryCode, dispatch, handleBeneficiarySelect]);
+
+  const handleNextStep = useCallback(() => {
+    if (step === 1) {
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        alert("Minimum transfer amount is $5.00");
+        return;
+      }
+      if (!formData.sendCurrency || !formData.receiveCurrency) {
+        alert("Please select currencies");
+        return;
+      }
+      if (!exchangeRateData?.fxRate) {
+        alert(
+          "Exchange rate is not available. Please check your currency selection."
+        );
+        return;
+      }
+
+      if (formData.paymentMethod === "manual") {
+        if (!manualAccountDetails || manualAccountError) {
+          let errorMessage = "Bank details are not available for cash deposit.";
+
+          if (manualAccountError) {
+            if (typeof manualAccountError === "string") {
+              errorMessage = manualAccountError;
+            } else if (manualAccountError?.message) {
+              errorMessage = manualAccountError.message;
+            } else if (manualAccountError?.data?.message) {
+              errorMessage = manualAccountError.data.message;
+            } else if (manualAccountError?.status === 404) {
+              errorMessage =
+                "Bank details not found for the selected currency.";
+            }
+          }
+
+          alert(
+            `${errorMessage} Please choose a different payment method or currency.`
+          );
+          return;
+        }
+      }
+      dispatch(setStep(2));
+    } else if (step === 2) {
+      if (!selectedBeneficiary) {
+        alert("Please select a beneficiary");
+        return;
+      }
+      if (!formData.purpose || !formData.incomeSource) {
+        alert("Please fill in purpose and income source");
+        return;
+      }
+      if (formData.paymentMethod === "manual" && !formData.document) {
+        alert("Please upload payment proof for cash deposit");
+        return;
+      }
+      if (formData.paymentMethod === "bank" && !selectedBank) {
+        alert("Please select a bank account for the beneficiary");
+        return;
+      }
+      dispatch(setStep(3));
+    } else if (step === 3) {
+      if (!formData.agreeToTerms) {
+        alert("Please agree to the terms and conditions");
+        return;
+      }
+      handleSubmitTransaction();
+    }
+  }, [
+    step,
+    formData,
+    exchangeRateData,
+    manualAccountDetails,
+    manualAccountError,
+    selectedBeneficiary,
+    selectedBank,
+    dispatch,
+  ]);
+
+  const handlePreviousStep = useCallback(() => {
+    if (step > 1) {
+      dispatch(setStep(step - 1));
+    }
+  }, [step, dispatch]);
+
+  const isOpenBankingAvailable = useCallback(() => {
+    const openBankingCurrencies = ["EUR", "GBP", "DKK"];
+    const sendCurrency = formData.sendCurrency?.value;
+    return (
+      step === 3 &&
+      formData.paymentMethod === "bank" &&
+      sendCurrency &&
+      openBankingCurrencies.includes(sendCurrency)
+    );
+  }, [step, formData.paymentMethod, formData.sendCurrency]);
+
+  const handleInitiateOpenBanking = useCallback(() => {
+    console.log("🚀 User clicked Open Banking button!");
+    if (!formData.agreeToTerms) {
+      toast.error("Please agree to terms first!");
+      return;
+    }
+    if (!selectedBeneficiary) {
+      toast.error("Please select a beneficiary!");
+      return;
+    }
+    if (!selectedBank) {
+      toast.error("Please select a bank!");
+      return;
+    }
+    if (!formData.sendAmount || parseFloat(formData.sendAmount) <= 0) {
+      toast.error("Please enter an amount!");
+      return;
+    }
+    setOpenBankingProcessing(true);
+    setShowOpenBanking(true);
+    console.log("✅ Everything is ready for Open Banking!");
+  }, [
+    formData.agreeToTerms,
+    selectedBeneficiary,
+    selectedBank,
+    formData.sendAmount,
+  ]);
+
+  const handleOpenBankingClose = useCallback(() => {
+    setShowOpenBanking(false);
+    setOpenBankingProcessing(false);
+  }, []);
+
+  const handleOpenBankingSuccess = useCallback(
+    (result) => {
+      console.log("🎉 Open Banking payment worked!", result);
+      setShowOpenBanking(false);
+      setOpenBankingProcessing(false);
+      toast.success("Open Banking payment started successfully!");
+
+      dispatch(setStep(4));
+    },
+    [dispatch]
+  );
+
+  const handleSubmitTransaction = useCallback(() => {
+    // Debug: Check what we have
+    console.log("🔍 Debug - Current state:");
+    console.log("formData.sendCurrency:", formData.sendCurrency);
+    console.log("formData.receiveCurrency:", formData.receiveCurrency);
+    console.log("selectedBeneficiary:", selectedBeneficiary);
+    console.log("selectedBank:", selectedBank);
+
+    const transactionData = {
+      // REQUIRED: Currency fields
+      from_currency: formData.sendCurrency?.value,
+      to_currency: formData.receiveCurrency?.value,
+
+      // REQUIRED: Amount fields
+      send_amount: parseFloat(formData.sendAmount),
+      receive_amount: parseFloat(formData.receiveAmount),
+      exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
+
+      // REQUIRED: Customer
+      customer_id: parseInt(customerId),
+
+      // REQUIRED: Payment
+      payment_method: formData.paymentMethod,
+      conversion_id: exchangeRateData?.conversion_id,
+
+      // REQUIRED: Beneficiary (ID as string)
+      beneficiary: selectedBeneficiary?.id?.toString(), // ← MUST BE STRING
+      beneficiary_bank_id: selectedBank?.id, // ← MUST HAVE THIS
+
+      // Optional but good to include
+      beneficiary_name: selectedBeneficiary?.name,
+      beneficiary_bank_name: selectedBank?.bank_name,
+      beneficiary_account_number:
+        selectedBank?.account_number || selectedBank?.bank_acc_no,
+
+      // REQUIRED: is_remit flag
+      is_remit: "Y",
+
+      // Compliance fields
+      purpose: formData.purpose?.value || formData.purpose,
+      income_source: formData.incomeSource?.value || formData.incomeSource,
+      occupation: formData.occupation || "",
+      relation: formData.relation?.value || formData.relation || "",
+      payout_method: formData.payout_method?.value || formData.paymentMethod,
+
+      // Document
+      document: formData.document,
+      agree_to_terms: formData.agreeToTerms ? "1" : "0",
+
+      // Additional
+      rails: "Local",
+    };
+
+    // Remove undefined/null fields
+    const cleanData = {};
+    Object.keys(transactionData).forEach((key) => {
+      if (transactionData[key] !== null && transactionData[key] !== undefined) {
+        cleanData[key] = transactionData[key];
+      }
+    });
+
+    console.log("📤 Sending transaction data:", cleanData);
+    console.log("📤 Missing required fields check:");
+    console.log(
+      "- from_currency:",
+      !!cleanData.from_currency,
+      cleanData.from_currency
+    );
+    console.log(
+      "- to_currency:",
+      !!cleanData.to_currency,
+      cleanData.to_currency
+    );
+    console.log(
+      "- beneficiary:",
+      !!cleanData.beneficiary,
+      cleanData.beneficiary
+    );
+    console.log(
+      "- beneficiary_bank_id:",
+      !!cleanData.beneficiary_bank_id,
+      cleanData.beneficiary_bank_id
+    );
+    console.log("- is_remit:", !!cleanData.is_remit, cleanData.is_remit);
+
+    // Validate required fields
+    const required = [
+      "from_currency",
+      "to_currency",
+      "beneficiary",
+      "beneficiary_bank_id",
+    ];
+    const missing = required.filter((field) => !cleanData[field]);
+
+    if (missing.length > 0) {
+      alert(`Missing required fields: ${missing.join(", ")}`);
+      return;
+    }
+
+    dispatch(submitTransaction(cleanData));
+  }, [
+    customerId,
+    formData,
+    exchangeRateData,
+    selectedBeneficiary,
+    selectedBank,
+    dispatch,
+  ]);
+
+  const handleReset = useCallback(() => {
+    dispatch(resetForm());
+  }, [dispatch]);
+
+  const handleGoBack = useCallback(() => {
+    navigate(-1);
+  }, [navigate]);
+
+  const handleDownloadReceipt = useCallback(() => {
+    console.log("Downloading receipt", transactionResult);
+  }, [transactionResult]);
+
+  // Professional select styles
+  const selectStyles = useMemo(
+    () => ({
+      control: (base, state) => ({
+        ...base,
+        minHeight: "52px",
+        borderRadius: "10px",
+        borderColor: state.isFocused ? "#2563eb" : "#e5e7eb",
+        borderWidth: "1px",
+        fontSize: "0.95rem",
+        backgroundColor: "#ffffff",
+        boxShadow: state.isFocused
+          ? "0 0 0 3px rgba(37, 99, 235, 0.1)"
+          : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        "&:hover": { borderColor: "#2563eb" },
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      }),
+      option: (base, { isSelected, isFocused }) => ({
+        ...base,
+        fontSize: "0.95rem",
+        padding: "12px 16px",
+        backgroundColor: isSelected
+          ? "#eff6ff"
+          : isFocused
+          ? "#f8fafc"
+          : "white",
+        color: isSelected ? "#1e40af" : "#374151",
+        fontWeight: isSelected ? "600" : "500",
+        "&:hover": {
+          backgroundColor: "#f8fafc",
+        },
+        transition: "all 0.2s ease",
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: "10px",
+        fontSize: "0.95rem",
+        border: "1px solid #e5e7eb",
+        boxShadow:
+          "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+        overflow: "hidden",
+        zIndex: 9999,
+      }),
+      placeholder: (base) => ({
+        ...base,
+        color: "#9ca3af",
+        fontWeight: "500",
+      }),
+      singleValue: (base) => ({
+        ...base,
+        color: "#1f2937",
+        fontWeight: "600",
+      }),
+      dropdownIndicator: (base) => ({
+        ...base,
+        color: "#6b7280",
+        padding: "8px",
+        "&:hover": {
+          color: "#374151",
+        },
+      }),
+      indicatorSeparator: (base) => ({
+        ...base,
+        backgroundColor: "#e5e7eb",
+      }),
+    }),
+    []
+  );
+
+  const stepVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, x: -20 },
+      visible: { opacity: 1, x: 0 },
+      exit: { opacity: 0, x: 20 },
+    }),
+    []
+  );
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="text-center space-y-6">
+          <div className="relative">
+            <div className="relative">
+              <RingLoader color="#2563eb" size={60} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-8 h-8 bg-white rounded-full shadow-md"></div>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-lg font-semibold text-gray-900">
+              Initializing Transfer System
+            </p>
+            <p className="text-sm text-gray-600 max-w-sm">
+              Loading your accounts and available currencies...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const totalToPay = parseFloat(formData.sendAmount || 0);
+  const fee = 0;
+
+  // Professional Progress Steps
+  const ProgressSteps = () => {
+    const steps = [
+      { number: 1, label: "Transfer Details", icon: <TbTransfer /> },
+      { number: 2, label: "Recipient", icon: <FaUser /> },
+      { number: 3, label: "Review", icon: <MdSecurity /> },
+      { number: 4, label: "Confirmation", icon: <FiCheck /> },
+    ];
+
+    return (
+      <div className="mb-10">
+        <div className="flex items-center justify-between relative">
+          {/* Background line */}
+          <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 -translate-y-1/2"></div>
+          {/* Progress line */}
+          <div
+            className="absolute top-1/2 left-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400 -translate-y-1/2 transition-all duration-500 ease-out"
+            style={{ width: `${((step - 1) / 3) * 100}%` }}
+          ></div>
+
+          {steps.map((stepItem, index) => (
+            <div key={stepItem.number} className="relative z-10">
+              <div
+                className={`flex flex-col items-center transition-all duration-300 ${
+                  step >= stepItem.number ? "scale-105" : ""
+                }`}
+              >
+                {/* Step circle */}
+                <div
+                  className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold transition-all duration-300 shadow-lg ${
+                    step > stepItem.number
+                      ? "bg-gradient-to-br from-green-500 to-emerald-400 text-white shadow-green-200"
+                      : step === stepItem.number
+                      ? "bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-blue-200"
+                      : "bg-white text-gray-400 border-2 border-gray-300 shadow-sm"
+                  }`}
+                >
+                  {step > stepItem.number ? (
+                    <FiCheck className="w-6 h-6" />
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      {step === stepItem.number
+                        ? stepItem.icon
+                        : stepItem.number}
+                    </span>
+                  )}
+                </div>
+                {/* Step label */}
+                <div className="mt-3 text-center">
+                  <span
+                    className={`text-sm font-semibold ${
+                      step >= stepItem.number
+                        ? "text-gray-900"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {stepItem.label}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Get payment method component
+  const getPaymentMethodComponent = () => {
+    switch (formData.paymentMethod) {
+      case "manual":
+        return (
+          <ManualDeposit
+            formData={formData}
+            manualAccountDetails={manualAccountDetails}
+            manualAccountError={manualAccountError}
+            manualDetailsLoading={manualDetailsLoading}
+            onFileUpload={handleFileUpload}
+            filePreview={filePreview}
+            selectedBeneficiary={selectedBeneficiary}
+            selectedBank={selectedBank}
+            beneficiaryBanks={beneficiaryBanks}
+            beneficiaryLoading={beneficiaryLoading}
+            onBeneficiarySelect={handleBeneficiarySelect}
+            onBankSelect={handleBankSelect}
+            customerId={customerId}
+            beneficiaryCode={beneficiaryCode}
+            setBeneficiaryCode={setBeneficiaryCode}
+            isLoadingCode={isLoadingCode}
+            showCodeInput={showCodeInput}
+            setShowCodeInput={setShowCodeInput}
+            handleBeneficiaryCodeLookup={handleBeneficiaryCodeLookup}
+            purposeOptions={purposeOptions} // ADD THIS LINE
+            incomeSourceOptions={incomeSourceOptions} // ADD THIS LINE
+            relationOptions={relationOptions} // ADD THIS LINE
+            paymentOptions={paymentOptions} // ADD THIS LINE
+            onPaymentMethodChange={handlePaymentMethodChange} // ADD THIS LINE
+            onFieldChange={handleFieldChange} // ADD THIS LINE
+          />
+        );
+      case "bank":
+        return (
+          <BankTransfer
+            formData={formData} // ADD THIS
+            selectedBeneficiary={selectedBeneficiary}
+            selectedBank={selectedBank}
+            beneficiaryBanks={beneficiaryBanks}
+            beneficiaryLoading={beneficiaryLoading}
+            onBeneficiarySelect={handleBeneficiarySelect} // ADD THIS
+            onBankSelect={handleBankSelect}
+            onFieldChange={handleFieldChange} // ADD THIS
+            purposeOptions={purposeOptions} // ADD THIS
+            incomeSourceOptions={incomeSourceOptions} // ADD THIS
+            relationOptions={relationOptions} // ADD THIS
+            paymentOptions={paymentOptions} // ADD THIS
+            onFileUpload={handleFileUpload} // ADD THIS IF NEEDED
+            selectedCurrency={formData.sendCurrency?.value}
+          />
+        );
+      case "card":
+        return (
+          <CardPayment formData={formData} onFieldChange={handleFieldChange} />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Render step based on current step
+  const renderStep = () => {
+    switch (step) {
+      case 1:
+        return (
+          <div className="space-y-8">
+            {/* Transfer Details Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      International Transfer
+                    </h2>
+                    <p className="text-blue-100 mt-1">
+                      Send money securely worldwide
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+                    <FaGlobe className="w-8 h-8 text-white" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column - Send Amount */}
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          You Send
+                        </h3>
+                        <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                          Your Account
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.sendAmount || ""}
+                          onChange={(e) =>
+                            handleSendAmountChange(e.target.value)
+                          }
+                          placeholder="0.00"
+                          className="w-full px-6 py-5 text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
+                          inputMode="decimal"
+                        />
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <div className="w-36">
+                            <Select
+                              options={sendCurrencyOptions}
+                              value={formData.sendCurrency}
+                              onChange={handleSendCurrencyChange}
+                              placeholder="Currency"
+                              styles={selectStyles}
+                              isSearchable
+                              className="text-sm"
+                              classNamePrefix="select"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Security Badge */}
+                    <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-lg shadow-sm">
+                          <FaLock className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            Secure Transfer
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Bank-level encryption
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Receive Amount */}
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          Recipient Receives
+                        </h3>
+                        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                          Estimated
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.receiveAmount || ""}
+                          placeholder="0.00"
+                          className={`w-full px-6 py-5 text-3xl font-bold rounded-xl focus:outline-none transition-all duration-200 ${
+                            exchangeRateError || !exchangeRateData?.fxRate
+                              ? "bg-gray-100 border-2 border-gray-200 text-gray-900"
+                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900"
+                          }`}
+                          readOnly
+                          disabled
+                        />
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <div className="w-36">
+                            <Select
+                              options={receiveCurrencyOptions}
+                              value={formData.receiveCurrency}
+                              onChange={handleReceiveCurrencyChange}
+                              placeholder="Currency"
+                              styles={selectStyles}
+                              isSearchable
+                              className="text-sm"
+                              classNamePrefix="select"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Exchange Rate Display */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-lg shadow-sm">
+                            <FaExchangeAlt className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              Exchange Rate
+                            </p>
+                            {exchangeRateLoading && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <ClipLoader color="#3b82f6" size={14} />
+                                <span className="text-xs text-gray-600">
+                                  Fetching live rate...
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {exchangeRateData?.fxRate ? (
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-900">
+                              1 {formData.sendCurrency?.value} ={" "}
+                              {exchangeRateData.fxRate.toFixed(4)}{" "}
+                              {formData.receiveCurrency?.value}
+                            </p>
+                            <div className="flex items-center gap-1 justify-end mt-1">
+                              <FaClock className="text-emerald-500 text-xs" />
+                              <p className="text-xs text-emerald-600 font-medium">
+                                Live market rate
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">
+                            Select currencies
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Method Section */}
+                <div className="mt-10 pt-8 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        Payment Method
+                      </h3>
+                      <p className="text-gray-600 mt-1">
+                        Choose how you'd like to fund this transfer
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-emerald-600">
+                      <FaShieldAlt className="w-5 h-5" />
+                      <span className="text-sm font-semibold">
+                        Secure Payment
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {paymentOptions.map((option) => {
+                      const isSelected =
+                        formData.paymentMethod === option.value;
+                      return (
+                        <motion.button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            handlePaymentMethodChange(option.value)
+                          }
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={`p-5 rounded-xl border-2 transition-all duration-300 text-left ${
+                            isSelected
+                              ? `border-blue-500 shadow-lg shadow-blue-100`
+                              : "border-gray-200 hover:border-gray-300 hover:shadow-md"
+                          } ${option.bgColor}`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div
+                              className={`p-3 rounded-lg ${
+                                isSelected
+                                  ? "bg-white shadow-sm"
+                                  : "bg-white/80"
+                              }`}
+                            >
+                              {React.cloneElement(option.icon, {
+                                className: `w-7 h-7 ${
+                                  isSelected ? "text-blue-600" : "text-gray-600"
+                                }`,
+                              })}
+                            </div>
+                            <div className="flex-1">
+                              <h4
+                                className={`font-bold text-lg mb-1 ${
+                                  isSelected ? "text-gray-900" : "text-gray-800"
+                                }`}
+                              >
+                                {option.label}
+                              </h4>
+                              <p className="text-sm text-gray-600 mb-3">
+                                {option.description}
+                              </p>
+                              {isSelected && (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                  <span className="text-xs font-semibold text-blue-600">
+                                    Selected
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Fee Summary */}
+                {exchangeRateData?.fxRate && (
+                  <div className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      Transfer Summary
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                        <span className="text-gray-700">Amount to send</span>
+                        <span className="font-semibold text-gray-900">
+                          {formData.sendCurrency?.value}{" "}
+                          {parseFloat(formData.sendAmount || 0).toLocaleString(
+                            undefined,
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                        <span className="text-gray-700">Transfer fee</span>
+                        <span className="font-semibold text-emerald-600">
+                          FREE
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-3">
+                        <span className="text-lg font-bold text-gray-900">
+                          Total to pay
+                        </span>
+                        <span className="text-xl font-bold text-blue-600">
+                          {formData.sendCurrency?.value} {totalToPay.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Enhanced Manual Deposit Section */}
+            {formData.paymentMethod === "manual" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+              >
+                {/* Header with Gradient */}
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+                        <FaMoneyCheckAlt className="w-8 h-8 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-white">
+                          Cash Deposit Instructions
+                        </h3>
+                        <p className="text-emerald-100 mt-1">
+                          Deposit funds at any bank branch
+                        </p>
+                      </div>
+                    </div>
+                    {manualDetailsLoading && (
+                      <div className="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
+                        <ClipLoader color="#ffffff" size={16} />
+                        <span className="text-sm text-white">
+                          Loading details...
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {manualAccountError ? (
+                  <div className="p-8">
+                    <div className="text-center py-10">
+                      <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FaBuilding className="w-8 h-8 text-red-500" />
+                      </div>
+                      <h4 className="text-lg font-bold text-gray-900 mb-2">
+                        Bank Details Unavailable
+                      </h4>
+                      <p className="text-gray-600 max-w-md mx-auto">
+                        We're unable to retrieve bank details for the selected
+                        currency at this time.
+                      </p>
+                      <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                        <button
+                          onClick={() => handlePaymentMethodChange("bank")}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        >
+                          Switch to Bank Transfer
+                        </button>
+                        <button
+                          onClick={() => navigate(-1)}
+                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                        >
+                          Go Back
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : manualAccountDetails ? (
+                  <div className="p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Primary Bank Details */}
+                      <div className="space-y-6">
+                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-xl border border-emerald-200">
+                          <h4 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                            <FaUniversity className="text-emerald-600" />
+                            Primary Bank Details
+                          </h4>
+
+                          {/* Account Number - Prominent */}
+                          {manualAccountDetails.account_number && (
+                            <div className="mb-6">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-700">
+                                  Account Number
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      manualAccountDetails.account_number,
+                                      "account_number"
+                                    )
+                                  }
+                                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                  {copiedField === "account_number" ? (
+                                    <>
+                                      <FaCheck className="w-3 h-3 text-emerald-500" />
+                                      Copied
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FaCopy className="w-3 h-3 text-gray-500" />
+                                      Copy
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <div className="p-4 bg-white rounded-lg border border-gray-200">
+                                <p className="text-2xl font-bold text-gray-900 font-mono tracking-wider">
+                                  {manualAccountDetails.account_number}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Account Name */}
+                          {manualAccountDetails.account_name && (
+                            <div className="mb-4">
+                              <span className="text-sm font-medium text-gray-700">
+                                Account Name
+                              </span>
+                              <div className="mt-1 p-3 bg-white rounded-lg border border-gray-200">
+                                <p className="text-lg font-semibold text-gray-900">
+                                  {manualAccountDetails.account_name}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bank Name */}
+                          {manualAccountDetails.bank_name && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">
+                                Bank Name
+                              </span>
+                              <div className="mt-1 p-3 bg-white rounded-lg border border-gray-200">
+                                <p className="text-lg font-semibold text-gray-900">
+                                  {manualAccountDetails.bank_name}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Additional Information Toggle */}
+                        <button
+                          onClick={() =>
+                            setShowAdvancedDetails(!showAdvancedDetails)
+                          }
+                          className="w-full p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-900">
+                              Additional Bank Information
+                            </span>
+                            {showAdvancedDetails ? (
+                              <FaArrowUp className="w-5 h-5 text-gray-500" />
+                            ) : (
+                              <FaArrowDown className="w-5 h-5 text-gray-500" />
+                            )}
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Instructions and Details */}
+                      <div className="space-y-6">
+                        {/* Deposit Instructions */}
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+                          <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <FaInfoCircle className="text-blue-600" />
+                            Deposit Instructions
+                          </h4>
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-bold text-blue-600">
+                                  1
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  Visit any branch of{" "}
+                                  {manualAccountDetails.bank_name || "the bank"}
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  Bring your identification document
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-bold text-blue-600">
+                                  2
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  Deposit the exact amount
+                                </p>
+                                <p className="text-lg font-bold text-emerald-600 mt-1">
+                                  {formData.sendCurrency?.value}{" "}
+                                  {parseFloat(formData.sendAmount || 0).toFixed(
+                                    2
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-bold text-blue-600">
+                                  3
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  Keep your deposit receipt
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  You'll need it for verification in the next
+                                  step
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Important Notes */}
+                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl border border-amber-200">
+                          <h4 className="text-lg font-bold text-gray-900 mb-3">
+                            Important Notes
+                          </h4>
+                          <ul className="space-y-2 text-sm text-gray-700">
+                            <li className="flex items-start gap-2">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>
+                                Deposit must be made within 24 hours of
+                                initiating this transfer
+                              </span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>
+                                Use the exact account number provided above
+                              </span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>
+                                Funds will be processed within 1-2 business days
+                                after deposit confirmation
+                              </span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>
+                                For assistance, contact our support team at
+                                support@example.com
+                              </span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Advanced Details (Collapsible) */}
+                    {showAdvancedDetails && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="mt-8 pt-8 border-t border-gray-200"
+                      >
+                        <h4 className="text-lg font-bold text-gray-900 mb-6">
+                          Advanced Bank Details
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {[
+                            {
+                              label: "Bank Code",
+                              value: manualAccountDetails.bank_code,
+                              icon: <FaIdCard />,
+                            },
+                            {
+                              label: "SWIFT Code",
+                              value: manualAccountDetails.swift_code,
+                              icon: <FaGlobe />,
+                            },
+                            {
+                              label: "Branch Name",
+                              value: manualAccountDetails.branch_name,
+                              icon: <FaBuilding />,
+                            },
+                            {
+                              label: "Branch Code",
+                              value: manualAccountDetails.branch_code,
+                              icon: <FaIdCard />,
+                            },
+                            {
+                              label: "IBAN",
+                              value: manualAccountDetails.iban,
+                              icon: <FaGlobe />,
+                            },
+                            {
+                              label: "Sort Code",
+                              value: manualAccountDetails.sort_code,
+                              icon: <FaIdCard />,
+                            },
+                            {
+                              label: "Routing Number",
+                              value: manualAccountDetails.routing_number,
+                              icon: <FaIdCard />,
+                            },
+                          ].map(
+                            (item) =>
+                              item.value && (
+                                <div
+                                  key={item.label}
+                                  className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                                >
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <div className="p-2 bg-white rounded-lg">
+                                      {React.cloneElement(item.icon, {
+                                        className: "w-4 h-4 text-gray-600",
+                                      })}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-700">
+                                      {item.label}
+                                    </span>
+                                  </div>
+                                  <p className="font-mono text-gray-900 font-semibold">
+                                    {item.value}
+                                  </p>
+                                </div>
+                              )
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-8">
+                    <div className="text-center py-10">
+                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FaUniversity className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h4 className="text-lg font-bold text-gray-900 mb-2">
+                        Enter Transfer Amount
+                      </h4>
+                      <p className="text-gray-600">
+                        Please enter the amount you wish to send to view deposit
+                        details
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Info Panel */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm">
+                  <FaInfoCircle className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                    Need Assistance?
+                  </h4>
+                  <p className="text-gray-700">
+                    Our support team is available 24/7 to assist you with your
+                    transfer. Minimum transfer amount is{" "}
+                    {formData.sendCurrency?.value || "USD"} 5.00. All transfers
+                    are secured with bank-level encryption and processed through
+                    regulated financial institutions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 2:
+        return (
+          <Step2Details
+            formData={formData}
+            paymentOptions={paymentOptions}
+            beneficiaryBanks={beneficiaryBanks}
+            selectedBeneficiary={selectedBeneficiary}
+            selectedBank={selectedBank}
+            onPaymentMethodChange={handlePaymentMethodChange}
+            onFieldChange={handleFieldChange}
+            onFileUpload={handleFileUpload}
+            filePreview={filePreview}
+            onBeneficiarySelect={handleBeneficiarySelect}
+            onBankSelect={handleBankSelect}
+            purposeOptions={purposeOptions}
+            incomeSourceOptions={incomeSourceOptions}
+            relationOptions={relationOptions}
+            exchangeRateData={exchangeRateData}
+            fee={fee}
+            totalToPay={totalToPay}
+            paymentMethodComponent={getPaymentMethodComponent()}
+            manualAccountDetails={manualAccountDetails}
+            manualAccountError={manualAccountError}
+            manualDetailsLoading={manualDetailsLoading}
+            beneficiaryLoading={beneficiaryLoading}
+          />
+        );
+
+      case 3:
+        return (
+          <Step3Confirm
+            formData={formData}
+            selectedBeneficiary={selectedBeneficiary}
+            selectedBank={selectedBank}
+            manualAccountDetails={manualAccountDetails}
+            exchangeRateData={exchangeRateData}
+            onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
+            onSubmit={handleSubmitTransaction}
+            loading={loading}
+            paymentMethod={formData.paymentMethod}
+          />
+        );
+
+      case 4:
+        return (
+          <Step4Success
+            transactionResult={transactionResult}
+            formData={formData}
+            selectedBeneficiary={selectedBeneficiary}
+            manualAccountDetails={manualAccountDetails}
+            exchangeRateData={exchangeRateData}
+            onReset={handleReset}
+            onDownloadReceipt={handleDownloadReceipt}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Professional Progress Steps */}
+        <ProgressSteps />
+
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+        />
+
+        {/* Step Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={stepVariants}
+            transition={{ duration: 0.3 }}
+            className="mb-8"
+          >
+            {renderStep()}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Professional Error Display */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-6 rounded-r-xl shadow-sm mb-6"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <FaInfoCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-red-800">
+                  Transaction Error
+                </h4>
+                <p className="text-red-700 mt-1">
+                  {typeof error === "string"
+                    ? error
+                    : error?.message ||
+                      "An error occurred during the transaction"}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Professional Navigation Buttons */}
+        {/* Professional Navigation Buttons */}
+        {step < 4 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex flex-col sm:flex-row gap-4"
+          >
+            {/* Back/Cancel button - UNCHANGED */}
+            {step > 1 ? (
+              <button
+                onClick={handlePreviousStep}
+                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm"
+              >
+                <FaArrowLeft className="w-5 h-5" />
+                Back
+              </button>
+            ) : (
+              <button
+                onClick={handleGoBack}
+                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm"
+              >
+                <FaArrowLeft className="w-5 h-5" />
+                Cancel Transfer
+              </button>
+            )}
+
+            {/* STEP 1 & 2: Continue to Next Step */}
+            {step < 3 && (
+              <button
+                onClick={handleNextStep}
+                disabled={
+                  (step === 1 &&
+                    (!formData.sendAmount ||
+                      parseFloat(formData.sendAmount) < 5 ||
+                      !exchangeRateData?.fxRate ||
+                      (formData.paymentMethod === "manual" &&
+                        (!manualAccountDetails || manualAccountError)))) ||
+                  (step === 2 &&
+                    (!selectedBeneficiary ||
+                      !formData.purpose ||
+                      !formData.incomeSource ||
+                      (formData.paymentMethod === "manual" &&
+                        !formData.document) ||
+                      (formData.paymentMethod === "bank" && !selectedBank))) ||
+                  loading ||
+                  exchangeRateLoading ||
+                  manualDetailsLoading ||
+                  beneficiaryLoading ||
+                  openBankingProcessing
+                }
+                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed grayscale"
+              >
+                {loading ? (
+                  <>
+                    <ClipLoader color="#ffffff" size={18} />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Continue to Next Step</span>
+                    <FaArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* STEP 3: Different buttons based on payment method */}
+            {step === 3 && (
+              <>
+                {/* BANK TRANSFER: Continue to Next Step (for Open Banking) */}
+                {formData.paymentMethod === "bank" && (
+                  <button
+                    onClick={handleInitiateOpenBanking}
+                    disabled={
+                      !formData.agreeToTerms ||
+                      loading ||
+                      openBankingProcessing ||
+                      !selectedBeneficiary ||
+                      !selectedBank ||
+                      !formData.sendAmount ||
+                      parseFloat(formData.sendAmount) <= 0
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {openBankingProcessing ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Initializing Open Banking...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Continue to Next Step</span>
+                        <FaArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* MANUAL DEPOSIT: Confirm & Send Transfer */}
+                {formData.paymentMethod === "manual" && (
+                  <button
+                    onClick={handleSubmitTransaction}
+                    disabled={
+                      !formData.agreeToTerms || loading || openBankingProcessing
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-emerald-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Processing Transaction...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiSend className="w-5 h-5" />
+                        <span>Confirm & Send Transfer</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* CARD PAYMENT: Confirm & Pay */}
+                {formData.paymentMethod === "card" && (
+                  <button
+                    onClick={handleSubmitTransaction}
+                    disabled={
+                      !formData.agreeToTerms || loading || openBankingProcessing
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-purple-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <ClipLoader color="#ffffff" size={18} />
+                        <span>Processing Transaction...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiCreditCard className="w-5 h-5" />
+                        <span>Confirm & Pay</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+      </main>
+
+      {showOpenBanking && (
+        <PaymentInitiation
+          selectedCurrency={formData.sendCurrency?.value} // ✅ FIXED: Use formData.sendCurrency
+          amount={formData?.sendAmount || ""} // ✅ Also fixed: should be sendAmount, not amount
+          purpose={formData?.purpose?.value || ""}
+          paymentMethod="bank_transfer"
+          selectedBeneficiaryBank={selectedBank}
+          selectedBeneficiary={selectedBeneficiary}
+          customerId={
+            customerId || localStorage.getItem("authcustomer_id") // ✅ Remove paramCustomerId
+          }
+          showPaymentInitiation={showOpenBanking} // ✅ Should be showOpenBanking, not showPaymentInitiation
+          transactionType="remittance"
+          onClose={() => {
+            setShowOpenBanking(false); // ✅ Close the Open Banking modal
+            setOpenBankingProcessing(false);
+          }}
+          onSuccess={(result) => {
+            console.log("Open Banking remittance success:", result);
+            if (result.success) {
+              toast.success(
+                "Remittance initiated successfully via Open Banking!"
+              );
+              setShowOpenBanking(false);
+              setOpenBankingProcessing(false);
+              // Optionally navigate to success page
+              dispatch(setStep(4));
+            } else {
+              toast.error(result.error || "Open Banking remittance failed");
+              setOpenBankingProcessing(false);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Remittance;

@@ -116,7 +116,7 @@ const teamMemberSlice = createSlice({
         } else if (action.payload && action.payload.roles) {
           state.roles = action.payload.roles;
         } else {
-          console.warn("Unexpected roles response format:", action.payload);
+          
           state.roles = []; // Default to empty array
         }
 

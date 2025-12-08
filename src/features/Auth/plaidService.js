@@ -14,7 +14,7 @@ export const initiatePlaidLink = async (customerId, hostname) => {
       request_id: response.data.request_id
     };
   } catch (error) {
-    console.error('Plaid initiation error:', error);
+    
     return {
       success: false,
       error: error.response?.data?.message || 'Failed to connect with Plaid'
@@ -32,7 +32,7 @@ export const exchangePlaidToken = async (publicToken) => {
       data: response.data
     };
   } catch (error) {
-    console.error('Plaid token exchange error:', error);
+    
     return {
       success: false,
       error: error.response?.data?.message || 'Failed to exchange Plaid token'

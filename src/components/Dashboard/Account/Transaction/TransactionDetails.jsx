@@ -8,20 +8,18 @@ import { useTransactionData } from "../../../../hooks/transactionHooks";
 
 const TransactionDetails = React.memo(
   ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
-    // ✅ USE SUCCESS-BASED TRANSACTION HOOK
-    const { 
-      transactions, 
-      loading, 
-      error, 
-      fetchTransactions, 
+    // ✅ USE TRANSACTION HOOK
+    const {
+      transactions,
+      loading,
+      error,
+      fetchTransactions,
       forceRefresh,
-      hasSuccessfulData 
     } = useTransactionData();
 
     // Local state for pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
-    const [initialFetchDone, setInitialFetchDone] = useState(false);
     const [transactionCompletionNotified, setTransactionCompletionNotified] = useState(false);
 
     // Memoized transaction data
@@ -33,58 +31,45 @@ const TransactionDetails = React.memo(
     }, [transactions, currentPage, itemsPerPage]);
 
     const totalPages = useMemo(
-      () => Math.ceil((Array.isArray(transactions) ? transactions.length : 0) / itemsPerPage),
+      () =>
+        Math.ceil(
+          (Array.isArray(transactions) ? transactions.length : 0) / itemsPerPage
+        ),
       [transactions.length, itemsPerPage]
     );
 
-    // ✅ FIXED: SINGLE FETCH EFFECT WITH SUCCESS-BASED STOPPING
+    // ✅ FIXED: ALWAYS FETCH WHEN CURRENCY CHANGES - NO STOPPING LOGIC
     useEffect(() => {
       if (!customerId || !selectedCurrencyCode || selectedCurrencyCode === "all") {
-        console.log("⏹️ Missing customerId or currency, skipping transaction fetch");
+        console.log("⏸️ Skipping transaction fetch - missing params");
         return;
       }
 
-      // ✅ STOP IF ALREADY HAVE SUCCESSFUL DATA
-      if (hasSuccessfulData(customerId, selectedCurrencyCode)) {
-        console.log("✅ Already have transaction data, skipping fetch");
-        return;
-      }
-
-      // ✅ PREVENT DUPLICATE INITIAL FETCH
-      if (initialFetchDone) {
-        console.log("⏸️ Initial fetch already completed, skipping...");
-        return;
-      }
-
-      console.log("🔄 Initial transaction fetch triggered", {
-        customerId,
-        selectedCurrencyCode,
-        hasSuccessfulData: hasSuccessfulData(customerId, selectedCurrencyCode)
-      });
-
-      setInitialFetchDone(true);
+      console.log("🔄 FETCHING TRANSACTIONS FOR CURRENCY:", selectedCurrencyCode);
+      
+      // ✅ ALWAYS FETCH - NO SUCCESS-BASED STOPPING
       fetchTransactions(customerId, selectedCurrencyCode);
 
-    }, [customerId, selectedCurrencyCode, fetchTransactions, hasSuccessfulData, initialFetchDone]);
+    }, [customerId, selectedCurrencyCode, fetchTransactions]);
 
-    // ✅ FIXED: Handle transaction completion WITHOUT triggering account refresh
+    // ✅ FIXED: Reset pagination when currency changes
     useEffect(() => {
-      // Only notify completion once when we have transactions and not loading
-      if (onTransactionComplete && 
-          transactions.length > 0 && 
-          !loading && 
-          !transactionCompletionNotified) {
-        console.log("✅ Transaction completion callback triggered (notification only)");
-        setTransactionCompletionNotified(true);
-        // Just notify completion without triggering refresh
-        onTransactionComplete(false); // Pass false to indicate no refresh needed
-      }
-    }, [transactions, onTransactionComplete, loading, transactionCompletionNotified]);
-
-    // Reset completion notification when currency changes
-    useEffect(() => {
+      setCurrentPage(1);
       setTransactionCompletionNotified(false);
     }, [selectedCurrencyCode]);
+
+    // ✅ FIXED: Handle transaction completion
+    useEffect(() => {
+      if (
+        onTransactionComplete &&
+        transactions.length > 0 &&
+        !loading &&
+        !transactionCompletionNotified
+      ) {
+        setTransactionCompletionNotified(true);
+        onTransactionComplete(false);
+      }
+    }, [transactions, onTransactionComplete, loading, transactionCompletionNotified]);
 
     // Memoized utility functions
     const formatDate = useCallback((dateString) => {
@@ -157,9 +142,8 @@ const TransactionDetails = React.memo(
     const handleManualRefresh = useCallback(() => {
       if (!customerId || !selectedCurrencyCode) return;
       
-      console.log("🔄 Manual transaction refresh triggered");
-      setInitialFetchDone(false); // Reset to allow new fetch
-      setTransactionCompletionNotified(false); // Reset completion notification
+      console.log("🔄 MANUAL REFRESH FOR CURRENCY:", selectedCurrencyCode);
+      setTransactionCompletionNotified(false);
       forceRefresh(customerId, selectedCurrencyCode);
     }, [customerId, selectedCurrencyCode, forceRefresh]);
 
@@ -182,6 +166,17 @@ const TransactionDetails = React.memo(
       return pages;
     }, [currentPage, totalPages]);
 
+    // Debug effect to track currency changes
+    useEffect(() => {
+      console.log('🔍 TransactionDetails Debug:', {
+        selectedCurrencyCode,
+        transactionsCount: transactions.length,
+        filteredCount: currentTransactions.length,
+        customerId,
+        loading
+      });
+    }, [selectedCurrencyCode, transactions, currentTransactions, customerId, loading]);
+
     if (loading) {
       return (
         <div className="flex justify-center items-center h-32">
@@ -202,7 +197,7 @@ const TransactionDetails = React.memo(
           <div className="text-red-500 text-sm mb-4">
             {error.message || "Please try again later"}
           </div>
-          <button 
+          <button
             onClick={handleManualRefresh}
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm"
           >
@@ -250,7 +245,7 @@ const TransactionDetails = React.memo(
                 ? `No transactions found for ${selectedCurrencyCode} currency.`
                 : "No transactions available for the selected period."}
             </p>
-            <button 
+            <button
               onClick={handleManualRefresh}
               className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
             >

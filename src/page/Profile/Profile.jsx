@@ -67,14 +67,15 @@ const Profile = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
+
   const authtoken = localStorage.getItem("authtoken");
   const uuid = localStorage.getItem("UUID");
   const countries = JSON.parse(localStorage.getItem("allcountries") || "[]");
   const bearertoken = localStorage.getItem("bearertoken");
 
   const config = usePartnerConfig(authtoken);
-  const headerColor = config?.header_color || localStorage.getItem("header_color");
+  const headerColor =
+    config?.header_color || localStorage.getItem("header_color");
   const textColor = config?.text_color || localStorage.getItem("text_color");
 
   // Redux selectors - using data already fetched by Header
@@ -85,28 +86,16 @@ const Profile = () => {
   const chargesLoading = useSelector(selectChargesLoading);
   const chargesError = useSelector(selectChargesError);
 
-  // Function to handle text color style
-  const getTextColorStyle = () => {
-    if (textColor && textColor.startsWith("text-")) {
-      return { className: textColor };
-    } else if (textColor && textColor.startsWith("#")) {
-      return { style: { color: textColor } };
-    }
-    return {};
-  };
-
-  // Function to handle header color style
-  const getHeaderColorStyle = () => {
-    if (headerColor && headerColor.startsWith("bg-")) {
-      return { className: headerColor };
-    } else if (headerColor && headerColor.startsWith("#")) {
-      return { style: { backgroundColor: headerColor } };
-    }
-    return { className: "bg-blue-600" };
-  };
-
-  const textColorProps = getTextColorStyle();
-  const headerColorProps = getHeaderColorStyle();
+  // Debug logging
+  console.log("🔍 Profile Debug:", {
+    profileData: profileData,
+    profileLoading: profileLoading,
+    profileError: profileError,
+    customerId: customerId,
+    hasBearerToken: !!bearertoken,
+    hasProfileFirstName: profileData?.first_name,
+    hasLocalStorageFirstName: localStorage.getItem("firstName")
+  });
 
   // Local state for editing and additional data
   const [saveLoading, setSaveLoading] = useState(false);
@@ -151,32 +140,77 @@ const Profile = () => {
     }
   }, [isModalOpen]);
 
+  // =============== FIX: Fetch profile data if missing in Redux ===============
+  useEffect(() => {
+    const fetchProfileIfNeeded = async () => {
+      // Check if we have necessary tokens and customerId
+      if (!bearertoken || !customerId) {
+        console.log("❌ Profile: Missing token or customerId", {
+          bearertoken: !!bearertoken,
+          customerId: customerId
+        });
+        return;
+      }
+
+      // If we already have data, no need to fetch
+      if (profileData) {
+        console.log("✅ Profile: Already have data in Redux", {
+          firstName: profileData.first_name,
+          lastName: profileData.last_name
+        });
+        return;
+      }
+
+      // If we're already loading, wait
+      if (profileLoading) {
+        console.log("⏳ Profile: Already loading from Redux");
+        return;
+      }
+
+      // If there's an error, don't try to fetch
+      if (profileError) {
+        console.log("❌ Profile: Error in Redux", profileError);
+        return;
+      }
+
+      // No data and not loading/error - fetch the profile
+      console.log("🚀 Profile: Fetching profile data (missing in Redux)");
+      
+      try {
+        await dispatch(fetchUserProfile({ customerId, bearertoken }));
+        console.log("✅ Profile: Successfully dispatched fetch");
+      } catch (error) {
+        console.error("❌ Profile: Failed to fetch profile", error);
+      }
+    };
+
+    fetchProfileIfNeeded();
+  }, [profileData, profileLoading, profileError, customerId, bearertoken, dispatch]);
+  // =============== END FIX ===============
+
   // Fetch additional profile data that's not in Redux
   useEffect(() => {
     const fetchAdditionalProfileData = async () => {
       if (!profileData || !customerId) return;
 
       try {
-        console.log("🔍 Fetching additional profile data for customer:", customerId);
-        
-        const [
-          imageResponse,
-          termsResponse,
-          statusLogResponse,
-        ] = await Promise.all([
-          axios.get(`${API_URL}/kyc/${customerId}`, {
-            headers: { Authorization: `Bearer ${bearertoken}` },
-          }),
-          axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
-            headers: { Authorization: `Bearer ${authtoken}` },
-          }),
-          axios.get(`${API_URL}/account-status-log/${customerId}`, {
-            headers: { Authorization: `Bearer ${authtoken}` },
-          }),
-        ]);
+        console.log("📸 Profile: Fetching additional profile data");
 
-        console.log("✅ Additional profile data fetched successfully");
-        
+        const [imageResponse, termsResponse, statusLogResponse] =
+          await Promise.all([
+            axios.get(`${API_URL}/kyc/${customerId}`, {
+              headers: { Authorization: `Bearer ${bearertoken}` },
+            }),
+            axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
+              headers: { Authorization: `Bearer ${authtoken}` },
+            }),
+            axios.get(`${API_URL}/account-status-log/${customerId}`, {
+              headers: { Authorization: `Bearer ${authtoken}` },
+            }),
+          ]);
+
+        console.log("✅ Profile: Additional data fetched successfully");
+
         setProfilePicture(imageResponse.data.profile_picture);
         setCroppedImage(imageResponse.data.document_picture_front);
 
@@ -189,12 +223,7 @@ const Profile = () => {
 
         setStatusHistory(statusLogResponse.data);
       } catch (err) {
-        console.error("❌ Failed to fetch additional profile data:", err);
-        console.error("Error details:", {
-          url: err.config?.url,
-          status: err.response?.status,
-          message: err.message
-        });
+        console.error("❌ Profile: Failed to fetch additional data", err);
       }
     };
 
@@ -203,70 +232,76 @@ const Profile = () => {
     }
   }, [profileData, customerId, authtoken, bearertoken]);
 
-  // Fetch tab data when tab changes
+  // Fetch tab data when tab changes - ONLY for non-individual accounts
   useEffect(() => {
     const fetchTabData = async () => {
+      // Don't fetch ANY tab data for individual accounts
+      if (isIndividualAccount) {
+        console.log("👤 Profile: Individual account, skipping tab data fetch");
+        return;
+      }
+
       if (!uuid || !authtoken) return;
 
       try {
         setTabLoading(true);
-        console.log(`🔍 Fetching ${activeTab} data for UUID:`, uuid);
-        
+        console.log(`📊 Profile: Fetching ${activeTab} data`);
+
         let response;
         let endpoint = "";
 
         switch (activeTab) {
           case "Business Information":
             endpoint = `${API_URL}/customers/business-information/${uuid}`;
-            response = await axios.get(endpoint, { 
-              headers: { Authorization: `Bearer ${authtoken}` } 
+            response = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${authtoken}` },
             });
             setBusinessInfo(response.data);
             break;
           case "Responsible Person":
             endpoint = `${API_URL}/customers/responsible-person/${uuid}`;
-            response = await axios.get(endpoint, { 
-              headers: { Authorization: `Bearer ${authtoken}` } 
+            response = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${authtoken}` },
             });
             setResponsiblePerson(response.data);
             break;
           case "Office Controllers":
             endpoint = `${API_URL}/customers/office-controllers/${uuid}`;
-            response = await axios.get(endpoint, { 
-              headers: { Authorization: `Bearer ${authtoken}` } 
+            response = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${authtoken}` },
             });
             setOfficeControllers(response.data);
             break;
+          case "Owner Details":
+            // Add your Owner Details API endpoint here if needed
+            console.log("👑 Profile: Owner Details tab selected");
+            break;
           case "Uploaded Documents":
             endpoint = `${API_URL}/customers/uploaded-documents/${uuid}`;
-            response = await axios.get(endpoint, { 
-              headers: { Authorization: `Bearer ${authtoken}` } 
+            response = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${authtoken}` },
             });
             setUploadedDocuments(response.data);
             break;
           default:
             break;
         }
-        
-        console.log(`✅ ${activeTab} data fetched successfully from:`, endpoint);
+
+        console.log(`✅ Profile: ${activeTab} data fetched successfully`);
       } catch (err) {
-        console.error(`❌ Failed to fetch ${activeTab} data:`, err);
-        console.error("Error details:", {
-          url: err.config?.url,
-          status: err.response?.status,
-          message: err.message
-        });
+        console.error(`❌ Profile: Failed to fetch ${activeTab} data`, err);
       } finally {
         setTabLoading(false);
       }
     };
 
     fetchTabData();
-  }, [activeTab, uuid, authtoken]);
+  }, [activeTab, uuid, authtoken, isIndividualAccount]);
 
   // Initialize editableData when profileData changes
   useEffect(() => {
     if (profileData) {
+      console.log("🔄 Profile: Initializing editableData from profileData");
       setEditableData({
         first_name: profileData.first_name || "",
         last_name: profileData.last_name || "",
@@ -287,8 +322,8 @@ const Profile = () => {
       if (!bearertoken) return;
 
       try {
-        console.log("🔍 Fetching genders and nationalities");
-        
+        console.log("👥 Profile: Fetching genders and nationalities");
+
         const [gendersRes, nationalitiesRes] = await Promise.all([
           axios.get(`${API_URL}/genders`, {
             headers: { Authorization: `Bearer ${bearertoken}` },
@@ -297,22 +332,40 @@ const Profile = () => {
             headers: { Authorization: `Bearer ${bearertoken}` },
           }),
         ]);
-        
-        console.log("✅ Genders and nationalities fetched successfully");
+
+        console.log("✅ Profile: Genders and nationalities fetched");
         setGenders(gendersRes.data);
         setNationalities(nationalitiesRes.data);
       } catch (err) {
-        console.error("❌ Error fetching genders and nationalities:", err);
-        console.error("Error details:", {
-          url: err.config?.url,
-          status: err.response?.status,
-          message: err.message
-        });
+        console.error("❌ Profile: Failed to fetch genders/nationalities", err);
       }
     };
 
     fetchData();
   }, [bearertoken]);
+
+  // Function to handle text color style
+  const getTextColorStyle = () => {
+    if (textColor && textColor.startsWith("text-")) {
+      return { className: textColor };
+    } else if (textColor && textColor.startsWith("#")) {
+      return { style: { color: textColor } };
+    }
+    return {};
+  };
+
+  // Function to handle header color style
+  const getHeaderColorStyle = () => {
+    if (headerColor && headerColor.startsWith("bg-")) {
+      return { className: headerColor };
+    } else if (headerColor && headerColor.startsWith("#")) {
+      return { style: { backgroundColor: headerColor } };
+    }
+    return { className: "bg-blue-600" };
+  };
+
+  const textColorProps = getTextColorStyle();
+  const headerColorProps = getHeaderColorStyle();
 
   const formatSSN = (value) => {
     if (!value) return "";
@@ -352,19 +405,21 @@ const Profile = () => {
 
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
-      console.error("❌ Missing authentication for profile update");
+      console.error("❌ Profile: Missing auth token or customer ID for save");
       return;
     }
 
     setSaveLoading(true);
     try {
-      console.log("🔍 Updating profile for customer:", customerId);
-      
+      console.log("💾 Profile: Saving changes", editableData);
+
       const requestData = {
         customer_id: customerId,
         first_name: editableData.first_name,
         last_name: editableData.last_name,
-        gender: editableData.gender_id ? parseInt(editableData.gender_id, 10) : null,
+        gender: editableData.gender_id
+          ? parseInt(editableData.gender_id, 10)
+          : null,
         dob: editableData.dob,
         country: editableData.country_id,
         nationality: editableData.nationality_id,
@@ -380,13 +435,13 @@ const Profile = () => {
       );
 
       if (response.data.status === "success") {
-        console.log("✅ Profile updated successfully");
-        
+        console.log("✅ Profile: Updated successfully");
+
         // Refresh profile data in Redux
         if (bearertoken) {
           dispatch(fetchUserProfile({ customerId, bearertoken }));
         }
-        
+
         setIsEditing(false);
         setModalData({
           isOpen: true,
@@ -397,13 +452,8 @@ const Profile = () => {
         setIsModalOpen(true);
       }
     } catch (err) {
-      console.error("❌ Failed to update profile:", err);
-      console.error("Error details:", {
-        url: err.config?.url,
-        status: err.response?.status,
-        message: err.message
-      });
-      
+      console.error("❌ Profile: Failed to update", err);
+
       setModalData({
         isOpen: true,
         title: "Error",
@@ -467,11 +517,11 @@ const Profile = () => {
   // Calculate charges statistics
   const getChargesStats = useMemo(() => {
     const total = charges.length;
-    const withFxCharges = charges.filter(c => {
+    const withFxCharges = charges.filter((c) => {
       const value = parseFloat(c.fx_charges);
       return !isNaN(value) && value > 0;
     }).length;
-    const withMaintenance = charges.filter(c => {
+    const withMaintenance = charges.filter((c) => {
       const value = parseFloat(c.monthly_maintenance_charge);
       return !isNaN(value) && value > 0;
     }).length;
@@ -484,30 +534,44 @@ const Profile = () => {
   // Use profile data from Redux with fallbacks
   const displayProfileData = profileData || defaultProfileData;
 
-  // Define tabs based on account type
+  // Define tabs based on account type - HIDE specified tabs for individual accounts
   const getAvailableTabs = () => {
     if (isIndividualAccount) {
-      return [
-        "Business Information",
-        "Responsible Person", 
-        "Office Controllers",
-        "Owner Details",
-        "Uploaded Documents"
-      ];
+      // For individual accounts, only show Owner Details and Uploaded Documents
+      return [];
     }
-    // For non-individual accounts, you can define different tabs here if needed
+    // For non-individual accounts, show all tabs
     return [
       "Business Information",
       "Responsible Person",
-      "Office Controllers", 
+      "Office Controllers",
       "Owner Details",
-      "Uploaded Documents"
+      "Uploaded Documents",
     ];
   };
 
   const availableTabs = getAvailableTabs();
 
   const renderTabContent = () => {
+    // If no tabs are available (individual account), show appropriate message
+    if (availableTabs.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaUser className="w-12 h-12 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-700 mb-2">
+            Individual Account
+          </h3>
+          <p className="text-gray-500 max-w-md mx-auto">
+            Business information sections are only available for institution
+            accounts. Your individual account profile contains all the necessary
+            information in the personal details section.
+          </p>
+        </div>
+      );
+    }
+
     if (tabLoading) {
       return (
         <div className="flex justify-center items-center h-64">
@@ -577,7 +641,8 @@ const Profile = () => {
                       },
                       {
                         label: "State",
-                        value: businessInfo.data.registered_address_street_state,
+                        value:
+                          businessInfo.data.registered_address_street_state,
                       },
                       {
                         label: "ZIP",
@@ -585,7 +650,9 @@ const Profile = () => {
                       },
                       {
                         label: "Country",
-                        value: businessInfo.data.registered_address_street_country_name,
+                        value:
+                          businessInfo.data
+                            .registered_address_street_country_name,
                       },
                     ],
                   },
@@ -595,7 +662,9 @@ const Profile = () => {
                       {
                         label: "Phone",
                         value: businessInfo.data.company_phone_number
-                          ? `${businessInfo.data.companyphone_countrycode || ""} ${businessInfo.data.company_phone_number}`
+                          ? `${
+                              businessInfo.data.companyphone_countrycode || ""
+                            } ${businessInfo.data.company_phone_number}`
                           : null,
                       },
                       { label: "EIN", value: businessInfo.data.ein },
@@ -758,7 +827,10 @@ const Profile = () => {
                       {
                         label: "Phone",
                         value: responsiblePerson.data.mobile_number
-                          ? `${responsiblePerson.data.mobile_number_country_code || ""} ${responsiblePerson.data.mobile_number}`
+                          ? `${
+                              responsiblePerson.data
+                                .mobile_number_country_code || ""
+                            } ${responsiblePerson.data.mobile_number}`
                           : null,
                       },
                       {
@@ -961,7 +1033,8 @@ const Profile = () => {
                       Owner Name:
                     </span>
                     <span className="text-sm font-medium text-gray-800">
-                      {displayProfileData.first_name} {displayProfileData.last_name}
+                      {displayProfileData.first_name}{" "}
+                      {displayProfileData.last_name}
                     </span>
                   </div>
                   <div className="flex justify-between items-start">
@@ -1081,10 +1154,15 @@ const Profile = () => {
         );
 
       default:
-        return null;
+        return (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Select a tab to view details</p>
+          </div>
+        );
     }
   };
 
+  // =============== LOADING STATE ===============
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1098,6 +1176,7 @@ const Profile = () => {
     );
   }
 
+  // =============== ERROR STATE ===============
   if (profileError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1118,6 +1197,7 @@ const Profile = () => {
     );
   }
 
+  // =============== NO DATA STATE ===============
   if (!profileData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1127,19 +1207,29 @@ const Profile = () => {
             No Profile Data
           </h2>
           <p className="text-gray-600 mb-4">
-            Profile information is not available. Please try refreshing the page.
+            Profile information is not available. Please try refreshing the
+            page.
           </p>
-          <button
-            onClick={handleBackClick}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors block w-full"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={handleBackClick}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors block w-full"
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // =============== MAIN RENDER ===============
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {isModalOpen && (
@@ -1326,8 +1416,9 @@ const Profile = () => {
                       </select>
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
-                        {genders.find((g) => g.id === displayProfileData.gender_id)
-                          ?.name || "N/A"}
+                        {genders.find(
+                          (g) => g.id === displayProfileData.gender_id
+                        )?.name || "N/A"}
                       </span>
                     )}
                   </div>
@@ -1467,15 +1558,17 @@ const Profile = () => {
                         SSN
                       </label>
                       <span className="text-sm font-medium text-gray-800 block py-2">
-                        {displayProfileData?.ssn ? formatSSN(displayProfileData.ssn) : "N/A"}
+                        {displayProfileData?.ssn
+                          ? formatSSN(displayProfileData.ssn)
+                          : "N/A"}
                       </span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Tabs Section - Only show for individual accounts */}
-              {isIndividualAccount && (
+              {/* Tabs Section - Show different tabs based on account type */}
+              {availableTabs.length > 0 && (
                 <div className="bg-white rounded-xl shadow-md p-6">
                   <div className="border-b border-gray-200">
                     <div className="flex overflow-x-auto scrollbar-hide -mb-px">

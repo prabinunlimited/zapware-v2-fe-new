@@ -1,14 +1,16 @@
+// src/features/Auth/Login/Login.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faExternalLinkAlt,
+} from "@fortawesome/free-solid-svg-icons";
 import { AiOutlineClose } from "react-icons/ai";
-import { faTimes } from "@fortawesome/free-solid-svg-icons";
-import { faExternalLinkAlt } from "@fortawesome/free-solid-svg-icons";
-
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
 import { RingLoader } from "react-spinners";
@@ -24,12 +26,8 @@ import {
   generateOTP,
   verifyPasscode,
   verifyOTP,
-  initiatePlaidFlow,
   downloadManual,
 } from "../../Auth/authThunk";
-
-// Services
-import { tokenService, initializePartnerToken } from "../../../services/authService";
 
 // Selectors
 import {
@@ -50,6 +48,7 @@ import {
   selectIsVerifyingOtp,
   selectRequiresKycVerification,
   selectShowCustomerType,
+  selectIsRedirecting,
 } from "../../Auth/slices/authSlice";
 
 // Actions
@@ -68,6 +67,7 @@ import {
   setOwnerDetails,
   setAuthState,
   setShowCustomerType,
+  setRedirecting,
 } from "../../Auth/slices/authSlice";
 
 // Other selectors
@@ -76,8 +76,6 @@ import {
   selectSelectedCountry,
   selectCountriesLoading,
 } from "../../Auth/slices/countrySlice";
-
-import { selectPartnerConfig } from "../../Auth/slices/partnerSlice";
 
 // UI Slice imports
 import {
@@ -97,12 +95,15 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Add state for iframe management
+  // ✅ Double submission prevention
+  const isSubmittingRef = useRef(false);
+  const kycHandlingRef = useRef(false);
+
+  // State for iframe management
   const [showPlaidIframe, setShowPlaidIframe] = useState(false);
   const [plaidUrl, setPlaidUrl] = useState("");
   const [showPlaidModal, setShowPlaidModal] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(true);
-  const [tokenInitialized, setTokenInitialized] = useState(false);
   const iframeRef = useRef(null);
 
   // Select state from Redux
@@ -119,8 +120,9 @@ const Login = () => {
   const isGeneratingOtp = useSelector(selectIsGeneratingOtp);
   const requiresKyc = useSelector(selectRequiresKycVerification);
   const showCustomerType = useSelector(selectShowCustomerType);
+  const isRedirecting = useSelector(selectIsRedirecting);
 
-  // FIXED: Proper loading state handling
+  // Proper loading state handling
   const isLoading = auth.loading?.general || false;
   const isSubmitting = auth.isSubmitting || false;
 
@@ -175,73 +177,44 @@ const Login = () => {
     }),
   });
 
-  // ========== EFFECTS ==========
-
-  // Debug loading state
-  useEffect(() => {
-    console.log('🔍 Login component state:', {
-      isLoading,
-      isSubmitting,
-      tokenInitialized,
-      modalOpen: modal.isOpen,
-      showPasscodeInput,
-      showOtpInput
-    });
-  }, [isLoading, isSubmitting, tokenInitialized, modal.isOpen, showPasscodeInput, showOtpInput]);
-
-  // Token initialization effect - OPTIMIZED
-  useEffect(() => {
-    const initializeToken = async () => {
-      try {
-        await initializePartnerToken();
-        setTokenInitialized(true);
-      } catch (error) {
-        console.error('❌ Token initialization failed:', error);
-        setTokenInitialized(true); // Still set to true to prevent blocking
-      }
-    };
-
-    initializeToken();
-  }, []);
-
-  // Initialization effect
+  // ✅ Single initialization effect
   useEffect(() => {
     dispatch(initializeApp());
   }, [dispatch]);
 
-  // Auto-close stuck modals
-  useEffect(() => {
-    const modalTimer = setTimeout(() => {
-      if (modal.isOpen) {
-        console.log('🔄 Auto-closing stuck modal');
-        dispatch(closeModal());
-      }
-    }, 5000);
-
-    return () => clearTimeout(modalTimer);
-  }, [modal.isOpen, dispatch]);
-
-  // Reset stuck loading state
+  // ✅ Reset stuck loading state
   useEffect(() => {
     const loadingTimer = setTimeout(() => {
-      if (isLoading) {
-        console.log('🔄 Resetting stuck loading state');
+      if (isLoading && !isSubmittingRef.current) {
         dispatch(setLoading(false));
       }
-    }, 10000);
+    }, 15000);
 
     return () => clearTimeout(loadingTimer);
   }, [isLoading, dispatch]);
 
-  // KYC callback handler - OPTIMIZED
+  // ✅ KYC callback handler with duplicate prevention
   useEffect(() => {
     const handleKycCallback = () => {
+      if (kycHandlingRef.current) {
+        return;
+      }
+
+      kycHandlingRef.current = true;
+
       const urlParams = new URLSearchParams(window.location.search);
       const kycStatus = urlParams.get("status");
       const kycMessage = urlParams.get("message");
       const customerId = urlParams.get("customer_id");
       const plaidStatus = urlParams.get("plaid_status");
       const plaidError = urlParams.get("plaid_error");
+
+      // Only process if we have relevant parameters
+      const hasKycParams = kycStatus || plaidStatus || plaidError;
+      if (!hasKycParams) {
+        kycHandlingRef.current = false;
+        return;
+      }
 
       // Handle successful KYC
       if (kycStatus === "success" || plaidStatus === "success") {
@@ -255,7 +228,7 @@ const Login = () => {
           try {
             authData = JSON.parse(tempAuth);
           } catch (e) {
-            // Silent error
+            console.error("Failed to parse temp auth data");
           }
         }
 
@@ -263,7 +236,7 @@ const Login = () => {
           try {
             authData = JSON.parse(pendingAuth);
           } catch (e) {
-            // Silent error
+            console.error("Failed to parse pending auth data");
           }
         }
 
@@ -281,14 +254,15 @@ const Login = () => {
               showCloseButton: true,
               onClose: () => {
                 const redirectCustomerId = customerId || authData?.customer_id;
-                if (redirectCustomerId) {
-                  // Clear temp data and redirect
+                if (redirectCustomerId && !isRedirecting) {
+                  dispatch(setRedirecting(true));
                   sessionStorage.removeItem("temp_auth_data");
                   sessionStorage.removeItem("pending_kyc_auth");
                   navigate(`/home/${redirectCustomerId}`);
                 } else {
                   navigate("/");
                 }
+                kycHandlingRef.current = false;
               },
             },
           })
@@ -315,44 +289,54 @@ const Login = () => {
                 window.history.replaceState({}, "", window.location.pathname);
                 sessionStorage.removeItem("temp_auth_data");
                 sessionStorage.removeItem("pending_kyc_auth");
+                kycHandlingRef.current = false;
               },
             },
           })
         );
+      } else {
+        kycHandlingRef.current = false;
       }
     };
 
     handleKycCallback();
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, isRedirecting]);
 
-  // Owner login redirect - OPTIMIZED
+  // ✅ Owner login redirect
   useEffect(() => {
-    if (is_owner_login && owner_id) {
+    if (is_owner_login && owner_id && !isRedirecting) {
+      dispatch(setRedirecting(true));
       navigate(`/signupowner/${owner_id}`);
     }
-  }, [is_owner_login, owner_id, navigate]);
+  }, [is_owner_login, owner_id, navigate, isRedirecting, dispatch]);
 
-  // Download status handler
+  // ✅ Download status handler
   useEffect(() => {
     if (downloadStatus === "succeeded" && lastDownloadUrl) {
       window.open(lastDownloadUrl, "_blank");
     }
   }, [downloadStatus, lastDownloadUrl]);
 
-  // Auth state change handler - FIXED (No infinite re-renders)
+  // ✅ Auth state change handler with redirect prevention
   useEffect(() => {
-    // Only redirect if fully authenticated with valid data
-    const shouldRedirect = auth.isAuthenticated && 
-                          auth.customerId && 
-                          auth.token;
+    const shouldRedirect =
+      auth.isAuthenticated && auth.customerId && auth.token && !isRedirecting;
 
     if (shouldRedirect) {
+      dispatch(setRedirecting(true));
       handleSuccessfulLoginRedirect({
         customer_id: auth.customerId,
         isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer || false,
       });
     }
-  }, [auth.isAuthenticated, auth.customerId, auth.token, auth.user]);
+  }, [
+    auth.isAuthenticated,
+    auth.customerId,
+    auth.token,
+    auth.user,
+    isRedirecting,
+    dispatch,
+  ]);
 
   // ========== HANDLER FUNCTIONS ==========
 
@@ -368,7 +352,7 @@ const Login = () => {
     navigate(redirectPath, { replace: true });
   };
 
-  // ========== FIXED KYC VERIFICATION HANDLER ==========
+  // ✅ KYC verification handler
   const handleKycVerification = async (response, values) => {
     // Check for owner login first with proper validation
     if (response.is_owner_login === true || response.is_owner_login === "1") {
@@ -411,11 +395,8 @@ const Login = () => {
     if (plaidWindow) {
       // Set up monitoring for the Plaid window
       monitorPlaidWindow(plaidWindow);
-
-      // Close the modal
       setShowPlaidModal(false);
 
-      // Show success message
       dispatch(
         openModal({
           title: "Bank Verification Started",
@@ -491,7 +472,6 @@ const Login = () => {
               modalProps: {
                 showCloseButton: true,
                 onClose: () => {
-                  // Clear the passcode and reset state
                   dispatch(setPasscode(new Array(6).fill("")));
                   dispatch(setShowPasscodeInput(false));
                   dispatch(setPasscodeSent(false));
@@ -518,77 +498,7 @@ const Login = () => {
     setPlaidUrl("");
   };
 
-  // Handle iframe load events
-  const handleIframeLoad = () => {
-    setIframeLoading(false);
-  };
-
-  const handleIframeError = () => {
-    setIframeLoading(false);
-    dispatch(
-      openModal({
-        title: "Verification Error",
-        message:
-          "Failed to load verification. Please try again or contact support.",
-        type: "error",
-      })
-    );
-  };
-
-  // Close iframe handler
-  const closePlaidIframe = () => {
-    setShowPlaidIframe(false);
-    setPlaidUrl("");
-    setIframeLoading(true);
-
-    // Check if verification was completed
-    const pendingAuth = sessionStorage.getItem("pending_kyc_auth");
-    if (pendingAuth) {
-      dispatch(
-        openModal({
-          title: "Verification Incomplete",
-          message:
-            "Have you completed the bank verification? If yes, please try logging in again. If not, you can reopen verification from your account settings.",
-          type: "info",
-          modalProps: {
-            showCloseButton: true,
-          },
-        })
-      );
-    }
-  };
-
-  // Handle messages from iframe
-  useEffect(() => {
-    const handleMessage = (event) => {
-      // Check if message is from Plaid domain
-      if (
-        event.origin.includes("plaid.com") ||
-        event.origin.includes("verify.plaid.com")
-      ) {
-        // Handle verification completion
-        if (
-          event.data.type === "VERIFICATION_COMPLETED" ||
-          event.data.status === "success"
-        ) {
-          closePlaidIframe();
-          dispatch(
-            openModal({
-              title: "Verification Completed",
-              message:
-                "Bank verification completed successfully! Please try logging in again.",
-              type: "success",
-            })
-          );
-        }
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [dispatch]);
-
-  // Formik setup
+  // ✅ Formik setup with double-submission prevention
   const formik = useFormik({
     initialValues: {
       email: "",
@@ -600,19 +510,14 @@ const Login = () => {
     },
     validationSchema,
     onSubmit: async (values) => {
-      try {
-        // Check token status before proceeding
-        if (!tokenInitialized) {
-          dispatch(
-            openModal({
-              title: "System Initializing",
-              message: "Please wait while we initialize the system...",
-              type: "info",
-            })
-          );
-          return;
-        }
+      // ✅ PREVENT DOUBLE SUBMISSION
+      if (isSubmittingRef.current) {
+        return;
+      }
 
+      isSubmittingRef.current = true;
+
+      try {
         let payload = {
           sign_in_option: inputType,
           email: values.email,
@@ -690,6 +595,7 @@ const Login = () => {
                 owner_role_name: processedData.owner_role_name,
               })
             );
+            dispatch(setRedirecting(true));
             navigate(`/signupowner/${processedData.owner_id}`);
             return;
           }
@@ -730,6 +636,7 @@ const Login = () => {
 
           setTimeout(() => {
             dispatch(closeModal());
+            dispatch(setRedirecting(true));
             handleSuccessfulLoginRedirect(processedData);
           }, 1500);
         }
@@ -751,6 +658,9 @@ const Login = () => {
             type: "error",
           })
         );
+      } finally {
+        // ✅ RESET SUBMISSION FLAG
+        isSubmittingRef.current = false;
       }
     },
   });
@@ -787,6 +697,10 @@ const Login = () => {
   // Handler functions
   const handleGeneratePasscode = async (e) => {
     e.preventDefault();
+
+    if (isGeneratingPasscode) {
+      return;
+    }
 
     if (!values.email || !values.password) {
       dispatch(
@@ -836,6 +750,9 @@ const Login = () => {
         })
       );
     } catch (error) {
+      console.log("🔍 Passcode Generation Error:", error);
+
+      // Handle account blocked status
       if (
         error.data?.blocked_status === 1 ||
         error.payload?.data?.blocked_status === 1
@@ -860,20 +777,12 @@ const Login = () => {
         return;
       }
 
-      let displayMessage = "Failed to generate passcode";
-
-      if (error.message) {
-        displayMessage = error.message;
-      } else if (error.payload?.message) {
-        displayMessage = error.payload.message;
-      } else if (error.response?.data?.message) {
-        displayMessage = error.response.data.message;
-      }
-
+      // ✅ SIMPLIFIED: Just pass the error object to Modal
+      // Let the Modal component handle message extraction
       dispatch(
         openModal({
           title: "Error",
-          message: displayMessage,
+          message: error, // Pass the entire error object
           type: "error",
         })
       );
@@ -883,21 +792,28 @@ const Login = () => {
   };
 
   const handleGenerateOTP = async () => {
+    if (isGeneratingOtp) {
+      return;
+    }
+
     try {
-      if (!values.phone_code || !values.mobile_number) {
+      // ✅ Check that ALL required fields are filled
+      if (!values.phone_code || !values.mobile_number || !values.password) {
         dispatch(
           openModal({
             title: "Error",
-            message: "Please enter both country code and mobile number",
+            message: "Please enter country code, mobile number, AND password",
             type: "error",
           })
         );
         return;
       }
 
+      // ✅ Password is ALWAYS included
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
+        password: values.password, // ✅ REQUIRED - NO CONDITIONAL
         ...(showCustomerType === "Y" &&
           values.customerType && {
             customer_type: values.customerType,
@@ -1022,6 +938,10 @@ const Login = () => {
   };
 
   const handleVerifyPasscode = async () => {
+    if (isVerifyingPasscode) {
+      return;
+    }
+
     if (passcode.join("").length !== 6) {
       dispatch(
         openModal({
@@ -1043,6 +963,7 @@ const Login = () => {
         passcode: passcode,
         password: values.password,
         sign_in_option: inputType,
+        context: "login_verification",
       };
 
       if (showCustomerType === "Y" && values.customerType) {
@@ -1066,6 +987,7 @@ const Login = () => {
             owner_role_name: result.owner_role_name,
           })
         );
+        dispatch(setRedirecting(true));
         navigate(`/signupowner/${result.owner_id}`);
         return;
       }
@@ -1129,6 +1051,7 @@ const Login = () => {
 
         setTimeout(() => {
           dispatch(closeModal());
+          dispatch(setRedirecting(true));
           handleSuccessfulLoginRedirect({
             customer_id: customerId,
             isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
@@ -1192,6 +1115,10 @@ const Login = () => {
   };
 
   const handleVerifyOtp = async () => {
+    if (isVerifyingOtp) {
+      return;
+    }
+
     try {
       if (otp.length !== 6 || otp.some((digit) => !digit)) {
         dispatch(setError("Please enter a valid 6-digit OTP"));
@@ -1266,6 +1193,7 @@ const Login = () => {
 
         setTimeout(() => {
           dispatch(closeModal());
+          dispatch(setRedirecting(true));
           handleSuccessfulLoginRedirect(processedData);
         }, 1500);
       }
@@ -1293,6 +1221,7 @@ const Login = () => {
     navigate("/selectaccounttype");
   };
 
+  // Render the login form - ORIGINAL UI
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
       {/* LEFT SIDE - MAIN LOGIN FORM */}
@@ -1360,252 +1289,262 @@ const Login = () => {
             </div>
           </div>
 
-          {inputType === "email" ? (
+          <form onSubmit={handleSubmit}>
+            {inputType === "email" ? (
+              <div className="relative mb-6">
+                <input
+                  id="email"
+                  type="email"
+                  className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
+                  placeholder=" "
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  value={values.email}
+                  name="email"
+                  autoComplete="off"
+                />
+                <label
+                  htmlFor="email"
+                  className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
+                >
+                  Email
+                </label>
+                {errors.email && touched.email && (
+                  <p className="text-red-500 text-xs">{errors.email}</p>
+                )}
+              </div>
+            ) : (
+              <div className="relative mb-6">
+                <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                  {isCountriesLoading === "Y" && (
+                    <div className="flex justify-center items-center h-full">
+                      <RingLoader size={24} color="#36d7b7" />
+                    </div>
+                  )}
+                  {isCountriesLoading === "N" && (
+                    <div className="relative w-full">
+                      <Select
+                        key={`country-select-${inputType}`}
+                        options={countryOptions}
+                        value={currentCountryOption}
+                        onChange={(option) => {
+                          dispatch(
+                            setSelectedCountry({
+                              country: option.countryName,
+                              countryCode: option.value,
+                              flagUrl: option.flagUrl,
+                            })
+                          );
+                          setFieldValue("phone_code", option.value);
+                        }}
+                        placeholder="Select country"
+                        isSearchable
+                        classNamePrefix="react-select"
+                        isLoading={isCountriesLoading === "Y"}
+                        styles={{
+                          control: (provided) => ({
+                            ...provided,
+                            minHeight: "48px",
+                            borderColor:
+                              errors.phone_code && touched.phone_code
+                                ? "#f87171"
+                                : "#d1d5db",
+                            "&:hover": {
+                              borderColor:
+                                errors.phone_code && touched.phone_code
+                                  ? "#f87171"
+                                  : "#9ca3af",
+                            },
+                          }),
+                          option: (provided) => ({
+                            ...provided,
+                            padding: "10px",
+                            display: "flex",
+                            alignItems: "center",
+                          }),
+                        }}
+                        formatOptionLabel={(option) => (
+                          <div className="flex items-center">
+                            {option.flagUrl && (
+                              <img
+                                src={option.flagUrl}
+                                alt={option.label}
+                                className="w-5 h-4 object-cover mr-2"
+                              />
+                            )}
+                            <span>{option.label}</span>
+                          </div>
+                        )}
+                      />
+                      {errors.phone_code && touched.phone_code && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {errors.phone_code}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="w-full">
+                    <input
+                      id="mobile_number"
+                      type="number"
+                      className="block px-4 py-3 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 peer"
+                      placeholder=" "
+                      onChange={(e) =>
+                        setFieldValue("mobile_number", e.target.value)
+                      }
+                      value={values.mobile_number}
+                      name="mobile_number"
+                    />
+                    <label
+                      htmlFor="mobile_number"
+                      className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-2 z-10 origin-[0] bg-white px-2"
+                    >
+                      Phone Number
+                    </label>
+                    {errors.mobile_number && touched.mobile_number && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.mobile_number}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="relative mb-6">
               <input
-                id="email"
-                type="email"
+                id="password"
+                type={passwordVisible ? "text" : "password"}
                 className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
                 placeholder=" "
                 onChange={handleChange}
                 onBlur={handleBlur}
-                value={values.email}
-                name="email"
-                autoComplete="off"
+                value={values.password}
+                name="password"
+                autoComplete="current-password"
               />
               <label
-                htmlFor="email"
+                htmlFor="password"
                 className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
               >
-                Email
+                Password
               </label>
-              {errors.email && touched.email && (
-                <p className="text-red-500 text-xs">{errors.email}</p>
-              )}
-            </div>
-          ) : (
-            <div className="relative mb-6">
-              <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-                {isCountriesLoading === "Y" && (
-                  <div className="flex justify-center items-center h-full">
-                    <RingLoader size={24} color="#36d7b7" />
-                  </div>
-                )}
-                {isCountriesLoading === "N" && (
-                  <div className="relative w-full">
-                    <Select
-                      key={`country-select-${inputType}`}
-                      options={countryOptions}
-                      value={currentCountryOption}
-                      onChange={(option) => {
-                        dispatch(
-                          setSelectedCountry({
-                            country: option.countryName,
-                            countryCode: option.value,
-                            flagUrl: option.flagUrl,
-                          })
-                        );
-                        setFieldValue("phone_code", option.value);
-                      }}
-                      placeholder="Select country"
-                      isSearchable
-                      classNamePrefix="react-select"
-                      isLoading={isCountriesLoading === "Y"}
-                      styles={{
-                        control: (provided) => ({
-                          ...provided,
-                          minHeight: "48px",
-                          borderColor:
-                            errors.phone_code && touched.phone_code
-                              ? "#f87171"
-                              : "#d1d5db",
-                          "&:hover": {
-                            borderColor:
-                              errors.phone_code && touched.phone_code
-                                ? "#f87171"
-                                : "#9ca3af",
-                          },
-                        }),
-                        option: (provided) => ({
-                          ...provided,
-                          padding: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                        }),
-                      }}
-                      formatOptionLabel={(option) => (
-                        <div className="flex items-center">
-                          {option.flagUrl && (
-                            <img
-                              src={option.flagUrl}
-                              alt={option.label}
-                              className="w-5 h-4 object-cover mr-2"
-                            />
-                          )}
-                          <span>{option.label}</span>
-                        </div>
-                      )}
-                    />
-                    {errors.phone_code && touched.phone_code && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {errors.phone_code}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="w-full">
-                  <input
-                    id="mobile_number"
-                    type="number"
-                    className="block px-4 py-3 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 peer"
-                    placeholder=" "
-                    onChange={(e) =>
-                      setFieldValue("mobile_number", e.target.value)
-                    }
-                    value={values.mobile_number}
-                    name="mobile_number"
-                  />
-                  <label
-                    htmlFor="mobile_number"
-                    className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-2 z-10 origin-[0] bg-white px-2"
-                  >
-                    Phone Number
-                  </label>
-                  {errors.mobile_number && touched.mobile_number && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {errors.mobile_number}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="relative mb-6">
-            <input
-              id="password"
-              type={passwordVisible ? "text" : "password"}
-              className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
-              placeholder=" "
-              onChange={handleChange}
-              onBlur={handleBlur}
-              value={values.password}
-              name="password"
-              autoComplete="current-password"
-            />
-            <label
-              htmlFor="password"
-              className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
-            >
-              Password
-            </label>
-            <button
-              type="button"
-              onClick={() => dispatch(togglePasswordVisibility())}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            >
-              <FontAwesomeIcon icon={passwordVisible ? faEyeSlash : faEye} />
-            </button>
-            {errors.password && touched.password && (
-              <p className="text-red-500 text-xs">{errors.password}</p>
-            )}
-          </div>
-
-          {showCustomerType === "Y" && (
-            <div className="relative mb-6">
-              <label
-                htmlFor="customerType"
-                className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
-              >
-                Customer Type
-              </label>
-              <select
-                id="customerType"
-                name="customerType"
-                className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
-                placeholder=" "
-                onChange={(e) => {
-                  setFieldValue("customerType", e.target.value);
-                }}
-                onBlur={handleBlur}
-                value={values.customerType}
-              >
-                <option value="">--Select Customer Type--</option>
-                <option value="individual">Individual</option>
-                <option value="institution">Institution</option>
-              </select>
-              {errors.customerType && touched.customerType && (
-                <p className="text-red-500 text-xs">{errors.customerType}</p>
-              )}
-            </div>
-          )}
-
-          {inputType === "email" ? (
-            <button
-              type="button"
-              onClick={handleGeneratePasscode}
-              className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
-              disabled={isGeneratingPasscode}
-            >
-              {isGeneratingPasscode ? (
-                <>
-                  <RingLoader size={20} color="#ffffff" />
-                  <span>Requesting Passcode...</span>
-                </>
-              ) : (
-                "Request Passcode"
-              )}
-            </button>
-          ) : (
-            !showOtpInput && (
               <button
                 type="button"
-                onClick={handleGenerateOTP}
-                className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
-                disabled={isGeneratingOtp}
+                onClick={() => dispatch(togglePasswordVisibility())}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
               >
-                {isGeneratingOtp ? (
+                <FontAwesomeIcon icon={passwordVisible ? faEyeSlash : faEye} />
+              </button>
+              {errors.password && touched.password && (
+                <p className="text-red-500 text-xs">{errors.password}</p>
+              )}
+            </div>
+
+            {showCustomerType === "Y" && (
+              <div className="relative mb-6">
+                <label
+                  htmlFor="customerType"
+                  className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
+                >
+                  Customer Type
+                </label>
+                <select
+                  id="customerType"
+                  name="customerType"
+                  className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
+                  placeholder=" "
+                  onChange={(e) => {
+                    setFieldValue("customerType", e.target.value);
+                  }}
+                  onBlur={handleBlur}
+                  value={values.customerType}
+                >
+                  <option value="">--Select Customer Type--</option>
+                  <option value="individual">Individual</option>
+                  <option value="institution">Institution</option>
+                </select>
+                {errors.customerType && touched.customerType && (
+                  <p className="text-red-500 text-xs">{errors.customerType}</p>
+                )}
+              </div>
+            )}
+
+            {inputType === "email" ? (
+              <button
+                type="button"
+                onClick={handleGeneratePasscode}
+                className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
+                disabled={isGeneratingPasscode}
+              >
+                {isGeneratingPasscode ? (
                   <>
                     <RingLoader size={20} color="#ffffff" />
-                    <span>Requesting OTP...</span>
+                    <span>Requesting Passcode...</span>
                   </>
                 ) : (
-                  "Request OTP"
+                  "Request Passcode"
                 )}
               </button>
-            )
-          )}
+            ) : (
+              !showOtpInput && (
+                <button
+                  type="button"
+                  onClick={handleGenerateOTP}
+                  className="w-full bg-green-600 text-white py-2 mb-1 rounded-lg hover:bg-green-700 focus:outline-none flex items-center justify-center gap-2"
+                  disabled={isGeneratingOtp}
+                >
+                  {isGeneratingOtp ? (
+                    <>
+                      <RingLoader size={20} color="#ffffff" />
+                      <span>Requesting OTP...</span>
+                    </>
+                  ) : (
+                    "Request OTP"
+                  )}
+                </button>
+              )
+            )}
 
-          <div className="flex justify-between items-center my-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={() => dispatch(setRememberMe(!rememberMe))}
-                className="mr-2"
-              />
-              Remember Me
-            </label>
-            <button
-              onClick={() => navigate("/forgotpassword")}
-              type="button"
-              className="text-sm text-red-600 hover:underline"
-            >
-              Forgot Password?
-            </button>
-          </div>
+            <div className="flex justify-between items-center my-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={() => dispatch(setRememberMe(!rememberMe))}
+                  className="mr-2"
+                />
+                Remember Me
+              </label>
+              <button
+                onClick={() => navigate("/forgotpassword")}
+                type="button"
+                className="text-sm text-red-600 hover:underline"
+              >
+                Forgot Password?
+              </button>
+            </div>
+          </form>
 
-          <div className="text-center mt-4">
-            <p className="text-gray-600">
-              Don't have an account?{" "}
+          <div
+            className="mt-2 p-6 bg-gradient-to-br from-gray-50 to-white
+            rounded-xl border border-gray-200 shadow-sm"
+          >
+            <div className="flex flex-col items-center space-y-3">
+              <h3 className="font-semibold text-gray-800 text-lg">
+                Don't have an account yet?
+              </h3>
+
               <button
                 onClick={handleNavigation}
-                className="text-blue-600 hover:text-blue-800 font-medium"
+                className="bg-white text-green-700 border-2 border-green-600
+                hover:bg-green-50 font-semibold py-2 px-6 rounded-lg
+                transition-colors duration-200 shadow-sm"
               >
-                Sign Up
+                Create Account →
               </button>
-            </p>
+            </div>
           </div>
 
           <button
@@ -1672,32 +1611,6 @@ const Login = () => {
                   You need to complete kyc verification to access your account.
                   This is a secure process powered by Plaid.
                 </p>
-              </div>
-
-              {/* Security Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start">
-                  <svg
-                    className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <div>
-                    <p className="text-sm font-medium text-blue-800">
-                      Secure & Encrypted
-                    </p>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Your information is protected with bank-level security. We
-                      never store your banking credentials.
-                    </p>
-                  </div>
-                </div>
               </div>
 
               {/* Action Buttons */}

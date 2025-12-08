@@ -15,17 +15,26 @@ import {
 
 // Import Redux actions and selectors
 import {
-  createBeneficiaryWithBanks,
-  fetchNationalities,
-  fetchBanksByCurrency,
-  fetchIdTypesByCurrency,
-  fetchCitiesByCountry,
-  fetchBankBranches,
-  clearError,
-  clearCreateError,
-  clearCreateSuccess,
+  selectCreateLoading,
+  selectCreateError,
+  selectCreateSuccess,
+  selectNationalities,
+  selectBanks,
+  selectIdTypes,
+  selectCities,
+  selectBankBranches,
+  selectDropdownLoading,
+  fetchNationalities, 
+  fetchBanksByCurrency, 
+  fetchIdTypesByCurrency, 
+  fetchCitiesByCountry, 
+  fetchBankBranches, 
+  createBeneficiaryWithBanks, 
+  clearCreateError, 
+  clearCreateSuccess, 
   resetCreateState,
 } from "../AddBeneficiary/addBeneficiarySlice";
+
 import {
   selectCountriesOptionsSafe,
   selectCountries,
@@ -83,15 +92,16 @@ const AddBeneficiary = () => {
     bankBranches,
     dropdownLoading,
   } = useSelector((state) => ({
-    createLoading: state.beneficiaries?.createLoading || false,
-    createError: state.beneficiaries?.createError || null,
-    createSuccess: state.beneficiaries?.createSuccess || false,
-    nationalities: state.beneficiaries?.nationalities || [],
-    banks: state.beneficiaries?.banks || {},
-    idTypes: state.beneficiaries?.idTypes || {},
-    cities: state.beneficiaries?.cities || {},
-    bankBranches: state.beneficiaries?.bankBranches || {},
-    dropdownLoading: state.beneficiaries?.dropdownLoading || false,
+    // These come from addBeneficiary slice (form creation)
+    createLoading: state.addBeneficiary?.createLoading || false,
+    createError: state.addBeneficiary?.createError || null,
+    createSuccess: state.addBeneficiary?.createSuccess || false,
+    nationalities: state.addBeneficiary?.nationalities || [],
+    banks: state.addBeneficiary?.banks || {},
+    idTypes: state.addBeneficiary?.idTypes || {},
+    cities: state.addBeneficiary?.cities || {},
+    bankBranches: state.addBeneficiary?.bankBranches || {},
+    dropdownLoading: state.addBeneficiary?.dropdownLoading || false,
   }));
 
   // Countries from Redux
@@ -211,7 +221,6 @@ const AddBeneficiary = () => {
     initialValues: {
       name: "",
       country_id: "",
-      phone_code_country_id: "",
       country_phone_code: "+1",
       phone_number: "",
       email: "",
@@ -228,66 +237,19 @@ const AddBeneficiary = () => {
       beneficiary_id_type: "",
       beneficiary_id_number: "",
     },
-    onSubmit: async (values) => {
-      setIsLoading(true);
-
-      const finalRelationship =
-        values.relationtobenef === "other" &&
-        values.otherRelationship.trim() !== ""
-          ? values.otherRelationship.trim()
-          : values.relationtobenef;
-
-      const beneficiaryData = {
-        beneftype: values.beneftype,
-        name: values.name,
-        email: values.email,
-        country_id: values.country_id,
-        country_phone_code: values.country_phone_code,
-        phone_number: values.phone_number,
-        state: values.state,
-        city: values.city,
-        street: values.street,
-        postalcode: values.postalcode,
-        relationtobenef: finalRelationship,
-        nationality_id: values.nationality_id,
-        status: values.status,
-        bic_ncc_code: values.bic_ncc_code,
-        beneficiary_id_type: values.beneficiary_id_type,
-        beneficiary_id_number: values.beneficiary_id_number,
-      };
-
-      try {
-        await dispatch(
-          createBeneficiaryWithBanks({
-            customerId,
-            beneficiaryData,
-            bankAccounts,
-            currency,
-          })
-        ).unwrap();
-
-        setMessage("Beneficiary added successfully!");
-        setStep(2);
-      } catch (error) {
-        setMessage("Error adding beneficiary: " + error.message);
-      } finally {
-        setIsLoading(false);
-        setTimeout(() => {
-          setMessage("");
-        }, 3000);
-      }
+    onSubmit: () => {
+      // Empty function - we'll handle submission in Step 2
     },
   });
 
+  // Component mount debug
   useEffect(() => {
-    console.log("🔍 Environment Debug:", {
-      VITE_API_URL: import.meta.env.VITE_API_URL,
-      customerId: customerId,
-      fullURL: `${
-        import.meta.env.VITE_API_URL
-      }/beneficiaries/customer-view/${customerId}`,
-    });
-  }, [customerId]);
+    console.log("🔍 AddBeneficiary Component mounted with:");
+    console.log("   customerId:", customerId);
+    console.log("   location.state:", location.state);
+    console.log("   is_payout:", is_payout);
+    console.log("   current pathname:", window.location.pathname);
+  }, [customerId, location.state, is_payout]);
 
   // Fetch initial data
   useEffect(() => {
@@ -295,23 +257,60 @@ const AddBeneficiary = () => {
     dispatch(fetchCountries()); // Ensure countries are loaded
   }, [dispatch]);
 
-  // Handle errors and success
+  // Handle errors and success with navigation
   useEffect(() => {
+    console.log("=== NAVIGATION DEBUG ===");
+    console.log("🔍 createSuccess value:", createSuccess);
+    console.log("🔍 is_payout value:", is_payout);
+    console.log("🔍 customerId from params:", customerId);
+    console.log(
+      "🔍 Will navigate to:",
+      is_payout === "y" ? "Previous page (-1)" : `/mybeneficiary/${customerId}`
+    );
+    console.log("🔍 createLoading state:", createLoading);
+
     if (createError) {
+      console.error("❌ Create Error:", createError);
       toast.error(createError);
       dispatch(clearCreateError());
     }
 
     if (createSuccess) {
+      console.log("✅ SUCCESS: Beneficiary created, preparing to navigate...");
       toast.success("Beneficiary created successfully!");
       dispatch(clearCreateSuccess());
-      if (is_payout === "y") {
-        navigate(-1);
-      } else {
-        navigate(`/mybeneficiary/${customerId}`);
-      }
+
+      // Add a small delay to ensure toast is visible
+      setTimeout(() => {
+        if (is_payout === "y") {
+          console.log("📤 Navigating back (is_payout = y)");
+          navigate(-1);
+        } else {
+          const targetPath = `/mybeneficiary/${customerId}`;
+          console.log("📤 Navigating to:", targetPath);
+          navigate(targetPath);
+        }
+      }, 1500);
     }
-  }, [createError, createSuccess, dispatch, is_payout, navigate, customerId]);
+  }, [
+    createError,
+    createSuccess,
+    dispatch,
+    is_payout,
+    navigate,
+    customerId,
+    createLoading,
+  ]);
+
+  // Redux state debug
+  useEffect(() => {
+    console.log("🔍 Redux beneficiaries state:", {
+      createSuccess,
+      createLoading,
+      createError,
+      beneficiaryCount: nationalities.length,
+    });
+  }, [createSuccess, createLoading, createError, nationalities]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -328,11 +327,22 @@ const AddBeneficiary = () => {
   }, [formik.values.country_id, dispatch]);
 
   // Debug countries data
+  useEffect(() => {}, [countriesOptions, countries, phoneCodeOptions]);
+
+  // Debug useEffect to track Redux state changes
   useEffect(() => {
-    console.log("🌍 Countries Options:", countriesOptions);
-    console.log("🌍 Countries Data:", countries);
-    console.log("🌍 Phone Code Options:", phoneCodeOptions);
-  }, [countriesOptions, countries, phoneCodeOptions]);
+    console.log("=== REDUX STATE UPDATE ===");
+    console.log("Current currency:", currency);
+    console.log("All ID types in Redux:", idTypes);
+    console.log("ID types for current currency:", idTypes[currency]);
+    console.log("Type of idTypes[currency]:", typeof idTypes[currency]);
+
+    if (idTypes[currency]) {
+      console.log("Is array?", Array.isArray(idTypes[currency]));
+      console.log("Array length:", idTypes[currency].length);
+      console.log("First item:", idTypes[currency][0]);
+    }
+  }, [currency, idTypes]);
 
   // Get cities for selected country
   const getCitiesForCountry = () => {
@@ -356,14 +366,8 @@ const AddBeneficiary = () => {
       if (formik.values.relationtobenef === "") return false;
     }
 
-    // Additional checks for specific currencies
-    if (
-      currency === "BDT" ||
-      currency === "INR" ||
-      currency === "PKR" ||
-      currency === "AUD" ||
-      currency === "LKR"
-    ) {
+    // ✅ FIXED: Only check ID fields for BDT, INR, PKR
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (
         formik.values.beneficiary_id_type === "" ||
         formik.values.beneficiary_id_number === ""
@@ -378,15 +382,57 @@ const AddBeneficiary = () => {
 
   const handleCurrencyChange = async (e) => {
     const newCurrency = e.target.value;
-    console.log("new currencies", newCurrency);
+
+    console.log("=== CURRENCY CHANGE START ===");
+    console.log("New currency selected:", newCurrency);
+    console.log("Previous currency:", currency);
+
     setCurrency(newCurrency);
 
-    // Fetch ID types for the currency
-    if (["BDT", "INR", "PKR", "AUD", "LKR"].includes(newCurrency)) {
-      dispatch(fetchIdTypesByCurrency(newCurrency));
+    // ✅ FIX: Reset form values when currency changes
+    console.log("Resetting form ID fields...");
+    formik.setFieldValue("beneficiary_id_type", "");
+    formik.setFieldValue("beneficiary_id_number", "");
+
+    // ✅ FIX: Always fetch ID types for BDT, INR, PKR when selected
+    console.log("Checking if currency requires ID types:", newCurrency);
+    console.log(
+      "Should fetch ID types?",
+      ["BDT", "INR", "PKR"].includes(newCurrency)
+    );
+
+    if (["BDT", "INR", "PKR"].includes(newCurrency)) {
+      console.log(`Dispatching fetchIdTypesByCurrency for ${newCurrency}...`);
+
+      // Store the promise to see the result
+      const idTypesPromise = dispatch(fetchIdTypesByCurrency(newCurrency));
+
+      idTypesPromise
+        .then((result) => {
+          console.log(
+            `fetchIdTypesByCurrency SUCCESS for ${newCurrency}:`,
+            result
+          );
+          console.log("Payload data:", result.payload);
+          console.log("Meta:", result.meta);
+        })
+        .catch((error) => {
+          console.error(
+            `fetchIdTypesByCurrency ERROR for ${newCurrency}:`,
+            error
+          );
+        });
+    } else {
+      console.log(`Currency ${newCurrency} does not require ID types`);
     }
 
     // Fetch banks for the currency
+    console.log("Fetching banks for currency:", newCurrency);
+    console.log(
+      "Is int-bank currency?",
+      ["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)
+    );
+
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
         fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
@@ -401,12 +447,15 @@ const AddBeneficiary = () => {
     }
 
     // Update currency for all existing bank accounts
+    console.log("Updating bank accounts currency to:", newCurrency);
     setBankAccounts((prevAccounts) =>
       prevAccounts.map((account) => ({
         ...account,
         currency: newCurrency,
       }))
     );
+
+    console.log("=== CURRENCY CHANGE END ===");
   };
 
   const handleCancel = () => {
@@ -414,7 +463,8 @@ const AddBeneficiary = () => {
   };
 
   const nextStep = () => {
-    if (currency === "BDT" || currency === "INR") {
+    // ✅ FIXED: Only validate ID fields for BDT, INR, PKR
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       const countryInput = formik.values.country_id;
       if (countryInput === "" || countryInput === " ") {
         alert(`Country Required for Currency: ${currency}`);
@@ -433,7 +483,7 @@ const AddBeneficiary = () => {
 
       const idNumber = formik.values.beneficiary_id_number;
       if (idNumber === "" || streetInput === " ") {
-        alert(`ID Number Required for Currency: BDT`);
+        alert(`ID Number Required for Currency: ${currency}`);
         return false;
       }
 
@@ -473,15 +523,17 @@ const AddBeneficiary = () => {
 
   const handleSubmitBankDetails = async (e) => {
     e.preventDefault();
+    console.log("🔄 Starting beneficiary creation...");
     setLoading(true);
 
-    if (
-      currency === "BDT" ||
-      currency === "INR" ||
-      currency === "PKR" ||
-      currency === "AUD" ||
-      currency === "LKR"
-    ) {
+    const isRailsMissing = bankAccounts.some((account) => !account.rails);
+    if (isRailsMissing) {
+      toast.error("Please select rails for all bank accounts.");
+      setLoading(false);
+      return;
+    }
+
+    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (!formik.values.beneficiary_id_type) {
         toast.error("Beneficiary ID Type is required");
         setLoading(false);
@@ -494,13 +546,6 @@ const AddBeneficiary = () => {
       }
     }
 
-    const isRailsMissing = bankAccounts.some((account) => !account.rails);
-    if (isRailsMissing) {
-      toast.error("Please select rails for all bank accounts.");
-      setLoading(false);
-      return;
-    }
-
     const finalRelationship =
       formik.values.relationtobenef === "other" &&
       formik.values.otherRelationship.trim() !== ""
@@ -510,7 +555,6 @@ const AddBeneficiary = () => {
     const beneficiaryData = {
       name: formik.values.name,
       country_id: formik.values.country_id,
-      country_phone_code: formik.values.country_phone_code,
       phone_number: formik.values.phone_number,
       email: formik.values.email,
       beneftype: formik.values.beneftype,
@@ -527,9 +571,14 @@ const AddBeneficiary = () => {
       nic_bcc_code: formik.values.nic_bcc_code,
     };
 
+    console.log("📤 Submitting beneficiary data:", beneficiaryData);
+    console.log("📤 Submitting bank accounts:", bankAccounts);
+    console.log("📤 Currency:", currency);
+
     // Use Redux action to create beneficiary with banks
     try {
-      await dispatch(
+      console.log("📤 Dispatching createBeneficiaryWithBanks...");
+      const result = await dispatch(
         createBeneficiaryWithBanks({
           customerId,
           beneficiaryData,
@@ -538,9 +587,11 @@ const AddBeneficiary = () => {
         })
       ).unwrap();
 
+      console.log("✅ Dispatch successful, result:", result);
       resetForm();
     } catch (error) {
-      console.error("Failed to create beneficiary:", error);
+      console.error("❌ Dispatch error:", error.message || error);
+      toast.error(error.message || "Failed to create beneficiary");
     } finally {
       setLoading(false);
     }
@@ -609,9 +660,49 @@ const AddBeneficiary = () => {
     return banks[currency] || [];
   };
 
-  // Get ID types for current currency
+  // Get ID types for current currency - OPTIMIZED VERSION
   const getIdTypesForCurrency = () => {
-    return idTypes[currency] || [];
+    // Add a check to prevent logging on every render
+    if (Object.keys(idTypes).length === 0) {
+      return [];
+    }
+
+    console.log("=== GET ID TYPES CALLED ===");
+    console.log("Current currency:", currency);
+    console.log("All ID types object:", idTypes);
+
+    const types = idTypes[currency];
+    console.log("Raw types for currency:", types);
+
+    if (!types) {
+      console.log("No ID types found for currency");
+      return [];
+    }
+
+    // Check what format the data is in
+    console.log("Type of types:", typeof types);
+    console.log("Is array?", Array.isArray(types));
+
+    if (Array.isArray(types)) {
+      console.log("Returning array of length:", types.length);
+      return types;
+    }
+
+    // Check if it's an object with data property
+    if (types && types.data && Array.isArray(types.data)) {
+      console.log("Returning types.data array of length:", types.data.length);
+      return types.data;
+    }
+
+    // Try to convert object to array
+    if (types && typeof types === "object") {
+      const array = Object.values(types);
+      console.log("Converted object to array of length:", array.length);
+      return array;
+    }
+
+    console.log("Falling back to empty array");
+    return [];
   };
 
   // Get bank branches for selected bank
@@ -634,10 +725,7 @@ const AddBeneficiary = () => {
             "country_phone_code",
             selectedOption?.value || ""
           );
-          formik.setFieldValue(
-            "phone_code_country_id",
-            selectedOption?.country?.id || ""
-          );
+          // ✅ No need to set phone_code_country_id anymore
         }}
         value={phoneCodeOptions.find(
           (option) => option.value === formik.values.country_phone_code
@@ -663,21 +751,38 @@ const AddBeneficiary = () => {
   const renderCountryDropdown = () => (
     <select
       className="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      onChange={formik.handleChange}
+      onChange={(e) => {
+        const selectedCountryId = e.target.value;
+        const selectedCountry = countries.find(
+          (country) => country.id === parseInt(selectedCountryId)
+        );
+
+        // ✅ Set the country ID (numeric) not the name
+        formik.setFieldValue("country_id", selectedCountryId);
+
+        // ✅ Automatically set the phone code when country is selected
+        if (selectedCountry) {
+          formik.setFieldValue(
+            "country_phone_code",
+            selectedCountry.phone_code || "+1"
+          );
+        }
+      }}
       value={formik.values.country_id}
       name="country_id"
     >
       <option value="">Select Country</option>
       {countriesOptions.map((country) => (
-        <option key={country.value} value={country.value}>
+        <option key={country.value} value={country.id}>
+          {" "}
+          {/* ✅ Use country.id here */}
           {country.label} ({country.country_code})
         </option>
       ))}
     </select>
   );
 
-  // Render bank account fields
-  // Render bank account fields - COMPLETE VERSION
+  // Render bank account fields - OPTIMIZED VERSION
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
@@ -762,10 +867,8 @@ const AddBeneficiary = () => {
 
         {/* Currency-Specific ID Fields */}
         {(accountCurrency === "BDT" ||
-          accountCurrency === "PKR" ||
           accountCurrency === "INR" ||
-          accountCurrency === "AUD" ||
-          accountCurrency === "LKR") && (
+          accountCurrency === "PKR") && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-medium mb-1">
@@ -1524,7 +1627,13 @@ const AddBeneficiary = () => {
 
         <div className="flex-1 overflow-auto p-8">
           {step === 1 && (
-            <form onSubmit={formik.handleSubmit} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                nextStep();
+              }}
+              className="space-y-6"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Beneficiary Type */}
                 <div className="md:col-span-2">
@@ -1744,9 +1853,7 @@ const AddBeneficiary = () => {
                     {/* Beneficiary ID Type (for specific currencies) */}
                     {(currency === "BDT" ||
                       currency === "INR" ||
-                      currency === "PKR" ||
-                      currency === "AUD" ||
-                      currency === "LKR") && (
+                      currency === "PKR") && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Beneficiary ID Type
@@ -1758,11 +1865,26 @@ const AddBeneficiary = () => {
                           name="beneficiary_id_type"
                         >
                           <option value="">Select ID Type</option>
-                          {getIdTypesForCurrency().map((idType) => (
-                            <option key={idType.name} value={idType.name}>
-                              {idType.name}
-                            </option>
-                          ))}
+                          {(() => {
+                            const idTypeOptions = getIdTypesForCurrency();
+                            console.log(
+                              "Rendering dropdown with options:",
+                              idTypeOptions
+                            );
+                            console.log("Options count:", idTypeOptions.length);
+
+                            return idTypeOptions.map((idType) => {
+                              console.log("Mapping ID type:", idType);
+                              const value = idType.name || idType.id || idType;
+                              const label = idType.name || idType.id || idType;
+
+                              return (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              );
+                            });
+                          })()}
                         </select>
                       </div>
                     )}
@@ -1770,9 +1892,7 @@ const AddBeneficiary = () => {
                     {/* Beneficiary ID Number (for specific currencies) */}
                     {(currency === "BDT" ||
                       currency === "INR" ||
-                      currency === "PKR" ||
-                      currency === "AUD" ||
-                      currency === "LKR") && (
+                      currency === "PKR") && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Beneficiary ID Number

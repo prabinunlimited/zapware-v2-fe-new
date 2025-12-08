@@ -1,3 +1,4 @@
+// src/features/Transfer/transferSlice.js - COMPLETE
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
@@ -11,6 +12,8 @@ const initialState = {
   selectedCurrency: '',
   transferAmount: '',
   selectedCountryCode: '',
+  // ✅ ADD: Track form interaction
+  hasUserInteracted: false,
 };
 
 const transferSlice = createSlice({
@@ -64,24 +67,33 @@ const transferSlice = createSlice({
       state.customerBankAccounts = action.payload;
     },
     
-    // Set search query
+    // ✅ UPDATED: Set search query with interaction tracking
     setSearchQuery: (state, action) => {
       state.searchQuery = action.payload;
+      state.hasUserInteracted = true;
     },
     
-    // Set selected currency
+    // ✅ UPDATED: Set selected currency with interaction tracking
     setSelectedCurrency: (state, action) => {
       state.selectedCurrency = action.payload;
+      state.hasUserInteracted = true;
     },
     
-    // Set transfer amount
+    // ✅ UPDATED: Set transfer amount with interaction tracking
     setTransferAmount: (state, action) => {
       state.transferAmount = action.payload;
+      state.hasUserInteracted = true;
     },
     
-    // Set selected country code
+    // ✅ UPDATED: Set selected country code with interaction tracking
     setSelectedCountryCode: (state, action) => {
       state.selectedCountryCode = action.payload;
+      state.hasUserInteracted = true;
+    },
+    
+    // ✅ ADD: Explicit form interaction setter
+    setFormInteraction: (state) => {
+      state.hasUserInteracted = true;
     },
     
     // Clear transfer state
@@ -109,6 +121,7 @@ export const {
   setSelectedCurrency,
   setTransferAmount,
   setSelectedCountryCode,
+  setFormInteraction,
   clearTransferState,
   clearErrors,
 } = transferSlice.actions;

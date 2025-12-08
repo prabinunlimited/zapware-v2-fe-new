@@ -1,16 +1,19 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-const API_URL = import.meta.env.VITE_VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Async thunks
 export const initializePlaidLink = createAsyncThunk(
-  'plaid/initializePlaidLink',
+  "plaid/initializePlaidLink",
   async (customerId) => {
+    console.log("🔍 Initializing Plaid link for customer:", customerId);
+
     const response = await fetch(`${API_URL}/sila/create_link_token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content || "",
+        "X-CSRF-TOKEN":
+          document.querySelector('meta[name="csrf-token"]')?.content || "",
       },
       body: JSON.stringify({ customerId }),
     });
@@ -20,18 +23,30 @@ export const initializePlaidLink = createAsyncThunk(
     }
 
     const data = await response.json();
+
+    // ✅ ADD: Validate the response structure
+    console.log("🔍 Plaid API Response:", data);
+
+    if (!data.link_token) {
+      // Check if there's an error message in the response
+      const errorMessage =
+        data.message || data.error || "No link token received";
+      throw new Error(errorMessage);
+    }
+
     return data;
   }
 );
 
 export const storePlaidData = createAsyncThunk(
-  'plaid/storePlaidData',
+  "plaid/storePlaidData",
   async ({ public_token, accounts, customerId }) => {
     const response = await fetch(`${API_URL}/sila/store_plaid_data`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content || "",
+        "X-CSRF-TOKEN":
+          document.querySelector('meta[name="csrf-token"]')?.content || "",
       },
       body: JSON.stringify({
         public_token,
@@ -44,7 +59,7 @@ export const storePlaidData = createAsyncThunk(
 
     if (!response.ok) {
       throw new Error(
-        resultData.error 
+        resultData.error
           ? parsePlaidErrorMessage(resultData.error)
           : resultData.message || "Failed to save bank details"
       );
@@ -55,13 +70,14 @@ export const storePlaidData = createAsyncThunk(
 );
 
 export const deleteLinkedBankAccount = createAsyncThunk(
-  'plaid/deleteLinkedBankAccount',
+  "plaid/deleteLinkedBankAccount",
   async ({ account_id, user_handle }) => {
     const response = await fetch(`${API_URL}/sila/delete-sila-linked-bank`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content || "",
+        "X-CSRF-TOKEN":
+          document.querySelector('meta[name="csrf-token"]')?.content || "",
       },
       body: JSON.stringify({
         account_id,
@@ -82,7 +98,9 @@ export const deleteLinkedBankAccount = createAsyncThunk(
             const silaError = JSON.parse(silaErrorMatch[0]);
             silaMessage = silaError.message || "Unknown Sila error";
           } else {
-            const messageMatch = resultData.error.match(/message[^"]*"([^"]+)"/);
+            const messageMatch = resultData.error.match(
+              /message[^"]*"([^"]+)"/
+            );
             if (messageMatch) {
               silaMessage = messageMatch[1];
             }
@@ -116,7 +134,7 @@ const parsePlaidErrorMessage = (errorString) => {
 };
 
 const plaidSlice = createSlice({
-  name: 'plaid',
+  name: "plaid",
   initialState: {
     isLoading: false,
     error: null,
@@ -175,7 +193,7 @@ const plaidSlice = createSlice({
         state.result = {
           ...action.payload,
           success: true,
-          message: "Bank account successfully linked"
+          message: "Bank account successfully linked",
         };
       })
       .addCase(storePlaidData.rejected, (state, action) => {
@@ -184,7 +202,7 @@ const plaidSlice = createSlice({
         state.result = {
           success: false,
           message: action.error.message,
-          error: action.error.message
+          error: action.error.message,
         };
       })
       // Delete Linked Bank Account
@@ -198,7 +216,7 @@ const plaidSlice = createSlice({
           success: true,
           message: "Bank account successfully unlinked",
           status: action.payload.status,
-          reference: action.payload.reference
+          reference: action.payload.reference,
         };
       })
       .addCase(deleteLinkedBankAccount.rejected, (state, action) => {
@@ -208,7 +226,7 @@ const plaidSlice = createSlice({
           success: false,
           message: action.error.message,
           status: "FAILURE",
-          error: action.error.message
+          error: action.error.message,
         };
       });
   },

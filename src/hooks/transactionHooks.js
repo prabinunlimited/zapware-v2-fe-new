@@ -20,26 +20,15 @@ export const useTransactionData = () => {
   const fetchTransactions = useCallback((customerId, currencyCode, forceRefresh = false) => {
     if (!customerId || !currencyCode) return;
 
-    // ✅ Clear successful status if force refresh
+    console.log("🔄 HOOK: Fetching transactions for", currencyCode);
+
+    // ✅ ALWAYS FETCH - NO BLOCKING LOGIC
     if (forceRefresh) {
-      transactionUtils.clearTransactionSuccessCache(customerId, currencyCode);
-      dispatch(forceRefreshTransactions({ customerId, currencyCode }));
+      dispatch(forceRefreshTransactions());
+      dispatch(fetchTransactionDetails({ customerId, currencyCode }));
+    } else {
+      dispatch(fetchTransactionDetails({ customerId, currencyCode }));
     }
-
-    // ✅ Skip if already have successful data (unless force refresh)
-    if (transactionUtils.hasSuccessfulTransactionFetch(customerId, currencyCode) && !forceRefresh) {
-      console.log("✅ Already have transaction data, skipping fetch");
-      return;
-    }
-
-    console.log("🔄 Fetching transactions...", {
-      customerId,
-      currencyCode,
-      forceRefresh,
-      hasSuccessfulData: transactionUtils.hasSuccessfulTransactionFetch(customerId, currencyCode)
-    });
-
-    dispatch(fetchTransactionDetails({ customerId, currencyCode }));
   }, [dispatch]);
 
   const forceRefresh = useCallback((customerId, currencyCode) => {
@@ -53,6 +42,6 @@ export const useTransactionData = () => {
     hasFetched,
     fetchTransactions,
     forceRefresh,
-    hasSuccessfulData: transactionUtils.hasSuccessfulTransactionFetch
+    hasSuccessfulData: () => false // Always allow fetching
   };
 };

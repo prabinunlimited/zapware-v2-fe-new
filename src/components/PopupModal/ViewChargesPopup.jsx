@@ -36,7 +36,7 @@ const ViewChargesPopup = ({ isOpen, onClose, customerId, authtoken }) => {
   // Fetch charges when popup opens
   useEffect(() => {
     if (isOpen && customerId && authtoken) {
-      console.log("🔍 Fetching charges data for customer:", customerId);
+      
       dispatch(fetchChargesData({ customerId, authtoken }));
       setLastRefreshed(new Date());
     }
@@ -55,7 +55,7 @@ const ViewChargesPopup = ({ isOpen, onClose, customerId, authtoken }) => {
   // Handle refresh
   const handleRefresh = () => {
     if (customerId && authtoken && !chargesLoading) {
-      console.log("🔄 Refreshing charges data...");
+      
       dispatch(fetchChargesData({ customerId, authtoken }));
       setLastRefreshed(new Date());
     }

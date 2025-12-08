@@ -17,25 +17,17 @@ apiClient.interceptors.request.use(
     // ✅ USE YOUR TOKEN SERVICE FROM AUTH SERVICE
     const token = tokenService.getToken();
 
-    console.log("🔐 API Client Request - Token Check:", {
-      url: config.url,
-      tokenInfo: tokenService.debugToken(),
-      tokenPresent: !!token,
-    });
-
     // Don't add token to login requests
     if (
       config.url.includes("/partner-login") ||
       config.url.includes("/login") ||
       config.url.includes("/auth")
     ) {
-      console.log("🔐 Skipping token for auth endpoint");
       return config;
     }
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log("✅ Token added to API client headers");
     } else {
       console.warn("⚠️ No token found for API client request");
     }
@@ -51,7 +43,6 @@ apiClient.interceptors.request.use(
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => {
-    console.log("✅ API Client Response success:", response.config.url);
     return response;
   },
   (error) => {
