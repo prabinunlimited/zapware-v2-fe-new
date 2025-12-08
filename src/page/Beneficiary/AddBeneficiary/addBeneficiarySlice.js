@@ -199,6 +199,192 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
   }
 );
 
+// ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
+export const updateBeneficiaryBank = createAsyncThunk(
+  "beneficiaries/updateBeneficiaryBank",
+  async ({ beneficiaryId, bankId, bankData }, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const response = await fetch(
+        `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(bankData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update bank");
+      }
+
+      return await response.json();
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ===================== ADD BENEFICIARY BANK ASYNC THUNKS =====================
+export const addBeneficiaryBank = createAsyncThunk(
+  "beneficiaries/addBeneficiaryBank",
+  async ({ beneficiaryId, bankData }, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const response = await fetch(
+        `${API_URL}/beneficiaries/${beneficiaryId}/banks`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(bankData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to add bank");
+      }
+
+      return await response.json();
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ===================== DELETE BENEFICIARY BANK ASYNC THUNKS =====================
+export const deleteBeneficiaryBank = createAsyncThunk(
+  "beneficiaries/deleteBeneficiaryBank",
+  async ({ beneficiaryId, bankId }, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const response = await fetch(
+        `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete bank");
+      }
+
+      return { beneficiaryId, bankId };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ===================== FETCH BENEFICIARY BY ID ASYNC THUNK =====================
+export const fetchBeneficiaryById = createAsyncThunk(
+  "beneficiaries/fetchBeneficiaryById",
+  async (beneficiaryId, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const response = await fetch(
+        `${API_URL}/beneficiaries/${beneficiaryId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch beneficiary");
+      }
+
+      return await response.json();
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ===================== UPDATE BENEFICIARY ASYNC THUNK =====================
+export const updateBeneficiary = createAsyncThunk(
+  "beneficiaries/updateBeneficiary",
+  async (
+    { customerId, beneficiaryId, beneficiaryData },
+    { rejectWithValue }
+  ) => {
+    try {
+      console.log("📤 Updating beneficiary with:", {
+        customerId,
+        beneficiaryId,
+        beneficiaryData,
+      });
+
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Format current_date_time like the non-redux version
+      const currentDateTime = new Date().toLocaleString(); // Changed from ISO format
+
+      // Create payload matching the non-redux version
+      const payload = {
+        ...beneficiaryData,
+        current_date_time: currentDateTime,
+        // Include these additional fields that the API might expect
+        name: `${beneficiaryData.first_name} ${beneficiaryData.last_name}`.trim(),
+        street: beneficiaryData.street || "", // Ensure street is included
+        pincode: beneficiaryData.postalcode || "", // Map postalcode to pincode if needed
+        // idTypes: beneficiaryData.idTypes || [] // Add if needed
+      };
+
+      console.log("📤 Payload being sent:", payload);
+
+      // ✅ Use the correct endpoint from non-redux version
+      const response = await fetch(
+        `${API_URL}/beneficiaries/update-benef/${beneficiaryId}`,
+        {
+          method: "POST", // ✅ Changed from PUT to POST
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      console.log("📡 API Response status:", response.status);
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        console.error("❌ API Error Response:", errorResult);
+        throw new Error(
+          errorResult.message ||
+            errorResult.error ||
+            "Failed to update beneficiary"
+        );
+      }
+
+      const result = await response.json();
+      console.log("✅ API Success Response:", result);
+
+      return {
+        beneficiaryId,
+        beneficiary: result.data || beneficiaryData,
+        message: result.message || "Beneficiary updated successfully",
+      };
+    } catch (error) {
+      console.error("❌ updateBeneficiary error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // ===================== DROPDOWN DATA ASYNC THUNKS =====================
 export const fetchNationalities = createAsyncThunk(
   "beneficiaries/fetchNationalities",
@@ -343,6 +529,38 @@ const initialState = {
   createSuccess: false,
   beneficiaryId: null,
 
+  // Create beneficiary state
+  createLoading: false,
+  createError: null,
+  createSuccess: false,
+  beneficiaryId: null,
+
+  // Fetch beneficiary state
+  fetchLoading: false,
+  fetchError: null,
+  beneficiaryData: null,
+
+  // Update beneficiary state
+  updateLoading: false,
+  updateError: null,
+  updateSuccess: false,
+
+  // Bank operations state
+  bankLoading: false,
+  bankError: null,
+  bankSuccess: false,
+  bankOperation: null, // 'add', 'update', or 'delete'
+  bankId: null,
+
+  // Dropdown data state (for forms)
+  nationalities: [],
+  banks: {},
+  idTypes: {},
+  cities: {},
+  bankBranches: {},
+  dropdownLoading: false,
+  dropdownError: null,
+
   // Dropdown data state (for forms)
   nationalities: [],
   banks: {},
@@ -370,6 +588,32 @@ const addBeneficiarySlice = createSlice({
       state.createError = null;
       state.createSuccess = false;
       state.beneficiaryId = null;
+    },
+
+    clearBankError: (state) => {
+      state.bankError = null;
+      state.bankSuccess = false;
+      state.bankOperation = null;
+      state.bankId = null;
+    },
+
+    // Clear fetch beneficiary state
+    clearFetchState: (state) => {
+      state.fetchLoading = false;
+      state.fetchError = null;
+      state.beneficiaryData = null;
+    },
+
+    // Clear update beneficiary state
+    clearUpdateState: (state) => {
+      state.updateLoading = false;
+      state.updateError = null;
+      state.updateSuccess = false;
+    },
+
+    // Set beneficiary data (useful for editing)
+    setBeneficiaryData: (state, action) => {
+      state.beneficiaryData = action.payload;
     },
 
     // Clear dropdown errors
@@ -499,6 +743,143 @@ const addBeneficiarySlice = createSlice({
       .addCase(fetchBankBranches.rejected, (state, action) => {
         state.dropdownLoading = false;
         state.dropdownError = action.payload;
+      })
+
+      .addCase(fetchBeneficiaryById.pending, (state) => {
+        console.log("⏳ fetchBeneficiaryById PENDING");
+        state.fetchLoading = true;
+        state.fetchError = null;
+        state.beneficiaryData = null;
+      })
+      .addCase(fetchBeneficiaryById.fulfilled, (state, action) => {
+        console.log("✅ fetchBeneficiaryById FULFILLED");
+        state.fetchLoading = false;
+        state.beneficiaryData = action.payload;
+        state.fetchError = null;
+      })
+      .addCase(fetchBeneficiaryById.rejected, (state, action) => {
+        console.error("❌ fetchBeneficiaryById REJECTED:", action.payload);
+        state.fetchLoading = false;
+        state.fetchError = action.payload;
+      })
+
+      // ===================== UPDATE BENEFICIARY =====================
+      .addCase(updateBeneficiary.pending, (state) => {
+        console.log("⏳ updateBeneficiary PENDING");
+        state.updateLoading = true;
+        state.updateError = null;
+        state.updateSuccess = false;
+      })
+      .addCase(updateBeneficiary.fulfilled, (state, action) => {
+        console.log("✅ updateBeneficiary FULFILLED");
+        state.updateLoading = false;
+        state.updateSuccess = true;
+        state.updateError = null;
+
+        // Update beneficiary data if it exists
+        if (state.beneficiaryData) {
+          state.beneficiaryData = {
+            ...state.beneficiaryData,
+            ...action.payload.beneficiary,
+          };
+        }
+      })
+      .addCase(updateBeneficiary.rejected, (state, action) => {
+        console.error("❌ updateBeneficiary REJECTED:", action.payload);
+        state.updateLoading = false;
+        state.updateError = action.payload;
+        state.updateSuccess = false;
+      })
+
+      // ===================== UPDATE BENEFICIARY BANK =====================
+      .addCase(updateBeneficiaryBank.pending, (state) => {
+        console.log("⏳ updateBeneficiaryBank PENDING");
+        state.bankLoading = true;
+        state.bankError = null;
+        state.bankSuccess = false;
+        state.bankOperation = "update";
+      })
+      .addCase(updateBeneficiaryBank.fulfilled, (state, action) => {
+        console.log("✅ updateBeneficiaryBank FULFILLED");
+        state.bankLoading = false;
+        state.bankSuccess = true;
+        state.bankError = null;
+        state.bankId = action.payload.bankId || null;
+
+        // Update beneficiary data if it exists
+        if (state.beneficiaryData && state.beneficiaryData.banks) {
+          const bankIndex = state.beneficiaryData.banks.findIndex(
+            (bank) => bank.id === action.payload.bankId
+          );
+          if (bankIndex !== -1) {
+            state.beneficiaryData.banks[bankIndex] = {
+              ...state.beneficiaryData.banks[bankIndex],
+              ...action.payload,
+            };
+          }
+        }
+      })
+      .addCase(updateBeneficiaryBank.rejected, (state, action) => {
+        console.error("❌ updateBeneficiaryBank REJECTED:", action.payload);
+        state.bankLoading = false;
+        state.bankError = action.payload;
+        state.bankSuccess = false;
+      })
+
+      // ===================== ADD BENEFICIARY BANK =====================
+      .addCase(addBeneficiaryBank.pending, (state) => {
+        console.log("⏳ addBeneficiaryBank PENDING");
+        state.bankLoading = true;
+        state.bankError = null;
+        state.bankSuccess = false;
+        state.bankOperation = "add";
+      })
+      .addCase(addBeneficiaryBank.fulfilled, (state, action) => {
+        console.log("✅ addBeneficiaryBank FULFILLED");
+        state.bankLoading = false;
+        state.bankSuccess = true;
+        state.bankError = null;
+        state.bankId = action.payload.bankId || null;
+
+        // Add bank to beneficiary data if it exists
+        if (state.beneficiaryData && state.beneficiaryData.banks) {
+          state.beneficiaryData.banks.push(action.payload);
+        }
+      })
+      .addCase(addBeneficiaryBank.rejected, (state, action) => {
+        console.error("❌ addBeneficiaryBank REJECTED:", action.payload);
+        state.bankLoading = false;
+        state.bankError = action.payload;
+        state.bankSuccess = false;
+      })
+
+      // ===================== DELETE BENEFICIARY BANK =====================
+      .addCase(deleteBeneficiaryBank.pending, (state) => {
+        console.log("⏳ deleteBeneficiaryBank PENDING");
+        state.bankLoading = true;
+        state.bankError = null;
+        state.bankSuccess = false;
+        state.bankOperation = "delete";
+      })
+      .addCase(deleteBeneficiaryBank.fulfilled, (state, action) => {
+        console.log("✅ deleteBeneficiaryBank FULFILLED");
+        state.bankLoading = false;
+        state.bankSuccess = true;
+        state.bankError = null;
+        state.bankId = action.payload.bankId;
+
+        // Remove bank from beneficiary data if it exists
+        if (state.beneficiaryData && state.beneficiaryData.banks) {
+          state.beneficiaryData.banks = state.beneficiaryData.banks.filter(
+            (bank) => bank.id !== action.payload.bankId
+          );
+        }
+      })
+      .addCase(deleteBeneficiaryBank.rejected, (state, action) => {
+        console.error("❌ deleteBeneficiaryBank REJECTED:", action.payload);
+        state.bankLoading = false;
+        state.bankError = action.payload;
+        state.bankSuccess = false;
       });
   },
 });
@@ -512,6 +893,10 @@ export const {
   clearDropdownData,
   clearError,
   resetState,
+  clearBankError,
+  clearFetchState,
+  clearUpdateState,
+  setBeneficiaryData,
 } = addBeneficiarySlice.actions;
 
 // ===================== SELECTORS =====================
@@ -558,6 +943,42 @@ export const selectIdTypesForCurrency = (currency) => (state) => {
 // Helper function to get cities for country
 export const selectCitiesForCountry = (countryId) => (state) => {
   return state.addBeneficiary.cities[countryId] || [];
+};
+
+// Fetch beneficiary selectors
+export const selectFetchLoading = (state) => state.addBeneficiary.fetchLoading;
+export const selectFetchError = (state) => state.addBeneficiary.fetchError;
+export const selectBeneficiaryData = (state) =>
+  state.addBeneficiary.beneficiaryData;
+
+// Update beneficiary selectors
+export const selectUpdateLoading = (state) =>
+  state.addBeneficiary.updateLoading;
+export const selectUpdateError = (state) => state.addBeneficiary.updateError;
+export const selectUpdateSuccess = (state) =>
+  state.addBeneficiary.updateSuccess;
+
+// Bank operations selectors
+export const selectBankLoading = (state) => state.addBeneficiary.bankLoading;
+export const selectBankError = (state) => state.addBeneficiary.bankError;
+export const selectBankSuccess = (state) => state.addBeneficiary.bankSuccess;
+export const selectBankOperation = (state) =>
+  state.addBeneficiary.bankOperation;
+export const selectBankId = (state) => state.addBeneficiary.bankId;
+
+// Helper to get specific bank by ID
+export const selectBankById = (bankId) => (state) => {
+  if (
+    !state.addBeneficiary.beneficiaryData ||
+    !state.addBeneficiary.beneficiaryData.banks
+  ) {
+    return null;
+  }
+  return (
+    state.addBeneficiary.beneficiaryData.banks.find(
+      (bank) => bank.id === bankId
+    ) || null
+  );
 };
 
 // ===================== DEFAULT EXPORT =====================

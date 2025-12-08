@@ -45,7 +45,6 @@ export const fetchBeneficiaryById = createAsyncThunk(
 
       console.log("📥 Fetching beneficiary:", beneficiaryId);
 
-      // ✅ FIXED: Use the correct API endpoint
       const response = await fetch(
         `${API_URL}/beneficiaries/benef-view/${beneficiaryId}`,
         {
@@ -66,18 +65,26 @@ export const fetchBeneficiaryById = createAsyncThunk(
       console.log("✅ API Response:", result);
 
       // Handle the API response structure
-      if (result.data) {
-        // If data is an object (not an array)
-        if (typeof result.data === "object" && !Array.isArray(result.data)) {
-          return result.data;
-        }
-        // If data is an array with items
-        else if (Array.isArray(result.data) && result.data.length > 0) {
-          return result.data[0];
-        }
+      let beneficiaryData = null;
+      let benefBanks = [];
+
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        beneficiaryData = result.data[0];
+      } else if (result.data && typeof result.data === "object") {
+        beneficiaryData = result.data;
       }
 
-      return result.data || result;
+      // Extract banks from the response
+      if (result.benef_banks && Array.isArray(result.benef_banks)) {
+        benefBanks = result.benef_banks;
+      }
+
+      // Attach banks to beneficiary data
+      if (beneficiaryData) {
+        beneficiaryData.benef_banks = benefBanks;
+      }
+
+      return beneficiaryData;
     } catch (error) {
       console.error("❌ fetchBeneficiaryById error:", error);
       return rejectWithValue(error.message);
@@ -395,68 +402,6 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
   }
 );
 
-// ===================== BENEFICIARY UPDATE ASYNC THUNKS =====================
-export const updateBeneficiary = createAsyncThunk(
-  "beneficiaries/updateBeneficiary",
-  async (
-    { customerId, beneficiaryId, beneficiaryData },
-    { rejectWithValue }
-  ) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-
-      console.log("📤 Updating beneficiary with:", {
-        customerId,
-        beneficiaryId,
-        beneficiaryData,
-      });
-
-      // ✅ FIXED: Use the correct API endpoint
-      const response = await fetch(
-        `${API_URL}/beneficiaries/update-benef/${beneficiaryId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-          body: JSON.stringify({
-            ...beneficiaryData,
-            current_date_time: new Date()
-              .toISOString()
-              .replace("T", " ")
-              .split(".")[0],
-          }),
-        }
-      );
-
-      console.log("📡 API Response status:", response.status);
-
-      if (!response.ok) {
-        const errorResult = await response.json();
-        console.error("❌ API Error Response:", errorResult);
-        throw new Error(
-          errorResult.message ||
-            errorResult.error ||
-            "Failed to update beneficiary"
-        );
-      }
-
-      const result = await response.json();
-      console.log("✅ API Success Response:", result);
-
-      return {
-        beneficiaryId,
-        beneficiary: result.data || beneficiaryData,
-        message: result.message || "Beneficiary updated successfully",
-      };
-    } catch (error) {
-      console.error("❌ updateBeneficiary error:", error);
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
 // ===================== INITIAL STATE =====================
 const initialState = {
   // Beneficiaries list state
@@ -700,6 +645,11 @@ const beneficiarySlice = createSlice({
         state.editLoading = false;
         state.beneficiaryDetails = action.payload;
         state.editError = null;
+
+        // Also update beneficiaryBanks if needed for remittance
+        if (action.payload && action.payload.benef_banks) {
+          state.beneficiaryBanks = action.payload.benef_banks;
+        }
       })
       .addCase(fetchBeneficiaryById.rejected, (state, action) => {
         state.editLoading = false;
@@ -905,45 +855,6 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaryBanks.rejected, (state) => {
         state.banksLoading = false;
         state.beneficiaryBanks = [];
-      })
-
-      // ===================== UPDATE BENEFICIARY =====================
-      .addCase(updateBeneficiary.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-        state.success = false;
-      })
-      .addCase(updateBeneficiary.fulfilled, (state, action) => {
-        state.loading = false;
-        state.error = null;
-        state.success = true;
-        state.lastUpdated = new Date().toISOString();
-
-        const { beneficiaryId, beneficiary } = action.payload;
-        if (Array.isArray(state.beneficiaries)) {
-          const beneficiaryIndex = state.beneficiaries.findIndex(
-            (b) => b.id === beneficiaryId
-          );
-
-          if (beneficiaryIndex !== -1) {
-            state.beneficiaries[beneficiaryIndex] = {
-              ...state.beneficiaries[beneficiaryIndex],
-              ...beneficiary,
-            };
-          }
-
-          if (state.selectedBeneficiary?.id === beneficiaryId) {
-            state.selectedBeneficiary = {
-              ...state.selectedBeneficiary,
-              ...beneficiary,
-            };
-          }
-        }
-      })
-      .addCase(updateBeneficiary.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.success = false;
       });
   },
 });
