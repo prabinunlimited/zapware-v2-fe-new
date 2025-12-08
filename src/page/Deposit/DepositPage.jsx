@@ -24,10 +24,14 @@ import { usePaymentMethods } from "./hooks/usePaymentMethods";
 import { useBankAccounts } from "./hooks/useBankAccounts";
 import { useUI } from "./hooks/useUI";
 
+import Select from "react-select";
+import { FaSearch, FaPlus } from "react-icons/fa";
+
 // ✅ CORRECT: Import from depositSlice
 import {
   fetchManualAccountDetails,
   setShowPaymentInitiation,
+  selectShowPaymentInitiation,
 } from "./slices/depositSlice";
 
 // ✅ CORRECT: Import USD account actions and selectors from bankAccountSlice
@@ -651,6 +655,8 @@ const DepositPageContent = () => {
     (state) => state.bankLink?.bankAccounts || []
   );
 
+  const showPaymentInitiation = useSelector(selectShowPaymentInitiation);
+
   // ✅ ADD: Sync state
   const [syncInProgress, setSyncInProgress] = useState(false);
 
@@ -1033,7 +1039,36 @@ const DepositPageContent = () => {
         toastClassName="font-sans"
         progressClassName="bg-gradient-to-r from-blue-500 to-blue-600"
       />
-      <PaymentInitiation />
+      <PaymentInitiation
+        selectedCurrency={deposit.selectedCurrency}
+        amount={deposit.amount}
+        purpose={deposit.purpose}
+        paymentMethod={deposit.paymentMethod}
+        selectedBankAccount={deposit.selectedBankAccount}
+        // For deposits, we don't need beneficiary data
+        selectedBeneficiaryBank={null}
+        selectedBeneficiary={null}
+        customerId={customerId}
+        showPaymentInitiation={showPaymentInitiation}
+        transactionType="deposit" // ✅ IMPORTANT: Set to "deposit"
+        onClose={() => dispatch(setShowPaymentInitiation(false))}
+        onSuccess={(result) => {
+          console.log("Open Banking success:", result);
+          if (result.success) {
+            toast.success("Open Banking deposit initiated successfully!");
+
+            // ✅ Reset the form
+            deposit.resetTransaction();
+
+            // ✅ Optional: Close the modal after success
+            setTimeout(() => {
+              dispatch(setShowPaymentInitiation(false));
+            }, 2000);
+          } else {
+            toast.error(result.error || "Open Banking failed");
+          }
+        }}
+      />
       <DebugPanel />
       <ReceiptTemplate
         transactionSuccess={deposit.transactionSuccess}
@@ -1288,8 +1323,17 @@ const DepositPageContent = () => {
                               "Please enter a purpose for this deposit";
                           }
 
+                          // For Open Banking deposits, you might also need to check for selected bank account
+                          // Uncomment if needed:
+                          // if (!deposit.selectedBankAccount) {
+                          //   errors.bankAccount = "Please select a bank account";
+                          // }
+
                           if (Object.keys(errors).length > 0) {
-                            deposit.setFormErrors(errors);
+                            // You need to make sure deposit.setFormErrors exists
+                            if (deposit.setFormErrors) {
+                              deposit.setFormErrors(errors);
+                            }
                             toast.error("Please fill all required fields");
                             return;
                           }
