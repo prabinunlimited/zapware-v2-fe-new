@@ -26,6 +26,8 @@ import { HiCurrencyDollar, HiOutlineBanknotes } from "react-icons/hi2";
 import { MdAccountBalance, MdSecurity } from "react-icons/md";
 import { TbTransfer } from "react-icons/tb";
 import Select from "react-select";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
 
@@ -989,6 +991,7 @@ const Remittance = () => {
             relationOptions={relationOptions} // ADD THIS
             paymentOptions={paymentOptions} // ADD THIS
             onFileUpload={handleFileUpload} // ADD THIS IF NEEDED
+            selectedCurrency={formData.sendCurrency?.value}
           />
         );
       case "card":
@@ -1738,6 +1741,18 @@ const Remittance = () => {
         {/* Professional Progress Steps */}
         <ProgressSteps />
 
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+        />
+
         {/* Step Content */}
         <AnimatePresence mode="wait">
           <motion.div
@@ -1932,17 +1947,36 @@ const Remittance = () => {
 
       {showOpenBanking && (
         <PaymentInitiation
-          selectedCurrency={formData.sendCurrency?.value}
-          amount={formData.sendAmount}
-          purpose={formData.purpose?.value || "remittance"}
-          paymentMethod="bank"
-          selectedBankAccount={formData.sendCurrency}
+          selectedCurrency={formData.sendCurrency?.value} // ✅ FIXED: Use formData.sendCurrency
+          amount={formData?.sendAmount || ""} // ✅ Also fixed: should be sendAmount, not amount
+          purpose={formData?.purpose?.value || ""}
+          paymentMethod="bank_transfer"
           selectedBeneficiaryBank={selectedBank}
           selectedBeneficiary={selectedBeneficiary}
-          customerId={customerId} // Pass customerId directly
-          showPaymentInitiation={showOpenBanking}
-          onClose={handleOpenBankingClose}
-          onSuccess={handleOpenBankingSuccess}
+          customerId={
+            customerId || localStorage.getItem("authcustomer_id") // ✅ Remove paramCustomerId
+          }
+          showPaymentInitiation={showOpenBanking} // ✅ Should be showOpenBanking, not showPaymentInitiation
+          transactionType="remittance"
+          onClose={() => {
+            setShowOpenBanking(false); // ✅ Close the Open Banking modal
+            setOpenBankingProcessing(false);
+          }}
+          onSuccess={(result) => {
+            console.log("Open Banking remittance success:", result);
+            if (result.success) {
+              toast.success(
+                "Remittance initiated successfully via Open Banking!"
+              );
+              setShowOpenBanking(false);
+              setOpenBankingProcessing(false);
+              // Optionally navigate to success page
+              dispatch(setStep(4));
+            } else {
+              toast.error(result.error || "Open Banking remittance failed");
+              setOpenBankingProcessing(false);
+            }
+          }}
         />
       )}
     </div>

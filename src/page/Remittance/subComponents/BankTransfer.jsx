@@ -35,6 +35,9 @@ import {
   selectBanksLoading,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
+import PaymentInitiation from "../../Deposit/components/PaymentInitiation/PaymentInitiation";
+import { setShowPaymentInitiation } from "../../Deposit/slices/depositSlice";
+
 const BankTransfer = ({
   formData = {},
   manualAccountDetails,
@@ -51,6 +54,9 @@ const BankTransfer = ({
   incomeSourceOptions = [],
   relationOptions = [],
   paymentOptions = [],
+  selectedCurrency,
+  showPaymentInitiation,
+  onSuccessCallback,
 }) => {
   const dispatch = useDispatch();
   const { customerId: paramCustomerId } = useParams();
@@ -68,11 +74,17 @@ const BankTransfer = ({
       .map((benef) => ({
         ...benef,
         value: benef?.id,
-        label: `${benef?.name || 'Unknown'} (${
-          benef?.full_phone_number || benef?.phone_number || benef?.benef_uuid || 'No Phone'
+        label: `${benef?.name || "Unknown"} (${
+          benef?.full_phone_number ||
+          benef?.phone_number ||
+          benef?.benef_uuid ||
+          "No Phone"
         })`,
-        formattedName: `${benef?.name || 'Unknown'} (${
-          benef?.phone_number || benef?.email || benef?.benef_uuid || 'No Contact'
+        formattedName: `${benef?.name || "Unknown"} (${
+          benef?.phone_number ||
+          benef?.email ||
+          benef?.benef_uuid ||
+          "No Contact"
         })`,
       }));
   }, [allBeneficiaries]);
@@ -82,20 +94,19 @@ const BankTransfer = ({
     const customerId =
       paramCustomerId || localStorage.getItem("customerId") || "1720";
 
-    if (customerId && (!allBeneficiaries || allBeneficiaries.length === 0) && !beneficiariesLoading) {
+    if (
+      customerId &&
+      (!allBeneficiaries || allBeneficiaries.length === 0) &&
+      !beneficiariesLoading
+    ) {
       console.log(
         "🔄 BankTransfer: Fetching beneficiaries for customer:",
         customerId
       );
       dispatch(fetchBeneficiaries(customerId));
     }
-  }, [
-    dispatch,
-    paramCustomerId,
-    allBeneficiaries,
-    beneficiariesLoading,
-  ]);
-  
+  }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
+
   const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
 
   // Local state
@@ -117,7 +128,14 @@ const BankTransfer = ({
       formDataIncomeSource: formData?.incomeSource,
       formDataPayoutMethod: formData?.payout_method,
     });
-  }, [onFieldChange, purposeOptions, incomeSourceOptions, paymentOptions, relationOptions, formData]);
+  }, [
+    onFieldChange,
+    purposeOptions,
+    incomeSourceOptions,
+    paymentOptions,
+    relationOptions,
+    formData,
+  ]);
 
   // Default payout options - fallback if paymentOptions is empty
   const defaultPayoutOptions = useMemo(
@@ -131,7 +149,9 @@ const BankTransfer = ({
 
   // Use provided paymentOptions or fallback to defaults
   const payoutMethodOptions = useMemo(() => {
-    return paymentOptions && paymentOptions.length > 0 ? paymentOptions : defaultPayoutOptions;
+    return paymentOptions && paymentOptions.length > 0
+      ? paymentOptions
+      : defaultPayoutOptions;
   }, [paymentOptions, defaultPayoutOptions]);
 
   // Custom select styles
@@ -231,7 +251,12 @@ const BankTransfer = ({
 
   // Auto-select first bank when banks are loaded
   useEffect(() => {
-    if (beneficiaryBanks?.length > 0 && selectedBeneficiary && !selectedBank && onBankSelect) {
+    if (
+      beneficiaryBanks?.length > 0 &&
+      selectedBeneficiary &&
+      !selectedBank &&
+      onBankSelect
+    ) {
       const firstBank = beneficiaryBanks[0];
       if (firstBank) {
         onBankSelect(firstBank);
@@ -305,7 +330,8 @@ const BankTransfer = ({
         }
 
         // Payout Method
-        const payoutMethodValue = selectedOption?.payout_method || selectedOption?.payment_method;
+        const payoutMethodValue =
+          selectedOption?.payout_method || selectedOption?.payment_method;
         if (payoutMethodValue) {
           const matchedPayoutMethod = payoutMethodOptions.find(
             (opt) => opt.value === payoutMethodValue
@@ -358,14 +384,17 @@ const BankTransfer = ({
         const transformedBeneficiary = {
           value: beneficiaryData?.id,
           id: beneficiaryData?.id,
-          label: `${beneficiaryData?.name || 'Unknown'} (${beneficiaryData?.phone_number || 'No Phone'})`,
+          label: `${beneficiaryData?.name || "Unknown"} (${
+            beneficiaryData?.phone_number || "No Phone"
+          })`,
           name: beneficiaryData?.name,
           benef_uuid: beneficiaryData?.benef_uuid,
           occupation: beneficiaryData?.occupation,
           relationtobenef: beneficiaryData?.relationtobenef,
           transfer_purpose: beneficiaryData?.transfer_purpose,
           income_source: beneficiaryData?.income_source,
-          payout_method: beneficiaryData?.payout_method || beneficiaryData?.payment_method,
+          payout_method:
+            beneficiaryData?.payout_method || beneficiaryData?.payment_method,
           ...beneficiaryData,
         };
 
@@ -415,7 +444,7 @@ const BankTransfer = ({
   // Find current occupation value for dropdown
   const currentOccupationValue = useMemo(() => {
     if (!formData?.occupation) return null;
-    return occupations.find(opt => opt.value === formData.occupation) || null;
+    return occupations.find((opt) => opt.value === formData.occupation) || null;
   }, [formData?.occupation, occupations]);
 
   // Add New Beneficiary button
@@ -483,7 +512,9 @@ const BankTransfer = ({
               isSearchable
               getOptionLabel={(option) =>
                 option?.formattedName ||
-                `${option?.name || 'Unknown'} (${option?.phone_number || option?.benef_uuid || 'No Contact'})`
+                `${option?.name || "Unknown"} (${
+                  option?.phone_number || option?.benef_uuid || "No Contact"
+                })`
               }
               getOptionValue={(option) => option?.id}
             />
@@ -533,7 +564,9 @@ const BankTransfer = ({
             <Select
               options={payoutMethodOptions}
               value={formData?.payout_method || null}
-              onChange={(selectedOption) => onFieldChange("payout_method", selectedOption)}
+              onChange={(selectedOption) =>
+                onFieldChange("payout_method", selectedOption)
+              }
               classNamePrefix="select"
               styles={selectStyles}
               placeholder="Select payout method..."
@@ -555,7 +588,9 @@ const BankTransfer = ({
             <Select
               options={purposeOptions}
               value={formData?.purpose || null}
-              onChange={(selectedOption) => onFieldChange("purpose", selectedOption)}
+              onChange={(selectedOption) =>
+                onFieldChange("purpose", selectedOption)
+              }
               classNamePrefix="select"
               styles={selectStyles}
               placeholder="Select purpose..."
@@ -577,7 +612,9 @@ const BankTransfer = ({
             <Select
               options={incomeSourceOptions}
               value={formData?.incomeSource || null}
-              onChange={(selectedOption) => onFieldChange("incomeSource", selectedOption)}
+              onChange={(selectedOption) =>
+                onFieldChange("incomeSource", selectedOption)
+              }
               classNamePrefix="select"
               styles={selectStyles}
               placeholder="Select income source..."
@@ -653,9 +690,7 @@ const BankTransfer = ({
               getOptionLabel={(option) => {
                 const bankName = option?.bank_name || "Unknown Bank";
                 const accountNumber =
-                  option?.bank_acc_no ||
-                  option?.account_number ||
-                  "No Account";
+                  option?.bank_acc_no || option?.account_number || "No Account";
                 const accountHolder =
                   option?.nameInBankAc || option?.account_name || "";
                 const rails = option?.rails || "";
@@ -668,7 +703,9 @@ const BankTransfer = ({
 
                 return label;
               }}
-              getOptionValue={(option) => option?.id || option?.benef_banks_uuid}
+              getOptionValue={(option) =>
+                option?.id || option?.benef_banks_uuid
+              }
               isSearchable
             />
             {selectedBeneficiary &&
@@ -680,6 +717,91 @@ const BankTransfer = ({
                 </p>
               )}
           </div>
+
+          {(selectedCurrency === "EUR" ||
+            selectedCurrency === "GBP" ||
+            selectedCurrency === "DKK") &&
+          selectedBank &&
+          selectedBeneficiary &&
+          formData?.amount &&
+          parseFloat(formData.amount) > 0 ? (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h4 className="text-lg font-medium text-gray-900">
+                    Open Banking
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    Initiate secure bank transfer via Open Banking
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Validate required fields
+                    const errors = {};
+
+                    if (!formData?.amount || parseFloat(formData.amount) <= 0) {
+                      errors.amount = "Please enter a valid amount";
+                    }
+                    if (!formData?.purpose?.value) {
+                      errors.purpose = "Please select a purpose";
+                    }
+                    if (!formData?.incomeSource?.value) {
+                      errors.incomeSource = "Please select income source";
+                    }
+                    if (!selectedBeneficiary) {
+                      errors.beneficiary = "Please select a beneficiary";
+                    }
+                    if (!selectedBank) {
+                      errors.bank = "Please select beneficiary bank";
+                    }
+
+                    if (Object.keys(errors).length > 0) {
+                      // Show validation errors
+                      Object.values(errors).forEach((error) =>
+                        toast.error(error)
+                      );
+                      return;
+                    }
+
+                    console.log("🎯 Initiating Open Banking remittance:", {
+                      currency: selectedCurrency,
+                      amount: formData.amount,
+                      beneficiary: selectedBeneficiary.name,
+                      bank: selectedBank.bank_name,
+                    });
+
+                    // Dispatch to show PaymentInitiation modal
+                    dispatch(setShowPaymentInitiation(true));
+                  }}
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all"
+                >
+                  <FaUniversity className="mr-2" />
+                  Initiate Open Banking
+                </button>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <FaInfoCircle className="text-green-600 mt-0.5 mr-3" />
+                  <div>
+                    <p className="text-sm text-green-800">
+                      <strong>Open Banking</strong> allows you to securely
+                      connect your bank account and initiate transfers
+                      instantly. No manual bank details required.
+                    </p>
+                    <ul className="mt-2 text-xs text-green-700 space-y-1">
+                      <li>• Instant bank account verification</li>
+                      <li>• Secure connection via Plaid</li>
+                      <li>• Real-time transfer initiation</li>
+                      <li>• No need to enter bank details manually</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Compliance Note */}
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -731,8 +853,8 @@ const BankTransfer = ({
       </div>
 
       {/* Success/Error Messages */}
-      <ToastContainer 
-        position="bottom-right" 
+      <ToastContainer
+        position="bottom-right"
         autoClose={5000}
         hideProgressBar={false}
         newestOnTop

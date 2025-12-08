@@ -1527,16 +1527,24 @@ const Login = () => {
             </div>
           </form>
 
-          <div className="text-center mt-4">
-            <p className="text-gray-600">
-              Don't have an account?{" "}
+          <div
+            className="mt-2 p-6 bg-gradient-to-br from-gray-50 to-white
+            rounded-xl border border-gray-200 shadow-sm"
+          >
+            <div className="flex flex-col items-center space-y-3">
+              <h3 className="font-semibold text-gray-800 text-lg">
+                Don't have an account yet?
+              </h3>
+
               <button
                 onClick={handleNavigation}
-                className="text-blue-600 hover:text-blue-800 font-medium"
+                className="bg-white text-green-700 border-2 border-green-600
+                hover:bg-green-50 font-semibold py-2 px-6 rounded-lg
+                transition-colors duration-200 shadow-sm"
               >
-                Sign Up
+                Create Account →
               </button>
-            </p>
+            </div>
           </div>
 
           <button
