@@ -58,6 +58,8 @@ const ConversionPage = () => {
     clearAllState,
     clearConversionError,
     clearConversionSuccess,
+    clearConversionId,
+    clearLastConversion,
   } = useConversion();
 
   // Local state
@@ -95,6 +97,63 @@ const ConversionPage = () => {
     return amount * (parseFloat(fxmarginRate) / 100);
   };
 
+  // Enhanced currency flags
+  const getCurrencyDisplay = (currencyCode) => {
+    const flags = {
+      USD: "🇺🇸",
+      EUR: "🇪🇺",
+      GBP: "🇬🇧",
+      JPY: "🇯🇵",
+      CAD: "🇨🇦",
+      AUD: "🇦🇺",
+      CHF: "🇨🇭",
+      CNY: "🇨🇳",
+      INR: "🇮🇳",
+      SGD: "🇸🇬",
+      HKD: "🇭🇰",
+      NZD: "🇳🇿",
+      KRW: "🇰🇷",
+      MXN: "🇲🇽",
+      BRL: "🇧🇷",
+      RUB: "🇷🇺",
+      ZAR: "🇿🇦",
+      AED: "🇦🇪",
+      SAR: "🇸🇦",
+      SEK: "🇸🇪",
+      NOK: "🇳🇴",
+      DKK: "🇩🇰",
+      PLN: "🇵🇱",
+      CZK: "🇨🇿",
+      HUF: "🇭🇺",
+      TRY: "🇹🇷",
+      THB: "🇹🇭",
+      MYR: "🇲🇾",
+      PHP: "🇵🇭",
+      IDR: "🇮🇩",
+      VND: "🇻🇳",
+    };
+    return `${flags[currencyCode] || "💳"} ${currencyCode}`;
+  };
+
+  // Validation function
+  const validateConversion = () => {
+    const { from, to, amount } = conversionForm;
+    
+    if (!from || !to) {
+      return "Please select both currencies";
+    }
+    
+    if (from === to) {
+      return "Cannot convert between same currencies";
+    }
+    
+    if (!amount || parseFloat(amount) <= 0) {
+      return "Please enter a valid amount greater than 0";
+    }
+    
+    return null;
+  };
+
   // Reset state when component mounts
   useEffect(() => {
     reset();
@@ -117,11 +176,10 @@ const ConversionPage = () => {
     }
   }, [error]);
 
-  // Handle success state - FIXED: Removed auto-navigation
+  // Handle success state
   useEffect(() => {
     if (successMessage) {
       setShowPopupSuccess(true);
-      // Removed the auto-navigation timer
     }
   }, [successMessage]);
 
@@ -149,9 +207,15 @@ const ConversionPage = () => {
   };
 
   const handleConvert = async () => {
-    const { from, to, amount } = conversionForm;
-    if (!amount || !from || !to) return;
+    const validationError = validateConversion();
+    if (validationError) {
+      setLocalErrorMessage(validationError);
+      setShowPopup(true);
+      return;
+    }
 
+    const { from, to, amount } = conversionForm;
+    
     setIsConverting(true);
     try {
       await convert({
@@ -170,18 +234,24 @@ const ConversionPage = () => {
   };
 
   const handleSubmit = async () => {
-    const { from, to, amount } = conversionForm;
-
-    if (!convertedValue || !fxRate) {
-      setLocalErrorMessage("Please convert first");
+    const validationError = validateConversion();
+    if (validationError) {
+      setLocalErrorMessage(validationError);
       setShowPopup(true);
       return;
     }
 
-    const bank_id =
-      customerBankAccounts.find((a) => a.currency_code === to)?.id || null;
-    const sender_bank_id =
-      customerBankAccounts.find((a) => a.currency_code === from)?.id || null;
+    if (!convertedValue || !fxRate) {
+      setLocalErrorMessage("Please convert first to get the exchange rate");
+      setShowPopup(true);
+      return;
+    }
+
+    const { from, to, amount } = conversionForm;
+    
+    // Allow conversion between ANY accounts without restrictions
+    const bank_id = customerBankAccounts.find((a) => a.currency_code === to)?.id || null;
+    const sender_bank_id = customerBankAccounts.find((a) => a.currency_code === from)?.id || null;
 
     setIsSubmitting(true);
     try {
@@ -212,8 +282,8 @@ const ConversionPage = () => {
   const handleClosePopupSuccess = () => {
     setShowPopupSuccess(false);
     clearConversionSuccess();
-    clearLastConversion(); // Clear stored conversion data
-    clearConversionId(); // Clear conversion ID
+    clearLastConversion();
+    clearConversionId();
     reset();
     navigate(`/newhomepage/${customerId}`);
   };
@@ -232,22 +302,6 @@ const ConversionPage = () => {
       resetResult();
       setLastUpdateTime(new Date());
     }
-  };
-
-  // Currency options with flags
-  const getCurrencyDisplay = (currencyCode) => {
-    const flags = {
-      USD: "🇺🇸",
-      EUR: "🇪🇺",
-      GBP: "🇬🇧",
-      JPY: "🇯🇵",
-      CAD: "🇨🇦",
-      AUD: "🇦🇺",
-      CHF: "🇨🇭",
-      CNY: "🇨🇳",
-      INR: "🇮🇳",
-    };
-    return `${flags[currencyCode] || "💳"} ${currencyCode}`;
   };
 
   // Show loading only on initial page load
@@ -294,7 +348,7 @@ const ConversionPage = () => {
                       Convert Currency
                     </h2>
                     <p className="text-gray-500 text-sm mt-1">
-                      Get live exchange rates instantly
+                      Convert between any of your accounts instantly
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -380,10 +434,9 @@ const ConversionPage = () => {
                           className="w-full px-6 py-4 text-lg bg-white border-2 border-gray-200 rounded-xl appearance-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">Select Currency</option>
-                          {customerBankAccounts.map((a) => (
-                            <option key={a.id} value={a.currency_code}>
-                              {getCurrencyDisplay(a.currency_code)} -{" "}
-                              {a.account_name}
+                          {customerBankAccounts.map((account) => (
+                            <option key={`from-${account.id}`} value={account.currency_code}>
+                              {getCurrencyDisplay(account.currency_code)} - {account.account_name}
                             </option>
                           ))}
                         </select>
@@ -406,10 +459,10 @@ const ConversionPage = () => {
                           className="w-full px-6 py-4 text-lg bg-white border-2 border-gray-200 rounded-xl appearance-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">Select Currency</option>
-                          {customerBankAccounts.map((a) => (
-                            <option key={a.id} value={a.currency_code}>
-                              {getCurrencyDisplay(a.currency_code)} -{" "}
-                              {a.account_name}
+                          {/* ALL accounts available for "to" without restrictions */}
+                          {customerBankAccounts.map((account) => (
+                            <option key={`to-${account.id}`} value={account.currency_code}>
+                              {getCurrencyDisplay(account.currency_code)} - {account.account_name}
                             </option>
                           ))}
                         </select>
@@ -665,6 +718,78 @@ const ConversionPage = () => {
                 ))}
               </div>
             </div>
+
+            {/* Available Accounts Card */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
+                <Globe className="h-5 w-5 text-blue-500 mr-2" />
+                Your Available Accounts
+              </h3>
+              <div className="space-y-3">
+                {customerBankAccounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                        <span className="text-sm font-semibold text-blue-600">
+                          {account.currency_code.slice(0, 2)}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {account.account_name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {getCurrencyDisplay(account.currency_code)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Balance</div>
+                      <div className="font-semibold text-gray-900">
+                        {formatCurrency(account.balance, account.currency_code)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Conversion Tips Card */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-xl border border-blue-100 p-6">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
+                <Info className="h-5 w-5 text-blue-600 mr-2" />
+                Conversion Tips
+              </h3>
+              <ul className="space-y-3">
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-xs font-bold text-blue-600">1</span>
+                  </div>
+                  <span className="text-sm text-gray-700">
+                    Convert between any of your accounts
+                  </span>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-xs font-bold text-blue-600">2</span>
+                  </div>
+                  <span className="text-sm text-gray-700">
+                    Rates are locked in for 30 seconds
+                  </span>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <span className="text-xs font-bold text-blue-600">3</span>
+                  </div>
+                  <span className="text-sm text-gray-700">
+                    No hidden fees or restrictions
+                  </span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -680,7 +805,7 @@ const ConversionPage = () => {
             onClose={handleClosePopupSuccess}
             message={successMessage}
             transactionDetails={{
-              transactionId: `CONV-${conversionId}`, // Display format with backend ID
+              transactionId: `CONV-${conversionId}`,
               fromCurrency: lastSuccessfulConversion.from,
               toCurrency: lastSuccessfulConversion.to,
               amount: lastSuccessfulConversion.amount.toString(),

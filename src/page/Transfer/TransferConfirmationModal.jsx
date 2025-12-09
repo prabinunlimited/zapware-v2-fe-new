@@ -65,10 +65,9 @@ const TransferConfirmationModal = ({
     }).format(parseFloat(amount || 0));
   };
 
-  // Calculate transfer fee (example: 1.5%)
   const calculateTransferFee = () => {
     const amount = parseFloat(transferAmount || 0);
-    const feeRate = 0.015; // 1.5%
+    const feeRate = 0.015;
     return amount * feeRate;
   };
 
@@ -84,37 +83,29 @@ const TransferConfirmationModal = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 overflow-y-auto"
         role="dialog"
         aria-modal="true"
         aria-labelledby="transfer-confirmation-title"
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100/50 backdrop-blur-lg"
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ type: "spring", damping: 20 }}
+          className="bg-white rounded-lg sm:rounded-xl shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-2xl mx-auto my-2 sm:my-4 md:my-8 border border-gray-200 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto"
         >
-          {/* Enhanced Header */}
+          {/* Header */}
           <div
-            className={`px-8 py-6 text-white relative overflow-hidden ${
-              headerColorProps.className ||
-              "bg-gradient-to-r from-emerald-600 to-green-600"
+            className={`px-4 sm:px-5 md:px-6 py-3 sm:py-4 border-b ${
+              headerColorProps?.className || "bg-blue-600 text-white"
             }`}
-            style={headerColorProps.style}
           >
-            {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute -top-4 -right-4 w-24 h-24 bg-white rounded-full"></div>
-              <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white rounded-full"></div>
-            </div>
-            
-            <div className="flex items-center justify-between relative z-10">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white/20 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <svg
-                    className="w-6 h-6"
+                    className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -130,223 +121,22 @@ const TransferConfirmationModal = ({
                 <div>
                   <h3
                     id="transfer-confirmation-title"
-                    className="text-2xl font-bold"
+                    className="text-sm sm:text-base md:text-lg font-bold"
                   >
-                    Confirm Transfer
+                    Transfer Confirmation
                   </h3>
-                  <p className="text-green-100 text-sm opacity-95 mt-1 font-medium">
-                    Review all details before proceeding
+                  <p className="text-xs sm:text-sm opacity-90">
+                    Review transfer details
                   </p>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Enhanced Body */}
-          <div className="p-8">
-            {/* Amount Highlight - Improved */}
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-center mb-8"
-            >
-              <div className="inline-flex flex-col items-center bg-gradient-to-br from-gray-50 to-blue-50 rounded-3xl px-8 py-6 border border-blue-100/50 shadow-sm">
-                <span className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-                  Transfer Amount
-                </span>
-                <div className="flex items-baseline">
-                  <span className="text-2xl font-bold text-gray-600 mr-2">
-                    {selectedCurrency}
-                  </span>
-                  <span className="text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                    {formatAmount(transferAmount)}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Enhanced Transfer Details */}
-            <div className="space-y-4 mb-8">
-              <motion.div
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-5 border border-green-100 shadow-sm"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center shadow-sm">
-                    <svg
-                      className="w-6 h-6 text-green-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">
-                      Receiver
-                    </p>
-                    <p
-                      className="text-lg font-bold text-gray-900"
-                      {...textColorProps}
-                    >
-                      {getReceiverDisplayName()}
-                    </p>
-                    <p className="text-sm text-green-600 mt-1">
-                      {receiverDetails?.customer_type === "individual" ? "Individual Account" : "Business Account"}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-5 border border-blue-100 shadow-sm"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-sm">
-                    <svg
-                      className="w-6 h-6 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-                      Contact
-                    </p>
-                    <p
-                      className="text-lg font-bold text-gray-900"
-                      {...textColorProps}
-                    >
-                      {receiverDetails?.mobile_number}
-                    </p>
-                    {receiverDetails?.customer_type === "individual" && (
-                      <p className="text-sm text-blue-600 mt-1">
-                        {receiverDetails?.email}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Cost Breakdown */}
-              <motion.div
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-2xl p-5 border border-purple-100 shadow-sm"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center shadow-sm">
-                    <svg
-                      className="w-6 h-6 text-purple-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">
-                      Cost Breakdown
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Transfer Amount</span>
-                        <span className="font-semibold text-gray-900">
-                          {selectedCurrency} {formatAmount(transferAmount)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Transfer Fee</span>
-                        <span className="font-semibold text-gray-900">
-                          {selectedCurrency} {formatAmount(calculateTransferFee())}
-                        </span>
-                      </div>
-                      <div className="border-t border-gray-200 pt-2 mt-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-base font-semibold text-gray-900">Total</span>
-                          <span className="text-lg font-bold text-purple-700">
-                            {selectedCurrency} {formatAmount(calculateTotalAmount())}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Enhanced Security Notice */}
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5 mb-2 shadow-sm"
-            >
-              <div className="flex items-start space-x-4">
-                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <svg
-                    className="w-5 h-5 text-amber-600"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-amber-800 mb-2">
-                    🔒 Secure Transaction
-                  </p>
-                  <p className="text-amber-700 text-sm leading-relaxed">
-                    Please verify all details before confirming. This transaction is encrypted and secure, but cannot be reversed once processed.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Enhanced Footer */}
-          <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-200/50">
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <motion.button
+              <button
                 onClick={onClose}
-                disabled={transferLoading}
-                whileHover={{ scale: transferLoading ? 1 : 1.02 }}
-                whileTap={{ scale: transferLoading ? 1 : 0.98 }}
-                className="w-full sm:w-auto px-8 py-4 border-2 border-gray-300 text-gray-700 rounded-2xl hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold flex items-center justify-center space-x-3 order-2 sm:order-1 shadow-sm"
+                className="text-white/80 hover:text-white p-1"
+                aria-label="Close modal"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4 sm:w-5 sm:h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -358,70 +148,334 @@ const TransferConfirmationModal = ({
                     d="M6 18L18 6M6 6l12 12"
                   />
                 </svg>
-                <span>Cancel</span>
-              </motion.button>
-
-              <motion.button
-                onClick={handleConfirmTransfer}
-                disabled={transferLoading}
-                whileHover={transferLoading ? {} : { scale: 1.02, boxShadow: "0 8px 25px rgba(0, 0, 0, 0.15)" }}
-                whileTap={transferLoading ? {} : { scale: 0.98 }}
-                className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-bold transition-all duration-200 relative overflow-hidden group ${
-                  headerColorProps.className ||
-                  "bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
-                } ${
-                  transferLoading
-                    ? "opacity-50 cursor-not-allowed"
-                    : "shadow-lg"
-                }`}
-                style={{
-                  ...headerColorProps.style,
-                  color: "#ffffff",
-                }}
-              >
-                {/* Animated background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                
-                {transferLoading ? (
-                  <div className="flex items-center justify-center space-x-3 relative z-10">
-                    <RingLoader size={20} color="#fff" />
-                    <span className="font-semibold">Processing...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center space-x-3 relative z-10">
-                    <svg
-                      className="w-6 h-6 transform group-hover:scale-110 transition-transform duration-200"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className="text-lg">Confirm Transfer</span>
-                  </div>
-                )}
-              </motion.button>
+              </button>
             </div>
+          </div>
 
-            {/* Additional Security Info */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="text-center mt-4 pt-4 border-t border-gray-200/50"
-            >
-              <div className="flex items-center justify-center space-x-2 text-xs text-gray-500">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-                <span>256-bit SSL Encryption • PCI DSS Compliant</span>
+          {/* Main Content - Responsive Layout */}
+          <div className="p-3 sm:p-4 md:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
+              {/* Left Column - Amount & Receiver Info */}
+              <div className="space-y-4 sm:space-y-5">
+                {/* Amount Card */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl p-4 sm:p-5 border border-blue-100">
+                  <div className="text-center mb-3 sm:mb-4">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">
+                      Transfer Amount
+                    </p>
+                    <div className="flex items-baseline justify-center">
+                      <span className="text-lg sm:text-xl md:text-2xl font-bold text-gray-700 mr-1 sm:mr-2">
+                        {selectedCurrency}
+                      </span>
+                      <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                        {formatAmount(transferAmount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Cost Breakdown */}
+                  <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
+                      Cost Breakdown
+                    </p>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Transfer Amount
+                        </span>
+                        <span className="font-medium text-gray-900 text-sm sm:text-base">
+                          {selectedCurrency} {formatAmount(transferAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Transfer Fee (1.5%)
+                        </span>
+                        <span className="font-medium text-gray-900 text-sm sm:text-base">
+                          {selectedCurrency} {formatAmount(calculateTransferFee())}
+                        </span>
+                      </div>
+                      <div className="border-t border-gray-200 pt-1.5 sm:pt-2 mt-1.5 sm:mt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-gray-900 text-sm sm:text-base">
+                            Total to Pay
+                          </span>
+                          <span className="text-base sm:text-lg md:text-xl font-bold text-blue-700">
+                            {selectedCurrency} {formatAmount(calculateTotalAmount())}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Security Notice */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-amber-200">
+                  <div className="flex items-start space-x-2 sm:space-x-3">
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 bg-amber-100 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg
+                        className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-semibold text-amber-800 mb-0.5 sm:mb-1">
+                        Important Notice
+                      </p>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        Please verify all details carefully. Once confirmed, this
+                        transaction cannot be reversed or modified.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </motion.div>
+
+              {/* Right Column - Receiver Details */}
+              <div className="space-y-4 sm:space-y-5">
+                {/* Receiver Info Card */}
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg sm:rounded-xl p-4 sm:p-5 border border-green-100">
+                  <div className="flex items-center space-x-2 sm:space-x-3 mb-3 sm:mb-4">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-green-100 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg
+                        className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide truncate">
+                        Receiver Details
+                      </p>
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate">
+                        {getReceiverDisplayName()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 sm:space-y-3">
+                    <div className="flex items-center justify-between p-2 sm:p-3 bg-white/80 rounded-lg border border-green-100">
+                      <div className="flex items-center space-x-1.5 sm:space-x-2">
+                        <svg
+                          className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                          />
+                        </svg>
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Mobile
+                        </span>
+                      </div>
+                      <span className="font-semibold text-gray-900 text-xs sm:text-sm md:text-base truncate ml-2">
+                        {receiverDetails?.mobile_number}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 sm:p-3 bg-white/80 rounded-lg border border-green-100">
+                      <div className="flex items-center space-x-1.5 sm:space-x-2">
+                        <svg
+                          className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Email
+                        </span>
+                      </div>
+                      <span className="font-medium text-gray-900 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[150px] md:max-w-[180px]">
+                        {receiverDetails?.email || "Not provided"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 sm:p-3 bg-white/80 rounded-lg border border-green-100">
+                      <div className="flex items-center space-x-1.5 sm:space-x-2">
+                        <svg
+                          className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                          />
+                        </svg>
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Account Type
+                        </span>
+                      </div>
+                      <span className="font-medium text-blue-700 text-xs sm:text-sm md:text-base">
+                        {receiverDetails?.customer_type === "individual"
+                          ? "Individual"
+                          : "Business"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 sm:p-3 bg-white/80 rounded-lg border border-green-100">
+                      <div className="flex items-center space-x-1.5 sm:space-x-2">
+                        <svg
+                          className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span className="text-xs sm:text-sm text-gray-600">
+                          Currency
+                        </span>
+                      </div>
+                      <span className="font-bold text-gray-900 text-sm sm:text-base md:text-lg">
+                        {selectedCurrency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transfer Summary */}
+                <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg sm:rounded-xl p-4 sm:p-5 border border-purple-100">
+                  <p className="text-xs sm:text-sm font-semibold text-purple-700 mb-2 sm:mb-3">
+                    Transfer Summary
+                  </p>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        From Account
+                      </span>
+                      <span className="font-medium text-gray-900 text-xs sm:text-sm md:text-base">
+                        Your Account
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        To Receiver
+                      </span>
+                      <span className="font-medium text-gray-900 text-xs sm:text-sm md:text-base truncate max-w-[100px] sm:max-w-[150px]">
+                        {getReceiverDisplayName()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        Transfer Method
+                      </span>
+                      <span className="font-medium text-blue-700 text-xs sm:text-sm md:text-base">
+                        Instant Transfer
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-gray-600">
+                        Estimated Delivery
+                      </span>
+                      <span className="font-medium text-green-700 text-xs sm:text-sm md:text-base">
+                        Within minutes
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 sm:px-5 md:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+              <div className="flex items-center space-x-2 text-xs text-gray-500">
+                <svg
+                  className="w-3 h-3 sm:w-4 sm:h-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span className="text-xs sm:text-sm">256-bit SSL Secured</span>
+              </div>
+
+              <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto">
+                <button
+                  onClick={onClose}
+                  disabled={transferLoading}
+                  className="px-4 sm:px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium text-xs sm:text-sm flex-1 sm:flex-none text-center"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleConfirmTransfer}
+                  disabled={transferLoading}
+                  className={`px-4 sm:px-8 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 flex items-center justify-center space-x-2 flex-1 sm:flex-none ${
+                    headerColorProps?.className || "bg-blue-600 hover:bg-blue-700"
+                  } ${
+                    transferLoading ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  style={{ color: "#ffffff" }}
+                >
+                  {transferLoading ? (
+                    <>
+                      <RingLoader size={14} color="#fff" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-3 h-3 sm:w-4 sm:h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <span>Confirm Transfer</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </motion.div>
       </motion.div>

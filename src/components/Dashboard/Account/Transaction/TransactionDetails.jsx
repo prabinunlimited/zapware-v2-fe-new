@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import PropTypes from "prop-types";
 import ClipLoader from "react-spinners/ClipLoader";
+import { FaFileExport } from "react-icons/fa"; // Import export icon
 
 // ✅ USE THE NEW HOOK
 import { useTransactionData } from "../../../../hooks/transactionHooks";
@@ -9,18 +10,15 @@ import { useTransactionData } from "../../../../hooks/transactionHooks";
 const TransactionDetails = React.memo(
   ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
     // ✅ USE TRANSACTION HOOK
-    const {
-      transactions,
-      loading,
-      error,
-      fetchTransactions,
-      forceRefresh,
-    } = useTransactionData();
+    const { transactions, loading, error, fetchTransactions, forceRefresh } =
+      useTransactionData();
 
     // Local state for pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
-    const [transactionCompletionNotified, setTransactionCompletionNotified] = useState(false);
+    const [transactionCompletionNotified, setTransactionCompletionNotified] =
+      useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
 
     // Memoized transaction data
     const currentTransactions = useMemo(() => {
@@ -40,16 +38,22 @@ const TransactionDetails = React.memo(
 
     // ✅ FIXED: ALWAYS FETCH WHEN CURRENCY CHANGES - NO STOPPING LOGIC
     useEffect(() => {
-      if (!customerId || !selectedCurrencyCode || selectedCurrencyCode === "all") {
+      if (
+        !customerId ||
+        !selectedCurrencyCode ||
+        selectedCurrencyCode === "all"
+      ) {
         console.log("⏸️ Skipping transaction fetch - missing params");
         return;
       }
 
-      console.log("🔄 FETCHING TRANSACTIONS FOR CURRENCY:", selectedCurrencyCode);
-      
+      console.log(
+        "🔄 FETCHING TRANSACTIONS FOR CURRENCY:",
+        selectedCurrencyCode
+      );
+
       // ✅ ALWAYS FETCH - NO SUCCESS-BASED STOPPING
       fetchTransactions(customerId, selectedCurrencyCode);
-
     }, [customerId, selectedCurrencyCode, fetchTransactions]);
 
     // ✅ FIXED: Reset pagination when currency changes
@@ -69,7 +73,12 @@ const TransactionDetails = React.memo(
         setTransactionCompletionNotified(true);
         onTransactionComplete(false);
       }
-    }, [transactions, onTransactionComplete, loading, transactionCompletionNotified]);
+    }, [
+      transactions,
+      onTransactionComplete,
+      loading,
+      transactionCompletionNotified,
+    ]);
 
     // Memoized utility functions
     const formatDate = useCallback((dateString) => {
@@ -141,18 +150,95 @@ const TransactionDetails = React.memo(
     // Manual refresh function
     const handleManualRefresh = useCallback(() => {
       if (!customerId || !selectedCurrencyCode) return;
-      
+
       console.log("🔄 MANUAL REFRESH FOR CURRENCY:", selectedCurrencyCode);
       setTransactionCompletionNotified(false);
       forceRefresh(customerId, selectedCurrencyCode);
     }, [customerId, selectedCurrencyCode, forceRefresh]);
+
+    // Export transactions function
+    const handleExportTransactions = useCallback(async () => {
+      if (!customerId || !selectedCurrencyCode || transactions.length === 0) {
+        console.log("No transactions to export");
+        return;
+      }
+
+      setExportLoading(true);
+      try {
+        // Prepare export data
+        const exportData = transactions.map((transaction) => ({
+          "Date & Time": formatDate(transaction.transaction_datetime),
+          "Transaction ID": transaction.transaction_id || "N/A",
+          Description:
+            transaction.beneficiary_name || transaction.sender_name || "N/A",
+          Direction: transaction.direction || "N/A",
+          Amount: `${transaction.instructed_amount || "0"} ${
+            transaction.currency_code
+          }`,
+          Fee: transaction.fee_amount || "0",
+          Balance: transaction.balance || "0",
+          Status: transaction.status || "Unknown",
+          Currency: transaction.currency_code || selectedCurrencyCode,
+          Reference: transaction.external_reference || "N/A",
+          "Created At": transaction.created_at || "N/A",
+        }));
+
+        // Convert to CSV
+        const headers = Object.keys(exportData[0]).join(",");
+        const csvRows = exportData.map((row) =>
+          Object.values(row)
+            .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+            .join(",")
+        );
+        const csvContent = [headers, ...csvRows].join("\n");
+
+        // Create and download file
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+
+        const fileName = `transactions_${selectedCurrencyCode}_${
+          new Date().toISOString().split("T")[0]
+        }.csv`;
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log(
+          `✅ Exported ${transactions.length} transactions to ${fileName}`
+        );
+
+        // You could also send this to an API endpoint for server-side processing
+        // await axios.post('/api/export-transactions', {
+        //   customerId,
+        //   currency: selectedCurrencyCode,
+        //   transactions: exportData
+        // });
+      } catch (error) {
+        console.error("Error exporting transactions:", error);
+        // You could add a toast notification here
+        alert("Failed to export transactions. Please try again.");
+      } finally {
+        setExportLoading(false);
+      }
+    }, [customerId, selectedCurrencyCode, transactions, formatDate]);
 
     // Generate page numbers for pagination
     const pageNumbers = useMemo(() => {
       const pages = [];
       const maxVisiblePages = 5;
 
-      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let startPage = Math.max(
+        1,
+        currentPage - Math.floor(maxVisiblePages / 2)
+      );
       let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
       if (endPage - startPage + 1 < maxVisiblePages) {
@@ -168,14 +254,20 @@ const TransactionDetails = React.memo(
 
     // Debug effect to track currency changes
     useEffect(() => {
-      console.log('🔍 TransactionDetails Debug:', {
+      console.log("🔍 TransactionDetails Debug:", {
         selectedCurrencyCode,
         transactionsCount: transactions.length,
         filteredCount: currentTransactions.length,
         customerId,
-        loading
+        loading,
       });
-    }, [selectedCurrencyCode, transactions, currentTransactions, customerId, loading]);
+    }, [
+      selectedCurrencyCode,
+      transactions,
+      currentTransactions,
+      customerId,
+      loading,
+    ]);
 
     if (loading) {
       return (
@@ -216,14 +308,41 @@ const TransactionDetails = React.memo(
         className="w-full"
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-800">
-            Transaction History
-          </h2>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">
+              Transaction History
+            </h2>
+            {/* ✅ ADDED: Subheading */}
+            <p className="text-sm text-gray-500 mt-1">
+              View and manage your transaction records
+            </p>
+          </div>
           <div className="flex items-center gap-4">
             <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
               {safeTransactions.length} transaction
               {safeTransactions.length !== 1 ? "s" : ""} found
             </div>
+
+            {/* ✅ UPDATED: Export button with new wording */}
+            {safeTransactions.length > 0 && (
+              <button
+                onClick={handleExportTransactions}
+                disabled={exportLoading || safeTransactions.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download Transaction Data"
+              >
+                <FaFileExport className="w-4 h-4" />
+                {exportLoading ? (
+                  <>
+                    <ClipLoader color="#ffffff" size={16} />
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  "Export Transaction Records"
+                )}
+              </button>
+            )}
+
             <button
               onClick={handleManualRefresh}
               className="text-blue-600 hover:text-blue-800 text-sm font-medium"

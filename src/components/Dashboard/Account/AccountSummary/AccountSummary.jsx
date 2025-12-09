@@ -63,7 +63,7 @@ import {
   SafeErrorDisplay,
 } from "../../../../utils/errorHandling";
 
-import { useBankLetter } from '../../../../page/BankLetter/hooks/useBankLetter';
+import { useBankLetter } from "../../../../page/BankLetter/hooks/useBankLetter";
 
 // ✅ FIXED: Custom hook for token synchronization
 const useTokenSync = () => {
@@ -82,7 +82,7 @@ const useTokenSync = () => {
 // ✅ FIXED: Custom hook for auto-fetch with debouncing
 const useAutoFetchAccounts = (customerId, authtoken) => {
   const dispatch = useDispatch();
-  const [fetchTrigger, forceRefresh] = useReducer(x => x + 1, 0);
+  const [fetchTrigger, forceRefresh] = useReducer((x) => x + 1, 0);
   const fetchRef = useRef({
     hasAttempted: false,
     lastFetchTime: 0,
@@ -95,33 +95,42 @@ const useAutoFetchAccounts = (customerId, authtoken) => {
   const shouldFetch = useMemo(() => {
     // Don't fetch if already loading
     if (accountLoading) return false;
-    
+
     // Don't fetch if missing required data
     if (!customerId || !authtoken) return false;
-    
+
     // Don't fetch if we already have data
     if (hasFetchedAccount && !fetchTrigger) return false;
-    
+
     // Check cooldown
     const now = Date.now();
     if (now - fetchRef.current.lastFetchTime < fetchRef.current.cooldown) {
       return false;
     }
-    
+
     return true;
-  }, [customerId, authtoken, hasFetchedAccount, accountLoading, fetchAttempted, fetchTrigger]);
+  }, [
+    customerId,
+    authtoken,
+    hasFetchedAccount,
+    accountLoading,
+    fetchAttempted,
+    fetchTrigger,
+  ]);
 
   useEffect(() => {
     if (shouldFetch) {
       console.log("🚀 Triggering account fetch...");
       fetchRef.current.hasAttempted = true;
       fetchRef.current.lastFetchTime = Date.now();
-      
-      dispatch(fetchAccountDetails({ 
-        customerId, 
-        authtoken, 
-        isRefresh: fetchTrigger > 0 
-      }));
+
+      dispatch(
+        fetchAccountDetails({
+          customerId,
+          authtoken,
+          isRefresh: fetchTrigger > 0,
+        })
+      );
     }
   }, [shouldFetch, dispatch, customerId, authtoken, fetchTrigger]);
 
@@ -294,11 +303,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   const authtoken = useSelector(selectAuthToken);
   const exporting = useSelector(selectExporting);
   const accountDetailsModal = useSelector(selectAccountDetailsModal);
-  const accountDropdown = useSelector(state => state.account?.accountDropdownOpen || false);
+  const accountDropdown = useSelector(
+    (state) => state.account?.accountDropdownOpen || false
+  );
 
   // ✅ FIXED: Custom hooks
-  const { refreshAccounts, isFetching } = useAutoFetchAccounts(customerId, authtoken);
-  const { formatCurrency, getFullFormattedAmount, getCurrencyName } = useCurrencyUtils();
+  const { refreshAccounts, isFetching } = useAutoFetchAccounts(
+    customerId,
+    authtoken
+  );
+  const { formatCurrency, getFullFormattedAmount, getCurrencyName } =
+    useCurrencyUtils();
   const config = usePartnerConfig(authtoken);
 
   // ✅ FIXED: Memoized computed values
@@ -310,13 +325,13 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     return safeAccounts.length > 0;
   }, [safeAccounts]);
 
-  const headerColor = useMemo(() => 
-    config?.header_color || localStorage.getItem("header_color"),
+  const headerColor = useMemo(
+    () => config?.header_color || localStorage.getItem("header_color"),
     [config?.header_color]
   );
 
-  const textColorFromConfig = useMemo(() => 
-    config?.text_color || localStorage.getItem("text_color") || textColor,
+  const textColorFromConfig = useMemo(
+    () => config?.text_color || localStorage.getItem("text_color") || textColor,
     [config?.text_color, textColor]
   );
 
@@ -365,17 +380,20 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     dispatch(setAccountDropdownOpen(!accountDropdown));
   }, [dispatch, accountDropdown]);
 
-  const handleAccountChange = useCallback((account) => {
-    dispatch(setSelectedAccount(account));
-    const newCurrency = account.currency || "all";
-    dispatch(setSelectedCurrency(newCurrency));
+  const handleAccountChange = useCallback(
+    (account) => {
+      dispatch(setSelectedAccount(account));
+      const newCurrency = account.currency || "all";
+      dispatch(setSelectedCurrency(newCurrency));
 
-    if (onCurrencyChange) {
-      onCurrencyChange(newCurrency);
-    }
+      if (onCurrencyChange) {
+        onCurrencyChange(newCurrency);
+      }
 
-    dispatch(setAccountDropdownOpen(false));
-  }, [dispatch, onCurrencyChange]);
+      dispatch(setAccountDropdownOpen(false));
+    },
+    [dispatch, onCurrencyChange]
+  );
 
   const handleAccountDetailsClick = useCallback(() => {
     if (selectedAccount) {
@@ -390,12 +408,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   const handleBankLetter = () => {
     navigateToBankLetter(customerId);
   };
-
-  const handleExcelExport = useCallback(() => {
-    if (customerId && authtoken) {
-      dispatch(exportTransactionsToExcel({ customerId, bearertoken: authtoken }));
-    }
-  }, [customerId, authtoken, dispatch]);
 
   const handleBalanceUpdate = useCallback(async () => {
     if (customerId && authtoken) {
@@ -580,7 +592,9 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                       <div className="p-2">
                         {safeAccounts.map((account, index) => (
                           <motion.button
-                            key={`${account.account_id || account.currency}-${index}`}
+                            key={`${
+                              account.account_id || account.currency
+                            }-${index}`}
                             onClick={() => handleAccountChange(account)}
                             className={`w-full p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${
                               selectedAccount?.currency === account.currency
@@ -699,11 +713,11 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 Account Actions
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
                 {/* Account Details */}
                 <motion.button
                   onClick={handleAccountDetailsClick}
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full"
+                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
@@ -724,7 +738,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {/* Bank Letter */}
                 <motion.button
                   onClick={handleBankLetter}
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full"
+                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
@@ -738,31 +752,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     </p>
                     <p className="text-xs text-gray-500 truncate">
                       Generate bank document
-                    </p>
-                  </div>
-                </motion.button>
-
-                {/* Export Excel */}
-                <motion.button
-                  onClick={handleExcelExport}
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full"
-                  disabled={exporting}
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors flex-shrink-0">
-                    {exporting ? (
-                      <ClipLoader color="#9333EA" size={16} />
-                    ) : (
-                      <FiDownload className="w-5 h-5 text-purple-600" />
-                    )}
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
-                      {exporting ? "Exporting..." : "Export Excel"}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      Download transactions
                     </p>
                   </div>
                 </motion.button>
@@ -808,13 +797,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
         transition={{ duration: 0.5, delay: 0.2 }}
       >
         <div className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <FaChartLine className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-800">
-              Transaction History
-            </h2>
-          </div>
-
           <TransactionDetails
             customerId={customerId}
             selectedCurrencyCode={selectedCurrency}
