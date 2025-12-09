@@ -291,8 +291,15 @@ export const fetchBeneficiaryById = createAsyncThunk(
   async (beneficiaryId, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
+
+      console.log("📥 Fetching beneficiary with ID:", beneficiaryId);
+      console.log(
+        "📥 Using endpoint:",
+        `/beneficiaries/benef-view/${beneficiaryId}`
+      );
+
       const response = await fetch(
-        `${API_URL}/beneficiaries/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/benef-view/${beneficiaryId}`,
         {
           method: "GET",
           headers: {
@@ -302,12 +309,37 @@ export const fetchBeneficiaryById = createAsyncThunk(
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ API Error Response:", errorText);
         throw new Error("Failed to fetch beneficiary");
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log("✅ API Success Response:", result);
+
+      // Handle the API response structure
+      let beneficiaryData = null;
+
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        beneficiaryData = result.data[0];
+      } else if (result.data && typeof result.data === "object") {
+        beneficiaryData = result.data;
+      }
+
+      // The API might return banks separately or within the data
+      if (result.benef_banks && Array.isArray(result.benef_banks)) {
+        beneficiaryData = {
+          ...beneficiaryData,
+          banks: result.benef_banks,
+        };
+      }
+
+      return beneficiaryData;
     } catch (error) {
+      console.error("❌ fetchBeneficiaryById error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -317,39 +349,43 @@ export const fetchBeneficiaryById = createAsyncThunk(
 export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
   async (
-    { customerId, beneficiaryId, beneficiaryData },
+    { beneficiaryId, beneficiaryData }, // Only needs beneficiaryId
     { rejectWithValue }
   ) => {
     try {
-      console.log("📤 Updating beneficiary with:", {
-        customerId,
+      console.log("📤 Updating beneficiary:", {
         beneficiaryId,
         beneficiaryData,
       });
 
       const authtoken = localStorage.getItem("authtoken");
+      const currentDateTime = new Date().toLocaleString();
 
-      // Format current_date_time like the non-redux version
-      const currentDateTime = new Date().toLocaleString(); // Changed from ISO format
-
-      // Create payload matching the non-redux version
+      // Create payload exactly like your non-redux version
       const payload = {
         ...beneficiaryData,
         current_date_time: currentDateTime,
-        // Include these additional fields that the API might expect
-        name: `${beneficiaryData.first_name} ${beneficiaryData.last_name}`.trim(),
-        street: beneficiaryData.street || "", // Ensure street is included
-        pincode: beneficiaryData.postalcode || "", // Map postalcode to pincode if needed
-        // idTypes: beneficiaryData.idTypes || [] // Add if needed
+        // Don't include customer_id unless your API specifically needs it
+        // The non-redux version doesn't send it in the payload
       };
 
-      console.log("📤 Payload being sent:", payload);
+      // Clean up the payload
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === undefined || payload[key] === "") {
+          delete payload[key];
+        }
+      });
 
-      // ✅ Use the correct endpoint from non-redux version
+      console.log("📤 Payload for update:", payload);
+      console.log(
+        "📤 Endpoint:",
+        `/beneficiaries/update-benef/${beneficiaryId}`
+      );
+
       const response = await fetch(
         `${API_URL}/beneficiaries/update-benef/${beneficiaryId}`,
         {
-          method: "POST", // ✅ Changed from PUT to POST
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
@@ -358,11 +394,11 @@ export const updateBeneficiary = createAsyncThunk(
         }
       );
 
-      console.log("📡 API Response status:", response.status);
+      console.log("📡 Update API Response status:", response.status);
 
       if (!response.ok) {
         const errorResult = await response.json();
-        console.error("❌ API Error Response:", errorResult);
+        console.error("❌ Update API Error:", errorResult);
         throw new Error(
           errorResult.message ||
             errorResult.error ||
@@ -371,7 +407,7 @@ export const updateBeneficiary = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("✅ API Success Response:", result);
+      console.log("✅ Update successful:", result);
 
       return {
         beneficiaryId,

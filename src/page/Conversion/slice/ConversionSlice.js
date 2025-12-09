@@ -24,6 +24,11 @@ export const performConversion = createAsyncThunk(
   'conversion/performConversion',
   async ({ from, to, amount, customer_id, authtoken }, { rejectWithValue }) => {
     try {
+      // Client-side validation only for same currency
+      if (from === to) {
+        return rejectWithValue("Cannot convert between same currencies");
+      }
+      
       const response = await axios.post(
         `${API_URL}/fx-conversion`,
         { from, to, amount, customer_id },
@@ -76,16 +81,14 @@ export const submitConversion = createAsyncThunk(
         { headers: { Authorization: `Bearer ${authtoken}` } }
       );
       
-      console.log('Conversion API Response:', response.data); // Debug log
+      console.log('Conversion API Response:', response.data);
       
       if (response.data.status === 'Success') {
-        // Return all data from API including conversion_id
         return {
           message: response.data.message || 'Conversion Successful!',
-          conversionId: response.data.conversion_id, // From backend API
+          conversionId: response.data.conversion_id,
           feeAmount: response.data.fee_amount || 0,
           convertedValue: response.data.converted_value,
-          // Also return the submitted data for reference
           submittedData: {
             from,
             to,
@@ -115,8 +118,8 @@ const conversionSlice = createSlice({
     loading: false,
     error: null,
     successMessage: null,
-    conversionId: null, // Will store backend-provided conversion_id
-    lastSuccessfulConversion: null, // Store complete conversion data for display
+    conversionId: null,
+    lastSuccessfulConversion: null,
     conversionForm: {
       from: '',
       to: '',
@@ -128,7 +131,6 @@ const conversionSlice = createSlice({
       state.conversionForm = { ...state.conversionForm, ...action.payload };
     },
     resetConversion: (state) => {
-      // Reset all conversion-related state
       state.convertedValue = null;
       state.fxRate = null;
       state.fxmarginRate = null;
@@ -143,7 +145,6 @@ const conversionSlice = createSlice({
       };
     },
     resetConversionForm: (state) => {
-      // Reset only the form
       state.conversionForm = {
         from: '',
         to: '',
@@ -151,7 +152,6 @@ const conversionSlice = createSlice({
       };
     },
     resetConversionResult: (state) => {
-      // Reset only the conversion results
       state.convertedValue = null;
       state.fxRate = null;
       state.fxmarginRate = null;
@@ -169,7 +169,6 @@ const conversionSlice = createSlice({
       state.lastSuccessfulConversion = null;
     },
     clearAllConversionState: (state) => {
-      // Clear everything
       state.customerBankAccounts = [];
       state.convertedValue = null;
       state.fxRate = null;
@@ -223,12 +222,12 @@ const conversionSlice = createSlice({
         state.loading = true;
         state.error = null;
         state.successMessage = null;
-        state.conversionId = null; // Clear previous ID on new submission
+        state.conversionId = null;
       })
       .addCase(submitConversion.fulfilled, (state, action) => {
         state.loading = false;
         state.successMessage = action.payload.message;
-        state.conversionId = action.payload.conversionId; // Store backend-provided ID
+        state.conversionId = action.payload.conversionId;
         
         // Store complete conversion data for display in success popup
         state.lastSuccessfulConversion = {
@@ -251,8 +250,8 @@ const conversionSlice = createSlice({
       .addCase(submitConversion.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        state.conversionId = null; // Ensure no ID on error
-        state.lastSuccessfulConversion = null; // Clear on error
+        state.conversionId = null;
+        state.lastSuccessfulConversion = null;
       });
   }
 });
