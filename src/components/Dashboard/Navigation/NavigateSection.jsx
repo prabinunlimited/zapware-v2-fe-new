@@ -15,7 +15,7 @@ import FeatureComingSoonPopup from "../../PopupModal/FeatureComingSoonPopup"; //
 import ZapPlaidLink from "../../ZapPlaidLink/ZapPlaidLink";
 import { Download } from "lucide-react";
 import PropTypes from "prop-types";
-import ClipLoader from "react-spinners/ClipLoader";
+import RingLoader from "react-spinners/RingLoader";
 
 // Import Error Boundary
 import ErrorBoundary from "../../ErrorBoundary/ErrorBoundary";
@@ -442,7 +442,7 @@ function NavigateSectionContent({
   if (profileLoading || isFetching) {
     return (
       <div className="w-full px-2 sm:px-4 flex justify-center items-center min-h-[200px]">
-        <ClipLoader color="#36d7b7" size={40} />
+        <RingLoader color="#36d7b7" size={40} />
       </div>
     );
   }
@@ -698,7 +698,7 @@ function NavigateSectionContent({
                 <div className="rounded-2xl border flex justify-center items-center border-stroke h-14 sm:h-16 text-white bg-gray-800 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-700 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                   {manualLoading ? (
                     <div className="flex justify-center items-center">
-                      <ClipLoader color="#36d7b7" size={25} />
+                      <RingLoader color="#36d7b7" size={25} />
                     </div>
                   ) : (
                     <div className="flex items-center space-x-3">

@@ -71,7 +71,7 @@ import Step2Details from "./steps/Step2Details";
 import Step3Confirm from "./steps/Step3Confirm";
 import Step4Success from "./steps/Step4Success";
 
-import { RingLoader, ClipLoader } from "react-spinners";
+import {  RingLoader } from "react-spinners";
 
 const Remittance = () => {
   const dispatch = useDispatch();
@@ -1146,7 +1146,7 @@ const Remittance = () => {
                             </p>
                             {exchangeRateLoading && (
                               <div className="flex items-center gap-2 mt-1">
-                                <ClipLoader color="#3b82f6" size={14} />
+                                <RingLoader color="#3b82f6" size={14} />
                                 <span className="text-xs text-gray-600">
                                   Fetching live rate...
                                 </span>
@@ -1323,7 +1323,7 @@ const Remittance = () => {
                     </div>
                     {manualDetailsLoading && (
                       <div className="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
-                        <ClipLoader color="#ffffff" size={16} />
+                        <RingLoader color="#ffffff" size={16} />
                         <span className="text-sm text-white">
                           Loading details...
                         </span>
@@ -1850,7 +1850,7 @@ const Remittance = () => {
               >
                 {loading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={18} />
+                    <RingLoader color="#ffffff" size={18} />
                     <span>Processing...</span>
                   </>
                 ) : (
@@ -1882,7 +1882,7 @@ const Remittance = () => {
                   >
                     {openBankingProcessing ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Initializing Open Banking...</span>
                       </>
                     ) : (
@@ -1905,7 +1905,7 @@ const Remittance = () => {
                   >
                     {loading ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Processing Transaction...</span>
                       </>
                     ) : (
@@ -1928,7 +1928,7 @@ const Remittance = () => {
                   >
                     {loading ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Processing Transaction...</span>
                       </>
                     ) : (

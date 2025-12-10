@@ -13,7 +13,7 @@ import {
   FaMoneyBillWave,
   FaPlus,
 } from "react-icons/fa";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";

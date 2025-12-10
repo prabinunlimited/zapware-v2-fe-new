@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { motion } from "framer-motion";
 import {
   FaUniversity,

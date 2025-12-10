@@ -10,7 +10,7 @@ import {
   FaLink,
 } from "react-icons/fa";
 import { FiHelpCircle } from "react-icons/fi";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import PaymentMethodCard from "./PaymentMethodCard";
 
 const PaymentMethodSelection = ({
@@ -113,7 +113,7 @@ const PaymentMethodSelection = ({
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-xl"
       >
-        <ClipLoader color="#3B82F6" size={30} className="mb-4" />
+        <RingLoader color="#3B82F6" size={30} className="mb-4" />
         <p className="text-gray-600 font-medium">Loading payment methods...</p>
         <p className="text-gray-500 text-sm mt-1">
           Fetching available options for {selectedCurrency}

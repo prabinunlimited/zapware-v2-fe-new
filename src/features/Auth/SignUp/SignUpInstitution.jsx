@@ -11,7 +11,7 @@ import {
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RingLoader, ClipLoader } from "react-spinners";
+import {  RingLoader } from "react-spinners";
 import Select from "react-select";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
 
@@ -1929,7 +1929,7 @@ const Institution = () => {
               />
               {isZipLoading && activeField === "controller_zip_code" && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <ClipLoader size={16} color="#3b82f6" />
+                  <RingLoader size={16} color="#3b82f6" />
                 </div>
               )}
               <FormField
@@ -2682,7 +2682,7 @@ const Institution = () => {
                         />
                         {isZipLoading && activeField === "registered_address_street_zip" && (
                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <ClipLoader size={16} color="#3b82f6" />
+                            <RingLoader size={16} color="#3b82f6" />
                           </div>
                         )}
                        

@@ -13,7 +13,7 @@ import {
   FaMoneyBillWave,
   FaPlus,
 } from "react-icons/fa";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -664,7 +664,7 @@ const ManualDeposit = ({
 
             {manualDetailsLoading ? (
               <div className="flex justify-center py-3">
-                <ClipLoader color="#2563eb" size={16} />
+                <RingLoader color="#2563eb" size={16} />
                 <span className="ml-2 text-sm text-gray-600">
                   Loading bank details...
                 </span>

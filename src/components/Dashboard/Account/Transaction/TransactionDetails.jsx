@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import PropTypes from "prop-types";
-import ClipLoader from "react-spinners/ClipLoader";
+import RingLoader from "react-spinners/RingLoader";
 import { FaFileExport } from "react-icons/fa"; // Import export icon
 
 // ✅ USE THE NEW HOOK
@@ -272,8 +272,8 @@ const TransactionDetails = React.memo(
     if (loading) {
       return (
         <div className="flex justify-center items-center h-32">
-          <div className="text-center">
-            <ClipLoader color="#3B82F6" size={40} />
+          <div className="w-full h-32 flex flex-col items-center justify-center">
+            <RingLoader color="#3B82F6" size={40} />
             <p className="text-gray-500 mt-2">Loading transactions...</p>
           </div>
         </div>
@@ -323,22 +323,30 @@ const TransactionDetails = React.memo(
               {safeTransactions.length !== 1 ? "s" : ""} found
             </div>
 
-            {/* ✅ UPDATED: Export button with new wording */}
             {safeTransactions.length > 0 && (
               <button
                 onClick={handleExportTransactions}
                 disabled={exportLoading || safeTransactions.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-3 bg-white rounded-xl border border-green-500 
+      shadow-sm hover:shadow-md hover:bg-green-500 
+      hover:text-white transition-all duration-300 
+      flex items-center justify-center gap-2 min-w-[200px] 
+      disabled:opacity-50 disabled:cursor-not-allowed 
+      text-gray-700 text-sm font-medium
+    "
                 title="Download Transaction Data"
               >
-                <FaFileExport className="w-4 h-4" />
+                <FaFileExport className="w-4 h-4 text-current" />
+
                 {exportLoading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={16} />
-                    <span>Exporting...</span>
+                    <RingLoader color="#ffffff" size={16} />
+                    <span className="text-current">Exporting...</span>
                   </>
                 ) : (
-                  "Export Transaction Records"
+                  <span className="text-current">
+                    Export Transaction Records
+                  </span>
                 )}
               </button>
             )}
@@ -385,9 +393,6 @@ const TransactionDetails = React.memo(
                       Transaction ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Direction
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -416,25 +421,11 @@ const TransactionDetails = React.memo(
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
                         {transaction.transaction_id ? (
                           <span className="bg-gray-100 px-2 py-1 rounded text-xs">
-                            {transaction.transaction_id.slice(0, 8)}...
+                            {transaction.transaction_id}
                           </span>
                         ) : (
                           "N/A"
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div>
-                          <div className="font-medium">
-                            {transaction.beneficiary_name ||
-                              transaction.sender_name ||
-                              "N/A"}
-                          </div>
-                          {transaction.description && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              {transaction.description}
-                            </div>
-                          )}
-                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span

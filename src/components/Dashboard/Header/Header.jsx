@@ -17,7 +17,7 @@ import {
   FaChevronRight,
   FaStar,
 } from "react-icons/fa";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Redux imports from headerSlice
@@ -420,7 +420,7 @@ const Header = ({ customerId }) => {
     if (profileLoading && !profileData) {
       return (
         <div className="flex items-center">
-          <ClipLoader size={30} color={"#ffffff"} loading={true} />
+          <RingLoader size={30} color={"#ffffff"} loading={true} />
           <span className="ml-2 text-white text-sm">Loading Profile...</span>
         </div>
       );
@@ -749,7 +749,7 @@ const Header = ({ customerId }) => {
               className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
             >
               {partnerConfigLoading ? (
-                <ClipLoader size={30} color={"#ffffff"} loading={true} />
+                <RingLoader size={30} color={"#ffffff"} loading={true} />
               ) : (
                 <>
                   <motion.div
@@ -775,7 +775,7 @@ const Header = ({ customerId }) => {
               className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
             >
               {partnerConfigLoading ? (
-                <ClipLoader size={30} color={"#ffffff"} loading={true} />
+                <RingLoader size={30} color={"#ffffff"} loading={true} />
               ) : (
                 <>
                   <motion.div

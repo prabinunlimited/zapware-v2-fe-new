@@ -557,6 +557,319 @@ export const fetchBankBranches = createAsyncThunk(
   }
 );
 
+// ===================== BENEFICIARY REGISTRATION VERIFICATION ENDPOINTS =====================
+
+/**
+ * Send passcode for beneficiary registration email verification
+ */
+export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
+  "beneficiaries/sendRegistrationPasscode",
+  async ({ email, partner_id }, { rejectWithValue }) => {
+    try {
+      console.log("📧 Sending registration passcode to:", email);
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        email: email.trim().toLowerCase(),
+        user_type: "beneficiary",
+        partner_id:
+          partner_id || localStorage.getItem("whitelabelledpartnerid") || "0",
+      };
+
+      console.log("📧 Payload:", payload);
+
+      const response = await fetch(`${API_URL}/send-passcode-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("📧 Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to send passcode");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Passcode sent to your email",
+        data: result.data || {},
+      };
+    } catch (error) {
+      console.error("❌ sendBeneficiaryRegistrationPasscode error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Validate passcode for beneficiary registration email verification
+ */
+export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
+  "beneficiaries/validateRegistrationPasscode",
+  async ({ email, passcode }, { rejectWithValue }) => {
+    try {
+      console.log("✅ Validating registration passcode for:", email);
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        email: email.trim().toLowerCase(),
+        passcode: passcode,
+      };
+
+      console.log("✅ Payload:", payload);
+
+      const response = await fetch(
+        `${API_URL}/validate-passcode-registration`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+      console.log("✅ Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Invalid passcode");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Email verified successfully",
+        data: result.data || {},
+        verificationToken: result.data?.verification_token,
+      };
+    } catch (error) {
+      console.error("❌ validateBeneficiaryRegistrationPasscode error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Send OTP for beneficiary registration phone verification
+ */
+export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
+  "beneficiaries/sendRegistrationOTP",
+  async ({ country_code, mobile_number, partner_id }, { rejectWithValue }) => {
+    try {
+      console.log(
+        "📱 Sending registration OTP to:",
+        country_code,
+        mobile_number
+      );
+
+      // Clean inputs
+      const cleanMobileNumber = mobile_number.replace(/\D/g, "");
+      const cleanCountryCode = country_code.replace(/\D/g, "");
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        country_code: cleanCountryCode,
+        mobile_number: cleanMobileNumber,
+        user_type: "beneficiary",
+        partner_id:
+          partner_id || localStorage.getItem("whitelabelledpartnerid") || "0",
+      };
+
+      console.log("📱 Payload:", payload);
+
+      const response = await fetch(`${API_URL}/send-otp-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("📱 Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to send OTP");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "OTP sent to your phone",
+        data: result.data || {},
+      };
+    } catch (error) {
+      console.error("❌ sendBeneficiaryRegistrationOTP error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Validate OTP for beneficiary registration phone verification
+ */
+export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
+  "beneficiaries/validateRegistrationOTP",
+  async ({ country_code, mobile_number, otp }, { rejectWithValue }) => {
+    try {
+      console.log(
+        "✅ Validating registration OTP for:",
+        country_code,
+        mobile_number
+      );
+
+      // Clean inputs
+      const cleanMobileNumber = mobile_number.replace(/\D/g, "");
+      const cleanCountryCode = country_code.replace(/\D/g, "");
+      const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        country_code: cleanCountryCode,
+        mobile_number: cleanMobileNumber,
+        otp: formattedOTP,
+      };
+
+      console.log("✅ Payload:", payload);
+
+      const response = await fetch(`${API_URL}/validate-otp-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("✅ Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Invalid OTP");
+      }
+
+      // Store verification token if provided
+      if (result.data?.verification_token) {
+        localStorage.setItem(
+          "phone_verification_token",
+          result.data.verification_token
+        );
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Phone number verified successfully",
+        data: result.data || {},
+        verificationToken: result.data?.verification_token,
+      };
+    } catch (error) {
+      console.error("❌ validateBeneficiaryRegistrationOTP error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Create beneficiary with request-remit flow (from your original component)
+ */
+export const createBeneficiaryRequestRemit = createAsyncThunk(
+  "beneficiaries/createBeneficiaryRequestRemit",
+  async (beneficiaryData, { rejectWithValue }) => {
+    try {
+      console.log("🔧 Creating beneficiary with request-remit flow...");
+      console.log("🔧 Beneficiary Data:", beneficiaryData);
+
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Add hostname if not present
+      if (!beneficiaryData.hostname) {
+        beneficiaryData.hostname = window.location.hostname;
+      }
+
+      // Add partner_id if not present
+      if (!beneficiaryData.partner_id) {
+        beneficiaryData.partner_id =
+          localStorage.getItem("whitelabelledpartnerid") || "0";
+      }
+
+      console.log(
+        "📡 Final payload:",
+        JSON.stringify(beneficiaryData, null, 2)
+      );
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/create-requestremit-benef`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(beneficiaryData),
+        }
+      );
+
+      console.log("📡 API Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("📡 API Response text:", responseText);
+
+      if (!response.ok) {
+        console.error("❌ API Error Response:", responseText);
+        const errorData = JSON.parse(responseText);
+
+        // Handle field-specific errors
+        if (errorData.message) {
+          const errorMessages = [];
+
+          // Handle phone number errors
+          if (errorData.message.phone_number) {
+            errorMessages.push(...errorData.message.phone_number);
+          }
+
+          // Handle email errors
+          if (errorData.message.email) {
+            errorMessages.push(...errorData.message.email);
+          }
+
+          // Handle password errors
+          if (errorData.message.password) {
+            errorMessages.push(...errorData.message.password);
+          }
+
+          // Handle general errors
+          if (errorData.message && typeof errorData.message === "string") {
+            errorMessages.push(errorData.message);
+          }
+
+          throw new Error(errorMessages.join(", "));
+        }
+
+        throw new Error(errorData.message || "Failed to create beneficiary");
+      }
+
+      const result = JSON.parse(responseText);
+      console.log("✅ API Success Response:", result);
+
+      return {
+        status: "success",
+        message: result.message || "Beneficiary created successfully",
+        data: result.data || {},
+        benefCode: result.benefCode,
+      };
+    } catch (error) {
+      console.error("❌ createBeneficiaryRequestRemit error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // ===================== INITIAL STATE =====================
 const initialState = {
   // Create beneficiary state

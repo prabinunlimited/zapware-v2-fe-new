@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import axios from "axios";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import {
   FaUser,
   FaEnvelope,
@@ -575,7 +575,7 @@ const Profile = () => {
     if (tabLoading) {
       return (
         <div className="flex justify-center items-center h-64">
-          <ClipLoader size={50} color="#00254d" />
+          <RingLoader size={50} color="#00254d" />
           <p className="mt-4 text-gray-600">Loading {activeTab}...</p>
         </div>
       );
@@ -1167,7 +1167,7 @@ const Profile = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <ClipLoader size={60} color={"#3B82F6"} loading={true} />
+          <RingLoader size={60} color={"#3B82F6"} loading={true} />
           <p className="mt-4 text-gray-600 text-lg">
             Loading profile information...
           </p>
@@ -1850,7 +1850,7 @@ const Profile = () => {
                 disabled={saveLoading}
               >
                 {saveLoading ? (
-                  <ClipLoader size={16} color="#ffffff" />
+                  <RingLoader size={16} color="#ffffff" />
                 ) : (
                   "Save Changes"
                 )}

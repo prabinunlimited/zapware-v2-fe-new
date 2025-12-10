@@ -30,7 +30,7 @@ import {
   faFilter,
   faCircleInfo,
 } from "@fortawesome/free-solid-svg-icons";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import PropTypes from "prop-types";
 
 import RegistrationLayout from "../../../../components/ProgressBar/RegistrationLayout";
@@ -296,7 +296,7 @@ const CurrencySelectAccount = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="text-center">
           <div className="relative">
-            <ClipLoader color="#3B82F6" size={60} />
+            <RingLoader color="#3B82F6" size={60} />
             <div className="absolute inset-0 animate-spin"></div>
           </div>
           <p className="mt-4 text-gray-600 font-medium">
@@ -939,7 +939,7 @@ const CurrencySelectAccount = () => {
               >
                 {loading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={20} className="mr-2" />
+                    <RingLoader color="#ffffff" size={20} className="mr-2" />
                     Processing...
                   </>
                 ) : (

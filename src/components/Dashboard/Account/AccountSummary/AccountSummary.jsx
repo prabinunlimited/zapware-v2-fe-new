@@ -26,7 +26,7 @@ import {
   FaMoneyBillWave,
   FaChartLine,
 } from "react-icons/fa";
-import ClipLoader from "react-spinners/ClipLoader";
+import RingLoader from "react-spinners/RingLoader";
 
 // Components
 import Modal from "./Modal";
@@ -438,7 +438,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       <div className="flex flex-col justify-center items-center w-full space-y-6">
         <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="flex justify-center items-center h-32">
-            <ClipLoader color="#3B82F6" size={40} />
+            <RingLoader color="#3B82F6" size={40} />
           </div>
           <p className="text-gray-500 mt-4">Loading your accounts...</p>
         </div>
@@ -493,7 +493,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       <div className="flex flex-col justify-center items-center w-full space-y-6">
         <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="flex justify-center items-center h-32">
-            <ClipLoader color="#3B82F6" size={40} />
+            <RingLoader color="#3B82F6" size={40} />
           </div>
           <p className="text-gray-500 mt-4">Preparing your accounts...</p>
         </div>
@@ -767,7 +767,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                   >
                     <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors flex-shrink-0">
                       {balanceLoading ? (
-                        <ClipLoader color="#EA580C" size={16} />
+                        <RingLoader color="#EA580C" size={16} />
                       ) : (
                         <FiRefreshCw className="w-5 h-5 text-orange-600" />
                       )}

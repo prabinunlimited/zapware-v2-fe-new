@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiDownload, FiArrowLeft, FiPrinter } from "react-icons/fi";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 // Components
 import UnlimitedLogo from "../../assets/images/Logo/unlimited remit logo.png";
@@ -572,7 +572,7 @@ const BankLetter = () => {
             {isWhitelabelled ? (
               loading ? (
                 <div className="flex justify-center py-4">
-                  <ClipLoader size={30} color="#3b82f6" />
+                  <RingLoader size={30} color="#3b82f6" />
                 </div>
               ) : (
                 <img
@@ -602,7 +602,7 @@ const BankLetter = () => {
               {isWhitelabelled ? (
                 loading ? (
                   <div className="flex justify-center py-4">
-                    <ClipLoader size={30} color="#3b82f6" />
+                    <RingLoader size={30} color="#3b82f6" />
                   </div>
                 ) : (
                   <div
@@ -777,7 +777,7 @@ const BankLetter = () => {
         >
           {isPdfGenerating ? (
             <>
-              <ClipLoader size={18} color="#ffffff" className="mr-2" />
+              <RingLoader size={18} color="#ffffff" className="mr-2" />
               Generating PDF...
             </>
           ) : (

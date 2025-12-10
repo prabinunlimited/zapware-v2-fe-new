@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import BeneficiaryForm from "../AddBeneficiary/BeneficiaryForm";
 import { fetchBeneficiaryById } from "../AddBeneficiary/addBeneficiarySlice";
 
@@ -26,7 +26,7 @@ const EditBeneficiary = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <ClipLoader size={60} color="#3B82F6" />
+          <RingLoader size={60} color="#3B82F6" />
           <p className="mt-4 text-gray-700">Loading beneficiary data...</p>
         </div>
       </div>

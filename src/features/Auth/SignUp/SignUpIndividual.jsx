@@ -8,7 +8,7 @@ import {
   faEyeSlash,
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import { RingLoader, ClipLoader } from "react-spinners";
+import {  RingLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -1146,7 +1146,7 @@ function SignUpIndividualContent() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
-          <ClipLoader color="#3b82f6" size={50} />
+          <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -1198,7 +1198,7 @@ function SignUpIndividualContent() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
-          <ClipLoader color="#3b82f6" size={50} />
+          <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading registration form...</p>
         </div>
       </div>
@@ -1229,7 +1229,7 @@ function SignUpIndividualContent() {
           {isSubmitting && (
             <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
               <div className="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center">
-                <ClipLoader color="#3b82f6" size={50} loading={isSubmitting} />
+                <RingLoader color="#3b82f6" size={50} loading={isSubmitting} />
                 <p className="mt-4 text-gray-600 font-medium">
                   Processing your request...
                 </p>
@@ -1409,7 +1409,7 @@ function SignUpIndividualContent() {
 
                     {isLoadingNationalities ? (
                       <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <ClipLoader size={20} color="#3b82f6" />
+                        <RingLoader size={20} color="#3b82f6" />
                         <span className="ml-2 text-gray-600">
                           Loading nationalities...
                         </span>
@@ -1651,12 +1651,12 @@ function SignUpIndividualContent() {
                       {/* Loading indicator for ZIP lookup */}
                       {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <ClipLoader size={16} color="#3b82f6" />
+                          <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
                       {(isZipLoading || zipLookup.loading) && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <ClipLoader size={16} color="#3b82f6" />
+                          <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
 
@@ -1743,7 +1743,7 @@ function SignUpIndividualContent() {
                       />
                       {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <ClipLoader size={16} color="#3b82f6" />
+                          <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
                     </div>
@@ -1797,7 +1797,7 @@ function SignUpIndividualContent() {
                       />
                       {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <ClipLoader size={16} color="#3b82f6" />
+                          <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
                     </div>
@@ -2100,7 +2100,7 @@ function SignUpIndividualContent() {
 
                     {isLoadingDocumentTypes ? (
                       <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <ClipLoader size={20} color="#3b82f6" />
+                        <RingLoader size={20} color="#3b82f6" />
                         <span className="ml-2 text-gray-600">
                           Loading document types...
                         </span>
@@ -2479,7 +2479,7 @@ function SignUpIndividualContent() {
 
                 {termsLoading ? (
                   <div className="flex justify-center items-center py-8">
-                    <ClipLoader color="#3b82f6" size={30} />
+                    <RingLoader color="#3b82f6" size={30} />
                     <span className="ml-3 text-gray-600">
                       Loading terms and conditions...
                     </span>
@@ -2597,7 +2597,7 @@ function SignUpIndividualContent() {
                     >
                       {isCancelling ? (
                         <>
-                          <ClipLoader
+                          <RingLoader
                             size={20}
                             color="#ffffff"
                             className="mr-2"
@@ -2636,7 +2636,7 @@ function SignUpIndividualContent() {
                     >
                       {isSubmitting ? (
                         <>
-                          <ClipLoader
+                          <RingLoader
                             size={20}
                             color="#ffffff"
                             className="mr-2"
