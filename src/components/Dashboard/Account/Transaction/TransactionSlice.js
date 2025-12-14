@@ -1,20 +1,19 @@
+// transactionSlice.js (Updated with Monthly Transactions)
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// ===== TRANSACTIONS SLICE =====
+
 // ✅ SIMPLIFIED: Remove complex coordination logic
 let transactionFetchInProgress = false;
 
-// Async thunks
+// Async thunks for regular transactions
 export const fetchTransactionDetails = createAsyncThunk(
   "transaction/fetchTransactionDetails",
   async ({ customerId, currencyCode }, { rejectWithValue, getState }) => {
-    
-    // ✅ REMOVED: Success-based stopping logic
-    // ✅ ALWAYS FETCH when called
-    
     // ✅ SIMPLE DUPLICATE REQUEST PREVENTION ONLY
     if (transactionFetchInProgress) {
       return rejectWithValue("Transaction fetch already in progress");
@@ -104,19 +103,70 @@ export const exportTransactionsToExcel = createAsyncThunk(
   }
 );
 
+// ===== MONTHLY TRANSACTIONS SLICE =====
+
+// Async thunks for monthly statements
+export const fetchStatements = createAsyncThunk(
+  "transaction/fetchStatements",
+  async (customerId, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${API_URL}/show-pdf/${customerId}`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  }
+);
+
+export const fetchCustomerBankAccounts = createAsyncThunk(
+  "transaction/fetchCustomerBankAccounts",
+  async ({ customerId, bearertoken }, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || bearertoken;
+      const response = await axios.get(
+        `${API_URL}/active-approved-bank-accounts/${customerId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return response.data.account_details;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  }
+);
+
+// Combined Initial State
 const initialState = {
+  // Regular Transactions State
   transactions: [],
   loading: false,
   exporting: false,
   error: null,
   lastFetched: null,
   hasFetchedTransactions: false,
+  
+  // Monthly Statements State
+  statements: [],
+  filteredStatements: [],
+  customerBankAccounts: [],
+  selectedCurrency: '',
+  selectedMonth: '',
+  selectedYear: '',
+  statementsLoading: false,
+  currencyLoading: false,
+  statementsError: null,
+  statementsDataLoaded: false,
 };
 
 const transactionSlice = createSlice({
   name: "transaction",
   initialState,
   reducers: {
+    // Regular Transactions Reducers
     clearTransactions: (state) => {
       state.transactions = [];
     },
@@ -126,19 +176,76 @@ const transactionSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    resetTransactionState: () => initialState,
-    // ✅ SIMPLIFIED: Remove complex cache management
+    resetTransactionState: (state) => {
+      state.transactions = [];
+      state.loading = false;
+      state.exporting = false;
+      state.error = null;
+      state.lastFetched = null;
+      state.hasFetchedTransactions = false;
+    },
     forceRefreshTransactions: (state) => {
-      // Just reset the local state, no complex cache clearing needed
       state.hasFetchedTransactions = false;
     },
     setHasFetchedTransactions: (state, action) => {
       state.hasFetchedTransactions = action.payload;
+    },
+    
+    // Monthly Statements Reducers
+    setSelectedCurrency: (state, action) => {
+      state.selectedCurrency = action.payload;
+    },
+    setSelectedMonth: (state, action) => {
+      state.selectedMonth = action.payload;
+    },
+    setSelectedYear: (state, action) => {
+      state.selectedYear = action.payload;
+    },
+    filterStatements: (state) => {
+      let filtered = [...state.statements];
+      
+      if (state.selectedCurrency) {
+        filtered = filtered.filter((item) => item.currency === state.selectedCurrency);
+      }
+      
+      if (state.selectedMonth) {
+        filtered = filtered.filter(
+          (item) => item.month === parseInt(state.selectedMonth)
+        );
+      }
+      
+      if (state.selectedYear) {
+        filtered = filtered.filter(
+          (item) => item.year === parseInt(state.selectedYear)
+        );
+      }
+      
+      state.filteredStatements = filtered;
+    },
+    clearStatements: (state) => {
+      state.statements = [];
+      state.filteredStatements = [];
+      state.customerBankAccounts = [];
+      state.selectedCurrency = '';
+      state.selectedMonth = '';
+      state.selectedYear = '';
+    },
+    resetMonthlyStatementsState: (state) => {
+      state.statements = [];
+      state.filteredStatements = [];
+      state.customerBankAccounts = [];
+      state.selectedCurrency = '';
+      state.selectedMonth = '';
+      state.selectedYear = '';
+      state.statementsLoading = false;
+      state.currencyLoading = false;
+      state.statementsError = null;
+      state.statementsDataLoaded = false;
     }
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Transaction Details
+      // Regular Transactions
       .addCase(fetchTransactionDetails.pending, (state) => {
         console.log("🔄 TRANSACTION SLICE: Fetch pending");
         state.loading = true;
@@ -155,7 +262,6 @@ const transactionSlice = createSlice({
       .addCase(fetchTransactionDetails.rejected, (state, action) => {
         console.log("❌ TRANSACTION SLICE: Fetch rejected", action.payload);
         
-        // ✅ Don't treat "request in progress" as a real error
         if (action.payload !== "Transaction fetch already in progress") {
           state.error = action.payload;
         }
@@ -173,20 +279,59 @@ const transactionSlice = createSlice({
       .addCase(exportTransactionsToExcel.rejected, (state, action) => {
         state.exporting = false;
         state.error = action.payload;
+      })
+      // Monthly Statements
+      .addCase(fetchStatements.pending, (state) => {
+        state.statementsLoading = true;
+        state.statementsError = null;
+      })
+      .addCase(fetchStatements.fulfilled, (state, action) => {
+        state.statementsLoading = false;
+        state.statements = Array.isArray(action.payload) ? action.payload : [];
+        state.filteredStatements = Array.isArray(action.payload) ? action.payload : [];
+        state.statementsDataLoaded = true;
+      })
+      .addCase(fetchStatements.rejected, (state, action) => {
+        state.statementsLoading = false;
+        state.statementsError = action.payload;
+      })
+      // Customer Bank Accounts
+      .addCase(fetchCustomerBankAccounts.pending, (state) => {
+        state.currencyLoading = true;
+        state.statementsError = null;
+      })
+      .addCase(fetchCustomerBankAccounts.fulfilled, (state, action) => {
+        state.currencyLoading = false;
+        state.customerBankAccounts = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchCustomerBankAccounts.rejected, (state, action) => {
+        state.currencyLoading = false;
+        state.statementsError = action.payload;
       });
   },
 });
 
+// Export Actions
 export const {
+  // Regular Transactions
   clearTransactions,
   setLoading,
   clearError,
   resetTransactionState,
   forceRefreshTransactions,
   setHasFetchedTransactions,
+  
+  // Monthly Statements
+  setSelectedCurrency,
+  setSelectedMonth,
+  setSelectedYear,
+  filterStatements,
+  clearStatements,
+  resetMonthlyStatementsState,
 } = transactionSlice.actions;
 
 // Selectors
+// Regular Transactions
 export const selectTransactions = (state) => state.transaction.transactions;
 export const selectTransactionLoading = (state) => state.transaction.loading;
 export const selectExporting = (state) => state.transaction.exporting;
@@ -194,10 +339,22 @@ export const selectTransactionError = (state) => state.transaction.error;
 export const selectLastFetched = (state) => state.transaction.lastFetched;
 export const selectHasFetchedTransactions = (state) => state.transaction.hasFetchedTransactions;
 
-// ✅ SIMPLIFIED UTILITY FUNCTIONS
+// Monthly Statements
+export const selectStatements = (state) => state.transaction.statements;
+export const selectFilteredStatements = (state) => state.transaction.filteredStatements;
+export const selectCustomerBankAccounts = (state) => state.transaction.customerBankAccounts;
+export const selectSelectedCurrency = (state) => state.transaction.selectedCurrency;
+export const selectSelectedMonth = (state) => state.transaction.selectedMonth;
+export const selectSelectedYear = (state) => state.transaction.selectedYear;
+export const selectStatementsLoading = (state) => state.transaction.statementsLoading;
+export const selectCurrencyLoading = (state) => state.transaction.currencyLoading;
+export const selectStatementsError = (state) => state.transaction.statementsError;
+export const selectStatementsDataLoaded = (state) => state.transaction.statementsDataLoaded;
+
+// Utility Functions
 export const transactionUtils = {
-  hasSuccessfulTransactionFetch: () => false, // Always return false to allow fetching
-  clearTransactionSuccessCache: () => {} // No-op since we removed caching
+  hasSuccessfulTransactionFetch: () => false,
+  clearTransactionSuccessCache: () => {}
 };
 
 export default transactionSlice.reducer;

@@ -55,10 +55,10 @@ const PaymentMethodSelection = ({
       },
       bank_deposit: {
         value: "bank_deposit",
-        label: "Link Bank Account",
+        label: "Bank Transfer",
         icon: <FaLink />,
-        description: "Connect your US bank account via Plaid",
-        help: "Link your US bank account using Plaid integration to enable secure USD deposits and transfers. Available for USD currency only.",
+        description: "Instant transfer via bank",
+        help: "Secure bank transfer from your bank to enable secure USD deposits and transfers. Available for USD currency only.",
       },
     };
 
@@ -89,7 +89,7 @@ const PaymentMethodSelection = ({
       EUR: ["card_deposit", "manual_deposit", "bank_transfer"],
       GBP: ["card_deposit", "manual_deposit", "bank_transfer"],
       DKK: ["card_deposit", "manual_deposit", "bank_transfer"],
-      AED: ["manual_deposit"],
+      AED: ["manual_deposit", "card_deposit"],
     };
 
     const allowedMethods = defaultMethods[selectedCurrency] || ["card_deposit", "manual_deposit"];

@@ -1,27 +1,27 @@
 // features/currencyAccounts/currencyAccountsSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../../../services/api"; 
+import api from "../../../../services/api";
 
 // Helper function to filter accounts by currency
 const filterAccountsByCurrency = (accounts, currencyFilter) => {
   if (currencyFilter === "all") {
     return accounts;
   }
-  
-  return accounts.filter(account => {
+
+  return accounts.filter((account) => {
     // Try multiple possible currency field names
     const currencyFields = [
       account.currency,
-      account.currency_code, 
+      account.currency_code,
       account.currency_type,
       account.account_currency,
-      account.currencyName
+      account.currencyName,
     ];
-    
-    const accountCurrency = currencyFields.find(field => 
-      field && typeof field === "string"
+
+    const accountCurrency = currencyFields.find(
+      (field) => field && typeof field === "string"
     );
-    
+
     return accountCurrency === currencyFilter;
   });
 };
@@ -88,26 +88,28 @@ const checkIfUSDNamedAccountSelected = (state) => {
   return false;
 };
 
-// Async thunks - SIMPLIFIED WITH api.js! 🎉
+// Async thunks
 export const fetchAccountOptions = createAsyncThunk(
   "currencyAccounts/fetchAccountOptions",
-  async ({ accountType, bearertoken, API_URL }, { rejectWithValue }) => {
+  async ({ accountType, API_URL }, { rejectWithValue }) => {
     try {
-      
-      
       // ✅ USE api.js INSTEAD OF FETCH - MUCH SIMPLER!
-      const accountOptionsResponse = await api.get("/get-onboarding-description");
+      const accountOptionsResponse = await api.get(
+        "/get-onboarding-description"
+      );
 
-      const accountTypeEndpoint = accountType === "individual" ? "Individuals" : "Institutions";
-      const termsResponse = await api.get("/get-bank-ac-type/" + accountTypeEndpoint);
+      const accountTypeEndpoint =
+        accountType === "individual" ? "Individuals" : "Institutions";
+      const termsResponse = await api.get(
+        "/get-bank-ac-type/" + accountTypeEndpoint
+      );
 
-      return { 
-        accountOptionsData: accountOptionsResponse.data, 
-        termsData: termsResponse.data, 
-        accountType 
+      return {
+        accountOptionsData: accountOptionsResponse.data,
+        termsData: termsResponse.data,
+        accountType,
       };
     } catch (error) {
-      
       return rejectWithValue(error.message);
     }
   }
@@ -117,17 +119,70 @@ export const fetchTermsContent = createAsyncThunk(
   "currencyAccounts/fetchTermsContent",
   async (url, { rejectWithValue }) => {
     try {
-      
-      
       // ✅ USE api.js INSTEAD OF FETCH - MUCH SIMPLER!
       const response = await api.get(url, {
-        responseType: 'text' // Important for HTML content
+        responseType: "text", // Important for HTML content
       });
 
       return response.data;
     } catch (error) {
-      
       return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const validateReferralCode = createAsyncThunk(
+  "currencyAccounts/validateReferralCode",
+  async (referralCode, { rejectWithValue, dispatch }) => {
+    try {
+      if (!referralCode || referralCode.trim() === "") {
+        return { isValid: true, message: "" };
+      }
+
+      const response = await api.post("/validate-referral-code", {
+        referral_code: referralCode,
+      });
+
+      if (response.status === 200) {
+        return {
+          isValid: true,
+          message: "✓ Referral code is valid",
+        };
+      }
+    } catch (error) {
+      dispatch(setReferralError("Referral code is invalid!"));
+      return rejectWithValue("Referral code is invalid!");
+    }
+  }
+);
+
+export const validateAgentCode = createAsyncThunk(
+  "currencyAccounts/validateAgentCode",
+  async (agentCode, { rejectWithValue, dispatch }) => {
+    try {
+      if (!agentCode || agentCode.trim() === "") {
+        return { isValid: true, message: "" };
+      }
+
+      // Basic client-side validation
+      if (agentCode.length > 10) {
+        dispatch(setAgentError("The provided Agent Code is invalid"));
+        return rejectWithValue("Agent code must be 10 characters or less");
+      }
+
+      const response = await api.post("/validate-agent-code", {
+        agent_code: agentCode,
+      });
+
+      if (response.status === 200) {
+        return {
+          isValid: true,
+          message: "✓ Agent code is valid",
+        };
+      }
+    } catch (error) {
+      dispatch(setAgentError("Agent Code Invalid"));
+      return rejectWithValue("Agent Code Invalid");
     }
   }
 );
@@ -154,6 +209,11 @@ const currencyAccountsSlice = createSlice({
     remittanceOnlyAccepted: false,
     termsModalOpen: false,
     isNamedAccount: false,
+    agentCode: "",
+    agentError: null,
+    isReferralValidating: false,
+    isAgentValidating: false,
+    validationMessage: "",
   },
   reducers: {
     clearAllSelections: (state) => {
@@ -177,23 +237,33 @@ const currencyAccountsSlice = createSlice({
         state.referralError = "";
       }
     },
+    setReferralError: (state, action) => {
+      state.referralError = action.payload;
+    },
     setTermsAccepted: (state, action) => {
       state.termsAccepted = action.payload;
     },
     setSearchTerm: (state, action) => {
       state.searchTerm = action.payload;
-      
+
       // Apply both currency and search filtering
-      const currencyFilteredNamed = filterAccountsByCurrency(state.namedAccounts, state.activeTab);
-      const currencyFilteredPooled = filterAccountsByCurrency(state.pooledAccounts, state.activeTab);
-      
+      const currencyFilteredNamed = filterAccountsByCurrency(
+        state.namedAccounts,
+        state.activeTab
+      );
+      const currencyFilteredPooled = filterAccountsByCurrency(
+        state.pooledAccounts,
+        state.activeTab
+      );
+
       if (action.payload) {
         const searchLower = action.payload.toLowerCase();
-        state.filteredNamedAccounts = currencyFilteredNamed.filter(account => 
+        state.filteredNamedAccounts = currencyFilteredNamed.filter((account) =>
           JSON.stringify(account).toLowerCase().includes(searchLower)
         );
-        state.filteredPooledAccounts = currencyFilteredPooled.filter(account => 
-          JSON.stringify(account).toLowerCase().includes(searchLower)
+        state.filteredPooledAccounts = currencyFilteredPooled.filter(
+          (account) =>
+            JSON.stringify(account).toLowerCase().includes(searchLower)
         );
       } else {
         state.filteredNamedAccounts = currencyFilteredNamed;
@@ -203,17 +273,25 @@ const currencyAccountsSlice = createSlice({
     setActiveTab: (state, action) => {
       state.activeTab = action.payload;
       // Apply filtering when tab changes
-      state.filteredNamedAccounts = filterAccountsByCurrency(state.namedAccounts, action.payload);
-      state.filteredPooledAccounts = filterAccountsByCurrency(state.pooledAccounts, action.payload);
-      
+      state.filteredNamedAccounts = filterAccountsByCurrency(
+        state.namedAccounts,
+        action.payload
+      );
+      state.filteredPooledAccounts = filterAccountsByCurrency(
+        state.pooledAccounts,
+        action.payload
+      );
+
       // If there's a search term, apply search filtering on top of currency filtering
       if (state.searchTerm) {
         const searchLower = state.searchTerm.toLowerCase();
-        state.filteredNamedAccounts = state.filteredNamedAccounts.filter(account => 
-          JSON.stringify(account).toLowerCase().includes(searchLower)
+        state.filteredNamedAccounts = state.filteredNamedAccounts.filter(
+          (account) =>
+            JSON.stringify(account).toLowerCase().includes(searchLower)
         );
-        state.filteredPooledAccounts = state.filteredPooledAccounts.filter(account => 
-          JSON.stringify(account).toLowerCase().includes(searchLower)
+        state.filteredPooledAccounts = state.filteredPooledAccounts.filter(
+          (account) =>
+            JSON.stringify(account).toLowerCase().includes(searchLower)
         );
       }
     },
@@ -236,6 +314,8 @@ const currencyAccountsSlice = createSlice({
     },
     clearError: (state) => {
       state.apiError = null;
+      state.referralError = null;
+      state.agentError = null;
     },
     resetState: (state) => {
       return {
@@ -258,10 +338,33 @@ const currencyAccountsSlice = createSlice({
         remittanceOnlyAccepted: false,
         termsModalOpen: false,
         isNamedAccount: false,
+        agentCode: "",
+        agentError: null,
+        isReferralValidating: false,
+        isAgentValidating: false,
+        validationMessage: "",
       };
     },
     setIsNamedAccount: (state, action) => {
       state.isNamedAccount = action.payload;
+    },
+    setAgentCode: (state, action) => {
+      state.agentCode = action.payload;
+      // Basic validation - check if more than 10 characters
+      if (action.payload && action.payload.length > 10) {
+        state.agentError = "The provided Agent Code is invalid";
+      } else {
+        state.agentError = "";
+      }
+    },
+    setAgentError: (state, action) => {
+      state.agentError = action.payload;
+    },
+    setValidationMessage: (state, action) => {
+      state.validationMessage = action.payload;
+    },
+    clearValidationMessage: (state) => {
+      state.validationMessage = "";
     },
   },
   extraReducers: (builder) => {
@@ -357,6 +460,34 @@ const currencyAccountsSlice = createSlice({
       .addCase(fetchTermsContent.rejected, (state, action) => {
         state.loading = false;
         state.apiError = action.payload;
+      })
+      // Validate referral code
+      .addCase(validateReferralCode.pending, (state) => {
+        state.isReferralValidating = true;
+        state.referralError = null;
+        state.validationMessage = "";
+      })
+      .addCase(validateReferralCode.fulfilled, (state, action) => {
+        state.isReferralValidating = false;
+        state.validationMessage = action.payload.message;
+      })
+      .addCase(validateReferralCode.rejected, (state, action) => {
+        state.isReferralValidating = false;
+        state.referralError = action.payload;
+      })
+      // Validate agent code
+      .addCase(validateAgentCode.pending, (state) => {
+        state.isAgentValidating = true;
+        state.agentError = null;
+        state.validationMessage = "";
+      })
+      .addCase(validateAgentCode.fulfilled, (state, action) => {
+        state.isAgentValidating = false;
+        state.validationMessage = action.payload.message;
+      })
+      .addCase(validateAgentCode.rejected, (state, action) => {
+        state.isAgentValidating = false;
+        state.agentError = action.payload;
       });
   },
 });
@@ -364,6 +495,7 @@ const currencyAccountsSlice = createSlice({
 export const {
   setSelectedAccounts,
   setReferralCode,
+  setReferralError,
   setTermsAccepted,
   setSearchTerm,
   setActiveTab,
@@ -375,6 +507,10 @@ export const {
   setIsNamedAccount,
   clearSelectedAccounts,
   clearAllSelections,
+  setAgentCode,
+  setAgentError,
+  setValidationMessage,
+  clearValidationMessage,
 } = currencyAccountsSlice.actions;
 
 export default currencyAccountsSlice.reducer;

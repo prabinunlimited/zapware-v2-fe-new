@@ -16,6 +16,7 @@ import {
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
 import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
+import CardPayment from "./components/Card/CardPayment";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -589,18 +590,30 @@ const EmptyState = ({ navigate }) => (
 const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
   const handleCardPayment = async () => {
     try {
-      // ✅ SIMPLE: Direct navigation like original code
+      // Validate
+      if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+        toast.error("Please enter a valid amount");
+        return;
+      }
+
+      if (!deposit.purpose) {
+        toast.error("Please select a purpose");
+        return;
+      }
+
       const navigationState = {
         customerId: customerId,
         amount: parseFloat(deposit.amount),
         currency: deposit.selectedCurrency,
+        purpose: deposit.purpose,
+        paymentMethod: deposit.paymentMethod,
       };
 
       console.log("🚀 Navigating to card payment:", navigationState);
       navigate("/card", { state: navigationState });
     } catch (error) {
-      console.error("❌ Error initiating card payment:", error);
-      toast.error("Failed to initiate card payment. Please try again.");
+      console.error("❌ Card payment error:", error);
+      toast.error("Failed to initiate card payment");
     }
   };
 
@@ -627,6 +640,7 @@ const DepositPageContent = () => {
 
   // ✅ TAB STATE
   const [activeTab, setActiveTab] = useState("deposit");
+  const [sessionData, setSessionData] = useState(null);
 
   // Safe parameter access with debugging
   const customerId = params.customerId;
@@ -1300,7 +1314,6 @@ const DepositPageContent = () => {
                         deposit={deposit}
                         navigate={navigate}
                         customerId={customerId}
-                        currency={currency}
                       />
                     ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
                     (deposit.selectedCurrency === "EUR" ||

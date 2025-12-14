@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
 import { apiCoordinator } from "../../services/api";
@@ -349,6 +349,9 @@ const PayoutPage = () => {
       payment_method: formValues.transaction_type,
       benef_bank_account: formValues.benef_bank_account,
       description: formValues.description,
+      ...(formValues.to === "AED" || formValues.to === "KES"
+        ? { promo_code: formValues.promo_code || "" }
+        : {}),
     };
 
     dispatch(convertCurrency(payload));
@@ -471,7 +474,7 @@ const PayoutPage = () => {
     formData.append("convertedValue", convertedValue);
     formData.append("amount", formValues.value);
     formData.append("purpose", formValues.purpose);
-    formData.append("promo_code", formValues.promocode);
+    formData.append("promo_code", formValues.promo_code || "");
     formData.append("convertedId", convertedId);
     formData.append("currency", formValues.to);
     formData.append("source_currency", formValues.from);
@@ -935,17 +938,17 @@ const PayoutPage = () => {
                 {["AED", "KES"].includes(formValues.to) && (
                   <div>
                     <label
-                      htmlFor="promocode"
+                      htmlFor="promo_code"
                       className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                     >
                       Promocode (optional)
                     </label>
                     <input
                       type="text"
-                      name="promocode"
-                      value={formValues.promocode}
+                      name="promo_code"
+                      value={formValues.promo_code}
                       onChange={handleChange}
-                      placeholder="Enter promocode"
+                      placeholder="Enter Promocode"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
                     />
                   </div>

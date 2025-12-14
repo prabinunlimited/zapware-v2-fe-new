@@ -224,6 +224,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [showOtherRelationship, setShowOtherRelationship] = useState(false);
   const [branchCode, setBranchCode] = useState("");
   const [fieldTouched, setFieldTouched] = useState({});
+  const [selectedCountryCode, setSelectedCountryCode] = useState("");
 
   // Define steps array - ADD STEP 0 FOR PHONE SEARCH
   const steps =
@@ -561,90 +562,48 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Handle errors and success with navigation - FIXED with mounted check
   useEffect(() => {
+    console.log("🔄 DEBUG - Error handling useEffect triggered");
+
     // Store the current mounted state
     const mounted = isMounted.current;
 
     if (mode === "create") {
-      // Handle error from beneficiarySlice
+      // Only handle errors here, not success navigation
+      // Success navigation is handled in handleSubmit immediately
       if (beneficiariesCreateError && mounted) {
+        console.log(
+          "❌ DEBUG - Create error detected in useEffect:",
+          beneficiariesCreateError
+        );
         toast.error(beneficiariesCreateError);
         dispatch(clearBeneficiariesCreateState());
       }
-
-      // Handle success from beneficiarySlice
-      if (beneficiariesCreateSuccess && mounted) {
-        toast.success("Beneficiary created and added to list successfully!");
-        dispatch(clearBeneficiariesCreateState());
-
-        const timeoutId = setTimeout(() => {
-          if (!mounted) return;
-
-          if (is_payout === "y") {
-            navigate(-1);
-          } else {
-            const targetPath = `/mybeneficiary/${customerId}`;
-            navigate(targetPath);
-          }
-        }, 1500);
-
-        // Cleanup timeout on unmount
-        return () => clearTimeout(timeoutId);
-      }
-
-      // Also handle errors from addBeneficiarySlice (for edit mode)
-      if (createError && mounted) {
-        toast.error(createError);
-        dispatch(clearCreateError());
-      }
-
-      if (createSuccess && mounted) {
-        toast.success("Beneficiary created successfully!");
-        dispatch(clearCreateSuccess());
-
-        const timeoutId = setTimeout(() => {
-          if (!mounted) return;
-
-          if (is_payout === "y") {
-            navigate(-1);
-          } else {
-            const targetPath = `/mybeneficiary/${customerId}`;
-            navigate(targetPath);
-          }
-        }, 1500);
-
-        // Cleanup timeout on unmount
-        return () => clearTimeout(timeoutId);
-      }
     } else if (mode === "edit") {
+      // Edit mode error handling
       if (updateError && mounted) {
         toast.error(updateError);
         dispatch(clearUpdateState());
       }
-
-      if (updateSuccess && mounted) {
-        toast.success("Beneficiary updated successfully!");
-        dispatch(clearUpdateState());
-
-        const timeoutId = setTimeout(() => {
-          if (!mounted) return;
-          navigate(`/mybeneficiary/${customerId}`);
-        }, 1500);
-
-        // Cleanup timeout on unmount
-        return () => clearTimeout(timeoutId);
-      }
     }
+  }, [updateError, beneficiariesCreateError, dispatch, mode]);
+
+  useEffect(() => {
+    console.log("📊 State Debug:", {
+      beneficiariesCreateSuccess,
+      beneficiariesCreateError,
+      createSuccess,
+      createError,
+      updateSuccess,
+      updateError,
+      mode,
+    });
   }, [
-    createError,
-    createSuccess,
-    updateError,
-    updateSuccess,
-    beneficiariesCreateError,
     beneficiariesCreateSuccess,
-    dispatch,
-    is_payout,
-    navigate,
-    customerId,
+    beneficiariesCreateError,
+    createSuccess,
+    createError,
+    updateSuccess,
+    updateError,
     mode,
   ]);
 
@@ -1056,11 +1015,32 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("🔴 DEBUG - handleSubmit FUNCTION CALLED!");
+    console.log("🔴 Event prevented:", e.defaultPrevented);
+    console.log("🔴 Form submitted at:", new Date().toISOString());
     console.log(`🔄 Starting beneficiary ${mode}...`);
+    console.log("🚀 SUBMITTING WITH:");
+    console.log(
+      "country_phone_code from formik:",
+      formik.values.country_phone_code
+    );
+    console.log("country_id:", formik.values.country_id);
+
     setLoading(true);
+    console.log("🔴 Loading state set to true");
 
     const isRailsMissing = bankAccounts.some((account) => !account.rails);
+    console.log("🔴 DEBUG - Form validation check:");
+    console.log("🔴 Rails missing?", isRailsMissing);
+    console.log("🔴 Currency:", currency);
+    console.log("🔴 beneficiary_id_type:", formik.values.beneficiary_id_type);
+    console.log(
+      "🔴 beneficiary_id_number:",
+      formik.values.beneficiary_id_number
+    );
+
     if (isRailsMissing) {
+      console.log("❌ DEBUG - Early return due to missing rails");
       toast.error("Please select rails for all bank accounts.");
       setLoading(false);
       return;
@@ -1068,11 +1048,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (!formik.values.beneficiary_id_type) {
+        console.log("❌ DEBUG - Early return due to missing ID type");
         toast.error("Beneficiary ID Type is required");
         setLoading(false);
         return;
       }
       if (!formik.values.beneficiary_id_number) {
+        console.log("❌ DEBUG - Early return due to missing ID number");
         toast.error("Beneficiary ID Number is required");
         setLoading(false);
         return;
@@ -1084,6 +1066,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       formik.values.otherRelationship.trim() !== ""
         ? formik.values.otherRelationship.trim()
         : formik.values.relationtobenef;
+
+    // Clean the country code (remove + sign if present)
+    const cleanedCountryCode = formik.values.country_phone_code.startsWith("+")
+      ? formik.values.country_phone_code.substring(1)
+      : formik.values.country_phone_code;
 
     const beneficiaryData = {
       name: formik.values.name,
@@ -1102,51 +1089,106 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       status: 1,
       address: "",
       nic_bcc_code: formik.values.nic_bcc_code,
+      country_phone_code: cleanedCountryCode, // ADD THIS - include country code in payload
     };
 
     console.log(`📤 Submitting beneficiary data (${mode}):`, beneficiaryData);
     console.log("📤 Submitting bank accounts:", bankAccounts);
     console.log("📤 Currency:", currency);
+    console.log("📤 Country Code:", cleanedCountryCode); // Log the country code
 
     try {
       if (mode === "create") {
+        console.log("🔴 DEBUG - Entering CREATE mode block");
         console.log("📤 Dispatching createAndAddBeneficiary...");
 
-        // Use the new thunk that automatically adds to the list
         const result = await dispatch(
           createAndAddBeneficiary({
             customerId,
-            beneficiaryData,
+            beneficiaryData: {
+              ...beneficiaryData,
+              country_phone_code: cleanedCountryCode,
+            },
             bankAccounts,
             currency,
+            country_code: cleanedCountryCode,
           })
         ).unwrap();
 
+        console.log("✅ DEBUG - Dispatch completed successfully!");
         console.log("✅ Create successful, result:", result);
-        resetForm();
+        console.log("✅ Result success property:", result?.success);
+        console.log("✅ Result type:", typeof result);
+        console.log("✅ Result keys:", Object.keys(result || {}));
 
-        // Success is handled in useEffect
+        if (result?.success) {
+          console.log("🎯 SUCCESS FLAG IS TRUE! Time to navigate...");
+
+          // Show success toast
+          toast.success("Beneficiary created successfully!");
+          console.log("✅ Success toast shown");
+
+          // Navigate BACK (-1) to return to the previous page
+          console.log("🚀 Setting up navigation timeout...");
+          setTimeout(() => {
+            console.log("🔴 DEBUG - Navigation timeout executing NOW!");
+            console.log("🔴 navigate function available:", typeof navigate);
+            console.log("🔴 Current URL:", window.location.href);
+            console.log("🔴 Executing navigate(-1)...");
+            navigate(-1);
+            console.log("🔴 navigate(-1) called");
+          }, 1500);
+        } else {
+          console.log("❌ DEBUG - Success flag is false or missing");
+          console.log(
+            "❌ Full result object:",
+            JSON.stringify(result, null, 2)
+          );
+        }
+
+        resetForm();
+        console.log("✅ Form reset");
       } else if (mode === "edit") {
+        console.log("🔴 DEBUG - Entering EDIT mode block");
         console.log("📤 Dispatching updateBeneficiary...");
+
+        // For edit mode, include country_code in beneficiaryData
         const result = await dispatch(
           updateBeneficiary({
             customerId,
             beneficiaryId,
-            beneficiaryData,
+            beneficiaryData: {
+              ...beneficiaryData,
+              country_phone_code: cleanedCountryCode,
+            },
           })
         ).unwrap();
+
         console.log("✅ Update successful, result:", result);
+        console.log("🎯 IMMEDIATE NAVIGATION - Update successful");
+
+        // Show success toast
+        toast.success("Beneficiary updated successfully!");
+
+        // Navigate BACK (-1) after successful update
+        setTimeout(() => {
+          console.log("🚀 Executing navigate(-1) to go back");
+          navigate(-1);
+        }, 1500);
       }
     } catch (error) {
-      // CHECK MOUNTED STATE
-      if (!isMounted.current) return;
-
+      console.error("🔴 DEBUG - CATCH BLOCK TRIGGERED!");
       console.error(`❌ ${mode} error:`, error.message || error);
+      console.error("❌ Error stack:", error.stack);
       toast.error(error.message || `Failed to ${mode} beneficiary`);
     } finally {
+      console.log("🔴 DEBUG - FINALLY BLOCK EXECUTING");
       // CHECK MOUNTED STATE
       if (isMounted.current) {
+        console.log("🔴 Component still mounted, setting loading to false");
         setLoading(false);
+      } else {
+        console.log("🔴 Component already unmounted, skipping setLoading");
       }
     }
   };
@@ -1263,13 +1305,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         placeholder="Code..."
         isSearchable
         onChange={(selectedOption) => {
+          setCountryCodeInput(selectedOption?.value || "+1");
+          // Also update formik
           formik.setFieldValue(
             "country_phone_code",
-            selectedOption?.value || ""
+            selectedOption?.value || "+1"
           );
         }}
         value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code
+          (option) => option.value === formik.values.country_phone_code // Use formik value
         )}
         formatOptionLabel={({ country, label }) => (
           <div className="flex items-center">
@@ -1301,10 +1345,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         formik.setFieldValue("country_id", selectedCountryId);
 
         if (selectedCountry) {
-          formik.setFieldValue(
-            "country_phone_code",
-            selectedCountry.phone_code || "+1"
-          );
+          // Get phone code from selected country - ensure it has + sign
+          let countryPhoneCode = selectedCountry.phone_code || "+1";
+
+          // If it doesn't start with +, add it
+          if (!countryPhoneCode.startsWith("+")) {
+            countryPhoneCode = `+${countryPhoneCode}`;
+          }
+
+          // Update formik with the correct phone code
+          formik.setFieldValue("country_phone_code", countryPhoneCode);
+
+          // Also update the phoneInput country code for search
+          setCountryCodeInput(countryPhoneCode);
         }
       }}
       value={formik.values.country_id}
@@ -2520,6 +2573,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 isSearchable
                 onChange={(selectedOption) => {
                   setCountryCodeInput(selectedOption?.value || "+1");
+                  // Also store the country code in a state variable to include in the payload
+                  setSelectedCountryCode(selectedOption?.value || "+1");
                 }}
                 value={phoneCodeOptions.find(
                   (option) => option.value === countryCodeInput
@@ -3118,7 +3173,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             if (!usingExistingBeneficiary) {
                               formik.setFieldValue(
                                 "country_phone_code",
-                                selectedOption?.value || ""
+                                selectedOption?.value || "+1"
                               );
                             }
                           }}

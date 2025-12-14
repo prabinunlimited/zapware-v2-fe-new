@@ -29,6 +29,7 @@ import {
   faExchangeAlt,
   faFilter,
   faCircleInfo,
+  faUserTie,
 } from "@fortawesome/free-solid-svg-icons";
 import { RingLoader } from "react-spinners";
 import PropTypes from "prop-types";
@@ -50,6 +51,12 @@ import {
   toggleAccountSelection,
   clearError,
   setSelectedAccounts,
+  setReferralError,
+  setAgentCode,
+  setAgentError,
+  validateReferralCode,
+  validateAgentCode,
+  clearValidationMessage,
 } from "./currencyAccountsSlice";
 import {
   selectAccountOptions,
@@ -70,6 +77,14 @@ import {
   selectActiveTab,
   selectRemittanceOnlyAccepted,
   selectTermsModalOpen,
+  selectAgentCode,
+  selectAgentError,
+  selectIsReferralValidating,
+  selectIsAgentValidating,
+  selectValidationMessage,
+  selectIsSubmitDisabled,
+  selectReferralSuccessMessage,
+  selectAgentSuccessMessage,
 } from "./currencyAccountsSelectors";
 
 const CurrencySelectAccount = () => {
@@ -98,6 +113,14 @@ const CurrencySelectAccount = () => {
   const activeTab = useSelector(selectActiveTab);
   const remittanceOnlyAccepted = useSelector(selectRemittanceOnlyAccepted);
   const termsModalOpen = useSelector(selectTermsModalOpen);
+  const agentCode = useSelector(selectAgentCode);
+  const agentError = useSelector(selectAgentError);
+  const isReferralValidating = useSelector(selectIsReferralValidating);
+  const isAgentValidating = useSelector(selectIsAgentValidating);
+  const validationMessage = useSelector(selectValidationMessage);
+  const isSubmitDisabled = useSelector(selectIsSubmitDisabled);
+  const referralSuccessMessage = useSelector(selectReferralSuccessMessage);
+  const agentSuccessMessage = useSelector(selectAgentSuccessMessage);
 
   // Local component state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,6 +133,7 @@ const CurrencySelectAccount = () => {
 
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL;
   const API_URL = `${API_BASE_URL}`;
@@ -152,6 +176,19 @@ const CurrencySelectAccount = () => {
     }
   }, [apiError]);
 
+  // Handle agent code input
+  const handleAgent = (event) => {
+    const value = event.target.value;
+    dispatch(setAgentCode(value));
+
+    // Basic validation - check if more than 10 characters
+    if (value.length > 10) {
+      dispatch(setAgentError("The provided Agent Code is invalid"));
+    } else {
+      dispatch(setAgentError(""));
+    }
+  };
+
   // Handle account selection
   const handleAccountSelect = (accountId) => {
     if (remittanceOnlyAccepted) {
@@ -190,7 +227,8 @@ const CurrencySelectAccount = () => {
   };
 
   const handleReferral = (event) => {
-    dispatch(setReferralCode(event.target.value));
+    const value = event.target.value;
+    dispatch(setReferralCode(value));
   };
 
   const toggleSection = (section) => {
@@ -206,6 +244,8 @@ const CurrencySelectAccount = () => {
   };
 
   const handleSubmit = async () => {
+    if (isRedirecting) return; // Prevent multiple clicks
+
     if (selectedAccounts.length === 0 && !remittanceOnlyAccepted) {
       setModalMessage(
         "Please select at least one currency account or choose Remittance Services Only to proceed"
@@ -220,18 +260,49 @@ const CurrencySelectAccount = () => {
       return;
     }
 
-    const stateData = {
-      service_provide_ids: selectedAccounts,
-      accountOptions: accountOptions,
-      referral_code: referralCode,
-      is_remit: remittanceOnlyAccepted ? 1 : 0,
-    };
+    let validationSuccessful = true;
 
-    if (accountType === "individual") {
-      navigate("/signupindividual", { state: stateData });
-    } else if (accountType === "institution") {
-      navigate("/signupinstitution", { state: stateData });
+    // Validate referral code using Redux thunk
+    if (referralCode && !referralError) {
+      const result = await dispatch(validateReferralCode(referralCode));
+      if (validateReferralCode.rejected.match(result)) {
+        validationSuccessful = false;
+      }
     }
+
+    // Validate agent code using Redux thunk
+    if (agentCode && !agentError && validationSuccessful) {
+      const result = await dispatch(validateAgentCode(agentCode));
+      if (validateAgentCode.rejected.match(result)) {
+        validationSuccessful = false;
+      }
+    }
+
+    if (!validationSuccessful) {
+      return; // Errors are already shown inline
+    }
+
+    // Set redirecting state
+    setIsRedirecting(true);
+
+    // If codes were validated, wait 2 seconds, otherwise proceed immediately
+    const delay = referralCode || agentCode ? 2000 : 0;
+
+    setTimeout(() => {
+      const stateData = {
+        service_provide_ids: selectedAccounts,
+        accountOptions: accountOptions,
+        referral_code: referralCode,
+        agent_code: agentCode,
+        is_remit: remittanceOnlyAccepted ? 1 : 0,
+      };
+
+      if (accountType === "individual") {
+        navigate("/signupindividual", { state: stateData });
+      } else if (accountType === "institution") {
+        navigate("/signupinstitution", { state: stateData });
+      }
+    }, delay);
   };
 
   const handleCancel = () => {
@@ -901,46 +972,97 @@ const CurrencySelectAccount = () => {
               </label>
             </div>
 
-            {/* Referral Code Input */}
-            <div className="mb-6">
-              <label
-                htmlFor="referralCode"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Referral Code (Optional)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="referralCode"
-                  value={referralCode}
-                  onChange={handleReferral}
-                  placeholder="Enter referral code if you have one"
-                  className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
-                />
-                {referralError && (
-                  <p className="text-red-500 text-sm mt-1 flex items-center">
-                    <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
-                    {referralError}
-                  </p>
-                )}
+            {/* Put these inputs side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Referral Code Input */}
+              <div>
+                <label
+                  htmlFor="referralCode"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Referral Code (Optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="referralCode"
+                    value={referralCode}
+                    onChange={handleReferral}
+                    placeholder="Enter referral code"
+                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
+                  />
+                  {isReferralValidating && (
+                    <div className="absolute right-3 top-3">
+                      <RingLoader color="#3B82F6" size={20} />
+                    </div>
+                  )}
+                  {referralError && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
+                      {referralError}
+                    </p>
+                  )}
+                  {referralSuccessMessage && (
+                    <p className="text-green-600 text-sm mt-1 flex items-center">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                      {referralSuccessMessage}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Agent Code Input */}
+              <div>
+                <label
+                  htmlFor="agentCode"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Agent Code (Optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="agentCode"
+                    value={agentCode}
+                    onChange={handleAgent}
+                    placeholder="Enter agent code"
+                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
+                  />
+                  {isAgentValidating && (
+                    <div className="absolute right-3 top-3">
+                      <RingLoader color="#3B82F6" size={20} />
+                    </div>
+                  )}
+                  {agentError && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
+                      {agentError}
+                    </p>
+                  )}
+                  {agentSuccessMessage && (
+                    <p className="text-green-600 text-sm mt-1 flex items-center">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                      {agentSuccessMessage}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons - Update disabled state */}
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleSubmit}
-                disabled={
-                  loading ||
-                  (selectedAccounts.length === 0 && !remittanceOnlyAccepted)
-                }
+                disabled={isSubmitDisabled || loading || isRedirecting}
                 className="flex-1 py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? (
+                {loading ||
+                isReferralValidating ||
+                isAgentValidating ||
+                isRedirecting ? (
                   <>
                     <RingLoader color="#ffffff" size={20} className="mr-2" />
-                    Processing...
+                    {isRedirecting ? "Redirecting..." : "Validating..."}
                   </>
                 ) : (
                   <>
@@ -1059,7 +1181,12 @@ const CurrencySelectAccount = () => {
                   <>
                     <div className="bg-blue-50 p-4 rounded-lg">
                       <p className="text-gray-700">
-                        A Named Account is a dedicated bank account issued in the customer’s name. All transactions are processed directly through this account, allowing funds to be received and sent in the customer's own identity. This provides higher transparency, better reconciliation, and improved trust for business and high-volume customers.
+                        A Named Account is a dedicated bank account issued in
+                        the customer’s name. All transactions are processed
+                        directly through this account, allowing funds to be
+                        received and sent in the customer's own identity. This
+                        provides higher transparency, better reconciliation, and
+                        improved trust for business and high-volume customers.
                       </p>
                     </div>
                   </>
@@ -1067,7 +1194,13 @@ const CurrencySelectAccount = () => {
                   <>
                     <div className="bg-indigo-50 p-4 rounded-lg">
                       <p className="text-gray-700">
-                        A Pooled Account is a shared account operated by the platform on behalf of multiple customers. Individual customer balances are maintained virtually within the system, while actual transactions are settled through the pooled account. This allows faster onboarding and efficient handling for customers who do not require a dedicated bank account.
+                        A Pooled Account is a shared account operated by the
+                        platform on behalf of multiple customers. Individual
+                        customer balances are maintained virtually within the
+                        system, while actual transactions are settled through
+                        the pooled account. This allows faster onboarding and
+                        efficient handling for customers who do not require a
+                        dedicated bank account.
                       </p>
                     </div>
                   </>

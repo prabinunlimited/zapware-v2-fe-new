@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FaUniversity,
   FaFileUpload,
@@ -53,6 +53,7 @@ const ManualDeposit = ({
   paymentOptions = [],
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { customerId: paramCustomerId } = useParams();
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
@@ -329,65 +330,65 @@ const ManualDeposit = ({
   );
 
   // Handle beneficiary code lookup
-  const handleBeneficiaryCodeLookupInternal = async () => {
-    if (!beneficiaryCode.trim()) {
-      toast.error("Please enter a beneficiary code");
-      return;
-    }
+  // const handleBeneficiaryCodeLookupInternal = async () => {
+  //   if (!beneficiaryCode.trim()) {
+  //     toast.error("Please enter a beneficiary code");
+  //     return;
+  //   }
 
-    try {
-      setIsLoadingCode(true);
-      const result = await dispatch(
-        fetchBeneficiaryByCode(beneficiaryCode)
-      ).unwrap();
+  //   try {
+  //     setIsLoadingCode(true);
+  //     const result = await dispatch(
+  //       fetchBeneficiaryByCode(beneficiaryCode)
+  //     ).unwrap();
 
-      if (result.data) {
-        const beneficiaryData = result.data;
+  //     if (result.data) {
+  //       const beneficiaryData = result.data;
 
-        const transformedBeneficiary = {
-          value: beneficiaryData.id,
-          id: beneficiaryData.id,
-          label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
-          name: beneficiaryData.name,
-          benef_uuid: beneficiaryData.benef_uuid,
-          occupation: beneficiaryData.occupation,
-          relationtobenef: beneficiaryData.relationtobenef,
-          transfer_purpose: beneficiaryData.transfer_purpose,
-          income_source: beneficiaryData.income_source,
-          payout_method:
-            beneficiaryData.payout_method || beneficiaryData.payment_method,
-          ...beneficiaryData,
-        };
+  //       const transformedBeneficiary = {
+  //         value: beneficiaryData.id,
+  //         id: beneficiaryData.id,
+  //         label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
+  //         name: beneficiaryData.name,
+  //         benef_uuid: beneficiaryData.benef_uuid,
+  //         occupation: beneficiaryData.occupation,
+  //         relationtobenef: beneficiaryData.relationtobenef,
+  //         transfer_purpose: beneficiaryData.transfer_purpose,
+  //         income_source: beneficiaryData.income_source,
+  //         payout_method:
+  //           beneficiaryData.payout_method || beneficiaryData.payment_method,
+  //         ...beneficiaryData,
+  //       };
 
-        await handleBeneficiarySelect(transformedBeneficiary);
-        toast.success("Beneficiary details loaded successfully!");
-      }
-    } catch (error) {
-      console.error("Error fetching beneficiary by code:", error);
-      if (error.response?.status === 404) {
-        toast.error("No beneficiary found with this code");
-      } else {
-        toast.error("Failed to fetch beneficiary details");
-      }
-    } finally {
-      setIsLoadingCode(false);
-    }
-  };
+  //       await handleBeneficiarySelect(transformedBeneficiary);
+  //       toast.success("Beneficiary details loaded successfully!");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching beneficiary by code:", error);
+  //     if (error.response?.status === 404) {
+  //       toast.error("No beneficiary found with this code");
+  //     } else {
+  //       toast.error("Failed to fetch beneficiary details");
+  //     }
+  //   } finally {
+  //     setIsLoadingCode(false);
+  //   }
+  // };
 
   // Handle beneficiary code input change
-  const handleBeneficiaryCodeInputChange = useCallback(
-    (e) => {
-      const value = e.target.value;
-      setBeneficiaryCode(value);
-      setShowCodeInput(value.trim().length > 0);
+  // const handleBeneficiaryCodeInputChange = useCallback(
+  //   (e) => {
+  //     const value = e.target.value;
+  //     setBeneficiaryCode(value);
+  //     setShowCodeInput(value.trim().length > 0);
 
-      // If clearing the code input, enable dropdown
-      if (!value.trim() && selectedBeneficiary) {
-        handleBeneficiarySelect(selectedBeneficiary);
-      }
-    },
-    [selectedBeneficiary, handleBeneficiarySelect]
-  );
+  //     // If clearing the code input, enable dropdown
+  //     if (!value.trim() && selectedBeneficiary) {
+  //       handleBeneficiarySelect(selectedBeneficiary);
+  //     }
+  //   },
+  //   [selectedBeneficiary, handleBeneficiarySelect]
+  // );
 
   // Handle file upload
   const handleFileUploadInternal = (e) => {
@@ -422,8 +423,9 @@ const ManualDeposit = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    toast.info("Redirecting to add new beneficiary...");
-    // You can implement navigation to beneficiary creation page
+    const customerId =
+      paramCustomerId || localStorage.getItem("authcustomer_id");
+    navigate(`/addbeneficiary/${customerId}`);
   };
 
   return (
@@ -475,14 +477,14 @@ const ManualDeposit = ({
           </div>
 
           {/* OR Separator */}
-          <div className="flex items-center my-4">
+          {/* <div className="flex items-center my-4">
             <div className="flex-1 border-t border-gray-300"></div>
             <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
             <div className="flex-1 border-t border-gray-300"></div>
-          </div>
+          </div> */}
 
           {/* Enter Beneficiary Code Field */}
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Enter Beneficiary Code
             </label>
@@ -508,7 +510,7 @@ const ManualDeposit = ({
             <p className="mt-1 text-sm text-gray-500">
               Enter the beneficiary code to load their details automatically
             </p>
-          </div>
+          </div> */}
 
           {/* Payout Method */}
           <div>
@@ -689,8 +691,8 @@ const ManualDeposit = ({
                   />
                   <BankDetailItem
                     icon={<FaInfoCircle className="text-gray-400" />}
-                    label="IBAN"
-                    value={manualAccountDetails.iban}
+                    label="Routing Number"
+                    value={manualAccountDetails.routing_number}
                   />
                 </div>
               </div>

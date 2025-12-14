@@ -7,7 +7,8 @@ import { jsPDF } from "jspdf";
 import { RingLoader } from "react-spinners";
 
 // Components
-import UnlimitedLogo from "../../assets/images/Logo/unlimited remit logo.png";
+// REMOVED: UnlimitedLogo static import
+import DefaultLogo from "../../assets/images/Logo/unlimited remit logo.png"; // Fallback logo
 
 // Redux
 import {
@@ -25,6 +26,9 @@ import {
 
 import { selectAuth } from "../../features/Auth/slices/authSlice";
 
+// NEW: Import partner config hook
+import { usePartnerConfig } from "../../hooks/usePartnerConfig";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 const BankLetter = () => {
@@ -33,9 +37,20 @@ const BankLetter = () => {
   const location = useLocation();
   const { accountId } = useParams();
 
+  // NEW: Get partner config including logo
+  const { 
+    logoUrl, 
+    logoAltText, 
+    loading: partnerConfigLoading,
+    config: partnerConfig,
+    headerColor,
+    textColor,
+    isConfigured 
+  } = usePartnerConfig();
+
   // Redux Selectors
   const {
-    loading,
+    loading: bankLetterLoading,
     pdfGenerating,
     error: bankLetterError,
     currentDate,
@@ -44,7 +59,6 @@ const BankLetter = () => {
   const accountData = useSelector(selectAccountData);
   const isPdfGenerating = useSelector(selectPdfGenerating);
   const isWhitelabelled = useSelector(selectIsWhitelabelled);
-
   const { token } = useSelector(selectAuth);
 
   // Local Refs
@@ -71,6 +85,45 @@ const BankLetter = () => {
     }
   }, [isWhitelabelled, token, dispatch]);
 
+  // Determine which logo to display
+  const getLogoToDisplay = () => {
+    if (isWhitelabelled) {
+      // For whitelabelled partners, use the profile logo first, then partner config logo
+      if (partnerProfileData?.logo) {
+        return {
+          src: partnerProfileData.logo,
+          alt: partnerProfileData.partner_name || "Partner Logo",
+          type: "partner-profile"
+        };
+      } else if (logoUrl) {
+        return {
+          src: logoUrl,
+          alt: logoAltText,
+          type: "partner-config"
+        };
+      }
+    } else {
+      // For regular users, use partner config logo if available, otherwise default
+      if (isConfigured && logoUrl) {
+        return {
+          src: logoUrl,
+          alt: logoAltText,
+          type: "partner-config"
+        };
+      }
+    }
+    
+    // Fallback to default logo
+    return {
+      src: DefaultLogo,
+      alt: "Unlimited Remit Logo",
+      type: "default"
+    };
+  };
+
+  // Get the current logo
+  const currentLogo = getLogoToDisplay();
+
   // Handle missing account data
   const handleMissingData = () => {
     return (
@@ -88,7 +141,7 @@ const BankLetter = () => {
     );
   };
 
-  // Generate PDF
+  // Generate PDF (unchanged from your code)
   const generatePDF = useCallback(async () => {
     dispatch(setPdfGenerating(true));
 
@@ -260,7 +313,7 @@ const BankLetter = () => {
     }
   }, [accountData, dispatch]);
 
-  // Enhanced Print Document
+  // Enhanced Print Document (unchanged from your code)
   const printDocument = useCallback(() => {
     const content = pdfContentRef.current;
     if (!content) return;
@@ -395,6 +448,16 @@ const BankLetter = () => {
 
   const displayAccountData = accountData || originalAccountData.current;
 
+  // Loading state for partner config
+  if (partnerConfigLoading && isWhitelabelled) {
+    return (
+      <div className="container mx-auto py-20 text-center">
+        <RingLoader size={50} color="#3b82f6" className="mx-auto mb-4" />
+        <p className="text-gray-600">Loading partner configuration...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
       {/* Header with navigation */}
@@ -465,8 +528,9 @@ const BankLetter = () => {
                 margin-bottom: 1rem;
               }
               
-              /* Whitelabel logo size */
-              #pdfContent header img[alt="Partner Profile"] {
+              /* Partner config logo size */
+              #pdfContent header img[data-logo-type="partner-config"],
+              #pdfContent header img[data-logo-type="partner-profile"] {
                 max-width: 150px;
                 max-height: 50px;
               }
@@ -510,6 +574,22 @@ const BankLetter = () => {
                 color: #718096;
               }
               
+              /* Apply partner colors if available */
+              ${headerColor ? `
+                .pdf-container {
+                  border-top: 4px solid ${headerColor};
+                }
+                h1, h2 {
+                  color: ${headerColor};
+                }
+              ` : ''}
+              
+              ${textColor ? `
+                body {
+                  color: ${textColor};
+                }
+              ` : ''}
+              
               /* Print media query */
               @media print {
                 body { 
@@ -524,6 +604,7 @@ const BankLetter = () => {
                   box-shadow: none !important;
                   border: none !important;
                   border-radius: 0 !important;
+                  border-top: 4px solid ${headerColor || '#3b82f6'} !important;
                 }
                 
                 #pdfContent header img {
@@ -569,23 +650,27 @@ const BankLetter = () => {
           </style>
 
           <header className="text-center pb-6 flex flex-col justify-center items-center">
-            {isWhitelabelled ? (
-              loading ? (
-                <div className="flex justify-center py-4">
-                  <RingLoader size={30} color="#3b82f6" />
-                </div>
-              ) : (
-                <img
-                  src={partnerProfileData?.logo || "logo"}
-                  alt="Partner Profile"
-                  className="partner-logo mb-6 object-contain"
-                />
-              )
+            {/* Loading state for whitelabelled partner */}
+            {isWhitelabelled && bankLetterLoading ? (
+              <div className="flex justify-center py-4">
+                <RingLoader size={30} color="#3b82f6" />
+              </div>
             ) : (
               <img
-                src={UnlimitedLogo}
-                alt="Logo"
-                className="default-logo mb-6 object-contain"
+                src={currentLogo.src}
+                alt={currentLogo.alt}
+                data-logo-type={currentLogo.type}
+                className={`mb-6 object-contain ${
+                  currentLogo.type === 'default' 
+                    ? 'default-logo' 
+                    : 'partner-logo'
+                }`}
+                onError={(e) => {
+                  console.error(`Failed to load logo: ${currentLogo.src}`);
+                  e.target.src = DefaultLogo;
+                  e.target.alt = "Default Logo";
+                  e.target.dataset.logoType = "default";
+                }}
               />
             )}
             <h1 className="text-2xl font-bold text-gray-800">
@@ -600,7 +685,7 @@ const BankLetter = () => {
 
             <div className="text-justify">
               {isWhitelabelled ? (
-                loading ? (
+                bankLetterLoading ? (
                   <div className="flex justify-center py-4">
                     <RingLoader size={30} color="#3b82f6" />
                   </div>
@@ -702,7 +787,6 @@ const BankLetter = () => {
                     </div>
                   </div>
                 )}
-
               </div>
             </div>
 

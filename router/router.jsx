@@ -39,6 +39,8 @@ import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
+import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
+import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
 
 const ProtectedLayout = () => {
   return (
@@ -100,6 +102,10 @@ const router = createBrowserRouter([
         element: <Home />,
       },
       {
+        path: "monthlytransactions/:customerId",
+        element: <MonthlyTransactions />,
+      },
+      {
         path: "transfer/:customerId",
         element: <TransferBalancePage />,
       },
@@ -122,6 +128,10 @@ const router = createBrowserRouter([
       {
         path: "card",
         element: <CardPayment />,
+      },
+      {
+        path: "/card/success",
+        element: <CardPaymentSuccess />, // You need to create this component
       },
       {
         path: "cardiframe",

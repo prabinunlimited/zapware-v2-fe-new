@@ -1,21 +1,19 @@
+// src/components/Header/Header.js
 import React, { useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import {
   FaUserCircle,
-  FaUser,
   FaUsers,
   FaSignOutAlt,
-  FaUserFriends,
+  FaIdCard,
+  FaUserTie,
+  FaChevronRight,
+  FaStar,
   FaHome,
   FaBuilding,
   FaMoneyCheckAlt,
-  FaIdCard,
-  FaUserTie,
-  FaShieldAlt,
-  FaChevronRight,
-  FaStar,
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
@@ -49,16 +47,14 @@ import {
 // FIXED: Only import logoutUser, use local selectAuthToken
 import { logoutUser } from "../../../features/Auth/slices/authSlice";
 
-// Partner config hook
+// Partner config hook - UPDATED to get logoUrl
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
 // API Coordination
 import { apiCoordinator } from "../../../services/api";
 
 const selectAuthToken = (state) => {
-  // Use bearertoken from localStorage for API calls
   const bearertoken = localStorage.getItem("bearertoken");
-
   const isValidToken =
     bearertoken &&
     bearertoken !== "undefined" &&
@@ -71,7 +67,6 @@ const selectAuthToken = (state) => {
     return bearertoken;
   }
 
-  // Fallback to Redux token
   const token = state.auth?.token;
   const isValidReduxToken =
     token &&
@@ -92,9 +87,13 @@ const Header = ({ customerId }) => {
   const hoverTimerRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
 
-  // Use the partner config hook
+  // Use the partner config hook - UPDATED to get all new properties
   const {
     headerColor,
+    logoUrl,
+    logoAltText,
+    partnerName, // NEW: Get partner name from hook
+    hasLogo, // NEW: Check if logo exists
     loading: partnerConfigLoading,
     error: partnerConfigError,
     refresh: refreshPartnerConfig,
@@ -141,6 +140,38 @@ const Header = ({ customerId }) => {
     profileFetchSignature.current = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
   }, [customerId]);
 
+  // ==================== DEBUG LOGGING ====================
+  useEffect(() => {
+    console.log("🔍 Header Partner Config Debug:", {
+      hasLogo,
+      logoUrl,
+      logoAltText,
+      partnerName,
+      partnerConfigLoading,
+      isWhitelabelledCustomerPartnerId,
+      isRemittanceOnlyCustomer,
+      localStoragePartnerName: localStorage.getItem(
+        "whitelabelled_customer_partnername"
+      ),
+      localStoragePartnerLogo: localStorage.getItem("partner_logo"),
+      localStoragePartnerConfig: JSON.parse(
+        localStorage.getItem("partnerConfig") || "{}"
+      ),
+      localStoragePartnerDetails: JSON.parse(
+        localStorage.getItem("partnerDetails") || "{}"
+      ),
+    });
+  }, [
+    hasLogo,
+    logoUrl,
+    logoAltText,
+    partnerName,
+    partnerConfigLoading,
+    isWhitelabelledCustomerPartnerId,
+    isRemittanceOnlyCustomer,
+  ]);
+  // ==================== END DEBUG ====================
+
   // Handle logout
   const handleLogout = useCallback(async () => {
     // Clear timers
@@ -164,7 +195,6 @@ const Header = ({ customerId }) => {
       localStorage.getItem("bearertoken");
 
     try {
-      // Call the NEW async thunk
       if (tokenToUse) {
         await dispatch(logoutUser(tokenToUse)).unwrap();
       } else {
@@ -268,7 +298,6 @@ const Header = ({ customerId }) => {
         // Reset fetch status to idle to allow the fetch
         if (fetchStatus.profile !== "idle") {
           console.log("🔄 Resetting fetch status to idle");
-          // You might need to dispatch an action to reset the status if it's stuck
         }
 
         dispatch(fetchUserProfile({ customerId, bearertoken }));
@@ -281,7 +310,7 @@ const Header = ({ customerId }) => {
           fetchStatus: fetchStatus.profile,
         });
       }
-    }, 300); // Slightly longer delay to avoid race conditions
+    }, 300);
 
     return () => {
       if (fetchTimeoutRef.current) {
@@ -320,21 +349,17 @@ const Header = ({ customerId }) => {
 
   // Hover handlers
   const handleMouseEnter = useCallback(() => {
-    // Clear any pending close timer
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-
-    // Open dropdown immediately on hover
     dispatch(openDropdown());
   }, [dispatch]);
 
   const handleMouseLeave = useCallback(() => {
-    // Set a small delay before closing to allow moving to dropdown
     hoverTimerRef.current = setTimeout(() => {
       dispatch(closeDropdown());
-    }, 300); // 300ms delay
+    }, 300);
   }, [dispatch]);
 
   // Auto-logout timer
@@ -345,7 +370,7 @@ const Header = ({ customerId }) => {
 
     timerRef.current = setTimeout(() => {
       handleLogout();
-    }, 36000000); // 10 hours
+    }, 36000000);
   }, [handleLogout]);
 
   useEffect(() => {
@@ -366,7 +391,7 @@ const Header = ({ customerId }) => {
     }
   }, [resetTimer, authtoken]);
 
-  // Enhanced dropdown items with bigger padding and better UX
+  // Enhanced dropdown items
   const dropdownItems = [
     {
       id: 1,
@@ -401,22 +426,10 @@ const Header = ({ customerId }) => {
       delay: 0.3,
       description: "Manage team access and permissions",
     },
-    // {
-    //     id: 4,
-    //     label: "Change Password",
-    //     icon: FaShieldAlt,
-    //     color: "text-red-600",
-    //     bgColor: "bg-red-500/10",
-    //     borderColor: "border-red-200",
-    //     onClick: handleChangePasswordStaff,
-    //     delay: 0.4,
-    //     description: "Update your password"
-    // },
   ];
 
-  // ✅ FIXED: Memoized profile section with better loading handling
+  // ✅ FIXED: Memoized profile section
   const ProfileSection = useMemo(() => {
-    // ✅ Show profile-specific loading only, don't block entire UI
     if (profileLoading && !profileData) {
       return (
         <div className="flex items-center">
@@ -430,7 +443,6 @@ const Header = ({ customerId }) => {
       console.error("🔍 Profile error in ProfileSection:", profileError);
     }
 
-    // Use data from Redux if available, otherwise fallback to localStorage
     const displayName =
       profileData?.first_name &&
       profileData.first_name !== "User" &&
@@ -457,7 +469,6 @@ const Header = ({ customerId }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Profile Trigger Button - REMOVED onClick */}
         <motion.div
           whileHover={{ scale: 1.05 }}
           className="flex items-center cursor-pointer bg-white/10 hover:bg-white/20 rounded-2xl px-4 py-3 transition-all duration-300 backdrop-blur-sm border border-white/20"
@@ -491,7 +502,6 @@ const Header = ({ customerId }) => {
           </motion.div>
         </motion.div>
 
-        {/* Enhanced Animated Dropdown */}
         <AnimatePresence>
           {isDropdownOpen && (
             <motion.div
@@ -499,7 +509,7 @@ const Header = ({ customerId }) => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
               transition={{
-                duration: 0.2, // Faster animation for hover
+                duration: 0.2,
                 type: "spring",
                 stiffness: 500,
                 damping: 30,
@@ -509,10 +519,9 @@ const Header = ({ customerId }) => {
                 background:
                   "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
               }}
-              onMouseEnter={handleMouseEnter} // Keep open when hovering dropdown
-              onMouseLeave={handleMouseLeave} // Close when leaving dropdown
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
             >
-              {/* Header with user info */}
               <motion.div
                 className="p-8 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600"
                 initial={{ opacity: 0, y: -10 }}
@@ -567,7 +576,6 @@ const Header = ({ customerId }) => {
                 </div>
               </motion.div>
 
-              {/* Menu Items with Bigger Padding */}
               <div className="p-6">
                 <div className="space-y-3">
                   {dropdownItems.map((item, index) => (
@@ -615,7 +623,6 @@ const Header = ({ customerId }) => {
                 </div>
               </div>
 
-              {/* Logout Section */}
               <motion.div
                 className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
                 initial={{ opacity: 0 }}
@@ -642,7 +649,6 @@ const Header = ({ customerId }) => {
                 </motion.button>
               </motion.div>
 
-              {/* Footer */}
               <motion.div
                 className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
                 initial={{ opacity: 0 }}
@@ -682,46 +688,123 @@ const Header = ({ customerId }) => {
     dispatch,
   ]);
 
-  // Determine which icon to use based on customer type
-  const LogoIcon = useMemo(() => {
-    if (isRemittanceOnlyCustomer === "Y") {
-      return FaMoneyCheckAlt;
+  // UPDATED: Determine which icon/logo to use based on customer type and partner config
+  const LogoContent = useMemo(() => {
+    // Show loading spinner if partner config is loading
+    if (partnerConfigLoading) {
+      return (
+        <div className="flex items-center">
+          <RingLoader size={70} color={"#ffffff"} loading={true} />
+        </div>
+      );
     }
-    if (isWhitelabelledCustomerPartnerId) {
-      return FaBuilding;
-    }
-    return FaHome;
-  }, [isRemittanceOnlyCustomer, isWhitelabelledCustomerPartnerId]);
 
-  // Get appropriate text for the logo area
+    // If we have a partner logo URL, use it
+    if (hasLogo && logoUrl) {
+      return (
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 300 }}
+          className="flex items-center justify-center"
+        >
+          <img
+            src={logoUrl}
+            alt={logoAltText}
+            className="h-20 w-auto object-contain md:h-20 lg:h-20" // Much bigger
+            style={{
+              maxWidth: "300px",
+              maxHeight: "100px",
+            }}
+            onError={(e) => {
+              console.error("Failed to load partner logo:", logoUrl);
+              e.target.style.display = "none";
+            }}
+            onLoad={() =>
+              console.log("✅ Big logo loaded successfully:", logoUrl)
+            }
+          />
+        </motion.div>
+      );
+    }
+
+    // Fallback to icon based on customer type
+    let IconComponent = FaHome;
+    let titleText = "Dashboard";
+
+    if (isRemittanceOnlyCustomer === "Y") {
+      IconComponent = FaMoneyCheckAlt;
+      titleText = "Remittance Portal";
+    } else if (isWhitelabelledCustomerPartnerId) {
+      IconComponent = FaBuilding;
+      titleText = logoAltText || "Partner Portal";
+    }
+
+    return (
+      <motion.div
+        whileHover={{ scale: 1.05 }}
+        transition={{ type: "spring", stiffness: 300 }}
+        className="flex items-center justify-center"
+      >
+        <IconComponent
+          className="h-32 w-auto text-white group-hover:text-blue-200 transition-colors duration-300 md:h-36 lg:h-40"
+          style={{ minWidth: "100px" }}
+        />
+      </motion.div>
+    );
+  }, [
+    partnerConfigLoading,
+    logoUrl,
+    logoAltText,
+    hasLogo,
+    isRemittanceOnlyCustomer,
+    isWhitelabelledCustomerPartnerId,
+    customerId,
+  ]);
+
+  // UPDATED: Get appropriate text for the logo area
   const logoText = useMemo(() => {
     if (isRemittanceOnlyCustomer === "Y") {
       return "Remittance Portal";
     }
     if (isWhitelabelledCustomerPartnerId) {
-      return partnerConfig?.name || "Partner Portal";
+      // Use partner name from hook (which comes from partner details API)
+      return partnerName || "Partner Portal";
     }
     return "Dashboard";
   }, [
     isRemittanceOnlyCustomer,
     isWhitelabelledCustomerPartnerId,
-    partnerConfig,
+    partnerName, // Use partnerName instead of partnerConfig
   ]);
 
-  // Handle header color class application
+  // UPDATED: Handle header color class application with better fallback
   const headerClassNames = useMemo(() => {
     const baseClasses = "w-full shadow-xl";
-    if (headerColor && !headerColor.startsWith("#")) {
+
+    // If we have a header color from partner config
+    if (headerColor) {
+      // Check if it's a hex color or Tailwind class
+      if (headerColor.startsWith("#")) {
+        return baseClasses; // Use inline style for hex colors
+      }
+      // It's a Tailwind class
       return `${baseClasses} ${headerColor}`;
     }
+
+    // Default gradient
     return `${baseClasses} bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700`;
   }, [headerColor]);
 
-  // Inline style for hex colors
+  // UPDATED: Inline style for hex colors with better gradient
   const headerStyle = useMemo(() => {
     if (headerColor?.startsWith("#")) {
+      // Create a gradient from the header color
+      const baseColor = headerColor;
+      const darkerColor = headerColor + "CC"; // 80% opacity
+      const darkestColor = headerColor + "99"; // 60% opacity
+
       return {
-        background: `linear-gradient(135deg, ${headerColor} 0%, ${headerColor}99 50%, ${headerColor}80 100%)`,
+        background: `linear-gradient(135deg, ${baseColor} 0%, ${darkerColor} 50%, ${darkestColor} 100%)`,
       };
     }
     return {};
@@ -741,59 +824,21 @@ const Header = ({ customerId }) => {
 
   return (
     <header className={headerClassNames} style={headerStyle}>
-      <div className="max-w-[2000px] mx-auto px-8 py-4 flex justify-between items-center w-full">
+      <div className="max-w-[2000px] mx-auto px-6 py-3 flex justify-between items-center w-full">
         <div className="flex items-center space-x-5">
           {isRemittanceOnlyCustomer === "Y" ? (
             <Link
               to={`/homeremit/${customerId}`}
               className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
             >
-              {partnerConfigLoading ? (
-                <RingLoader size={30} color={"#ffffff"} loading={true} />
-              ) : (
-                <>
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <LogoIcon className="w-12 h-12 text-white group-hover:text-blue-200 transition-colors duration-300" />
-                  </motion.div>
-                  <div className="flex flex-col">
-                    <span className="font-bold text-2xl tracking-tight">
-                      {logoText}
-                    </span>
-                    <span className="text-sm opacity-90 font-medium mt-1">
-                      Customer ID: {customerId}
-                    </span>
-                  </div>
-                </>
-              )}
+              {LogoContent}
             </Link>
           ) : (
             <Link
               to={`/home/${customerId}`}
               className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
             >
-              {partnerConfigLoading ? (
-                <RingLoader size={30} color={"#ffffff"} loading={true} />
-              ) : (
-                <>
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <LogoIcon className="w-12 h-12 text-white group-hover:text-blue-200 transition-colors duration-300" />
-                  </motion.div>
-                  <div className="flex flex-col">
-                    <span className="font-bold text-2xl tracking-tight">
-                      {logoText}
-                    </span>
-                    <span className="text-sm opacity-90 font-medium mt-1">
-                      Customer ID: {customerId}
-                    </span>
-                  </div>
-                </>
-              )}
+              {LogoContent}
             </Link>
           )}
         </div>
@@ -832,16 +877,16 @@ const Header = ({ customerId }) => {
 
       {/* Enhanced Keyframe style */}
       <style>{`
-                @keyframes marquee {
-                    0% { transform: translateX(100%); }
-                    100% { transform: translateX(-100%); }
-                }
-                .animate-marquee {
-                    display: inline-block;
-                    animation: marquee 35s linear infinite;
-                    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                }
-            `}</style>
+        @keyframes marquee {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+          display: inline-block;
+          animation: marquee 35s linear infinite;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+      `}</style>
     </header>
   );
 };

@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { RingLoader } from "react-spinners";
 import BankDetailsPopup from "../../../components/PopupModal/BankDetailsPopup";
 import DeleteConfirmationModal from "./DeleteConfirmationModal";
+import PropTypes from "prop-types";
 
+// Import from MyBeneficiaries/BeneficiariesSlice
 import {
-  // Selectors (ALL THESE ARE EXPORTED IN YOUR SLICE)
   selectBeneficiaries,
   selectFilteredBeneficiaries,
   selectBeneficiariesLoading,
@@ -16,884 +17,747 @@ import {
   selectBeneficiariesSuccess,
   selectSearchQuery,
   selectFilterVisibility,
-  selectBeneficiaryBanks,
-  selectBanksLoading,
-  // For your statistics calculations, you might also want:
   selectVisibleBeneficiaries,
   selectBeneficiariesCount,
-
-  // Actions/Reducers
   setSearchQuery,
   setFilterVisibility,
-  setSelectedBeneficiary,
   clearError,
   clearSuccess,
-
-  // Async thunks
   fetchBeneficiaries,
   deleteBeneficiary,
   toggleBeneficiaryVisibility,
-  fetchBeneficiaryBanks,
 } from "../MyBeneficiaries/BeneficiariesSlice";
 
+// Import ModalSlice actions
 import { showDeleteModal, showBulkDeleteModal } from "./ModalSlice";
 
-const Beneficiaries = () => {
-  const { customerId } = useParams();
+// Import FontAwesome icons
+import {
+  FaEye,
+  FaEyeSlash,
+  FaEdit,
+  FaTrash,
+  FaSearch,
+  FaFilter,
+  FaTimes,
+  FaPlus,
+  FaMoneyBillWave,
+  FaUser,
+  FaUniversity,
+  FaInfoCircle,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaArrowLeft,
+  FaChevronRight,
+  FaChevronLeft,
+  FaPhone,
+} from "react-icons/fa";
+
+const Beneficiaries = ({ mode = "list" }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
+  const params = useParams();
 
-  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
-  const [selectAll, setSelectAll] = useState(false);
+  // Add useRef to track mounted state
+  const isMounted = useRef(true);
 
-  // Selectors - using the actual exported selector names
-  const beneficiaries = useSelector(selectFilteredBeneficiaries); // ✓ This selector exists in your slice
+  // Get customerId from params or location state
+  const customerId = params.customerId || location.state?.customerId || localStorage.getItem("currentCustomerId");
 
-  // If you need ALL beneficiaries (for stats, etc.)
-  const allBeneficiaries = useSelector(selectBeneficiaries);
-
+  // Redux selectors
+  const beneficiaries = useSelector(selectBeneficiaries);
+  const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
   const loading = useSelector(selectBeneficiariesLoading);
   const error = useSelector(selectBeneficiariesError);
-  const operationSuccess = useSelector(selectBeneficiariesSuccess);
+  const success = useSelector(selectBeneficiariesSuccess);
   const searchQuery = useSelector(selectSearchQuery);
   const filterVisibility = useSelector(selectFilterVisibility);
-
-  // Additional selectors for statistics
   const visibleBeneficiaries = useSelector(selectVisibleBeneficiaries);
-  const totalCount = useSelector(selectBeneficiariesCount);
+  const beneficiariesCount = useSelector(selectBeneficiariesCount);
 
-  // Use the same loading state for both initial load and operations
-  const operationLoading = loading;
-
-  // Local state for filters - map to your actual filter structure
-  const [localSearch, setLocalSearch] = useState(searchQuery);
-  const [statusFilter, setStatusFilter] = useState(filterVisibility);
-  const [typeFilter, setTypeFilter] = useState("all");
+  // Local states
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [showBankDetails, setShowBankDetails] = useState(false);
-  const [selectedBeneficiaryForBank, setSelectedBeneficiaryForBank] =
-    useState(null);
+  const [showDeleteModalLocal, setShowDeleteModalLocal] = useState(false);
+  const [beneficiaryToDelete, setBeneficiaryToDelete] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+
+  // Cleanup function
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      dispatch(clearError());
+      dispatch(clearSuccess());
+    };
+  }, [dispatch]);
 
   // Fetch beneficiaries on component mount
   useEffect(() => {
-    if (customerId) {
+    if (customerId && isMounted.current) {
+      console.log("🔍 Beneficiaries Component mounted with customerId:", customerId);
       dispatch(fetchBeneficiaries(customerId));
     }
-  }, [customerId, dispatch]);
+  }, [dispatch, customerId]);
 
-  // Handle search with debounce
+  // Handle success and error messages
   useEffect(() => {
-    const timer = setTimeout(() => {
-      dispatch(setSearchQuery(localSearch));
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [localSearch, dispatch]);
-
-  // Handle status filter changes
-  useEffect(() => {
-    dispatch(setFilterVisibility(statusFilter));
-  }, [statusFilter, dispatch]);
-
-  // Reset select all when beneficiaries change
-  useEffect(() => {
-    if (selectAll && beneficiaries.length === 0) {
-      setSelectAll(false);
-      setSelectedBeneficiaries([]);
-    }
-  }, [beneficiaries, selectAll]);
-
-  // Handle errors and success messages
-  useEffect(() => {
-    if (error) {
-      toast.error(`Error: ${error}`);
-      dispatch(clearError());
-    }
-
-    if (operationSuccess) {
-      toast.success("Operation completed successfully!");
+    if (success && isMounted.current) {
+      toast.success(success);
       dispatch(clearSuccess());
     }
-  }, [error, operationSuccess, dispatch]);
 
+    if (error && isMounted.current) {
+      toast.error(error);
+      dispatch(clearError());
+    }
+  }, [success, error, dispatch]);
+
+  // Handle search input changes
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    dispatch(setSearchQuery(value));
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearchInput("");
+    dispatch(setSearchQuery(""));
+  };
+
+  // Toggle filter visibility
+  const handleToggleFilter = () => {
+    dispatch(setFilterVisibility(!filterVisibility));
+  };
+
+  // Navigate to add beneficiary page
   const handleAddBeneficiary = () => {
     navigate(`/addbeneficiary/${customerId}`);
   };
 
-  const handleEditBeneficiary = (beneficiaryId) => {
-    navigate(`/editbeneficiary/${beneficiaryId}`);
+  // Navigate to edit beneficiary page
+  const handleEditBeneficiary = (beneficiary) => {
+    navigate(`/editbeneficiary/${beneficiary.id}`, {
+      state: { customerId, beneficiaryData: beneficiary }
+    });
   };
 
-  const handleViewBeneficiary = (beneficiaryId) => {
-    navigate(`/beneficiary/${customerId}/${beneficiaryId}`);
+  // Show bank details popup
+  const handleViewBankDetails = (beneficiary) => {
+    setSelectedBeneficiary(beneficiary);
+    setShowBankDetails(true);
   };
 
-  const handleDeleteBeneficiary = (beneficiaryId, beneficiaryName) => {
-    dispatch(showDeleteModal({ id: beneficiaryId, name: beneficiaryName }));
+  // Handle delete confirmation
+  const handleDeleteClick = (beneficiary) => {
+    setBeneficiaryToDelete(beneficiary);
+    setShowDeleteModalLocal(true);
+    // Also dispatch to Redux modal state if needed
+    dispatch(showDeleteModal(beneficiary));
   };
 
-  // Bulk delete handler
-  const handleBulkDelete = () => {
-    if (selectedBeneficiaries.length === 0) return;
-
-    dispatch(
-      showBulkDeleteModal({
-        ids: selectedBeneficiaries,
-        count: selectedBeneficiaries.length,
-      })
-    );
+  // Confirm delete
+  const handleConfirmDelete = async () => {
+    if (beneficiaryToDelete && customerId) {
+      setIsLoading(true);
+      try {
+        await dispatch(deleteBeneficiary({
+          customerId,
+          beneficiaryId: beneficiaryToDelete.id
+        })).unwrap();
+        
+        toast.success("Beneficiary deleted successfully!");
+        // Refresh the list
+        dispatch(fetchBeneficiaries(customerId));
+      } catch (error) {
+        toast.error(error.message || "Failed to delete beneficiary");
+      } finally {
+        setIsLoading(false);
+        setShowDeleteModalLocal(false);
+        setBeneficiaryToDelete(null);
+      }
+    }
   };
 
-  // Handle individual beneficiary selection
-  const handleSelectBeneficiary = (beneficiaryId) => {
-    setSelectedBeneficiaries((prevSelected) => {
-      if (prevSelected.includes(beneficiaryId)) {
-        return prevSelected.filter((id) => id !== beneficiaryId);
+  // Cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteModalLocal(false);
+    setBeneficiaryToDelete(null);
+  };
+
+  // Toggle beneficiary visibility
+  const handleToggleVisibility = async (beneficiaryId) => {
+    if (customerId) {
+      try {
+        await dispatch(toggleBeneficiaryVisibility({
+          customerId,
+          beneficiaryId
+        })).unwrap();
+        
+        // Refresh the list
+        dispatch(fetchBeneficiaries(customerId));
+      } catch (error) {
+        toast.error(error.message || "Failed to toggle visibility");
+      }
+    }
+  };
+
+  // Handle beneficiary selection for bulk actions
+  const handleBeneficiarySelect = (beneficiaryId) => {
+    setSelectedBeneficiaries(prev => {
+      if (prev.includes(beneficiaryId)) {
+        return prev.filter(id => id !== beneficiaryId);
       } else {
-        return [...prevSelected, beneficiaryId];
+        return [...prev, beneficiaryId];
       }
     });
   };
 
-  // Handle select all beneficiaries
+  // Handle select all
   const handleSelectAll = () => {
-    if (selectAll) {
+    if (selectedBeneficiaries.length === filteredBeneficiaries.length) {
       setSelectedBeneficiaries([]);
     } else {
-      const allIds = beneficiaries.map((beneficiary) => beneficiary.id);
-      setSelectedBeneficiaries(allIds);
-    }
-    setSelectAll(!selectAll);
-  };
-
-  // Check if a beneficiary is selected
-  const isSelected = (beneficiaryId) => {
-    return selectedBeneficiaries.includes(beneficiaryId);
-  };
-
-  const renderDeleteButton = (beneficiary) => (
-    <button
-      onClick={() => handleDeleteBeneficiary(beneficiary.id, beneficiary.name)}
-      className="text-red-600 hover:text-red-900 transition-colors"
-      title="Delete beneficiary"
-    >
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-        />
-      </svg>
-    </button>
-  );
-
-  const handleToggleVisibility = (
-    beneficiaryId,
-    beneficiaryName,
-    currentStatus
-  ) => {
-    const newStatus = !currentStatus;
-    const action = newStatus ? "activate" : "deactivate";
-
-    if (
-      window.confirm(
-        `Are you sure you want to ${action} beneficiary "${beneficiaryName}"?`
-      )
-    ) {
-      dispatch(
-        toggleBeneficiaryVisibility({
-          customerId,
-          beneficiaryId,
-          isVisible: newStatus,
-        })
-      );
+      setSelectedBeneficiaries(filteredBeneficiaries.map(b => b.id));
     }
   };
 
-  const handleClearFilters = () => {
-    setLocalSearch("");
-    setStatusFilter("all");
-    setTypeFilter("all");
-    setSelectedBeneficiaries([]);
-    setSelectAll(false);
-    // Clear the actual filters in the slice
-    dispatch(setSearchQuery(""));
-    dispatch(setFilterVisibility("all"));
+  // Handle bulk delete
+  const handleBulkDeleteClick = () => {
+    if (selectedBeneficiaries.length > 0) {
+      setShowBulkDelete(true);
+      dispatch(showBulkDeleteModal(selectedBeneficiaries.length));
+    } else {
+      toast.warning("Please select at least one beneficiary to delete");
+    }
   };
 
-  const handleExportBeneficiaries = () => {
-    // Simple export functionality - could be enhanced with CSV export
-    const beneficiariesData = JSON.stringify(beneficiaries, null, 2);
-    const blob = new Blob([beneficiariesData], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `beneficiaries-${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    toast.info("Beneficiaries data exported successfully!");
+  // Confirm bulk delete
+  const handleConfirmBulkDelete = async () => {
+    if (selectedBeneficiaries.length > 0 && customerId) {
+      setIsLoading(true);
+      try {
+        // Delete each selected beneficiary
+        for (const beneficiaryId of selectedBeneficiaries) {
+          await dispatch(deleteBeneficiary({
+            customerId,
+            beneficiaryId
+          })).unwrap();
+        }
+        
+        toast.success(`${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`);
+        
+        // Clear selection and refresh list
+        setSelectedBeneficiaries([]);
+        dispatch(fetchBeneficiaries(customerId));
+      } catch (error) {
+        toast.error(error.message || "Failed to delete beneficiaries");
+      } finally {
+        setIsLoading(false);
+        setShowBulkDelete(false);
+      }
+    }
   };
 
-  // Calculate statistics
-  const stats = {
-    total: beneficiaries.length,
-    active: beneficiaries.filter((b) => b.status === 1).length,
-    inactive: beneficiaries.filter((b) => b.status === 0).length,
-    individuals: beneficiaries.filter((b) => b.beneftype === "individual")
-      .length,
-    institutions: beneficiaries.filter((b) => b.beneftype === "institution")
-      .length,
+  // Close bank details popup
+  const handleCloseBankDetails = () => {
+    setShowBankDetails(false);
+    setSelectedBeneficiary(null);
   };
 
-  if (loading && beneficiaries.length === 0) {
+  // Navigate back
+  const handleGoBack = () => {
+    navigate(-1);
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  };
+
+  // Loading overlay
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <RingLoader
-            color="#3B82F6"
-            loading={true}
-            size={60}
-            speedMultiplier={1}
-          />
+          <RingLoader size={60} color="#3B82F6" />
           <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
         </div>
       </div>
     );
   }
 
+  // Check if customerId exists
+  if (!customerId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+          <FaExclamationTriangle className="text-red-500 text-5xl mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Customer ID Missing</h2>
+          <p className="text-gray-600 mb-6">Please navigate to this page through the proper route.</p>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                My Beneficiaries
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Manage your beneficiaries and their bank accounts
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={handleExportBeneficiaries}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-                disabled={beneficiaries.length === 0}
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                Export
-              </button>
-              <button
-                onClick={handleAddBeneficiary}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                Add Beneficiary
-              </button>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-50 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
+            <RingLoader size={60} color="#3B82F6" />
+            <p className="mt-6 text-gray-700 font-medium">Processing...</p>
           </div>
         </div>
+      )}
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Total Beneficiaries
-                </h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stats.total}
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-white flex items-center">
+                  <FaMoneyBillWave className="mr-3" size={28} />
+                  My Beneficiaries
+                </h1>
+                <p className="text-blue-100 mt-1">
+                  Manage your beneficiaries for sending money
                 </p>
               </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="bg-green-100 p-3 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Active</h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stats.active}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="bg-red-100 p-3 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Inactive</h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stats.inactive}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-purple-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Individuals
-                </h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stats.individuals}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="bg-orange-100 p-3 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-orange-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Institutions
-                </h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stats.institutions}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Add selection notification */}
-        {selectedBeneficiaries.length > 0 && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-yellow-800">
-                {selectedBeneficiaries.length} beneficiaries selected
-              </span>
               <button
-                onClick={handleBulkDelete}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                onClick={handleGoBack}
+                className="flex items-center text-white hover:text-blue-100 transition-colors duration-200 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg mt-4 md:mt-0"
               >
-                Delete Selected ({selectedBeneficiaries.length})
+                <FaArrowLeft className="mr-2" />
+                Back
               </button>
             </div>
           </div>
-        )}
 
-        {/* Filters Section - Updated to match your actual filter structure */}
-        <div className="bg-white rounded-lg shadow mb-6 p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-end">
-            <div className="flex-1">
-              <label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Search Beneficiaries
-              </label>
-              <input
-                type="text"
-                id="search"
-                placeholder="Search by name, email, or phone..."
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+          {/* Stats and Actions */}
+          <div className="p-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+                <div className="flex items-center">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 mr-3">
+                    <FaUser size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Beneficiaries</p>
+                    <p className="text-2xl font-bold text-gray-800">{beneficiariesCount}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+                <div className="flex items-center">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600 mr-3">
+                    <FaEye size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Visible</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {visibleBeneficiaries.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                <div className="flex items-center">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 text-yellow-600 mr-3">
+                    <FaEyeSlash size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Hidden</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {beneficiariesCount - visibleBeneficiaries.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
+                <button
+                  onClick={handleAddBeneficiary}
+                  className="w-full h-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  <FaPlus className="mr-2" size={20} />
+                  <span className="font-semibold">Add New Beneficiary</span>
+                </button>
+              </div>
             </div>
 
-            <div className="w-full lg:w-48">
-              <label
-                htmlFor="status"
-                className="block text-sm font-medium text-gray-700 mb-1"
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="flex-1 relative">
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+                  <FaSearch />
+                </div>
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={handleSearchChange}
+                  placeholder="Search beneficiaries by name, phone, or email..."
+                  className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchInput && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <FaTimes />
+                  </button>
+                )}
+              </div>
+              
+              <button
+                onClick={handleToggleFilter}
+                className={`px-6 py-3 rounded-xl flex items-center transition-all duration-300 ${
+                  filterVisibility
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
               >
-                Status
-              </label>
-              <select
-                id="status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Status</option>
-                <option value="visible">Active</option>
-                <option value="hidden">Inactive</option>
-              </select>
+                <FaFilter className="mr-2" />
+                Filter
+              </button>
+              
+              {selectedBeneficiaries.length > 0 && (
+                <button
+                  onClick={handleBulkDeleteClick}
+                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-300 flex items-center"
+                >
+                  <FaTrash className="mr-2" />
+                  Delete Selected ({selectedBeneficiaries.length})
+                </button>
+              )}
             </div>
 
-            <button
-              onClick={handleClearFilters}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Clear Filters
-            </button>
+            {/* Filter Panel */}
+            {filterVisibility && (
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Status
+                    </label>
+                    <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Currency
+                    </label>
+                    <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">All Currencies</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="NPR">NPR</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date Added
+                    </label>
+                    <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">All Time</option>
+                      <option value="today">Today</option>
+                      <option value="week">This Week</option>
+                      <option value="month">This Month</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Beneficiaries Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {beneficiaries.length === 0 ? (
-            <div className="text-center py-12">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">
-                No beneficiaries found
-              </h3>
-              <p className="mt-2 text-gray-500">
-                {searchQuery || statusFilter !== "all"
-                  ? "Try adjusting your filters to see more results."
-                  : "Get started by adding your first beneficiary."}
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={handleAddBeneficiary}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Add Beneficiary
-                </button>
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {filteredBeneficiaries.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="flex flex-col items-center">
+                <FaUser className="text-gray-300 text-6xl mb-4" />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                  No Beneficiaries Found
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  {searchQuery
+                    ? `No beneficiaries found matching "${searchQuery}"`
+                    : "You haven't added any beneficiaries yet."}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={handleAddBeneficiary}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl"
+                  >
+                    <FaPlus className="inline mr-2" />
+                    Add Your First Beneficiary
+                  </button>
+                )}
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectAll}
-                          onChange={handleSelectAll}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
-                        />
-                        Beneficiary
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Type
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Contact
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Created
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {beneficiaries.map((beneficiary) => (
-                    <tr
-                      key={beneficiary.id}
-                      className={`hover:bg-gray-50 ${
-                        isSelected(beneficiary.id) ? "bg-blue-50" : ""
-                      }`}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="py-4 px-6">
                         <div className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={isSelected(beneficiary.id)}
-                            onChange={() =>
-                              handleSelectBeneficiary(beneficiary.id)
-                            }
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-3"
+                            checked={selectedBeneficiaries.length === filteredBeneficiaries.length}
+                            onChange={handleSelectAll}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                           />
+                          <span className="ml-3 text-sm font-semibold text-gray-700">Select</span>
+                        </div>
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Name
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Contact
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Country
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Currency
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Status
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Date Added
+                      </th>
+                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredBeneficiaries.map((beneficiary) => (
+                      <tr
+                        key={beneficiary.id}
+                        className="hover:bg-gray-50 transition-colors duration-150"
+                      >
+                        <td className="py-4 px-6">
+                          <input
+                            type="checkbox"
+                            checked={selectedBeneficiaries.includes(beneficiary.id)}
+                            onChange={() => handleBeneficiarySelect(beneficiary.id)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="py-4 px-6">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-600 font-medium">
-                                {beneficiary.name?.charAt(0).toUpperCase() ||
-                                  "B"}
-                              </span>
+                            <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
+                              {beneficiary.name?.charAt(0) || "?"}
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900">
-                                {beneficiary.name}
+                                {beneficiary.name || "N/A"}
                               </div>
                               <div className="text-sm text-gray-500">
-                                {beneficiary.email}
+                                {beneficiary.relationtobenef || "N/A"}
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            beneficiary.beneftype === "individual"
-                              ? "bg-purple-100 text-purple-800"
-                              : "bg-orange-100 text-orange-800"
-                          }`}
-                        >
-                          {beneficiary.beneftype === "individual"
-                            ? "Individual"
-                            : "Institution"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {beneficiary.phone_number || "N/A"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            beneficiary.status === 1
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {beneficiary.status === 1 ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {beneficiary.created_at
-                          ? new Date(
-                              beneficiary.created_at
-                            ).toLocaleDateString()
-                          : "N/A"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => {
-                              setSelectedBeneficiaryForBank({
-                                id: beneficiary.id,
-                                name: beneficiary.name,
-                              });
-                              setShowBankDetails(true);
-                            }}
-                            className="text-indigo-600 hover:text-indigo-900 transition-colors relative group"
-                            title="View Bank Details"
-                          >
-                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center hover:bg-indigo-200 transition-colors">
-                              <svg
-                                className="w-4 h-4 text-indigo-600"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                                <path
-                                  fillRule="evenodd"
-                                  d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            </div>
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                              View Bank Details
-                            </div>
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleViewBeneficiary(beneficiary.id)
-                            }
-                            className="text-blue-600 hover:text-blue-900 transition-colors"
-                            title="View Details"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-900">
+                            {beneficiary.phone_number || "N/A"}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {beneficiary.email || "N/A"}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-900">
+                            {beneficiary.country_id || "N/A"}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                            {beneficiary.currency || "N/A"}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => handleToggleVisibility(beneficiary.id)}
+                              className={`p-2 rounded-full ${
+                                beneficiary.status === 1 || beneficiary.active_status === 1
+                                  ? "text-green-600 hover:bg-green-50"
+                                  : "text-gray-400 hover:bg-gray-100"
+                              }`}
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleEditBeneficiary(beneficiary.id)
-                            }
-                            className="text-green-600 hover:text-green-900 transition-colors"
-                            title="Edit"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleToggleVisibility(
-                                beneficiary.id,
-                                beneficiary.name,
-                                beneficiary.status === 1
-                              )
-                            }
-                            className={`${
-                              beneficiary.status === 1
-                                ? "text-yellow-600 hover:text-yellow-900"
-                                : "text-green-600 hover:text-green-900"
-                            } transition-colors`}
-                            title={
-                              beneficiary.status === 1
-                                ? "Deactivate"
-                                : "Activate"
-                            }
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              {beneficiary.status === 1 ? (
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                                />
+                              {beneficiary.status === 1 || beneficiary.active_status === 1 ? (
+                                <FaEye size={16} />
                               ) : (
-                                <>
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                  />
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                  />
-                                </>
+                                <FaEyeSlash size={16} />
                               )}
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleDeleteBeneficiary(
-                                beneficiary.id,
-                                beneficiary.name
-                              )
-                            }
-                            className="text-red-600 hover:text-red-900 transition-colors"
-                            title="Delete"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                            </button>
+                            <span className={`ml-2 px-3 py-1 text-xs font-semibold rounded-full ${
+                              beneficiary.status === 1 || beneficiary.active_status === 1
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}>
+                              {beneficiary.status === 1 || beneficiary.active_status === 1 ? "Visible" : "Hidden"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-500">
+                          {formatDate(beneficiary.created_at)}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleViewBankDetails(beneficiary)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                              title="View Bank Details"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                              <FaUniversity size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleEditBeneficiary(beneficiary)}
+                              className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                              title="Edit"
+                            >
+                              <FaEdit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(beneficiary)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                              title="Delete"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination or footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="flex flex-col md:flex-row justify-between items-center">
+                  <div className="text-sm text-gray-500 mb-4 md:mb-0">
+                    Showing {filteredBeneficiaries.length} of {beneficiariesCount} beneficiaries
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-sm text-gray-700">Page 1 of 1</span>
+                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
-
-        {/* Loading overlay for operations */}
-        {operationLoading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 flex items-center gap-3">
-              <RingLoader
-                color="#3B82F6"
-                loading={true}
-                size={30}
-                speedMultiplier={1}
-              />
-              <p className="text-gray-700">Processing...</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Bank Details Popup */}
-      {showBankDetails && selectedBeneficiaryForBank && (
+      {showBankDetails && selectedBeneficiary && (
         <BankDetailsPopup
-          beneficiaryId={selectedBeneficiaryForBank.id}
-          beneficiaryName={selectedBeneficiaryForBank.name}
-          onClose={() => {
-            setShowBankDetails(false);
-            setSelectedBeneficiaryForBank(null);
-          }}
+          beneficiary={selectedBeneficiary}
+          onClose={handleCloseBankDetails}
         />
       )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteConfirmationModal />
+      {showDeleteModalLocal && beneficiaryToDelete && (
+        <DeleteConfirmationModal
+          isOpen={showDeleteModalLocal}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          beneficiaryName={beneficiaryToDelete.name}
+        />
+      )}
 
-      {/* Toast Container */}
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center text-red-600 mb-4">
+              <FaExclamationTriangle className="mr-3" size={24} />
+              <h3 className="text-xl font-bold">Confirm Bulk Delete</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete {selectedBeneficiaries.length} selected beneficiary(ies)?
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowBulkDelete(false)}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmBulkDelete}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ToastContainer
-        position="top-right"
-        autoClose={5000}
+        position="bottom-right"
+        autoClose={3000}
         hideProgressBar={false}
-        newestOnTop={false}
+        newestOnTop
         closeOnClick
         rtl={false}
         pauseOnFocusLoss
         draggable
         pauseOnHover
+        theme="colored"
       />
     </div>
   );
+};
+
+Beneficiaries.propTypes = {
+  mode: PropTypes.oneOf(["list", "create", "edit"]),
+};
+
+Beneficiaries.defaultProps = {
+  mode: "list",
 };
 
 export default Beneficiaries;

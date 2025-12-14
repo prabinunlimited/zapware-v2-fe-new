@@ -3,10 +3,11 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE BENEFICIARY ASYNC THUNKS =====================
+
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
-    { customerId, beneficiaryData, bankAccounts, currency },
+    { customerId, beneficiaryData, bankAccounts, currency, country_code },
     { rejectWithValue }
   ) => {
     try {
@@ -15,6 +16,26 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
       console.log("🔧 Beneficiary Data:", beneficiaryData);
       console.log("🔧 Bank Accounts:", bankAccounts);
       console.log("🔧 Currency:", currency);
+      console.log("🔧 Country Code parameter:", country_code);
+
+      let finalCountryCode = country_code;
+
+      // Check if beneficiaryData has country_phone_code instead
+      if (!finalCountryCode && beneficiaryData.country_phone_code) {
+        finalCountryCode = beneficiaryData.country_phone_code;
+      }
+      // Also check for country_code in beneficiaryData as fallback
+      if (!finalCountryCode && beneficiaryData.country_code) {
+        finalCountryCode = beneficiaryData.country_code;
+      }
+
+      // Ensure we have a country code
+      if (!finalCountryCode) {
+        console.warn("⚠️ No country code provided, using +1 as fallback");
+        finalCountryCode = "+1";
+      }
+
+      console.log("🔧 Final Country Code to use:", finalCountryCode);
 
       const authtoken = localStorage.getItem("authtoken");
 
@@ -155,6 +176,13 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         ...beneficiaryData,
         banks: banksPayload,
       };
+
+      // Use country_phone_code instead of country_code
+      if (finalCountryCode.startsWith("+")) {
+        payload.country_phone_code = finalCountryCode.substring(1);
+      } else {
+        payload.country_phone_code = finalCountryCode;
+      }
 
       console.log("📡 Final payload:", JSON.stringify(payload, null, 2));
 
@@ -365,8 +393,6 @@ export const updateBeneficiary = createAsyncThunk(
       const payload = {
         ...beneficiaryData,
         current_date_time: currentDateTime,
-        // Don't include customer_id unless your API specifically needs it
-        // The non-redux version doesn't send it in the payload
       };
 
       // Clean up the payload
@@ -776,7 +802,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
 );
 
 /**
- * Create beneficiary with request-remit flow (from your original component)
+ * Create beneficiary with request-remit flow
  */
 export const createBeneficiaryRequestRemit = createAsyncThunk(
   "beneficiaries/createBeneficiaryRequestRemit",
@@ -878,12 +904,6 @@ const initialState = {
   createSuccess: false,
   beneficiaryId: null,
 
-  // Create beneficiary state
-  createLoading: false,
-  createError: null,
-  createSuccess: false,
-  beneficiaryId: null,
-
   // Fetch beneficiary state
   fetchLoading: false,
   fetchError: null,
@@ -909,15 +929,6 @@ const initialState = {
   bankBranches: {},
   dropdownLoading: false,
   dropdownError: null,
-
-  // Dropdown data state (for forms)
-  nationalities: [],
-  banks: {},
-  idTypes: {},
-  cities: {},
-  bankBranches: {},
-  dropdownLoading: false,
-  dropdownError: null,
 };
 
 // ===================== SLICE =====================
@@ -927,12 +938,15 @@ const addBeneficiarySlice = createSlice({
   reducers: {
     // Clear create state
     clearCreateError: (state) => {
+      console.log("🧹 Clearing create error in addBeneficiarySlice");
       state.createError = null;
     },
     clearCreateSuccess: (state) => {
+      console.log("🧹 Clearing create success in addBeneficiarySlice");
       state.createSuccess = false;
     },
     resetCreateState: (state) => {
+      console.log("🧹 Resetting create state in addBeneficiarySlice");
       state.createLoading = false;
       state.createError = null;
       state.createSuccess = false;
@@ -981,6 +995,9 @@ const addBeneficiarySlice = createSlice({
     clearError: (state) => {
       state.createError = null;
       state.dropdownError = null;
+      state.bankError = null;
+      state.fetchError = null;
+      state.updateError = null;
     },
 
     // Reset all state
@@ -990,6 +1007,12 @@ const addBeneficiarySlice = createSlice({
       state.createSuccess = false;
       state.dropdownLoading = false;
       state.dropdownError = null;
+      state.fetchLoading = false;
+      state.fetchError = null;
+      state.beneficiaryData = null;
+      state.updateLoading = false;
+      state.updateError = null;
+      state.updateSuccess = false;
     },
   },
   extraReducers: (builder) => {
@@ -1012,6 +1035,30 @@ const addBeneficiarySlice = createSlice({
       .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
         console.error(
           "❌ createBeneficiaryWithBanks REJECTED:",
+          action.payload
+        );
+        state.createLoading = false;
+        state.createError = action.payload;
+        state.createSuccess = false;
+      })
+
+      // ===================== CREATE BENEFICIARY REQUEST REMIT =====================
+      .addCase(createBeneficiaryRequestRemit.pending, (state) => {
+        console.log("⏳ createBeneficiaryRequestRemit PENDING");
+        state.createLoading = true;
+        state.createError = null;
+        state.createSuccess = false;
+      })
+      .addCase(createBeneficiaryRequestRemit.fulfilled, (state, action) => {
+        console.log("✅ createBeneficiaryRequestRemit FULFILLED");
+        state.createLoading = false;
+        state.createSuccess = true;
+        state.beneficiaryId = action.payload.benefCode;
+        state.createError = null;
+      })
+      .addCase(createBeneficiaryRequestRemit.rejected, (state, action) => {
+        console.error(
+          "❌ createBeneficiaryRequestRemit REJECTED:",
           action.payload
         );
         state.createLoading = false;
@@ -1094,6 +1141,7 @@ const addBeneficiarySlice = createSlice({
         state.dropdownError = action.payload;
       })
 
+      // ===================== FETCH BENEFICIARY BY ID =====================
       .addCase(fetchBeneficiaryById.pending, (state) => {
         console.log("⏳ fetchBeneficiaryById PENDING");
         state.fetchLoading = true;

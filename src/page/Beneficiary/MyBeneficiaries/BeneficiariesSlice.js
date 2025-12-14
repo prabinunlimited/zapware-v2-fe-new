@@ -3,175 +3,115 @@ import {
   createAsyncThunk,
   createSelector,
 } from "@reduxjs/toolkit";
-
-// Import the thunk from addBeneficiarySlice
 import { createBeneficiaryWithBanks } from "../AddBeneficiary/addBeneficiarySlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ===================== CREATE AND ADD BENEFICIARY (UPDATED) =====================
+// ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
 export const createAndAddBeneficiary = createAsyncThunk(
   "beneficiaries/createAndAddBeneficiary",
   async (
-    { customerId, beneficiaryData, bankAccounts, currency },
+    { customerId, beneficiaryData, bankAccounts, currency, country_code },
     { dispatch, rejectWithValue }
   ) => {
     try {
       console.log("🔄 createAndAddBeneficiary: Starting...");
+      console.log("📦 Parameters:", {
+        customerId,
+        beneficiaryData,
+        bankAccountsCount: bankAccounts?.length || 0,
+        currency,
+        country_code,
+      });
 
-      // 1. Create the beneficiary using the imported thunk from addBeneficiarySlice
+      // 1. Create the beneficiary
       const createResult = await dispatch(
         createBeneficiaryWithBanks({
           customerId,
           beneficiaryData,
           bankAccounts,
           currency,
+          country_code,
         })
       );
 
-      console.log("📦 Create result action:", createResult);
+      console.log("📦 Create result:", createResult);
 
       // Check if creation was successful
       if (createBeneficiaryWithBanks.rejected.match(createResult)) {
+        console.error("❌ Creation failed:", createResult.payload);
         throw new Error(createResult.payload || "Failed to create beneficiary");
       }
 
-      // Extract the result payload
-      const createPayload = createResult.payload;
-      console.log("✅ Beneficiary created, payload:", createPayload);
-
       // 2. Get the newly created beneficiary ID
+      const createPayload = createResult.payload;
       const newBeneficiaryId =
         createPayload?.beneficiary_id ||
         createPayload?.benef_id ||
-        createPayload?.data?.id;
+        createPayload?.id;
+
+      console.log("✅ Beneficiary created, ID:", newBeneficiaryId);
 
       if (!newBeneficiaryId) {
         console.error("❌ No beneficiary ID found in response:", createPayload);
         throw new Error("No beneficiary ID returned from creation");
       }
 
-      console.log("📥 New beneficiary ID:", newBeneficiaryId);
+      // 3. Add delay to allow DB sync (if needed)
+      console.log("⏳ Waiting for DB sync...");
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1000ms to 500ms
 
-      // 3. Fetch the complete beneficiary details
-      console.log("🔍 Fetching beneficiary details for ID:", newBeneficiaryId);
-      const authtoken = localStorage.getItem("authtoken");
-
-      const fetchResponse = await fetch(
-        `${API_URL}/beneficiaries/benef-view/${newBeneficiaryId}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-        }
+      // 4. Fetch the specific beneficiary to ensure it's available
+      console.log("🔄 Fetching newly created beneficiary...");
+      const fetchResult = await dispatch(
+        fetchBeneficiaryById(newBeneficiaryId)
       );
 
-      console.log("📡 Fetch response status:", fetchResponse.status);
-
-      if (!fetchResponse.ok) {
-        const errorText = await fetchResponse.text();
-        console.error("❌ Failed to fetch beneficiary details:", errorText);
-
-        // Even if fetch fails, we can still return what we have
-        return {
-          id: newBeneficiaryId,
-          ...beneficiaryData,
-          beneficiary_id: newBeneficiaryId,
-          created: true,
-          _fetched: false, // Flag to indicate we couldn't fetch full details
-        };
+      // Check if fetch was successful
+      if (fetchBeneficiaryById.rejected.match(fetchResult)) {
+        console.warn(
+          "⚠️ Beneficiary fetch failed, but creation was successful:",
+          fetchResult.payload
+        );
+        // Continue anyway since creation was successful
       }
 
-      const fetchResult = await fetchResponse.json();
-      console.log("✅ Fetch successful, result:", fetchResult);
-
-      // Extract beneficiary data from the API response
-      let beneficiaryDataFromApi = null;
-
-      if (
-        fetchResult.data &&
-        Array.isArray(fetchResult.data) &&
-        fetchResult.data.length > 0
-      ) {
-        beneficiaryDataFromApi = fetchResult.data[0];
-      } else if (fetchResult.data && typeof fetchResult.data === "object") {
-        beneficiaryDataFromApi = fetchResult.data;
-      } else {
-        // If data structure is unexpected, create a basic object
-        beneficiaryDataFromApi = {
-          id: newBeneficiaryId,
-          ...beneficiaryData,
-          beneficiary_id: newBeneficiaryId,
-          _fetched: true,
-        };
-      }
-
-      // Extract banks from the response
-      if (fetchResult.benef_banks && Array.isArray(fetchResult.benef_banks)) {
-        beneficiaryDataFromApi.benef_banks = fetchResult.benef_banks;
-      }
-
-      // Also include banks from the original creation if needed
-      if (
-        bankAccounts &&
-        bankAccounts.length > 0 &&
-        !beneficiaryDataFromApi.benef_banks
-      ) {
-        beneficiaryDataFromApi.banks = bankAccounts;
-      }
-
-      // Add success flag
-      beneficiaryDataFromApi._fetched = true;
-
-      return beneficiaryDataFromApi;
-    } catch (error) {
-      console.error("❌ createAndAddBeneficiary error:", error);
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-// ===================== SIMPLER VERSION: CREATE AND REFETCH =====================
-export const createAndRefetchBeneficiaries = createAsyncThunk(
-  "beneficiaries/createAndRefetch",
-  async (
-    { customerId, beneficiaryData, bankAccounts, currency },
-    { dispatch, rejectWithValue }
-  ) => {
-    try {
-      console.log("🔄 createAndRefetchBeneficiaries: Starting...");
-
-      // 1. Create the beneficiary using the imported thunk
-      const createResult = await dispatch(
-        createBeneficiaryWithBanks({
-          customerId,
-          beneficiaryData,
-          bankAccounts,
-          currency,
-        })
-      );
-
-      // Check if creation was successful
-      if (createBeneficiaryWithBanks.rejected.match(createResult)) {
-        throw new Error(createResult.payload || "Failed to create beneficiary");
-      }
-
-      console.log("✅ Beneficiary created successfully");
-
-      // 2. Refetch the updated list
+      // 5. Refresh the beneficiaries list
+      console.log("🔄 Refreshing beneficiaries list...");
       await dispatch(fetchBeneficiaries(customerId));
 
-      // Return the creation result
-      return createResult.payload;
+      // 6. Return the fetched beneficiary data
+      return {
+        success: true,
+        message: "Beneficiary created and fetched successfully",
+        beneficiaryId: newBeneficiaryId,
+        beneficiaryData: fetchResult.payload || createPayload,
+        timestamp: new Date().toISOString(),
+      };
     } catch (error) {
-      console.error("❌ createAndRefetchBeneficiaries error:", error);
-      return rejectWithValue(error.message);
+      console.error("❌ createAndAddBeneficiary error:", error);
+
+      // Even if something fails after creation, we might still want to indicate partial success
+      if (newBeneficiaryId) {
+        console.warn(
+          "⚠️ Beneficiary created but post-creation steps failed:",
+          error.message
+        );
+        return {
+          success: true,
+          warning: "Beneficiary created but some post-creation steps failed",
+          beneficiaryId: newBeneficiaryId,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      return rejectWithValue(error.message || "Failed to create beneficiary");
     }
   }
 );
 
-// ===================== ORIGINAL THUNKS (keep all existing ones) =====================
+// ===================== ORIGINAL THUNKS =====================
 export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
@@ -193,13 +133,7 @@ export const fetchBeneficiaries = createAsyncThunk(
       }
 
       const result = await response.json();
-
-      // DEBUG: Log what the API actually returns
-      console.log("📥 API Response for beneficiaries:", result);
-      if (result.data && result.data.length > 0) {
-        console.log("📋 First beneficiary from API:", result.data[0]);
-        console.log("📋 Available fields:", Object.keys(result.data[0]));
-      }
+      console.log("📥 Fetched beneficiaries count:", result.data?.length || 0);
 
       return result.data || [];
     } catch (error) {
@@ -611,14 +545,15 @@ const initialState = {
     bulkDeleteTotal: 0,
   },
 
-  // Create state
+  // Create state - UPDATED FOR CLARITY
   createState: {
     loading: false,
     error: null,
     success: false,
+    lastCreatedId: null,
   },
 
-  // Email search state (keep for backward compatibility)
+  // Email search state
   emailSearch: {
     loading: false,
     error: null,
@@ -628,7 +563,7 @@ const initialState = {
     processed: false,
   },
 
-  // Phone search state (NEW)
+  // Phone search state
   phoneSearch: {
     loading: false,
     error: null,
@@ -650,7 +585,12 @@ const beneficiarySlice = createSlice({
     // Phone search reducer
     searchBeneficiaryByPhone: (state, action) => {
       const { phoneNumber, countryPhoneCode } = action.payload;
-      console.log("🔍 Searching for phone in store:", phoneNumber, "with code:", countryPhoneCode);
+      console.log(
+        "🔍 Searching for phone in store:",
+        phoneNumber,
+        "with code:",
+        countryPhoneCode
+      );
 
       if (!phoneNumber) {
         state.phoneSearch = initialState.phoneSearch;
@@ -658,9 +598,9 @@ const beneficiarySlice = createSlice({
       }
 
       // Format phone number for comparison (remove non-digit characters)
-      const cleanSearchPhone = phoneNumber.replace(/\D/g, '');
-      const searchFullPhone = countryPhoneCode 
-        ? `${countryPhoneCode.replace(/\D/g, '')}${cleanSearchPhone}`
+      const cleanSearchPhone = phoneNumber.replace(/\D/g, "");
+      const searchFullPhone = countryPhoneCode
+        ? `${countryPhoneCode.replace(/\D/g, "")}${cleanSearchPhone}`
         : cleanSearchPhone;
 
       console.log("🔍 Clean search phone:", cleanSearchPhone);
@@ -673,26 +613,26 @@ const beneficiarySlice = createSlice({
         }
 
         // Clean beneficiary phone numbers
-        const beneficiaryPhone = beneficiary.phone_number?.replace(/\D/g, '') || '';
-        const beneficiaryFullPhone = beneficiary.full_phone_number?.replace(/\D/g, '') || '';
-        
+        const beneficiaryPhone =
+          beneficiary.phone_number?.replace(/\D/g, "") || "";
+        const beneficiaryFullPhone =
+          beneficiary.full_phone_number?.replace(/\D/g, "") || "";
+
         // Check if phone number matches (with or without country code)
-        const exactMatches = (
+        const exactMatches =
           beneficiaryPhone === cleanSearchPhone ||
           beneficiaryFullPhone === cleanSearchPhone ||
           beneficiaryFullPhone === searchFullPhone ||
           beneficiaryPhone === searchFullPhone ||
           beneficiary.phone_number === phoneNumber ||
-          beneficiary.full_phone_number === phoneNumber
-        );
+          beneficiary.full_phone_number === phoneNumber;
 
         // Also check for partial matches (in case numbers are stored with different formatting)
-        const partialMatches = (
+        const partialMatches =
           beneficiaryPhone.includes(cleanSearchPhone) ||
           beneficiaryFullPhone.includes(cleanSearchPhone) ||
           beneficiaryFullPhone.includes(searchFullPhone) ||
-          beneficiaryPhone.includes(searchFullPhone)
-        );
+          beneficiaryPhone.includes(searchFullPhone);
 
         // Return true if either exact or partial match
         return exactMatches || partialMatches;
@@ -754,12 +694,10 @@ const beneficiarySlice = createSlice({
           ) {
             countryId = "186"; // USA country ID
             if (!phoneCode) phoneCode = "+1";
-          }
-          else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
+          } else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
             countryId = "185"; // UK country ID
             if (!phoneCode) phoneCode = "+44";
-          }
-          else if (
+          } else if (
             foundBeneficiary.city?.toUpperCase() === "MUMBAI" ||
             foundBeneficiary.city?.toUpperCase() === "DELHI"
           ) {
@@ -804,16 +742,22 @@ const beneficiarySlice = createSlice({
 
         if (relationValue && relationshipMap[relationValue]) {
           relationValue = relationshipMap[relationValue];
-        } else if (relationValue && typeof relationValue === 'string') {
+        } else if (relationValue && typeof relationValue === "string") {
           const lowerRelation = relationValue.toLowerCase();
-          if (lowerRelation.includes('father') || lowerRelation.includes('mother')) {
-            relationValue = 'father';
-          } else if (lowerRelation.includes('sister') || lowerRelation.includes('brother')) {
-            relationValue = 'brother';
-          } else if (lowerRelation.includes('friend')) {
-            relationValue = 'friend';
-          } else if (lowerRelation.includes('cousin')) {
-            relationValue = 'cousin';
+          if (
+            lowerRelation.includes("father") ||
+            lowerRelation.includes("mother")
+          ) {
+            relationValue = "father";
+          } else if (
+            lowerRelation.includes("sister") ||
+            lowerRelation.includes("brother")
+          ) {
+            relationValue = "brother";
+          } else if (lowerRelation.includes("friend")) {
+            relationValue = "friend";
+          } else if (lowerRelation.includes("cousin")) {
+            relationValue = "cousin";
           }
         }
 
@@ -842,7 +786,10 @@ const beneficiarySlice = createSlice({
           _matchedPhone: cleanSearchPhone,
         };
 
-        console.log("📋 Clean beneficiary data with inferred values:", cleanData);
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
 
         state.phoneSearch.data = cleanData;
         state.phoneSearch.exists = true;
@@ -959,7 +906,10 @@ const beneficiarySlice = createSlice({
           banks: foundBeneficiary.banks || [],
         };
 
-        console.log("📋 Clean beneficiary data with inferred values:", cleanData);
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
 
         state.emailSearch.data = cleanData;
         state.emailSearch.exists = true;
@@ -1008,9 +958,23 @@ const beneficiarySlice = createSlice({
 
     // Clear create state
     clearCreateState: (state) => {
+      console.log("🧹 Clearing create state");
       state.createState.loading = false;
       state.createState.error = null;
       state.createState.success = false;
+      state.createState.lastCreatedId = null;
+    },
+
+    // Clear create error only
+    clearCreateError: (state) => {
+      state.createState.error = null;
+    },
+
+    // Clear create success only
+    clearCreateSuccess: (state) => {
+      console.log("🧹 Clearing create success");
+      state.createState.success = false;
+      state.createState.lastCreatedId = null;
     },
 
     // Selected beneficiary management
@@ -1170,16 +1134,6 @@ const beneficiarySlice = createSlice({
       state.deleteState.undoAvailable = false;
       state.deleteState.undoData = null;
     },
-
-    // Clear create error only
-    clearCreateError: (state) => {
-      state.createState.error = null;
-    },
-
-    // Clear create success only
-    clearCreateSuccess: (state) => {
-      state.createState.success = false;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -1189,71 +1143,27 @@ const beneficiarySlice = createSlice({
         state.createState.loading = true;
         state.createState.error = null;
         state.createState.success = false;
+        state.createState.lastCreatedId = null;
       })
       .addCase(createAndAddBeneficiary.fulfilled, (state, action) => {
         console.log("✅ createAndAddBeneficiary FULFILLED", action.payload);
         state.createState.loading = false;
         state.createState.success = true;
-
-        // Add the new beneficiary to the beginning of the list
-        if (action.payload) {
-          if (!Array.isArray(state.beneficiaries)) {
-            state.beneficiaries = [];
-          }
-
-          const existingIndex = state.beneficiaries.findIndex(
-            (b) =>
-              b.id === action.payload.id ||
-              b.beneficiary_id === action.payload.beneficiary_id ||
-              (b.email &&
-                action.payload.email &&
-                b.email.toLowerCase() === action.payload.email.toLowerCase())
-          );
-
-          if (existingIndex !== -1) {
-            state.beneficiaries[existingIndex] = {
-              ...state.beneficiaries[existingIndex],
-              ...action.payload,
-            };
-          } else {
-            state.beneficiaries.unshift(action.payload);
-          }
-
-          state.success = true;
-          state.lastUpdated = new Date().toISOString();
-
-          if (!state.selectedBeneficiary) {
-            state.selectedBeneficiary = action.payload;
-          }
-        }
-
+        state.createState.lastCreatedId = action.payload.beneficiaryId;
         state.createState.error = null;
-        state.error = null;
+
+        // Also set the main success flag for backward compatibility
+        state.success = true;
+        state.lastUpdated = new Date().toISOString();
+
+        console.log("🏁 createState after success:", state.createState);
       })
       .addCase(createAndAddBeneficiary.rejected, (state, action) => {
         console.error("❌ createAndAddBeneficiary REJECTED:", action.payload);
         state.createState.loading = false;
         state.createState.error = action.payload;
         state.createState.success = false;
-      })
-
-      // ===================== CREATE AND REFETCH BENEFICIARIES =====================
-      .addCase(createAndRefetchBeneficiaries.pending, (state) => {
-        state.createState.loading = true;
-        state.createState.error = null;
-        state.createState.success = false;
-      })
-      .addCase(createAndRefetchBeneficiaries.fulfilled, (state, action) => {
-        state.createState.loading = false;
-        state.createState.success = true;
-        state.success = true;
-        state.lastUpdated = new Date().toISOString();
-        state.createState.error = null;
-      })
-      .addCase(createAndRefetchBeneficiaries.rejected, (state, action) => {
-        state.createState.loading = false;
-        state.createState.error = action.payload;
-        state.createState.success = false;
+        state.createState.lastCreatedId = null;
       })
 
       // ===================== FETCH BENEFICIARIES =====================
@@ -1530,13 +1440,9 @@ export const {
   updateBulkDeleteProgress,
   clearDeleteState,
   clearUndoState,
-  
-  // Email search actions
   searchBeneficiaryByEmail,
   clearEmailSearch,
   setEmailSearchProcessed,
-  
-  // Phone search actions
   searchBeneficiaryByPhone,
   clearPhoneSearch,
   setPhoneSearchProcessed,
@@ -1562,6 +1468,8 @@ export const selectCreateError = (state) =>
   state.beneficiaries.createState.error;
 export const selectCreateSuccess = (state) =>
   state.beneficiaries.createState.success;
+export const selectLastCreatedId = (state) =>
+  state.beneficiaries.createState.lastCreatedId;
 
 // Edit beneficiary selectors
 export const selectEditBeneficiaryLoading = (state) =>

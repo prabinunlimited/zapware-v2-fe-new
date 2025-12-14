@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,7 +37,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
 
-// Redux actions (unchanged)
+// Redux actions
 import {
   setStep,
   setSendAmount,
@@ -50,20 +56,17 @@ import {
 
 import { fetchAllStaticData } from "./slices/staticDataSlice";
 
-// Import beneficiary actions (unchanged)
+// Import beneficiary actions
 import {
   setSelectedBeneficiary,
   setSelectedBank,
   fetchBeneficiaryBanks,
   fetchBeneficiaryByCode,
-  selectBeneficiaryBanks, // ADD THIS
-  selectBanksLoading, // ADD THIS
-  selectBeneficiaries, // ADD THIS if needed
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Import child components (unchanged)
+// Import child components
 import ManualDeposit from "./subComponents/ManualDeposit";
 import BankTransfer from "./subComponents/BankTransfer";
 import CardPayment from "./subComponents/CardPayment";
@@ -71,14 +74,14 @@ import Step2Details from "./steps/Step2Details";
 import Step3Confirm from "./steps/Step3Confirm";
 import Step4Success from "./steps/Step4Success";
 
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 const Remittance = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { customerId } = useParams();
 
-  // Select state from Redux store (unchanged)
+  // Select state from Redux store
   const {
     step,
     formData,
@@ -99,7 +102,7 @@ const Remittance = () => {
   } = useSelector((state) => state.beneficiaries);
 
   const { purposes, incomeSources, occupations, paymentMethods } = useSelector(
-    (state) => state.remittanceStatic // ✅ This matches your store configuration
+    (state) => state.remittanceStatic
   );
 
   // Local state for UI
@@ -115,9 +118,18 @@ const Remittance = () => {
   const [manualDetailsLoading, setManualDetailsLoading] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [showRecipientDetails, setShowRecipientDetails] = useState(true);
 
   const [showOpenBanking, setShowOpenBanking] = useState(false);
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
+
+  const isManualUpdate = useRef(false);
+  const lastCalculatedAmount = useRef({ send: null, receive: null });
+  const shouldFetchRate = useRef(true);
+
+  const [activeInput, setActiveInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
 
   // Professional payment method options
   const paymentOptions = useMemo(
@@ -203,7 +215,7 @@ const Remittance = () => {
     []
   );
 
-  // Memoized currency options (unchanged)
+  // Memoized currency options
   const sendCurrencyOptions = useMemo(
     () =>
       (bankAccounts || []).map((account) => ({
@@ -228,10 +240,7 @@ const Remittance = () => {
     });
   }, []);
 
-  // All existing hooks and functions remain unchanged
-  // (Initialize data, fetch exchange rate, manual account details, handlers, etc.)
-
-  // Initialize data (unchanged)
+  // Initialize data
   useEffect(() => {
     const initializeData = async () => {
       if (customerId) {
@@ -239,7 +248,7 @@ const Remittance = () => {
           await Promise.all([
             dispatch(fetchBankAccounts(customerId)),
             dispatch(fetchPayoutCurrencies()),
-            dispatch(fetchAllStaticData()), // Add this line
+            dispatch(fetchAllStaticData()),
           ]);
         } catch (error) {
           console.error("Failed to initialize data:", error);
@@ -254,88 +263,154 @@ const Remittance = () => {
     initializeData();
   }, [customerId, dispatch]);
 
-  // Reset exchange rate data when currencies change (unchanged)
+  useEffect(() => {
+    if (!initialLoading && !formData.sendAmount) {
+      // Set default send amount to 1
+      dispatch(setSendAmount("1"));
+      setActiveInput("send");
+    }
+  }, [initialLoading, formData.sendAmount, dispatch]);
+
+  // Reset exchange rate data when currencies change
   useEffect(() => {
     if (formData.sendCurrency?.value || formData.receiveCurrency?.value) {
       setExchangeRateData(null);
       setExchangeRateError(null);
-      if (formData.sendAmount) {
-        dispatch(setReceiveAmount(""));
-      }
-    }
-  }, [
-    formData.sendCurrency,
-    formData.receiveCurrency,
-    formData.sendAmount,
-    dispatch,
-  ]);
+      // Reset manual update flag
+      isManualUpdate.current = false;
 
-  // Fetch exchange rate with cleanup (unchanged)
+      // Clear receive amount when currencies change
+      dispatch(setReceiveAmount(""));
+    }
+  }, [formData.sendCurrency, formData.receiveCurrency, dispatch]);
+
+  // Fetch exchange rate with cleanup - IMPROVED VERSION
   useEffect(() => {
     let isMounted = true;
+    let debounceTimer;
 
     const fetchRate = async () => {
       const sendCurrencyValue = formData.sendCurrency?.value;
       const receiveCurrencyValue = formData.receiveCurrency?.value;
-      const sendAmountValue = parseFloat(formData.sendAmount);
 
-      if (sendCurrencyValue && receiveCurrencyValue && sendAmountValue > 0) {
-        const payload = {
-          fromCurrency: sendCurrencyValue,
-          toCurrency: receiveCurrencyValue,
-          amount: sendAmountValue,
-          bankId: formData.sendCurrency?.bank_id,
-          customerId,
-        };
+      // Don't fetch if missing required data
+      if (!sendCurrencyValue || !receiveCurrencyValue) {
+        return;
+      }
 
-        if (isMounted) {
-          setExchangeRateLoading(true);
+      // Don't fetch if user is typing or it's a manual update
+      if (isTyping || isManualUpdate.current) {
+        return;
+      }
+
+      // Determine which amount to use for calculation
+      let amountForCalculation;
+      if (activeInput === "receive" && formData.receiveAmount) {
+        // When user enters receive amount, use 1 to get the base rate
+        amountForCalculation = 1;
+      } else {
+        // Otherwise use send amount or default to 1
+        amountForCalculation = parseFloat(formData.sendAmount) || 1;
+      }
+
+      const payload = {
+        fromCurrency: sendCurrencyValue,
+        toCurrency: receiveCurrencyValue,
+        amount: amountForCalculation,
+        bankId: formData.sendCurrency?.bank_id,
+        customerId,
+      };
+
+      if (isMounted) {
+        setExchangeRateLoading(true);
+        setExchangeRateError(null);
+      }
+
+      try {
+        const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+        if (isMounted && response && response.converted_value) {
+          isManualUpdate.current = true;
+
+          // Calculate exchange rate
+          const fxRate = response.converted_value / amountForCalculation;
+
+          setExchangeRateData({
+            ...response,
+            fxRate: roundToDecimals(fxRate, 6),
+            fromCurrency: sendCurrencyValue,
+            toCurrency: receiveCurrencyValue,
+            originalAmount: amountForCalculation,
+          });
+
+          // If user entered receive amount, calculate the corresponding send amount
+          if (activeInput === "receive" && formData.receiveAmount) {
+            const receiveNum = parseFloat(formData.receiveAmount);
+            if (!isNaN(receiveNum) && receiveNum > 0) {
+              const calculatedSendAmount = roundToDecimals(
+                receiveNum / fxRate,
+                2
+              );
+              dispatch(setSendAmount(calculatedSendAmount.toString()));
+            }
+          }
+
           setExchangeRateError(null);
+        } else if (isMounted) {
+          setExchangeRateError("Unable to fetch exchange rate");
+          setExchangeRateData(null);
         }
-
-        try {
-          const response = await dispatch(fetchExchangeRate(payload)).unwrap();
-          if (isMounted && response && response.converted_value) {
-            dispatch(setReceiveAmount(response.converted_value));
-            setExchangeRateData(response);
-            setExchangeRateError(null);
-          } else if (isMounted) {
-            setExchangeRateError("Unable to fetch exchange rate");
-            setExchangeRateData(null);
-            dispatch(setReceiveAmount(""));
-          }
-        } catch (error) {
-          if (isMounted) {
-            console.error("Failed to fetch exchange rate:", error);
-            setExchangeRateError("Unable to fetch exchange rate");
-            setExchangeRateData(null);
-            dispatch(setReceiveAmount(""));
-          }
-        } finally {
-          if (isMounted) {
-            setExchangeRateLoading(false);
-          }
+      } catch (error) {
+        if (isMounted) {
+          setExchangeRateError("Unable to fetch exchange rate");
+          setExchangeRateData(null);
+        }
+      } finally {
+        if (isMounted) {
+          setExchangeRateLoading(false);
+          setTimeout(() => {
+            isManualUpdate.current = false;
+          }, 100);
         }
       }
     };
 
-    const debounceTimer = setTimeout(() => {
+    // Clear existing timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Set up debounce
+    debounceTimer = setTimeout(() => {
       fetchRate();
-    }, 500);
+    }, 800);
 
     return () => {
       isMounted = false;
-      clearTimeout(debounceTimer);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
     };
   }, [
     formData.sendCurrency?.value,
     formData.receiveCurrency?.value,
     formData.sendAmount,
+    formData.receiveAmount,
     customerId,
     dispatch,
+    isTyping,
+    activeInput,
   ]);
 
-  // Fetch manual account details with cleanup (unchanged)
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+    };
+  }, [typingTimeout]);
+
+  // Fetch manual account details with cleanup
   useEffect(() => {
     let isMounted = true;
 
@@ -413,38 +488,171 @@ const Remittance = () => {
     dispatch,
   ]);
 
-  // All other handlers remain unchanged
+  const formatNumberInput = (value) => {
+    if (!value) return "";
+
+    // Remove all characters except digits and decimal point
+    const cleaned = value.replace(/[^0-9.]/g, "");
+
+    // Prevent multiple decimal points
+    const parts = cleaned.split(".");
+    if (parts.length > 2) {
+      return parts[0] + "." + parts.slice(1).join("");
+    }
+
+    // If the value starts with decimal point, add "0" prefix
+    if (cleaned === ".") return "0.";
+
+    return cleaned;
+  };
+
+  const fetchExchangeRateManual = useCallback(async () => {
+    if (!formData.sendCurrency || !formData.receiveCurrency) return;
+
+    setExchangeRateLoading(true);
+    setExchangeRateError(null);
+
+    try {
+      const payload = {
+        fromCurrency: formData.sendCurrency.value,
+        toCurrency: formData.receiveCurrency.value,
+        amount: parseFloat(formData.sendAmount) || 1,
+        bankId: formData.sendCurrency.bank_id,
+        customerId,
+      };
+
+      const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+      setExchangeRateData(response);
+    } catch (error) {
+      setExchangeRateError("Unable to fetch exchange rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  }, [
+    formData.sendCurrency,
+    formData.receiveCurrency,
+    formData.sendAmount,
+    customerId,
+    dispatch,
+  ]);
+
+  const roundToDecimals = (value, decimals = 2) => {
+    if (typeof value !== "number" || isNaN(value)) {
+      return value;
+    }
+    const factor = Math.pow(10, decimals);
+    return Math.round((value + Number.EPSILON) * factor) / factor;
+  };
+
   const handleSendAmountChange = useCallback(
     (value) => {
-      dispatch(setSendAmount(value));
-      if (value && exchangeRateData?.fxRate) {
-        const receiveAmount = (
-          parseFloat(value) * exchangeRateData.fxRate
-        ).toFixed(2);
-        dispatch(setReceiveAmount(receiveAmount));
-      } else {
-        dispatch(setReceiveAmount(""));
+      // Clean the input
+      const cleanedValue = formatNumberInput(value);
+
+      // Don't process if value hasn't changed
+      const currentValue = parseFloat(formData.sendAmount || 0);
+      const newValue = parseFloat(cleanedValue || 0);
+
+      if (!isNaN(currentValue) && !isNaN(newValue)) {
+        const difference = Math.abs(currentValue - newValue);
+        if (difference < 0.01 && cleanedValue !== "") {
+          return;
+        }
       }
+
+      // Set active input and update state
+      setActiveInput("send");
+      dispatch(setSendAmount(cleanedValue));
+
+      // Clear existing timeout
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+
+      // Set typing state with timeout
+      setIsTyping(true);
+      const timeout = setTimeout(() => {
+        setIsTyping(false);
+
+        // Only fetch rate if we have a valid amount
+        const numValue = parseFloat(cleanedValue);
+        if (!isNaN(numValue) && numValue > 0) {
+          shouldFetchRate.current = true;
+        }
+      }, 800);
+
+      setTypingTimeout(timeout);
     },
-    [dispatch, exchangeRateData]
+    [dispatch, typingTimeout, formData.sendAmount]
+  );
+
+  const handleReceiveAmountChange = useCallback(
+    (value) => {
+      const cleanedValue = formatNumberInput(value);
+
+      setActiveInput("receive");
+      dispatch(setReceiveAmount(cleanedValue));
+
+      // Clear existing timeout
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+
+      // Set typing state with timeout - NO API CALL HERE
+      setIsTyping(true);
+      const timeout = setTimeout(() => {
+        setIsTyping(false);
+      }, 800);
+
+      setTypingTimeout(timeout);
+    },
+    [dispatch, typingTimeout] // Removed unnecessary dependencies
   );
 
   const handleSendCurrencyChange = useCallback(
     (option) => {
       dispatch(setSendCurrency(option));
-      setExchangeRateData(null);
+      setActiveInput("send");
+      setExchangeRateData(null); // Clear exchange rate
       setExchangeRateError(null);
+      setShowRecipientDetails(false);
+
+      // Set default amount to 1 when currency changes (unless user has entered something)
+      if (!formData.sendAmount || formData.sendAmount === "0") {
+        dispatch(setSendAmount("1"));
+      }
+
+      dispatch(setReceiveAmount(""));
+
+      // Trigger rate fetch if both currencies are selected
+      if (option?.value && formData.receiveCurrency?.value) {
+        shouldFetchRate.current = true;
+      }
     },
-    [dispatch]
+    [dispatch, formData.receiveCurrency?.value, formData.sendAmount]
   );
 
   const handleReceiveCurrencyChange = useCallback(
     (option) => {
       dispatch(setReceiveCurrency(option));
-      setExchangeRateData(null);
+      setActiveInput("receive");
+      setExchangeRateData(null); // Clear exchange rate
       setExchangeRateError(null);
+      setShowRecipientDetails(false);
+
+      // Set default send amount to 1 if it's empty
+      if (!formData.sendAmount || formData.sendAmount === "0") {
+        dispatch(setSendAmount("1"));
+      }
+
+      dispatch(setReceiveAmount(""));
+
+      // Trigger rate fetch if both currencies are selected
+      if (option?.value && formData.sendCurrency?.value) {
+        shouldFetchRate.current = true;
+      }
     },
-    [dispatch]
+    [dispatch, formData.sendCurrency?.value, formData.sendAmount]
   );
 
   const handlePaymentMethodChange = useCallback(
@@ -512,7 +720,18 @@ const Remittance = () => {
   const handleNextStep = useCallback(() => {
     if (step === 1) {
       if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        alert("Minimum transfer amount is $5.00");
+        toast.error(
+          `Minimum transfer amount is ${
+            formData.sendCurrency?.value || "USD"
+          } 5.00. 
+        Please enter at least ${
+          formData.sendCurrency?.value || "USD"
+        } 5.00 in the "You Send" field.`,
+          {
+            position: "top-center",
+            autoClose: 5000,
+          }
+        );
         return;
       }
       if (!formData.sendCurrency || !formData.receiveCurrency) {
@@ -649,13 +868,6 @@ const Remittance = () => {
   );
 
   const handleSubmitTransaction = useCallback(() => {
-    // Debug: Check what we have
-    console.log("🔍 Debug - Current state:");
-    console.log("formData.sendCurrency:", formData.sendCurrency);
-    console.log("formData.receiveCurrency:", formData.receiveCurrency);
-    console.log("selectedBeneficiary:", selectedBeneficiary);
-    console.log("selectedBank:", selectedBank);
-
     const transactionData = {
       // REQUIRED: Currency fields
       from_currency: formData.sendCurrency?.value,
@@ -674,8 +886,8 @@ const Remittance = () => {
       conversion_id: exchangeRateData?.conversion_id,
 
       // REQUIRED: Beneficiary (ID as string)
-      beneficiary: selectedBeneficiary?.id?.toString(), // ← MUST BE STRING
-      beneficiary_bank_id: selectedBank?.id, // ← MUST HAVE THIS
+      beneficiary: selectedBeneficiary?.id?.toString(),
+      beneficiary_bank_id: selectedBank?.id,
 
       // Optional but good to include
       beneficiary_name: selectedBeneficiary?.name,
@@ -710,28 +922,6 @@ const Remittance = () => {
     });
 
     console.log("📤 Sending transaction data:", cleanData);
-    console.log("📤 Missing required fields check:");
-    console.log(
-      "- from_currency:",
-      !!cleanData.from_currency,
-      cleanData.from_currency
-    );
-    console.log(
-      "- to_currency:",
-      !!cleanData.to_currency,
-      cleanData.to_currency
-    );
-    console.log(
-      "- beneficiary:",
-      !!cleanData.beneficiary,
-      cleanData.beneficiary
-    );
-    console.log(
-      "- beneficiary_bank_id:",
-      !!cleanData.beneficiary_bank_id,
-      cleanData.beneficiary_bank_id
-    );
-    console.log("- is_remit:", !!cleanData.is_remit, cleanData.is_remit);
 
     // Validate required fields
     const required = [
@@ -967,30 +1157,30 @@ const Remittance = () => {
             showCodeInput={showCodeInput}
             setShowCodeInput={setShowCodeInput}
             handleBeneficiaryCodeLookup={handleBeneficiaryCodeLookup}
-            purposeOptions={purposeOptions} // ADD THIS LINE
-            incomeSourceOptions={incomeSourceOptions} // ADD THIS LINE
-            relationOptions={relationOptions} // ADD THIS LINE
-            paymentOptions={paymentOptions} // ADD THIS LINE
-            onPaymentMethodChange={handlePaymentMethodChange} // ADD THIS LINE
-            onFieldChange={handleFieldChange} // ADD THIS LINE
+            purposeOptions={purposeOptions}
+            incomeSourceOptions={incomeSourceOptions}
+            relationOptions={relationOptions}
+            paymentOptions={paymentOptions}
+            onPaymentMethodChange={handlePaymentMethodChange}
+            onFieldChange={handleFieldChange}
           />
         );
       case "bank":
         return (
           <BankTransfer
-            formData={formData} // ADD THIS
+            formData={formData}
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
             beneficiaryBanks={beneficiaryBanks}
             beneficiaryLoading={beneficiaryLoading}
-            onBeneficiarySelect={handleBeneficiarySelect} // ADD THIS
+            onBeneficiarySelect={handleBeneficiarySelect}
             onBankSelect={handleBankSelect}
-            onFieldChange={handleFieldChange} // ADD THIS
-            purposeOptions={purposeOptions} // ADD THIS
-            incomeSourceOptions={incomeSourceOptions} // ADD THIS
-            relationOptions={relationOptions} // ADD THIS
-            paymentOptions={paymentOptions} // ADD THIS
-            onFileUpload={handleFileUpload} // ADD THIS IF NEEDED
+            onFieldChange={handleFieldChange}
+            purposeOptions={purposeOptions}
+            incomeSourceOptions={incomeSourceOptions}
+            relationOptions={relationOptions}
+            paymentOptions={paymentOptions}
+            onFileUpload={handleFileUpload}
             selectedCurrency={formData.sendCurrency?.value}
           />
         );
@@ -1053,9 +1243,45 @@ const Remittance = () => {
                           onChange={(e) =>
                             handleSendAmountChange(e.target.value)
                           }
-                          placeholder="0.00"
+                          onFocus={() => {
+                            setActiveInput("send");
+                            shouldFetchRate.current = false;
+                          }}
+                          onBlur={(e) => {
+                            // Round on blur
+                            let numValue = parseFloat(e.target.value);
+                            if (!isNaN(numValue)) {
+                              // ENFORCE MINIMUM
+                              if (numValue < 5) {
+                                numValue = 5;
+                                toast.info(
+                                  `Amount adjusted to minimum of ${
+                                    formData.sendCurrency?.value || "USD"
+                                  } 5.00`,
+                                  { position: "top-center", autoClose: 2000 }
+                                );
+                              }
+                              const rounded = roundToDecimals(numValue, 2);
+                              dispatch(setSendAmount(rounded.toString()));
+
+                              // Recalculate receive amount with corrected send amount
+                              if (exchangeRateData?.fxRate) {
+                                const correctedReceiveAmount = roundToDecimals(
+                                  numValue * exchangeRateData.fxRate,
+                                  2
+                                );
+                                dispatch(
+                                  setReceiveAmount(
+                                    correctedReceiveAmount.toString()
+                                  )
+                                );
+                              }
+                            }
+                          }}
+                          placeholder="1.00"
                           className="w-full px-6 py-5 text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
                           inputMode="decimal"
+                          autoComplete="off"
                         />
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                           <div className="w-36">
@@ -1099,23 +1325,91 @@ const Remittance = () => {
                         <h3 className="text-lg font-semibold text-gray-900">
                           Recipient Receives
                         </h3>
-                        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
-                          Estimated
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                            Estimated
+                          </span>
+                          {exchangeRateData?.fxRate &&
+                            formData.receiveAmount && (
+                              <span className="text-xs text-gray-500">
+                                • Real-time
+                              </span>
+                            )}
+                        </div>
                       </div>
+
                       <div className="relative">
                         <input
                           type="text"
                           value={formData.receiveAmount || ""}
+                          onChange={(e) => {
+                            setActiveInput("receive");
+                            handleReceiveAmountChange(e.target.value);
+                          }}
+                          onFocus={() => {
+                            setActiveInput("receive");
+                            setShowRecipientDetails(true);
+                            shouldFetchRate.current = false;
+                          }}
+                          onBlur={(e) => {
+                            // Keep details shown if there's a value
+                            if (!formData.receiveAmount) {
+                              setShowRecipientDetails(false);
+                            }
+
+                            // Check if resulting send amount meets minimum
+                            const receiveNumValue = parseFloat(e.target.value);
+                            if (
+                              !isNaN(receiveNumValue) &&
+                              exchangeRateData?.fxRate
+                            ) {
+                              const calculatedSendAmount =
+                                receiveNumValue / exchangeRateData.fxRate;
+
+                              if (calculatedSendAmount < 5) {
+                                // Calculate what receiver amount would be for minimum send amount
+                                const minSendAmount = 5;
+                                const adjustedReceiveAmount = roundToDecimals(
+                                  minSendAmount * exchangeRateData.fxRate,
+                                  2
+                                );
+
+                                toast.info(
+                                  `Amount adjusted to minimum equivalent of ${
+                                    formData.sendCurrency?.value || "USD"
+                                  } 5.00`,
+                                  { position: "top-center", autoClose: 2000 }
+                                );
+
+                                dispatch(
+                                  setSendAmount(minSendAmount.toString())
+                                );
+                                dispatch(
+                                  setReceiveAmount(
+                                    adjustedReceiveAmount.toString()
+                                  )
+                                );
+                              }
+                            }
+
+                            // Re-enable API calls after blur
+                            setTimeout(() => {
+                              shouldFetchRate.current = true;
+                            }, 300);
+                          }}
                           placeholder="0.00"
                           className={`w-full px-6 py-5 text-3xl font-bold rounded-xl focus:outline-none transition-all duration-200 ${
-                            exchangeRateError || !exchangeRateData?.fxRate
+                            exchangeRateError
+                              ? "bg-red-50 border-2 border-red-200 text-red-900 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                              : exchangeRateLoading
                               ? "bg-gray-100 border-2 border-gray-200 text-gray-900"
-                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900"
+                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                           }`}
-                          readOnly
-                          disabled
+                          inputMode="decimal"
+                          autoComplete="off"
                         />
+
+                        {/* Currency Selector */}
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                           <div className="w-36">
                             <Select
@@ -1123,58 +1417,117 @@ const Remittance = () => {
                               value={formData.receiveCurrency}
                               onChange={handleReceiveCurrencyChange}
                               placeholder="Currency"
-                              styles={selectStyles}
+                              styles={{
+                                ...selectStyles,
+                                control: (base, state) => ({
+                                  ...base,
+                                  minHeight: "52px",
+                                  borderRadius: "10px",
+                                  borderColor: state.isFocused
+                                    ? "#10b981"
+                                    : "#e5e7eb",
+                                  borderWidth: "1px",
+                                  backgroundColor: exchangeRateLoading
+                                    ? "#f9fafb"
+                                    : "#ffffff",
+                                  boxShadow: state.isFocused
+                                    ? "0 0 0 3px rgba(16, 185, 129, 0.1)"
+                                    : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                                  "&:hover": { borderColor: "#10b981" },
+                                }),
+                              }}
                               isSearchable
                               className="text-sm"
                               classNamePrefix="select"
+                              isLoading={exchangeRateLoading}
                             />
                           </div>
                         </div>
+
+                        {/* Loading indicator */}
+                        {exchangeRateLoading && (
+                          <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                            <RingLoader color="#10b981" size={16} />
+                          </div>
+                        )}
                       </div>
+
+                      {/* Minimal conversion info */}
+                      {formData.sendAmount &&
+                        formData.receiveAmount &&
+                        exchangeRateData?.fxRate && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
+                              <span>
+                                {formData.sendCurrency?.value}{" "}
+                                {parseFloat(formData.sendAmount).toFixed(2)} ={" "}
+                                {formData.receiveCurrency?.value}{" "}
+                                {parseFloat(formData.receiveAmount).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                     </div>
 
-                    {/* Exchange Rate Display */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-white rounded-lg shadow-sm">
-                            <FaExchangeAlt className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">
-                              Exchange Rate
-                            </p>
-                            {exchangeRateLoading && (
-                              <div className="flex items-center gap-2 mt-1">
-                                <RingLoader color="#3b82f6" size={14} />
-                                <span className="text-xs text-gray-600">
-                                  Fetching live rate...
-                                </span>
+                    {/* Collapsible details section */}
+                    <AnimatePresence>
+                      {exchangeRateData?.fxRate && (
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-200">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <FaExchangeAlt className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Exchange Rate
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    1 {formData.sendCurrency?.value} ={" "}
+                                    {exchangeRateData.fxRate.toFixed(4)}{" "}
+                                    {formData.receiveCurrency?.value}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <FaClock className="text-emerald-500 text-xs" />
+                                <p className="text-xs text-emerald-600 font-medium">
+                                  Live rate
+                                </p>
+                              </div>
+                            </div>
+
+                            {exchangeRateData.conversion_id && (
+                              <div className="mt-3 pt-3 border-t border-emerald-200">
+                                <p className="text-xs text-gray-600">
+                                  <span className="font-medium">Rate ID:</span>{" "}
+                                  <span className="font-mono">
+                                    {exchangeRateData.conversion_id}
+                                  </span>
+                                </p>
                               </div>
                             )}
                           </div>
                         </div>
-                        {exchangeRateData?.fxRate ? (
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gray-900">
-                              1 {formData.sendCurrency?.value} ={" "}
-                              {exchangeRateData.fxRate.toFixed(4)}{" "}
-                              {formData.receiveCurrency?.value}
-                            </p>
-                            <div className="flex items-center gap-1 justify-end mt-1">
-                              <FaClock className="text-emerald-500 text-xs" />
-                              <p className="text-xs text-emerald-600 font-medium">
-                                Live market rate
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">
-                            Select currencies
-                          </p>
-                        )}
+                      )}
+                    </AnimatePresence>
+
+                    {/* Error message - Keep only this one (moved from inside the div) */}
+                    {exchangeRateError && (
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm font-medium text-red-600">
+                          {exchangeRateError}
+                        </p>
+                        <button
+                          onClick={fetchExchangeRateManual}
+                          className="mt-1 text-xs text-red-700 hover:text-red-900 font-medium"
+                        >
+                          Try again
+                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -1795,7 +2148,6 @@ const Remittance = () => {
         )}
 
         {/* Professional Navigation Buttons */}
-        {/* Professional Navigation Buttons */}
         {step < 4 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1803,7 +2155,7 @@ const Remittance = () => {
             transition={{ delay: 0.1 }}
             className="flex flex-col sm:flex-row gap-4"
           >
-            {/* Back/Cancel button - UNCHANGED */}
+            {/* Back/Cancel button */}
             {step > 1 ? (
               <button
                 onClick={handlePreviousStep}
@@ -1846,7 +2198,7 @@ const Remittance = () => {
                   beneficiaryLoading ||
                   openBankingProcessing
                 }
-                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed grayscale"
+                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
@@ -1858,6 +2210,13 @@ const Remittance = () => {
                     <span>Continue to Next Step</span>
                     <FaArrowRight className="w-5 h-5" />
                   </>
+                )}
+
+                {parseFloat(formData.sendAmount) < 5 && (
+                  <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                    Minimum amount: {formData.sendCurrency?.value || "USD"} 5.00
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900"></div>
+                  </div>
                 )}
               </button>
             )}
@@ -1947,19 +2306,17 @@ const Remittance = () => {
 
       {showOpenBanking && (
         <PaymentInitiation
-          selectedCurrency={formData.sendCurrency?.value} // ✅ FIXED: Use formData.sendCurrency
-          amount={formData?.sendAmount || ""} // ✅ Also fixed: should be sendAmount, not amount
+          selectedCurrency={formData.sendCurrency?.value}
+          amount={formData?.sendAmount || ""}
           purpose={formData?.purpose?.value || ""}
           paymentMethod="bank_transfer"
           selectedBeneficiaryBank={selectedBank}
           selectedBeneficiary={selectedBeneficiary}
-          customerId={
-            customerId || localStorage.getItem("authcustomer_id") // ✅ Remove paramCustomerId
-          }
-          showPaymentInitiation={showOpenBanking} // ✅ Should be showOpenBanking, not showPaymentInitiation
+          customerId={customerId || localStorage.getItem("authcustomer_id")}
+          showPaymentInitiation={showOpenBanking}
           transactionType="remittance"
           onClose={() => {
-            setShowOpenBanking(false); // ✅ Close the Open Banking modal
+            setShowOpenBanking(false);
             setOpenBankingProcessing(false);
           }}
           onSuccess={(result) => {
@@ -1970,7 +2327,6 @@ const Remittance = () => {
               );
               setShowOpenBanking(false);
               setOpenBankingProcessing(false);
-              // Optionally navigate to success page
               dispatch(setStep(4));
             } else {
               toast.error(result.error || "Open Banking remittance failed");
