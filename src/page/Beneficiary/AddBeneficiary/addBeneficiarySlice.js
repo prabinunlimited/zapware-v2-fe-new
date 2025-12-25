@@ -3,10 +3,11 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE BENEFICIARY ASYNC THUNKS =====================
+
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
-    { customerId, beneficiaryData, bankAccounts, currency },
+    { customerId, beneficiaryData, bankAccounts, currency, country_code },
     { rejectWithValue }
   ) => {
     try {
@@ -15,6 +16,26 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
       console.log("🔧 Beneficiary Data:", beneficiaryData);
       console.log("🔧 Bank Accounts:", bankAccounts);
       console.log("🔧 Currency:", currency);
+      console.log("🔧 Country Code parameter:", country_code);
+
+      let finalCountryCode = country_code;
+
+      // Check if beneficiaryData has country_phone_code instead
+      if (!finalCountryCode && beneficiaryData.country_phone_code) {
+        finalCountryCode = beneficiaryData.country_phone_code;
+      }
+      // Also check for country_code in beneficiaryData as fallback
+      if (!finalCountryCode && beneficiaryData.country_code) {
+        finalCountryCode = beneficiaryData.country_code;
+      }
+
+      // Ensure we have a country code
+      if (!finalCountryCode) {
+        console.warn("⚠️ No country code provided, using +1 as fallback");
+        finalCountryCode = "+1";
+      }
+
+      console.log("🔧 Final Country Code to use:", finalCountryCode);
 
       const authtoken = localStorage.getItem("authtoken");
 
@@ -155,6 +176,13 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         ...beneficiaryData,
         banks: banksPayload,
       };
+
+      // Use country_phone_code instead of country_code
+      if (finalCountryCode.startsWith("+")) {
+        payload.country_phone_code = finalCountryCode.substring(1);
+      } else {
+        payload.country_phone_code = finalCountryCode;
+      }
 
       console.log("📡 Final payload:", JSON.stringify(payload, null, 2));
 
@@ -365,8 +393,6 @@ export const updateBeneficiary = createAsyncThunk(
       const payload = {
         ...beneficiaryData,
         current_date_time: currentDateTime,
-        // Don't include customer_id unless your API specifically needs it
-        // The non-redux version doesn't send it in the payload
       };
 
       // Clean up the payload
@@ -557,14 +583,321 @@ export const fetchBankBranches = createAsyncThunk(
   }
 );
 
+// ===================== BENEFICIARY REGISTRATION VERIFICATION ENDPOINTS =====================
+
+/**
+ * Send passcode for beneficiary registration email verification
+ */
+export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
+  "beneficiaries/sendRegistrationPasscode",
+  async ({ email, partner_id }, { rejectWithValue }) => {
+    try {
+      console.log("📧 Sending registration passcode to:", email);
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        email: email.trim().toLowerCase(),
+        user_type: "beneficiary",
+        partner_id:
+          partner_id || localStorage.getItem("whitelabelledpartnerid") || "0",
+      };
+
+      console.log("📧 Payload:", payload);
+
+      const response = await fetch(`${API_URL}/send-passcode-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("📧 Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to send passcode");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Passcode sent to your email",
+        data: result.data || {},
+      };
+    } catch (error) {
+      console.error("❌ sendBeneficiaryRegistrationPasscode error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Validate passcode for beneficiary registration email verification
+ */
+export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
+  "beneficiaries/validateRegistrationPasscode",
+  async ({ email, passcode }, { rejectWithValue }) => {
+    try {
+      console.log("✅ Validating registration passcode for:", email);
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        email: email.trim().toLowerCase(),
+        passcode: passcode,
+      };
+
+      console.log("✅ Payload:", payload);
+
+      const response = await fetch(
+        `${API_URL}/validate-passcode-registration`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+      console.log("✅ Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Invalid passcode");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Email verified successfully",
+        data: result.data || {},
+        verificationToken: result.data?.verification_token,
+      };
+    } catch (error) {
+      console.error("❌ validateBeneficiaryRegistrationPasscode error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Send OTP for beneficiary registration phone verification
+ */
+export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
+  "beneficiaries/sendRegistrationOTP",
+  async ({ country_code, mobile_number, partner_id }, { rejectWithValue }) => {
+    try {
+      console.log(
+        "📱 Sending registration OTP to:",
+        country_code,
+        mobile_number
+      );
+
+      // Clean inputs
+      const cleanMobileNumber = mobile_number.replace(/\D/g, "");
+      const cleanCountryCode = country_code.replace(/\D/g, "");
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        country_code: cleanCountryCode,
+        mobile_number: cleanMobileNumber,
+        user_type: "beneficiary",
+        partner_id:
+          partner_id || localStorage.getItem("whitelabelledpartnerid") || "0",
+      };
+
+      console.log("📱 Payload:", payload);
+
+      const response = await fetch(`${API_URL}/send-otp-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("📱 Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to send OTP");
+      }
+
+      return {
+        status: "success",
+        message: result.message || "OTP sent to your phone",
+        data: result.data || {},
+      };
+    } catch (error) {
+      console.error("❌ sendBeneficiaryRegistrationOTP error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Validate OTP for beneficiary registration phone verification
+ */
+export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
+  "beneficiaries/validateRegistrationOTP",
+  async ({ country_code, mobile_number, otp }, { rejectWithValue }) => {
+    try {
+      console.log(
+        "✅ Validating registration OTP for:",
+        country_code,
+        mobile_number
+      );
+
+      // Clean inputs
+      const cleanMobileNumber = mobile_number.replace(/\D/g, "");
+      const cleanCountryCode = country_code.replace(/\D/g, "");
+      const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
+
+      const authtoken = localStorage.getItem("authtoken");
+      const payload = {
+        country_code: cleanCountryCode,
+        mobile_number: cleanMobileNumber,
+        otp: formattedOTP,
+      };
+
+      console.log("✅ Payload:", payload);
+
+      const response = await fetch(`${API_URL}/validate-otp-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authtoken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log("✅ Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Invalid OTP");
+      }
+
+      // Store verification token if provided
+      if (result.data?.verification_token) {
+        localStorage.setItem(
+          "phone_verification_token",
+          result.data.verification_token
+        );
+      }
+
+      return {
+        status: "success",
+        message: result.message || "Phone number verified successfully",
+        data: result.data || {},
+        verificationToken: result.data?.verification_token,
+      };
+    } catch (error) {
+      console.error("❌ validateBeneficiaryRegistrationOTP error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
+ * Create beneficiary with request-remit flow
+ */
+export const createBeneficiaryRequestRemit = createAsyncThunk(
+  "beneficiaries/createBeneficiaryRequestRemit",
+  async (beneficiaryData, { rejectWithValue }) => {
+    try {
+      console.log("🔧 Creating beneficiary with request-remit flow...");
+      console.log("🔧 Beneficiary Data:", beneficiaryData);
+
+      const authtoken = localStorage.getItem("authtoken");
+
+      // Add hostname if not present
+      if (!beneficiaryData.hostname) {
+        beneficiaryData.hostname = window.location.hostname;
+      }
+
+      // Add partner_id if not present
+      if (!beneficiaryData.partner_id) {
+        beneficiaryData.partner_id =
+          localStorage.getItem("whitelabelledpartnerid") || "0";
+      }
+
+      console.log(
+        "📡 Final payload:",
+        JSON.stringify(beneficiaryData, null, 2)
+      );
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/create-requestremit-benef`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(beneficiaryData),
+        }
+      );
+
+      console.log("📡 API Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("📡 API Response text:", responseText);
+
+      if (!response.ok) {
+        console.error("❌ API Error Response:", responseText);
+        const errorData = JSON.parse(responseText);
+
+        // Handle field-specific errors
+        if (errorData.message) {
+          const errorMessages = [];
+
+          // Handle phone number errors
+          if (errorData.message.phone_number) {
+            errorMessages.push(...errorData.message.phone_number);
+          }
+
+          // Handle email errors
+          if (errorData.message.email) {
+            errorMessages.push(...errorData.message.email);
+          }
+
+          // Handle password errors
+          if (errorData.message.password) {
+            errorMessages.push(...errorData.message.password);
+          }
+
+          // Handle general errors
+          if (errorData.message && typeof errorData.message === "string") {
+            errorMessages.push(errorData.message);
+          }
+
+          throw new Error(errorMessages.join(", "));
+        }
+
+        throw new Error(errorData.message || "Failed to create beneficiary");
+      }
+
+      const result = JSON.parse(responseText);
+      console.log("✅ API Success Response:", result);
+
+      return {
+        status: "success",
+        message: result.message || "Beneficiary created successfully",
+        data: result.data || {},
+        benefCode: result.benefCode,
+      };
+    } catch (error) {
+      console.error("❌ createBeneficiaryRequestRemit error:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // ===================== INITIAL STATE =====================
 const initialState = {
-  // Create beneficiary state
-  createLoading: false,
-  createError: null,
-  createSuccess: false,
-  beneficiaryId: null,
-
   // Create beneficiary state
   createLoading: false,
   createError: null,
@@ -596,15 +929,6 @@ const initialState = {
   bankBranches: {},
   dropdownLoading: false,
   dropdownError: null,
-
-  // Dropdown data state (for forms)
-  nationalities: [],
-  banks: {},
-  idTypes: {},
-  cities: {},
-  bankBranches: {},
-  dropdownLoading: false,
-  dropdownError: null,
 };
 
 // ===================== SLICE =====================
@@ -614,12 +938,15 @@ const addBeneficiarySlice = createSlice({
   reducers: {
     // Clear create state
     clearCreateError: (state) => {
+      console.log("🧹 Clearing create error in addBeneficiarySlice");
       state.createError = null;
     },
     clearCreateSuccess: (state) => {
+      console.log("🧹 Clearing create success in addBeneficiarySlice");
       state.createSuccess = false;
     },
     resetCreateState: (state) => {
+      console.log("🧹 Resetting create state in addBeneficiarySlice");
       state.createLoading = false;
       state.createError = null;
       state.createSuccess = false;
@@ -668,6 +995,9 @@ const addBeneficiarySlice = createSlice({
     clearError: (state) => {
       state.createError = null;
       state.dropdownError = null;
+      state.bankError = null;
+      state.fetchError = null;
+      state.updateError = null;
     },
 
     // Reset all state
@@ -677,6 +1007,12 @@ const addBeneficiarySlice = createSlice({
       state.createSuccess = false;
       state.dropdownLoading = false;
       state.dropdownError = null;
+      state.fetchLoading = false;
+      state.fetchError = null;
+      state.beneficiaryData = null;
+      state.updateLoading = false;
+      state.updateError = null;
+      state.updateSuccess = false;
     },
   },
   extraReducers: (builder) => {
@@ -699,6 +1035,30 @@ const addBeneficiarySlice = createSlice({
       .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
         console.error(
           "❌ createBeneficiaryWithBanks REJECTED:",
+          action.payload
+        );
+        state.createLoading = false;
+        state.createError = action.payload;
+        state.createSuccess = false;
+      })
+
+      // ===================== CREATE BENEFICIARY REQUEST REMIT =====================
+      .addCase(createBeneficiaryRequestRemit.pending, (state) => {
+        console.log("⏳ createBeneficiaryRequestRemit PENDING");
+        state.createLoading = true;
+        state.createError = null;
+        state.createSuccess = false;
+      })
+      .addCase(createBeneficiaryRequestRemit.fulfilled, (state, action) => {
+        console.log("✅ createBeneficiaryRequestRemit FULFILLED");
+        state.createLoading = false;
+        state.createSuccess = true;
+        state.beneficiaryId = action.payload.benefCode;
+        state.createError = null;
+      })
+      .addCase(createBeneficiaryRequestRemit.rejected, (state, action) => {
+        console.error(
+          "❌ createBeneficiaryRequestRemit REJECTED:",
           action.payload
         );
         state.createLoading = false;
@@ -781,6 +1141,7 @@ const addBeneficiarySlice = createSlice({
         state.dropdownError = action.payload;
       })
 
+      // ===================== FETCH BENEFICIARY BY ID =====================
       .addCase(fetchBeneficiaryById.pending, (state) => {
         console.log("⏳ fetchBeneficiaryById PENDING");
         state.fetchLoading = true;

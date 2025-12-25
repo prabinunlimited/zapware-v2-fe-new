@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import { FiPlusCircle } from "react-icons/fi";
 import axios from "axios";
@@ -450,7 +450,7 @@ const PayoutPage = () => {
         <>
           <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50"></div>
           <div className="absolute inset-0 flex justify-center items-center z-50">
-            <ClipLoader color="#36d7b7" loading={loading} size={50} />
+            <RingLoader color="#36d7b7" loading={loading} size={50} />
           </div>
         </>
       )}
@@ -459,7 +459,7 @@ const PayoutPage = () => {
         <>
           <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50"></div>
           <div className="absolute inset-0 flex justify-center items-center z-50">
-            <ClipLoader color="#36d7b7" loading={benefLoading} size={50} />
+            <RingLoader color="#36d7b7" loading={benefLoading} size={50} />
           </div>
         </>
       )}

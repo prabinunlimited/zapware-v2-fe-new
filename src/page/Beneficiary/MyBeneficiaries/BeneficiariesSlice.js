@@ -3,10 +3,115 @@ import {
   createAsyncThunk,
   createSelector,
 } from "@reduxjs/toolkit";
+import { createBeneficiaryWithBanks } from "../AddBeneficiary/addBeneficiarySlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ===================== BENEFICIARY LIST ASYNC THUNKS =====================
+// ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
+export const createAndAddBeneficiary = createAsyncThunk(
+  "beneficiaries/createAndAddBeneficiary",
+  async (
+    { customerId, beneficiaryData, bankAccounts, currency, country_code },
+    { dispatch, rejectWithValue }
+  ) => {
+    try {
+      console.log("🔄 createAndAddBeneficiary: Starting...");
+      console.log("📦 Parameters:", {
+        customerId,
+        beneficiaryData,
+        bankAccountsCount: bankAccounts?.length || 0,
+        currency,
+        country_code,
+      });
+
+      // 1. Create the beneficiary
+      const createResult = await dispatch(
+        createBeneficiaryWithBanks({
+          customerId,
+          beneficiaryData,
+          bankAccounts,
+          currency,
+          country_code,
+        })
+      );
+
+      console.log("📦 Create result:", createResult);
+
+      // Check if creation was successful
+      if (createBeneficiaryWithBanks.rejected.match(createResult)) {
+        console.error("❌ Creation failed:", createResult.payload);
+        throw new Error(createResult.payload || "Failed to create beneficiary");
+      }
+
+      // 2. Get the newly created beneficiary ID
+      const createPayload = createResult.payload;
+      const newBeneficiaryId =
+        createPayload?.beneficiary_id ||
+        createPayload?.benef_id ||
+        createPayload?.id;
+
+      console.log("✅ Beneficiary created, ID:", newBeneficiaryId);
+
+      if (!newBeneficiaryId) {
+        console.error("❌ No beneficiary ID found in response:", createPayload);
+        throw new Error("No beneficiary ID returned from creation");
+      }
+
+      // 3. Add delay to allow DB sync (if needed)
+      console.log("⏳ Waiting for DB sync...");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // 4. Fetch the specific beneficiary to ensure it's available
+      console.log("🔄 Fetching newly created beneficiary...");
+      const fetchResult = await dispatch(
+        fetchBeneficiaryById(newBeneficiaryId)
+      );
+
+      // Check if fetch was successful
+      if (fetchBeneficiaryById.rejected.match(fetchResult)) {
+        console.warn(
+          "⚠️ Beneficiary fetch failed, but creation was successful:",
+          fetchResult.payload
+        );
+        // Continue anyway since creation was successful
+      }
+
+      // 5. Refresh the beneficiaries list
+      console.log("🔄 Refreshing beneficiaries list...");
+      await dispatch(fetchBeneficiaries(customerId));
+
+      // 6. Return the fetched beneficiary data
+      return {
+        success: true,
+        message: "Beneficiary created and fetched successfully",
+        beneficiaryId: newBeneficiaryId,
+        beneficiaryData: fetchResult.payload || createPayload,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ createAndAddBeneficiary error:", error);
+
+      // Even if something fails after creation, we might still want to indicate partial success
+      if (newBeneficiaryId) {
+        console.warn(
+          "⚠️ Beneficiary created but post-creation steps failed:",
+          error.message
+        );
+        return {
+          success: true,
+          warning: "Beneficiary created but some post-creation steps failed",
+          beneficiaryId: newBeneficiaryId,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      return rejectWithValue(error.message || "Failed to create beneficiary");
+    }
+  }
+);
+
+// ===================== ORIGINAL THUNKS =====================
 export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
@@ -28,8 +133,21 @@ export const fetchBeneficiaries = createAsyncThunk(
       }
 
       const result = await response.json();
+      console.log("📥 Fetched beneficiaries response:", result);
+
+      // Handle different response structures
+      if (
+        result.status === "200" &&
+        result.message === "No beneficiaries found"
+      ) {
+        console.log("📭 No beneficiaries found, returning empty array");
+        return []; // Explicit empty array
+      }
+
+      // Return data if it exists
       return result.data || [];
     } catch (error) {
+      console.error("❌ fetchBeneficiaries error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -64,7 +182,6 @@ export const fetchBeneficiaryById = createAsyncThunk(
       const result = await response.json();
       console.log("✅ API Response:", result);
 
-      // Handle the API response structure
       let beneficiaryData = null;
       let benefBanks = [];
 
@@ -74,12 +191,10 @@ export const fetchBeneficiaryById = createAsyncThunk(
         beneficiaryData = result.data;
       }
 
-      // Extract banks from the response
       if (result.benef_banks && Array.isArray(result.benef_banks)) {
         benefBanks = result.benef_banks;
       }
 
-      // Attach banks to beneficiary data
       if (beneficiaryData) {
         beneficiaryData.benef_banks = benefBanks;
       }
@@ -191,7 +306,6 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
 
-      // Store for potential undo
       const state = getState();
       const beneficiary = state.beneficiaries.beneficiaries.find(
         (b) => b.id === beneficiaryId
@@ -275,7 +389,6 @@ export const undoDeleteBeneficiary = createAsyncThunk(
       );
 
       if (!response.ok) {
-        // If no restore endpoint, try to create a new one
         const createResponse = await fetch(
           `${API_URL}/beneficiaries/create-benef/${customerId}`,
           {
@@ -443,6 +556,34 @@ const initialState = {
     bulkDeleteTotal: 0,
   },
 
+  // Create state - UPDATED FOR CLARITY
+  createState: {
+    loading: false,
+    error: null,
+    success: false,
+    lastCreatedId: null,
+  },
+
+  // Email search state
+  emailSearch: {
+    loading: false,
+    error: null,
+    searched: false,
+    exists: false,
+    data: null,
+    processed: false,
+  },
+
+  // Phone search state
+  phoneSearch: {
+    loading: false,
+    error: null,
+    searched: false,
+    exists: false,
+    data: null,
+    processed: false,
+  },
+
   // Last updated timestamp
   lastUpdated: null,
 };
@@ -452,17 +593,363 @@ const beneficiarySlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
+    // Phone search reducer
+    searchBeneficiaryByPhone: (state, action) => {
+      const { phoneNumber, countryPhoneCode } = action.payload;
+      console.log(
+        "🔍 Searching for phone in store:",
+        phoneNumber,
+        "with code:",
+        countryPhoneCode
+      );
+
+      if (!phoneNumber) {
+        state.phoneSearch = initialState.phoneSearch;
+        return;
+      }
+
+      // Format phone number for comparison (remove non-digit characters)
+      const cleanSearchPhone = phoneNumber.replace(/\D/g, "");
+      const searchFullPhone = countryPhoneCode
+        ? `${countryPhoneCode.replace(/\D/g, "")}${cleanSearchPhone}`
+        : cleanSearchPhone;
+
+      console.log("🔍 Clean search phone:", cleanSearchPhone);
+      console.log("🔍 Full search phone:", searchFullPhone);
+
+      const foundBeneficiary = state.beneficiaries.find((beneficiary) => {
+        // Check if beneficiary has any phone number field
+        if (!beneficiary.phone_number && !beneficiary.full_phone_number) {
+          return false;
+        }
+
+        // Clean beneficiary phone numbers
+        const beneficiaryPhone =
+          beneficiary.phone_number?.replace(/\D/g, "") || "";
+        const beneficiaryFullPhone =
+          beneficiary.full_phone_number?.replace(/\D/g, "") || "";
+
+        // Check if phone number matches (with or without country code)
+        const exactMatches =
+          beneficiaryPhone === cleanSearchPhone ||
+          beneficiaryFullPhone === cleanSearchPhone ||
+          beneficiaryFullPhone === searchFullPhone ||
+          beneficiaryPhone === searchFullPhone ||
+          beneficiary.phone_number === phoneNumber ||
+          beneficiary.full_phone_number === phoneNumber;
+
+        // Also check for partial matches (in case numbers are stored with different formatting)
+        const partialMatches =
+          beneficiaryPhone.includes(cleanSearchPhone) ||
+          beneficiaryFullPhone.includes(cleanSearchPhone) ||
+          beneficiaryFullPhone.includes(searchFullPhone) ||
+          beneficiaryPhone.includes(searchFullPhone);
+
+        // Return true if either exact or partial match
+        return exactMatches || partialMatches;
+      });
+
+      console.log("📊 Found beneficiary by phone:", foundBeneficiary);
+
+      if (foundBeneficiary) {
+        // Extract phone code from full_phone_number if available
+        let phoneCode = foundBeneficiary.country_phone_code;
+        let phoneNumber = foundBeneficiary.phone_number;
+
+        if (!phoneCode && foundBeneficiary.full_phone_number) {
+          const fullPhone = foundBeneficiary.full_phone_number;
+          if (fullPhone.startsWith("+")) {
+            if (fullPhone.startsWith("+1")) {
+              phoneCode = "+1";
+              phoneNumber = fullPhone.substring(2);
+            } else if (fullPhone.startsWith("+44")) {
+              phoneCode = "+44";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+91")) {
+              phoneCode = "+91";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+92")) {
+              phoneCode = "+92";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+880")) {
+              phoneCode = "+880";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+977")) {
+              phoneCode = "+977";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+254")) {
+              phoneCode = "+254";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+234")) {
+              phoneCode = "+234";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+971")) {
+              phoneCode = "+971";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+61")) {
+              phoneCode = "+61";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+45")) {
+              phoneCode = "+45";
+              phoneNumber = fullPhone.substring(3);
+            }
+          }
+        }
+
+        // Try to infer country_id from city/state if possible
+        let countryId = foundBeneficiary.country_id;
+        if (!countryId) {
+          if (
+            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
+            foundBeneficiary.state?.toUpperCase() === "TX"
+          ) {
+            countryId = "186"; // USA country ID
+            if (!phoneCode) phoneCode = "+1";
+          } else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
+            countryId = "185"; // UK country ID
+            if (!phoneCode) phoneCode = "+44";
+          } else if (
+            foundBeneficiary.city?.toUpperCase() === "MUMBAI" ||
+            foundBeneficiary.city?.toUpperCase() === "DELHI"
+          ) {
+            countryId = "88"; // India country ID
+            if (!phoneCode) phoneCode = "+91";
+          }
+        }
+
+        // Try to infer nationality if not set
+        let nationalityId = foundBeneficiary.nationality_id;
+        if (!nationalityId) {
+          if (countryId === "186") {
+            nationalityId = "186"; // American nationality
+          } else if (countryId === "185") {
+            nationalityId = "185"; // British nationality
+          } else if (countryId === "88") {
+            nationalityId = "88"; // Indian nationality
+          }
+        }
+
+        // Map relationship values
+        let relationValue = foundBeneficiary.relationtobenef;
+        const relationshipMap = {
+          Father: "father",
+          Mother: "mother",
+          Sister: "sister",
+          Brother: "brother",
+          Cousin: "cousin",
+          Friend: "friend",
+          Other: "other",
+          father: "father",
+          mother: "mother",
+          sister: "sister",
+          brother: "brother",
+          cousin: "cousin",
+          friend: "friend",
+          other: "other",
+          "Father/Mother": "father",
+          "Brother/Sister": "brother",
+          "Friend/Relative": "friend",
+        };
+
+        if (relationValue && relationshipMap[relationValue]) {
+          relationValue = relationshipMap[relationValue];
+        } else if (relationValue && typeof relationValue === "string") {
+          const lowerRelation = relationValue.toLowerCase();
+          if (
+            lowerRelation.includes("father") ||
+            lowerRelation.includes("mother")
+          ) {
+            relationValue = "father";
+          } else if (
+            lowerRelation.includes("sister") ||
+            lowerRelation.includes("brother")
+          ) {
+            relationValue = "brother";
+          } else if (lowerRelation.includes("friend")) {
+            relationValue = "friend";
+          } else if (lowerRelation.includes("cousin")) {
+            relationValue = "cousin";
+          }
+        }
+
+        const cleanData = {
+          id: foundBeneficiary.id || "",
+          name: foundBeneficiary.name || "",
+          email: foundBeneficiary.email || "",
+          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
+          country_id: countryId?.toString() || "",
+          country_phone_code: phoneCode || countryPhoneCode || "+1",
+          beneftype: foundBeneficiary.beneftype || "individual",
+          state: foundBeneficiary.state || "",
+          city: foundBeneficiary.city || "",
+          street: foundBeneficiary.street || foundBeneficiary.address || "",
+          postalcode: foundBeneficiary.postalcode || "",
+          relationtobenef: relationValue || "",
+          otherRelationship: foundBeneficiary.otherRelationship || "",
+          nationality_id: nationalityId?.toString() || "",
+          status: foundBeneficiary.status || 1,
+          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
+          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
+          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
+          currency: foundBeneficiary.currency || "USD",
+          banks: foundBeneficiary.banks || [],
+          _source: "phone_search",
+          _matchedPhone: cleanSearchPhone,
+        };
+
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
+
+        state.phoneSearch.data = cleanData;
+        state.phoneSearch.exists = true;
+        state.phoneSearch.searched = true;
+      } else {
+        state.phoneSearch = {
+          ...initialState.phoneSearch,
+          searched: true,
+          exists: false,
+        };
+      }
+
+      state.phoneSearch.loading = false;
+      state.phoneSearch.error = null;
+    },
+
+    // Keep email search for backward compatibility
+    searchBeneficiaryByEmail: (state, action) => {
+      const { email } = action.payload;
+      console.log("🔍 Searching for email in store:", email);
+
+      if (!email) {
+        state.emailSearch = initialState.emailSearch;
+        return;
+      }
+
+      const foundBeneficiary = state.beneficiaries.find(
+        (beneficiary) =>
+          beneficiary.email &&
+          beneficiary.email.toLowerCase() === email.toLowerCase()
+      );
+
+      console.log("📊 Found beneficiary:", foundBeneficiary);
+
+      if (foundBeneficiary) {
+        // Extract phone code from full_phone_number if available
+        let phoneCode = foundBeneficiary.country_phone_code;
+        let phoneNumber = foundBeneficiary.phone_number;
+
+        if (!phoneCode && foundBeneficiary.full_phone_number) {
+          const fullPhone = foundBeneficiary.full_phone_number;
+          if (fullPhone.startsWith("+")) {
+            if (fullPhone.startsWith("+1")) {
+              phoneCode = "+1";
+              phoneNumber = fullPhone.substring(2);
+            } else if (fullPhone.startsWith("+44")) {
+              phoneCode = "+44";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+91")) {
+              phoneCode = "+91";
+              phoneNumber = fullPhone.substring(3);
+            }
+          }
+        }
+
+        let countryId = foundBeneficiary.country_id;
+        if (!countryId) {
+          if (
+            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
+            foundBeneficiary.state?.toUpperCase() === "TX"
+          ) {
+            countryId = "186";
+            if (!phoneCode) phoneCode = "+1";
+          }
+        }
+
+        let nationalityId = foundBeneficiary.nationality_id;
+        if (!nationalityId && countryId === "186") {
+          nationalityId = "186";
+        }
+
+        let relationValue = foundBeneficiary.relationtobenef;
+        const relationshipMap = {
+          Father: "father",
+          Mother: "mother",
+          Sister: "sister",
+          Brother: "brother",
+          Cousin: "cousin",
+          Friend: "friend",
+          Other: "other",
+          father: "father",
+          mother: "mother",
+          sister: "sister",
+          brother: "brother",
+          cousin: "cousin",
+          friend: "friend",
+          other: "other",
+        };
+
+        if (relationValue && relationshipMap[relationValue]) {
+          relationValue = relationshipMap[relationValue];
+        }
+
+        const cleanData = {
+          id: foundBeneficiary.id || "",
+          name: foundBeneficiary.name || "",
+          email: foundBeneficiary.email || "",
+          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
+          country_id: countryId?.toString() || "",
+          country_phone_code: phoneCode || "+1",
+          beneftype: foundBeneficiary.beneftype || "individual",
+          state: foundBeneficiary.state || "",
+          city: foundBeneficiary.city || "",
+          street: foundBeneficiary.street || foundBeneficiary.address || "",
+          postalcode: foundBeneficiary.postalcode || "",
+          relationtobenef: relationValue || "",
+          otherRelationship: foundBeneficiary.otherRelationship || "",
+          nationality_id: nationalityId?.toString() || "",
+          status: foundBeneficiary.status || 1,
+          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
+          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
+          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
+          currency: foundBeneficiary.currency || "USD",
+          banks: foundBeneficiary.banks || [],
+        };
+
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
+
+        state.emailSearch.data = cleanData;
+        state.emailSearch.exists = true;
+        state.emailSearch.searched = true;
+      } else {
+        state.emailSearch = {
+          ...initialState.emailSearch,
+          searched: true,
+          exists: false,
+        };
+      }
+
+      state.emailSearch.loading = false;
+      state.emailSearch.error = null;
+    },
+
     // Clear errors
     clearError: (state) => {
       state.error = null;
       state.editError = null;
       state.deleteState.error = null;
       state.codeLookupError = null;
+      state.createState.error = null;
     },
 
     // Clear success messages
     clearSuccess: (state) => {
       state.success = false;
+      state.createState.success = false;
     },
 
     // Reset state
@@ -471,12 +958,34 @@ const beneficiarySlice = createSlice({
       state.error = null;
       state.success = false;
       state.deleteState.error = null;
+      state.createState.error = null;
     },
 
     clearEditState: (state) => {
       state.editLoading = false;
       state.editError = null;
       state.beneficiaryDetails = null;
+    },
+
+    // Clear create state
+    clearCreateState: (state) => {
+      console.log("🧹 Clearing create state");
+      state.createState.loading = false;
+      state.createState.error = null;
+      state.createState.success = false;
+      state.createState.lastCreatedId = null;
+    },
+
+    // Clear create error only
+    clearCreateError: (state) => {
+      state.createState.error = null;
+    },
+
+    // Clear create success only
+    clearCreateSuccess: (state) => {
+      console.log("🧹 Clearing create success");
+      state.createState.success = false;
+      state.createState.lastCreatedId = null;
     },
 
     // Selected beneficiary management
@@ -510,6 +1019,30 @@ const beneficiarySlice = createSlice({
       state.codeLookupError = null;
     },
 
+    // Set email search as processed
+    setEmailSearchProcessed: (state) => {
+      if (state.emailSearch) {
+        state.emailSearch.processed = true;
+      }
+    },
+
+    // Set phone search as processed
+    setPhoneSearchProcessed: (state) => {
+      if (state.phoneSearch) {
+        state.phoneSearch.processed = true;
+      }
+    },
+
+    // Clear phone search
+    clearPhoneSearch: (state) => {
+      state.phoneSearch = initialState.phoneSearch;
+    },
+
+    // Clear email search
+    clearEmailSearch: (state) => {
+      state.emailSearch = initialState.emailSearch;
+    },
+
     // Reset beneficiaries list
     resetBeneficiaries: (state) => {
       state.beneficiaries = [];
@@ -524,6 +1057,7 @@ const beneficiarySlice = createSlice({
       state.filterVisibility = "all";
       state.currentPage = 1;
       state.deleteState = initialState.deleteState;
+      state.createState = initialState.createState;
     },
 
     // Update beneficiary in list
@@ -548,6 +1082,8 @@ const beneficiarySlice = createSlice({
       } else {
         state.beneficiaries = [newBeneficiary];
       }
+      state.success = true;
+      state.lastUpdated = new Date().toISOString();
     },
 
     // Search, filter and pagination
@@ -612,13 +1148,42 @@ const beneficiarySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // ===================== CREATE AND ADD BENEFICIARY =====================
+      .addCase(createAndAddBeneficiary.pending, (state) => {
+        console.log("⏳ createAndAddBeneficiary PENDING");
+        state.createState.loading = true;
+        state.createState.error = null;
+        state.createState.success = false;
+        state.createState.lastCreatedId = null;
+      })
+      .addCase(createAndAddBeneficiary.fulfilled, (state, action) => {
+        console.log("✅ createAndAddBeneficiary FULFILLED", action.payload);
+        state.createState.loading = false;
+        state.createState.success = true;
+        state.createState.lastCreatedId = action.payload.beneficiaryId;
+        state.createState.error = null;
+
+        // Also set the main success flag for backward compatibility
+        state.success = true;
+        state.lastUpdated = new Date().toISOString();
+
+        console.log("🏁 createState after success:", state.createState);
+      })
+      .addCase(createAndAddBeneficiary.rejected, (state, action) => {
+        console.error("❌ createAndAddBeneficiary REJECTED:", action.payload);
+        state.createState.loading = false;
+        state.createState.error = action.payload;
+        state.createState.success = false;
+        state.createState.lastCreatedId = null;
+      })
+
       // ===================== FETCH BENEFICIARIES =====================
       .addCase(fetchBeneficiaries.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false
         const beneficiariesData = Array.isArray(action.payload)
           ? action.payload
           : action.payload.data || [];
@@ -631,7 +1196,7 @@ const beneficiarySlice = createSlice({
         }
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false even on error
         state.error = action.payload;
       })
 
@@ -646,7 +1211,6 @@ const beneficiarySlice = createSlice({
         state.beneficiaryDetails = action.payload;
         state.editError = null;
 
-        // Also update beneficiaryBanks if needed for remittance
         if (action.payload && action.payload.benef_banks) {
           state.beneficiaryBanks = action.payload.benef_banks;
         }
@@ -865,6 +1429,9 @@ export const {
   clearSuccess,
   resetState,
   clearEditState,
+  clearCreateState,
+  clearCreateError,
+  clearCreateSuccess,
   setSelectedBeneficiary,
   clearSelectedBeneficiary,
   setSelectedBank,
@@ -884,6 +1451,12 @@ export const {
   updateBulkDeleteProgress,
   clearDeleteState,
   clearUndoState,
+  searchBeneficiaryByEmail,
+  clearEmailSearch,
+  setEmailSearchProcessed,
+  searchBeneficiaryByPhone,
+  clearPhoneSearch,
+  setPhoneSearchProcessed,
 } = beneficiarySlice.actions;
 
 // ===================== SELECTOR DEFINITIONS =====================
@@ -898,6 +1471,16 @@ export const selectBeneficiariesSuccess = (state) =>
   state.beneficiaries.success;
 export const selectBeneficiariesLastUpdated = (state) =>
   state.beneficiaries.lastUpdated;
+
+// Create state selectors
+export const selectCreateLoading = (state) =>
+  state.beneficiaries.createState.loading;
+export const selectCreateError = (state) =>
+  state.beneficiaries.createState.error;
+export const selectCreateSuccess = (state) =>
+  state.beneficiaries.createState.success;
+export const selectLastCreatedId = (state) =>
+  state.beneficiaries.createState.lastCreatedId;
 
 // Edit beneficiary selectors
 export const selectEditBeneficiaryLoading = (state) =>
@@ -944,9 +1527,31 @@ export const selectUndoAvailable = (state) =>
 export const selectUndoData = (state) =>
   state.beneficiaries.deleteState.undoData;
 
-// ===================== UTILITY SELECTORS (Define these BEFORE memoized ones) =====================
+// Email search selectors
+export const selectEmailSearch = (state) => state.beneficiaries.emailSearch;
+export const selectEmailSearchLoading = (state) =>
+  state.beneficiaries.emailSearch.loading;
+export const selectEmailExists = (state) =>
+  state.beneficiaries.emailSearch.exists;
+export const selectEmailSearchData = (state) =>
+  state.beneficiaries.emailSearch.data;
+export const selectEmailSearchProcessed = (state) =>
+  state.beneficiaries.emailSearch.processed;
 
-// Visible beneficiaries (non-memoized)
+// Phone search selectors
+export const selectPhoneSearch = (state) => state.beneficiaries.phoneSearch;
+export const selectPhoneSearchLoading = (state) =>
+  state.beneficiaries.phoneSearch.loading;
+export const selectPhoneExists = (state) =>
+  state.beneficiaries.phoneSearch.exists;
+export const selectPhoneSearchData = (state) =>
+  state.beneficiaries.phoneSearch.data;
+export const selectPhoneSearchProcessed = (state) =>
+  state.beneficiaries.phoneSearch.processed;
+
+// ===================== UTILITY SELECTORS =====================
+
+// Visible beneficiaries
 export const selectVisibleBeneficiaries = (state) =>
   (state.beneficiaries.beneficiaries || []).filter(
     (beneficiary) =>
@@ -1051,7 +1656,7 @@ export const selectVisibleBeneficiariesCount = createSelector(
 
 // ===================== REMITTANCE-SPECIFIC SELECTORS =====================
 
-// Selector for remittance-ready beneficiaries (with formatted labels)
+// Selector for remittance-ready beneficiaries
 export const selectRemittanceReadyBeneficiaries = createSelector(
   [selectBeneficiaries],
   (beneficiaries) => {
@@ -1089,7 +1694,7 @@ export const selectBeneficiaryForRemittance = (beneficiaryId) =>
     };
   });
 
-// Remittance-ready beneficiary banks (with formatted labels)
+// Remittance-ready beneficiary banks
 export const selectRemittanceReadyBanks = createSelector(
   [selectBeneficiaryBanks],
   (banks) => {
@@ -1104,17 +1709,6 @@ export const selectRemittanceReadyBanks = createSelector(
       }) - ${bank.rails || "Unknown"}`,
     }));
   }
-);
-
-// Remittance-specific counts
-export const selectRemittanceReadyBeneficiariesCount = createSelector(
-  [selectRemittanceReadyBeneficiaries],
-  (remittanceReadyBeneficiaries) => remittanceReadyBeneficiaries.length
-);
-
-export const selectRemittanceReadyBanksCount = createSelector(
-  [selectRemittanceReadyBanks],
-  (remittanceReadyBanks) => remittanceReadyBanks.length
 );
 
 // ===================== DEFAULT EXPORT =====================

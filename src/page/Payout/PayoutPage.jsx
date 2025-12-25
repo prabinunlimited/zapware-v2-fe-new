@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
-import { ClipLoader, RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
 import { apiCoordinator } from "../../services/api";
@@ -349,6 +349,9 @@ const PayoutPage = () => {
       payment_method: formValues.transaction_type,
       benef_bank_account: formValues.benef_bank_account,
       description: formValues.description,
+      ...(formValues.to === "AED" || formValues.to === "KES"
+        ? { promo_code: formValues.promo_code || "" }
+        : {}),
     };
 
     dispatch(convertCurrency(payload));
@@ -409,6 +412,7 @@ const PayoutPage = () => {
 
         if (
           serviceProviderId !== 27 &&
+          serviceProviderId !== 24 &&
           ((formValues.from === "GBP" && formValues.to === "GBP") ||
             (formValues.from === "GBP" && formValues.to === "DKK") ||
             (formValues.from === "GBP" && formValues.to === "EUR") ||
@@ -471,7 +475,7 @@ const PayoutPage = () => {
     formData.append("convertedValue", convertedValue);
     formData.append("amount", formValues.value);
     formData.append("purpose", formValues.purpose);
-    formData.append("promo_code", formValues.promocode);
+    formData.append("promo_code", formValues.promo_code || "");
     formData.append("convertedId", convertedId);
     formData.append("currency", formValues.to);
     formData.append("source_currency", formValues.from);
@@ -543,6 +547,7 @@ const PayoutPage = () => {
       USD: ["swift", "bank"],
       NPR: ["bank"],
       INR: ["bank"],
+      CAD: ["bank"],
       KES: ["bank"],
       AED: ["bank"],
       PKR: ["bank"],
@@ -631,8 +636,9 @@ const PayoutPage = () => {
 
   const showTransferPurposeField = () => {
     if (
-      ["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
-      toServiceProviderInr === 27
+      (["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
+        toServiceProviderInr === 27) ||
+      toServiceProviderInr === 24
     )
       return true;
     if (
@@ -935,17 +941,17 @@ const PayoutPage = () => {
                 {["AED", "KES"].includes(formValues.to) && (
                   <div>
                     <label
-                      htmlFor="promocode"
+                      htmlFor="promo_code"
                       className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                     >
                       Promocode (optional)
                     </label>
                     <input
                       type="text"
-                      name="promocode"
-                      value={formValues.promocode}
+                      name="promo_code"
+                      value={formValues.promo_code}
                       onChange={handleChange}
-                      placeholder="Enter promocode"
+                      placeholder="Enter Promocode"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
                     />
                   </div>
@@ -1076,7 +1082,8 @@ const PayoutPage = () => {
                           <option value="10">SALARY</option>
                           <option value="11">TAX PAYMENT</option>
                         </>
-                      ) : toServiceProviderInr === 27 ? (
+                      ) : toServiceProviderInr === 27 ||
+                        toServiceProviderInr === 24 ? (
                         <>
                           <option value="FAM">Family Maintenance</option>
                           <option value="SAV">SAVINGS</option>
@@ -1191,16 +1198,18 @@ const PayoutPage = () => {
                     <option value="">Select a bank account</option>
                     {safeBeneficiaryBanks.map((bank) => (
                       <option key={bank.id} value={bank.id}>
-                        {bank.payment_method === "Swift"
-                          ? `${bank.benef_iban || "N/A"} - ${
-                              bank.swift || "N/A"
-                            }`
+                        {bank.payment_method === "swift"
+                          ? formValues.to === "USD" || formValues.to === "CAD"
+                            ? `[Swift] ${bank.bank_acc_no || "N/A"}` // Display bank_acc_no for USD and CAD
+                            : `[Swift] ${bank.benef_iban || "N/A"} - ${
+                                bank.swift || "N/A"
+                              }` // For other currencies, display IBAN and Swift code
                           : bank.rails === "Card"
-                          ? `(${bank.rails}) ${bank.bank_name} - ${
+                          ? `[Card] (${bank.rails}) ${bank.bank_name} - ${
                               bank.card_number || "N/A"
                             }`
                           : bank.bank_acc_no
-                          ? `${bank.bank_name} - ${bank.bank_acc_no}`
+                          ? `[Local] ${bank.bank_acc_no}`
                           : `${bank.benef_iban || "N/A"}`}
                       </option>
                     ))}
@@ -1278,7 +1287,7 @@ const PayoutPage = () => {
               >
                 {loading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={20} className="mr-3" />
+                    <RingLoader color="#ffffff" size={20} className="mr-3" />
                     Processing...
                   </>
                 ) : (

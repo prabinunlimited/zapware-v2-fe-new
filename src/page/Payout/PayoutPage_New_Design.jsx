@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
-import { ClipLoader, RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
 
@@ -1256,7 +1256,7 @@ const PayoutPage = () => {
               >
                 {loading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={20} className="mr-3" />
+                    <RingLoader color="#ffffff" size={20} className="mr-3" />
                     Processing...
                   </>
                 ) : (

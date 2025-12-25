@@ -1,5 +1,5 @@
-// src/page/Deposit/components/PaymentInitiation/PaymentInitiation.jsx - COMPLETE FIXED
-import React, { useEffect, useState, useCallback } from "react";
+// src/page/Deposit/components/PaymentInitiation/PaymentInitiation.jsx
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -27,6 +27,7 @@ const PaymentInitiation = ({
   onSuccess,
 }) => {
   const navigate = useNavigate();
+  const plaidLinkInitialized = useRef(false);
 
   const [linkToken, setLinkToken] = useState(null);
   const [transId, setTransId] = useState(null);
@@ -48,6 +49,7 @@ const PaymentInitiation = ({
     setError(null);
     setCurrentStep(1);
     setBankConnected(false);
+    plaidLinkInitialized.current = false;
   }, [onClose]);
 
   // Debug logging
@@ -63,6 +65,7 @@ const PaymentInitiation = ({
       linkTokenExists: !!linkToken,
       loading,
       currentStep,
+      authTokenExists: !!authToken,
     });
   }, [
     showPaymentInitiation,
@@ -75,50 +78,45 @@ const PaymentInitiation = ({
     linkToken,
     loading,
     currentStep,
+    authToken,
   ]);
+
+  // Validate transaction data
+  const validateTransaction = () => {
+    if (!selectedCurrency) {
+      throw new Error("Please select a currency");
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      throw new Error("Please enter a valid amount");
+    }
+
+    if (transactionType === "remittance") {
+      if (!selectedBeneficiary) {
+        throw new Error("Please select a beneficiary for remittance");
+      }
+      if (!selectedBeneficiaryBank) {
+        throw new Error("Please select beneficiary bank for remittance");
+      }
+    }
+  };
 
   // Fetch link token when showPaymentInitiation becomes true
   useEffect(() => {
     const fetchLinkToken = async () => {
-      if (!showPaymentInitiation) return;
+      if (!showPaymentInitiation || !customerId || plaidLinkInitialized.current) {
+        return;
+      }
 
       console.log(`🔄 Starting ${transactionType} flow...`);
       setLoading(true);
       setError(null);
       setCurrentStep(1);
 
-      // Validate inputs
-      if (!selectedCurrency) {
-        setError("Please select a currency");
-        toast.error("Please select a currency");
-        setLoading(false);
-        return;
-      }
-
-      if (!amount || parseFloat(amount) <= 0) {
-        setError("Please enter a valid amount");
-        toast.error("Please enter a valid amount");
-        setLoading(false);
-        return;
-      }
-
-      // Additional validation for remittances
-      if (transactionType === "remittance") {
-        if (!selectedBeneficiary) {
-          setError("Please select a beneficiary for remittance");
-          toast.error("Please select a beneficiary for remittance");
-          setLoading(false);
-          return;
-        }
-        if (!selectedBeneficiaryBank) {
-          setError("Please select beneficiary bank for remittance");
-          toast.error("Please select beneficiary bank for remittance");
-          setLoading(false);
-          return;
-        }
-      }
-
       try {
+        // Validate inputs
+        validateTransaction();
+
         console.log("🔄 Fetching Plaid Link token...");
 
         // Build payload based on transaction type
@@ -127,191 +125,114 @@ const PaymentInitiation = ({
           amount: {
             currency: selectedCurrency,
             value: parseFloat(amount),
-            paymentType: paymentMethod,
-            bank_id: null, // Will be populated based on transaction type
-            benef_account: null, // For remittances
-            benef_bank_account: null, // For remittances
+            paymentType: paymentMethod || "open_banking",
+            bank_id: null,
+            benef_account: null,
+            benef_bank_account: null,
           },
           transaction_type: transactionType,
-          purpose:
-            purpose ||
-            (transactionType === "deposit" ? "deposit" : "remittance"),
+          purpose: purpose || (transactionType === "deposit" ? "deposit" : "remittance"),
         };
 
-        // ✅ Add source account ID for deposits
+        // Add source account ID for deposits
         if (transactionType === "deposit" && selectedBankAccount) {
           payload.amount.bank_id = selectedBankAccount.id;
         }
 
-        // ✅ Add source account ID for deposits
-        if (transactionType === "deposit" && selectedBankAccount) {
-          payload.amount.bank_id = selectedBankAccount.id;
-        }
-
-        // ✅ Add beneficiary data for remittances
-        if (
-          transactionType === "remittance" &&
-          selectedBeneficiary &&
-          selectedBeneficiaryBank
-        ) {
+        // Add beneficiary data for remittances
+        if (transactionType === "remittance" && selectedBeneficiary && selectedBeneficiaryBank) {
           payload.amount.benef_account = selectedBeneficiary.id;
           payload.amount.benef_bank_account = selectedBeneficiaryBank.id;
         }
 
         console.log("📤 Sending payload to /plaidtoken:", payload);
 
+        const headers = {
+          "Content-Type": "application/json",
+          ...(authToken && { Authorization: `Bearer ${authToken}` }),
+        };
+
         const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/plaidtoken`,
+          `${import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api"}/plaidtoken`,
           payload,
           {
-            headers: {
-              "Content-Type": "application/json",
-              ...(authToken && { Authorization: `Bearer ${authToken}` }),
-            },
+            headers,
             timeout: 30000,
+            validateStatus: function (status) {
+              return status >= 200 && status < 500;
+            },
           }
         );
 
-        console.log("✅ /plaidtoken response:", response.data);
-
-        // ✅ FIXED: COMPLETELY REWRITTEN SAFE RESPONSE HANDLING
-        let link_token = null;
-        let transactionId = null;
-
-        // Debug the response structure
-        console.log("🔍 Response structure analysis:", {
-          responseData: response.data,
-          typeOfData: typeof response.data,
-          isObject: response.data && typeof response.data === "object",
-          isArray: Array.isArray(response.data),
-          isNumber: typeof response.data === "number",
-          isString: typeof response.data === "string",
+        console.log("✅ /plaidtoken response:", {
+          status: response.status,
+          data: response.data,
         });
 
-        // Handle different response types safely
-        if (response.data) {
+        // Handle response
+        if (response.status === 200 || response.status === 201) {
           const data = response.data;
+          
+          // Extract link_token from response
+          let link_token = null;
+          let transactionId = null;
 
-          // CASE 1: Data is a string or number (error case)
-          if (typeof data === "string" || typeof data === "number") {
-            console.warn(
-              "⚠️ Response data is primitive type:",
-              typeof data,
-              data
-            );
-            throw new Error(
-              `Unexpected response type: ${typeof data}. Expected object.`
-            );
+          // Try different response structures
+          if (data.link_token) {
+            link_token = data.link_token;
+          } else if (data.data && data.data.link_token) {
+            link_token = data.data.link_token;
+          } else if (data.link) {
+            link_token = data.link;
           }
 
-          // CASE 2: Data is an object
-          if (typeof data === "object" && data !== null) {
-            // Try to find link_token in various possible locations
-            const findLinkToken = (obj, path = "") => {
-              if (!obj || typeof obj !== "object") return null;
+          // Extract transaction ID
+          if (data.transactionId) {
+            transactionId = data.transactionId;
+          } else if (data.transaction_id) {
+            transactionId = data.transaction_id;
+          } else if (data.data && data.data.transactionId) {
+            transactionId = data.data.transactionId;
+          }
 
-              // Direct property
-              if (obj.link_token && typeof obj.link_token === "string") {
-                console.log(`✅ Found link_token at ${path}link_token`);
-                return obj.link_token;
-              }
-
-              // Check nested properties
-              for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                  const value = obj[key];
-                  if (typeof value === "object" && value !== null) {
-                    const found = findLinkToken(value, `${path}${key}.`);
-                    if (found) return found;
-                  }
-                }
-              }
-
-              return null;
-            };
-
-            // Try to find transactionId similarly
-            const findTransactionId = (obj, path = "") => {
-              if (!obj || typeof obj !== "object") return null;
-
-              // Direct property (camelCase)
-              if (obj.transactionId) {
-                console.log(`✅ Found transactionId at ${path}transactionId`);
-                return obj.transactionId;
-              }
-
-              // Direct property (snake_case)
-              if (obj.transaction_id) {
-                console.log(`✅ Found transaction_id at ${path}transaction_id`);
-                return obj.transaction_id;
-              }
-
-              // Check nested properties
-              for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                  const value = obj[key];
-                  if (typeof value === "object" && value !== null) {
-                    const found = findTransactionId(value, `${path}${key}.`);
-                    if (found) return found;
-                  }
-                }
-              }
-
-              return null;
-            };
-
-            // Search for link_token recursively
-            link_token = findLinkToken(data);
-
-            // Search for transactionId recursively
-            transactionId = findTransactionId(data);
-
-            // If we found link_token but not transactionId, try common patterns
-            if (link_token && !transactionId) {
-              // Try common response structures
-              if (data.data && typeof data.data === "object") {
-                if (data.data.transactionId) {
-                  transactionId = data.data.transactionId;
-                } else if (data.data.transaction_id) {
-                  transactionId = data.data.transaction_id;
-                }
-              }
+          if (link_token) {
+            setLinkToken(link_token);
+            setTransId(transactionId);
+            setCurrentStep(2);
+            plaidLinkInitialized.current = true;
+            console.log("✅ Link token received successfully");
+          } else {
+            throw new Error(data.message || "No link token in response");
+          }
+        } else {
+          // Handle error response
+          let errorMsg = "Failed to initialize bank connection";
+          
+          if (typeof response.data === 'string') {
+            // Check if it's a PHP error
+            if (response.data.includes('syntax error') || 
+                response.data.includes('Undefined variable') ||
+                response.data.includes('unexpected token')) {
+              errorMsg = "Server configuration error. Please contact support.";
+            } else {
+              errorMsg = response.data;
             }
+          } else if (response.data && typeof response.data === 'object') {
+            errorMsg = response.data.message || 
+                      response.data.error || 
+                      response.data.details || 
+                      errorMsg;
           }
-        }
-
-        if (!link_token) {
-          // Check if there's an error message in the response
-          let errorMsg = "No link token received from server";
-
-          if (response.data && typeof response.data === "object") {
-            if (response.data.message) {
-              errorMsg = response.data.message;
-            } else if (response.data.error) {
-              errorMsg = response.data.error;
-            } else if (response.data.status === "error") {
-              errorMsg = "Server returned error status";
-            }
-          } else if (typeof response.data === "string") {
-            errorMsg = `Server response: ${response.data}`;
-          }
-
+          
           throw new Error(errorMsg);
         }
-
-        setLinkToken(link_token);
-        setTransId(transactionId);
-        setCurrentStep(2);
-        console.log(
-          "✅ Link token received:",
-          link_token.substring(0, 20) + "..."
-        );
       } catch (error) {
         console.error("❌ Failed to get Plaid Link token:", {
+          name: error.name,
           message: error.message,
+          code: error.code,
           response: error.response?.data,
           status: error.response?.status,
-          config: error.config,
         });
 
         let errorMessage = "Failed to initialize bank connection";
@@ -319,34 +240,35 @@ const PaymentInitiation = ({
         // Parse error message from different sources
         if (error.response?.data) {
           const errorData = error.response.data;
-
-          // Handle different error response formats
+          
           if (typeof errorData === "string") {
-            errorMessage = errorData;
-          } else if (typeof errorData === "object") {
-            if (errorData.message) {
-              errorMessage = errorData.message;
-            } else if (errorData.error) {
-              errorMessage = errorData.error;
-            } else if (errorData.details) {
-              errorMessage = errorData.details;
+            // Check for PHP syntax errors
+            if (errorData.includes('syntax error') || 
+                errorData.includes('unexpected token') ||
+                errorData.includes('Undefined variable')) {
+              errorMessage = "Server configuration error. Please contact support.";
+            } else {
+              errorMessage = errorData.substring(0, 100); // Limit length
             }
+          } else if (typeof errorData === "object") {
+            errorMessage = errorData.message || 
+                          errorData.error || 
+                          errorData.details || 
+                          errorMessage;
           }
         } else if (error.request) {
-          errorMessage =
-            "No response from server. Please check your connection.";
+          errorMessage = "No response from server. Please check your connection.";
+        } else if (error.code === 'ERR_NETWORK') {
+          errorMessage = "Network error. Please check your internet connection.";
         } else {
           errorMessage = error.message || errorMessage;
         }
 
-        // Clean up error message if it contains PHP error
-        if (
-          errorMessage.includes(
-            "Trying to access array offset on value of type"
-          )
-        ) {
-          errorMessage = "Server configuration error. Please contact support.";
-        }
+        // Clean up any HTML or PHP error messages
+        errorMessage = errorMessage
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/Parse error:|syntax error,|unexpected token/gi, 'Server error:')
+          .substring(0, 150); // Limit message length
 
         setError(errorMessage);
         toast.error(errorMessage);
@@ -356,7 +278,7 @@ const PaymentInitiation = ({
       }
     };
 
-    if (showPaymentInitiation) {
+    if (showPaymentInitiation && customerId) {
       fetchLinkToken();
     }
   }, [
@@ -370,6 +292,7 @@ const PaymentInitiation = ({
     selectedBankAccount,
     customerId,
     authToken,
+    paymentMethod,
   ]);
 
   // Plaid Link configuration
@@ -395,13 +318,19 @@ const PaymentInitiation = ({
           amount: {
             currency: selectedCurrency,
             value: parseFloat(amount),
-            paymentType: paymentMethod,
+            paymentType: paymentMethod || "open_banking",
             bank_id:
               transactionType === "deposit" && selectedBankAccount
                 ? selectedBankAccount.id
                 : null,
-            benef_account: null, // Deposits don't have beneficiary
-            benef_bank_account: null, // Deposits don't have beneficiary bank
+            benef_account:
+              transactionType === "remittance" && selectedBeneficiary
+                ? selectedBeneficiary.id
+                : null,
+            benef_bank_account:
+              transactionType === "remittance" && selectedBeneficiaryBank
+                ? selectedBeneficiaryBank.id
+                : null,
           },
           transaction_type: transactionType,
           purpose:
@@ -413,7 +342,7 @@ const PaymentInitiation = ({
 
         // Call backend to complete the transaction
         const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/plaid/open-banking-success`,
+          `${import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api"}/plaid/open-banking-success`,
           successData,
           {
             headers: {
@@ -455,7 +384,7 @@ const PaymentInitiation = ({
             const destination =
               transactionType === "deposit"
                 ? `/dashboard/${customerId}`
-                : `/remittance/success/${transId}`;
+                : `/remittance/success/${transId || 'success'}`;
 
             navigate(destination, {
               state: {
@@ -488,14 +417,14 @@ const PaymentInitiation = ({
 
         // Clean up PHP errors
         if (
-          errorMessage.includes(
-            "Trying to access array offset on value of type"
-          )
+          errorMessage.includes("syntax error") ||
+          errorMessage.includes("unexpected token") ||
+          errorMessage.includes("Undefined variable")
         ) {
           errorMessage = "Server configuration error. Please contact support.";
         }
 
-        toast.error(errorMessage);
+        toast.error(errorMessage.substring(0, 100));
 
         // Still call onSuccess but with error flag
         if (onSuccess) {
@@ -524,15 +453,19 @@ const PaymentInitiation = ({
 
       if (err) {
         console.error("Plaid Link error:", err);
-        toast.error("Bank connection was cancelled or failed");
+        const errorMsg = err.display_message || err.error_message || "Bank connection failed";
+        toast.error(errorMsg);
 
         if (onSuccess) {
           onSuccess({
             success: false,
-            error: err.message || "Connection cancelled",
+            error: errorMsg,
             transactionType,
           });
         }
+      } else if (metadata && metadata.status === "requires_credentials") {
+        console.log("User needs to re-enter credentials");
+        toast.info("Please re-enter your banking credentials");
       } else {
         console.log("User exited Plaid Link without error");
       }
@@ -562,6 +495,9 @@ const PaymentInitiation = ({
         case "TRANSITION_VIEW":
           console.log("View transitioned:", metadata.view_name);
           break;
+        case "SUCCESS":
+          console.log("Bank connection successful");
+          break;
       }
     },
   };
@@ -575,13 +511,21 @@ const PaymentInitiation = ({
       linkToken &&
       showPaymentInitiation &&
       currentStep === 2 &&
-      !bankConnected
+      !bankConnected &&
+      !plaidError
     ) {
       console.log("🚀 Opening Plaid Link...");
       // Small delay to ensure UI is ready
       const timer = setTimeout(() => {
-        open();
-      }, 1000);
+        try {
+          open();
+        } catch (openError) {
+          console.error("Failed to open Plaid Link:", openError);
+          setError("Failed to open bank connection");
+          toast.error("Failed to open bank connection");
+          handleClose();
+        }
+      }, 500);
 
       return () => clearTimeout(timer);
     }
@@ -661,6 +605,12 @@ const PaymentInitiation = ({
               If the connection doesn't open automatically, please check your
               pop-up blocker.
             </p>
+            <button
+              onClick={handleClose}
+              className="mt-6 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       </div>
@@ -789,6 +739,7 @@ PaymentInitiation.defaultProps = {
   selectedBeneficiary: null,
   selectedBankAccount: null,
   purpose: "",
+  paymentMethod: "open_banking",
 };
 
 export default PaymentInitiation;

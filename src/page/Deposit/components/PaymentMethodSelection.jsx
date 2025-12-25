@@ -10,7 +10,7 @@ import {
   FaLink,
 } from "react-icons/fa";
 import { FiHelpCircle } from "react-icons/fi";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import PaymentMethodCard from "./PaymentMethodCard";
 
 const PaymentMethodSelection = ({
@@ -55,10 +55,10 @@ const PaymentMethodSelection = ({
       },
       bank_deposit: {
         value: "bank_deposit",
-        label: "Link Bank Account",
+        label: "Bank Transfer",
         icon: <FaLink />,
-        description: "Connect your US bank account via Plaid",
-        help: "Link your US bank account using Plaid integration to enable secure USD deposits and transfers. Available for USD currency only.",
+        description: "Instant transfer via bank",
+        help: "Secure bank transfer from your bank to enable secure USD deposits and transfers. Available for USD currency only.",
       },
     };
 
@@ -89,10 +89,13 @@ const PaymentMethodSelection = ({
       EUR: ["card_deposit", "manual_deposit", "bank_transfer"],
       GBP: ["card_deposit", "manual_deposit", "bank_transfer"],
       DKK: ["card_deposit", "manual_deposit", "bank_transfer"],
-      AED: ["manual_deposit"],
+      AED: ["manual_deposit", "card_deposit"],
     };
 
-    const allowedMethods = defaultMethods[selectedCurrency] || ["card_deposit", "manual_deposit"];
+    const allowedMethods = defaultMethods[selectedCurrency] || [
+      "card_deposit",
+      "manual_deposit",
+    ];
     return allowedMethods
       .filter((method) => paymentMethodDefinitions[method])
       .map((method) => paymentMethodDefinitions[method]);
@@ -113,7 +116,7 @@ const PaymentMethodSelection = ({
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-xl"
       >
-        <ClipLoader color="#3B82F6" size={30} className="mb-4" />
+        <RingLoader color="#3B82F6" size={30} className="mb-4" />
         <p className="text-gray-600 font-medium">Loading payment methods...</p>
         <p className="text-gray-500 text-sm mt-1">
           Fetching available options for {selectedCurrency}
@@ -139,15 +142,29 @@ const PaymentMethodSelection = ({
       {selectedCurrency === "USD" && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-700">
-            <strong>USD Deposits:</strong> Use "Link Bank Account" to connect your US bank via Plaid
+            <strong>USD Deposits:</strong> Use "Link Bank Account" to connect
+            your US bank via Plaid
           </p>
         </div>
       )}
-      
-      {(selectedCurrency === "EUR" || selectedCurrency === "GBP" || selectedCurrency === "DKK") && (
+
+      {(selectedCurrency === "EUR" ||
+        selectedCurrency === "GBP" ||
+        selectedCurrency === "DKK") && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-sm text-green-700">
-            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer" for instant Open Banking transfers
+            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer"
+            for instant Open Banking transfers
+          </p>
+        </div>
+      )}
+
+      {/* ✅ ADD: AED-specific hint */}
+      {selectedCurrency === "AED" && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm text-purple-700">
+            <strong>AED Deposits:</strong> Use "Card Deposit" for instant
+            payment or "Manual Deposit" for bank transfer
           </p>
         </div>
       )}

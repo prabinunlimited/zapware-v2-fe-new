@@ -1,7 +1,7 @@
 // ConversionPage.jsx - Premium Fintech UI/UX
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 import { useConversion } from "./hook/useConversion";
 import ConversionPopup from "../../components/PopupModal/ConversionPopup";
@@ -489,7 +489,7 @@ const ConversionPage = () => {
                 >
                   {isConverting ? (
                     <div className="flex items-center justify-center">
-                      <ClipLoader size={24} color="#ffffff" className="mr-3" />
+                      <RingLoader size={24} color="#ffffff" className="mr-3" />
                       <span>Converting...</span>
                     </div>
                   ) : (
@@ -654,7 +654,7 @@ const ConversionPage = () => {
                     >
                       {isSubmitting ? (
                         <div className="flex items-center justify-center">
-                          <ClipLoader
+                          <RingLoader
                             size={20}
                             color="#ffffff"
                             className="mr-2"

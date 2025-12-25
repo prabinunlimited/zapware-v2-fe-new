@@ -1,5 +1,5 @@
 import React from "react";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 const TermsAndConditions = ({ 
   termsConditions, 
@@ -14,7 +14,7 @@ const TermsAndConditions = ({
       </h3>
       {loading ? (
         <div className="flex items-center">
-          <ClipLoader color="#0284c7" size={16} className="mr-2" />
+          <RingLoader color="#0284c7" size={16} className="mr-2" />
           <p className="text-sm text-gray-500">Loading terms...</p>
         </div>
       ) : termsConditions && termsConditions.length > 0 ? (

@@ -1,515 +1,632 @@
-// src/page/Deposit/components/Card/CardPayment.jsx - FIXED WITH CORRECT CLIENT KEY
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import axios from "axios";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { motion } from "framer-motion";
+import axios from "axios";
 import {
-  FaUniversity,
   FaCreditCard,
   FaExclamationTriangle,
   FaCheckCircle,
+  FaLock,
+  FaShieldAlt,
 } from "react-icons/fa";
-import { FiArrowLeft, FiDownload, FiCheckCircle, FiInfo } from "react-icons/fi";
+import { FiArrowLeft, FiShield, FiAlertCircle } from "react-icons/fi";
+import { getBearerToken } from "../../../../services/authService";
 
 export default function CardPayment() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state;
+
+  // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [adyenLoaded, setAdyenLoaded] = useState(false);
-  const [adyenComponent, setAdyenComponent] = useState(null);
-  const [sessionData, setSessionData] = useState(null);
+  const [checkoutReady, setCheckoutReady] = useState(false);
 
-  useEffect(() => {
-    if (sessionData) {
-      console.log("🔍 Session Data Debug:", {
-        id: sessionData.id,
-        sessionData: sessionData.sessionData
-          ? `${sessionData.sessionData.substring(0, 50)}...`
-          : "MISSING",
-        amount: sessionData.amount,
-        hasRawSession: !!sessionData.rawSession,
-      });
+  // Refs
+  const checkoutRef = useRef(null);
+  const dropinInstance = useRef(null);
+  const containerRef = useRef(null);
+  const isMounted = useRef(false);
+  const initializationStarted = useRef(false);
 
-      // Check if sessionData is properly formatted
-      if (!sessionData.sessionData) {
-        console.error("🚨 CRITICAL: sessionData is missing from API response!");
-        setError(
-          "Payment session configuration error. Please contact support."
-        );
-      }
-    }
-  }, [sessionData, setError]);
-
-  console.log("🔍 CardPayment received state:", state);
-  console.log("🎯 Currency:", state?.currency);
-
-  const API_URL =
-    import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api";
-
-  // ✅ CRITICAL FIX: Get the correct Adyen configuration that matches your backend
+  // 🔥 Configuration with YOUR domain
   const getAdyenConfig = () => {
-    // Your backend is using LIVE environment - use the correct LIVE client key
-    const LIVE_CLIENT_KEY = "live_MDVSR7AQ75GT3JUGNXHL2Y7X4AN3OY6J"; // ✅ From your setup call
-
     return {
-      clientKey: LIVE_CLIENT_KEY,
-      environment: "live", // ✅ Must match your backend
-      resourcesUrl: "https://checkoutshopper-live.adyen.com/checkoutshopper/",
+      environment: "live",
+      isLive: true,
+      clientKey: "live_MDVSR7AQ75GT3JUGNXHL2Y7X4AN3OY6J",
+      checkoutUrl: "https://checkoutshopper-live.adyen.com",
+      customUrl: "267ad19785000936-UnlimitedRemit",
+      sdkVersion: "5.62.0",
+      apiUrl: "https://zapware.unlimitedremit.com/api",
+      origin: "https://ourzap-v2.unlimitedremit.com", // 👈 YOUR DOMAIN
+      merchantAccount: "UnlimitedRemitECOM", // Your merchant account
     };
   };
 
-  const adyenConfig = getAdyenConfig();
-  console.log("🔧 Adyen Configuration:", {
-    ...adyenConfig,
-    clientKey: adyenConfig.clientKey
-      ? `${adyenConfig.clientKey.substring(0, 10)}...`
-      : "MISSING",
-  });
+  // Get auth token
+  const getAuthToken = async () => {
+    try {
+      const token = await getBearerToken(false);
+      if (token && token.trim()) {
+        return token.trim();
+      }
 
-  const getBearerToken = () => {
-    return (
-      localStorage.getItem("authToken") || localStorage.getItem("authtoken")
-    );
-  };
+      const storedToken = localStorage.getItem("authtoken");
+      if (storedToken && storedToken.trim()) {
+        return storedToken.trim().replace(/^Bearer\s+/i, "");
+      }
 
-  // Get authentication token
-  const getAuthToken = () => {
-    return (
-      localStorage.getItem("authToken") || localStorage.getItem("authtoken")
-    );
+      throw new Error("Authentication required");
+    } catch (error) {
+      throw new Error("Session expired");
+    }
   };
 
   // Get customer ID
   const getCustomerId = () => {
-    return localStorage.getItem("customerId") || state?.customerId;
+    return (
+      state?.customerId ||
+      localStorage.getItem("authcustomer_id") ||
+      localStorage.getItem("customerId")
+    );
   };
 
-  // 🚨 CRITICAL FIX: Different logic for USD vs GBP/other currencies
-  const shouldUseBankAccounts = () => {
-    // ONLY USD requires SILA bank accounts for card deposits
-    return state?.currency === "USD";
+  // 🔥 Load Adyen SDK
+  const loadAdyenSDK = () => {
+    return new Promise((resolve, reject) => {
+      const config = getAdyenConfig();
+
+      if (window.AdyenCheckout && typeof window.AdyenCheckout === "function") {
+        console.log("✅ Adyen SDK already loaded");
+        resolve();
+        return;
+      }
+
+      // Clear existing scripts
+      document
+        .querySelectorAll('script[src*="adyen.com"]')
+        .forEach((el) => el.remove());
+      document
+        .querySelectorAll('link[href*="adyen.com"]')
+        .forEach((el) => el.remove());
+
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Payment system loading timeout"));
+      }, 15000);
+
+      // Load CSS
+      const cssLink = document.createElement("link");
+      cssLink.rel = "stylesheet";
+      cssLink.href = `${config.checkoutUrl}/checkoutshopper/sdk/${config.sdkVersion}/adyen.css`;
+      cssLink.crossOrigin = "anonymous";
+      cssLink.onerror = () => console.warn("CSS failed to load, continuing...");
+      document.head.appendChild(cssLink);
+
+      // Load JS
+      const script = document.createElement("script");
+      script.src = `${config.checkoutUrl}/checkoutshopper/sdk/${config.sdkVersion}/adyen.js`;
+      script.crossOrigin = "anonymous";
+      script.async = true;
+
+      script.onload = () => {
+        clearTimeout(timeoutId);
+
+        const checkAdyenLoaded = () => {
+          if (
+            window.AdyenCheckout &&
+            typeof window.AdyenCheckout === "function"
+          ) {
+            console.log("✅ Adyen SDK loaded successfully");
+            resolve();
+          } else {
+            console.log("⏳ Waiting for AdyenCheckout...");
+            setTimeout(checkAdyenLoaded, 100);
+          }
+        };
+
+        checkAdyenLoaded();
+      };
+
+      script.onerror = (error) => {
+        clearTimeout(timeoutId);
+        console.error("❌ Adyen SDK failed to load:", error);
+        reject(new Error(`Failed to load payment system: ${error.message}`));
+      };
+
+      document.head.appendChild(script);
+    });
   };
 
-  // Function to fetch bank accounts - ONLY FOR USD
-  const fetchBankAccounts = async () => {
-    if (!shouldUseBankAccounts()) {
-      console.log(
-        "🔄 Skipping bank account fetch for non-USD currency:",
-        state?.currency
-      );
-      return [];
-    }
-
+  // 🔥 Create Adyen session with URL fixing
+  const createAdyenSession = async () => {
     try {
-      const token = getAuthToken();
+      const config = getAdyenConfig();
+      const token = await getAuthToken();
       const customerId = getCustomerId();
 
       if (!token || !customerId) {
         throw new Error("Authentication required");
       }
 
-      console.log(
-        "🔄 Fetching SILA bank accounts for USD customer:",
-        customerId
-      );
+      if (!state?.amount || !state?.currency) {
+        throw new Error("Missing payment details");
+      }
+
+      const payload = {
+        customerId,
+        amount: parseFloat(state.amount),
+        currency: state.currency,
+        environment: config.environment,
+        origin: config.origin,
+        purpose: state.purpose || "Deposit",
+        returnUrl: `${config.origin}/card/success`,
+      };
+
+      console.log("🔍 Sending to backend:", JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
-        `https://zapware.unlimitedremit.com/api/sila/manual-sila-bankdetails`,
-        { customerId },
+        `${config.apiUrl}/adyen/session`,
+        payload,
         {
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-          timeout: 15000,
+          timeout: 30000,
         }
       );
 
-      console.log("✅ SILA bank accounts response:", response.data);
+      console.log("✅ Backend response received");
 
-      // Handle response structure
-      let accounts = [];
-      const data = response.data;
-
-      if (Array.isArray(data)) {
-        accounts = data;
-      } else if (data?.data) {
-        accounts = Array.isArray(data.data) ? data.data : [data.data];
-      } else if (data?.status === "success") {
-        accounts = data.data || [];
+      if (!response.data?.session) {
+        throw new Error("No session data received from payment server");
       }
 
-      console.log(`💰 Found ${accounts.length} SILA bank accounts for USD`);
-      return accounts;
-    } catch (error) {
-      console.error("❌ Error fetching SILA bank accounts:", error);
-      return [];
-    }
-  };
+      const session = response.data.session;
 
-  // ✅ FIXED: Create Adyen session
-  const createAdyenSession = async (bankAccount = null) => {
-    try {
-      const bearertoken = getBearerToken();
-      const customerId = getCustomerId();
-
-      if (!bearertoken || !customerId) {
-        throw new Error("Authentication required. Please log in again.");
+      // 🔥 CRITICAL: Check for wrong domain in sessionData
+      let fixedSessionData = session.sessionData;
+      if (session.sessionData && session.sessionData.includes("your-company.com")) {
+        console.warn("⚠️ Found 'your-company.com' in sessionData, attempting to fix...");
+        // Try to replace the wrong domain with our domain
+        fixedSessionData = session.sessionData.replace(
+          /your-company\.com/g, 
+          "ourzap-v2.unlimitedremit.com"
+        );
+        console.log("✅ Attempted to fix sessionData domain");
       }
 
-      // Build payload
-      const payload = {
-        customerId: customerId,
-        amount: parseFloat(state?.amount),
-        currency: state?.currency,
-        purpose: state?.purpose || "DEPOSIT",
-        payment_method: "card_deposit",
-        reference: `deposit_${customerId}_${Date.now()}`,
-        returnUrl: `${window.location.origin}/payment-callback`,
+      // Create mapped session with OUR domain
+      const mappedSession = {
+        id: session.id,
+        sessionData: fixedSessionData, // Use fixed session data
+        amount: session.amount || {
+          value: Math.round(parseFloat(state.amount) * 100),
+          currency: state.currency || "USD",
+        },
+        countryCode: session.countryCode || "US",
+        shopperLocale: session.shopperLocale || "en-US",
+        shopperReference: session.shopperReference || `customer_${customerId}`,
+        // 🔥 FORCE OUR DOMAIN HERE
+        returnUrl: `${config.origin}/card/success`,
+        expiresAt: session.expiresAt,
+        // Store original for debugging
+        originalReturnUrl: session.returnUrl,
       };
 
-      console.log("🚀 Creating Adyen session with payload:", payload);
+      console.log("✅ Session created with returnUrl:", mappedSession.returnUrl);
+      console.log("🔍 Original returnUrl from API:", session.returnUrl);
 
-      const response = await axios.post(`${API_URL}/adyen/session`, payload, {
-        headers: {
-          Authorization: `Bearer ${bearertoken}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
-      });
-
-      console.log("✅ Adyen session response:", response.data);
-
-      if (response.data.status === "success" && response.data.session) {
-        const sessionData = response.data.session;
-
-        // ✅ FIX: Log the exact structure for debugging
-        console.log("🔍 Session Data Structure:", {
-          id: sessionData.id,
-          sessionData: sessionData.sessionData, // This is what Adyen expects
-          amount: sessionData.amount,
-          countryCode: sessionData.countryCode,
-        });
-
-        return sessionData;
-      } else {
-        throw new Error("Invalid session response from server");
-      }
+      return mappedSession;
     } catch (error) {
-      console.error("❌ Adyen session creation failed:", error);
+      console.error("❌ Session creation error:", error);
       throw error;
     }
   };
 
-  // Load Adyen CSS and JS from CDN - UPDATED to use correct environment
-  useEffect(() => {
-    const loadAdyenResources = () => {
-      return new Promise((resolve, reject) => {
-        if (
-          window.AdyenCheckout &&
-          typeof window.AdyenCheckout === "function"
-        ) {
-          console.log("✅ Adyen already loaded");
-          resolve();
+  // 🔥 Wait for container
+  const waitForContainer = (containerId = "adyen-checkout-container") => {
+    return new Promise((resolve, reject) => {
+      const maxAttempts = 50;
+      const delay = 100;
+      let attempts = 0;
+
+      const checkContainer = () => {
+        attempts++;
+
+        if (!isMounted.current) {
+          reject(new Error("Component unmounted"));
           return;
         }
 
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        // Use the correct URL based on environment
-        link.href = `${adyenConfig.resourcesUrl}sdk/5.58.0/adyen.css`;
-        link.onload = () => {
-          console.log("✅ Adyen CSS loaded");
+        let container = document.getElementById(containerId);
 
-          const script = document.createElement("script");
-          script.src = `${adyenConfig.resourcesUrl}sdk/5.58.0/adyen.js`;
-          script.onload = () => {
-            console.log("✅ Adyen JS loaded");
+        if (container && document.body.contains(container)) {
+          console.log(`✅ Container found after ${attempts} attempts`);
+          resolve(container);
+        } else if (attempts >= maxAttempts) {
+          // Create container if it doesn't exist
+          try {
+            const newContainer = document.createElement('div');
+            newContainer.id = containerId;
+            newContainer.setAttribute('data-container-id', containerId);
+            newContainer.className = 'adyen-container';
+            newContainer.style.minHeight = '220px';
+            newContainer.style.position = 'relative';
+            
+            // Find where to insert it
+            const target = document.querySelector('.adyen-payment-section') || 
+                          document.querySelector('.p-6') || 
+                          document.body;
+            
+            target.appendChild(newContainer);
+            console.log(`✅ Created container "${containerId}" dynamically`);
+            resolve(newContainer);
+          } catch (createError) {
+            reject(new Error(`Container error: ${createError.message}`));
+          }
+        } else {
+          setTimeout(checkContainer, delay);
+        }
+      };
 
-            // Wait for AdyenCheckout to be fully available
-            const checkAdyen = () => {
-              if (
-                window.AdyenCheckout &&
-                typeof window.AdyenCheckout === "function"
-              ) {
-                console.log("✅ AdyenCheckout function ready");
-                setAdyenLoaded(true);
-                resolve();
-              } else {
-                setTimeout(checkAdyen, 100);
-              }
-            };
-            checkAdyen();
-          };
-          script.onerror = () => reject(new Error("Failed to load Adyen JS"));
-          document.head.appendChild(script);
-        };
-        link.onerror = () => reject(new Error("Failed to load Adyen CSS"));
-        document.head.appendChild(link);
+      checkContainer();
+    });
+  };
+
+  // 🔥 Initialize Adyen Checkout with complete fixes
+  const initializeAdyenCheckout = async (session) => {
+    try {
+      const config = getAdyenConfig();
+
+      if (!window.AdyenCheckout || typeof window.AdyenCheckout !== "function") {
+        throw new Error("Payment system not loaded");
+      }
+
+      console.log("🔍 Initializing Adyen checkout");
+      console.log("🔍 Using domain:", config.origin);
+      console.log("🔍 Return URL:", session.returnUrl);
+
+      // Wait for container
+      const container = await waitForContainer();
+
+      // Clear and show loading
+      container.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full py-8">
+          <RingLoader color="#DC2626" size={40} class="mb-4" />
+          <p class="text-gray-600 text-sm">Setting up payment form...</p>
+        </div>
+      `;
+
+      // 🔥 FINAL RETURN URL - MUST BE OUR DOMAIN
+      const finalReturnUrl = `${config.origin}/card/success`;
+      
+      // 🔥 Create session configuration
+      const configuration = {
+        clientKey: config.clientKey,
+        environment: config.environment,
+        origin: config.origin, // Critical for CORS
+        
+        session: {
+          id: session.id,
+          sessionData: session.sessionData,
+        },
+
+        // 🔥 EXPLICITLY SET returnUrl HERE
+        returnUrl: finalReturnUrl,
+
+        amount: session.amount || {
+          value: Math.round(parseFloat(state.amount) * 100),
+          currency: state.currency || "USD",
+        },
+
+        locale: "en-US",
+        countryCode: session.countryCode || "US",
+        shopperLocale: session.shopperLocale || "en-US",
+
+        showPayButton: true,
+        showStoreDetails: false,
+
+        analytics: { enabled: true },
+        risk: { enabled: true },
+
+        // Payment handlers
+        onPaymentCompleted: (result, component) => {
+          console.log("🎯 Payment completed:", result.resultCode);
+          
+          const successCodes = ["Authorised", "Received", "Pending", "RedirectShopper"];
+          const isSuccess = successCodes.includes(result.resultCode);
+
+          if (isSuccess) {
+            // Store result
+            localStorage.setItem('adyen_payment_result', JSON.stringify({
+              success: true,
+              resultCode: result.resultCode,
+              pspReference: result.pspReference,
+              amount: state.amount,
+              currency: state.currency,
+              timestamp: new Date().toISOString(),
+            }));
+            
+            // Navigate to success page
+            navigate("/card/success", {
+              state: {
+                customerId: getCustomerId(),
+                transactionId: result.pspReference || `adyen_${Date.now()}`,
+                amount: state.amount,
+                currency: state.currency,
+                purpose: state.purpose,
+                paymentMethod: "card_deposit",
+                success: true,
+                resultCode: result.resultCode,
+                sessionId: session.id,
+                environment: config.environment,
+                timestamp: new Date().toISOString(),
+              },
+              replace: true,
+            });
+          } else {
+            let errorMsg = `Payment ${result.resultCode}. `;
+            if (result.refusalReason) errorMsg += `Reason: ${result.refusalReason}. `;
+            
+            if (result.resultCode === "Refused") {
+              errorMsg += "Card declined. Please check details or try another card.";
+            } else if (result.resultCode === "Cancelled") {
+              errorMsg += "Payment cancelled.";
+            } else {
+              errorMsg += "Please try again.";
+            }
+            
+            setError(errorMsg);
+          }
+        },
+
+        onPaymentFailed: (result, component) => {
+          console.log("❌ Payment failed:", result);
+          setError("Payment failed. Please check your card details and try again.");
+        },
+
+        onError: (error, component) => {
+          console.error("❌ Adyen error:", error);
+          
+          let errorMessage = "Payment error: ";
+          if (error.message.includes("CORS") || error.message.includes("origin")) {
+            errorMessage = `
+              Domain Configuration Issue
+              
+              Please ensure ${config.origin} is properly configured in Adyen.
+              Contact support if this issue persists.
+            `;
+          } else {
+            errorMessage += error.message || "Please try again.";
+          }
+          
+          setError(errorMessage);
+        },
+
+        onChange: (state, component) => {
+          if (state.isValid && error) {
+            setError(null);
+          }
+        },
+      };
+
+      console.log("🔍 Adyen config:", {
+        origin: configuration.origin,
+        returnUrl: configuration.returnUrl,
+        environment: configuration.environment,
       });
+
+      // Create checkout
+      const checkout = await window.AdyenCheckout(configuration);
+      const dropin = checkout.create("dropin");
+      dropin.mount(container);
+
+      // Store references
+      dropinInstance.current = dropin;
+      checkoutRef.current = checkout;
+
+      setCheckoutReady(true);
+      console.log("✅ Adyen checkout ready");
+
+      return checkout;
+    } catch (error) {
+      console.error("❌ Checkout initialization error:", error);
+      throw error;
+    }
+  };
+
+  // 🔥 URL Interceptor - Catches wrong redirects
+  useEffect(() => {
+    const interceptWrongRedirect = () => {
+      const currentUrl = window.location.href;
+      
+      // Check for wrong domain
+      if (currentUrl.includes('your-company.com')) {
+        console.log("⚠️ INTERCEPTING: Wrong domain redirect!");
+        
+        try {
+          const config = getAdyenConfig();
+          const urlObj = new URL(currentUrl);
+          const params = new URLSearchParams(urlObj.search);
+          
+          // Build correct URL
+          const correctUrl = new URL(`${config.origin}/card/success`);
+          
+          // Copy parameters
+          params.forEach((value, key) => {
+            correctUrl.searchParams.set(key, value);
+          });
+          
+          // Add interception info
+          correctUrl.searchParams.set('intercepted', 'true');
+          correctUrl.searchParams.set('originalDomain', 'your-company.com');
+          
+          console.log("🔀 Redirecting to:", correctUrl.toString());
+          window.location.replace(correctUrl.toString());
+          return true;
+        } catch (error) {
+          // Fallback redirect
+          window.location.replace(`${getAdyenConfig().origin}/card/success`);
+          return true;
+        }
+      }
+      return false;
     };
-
-    loadAdyenResources()
-      .then(() => {
-        console.log("✅ All Adyen resources loaded successfully");
-        initializePayment();
-      })
-      .catch((error) => {
-        console.error("❌ Failed to load Adyen resources:", error);
-        setError("Failed to load payment processor. Please try again.");
-        setLoading(false);
-      });
+    
+    // Check on load
+    if (interceptWrongRedirect()) {
+      return;
+    }
+    
+    // Check periodically
+    const interval = setInterval(interceptWrongRedirect, 500);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // ✅ FIXED: Main payment initialization
-  const initializePayment = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Validate required state
-      if (!state?.customerId || !state?.currency || !state?.amount) {
-        throw new Error("Missing required payment information");
-      }
-
-      if (isNaN(parseFloat(state.amount)) || parseFloat(state.amount) <= 0) {
-        throw new Error("Please enter a valid amount greater than 0.");
-      }
-
-      console.log("🎯 Starting payment process for:", {
-        currency: state.currency,
-        amount: state.amount,
-        requiresBankAccount: shouldUseBankAccounts(),
-        adyenEnvironment: adyenConfig.environment,
-      });
-
-      let bankAccounts = [];
-
-      // Only check bank accounts for USD
-      if (shouldUseBankAccounts()) {
-        console.log("💰 USD detected - checking SILA bank accounts...");
-        bankAccounts = await fetchBankAccounts();
-
-        if (bankAccounts.length === 0) {
-          setError(`🚨 Bank Account Required for USD`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Create Adyen session
-      const selectedBankAccount =
-        bankAccounts.length > 0 ? bankAccounts[0] : null;
-      const sessionResult = await createAdyenSession(selectedBankAccount);
-
-      // ✅ FIX: Store session data for debugging
-      setSessionData(sessionResult);
-
-      // ✅ FIX: Initialize Adyen checkout with the session data
-      if (sessionResult) {
-        await initializeAdyenCheckout(sessionResult);
-      }
-    } catch (error) {
-      console.error("❌ Payment initialization failed:", error);
-      handlePaymentError(error);
-    }
-  };
-
-  // ✅ CRITICAL FIX: Correct Adyen initialization with proper configuration
-  const initializeAdyenCheckout = async (sessionData) => {
-    try {
-      console.log("🎯 Initializing Adyen Checkout with session:", {
-        id: sessionData.id,
-        hasSessionData: !!sessionData.sessionData,
-        sessionDataLength: sessionData.sessionData?.length,
-      });
-
-      if (!window.AdyenCheckout) {
-        throw new Error("AdyenCheckout not available in window object");
-      }
-
-      // ✅ CRITICAL FIX: Use the CORRECT session structure from your API
-      const session = {
-        id: sessionData.id,
-        sessionData: sessionData.sessionData, // This must match your API response
-      };
-
-      console.log("🔍 Final Adyen session object:", session);
-
-      // ✅ EXACT configuration matching your backend
-      const configuration = {
-        clientKey: adyenConfig.clientKey,
-        environment: adyenConfig.environment,
-        session: session, // ✅ CORRECT: Pass session with id and sessionData
-        amount: {
-          value: sessionData.amount.value,
-          currency: sessionData.amount.currency,
-        },
-        locale: "en_US",
-        countryCode: sessionData.countryCode || "US",
-        showPayButton: true,
-        onSubmit: (state, component) => {
-          console.log("🔄 Form submitted:", state);
-          // Handle form submission
-        },
-        onAdditionalDetails: (state, component) => {
-          console.log("🔄 Additional details:", state);
-          // Handle 3DS2 authentication
-        },
-        onPaymentCompleted: (result, component) => {
-          console.info("✅ Payment completed:", result, component);
-          if (
-            result.resultCode === "Authorised" ||
-            result.resultCode === "Received"
-          ) {
-            setTimeout(() => {
-              navigate("/payment-success", {
-                state: {
-                  transactionId: result.pspReference,
-                  amount: state.amount,
-                  currency: state.currency,
-                  purpose: state.purpose,
-                },
-              });
-            }, 2000);
-          }
-        },
-        onError: (error, component) => {
-          console.error("❌ Adyen checkout error:", error);
-
-          // Enhanced error handling
-          if (error.message?.includes("Invalid ClientKey")) {
-            setError(`🚨 Adyen Configuration Error - Invalid Client Key`);
-          } else if (error.message?.includes("sessionData")) {
-            setError(`🚨 Session Data Error - Missing sessionData field`);
-          } else {
-            setError(
-              `Payment error: ${error.message || "Unknown error occurred"}`
-            );
-          }
-        },
-      };
-
-      const checkout = await window.AdyenCheckout(configuration);
-
-      console.log("✅ Checkout created:", checkout);
-
-      // Create and mount card component
-      if (checkout && checkout.create) {
-        const cardComponent = checkout.create("card");
-        cardComponent.mount("#adyen-dropin-container");
-        setAdyenComponent(cardComponent);
-        console.log("✅ Adyen card component mounted successfully");
-        setLoading(false);
-      } else {
-        throw new Error("Adyen Checkout instance is invalid");
-      }
-    } catch (error) {
-      console.error("❌ Failed to initialize Adyen checkout:", error);
-      setError(
-        "Failed to initialize payment form. Please refresh the page and try again."
-      );
-      setLoading(false);
-    }
-  };
-
-  // ✅ SIMPLIFIED: Error handling
-  const handlePaymentError = (error) => {
-    console.error("❌ Payment error:", error);
-
-    if (error.response?.status === 400) {
-      const errorMessage = error.response?.data?.message || error.message;
-
-      if (errorMessage.includes("Bank Account not found")) {
-        if (shouldUseBankAccounts()) {
-          setError(`🚨 USD Bank Account Required
-
-To process USD card deposits, you need a linked US bank account.
-
-Please link a bank account first, then try again.`);
-        } else {
-          setError(`Payment setup failed: ${errorMessage}`);
-        }
-      } else {
-        setError(`Payment setup failed: ${errorMessage}`);
-      }
-    } else if (error.code === "ERR_NETWORK") {
-      setError(
-        "Network error: Unable to connect to payment service. Please check your internet connection."
-      );
-    } else if (error.response?.status === 401) {
-      setError("Authentication failed. Please log in again.");
-    } else if (error.response?.status === 500) {
-      setError("Server error. Please try again later or contact support.");
-    } else {
-      setError(error.message || "Payment setup failed. Please try again.");
-    }
-
-    setLoading(false);
-  };
-
-  // Cleanup function
-  const cleanupAdyen = () => {
-    if (adyenComponent) {
-      try {
-        adyenComponent.unmount();
-        console.log("🧹 Adyen component cleaned up");
-      } catch (error) {
-        console.warn("Error cleaning up Adyen component:", error);
-      }
-    }
-  };
-
+  // 🔥 Main initialization
   useEffect(() => {
-    return () => {
-      cleanupAdyen();
-    };
-  }, [adyenComponent]);
+    isMounted.current = true;
 
-  // Action handlers
+    if (initializationStarted.current) {
+      return;
+    }
+
+    initializationStarted.current = true;
+
+    if (!state) {
+      setError("Payment information missing. Please go back and try again.");
+      setLoading(false);
+      return;
+    }
+
+    const initializePayment = async () => {
+      try {
+        console.log("📦 Loading Adyen SDK...");
+        await loadAdyenSDK();
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        console.log("📦 Creating session...");
+        const session = await createAdyenSession();
+
+        console.log("📦 Initializing checkout...");
+        await initializeAdyenCheckout(session);
+
+        console.log("✅ Payment ready");
+        setLoading(false);
+      } catch (error) {
+        console.error("❌ Initialization error:", error);
+        setError(error.message || "Failed to initialize payment. Please try again.");
+        setLoading(false);
+      }
+    };
+
+    setTimeout(() => {
+      if (isMounted.current) {
+        initializePayment();
+      }
+    }, 100);
+
+    // Cleanup
+    return () => {
+      isMounted.current = false;
+      initializationStarted.current = false;
+
+      if (dropinInstance.current) {
+        try {
+          dropinInstance.current.unmount();
+        } catch (e) {}
+        dropinInstance.current = null;
+      }
+
+      checkoutRef.current = null;
+    };
+  }, []);
+
+  // Handle retry
   const handleRetry = () => {
-    console.log("🔄 Manual retry initiated...");
     setError(null);
     setLoading(true);
-    initializePayment();
+    setCheckoutReady(false);
+
+    // Cleanup
+    if (dropinInstance.current) {
+      try {
+        dropinInstance.current.unmount();
+      } catch (e) {}
+      dropinInstance.current = null;
+    }
+
+    checkoutRef.current = null;
+
+    const container = document.getElementById("adyen-checkout-container");
+    if (container) container.innerHTML = "";
+
+    if (window.AdyenCheckout) {
+      delete window.AdyenCheckout;
+    }
+
+    document
+      .querySelectorAll('script[src*="adyen.com"]')
+      .forEach((el) => el.remove());
+    document
+      .querySelectorAll('link[href*="adyen.com"]')
+      .forEach((el) => el.remove());
+
+    isMounted.current = true;
+    initializationStarted.current = false;
+
+    setTimeout(() => {
+      if (isMounted.current) {
+        window.location.reload();
+      }
+    }, 800);
   };
 
+  // Handle back
   const handleBackToDeposit = () => {
-    console.log("⬅️ Returning to deposit page...");
     navigate("/deposit");
-  };
-
-  const handleLinkBankAccount = () => {
-    console.log("🏦 Redirecting to bank account linking...");
-    navigate("/deposit", {
-      state: {
-        autoOpenBankTab: true,
-        returnToCard: true,
-      },
-    });
   };
 
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"
-          ></motion.div>
-          <p className="mt-4 text-gray-600 font-medium">
-            Setting Up {state?.currency} Payment...
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            {shouldUseBankAccounts()
-              ? "Verifying your bank accounts..."
-              : "Initializing secure payment form..."}
-          </p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 p-4">
+        <div className="text-center max-w-md w-full p-8 bg-white rounded-2xl shadow-xl">
+          <div className="relative inline-block mb-6">
+            <RingLoader color="#3B82F6" size={80} />
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 border-4 border-blue-200 border-t-blue-500 rounded-full"
+            />
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="mt-6 text-gray-700 font-semibold text-lg"
+          >
+            Initializing Payment...
+          </motion.p>
+
+          <p className="mt-2 text-gray-500 text-sm">Preparing secure payment form</p>
+
+          <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <div className="flex items-center justify-center gap-2 text-blue-700">
+              <FaShieldAlt className="text-blue-500" />
+              <span className="text-sm font-medium">
+                Environment: <span className="text-red-600 font-bold">LIVE</span>
+              </span>
+            </div>
+            <p className="text-xs text-red-600 mt-2 font-medium">Real payments with real money</p>
+          </div>
         </div>
       </div>
     );
@@ -517,184 +634,218 @@ Please link a bank account first, then try again.`);
 
   // Error state
   if (error) {
-    const requiresBankAccount =
-      error.includes("Bank Account Required") ||
-      error.includes("Bank Account Issue");
-    const isAdyenConfigError =
-      error.includes("Adyen Configuration") ||
-      error.includes("Invalid ClientKey") ||
-      error.includes("NETWORK_ERROR") ||
-      error.includes("Configuration Mismatch");
-    const isUSD = shouldUseBankAccounts();
-
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-          <div className="flex justify-center mb-4">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{
-                backgroundColor: isAdyenConfigError ? "#FEF3C7" : "#FEE2E2",
-                border: isAdyenConfigError
-                  ? "2px solid #F59E0B"
-                  : "2px solid #EF4444",
-              }}
-            >
-              {requiresBankAccount ? (
-                <FaUniversity className="h-8 w-8 text-red-500" />
-              ) : isAdyenConfigError ? (
-                <FaExclamationTriangle className="h-8 w-8 text-yellow-500" />
-              ) : (
-                <FaExclamationTriangle className="h-8 w-8 text-red-500" />
-              )}
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-gray-200"
+        >
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+              <FaExclamationTriangle className="h-10 w-10 text-red-500" />
             </div>
           </div>
 
-          <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
-            {requiresBankAccount
-              ? "Bank Account Required"
-              : isAdyenConfigError
-              ? "Payment System Configuration"
-              : "Payment Setup Error"}
+          <h3 className="text-2xl font-bold text-gray-900 text-center mb-3">
+            {error.includes("Domain") ? "Configuration Required" : "Payment Failed"}
           </h3>
 
-          <p className="text-gray-600 text-center mb-6 whitespace-pre-line">
-            {error}
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            {requiresBankAccount && isUSD ? (
-              <>
-                <motion.button
-                  onClick={handleLinkBankAccount}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex items-center justify-center px-4 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all"
-                >
-                  <FaUniversity className="mr-2" />
-                  Link Bank Account
-                </motion.button>
-                <motion.button
-                  onClick={handleBackToDeposit}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all"
-                >
-                  Back to Deposit
-                </motion.button>
-              </>
-            ) : (
-              <>
-                {!isAdyenConfigError && (
-                  <motion.button
-                    onClick={handleRetry}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="px-4 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all"
-                  >
-                    Try Again
-                  </motion.button>
-                )}
-                <motion.button
-                  onClick={handleBackToDeposit}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all"
-                >
-                  Back to Deposit
-                </motion.button>
-              </>
-            )}
+          <div className="mb-4 text-center">
+            <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">LIVE</span>
           </div>
 
-          {/* Configuration help for Adyen errors */}
-          {isAdyenConfigError && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-700">
-                <strong>Developer Note:</strong> Update the client key in{" "}
-                <code>CardPayment.jsx</code> at line ~25
-              </p>
-            </div>
-          )}
-        </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="text-center font-medium text-red-700 whitespace-pre-line">{error}</div>
+            <p className="text-red-600 text-sm text-center mt-2">No money has been charged</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <motion.button
+              onClick={handleRetry}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all font-medium shadow-md"
+            >
+              Retry Payment
+            </motion.button>
+
+            <motion.button
+              onClick={handleBackToDeposit}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all"
+            >
+              Back to Deposit
+            </motion.button>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
-  // Success state - Payment form
+  // Main render - 100% COMPLETE
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
-      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={handleBackToDeposit}
-            className="flex items-center mb-4 transition-colors font-medium hover:opacity-80"
+            className="flex items-center mb-6 text-gray-600 hover:text-gray-800 transition-colors group font-medium"
           >
-            <FiArrowLeft className="mr-1" /> Back to Deposit
+            <FiArrowLeft className="mr-2 group-hover:-translate-x-1 transition-transform" />
+            <span>Back to Deposit</span>
           </button>
 
-          <h1 className="text-3xl font-bold text-gray-900">Pay With Card</h1>
-          <p className="text-gray-600 mt-2">
-            Complete your secure {state.currency} card payment
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Card Payment</h1>
+              <p className="text-gray-600">
+                Pay {state?.currency || "USD"} {state?.amount ? parseFloat(state.amount).toFixed(2) : "0.00"}
+              </p>
+            </div>
+            <div className="px-3 py-1 bg-red-100 text-red-800 border border-red-300 rounded-full text-xs font-bold">LIVE</div>
+          </div>
         </div>
 
-        {/* Payment Details Card */}
-        <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
-          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <h2 className="text-lg font-medium text-gray-900">
-              {state.currency} Payment Details
-            </h2>
+        {/* Payment Summary */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200"
+        >
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="font-semibold text-gray-900">Amount</h3>
+              <p className="text-sm text-gray-600">{state?.purpose || "Deposit"}</p>
+            </div>
+            <div className="text-2xl font-bold text-blue-700">
+              {state?.currency || "USD"} {state?.amount ? parseFloat(state.amount).toFixed(2) : "0.00"}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm p-3 rounded-lg border bg-red-50 text-red-700 border-red-200">
+            <FaShieldAlt className="text-red-500" />
+            <span>Secure LIVE payment powered by Adyen</span>
+          </div>
+
+          <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <FiAlertCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-yellow-700">
+                You are making a <strong>real payment</strong> with real money.
+                Please ensure all card details are correct.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 🔥 ADYEN CONTAINER - ALWAYS RENDERED */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 mb-6 adyen-payment-section"
+        >
+          <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+            <h3 className="font-medium text-gray-900">Card Details</h3>
+            <div className="flex space-x-1">
+              <div className="w-10 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center">
+                <span className="text-white text-xs font-bold">VISA</span>
+              </div>
+              <div className="w-10 h-6 bg-gradient-to-r from-yellow-400 to-yellow-500 rounded flex items-center justify-center">
+                <span className="text-white text-xs font-bold">MC</span>
+              </div>
+              <div className="w-10 h-6 bg-gradient-to-r from-red-600 to-red-700 rounded flex items-center justify-center">
+                <span className="text-white text-xs font-bold">AMEX</span>
+              </div>
+            </div>
           </div>
 
           <div className="p-6">
-            {/* Payment Summary */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-gray-700 font-medium">Amount:</span>
-                <span className="text-lg font-bold text-blue-700">
-                  {state.currency} {parseFloat(state.amount).toFixed(2)}
-                </span>
-              </div>
-              {state.purpose && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700 font-medium">Purpose:</span>
-                  <span className="text-sm text-gray-600">{state.purpose}</span>
+            {/* 👇 THIS CONTAINER MUST EXIST */}
+            <div
+              ref={containerRef}
+              id="adyen-checkout-container"
+              data-container-id="adyen-checkout-container"
+              className="min-h-[220px] border-2 border-gray-200 rounded-xl p-4 bg-gray-50 hover:border-blue-300 transition-colors relative"
+              style={{ minHeight: '220px' }}
+            >
+              {!checkoutReady && !error && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <RingLoader color="#DC2626" size={40} className="mb-4" />
+                  <p className="text-gray-600 text-sm">Loading payment form...</p>
                 </div>
               )}
-              <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
-                <p className="text-xs text-green-700 flex items-center">
-                  <FaCheckCircle className="mr-1" />
-                  {shouldUseBankAccounts()
-                    ? "Using linked US bank account"
-                    : `Using ${state.currency} currency account`}
-                </p>
+              
+              {error && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                  <FaExclamationTriangle className="text-red-500 text-2xl mb-3" />
+                  <p className="text-red-600 text-center text-sm mb-4">{error}</p>
+                  <button
+                    onClick={handleRetry}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center text-gray-500">
+                  <FaLock className="mr-2 text-red-500" />
+                  <span>256-bit SSL encryption</span>
+                </div>
+                <div className="flex items-center text-gray-500">
+                  <FiShield className="mr-2 text-blue-500" />
+                  <span>PCI DSS compliant</span>
+                </div>
               </div>
             </div>
-
-            {/* Adyen Drop-in Container */}
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-3 text-center">
-                Enter your card details below
-              </p>
-              <div id="adyen-dropin-container" className="w-full" />
-            </div>
-
-            {/* Security Note */}
-            <div className="mt-6 text-center">
-              <p className="text-xs text-gray-500">
-                Your payment is secured with bank-level encryption
-              </p>
-            </div>
           </div>
+        </motion.div>
 
-          <div className="px-6 py-4 bg-gray-50 border-t rounded-b-2xl">
-            <div className="flex justify-between items-center text-sm text-gray-600">
-              <span>Secure Payment</span>
-              <span>Powered by Adyen</span>
-            </div>
-          </div>
+        {/* Security Info */}
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-5">
+          <h4 className="font-semibold text-red-800 mb-3 flex items-center">
+            <FiShield className="mr-2" />
+            Live Payment Security
+          </h4>
+          <ul className="text-sm text-red-700 space-y-2">
+            <li className="flex items-start">
+              <span className="text-red-500 mr-2">✓</span>
+              <span>Card details encrypted and never stored</span>
+            </li>
+            <li className="flex items-start">
+              <span className="text-red-500 mr-2">✓</span>
+              <span>Adyen fraud detection system</span>
+            </li>
+            <li className="flex items-start">
+              <span className="text-red-500 mr-2">✓</span>
+              <span>3D Secure authentication</span>
+            </li>
+            <li className="flex items-start">
+              <span className="mr-2 text-red-500">⚠️</span>
+              <span><strong>Live Mode:</strong> Real money transactions</span>
+            </li>
+            <li className="flex items-start">
+              <span className="text-blue-500 mr-2">🌐</span>
+              <span><strong>Domain:</strong> ourzap-v2.unlimitedremit.com</span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center text-xs text-gray-500 space-y-1">
+          <p className="flex items-center justify-center gap-2">
+            <span>Powered by</span>
+            <span className="font-semibold text-gray-700">Adyen</span>
+            <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-medium">LIVE</span>
+          </p>
+          <p className="text-gray-400">ourzap-v2.unlimitedremit.com</p>
         </div>
       </div>
     </div>

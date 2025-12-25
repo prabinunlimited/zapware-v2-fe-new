@@ -2,7 +2,7 @@
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import Select from "react-select";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { motion } from "framer-motion";
 
 import { searchReceiverByMobile } from "./transferThunks";
@@ -326,7 +326,7 @@ const ReceiverSearchSection = ({
       >
         {searchLoading ? (
           <>
-            <ClipLoader size={16} color="#fff" className="mr-2" />
+            <RingLoader size={16} color="#fff" className="mr-2" />
             <span className="text-sm">Searching...</span>
           </>
         ) : (
