@@ -38,6 +38,41 @@ export const fetchBankAccounts = createAsyncThunk(
   }
 );
 
+export const fetchLinkBankRequests = createAsyncThunk(
+  "bankLink/fetchLinkBankRequests",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.post("//link-bank-request-details", {
+        requestId: requestId,
+      });
+
+      // ✅ FIX: Handle the actual API response structure
+      let accounts = [];
+      const data = response.data;
+
+      if (data?.data && Array.isArray(data.data)) {
+        accounts = data.data; // This matches your API response
+      } else if (Array.isArray(data)) {
+        accounts = data;
+      } else if (data?.status === "success") {
+        accounts = data.data || [];
+      }
+
+      console.log(
+        "✅ Bank accounts loaded from /sila-bank-details:",
+        accounts.length,
+        accounts
+      );
+      return accounts;
+    } catch (error) {
+      console.error("❌ Failed to load bank accounts:", error);
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load bank accounts"
+      );
+    }
+  }
+);
+
 // ✅ Async thunk for deleting a bank account (matching reference structure)
 export const deleteBankAccount = createAsyncThunk(
   "bankLink/deleteBankAccount",

@@ -33,6 +33,7 @@ import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
 import DepositPage from "../src/page/Deposit/DepositPage";
 import DepositPageIframe from "../src/page/Deposit/DepositPageIframe";
 import BankLink from "../src/page/Deposit/components/BankLink";
+import BankLinkIframe from "../src/page/Deposit/components/BankLinkIframe";
 import CardPayment from "../src/page/Deposit/components/Card/CardPayment";
 import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIframe";
 import Team from "../src/page/Team/Team";
