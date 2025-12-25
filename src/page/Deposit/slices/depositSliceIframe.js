@@ -18,7 +18,7 @@ export const submitDeposit = createAsyncThunk(
       }
 
       const response = await api.post(
-        "/transactions/remittance-transaction",
+        "/transactions/sila-transaction-payin",
         depositData,
         {
           headers: {
