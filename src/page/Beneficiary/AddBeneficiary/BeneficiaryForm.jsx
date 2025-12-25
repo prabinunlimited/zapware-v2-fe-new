@@ -877,9 +877,20 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     // Check if beneficiaries are loaded
     if (beneficiaries.length === 0) {
-      toast.info(
-        "Loading beneficiaries... Please wait a moment and try again."
-      );
+      console.log("No beneficiaries to search through");
+
+      // Set phone in formik for new beneficiary
+      formik.setFieldValue("phone_number", phoneInput);
+      formik.setFieldValue("country_phone_code", countryCodeInput);
+
+      // Update search state
+      dispatch(clearPhoneSearch());
+      setFoundBeneficiary(null);
+      setUsingExistingBeneficiary(false);
+      setShowSearchResults(true);
+
+      // Show toast and let user continue
+      toast.info("No existing beneficiaries found. You can create a new one.");
       return;
     }
 
@@ -924,19 +935,70 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         return false;
       }
 
-      // Automatically search if not already searched
-      if (!phoneSearch.searched) {
-        handlePhoneSearch();
+      // Validate phone number (basic validation)
+      const phoneRegex = /^[+]?[0-9\s\-\(\)\.]+$/;
+      if (!phoneRegex.test(phoneInput)) {
+        toast.error("Please enter a valid phone number");
         return false;
       }
 
-      // If beneficiary found, move to step 1
-      if (phoneExists && foundBeneficiary) {
+      // If there are no beneficiaries in the system, skip search entirely
+      if (beneficiaries.length === 0) {
+        console.log(
+          "No beneficiaries in system, skipping search and creating new beneficiary"
+        );
+
+        // Store phone in formik for new beneficiary
+        formik.setFieldValue("phone_number", phoneInput);
+        formik.setFieldValue("country_phone_code", countryCodeInput);
+
+        // Clear any previous search state
+        dispatch(clearPhoneSearch());
+        setFoundBeneficiary(null);
+        setUsingExistingBeneficiary(false);
+        setShowSearchResults(false);
+
+        // Move to beneficiary details step
+        setStep(1);
+
+        // Show informative toast
+        toast.info(
+          "No existing beneficiaries found. You can create a new beneficiary."
+        );
+        return true;
+      }
+
+      // If we have beneficiaries but haven't searched yet, perform the search
+      if (!phoneSearch.searched) {
+        console.log("Performing phone search...");
+        handlePhoneSearch();
+        return false; // Don't proceed yet, wait for search results
+      }
+
+      // If we've already searched and found a beneficiary
+      if (phoneSearch.searched && phoneSearch.exists && phoneSearch.data) {
+        console.log("Existing beneficiary found, moving to step 1");
+        setFoundBeneficiary(phoneSearch.data);
+        setUsingExistingBeneficiary(true);
         setStep(1);
         return true;
       }
 
-      // If no beneficiary found, also move to step 1 (create new)
+      // If we've searched and no beneficiary found
+      if (phoneSearch.searched && !phoneSearch.exists) {
+        console.log("No existing beneficiary found, creating new one");
+        formik.setFieldValue("phone_number", phoneInput);
+        formik.setFieldValue("country_phone_code", countryCodeInput);
+        setFoundBeneficiary(null);
+        setUsingExistingBeneficiary(false);
+        setStep(1);
+        return true;
+      }
+
+      // Default fallback - just move to step 1
+      console.log("Default case, moving to step 1");
+      formik.setFieldValue("phone_number", phoneInput);
+      formik.setFieldValue("country_phone_code", countryCodeInput);
       setStep(1);
       return true;
     }
@@ -2617,13 +2679,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <button
                 type="button"
                 onClick={handlePhoneSearch}
-                disabled={
-                  !phoneInput.trim() ||
-                  phoneSearchLoading ||
-                  beneficiaries.length === 0
-                }
+                disabled={!phoneInput.trim() || phoneSearchLoading}
                 className={`px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap flex items-center ${
-                  phoneSearchLoading || beneficiaries.length === 0
+                  phoneSearchLoading
                     ? "bg-gray-300 cursor-not-allowed"
                     : !phoneInput.trim()
                     ? "bg-gray-300 cursor-not-allowed"
@@ -2634,11 +2692,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <>
                     <RingLoader size={16} color="#ffffff" className="mr-2" />
                     Searching...
-                  </>
-                ) : beneficiaries.length === 0 ? (
-                  <>
-                    <RingLoader size={16} color="#ffffff" className="mr-2" />
-                    Loading...
                   </>
                 ) : (
                   <>

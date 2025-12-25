@@ -14,7 +14,7 @@ const getPaymentMethodsByCurrency = (currency) => {
     EUR: ["card_deposit", "manual_deposit", "bank_transfer"],
     GBP: ["card_deposit", "manual_deposit", "bank_transfer"],
     DKK: ["card_deposit", "manual_deposit", "bank_transfer"],
-    AED: ["manual_deposit"],
+    AED: ["card_deposit", "manual_deposit"],
     USD: ["card_deposit", "manual_deposit", "bank_deposit"],
   };
 

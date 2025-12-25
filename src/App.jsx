@@ -1,4 +1,3 @@
-// src/App.jsx
 import React from "react";
 import { Provider } from "react-redux";
 import { RouterProvider } from "react-router-dom";
@@ -6,11 +5,18 @@ import { PlaidProvider } from "./features/Auth/PlaidProvider";
 import router from "../router/router";
 import store from "./store/store";
 import { PartnerConfigProvider } from "./contexts/PartnerConfigContext";
-// Import the GlobalErrorBoundary component (adjust the path if your file lives elsewhere)
 import GlobalErrorBoundary from "../router/GlobalErrorBoundary";
+import AppInitializer from "./services/AppInitializer";
 
-// Create a wrapper component that contains URLValidator inside Router context
 const AppContent = () => {
+  React.useEffect(() => {
+    console.log("🚀 AppContent: Starting initialization...");
+    console.log("🔍 Current hostname:", window.location.hostname);
+    console.log(
+      "✅ AppContent: Partner data fetching delegated to proper API calls"
+    );
+  }, []);
+
   return (
     <>
       <RouterProvider router={router} />
@@ -19,15 +25,21 @@ const AppContent = () => {
 };
 
 function App() {
+  React.useEffect(() => {
+    console.log("🚀 App.jsx: Main App component mounted");
+  }, []);
+
   return (
     <GlobalErrorBoundary>
-      <Provider store={store}>
-        <PartnerConfigProvider>
-          <PlaidProvider>
-            <AppContent />
-          </PlaidProvider>
-        </PartnerConfigProvider>
-      </Provider>
+      <AppInitializer>
+        <Provider store={store}>
+          <PartnerConfigProvider>
+            <PlaidProvider>
+              <AppContent />
+            </PlaidProvider>
+          </PartnerConfigProvider>
+        </Provider>
+      </AppInitializer>
     </GlobalErrorBoundary>
   );
 }

@@ -92,7 +92,10 @@ const PaymentMethodSelection = ({
       AED: ["manual_deposit", "card_deposit"],
     };
 
-    const allowedMethods = defaultMethods[selectedCurrency] || ["card_deposit", "manual_deposit"];
+    const allowedMethods = defaultMethods[selectedCurrency] || [
+      "card_deposit",
+      "manual_deposit",
+    ];
     return allowedMethods
       .filter((method) => paymentMethodDefinitions[method])
       .map((method) => paymentMethodDefinitions[method]);
@@ -139,15 +142,29 @@ const PaymentMethodSelection = ({
       {selectedCurrency === "USD" && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-700">
-            <strong>USD Deposits:</strong> Use "Link Bank Account" to connect your US bank via Plaid
+            <strong>USD Deposits:</strong> Use "Link Bank Account" to connect
+            your US bank via Plaid
           </p>
         </div>
       )}
-      
-      {(selectedCurrency === "EUR" || selectedCurrency === "GBP" || selectedCurrency === "DKK") && (
+
+      {(selectedCurrency === "EUR" ||
+        selectedCurrency === "GBP" ||
+        selectedCurrency === "DKK") && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-sm text-green-700">
-            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer" for instant Open Banking transfers
+            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer"
+            for instant Open Banking transfers
+          </p>
+        </div>
+      )}
+
+      {/* ✅ ADD: AED-specific hint */}
+      {selectedCurrency === "AED" && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm text-purple-700">
+            <strong>AED Deposits:</strong> Use "Card Deposit" for instant
+            payment or "Manual Deposit" for bank transfer
           </p>
         </div>
       )}

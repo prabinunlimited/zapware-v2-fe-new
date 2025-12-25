@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
 

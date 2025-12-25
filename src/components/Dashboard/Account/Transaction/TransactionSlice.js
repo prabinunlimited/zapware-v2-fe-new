@@ -10,6 +10,13 @@ const API_URL = import.meta.env.VITE_API_URL;
 // ✅ SIMPLIFIED: Remove complex coordination logic
 let transactionFetchInProgress = false;
 
+// Helper function to get token from localStorage as fallback
+const getAuthToken = () => {
+  // First try to get from localStorage
+  const localStorageToken = localStorage.getItem("bearertoken");
+  return localStorageToken;
+};
+
 // Async thunks for regular transactions
 export const fetchTransactionDetails = createAsyncThunk(
   "transaction/fetchTransactionDetails",
@@ -23,7 +30,13 @@ export const fetchTransactionDetails = createAsyncThunk(
 
     try {
       const state = getState();
-      const token = state.auth.token;
+      // Try Redux store first, then localStorage as fallback
+      const token = state.auth.token || getAuthToken();
+
+      if (!token) {
+        console.error("❌ TRANSACTION SLICE: No authentication token available");
+        return rejectWithValue("No authentication token available");
+      }
 
       console.log("🔄 TRANSACTION SLICE: Fetching transactions for", currencyCode);
 
@@ -53,7 +66,13 @@ export const exportTransactionsToExcel = createAsyncThunk(
   async ({ customerId }, { rejectWithValue, getState }) => {
     try {
       const state = getState();
-      const token = state.auth.token;
+      // Try Redux store first, then localStorage as fallback
+      const token = state.auth.token || getAuthToken();
+
+      if (!token) {
+        console.error("❌ TRANSACTION SLICE: No authentication token available for export");
+        return rejectWithValue("No authentication token available");
+      }
 
       const response = await axios.get(
         `${API_URL}/transactions/currency-transaction-details/${customerId}/all`,
@@ -121,9 +140,20 @@ export const fetchStatements = createAsyncThunk(
 
 export const fetchCustomerBankAccounts = createAsyncThunk(
   "transaction/fetchCustomerBankAccounts",
-  async ({ customerId, bearertoken }, { rejectWithValue, getState }) => {
+  async ({ customerId }, { rejectWithValue, getState }) => {
     try {
-      const token = getState().auth.token || bearertoken;
+      const state = getState();
+      // Try Redux store first, then localStorage as fallback
+      const token = state.auth.token || getAuthToken();
+
+      if (!token) {
+        console.error("❌ TRANSACTION SLICE: No authentication token available for bank accounts");
+        return rejectWithValue("No authentication token available");
+      }
+
+      console.log("🔄 TRANSACTION SLICE: Fetching bank accounts for customer", customerId);
+      console.log("🔄 Using token:", token ? "Token present (first 10 chars): " + token.substring(0, 10) + "..." : "No token");
+
       const response = await axios.get(
         `${API_URL}/active-approved-bank-accounts/${customerId}`,
         {
@@ -132,8 +162,18 @@ export const fetchCustomerBankAccounts = createAsyncThunk(
           },
         }
       );
+      
+      console.log("✅ TRANSACTION SLICE: Bank accounts fetch successful");
       return response.data.account_details;
     } catch (error) {
+      console.error("❌ TRANSACTION SLICE: Bank accounts fetch failed", error);
+      
+      // Log more details about the error
+      if (error.response) {
+        console.error("❌ Error response status:", error.response.status);
+        console.error("❌ Error response data:", error.response.data);
+      }
+      
       return rejectWithValue(error.response?.data || error.message);
     }
   }

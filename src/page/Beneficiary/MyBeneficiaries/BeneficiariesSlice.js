@@ -59,7 +59,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
 
       // 3. Add delay to allow DB sync (if needed)
       console.log("⏳ Waiting for DB sync...");
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1000ms to 500ms
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // 4. Fetch the specific beneficiary to ensure it's available
       console.log("🔄 Fetching newly created beneficiary...");
@@ -133,10 +133,21 @@ export const fetchBeneficiaries = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("📥 Fetched beneficiaries count:", result.data?.length || 0);
+      console.log("📥 Fetched beneficiaries response:", result);
 
+      // Handle different response structures
+      if (
+        result.status === "200" &&
+        result.message === "No beneficiaries found"
+      ) {
+        console.log("📭 No beneficiaries found, returning empty array");
+        return []; // Explicit empty array
+      }
+
+      // Return data if it exists
       return result.data || [];
     } catch (error) {
+      console.error("❌ fetchBeneficiaries error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -1172,7 +1183,7 @@ const beneficiarySlice = createSlice({
         state.error = null;
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false
         const beneficiariesData = Array.isArray(action.payload)
           ? action.payload
           : action.payload.data || [];
@@ -1185,7 +1196,7 @@ const beneficiarySlice = createSlice({
         }
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false even on error
         state.error = action.payload;
       })
 

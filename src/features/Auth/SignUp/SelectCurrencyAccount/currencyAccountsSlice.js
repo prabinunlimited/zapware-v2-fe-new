@@ -1,6 +1,61 @@
-// features/currencyAccounts/currencyAccountsSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../../services/api";
+import { countries } from "../../slices/countrySlice";
+
+const getValidCountryId = (countryId, getState) => {
+  console.log("🌍 getValidCountryId - Input:", {
+    inputCountryId: countryId,
+    type: typeof countryId,
+    isUndefined: countryId === undefined,
+    isStringUndefined: countryId === "undefined",
+  });
+
+  // Priority 1: Use the provided countryId if valid
+  if (countryId && countryId !== "undefined" && countryId !== "null") {
+    const countryIdStr = String(countryId);
+    console.log("✅ Using provided countryId:", countryIdStr);
+    return countryIdStr;
+  }
+
+  // Priority 2: Try to get from Redux state (countries slice)
+  try {
+    const state = getState();
+    const selectedCountry = state.countries?.selectedCountry;
+
+    if (selectedCountry && selectedCountry.id) {
+      const countryIdStr = String(selectedCountry.id);
+      console.log("✅ Using country from Redux state:", countryIdStr);
+      return countryIdStr;
+    }
+  } catch (error) {
+    console.warn("⚠️ Could not access Redux state for country:", error);
+  }
+
+  // Priority 3: Try localStorage
+  const storedCountryId = localStorage.getItem("selectedCountryId");
+  if (storedCountryId && storedCountryId !== "undefined") {
+    console.log("✅ Using country from localStorage ID:", storedCountryId);
+    return String(storedCountryId);
+  }
+
+  // Priority 4: Try to get from localStorage country code
+  const storedCountryCode = localStorage.getItem("userCountry");
+  if (storedCountryCode && countries && countries.length > 0) {
+    const country = countries.find(
+      (c) =>
+        c.country_code === storedCountryCode ||
+        c.id === parseInt(storedCountryCode)
+    );
+    if (country) {
+      console.log("✅ Using country from localStorage code:", country.id);
+      return String(country.id);
+    }
+  }
+
+  // Priority 5: Default to United States (id: 186)
+  console.log("⚠️ Using default country (US - 186)");
+  return "186";
+};
 
 // Helper function to filter accounts by currency
 const filterAccountsByCurrency = (accounts, currencyFilter) => {
@@ -26,91 +81,96 @@ const filterAccountsByCurrency = (accounts, currencyFilter) => {
   });
 };
 
-// Helper function to check if USD Named Account is selected
-const checkIfUSDNamedAccountSelected = (state) => {
-  if (!state.selectedAccounts || state.selectedAccounts.length === 0) {
-    return false;
-  }
+// ========== EXISTING ASYNC THUNKS ==========
 
-  // Check each selected account
-  for (const selectedAccountId of state.selectedAccounts) {
-    // Try to find the account by different possible ID properties
-    let account = state.namedAccounts.find((acc) => {
-      // Check multiple possible ID properties
-      const possibleIds = [
-        acc.service_provide_id_type,
-        acc.service_provide_id,
-        acc.id,
-        acc.account_id,
-      ];
-
-      const found = possibleIds.some(
-        (id) => id && id.toString() === selectedAccountId.toString()
-      );
-      return found;
-    });
-
-    // If not found in namedAccounts, try accountOptions
-    if (!account) {
-      account = state.accountOptions.find((acc) => {
-        const possibleIds = [
-          acc.service_provide_id_type,
-          acc.service_provide_id,
-          acc.id,
-          acc.account_id,
-        ];
-
-        const found = possibleIds.some(
-          (id) => id && id.toString() === selectedAccountId.toString()
-        );
-        return found;
-      });
-    }
-
-    if (account) {
-      // Check if it's a named account - check multiple possible properties
-      const isNamed =
-        account.accountType === "named" ||
-        account.account_type === "named" ||
-        account.type === "named";
-
-      // Check if it's USD - check multiple possible properties
-      const isUSD =
-        account.currency === "USD" || account.account_currency === "USD";
-
-      // Return true for ALL USD named accounts
-      if (isNamed && isUSD) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
-
-// Async thunks
 export const fetchAccountOptions = createAsyncThunk(
   "currencyAccounts/fetchAccountOptions",
-  async ({ accountType, API_URL }, { rejectWithValue }) => {
+  async (
+    { accountType, countryId, API_URL },
+    { rejectWithValue, getState }
+  ) => {
     try {
-      // ✅ USE api.js INSTEAD OF FETCH - MUCH SIMPLER!
+      // ⚠️ CRITICAL: Validate country ID
+      const validatedCountryId = getValidCountryId(countryId, getState);
+
+      console.log("🔍 THUNK - Validated Country ID:", {
+        original: countryId,
+        validated: validatedCountryId,
+        countryName:
+          countries.find((c) => c.id === parseInt(validatedCountryId))?.name ||
+          "Unknown",
+      });
+
+      // Step 1: Get onboarding description
       const accountOptionsResponse = await api.get(
         "/get-onboarding-description"
       );
 
-      const accountTypeEndpoint =
-        accountType === "individual" ? "Individuals" : "Institutions";
-      const termsResponse = await api.get(
-        "/get-bank-ac-type/" + accountTypeEndpoint
-      );
+      // Step 2: Check if partnerId exists in localStorage
+      const partnerId = localStorage.getItem("whitelabelledpartnerid");
+      const isPartnerFlow =
+        partnerId &&
+        partnerId !== "0" &&
+        partnerId !== "undefined" &&
+        partnerId !== "null" &&
+        partnerId !== "";
+
+      console.log("🔍 THUNK DEBUG - fetchAccountOptions:", {
+        partnerId,
+        isPartnerFlow,
+        accountType,
+        validatedCountryId,
+        timestamp: new Date().toISOString(),
+      });
+
+      let endpoint;
+      let responseData;
+
+      if (isPartnerFlow) {
+        // ✅ PARTNER-SPECIFIC FLOW - Use validatedCountryId
+        endpoint = `partners/open-account-currencies-customertype-and-country/${partnerId}/${accountType}/${validatedCountryId}`;
+        console.log(`🔍 Using PARTNER API: ${endpoint}`);
+
+        try {
+          const response = await api.get(endpoint);
+          responseData = response.data;
+          console.log("✅ Partner API response received:", {
+            status: response.status,
+            dataKeys: Object.keys(responseData),
+          });
+        } catch (partnerError) {
+          console.warn("⚠️ Partner API failed:", partnerError.message);
+
+          // Fallback to standard API
+          endpoint = `/get-bank-ac-type-and-country/${accountType}/${validatedCountryId}`;
+          console.log(`🔄 Using FALLBACK API: ${endpoint}`);
+
+          const fallbackResponse = await api.get(endpoint);
+          responseData = fallbackResponse.data;
+        }
+      } else {
+        // ✅ STANDARD FLOW - Use validatedCountryId
+        endpoint = `/get-bank-ac-type-and-country/${accountType}/${validatedCountryId}`;
+        console.log(`🔍 Using STANDARD API: ${endpoint}`);
+
+        const response = await api.get(endpoint);
+        responseData = response.data;
+        console.log("✅ Standard API response received");
+      }
 
       return {
         accountOptionsData: accountOptionsResponse.data,
-        termsData: termsResponse.data,
+        termsData: responseData,
         accountType,
+        countryId: validatedCountryId,
+        isPartnerFlow,
+        partnerId: isPartnerFlow ? partnerId : null,
       };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error("❌ API Error in fetchAccountOptions:", error.message);
+      return rejectWithValue(
+        error.message || "Failed to fetch account options"
+      );
     }
   }
 );
@@ -119,9 +179,8 @@ export const fetchTermsContent = createAsyncThunk(
   "currencyAccounts/fetchTermsContent",
   async (url, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js INSTEAD OF FETCH - MUCH SIMPLER!
       const response = await api.get(url, {
-        responseType: "text", // Important for HTML content
+        responseType: "text",
       });
 
       return response.data;
@@ -187,12 +246,91 @@ export const validateAgentCode = createAsyncThunk(
   }
 );
 
+// ========== NEW ASYNC THUNK FOR PACKAGE OPTIONS ==========
+export const fetchPackageOptions = createAsyncThunk(
+  "currencyAccounts/fetchPackageOptions",
+  async (
+    { accountType, partnerId, API_URL },
+    { rejectWithValue, getState }
+  ) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      if (!partnerId) {
+        partnerId = localStorage.getItem("whitelabelledpartnerid");
+      }
+
+      if (!partnerId || partnerId === "0") {
+        return rejectWithValue("Partner ID is required for package options");
+      }
+
+      console.log("🔍 Fetching package options:", {
+        partnerId,
+        accountType,
+        API_URL,
+      });
+
+      const response = await api.get(
+        `/package/list/${partnerId}/${accountType}`,
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        }
+      );
+
+      console.log("✅ Package data received:", response.data);
+
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching package options:", error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// ========== NEW ASYNC THUNK FOR PACKAGE VALIDATION ==========
+export const validatePackageCurrencies = createAsyncThunk(
+  "currencyAccounts/validatePackageCurrencies",
+  async ({ selectedPackageCurrencies, partnerId }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      if (!partnerId) {
+        partnerId = localStorage.getItem("whitelabelledpartnerid");
+      }
+
+      const response = await api.post(
+        "/customers/validate-package-currency",
+        {
+          packageCurrenciesSelected: selectedPackageCurrencies,
+          partnerId: partnerId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error validating package currencies:", error);
+      return rejectWithValue(
+        error.response?.data?.message || "Package validation failed"
+      );
+    }
+  }
+);
+
 const currencyAccountsSlice = createSlice({
   name: "currencyAccounts",
   initialState: {
     accountOptions: [],
     namedAccounts: [],
     pooledAccounts: [],
+    isPartnerFlow: false,
+    partnerId: null,
     ucaDescription: "",
     selectedAccounts: [],
     referralCode: "",
@@ -208,26 +346,40 @@ const currencyAccountsSlice = createSlice({
     activeTab: "all",
     remittanceOnlyAccepted: false,
     termsModalOpen: false,
-    isNamedAccount: false,
     agentCode: "",
     agentError: null,
     isReferralValidating: false,
     isAgentValidating: false,
     validationMessage: "",
+
+    // ✅ NEW: Package-related states
+    isPartnerPackageModule:
+      localStorage.getItem("isPartnerPackageModule") || "N",
+    packageOptions: [],
+    selectedPackageCurrencies: [],
+    packageFeesUrl: "",
+    packageLoading: false,
+    packageError: null,
+    isPackageValidating: false,
+    packageValidationMessage: "",
+
+    // Package-specific flags
+    packageDocumentUpload: "Y",
+    packageKycVerify: "Y",
+    packageOwnerAdd: "Y",
+    packageSsnRequired: "Y",
   },
   reducers: {
     clearAllSelections: (state) => {
       state.selectedAccounts = [];
+      state.selectedPackageCurrencies = [];
       state.remittanceOnlyAccepted = false;
-      state.isNamedAccount = false;
     },
     clearSelectedAccounts: (state) => {
       state.selectedAccounts = [];
-      state.isNamedAccount = false;
     },
     setSelectedAccounts: (state, action) => {
       state.selectedAccounts = action.payload;
-      state.isNamedAccount = checkIfUSDNamedAccountSelected(state);
     },
     setReferralCode: (state, action) => {
       state.referralCode = action.payload;
@@ -242,6 +394,9 @@ const currencyAccountsSlice = createSlice({
     },
     setTermsAccepted: (state, action) => {
       state.termsAccepted = action.payload;
+    },
+    setTermsText: (state, action) => {
+      state.termsText = action.payload;
     },
     setSearchTerm: (state, action) => {
       state.searchTerm = action.payload;
@@ -309,19 +464,20 @@ const currencyAccountsSlice = createSlice({
       } else {
         state.selectedAccounts.push(accountId);
       }
-      // Update isNamedAccount when account selection changes
-      state.isNamedAccount = checkIfUSDNamedAccountSelected(state);
     },
     clearError: (state) => {
       state.apiError = null;
       state.referralError = null;
       state.agentError = null;
+      state.packageError = null;
     },
     resetState: (state) => {
       return {
         accountOptions: [],
         namedAccounts: [],
         pooledAccounts: [],
+        isPartnerFlow: false,
+        partnerId: null,
         ucaDescription: "",
         selectedAccounts: [],
         referralCode: "",
@@ -337,20 +493,27 @@ const currencyAccountsSlice = createSlice({
         activeTab: "all",
         remittanceOnlyAccepted: false,
         termsModalOpen: false,
-        isNamedAccount: false,
         agentCode: "",
         agentError: null,
         isReferralValidating: false,
         isAgentValidating: false,
         validationMessage: "",
+        isPartnerPackageModule: "N",
+        packageOptions: [],
+        selectedPackageCurrencies: [],
+        packageFeesUrl: "",
+        packageLoading: false,
+        packageError: null,
+        isPackageValidating: false,
+        packageValidationMessage: "",
+        packageDocumentUpload: "Y",
+        packageKycVerify: "Y",
+        packageOwnerAdd: "Y",
+        packageSsnRequired: "Y",
       };
-    },
-    setIsNamedAccount: (state, action) => {
-      state.isNamedAccount = action.payload;
     },
     setAgentCode: (state, action) => {
       state.agentCode = action.payload;
-      // Basic validation - check if more than 10 characters
       if (action.payload && action.payload.length > 10) {
         state.agentError = "The provided Agent Code is invalid";
       } else {
@@ -366,6 +529,70 @@ const currencyAccountsSlice = createSlice({
     clearValidationMessage: (state) => {
       state.validationMessage = "";
     },
+
+    // ✅ NEW: Package-related reducers
+    setIsPartnerPackageModule: (state, action) => {
+      state.isPartnerPackageModule = action.payload;
+    },
+    setPackageOptions: (state, action) => {
+      state.packageOptions = action.payload;
+    },
+    setSelectedPackageCurrencies: (state, action) => {
+      state.selectedPackageCurrencies = action.payload;
+    },
+    setPackageFeesUrl: (state, action) => {
+      state.packageFeesUrl = action.payload;
+    },
+
+    // ========== FIXED: API says "Only 1 currency allowed" ==========
+    togglePackageCurrencySelection: (state, action) => {
+      const { currencyId, packageOption } = action.payload;
+
+      console.log("🔄 togglePackageCurrencySelection:", {
+        currencyId,
+        packageName: packageOption?.package_name,
+        packageAccountCount: packageOption?.package_accountCount,
+        currentSelection: [...state.selectedPackageCurrencies],
+      });
+
+      // Create a fresh copy
+      let newSelection = [...state.selectedPackageCurrencies];
+
+      // Check if this currency is already selected
+      const isAlreadySelected = newSelection.includes(currencyId);
+
+      // ========== CRITICAL FIX: API says "Only 1 currency allowed" ==========
+      // So we need to enforce SINGLE selection across ALL packages
+
+      if (isAlreadySelected) {
+        // If already selected, remove it (toggle off)
+        newSelection = newSelection.filter((id) => id !== currencyId);
+        console.log("🔘 Deselected currency:", currencyId);
+      } else {
+        // API says "Only 1 currency allowed" - so clear ALL previous selections
+        newSelection = [currencyId]; // Only allow ONE currency total
+        console.log("🔘 Selected new currency (cleared others):", currencyId);
+      }
+
+      // Update state
+      state.selectedPackageCurrencies = newSelection;
+
+      console.log("🎯 Final selection state:", newSelection);
+    },
+
+    setPackageFlags: (state, action) => {
+      const { ssnRequired, ownerAdd, documentUpload, kycVerify, feesUrl } =
+        action.payload;
+      if (ssnRequired !== undefined) state.packageSsnRequired = ssnRequired;
+      if (ownerAdd !== undefined) state.packageOwnerAdd = ownerAdd;
+      if (documentUpload !== undefined)
+        state.packageDocumentUpload = documentUpload;
+      if (kycVerify !== undefined) state.packageKycVerify = kycVerify;
+      if (feesUrl !== undefined) state.packageFeesUrl = feesUrl;
+    },
+    clearPackageValidationMessage: (state) => {
+      state.packageValidationMessage = "";
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -376,9 +603,23 @@ const currencyAccountsSlice = createSlice({
       })
       .addCase(fetchAccountOptions.fulfilled, (state, action) => {
         state.loading = false;
-        const { accountOptionsData, termsData, accountType } = action.payload;
+        const {
+          accountOptionsData,
+          termsData,
+          accountType,
+          countryId,
+          isPartnerFlow,
+          partnerId,
+        } = action.payload;
 
-        // Set description
+        console.log("✅ fetchAccountOptions successful:", {
+          isPartnerFlow,
+          partnerId,
+          accountType,
+          hasTermsData: !!termsData,
+        });
+
+        // Set description based on account type
         const descriptionKey =
           accountType === "individual"
             ? "individual_description"
@@ -386,38 +627,103 @@ const currencyAccountsSlice = createSlice({
         state.ucaDescription =
           accountOptionsData[descriptionKey] ||
           accountOptionsData.description ||
-          "Select your preferred currency accounts to get started";
+          (isPartnerFlow
+            ? `Select your currency accounts through our partner program`
+            : "Select your preferred currency accounts to get started");
 
-        // Process accounts data
+        // ✅ Process accounts data
         let accountsData = [];
-        if (Array.isArray(termsData)) {
-          accountsData = termsData;
-        } else if (termsData.data && Array.isArray(termsData.data)) {
-          accountsData = termsData.data;
-        } else if (termsData.accounts && Array.isArray(termsData.accounts)) {
-          accountsData = termsData.accounts;
-        } else if (termsData.success && Array.isArray(termsData.result)) {
-          accountsData = termsData.result;
+
+        if (isPartnerFlow) {
+          // ✅ PARTNER API RESPONSE FORMAT
+          console.log("🔍 Processing partner response format:", termsData);
+
+          if (termsData && Array.isArray(termsData)) {
+            accountsData = termsData;
+          } else if (
+            termsData &&
+            termsData.data &&
+            Array.isArray(termsData.data)
+          ) {
+            accountsData = termsData.data;
+          } else if (
+            termsData &&
+            termsData.currencies &&
+            Array.isArray(termsData.currencies)
+          ) {
+            accountsData = termsData.currencies;
+          } else if (
+            termsData &&
+            termsData.accounts &&
+            Array.isArray(termsData.accounts)
+          ) {
+            accountsData = termsData.accounts;
+          } else if (
+            termsData &&
+            termsData.success &&
+            Array.isArray(termsData.result)
+          ) {
+            accountsData = termsData.result;
+          }
+
+          // Add partner flag to accounts if needed
+          accountsData = accountsData.map((account) => ({
+            ...account,
+            is_partner_account: true,
+            partner_id: partnerId,
+          }));
+        } else {
+          // ✅ STANDARD API RESPONSE FORMAT
+          if (Array.isArray(termsData)) {
+            accountsData = termsData;
+          } else if (
+            termsData &&
+            termsData.data &&
+            Array.isArray(termsData.data)
+          ) {
+            accountsData = termsData.data;
+          } else if (
+            termsData &&
+            termsData.accounts &&
+            Array.isArray(termsData.accounts)
+          ) {
+            accountsData = termsData.accounts;
+          } else if (
+            termsData &&
+            termsData.success &&
+            Array.isArray(termsData.result)
+          ) {
+            accountsData = termsData.result;
+          }
         }
+
+        console.log("📊 Processed accounts data:", {
+          totalAccounts: accountsData.length,
+          sampleAccount: accountsData[0],
+        });
 
         // Separate accounts by type
         const named = accountsData.filter(
           (account) =>
             account.accountType === "named" ||
             account.account_type === "named" ||
-            account.type === "named"
+            account.type === "named" ||
+            (isPartnerFlow && account.account_type === "1")
         );
 
         const pooled = accountsData.filter(
           (account) =>
             account.accountType === "pooled" ||
             account.account_type === "pooled" ||
-            account.type === "pooled"
+            account.type === "pooled" ||
+            (isPartnerFlow && account.account_type === "0")
         );
 
         state.accountOptions = accountsData;
         state.namedAccounts = named;
         state.pooledAccounts = pooled;
+        state.isPartnerFlow = isPartnerFlow;
+        state.partnerId = partnerId;
 
         // Apply initial filtering based on active tab
         state.filteredNamedAccounts = filterAccountsByCurrency(
@@ -429,16 +735,18 @@ const currencyAccountsSlice = createSlice({
           state.activeTab
         );
 
-        // Reset isNamedAccount when new accounts are loaded
-        state.isNamedAccount = false;
-
         // Set terms text
-        if (termsData.termsText) {
+        if (termsData && termsData.termsText) {
           state.termsText = "I agree to " + termsData.termsText;
-        } else if (termsData.terms_text) {
+        } else if (termsData && termsData.terms_text) {
           state.termsText = "I agree to " + termsData.terms_text;
-        } else if (termsData.terms) {
+        } else if (termsData && termsData.terms) {
           state.termsText = "I agree to " + termsData.terms;
+        } else if (isPartnerFlow) {
+          const partnerName =
+            localStorage.getItem("whitelabelled_customer_partnername") ||
+            "Partner";
+          state.termsText = `I agree to ${partnerName} Terms and Conditions`;
         } else {
           state.termsText =
             "Please confirm that you agree on the Charges and Fees";
@@ -447,6 +755,7 @@ const currencyAccountsSlice = createSlice({
       .addCase(fetchAccountOptions.rejected, (state, action) => {
         state.loading = false;
         state.apiError = action.payload;
+        console.error("❌ fetchAccountOptions rejected:", action.payload);
       })
       // Fetch terms content
       .addCase(fetchTermsContent.pending, (state) => {
@@ -488,6 +797,47 @@ const currencyAccountsSlice = createSlice({
       .addCase(validateAgentCode.rejected, (state, action) => {
         state.isAgentValidating = false;
         state.agentError = action.payload;
+      })
+      // Fetch package options
+      .addCase(fetchPackageOptions.pending, (state) => {
+        state.packageLoading = true;
+        state.packageError = null;
+      })
+      .addCase(fetchPackageOptions.fulfilled, (state, action) => {
+        state.packageLoading = false;
+        const packageData = action.payload.data || action.payload;
+        state.packageOptions = packageData;
+
+        // Set initial package fees URL if available
+        if (packageData.length > 0 && packageData[0].currencies) {
+          const firstCurrency = packageData[0].currencies[0];
+          if (firstCurrency.fees_url) {
+            state.packageFeesUrl = firstCurrency.fees_url;
+          }
+        }
+
+        // Set partner-specific terms text
+        const partnerName =
+          localStorage.getItem("whitelabelled_customer_partnername") ||
+          "Partner";
+        state.termsText = `I agree to ${partnerName} Terms and Conditions`;
+      })
+      .addCase(fetchPackageOptions.rejected, (state, action) => {
+        state.packageLoading = false;
+        state.packageError = action.payload;
+      })
+      // Validate package currencies
+      .addCase(validatePackageCurrencies.pending, (state) => {
+        state.isPackageValidating = true;
+        state.packageValidationMessage = "";
+      })
+      .addCase(validatePackageCurrencies.fulfilled, (state, action) => {
+        state.isPackageValidating = false;
+        state.packageValidationMessage = "Package validation successful";
+      })
+      .addCase(validatePackageCurrencies.rejected, (state, action) => {
+        state.isPackageValidating = false;
+        state.packageValidationMessage = action.payload;
       });
   },
 });
@@ -497,6 +847,7 @@ export const {
   setReferralCode,
   setReferralError,
   setTermsAccepted,
+  setTermsText,
   setSearchTerm,
   setActiveTab,
   setRemittanceOnlyAccepted,
@@ -504,13 +855,20 @@ export const {
   toggleAccountSelection,
   clearError,
   resetState,
-  setIsNamedAccount,
   clearSelectedAccounts,
   clearAllSelections,
   setAgentCode,
   setAgentError,
   setValidationMessage,
   clearValidationMessage,
+  // ✅ NEW: Package actions
+  setIsPartnerPackageModule,
+  setPackageOptions,
+  setSelectedPackageCurrencies,
+  setPackageFeesUrl,
+  togglePackageCurrencySelection,
+  setPackageFlags,
+  clearPackageValidationMessage,
 } = currencyAccountsSlice.actions;
 
 export default currencyAccountsSlice.reducer;

@@ -205,6 +205,7 @@ const initialState = {
   showSSNField: false,
   hasNamedAccounts: false,
   isUSDSelected: false,
+  isNamedAccount: false,
   ssnError: "",
   showSSNConfirmation: false,
 
@@ -252,8 +253,8 @@ const signupSlice = createSlice({
       const { termId, accepted, metadata } = action.payload;
 
       // Ensure terms_and_conditions exists
-      const currentTerms = state.formData.terms_and_conditions 
-        ? [...state.formData.terms_and_conditions] 
+      const currentTerms = state.formData.terms_and_conditions
+        ? [...state.formData.terms_and_conditions]
         : [];
 
       if (accepted) {
@@ -448,6 +449,7 @@ export const selectIsUSDSelected = (state) => state.signup.isUSDSelected;
 export const selectSSNError = (state) => state.signup.ssnError;
 export const selectShowSSNConfirmation = (state) =>
   state.signup.showSSNConfirmation;
+export const selectIsNamedAccount = (state) => state.signup.isNamedAccount;
 
 export const selectValidationErrors = (state) => state.signup.validationErrors;
 export const selectIsFormValid = (state) => state.signup.isFormValid;

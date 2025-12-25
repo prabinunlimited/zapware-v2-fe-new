@@ -1,10 +1,13 @@
-// features/currencyAccounts/currencyAccountsSelectors.js
 import { createSelector } from "@reduxjs/toolkit";
 
+// ========== ORIGINAL SELECTORS ==========
 export const selectAccountOptions = (state) =>
   state.currencyAccounts.accountOptions;
 export const selectNamedAccounts = (state) =>
   state.currencyAccounts.namedAccounts;
+export const selectIsPartnerFlow = (state) =>
+  state.currencyAccounts.isPartnerFlow;
+export const selectPartnerId = (state) => state.currencyAccounts.partnerId;
 export const selectPooledAccounts = (state) =>
   state.currencyAccounts.pooledAccounts;
 export const selectUcaDescription = (state) =>
@@ -32,11 +35,8 @@ export const selectRemittanceOnlyAccepted = (state) =>
   state.currencyAccounts.remittanceOnlyAccepted;
 export const selectTermsModalOpen = (state) =>
   state.currencyAccounts.termsModalOpen;
-
 export const selectAgentCode = (state) => state.currencyAccounts.agentCode;
 export const selectAgentError = (state) => state.currencyAccounts.agentError;
-
-// New selectors for validation states
 export const selectIsReferralValidating = (state) =>
   state.currencyAccounts.isReferralValidating;
 export const selectIsAgentValidating = (state) =>
@@ -44,28 +44,123 @@ export const selectIsAgentValidating = (state) =>
 export const selectValidationMessage = (state) =>
   state.currencyAccounts.validationMessage;
 
+// ========== NEW PACKAGE SELECTORS ==========
+export const selectIsPartnerPackageModule = (state) =>
+  state.currencyAccounts.isPartnerPackageModule;
+export const selectPackageOptions = (state) =>
+  state.currencyAccounts.packageOptions;
+export const selectSelectedPackageCurrencies = (state) =>
+  state.currencyAccounts.selectedPackageCurrencies;
+export const selectPackageFeesUrl = (state) =>
+  state.currencyAccounts.packageFeesUrl;
+export const selectPackageLoading = (state) =>
+  state.currencyAccounts.packageLoading;
+export const selectPackageError = (state) =>
+  state.currencyAccounts.packageError;
+export const selectIsPackageValidating = (state) =>
+  state.currencyAccounts.isPackageValidating;
+export const selectPackageValidationMessage = (state) =>
+  state.currencyAccounts.packageValidationMessage;
+export const selectPackageFlags = (state) => ({
+  ssnRequired: state.currencyAccounts.packageSsnRequired,
+  ownerAdd: state.currencyAccounts.packageOwnerAdd,
+  documentUpload: state.currencyAccounts.packageDocumentUpload,
+  kycVerify: state.currencyAccounts.packageKycVerify,
+});
+
+// ========== ORIGINAL COMPUTED SELECTORS ==========
+
+// ✅ RESTORED: Selector to check if user has selected USD Named Accounts
 export const selectIsNamedAccount = createSelector(
   [selectSelectedAccounts, selectAccountOptions],
   (selectedAccounts, accountOptions) => {
-    if (!selectedAccounts || selectedAccounts.length === 0) {
+    if (!selectedAccounts || selectedAccounts.length === 0 || !accountOptions) {
       return false;
     }
 
-    // Convert selected accounts to strings for easier checking
-    const selectedAccountStrings = selectedAccounts.map((account) =>
-      typeof account === "string" ? account : account.id || account.toString()
-    );
-
-    // Check if any selected account contains "named"
-    const hasNamedAccount = selectedAccountStrings.some((accountStr) => {
-      const isNamed = accountStr.includes("named");
-      return isNamed;
+    console.log("🔍 Checking for USD Named Accounts:", {
+      selectedAccounts,
+      accountOptionsLength: accountOptions.length,
     });
 
-    return hasNamedAccount;
+    // Check if any selected account is BOTH "named" AND currency is "USD"
+    const hasUSDNamedAccount = selectedAccounts.some((accountId) => {
+      try {
+        // Convert to string for safe operations
+        const accountIdStr = accountId.toString();
+
+        // Check if it's a named account
+        const isNamed = accountIdStr.includes("named");
+        if (!isNamed) {
+          console.log("❌ Not a named account:", accountIdStr);
+          return false;
+        }
+
+        // Extract the service_provide_id from the account string
+        // Format is usually "123-named" or "456-pooled"
+        const parts = accountIdStr.split("-");
+        const serviceProvideId = parseInt(parts[0]);
+
+        if (isNaN(serviceProvideId)) {
+          console.log(
+            "❌ Could not parse service_provide_id from:",
+            accountIdStr
+          );
+          return false;
+        }
+
+        // Find the account in accountOptions
+        const account = accountOptions.find(
+          (opt) => opt.service_provide_id === serviceProvideId
+        );
+
+        if (!account) {
+          console.log("❌ Account not found in options:", serviceProvideId);
+          return false;
+        }
+
+        // Check if currency is USD
+        const isUSD = account.currency === "USD";
+
+        if (isUSD) {
+          console.log("✅ Found USD Named Account:", {
+            id: account.service_provide_id,
+            name: account.account_name,
+            currency: account.currency,
+            type: account.account_type || account.accountType,
+          });
+        } else {
+          console.log("❌ Not USD currency:", account.currency);
+        }
+
+        return isUSD;
+      } catch (error) {
+        console.error("❌ Error checking account:", accountId, error);
+        return false;
+      }
+    });
+
+    console.log(
+      "🏢 Final Result - Has USD Named Accounts:",
+      hasUSDNamedAccount
+    );
+    return hasUSDNamedAccount;
   }
 );
 
+// ✅ RESTORED: Selector to check if user has ANY Named Accounts (any currency)
+export const selectHasAnyNamedAccounts = createSelector(
+  [selectSelectedAccounts],
+  (selectedAccounts) => {
+    if (!selectedAccounts || selectedAccounts.length === 0) return false;
+
+    return selectedAccounts.some((accountId) =>
+      accountId.toString().includes("named")
+    );
+  }
+);
+
+// ✅ RESTORED: Success message selectors
 export const selectReferralSuccessMessage = createSelector(
   [selectValidationMessage, selectReferralError, selectIsReferralValidating],
   (validationMessage, referralError, isReferralValidating) => {
@@ -84,7 +179,9 @@ export const selectAgentSuccessMessage = createSelector(
   }
 );
 
-// Selector to check if form is ready to submit
+// ========== UPDATED FOR "ONLY 1 CURRENCY ALLOWED" ==========
+
+// Selector to check if form is ready to submit (UPDATED)
 export const selectIsFormValid = createSelector(
   [
     selectSelectedAccounts,
@@ -92,60 +189,83 @@ export const selectIsFormValid = createSelector(
     selectTermsAccepted,
     selectReferralError,
     selectAgentError,
+    selectIsPartnerPackageModule,
+    selectSelectedPackageCurrencies,
+    selectPackageOptions,
   ],
   (
     selectedAccounts,
     remittanceOnlyAccepted,
     termsAccepted,
     referralError,
-    agentError
+    agentError,
+    isPartnerPackageModule,
+    selectedPackageCurrencies,
+    packageOptions
   ) => {
-    // Check if at least one account is selected OR remittance only is chosen
-    const hasSelection = selectedAccounts.length > 0 || remittanceOnlyAccepted;
+    if (isPartnerPackageModule === "Y") {
+      // If remittance only is selected, only check terms and errors
+      if (remittanceOnlyAccepted) {
+        return termsAccepted && !referralError && !agentError;
+      }
 
-    // Check if terms are accepted
-    const hasAcceptedTerms = termsAccepted;
+      // ========== UPDATED: API says "Only 1 currency allowed" ==========
+      const hasPackageSelection = selectedPackageCurrencies.length === 1;
+      
+      if (!hasPackageSelection) {
+        return false;
+      }
 
-    // Check if there are no validation errors
-    const hasNoErrors = !referralError && !agentError;
+      const hasAcceptedTerms = termsAccepted;
+      const hasNoErrors = !referralError && !agentError;
 
-    return hasSelection && hasAcceptedTerms && hasNoErrors;
+      return hasPackageSelection && hasAcceptedTerms && hasNoErrors;
+    } else {
+      // Regular mode validation
+      const hasSelection = selectedAccounts.length > 0 || remittanceOnlyAccepted;
+      const hasAcceptedTerms = termsAccepted;
+      const hasNoErrors = !referralError && !agentError;
+
+      return hasSelection && hasAcceptedTerms && hasNoErrors;
+    }
   }
 );
 
-// Selector to get the submit button disabled state
+// Also update selectIsSubmitDisabled to be simpler
 export const selectIsSubmitDisabled = createSelector(
   [
     selectLoading,
+    selectPackageLoading,
     selectIsReferralValidating,
     selectIsAgentValidating,
-    selectSelectedAccounts,
-    selectRemittanceOnlyAccepted,
-    selectTermsAccepted,
+    selectIsPackageValidating,
+    selectIsFormValid, // Use the form validation result
   ],
   (
     loading,
+    packageLoading,
     isReferralValidating,
     isAgentValidating,
-    selectedAccounts,
-    remittanceOnlyAccepted,
-    termsAccepted
+    isPackageValidating,
+    isFormValid
   ) => {
-    // Button should be disabled if:
-    // 1. Any loading/validation is in progress
-    // 2. No accounts selected AND remittance only is not chosen
-    // 3. Terms are not accepted
-    return (
+    // Disable if any loading/validation is in progress
+    if (
       loading ||
+      packageLoading ||
       isReferralValidating ||
       isAgentValidating ||
-      (selectedAccounts.length === 0 && !remittanceOnlyAccepted) ||
-      !termsAccepted
-    );
+      isPackageValidating
+    ) {
+      return true;
+    }
+
+    // Disable if form is not valid
+    return !isFormValid;
   }
 );
 
-// Selector to get all form data for submission
+// Selector to get all form data for submission (UPDATED)
 export const selectFormData = createSelector(
   [
     selectSelectedAccounts,
@@ -153,20 +273,44 @@ export const selectFormData = createSelector(
     selectReferralCode,
     selectAgentCode,
     selectRemittanceOnlyAccepted,
+    selectIsPartnerPackageModule,
+    selectSelectedPackageCurrencies,
+    selectPackageOptions,
+    selectPackageFlags,
   ],
   (
     selectedAccounts,
     accountOptions,
     referralCode,
     agentCode,
-    remittanceOnlyAccepted
+    remittanceOnlyAccepted,
+    isPartnerPackageModule,
+    selectedPackageCurrencies,
+    packageOptions,
+    packageFlags
   ) => {
-    return {
-      service_provide_ids: selectedAccounts,
+    const baseData = {
+      service_provide_ids:
+        isPartnerPackageModule === "Y" ? [] : selectedAccounts,
       accountOptions: accountOptions,
       referral_code: referralCode,
       agent_code: agentCode,
       is_remit: remittanceOnlyAccepted ? 1 : 0,
     };
+
+    if (isPartnerPackageModule === "Y") {
+      return {
+        ...baseData,
+        is_partner_package_module: "Y",
+        package_currencies: selectedPackageCurrencies,
+        package_options: packageOptions,
+        ssn_required: packageFlags.ssnRequired || "Y",
+        owner_add: packageFlags.ownerAdd || "Y",
+        document_upload: packageFlags.documentUpload || "Y",
+        kyc_verify: packageFlags.kycVerify || "Y",
+      };
+    }
+
+    return baseData;
   }
 );

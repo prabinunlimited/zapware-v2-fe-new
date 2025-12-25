@@ -58,6 +58,7 @@ const ManualDeposit = ({
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
   const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
+  const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
   const banksLoading = useSelector(selectBanksLoading);
 
   const API_URL = import.meta.env.VITE_API_URL;
@@ -77,26 +78,6 @@ const ManualDeposit = ({
         })`,
       }));
   }, [allBeneficiaries]);
-
-  // FETCH BENEFICIARIES ON MOUNT
-  useEffect(() => {
-    const customerId =
-      paramCustomerId || localStorage.getItem("customerId") || "1720";
-
-    if (customerId && allBeneficiaries.length === 0 && !beneficiariesLoading) {
-      console.log(
-        "🔄 ManualDeposit: Fetching beneficiaries for customer:",
-        customerId
-      );
-      dispatch(fetchBeneficiaries(customerId));
-    }
-  }, [
-    dispatch,
-    paramCustomerId,
-    allBeneficiaries.length,
-    beneficiariesLoading,
-  ]);
-  const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
 
   // ADD THESE LOGS HERE:
   console.log("All beneficiaries from Redux:", allBeneficiaries);

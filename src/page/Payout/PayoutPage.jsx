@@ -412,6 +412,7 @@ const PayoutPage = () => {
 
         if (
           serviceProviderId !== 27 &&
+          serviceProviderId !== 24 &&
           ((formValues.from === "GBP" && formValues.to === "GBP") ||
             (formValues.from === "GBP" && formValues.to === "DKK") ||
             (formValues.from === "GBP" && formValues.to === "EUR") ||
@@ -546,6 +547,7 @@ const PayoutPage = () => {
       USD: ["swift", "bank"],
       NPR: ["bank"],
       INR: ["bank"],
+      CAD: ["bank"],
       KES: ["bank"],
       AED: ["bank"],
       PKR: ["bank"],
@@ -634,8 +636,9 @@ const PayoutPage = () => {
 
   const showTransferPurposeField = () => {
     if (
-      ["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
-      toServiceProviderInr === 27
+      (["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
+        toServiceProviderInr === 27) ||
+      toServiceProviderInr === 24
     )
       return true;
     if (
@@ -1079,7 +1082,8 @@ const PayoutPage = () => {
                           <option value="10">SALARY</option>
                           <option value="11">TAX PAYMENT</option>
                         </>
-                      ) : toServiceProviderInr === 27 ? (
+                      ) : toServiceProviderInr === 27 ||
+                        toServiceProviderInr === 24 ? (
                         <>
                           <option value="FAM">Family Maintenance</option>
                           <option value="SAV">SAVINGS</option>
@@ -1194,16 +1198,18 @@ const PayoutPage = () => {
                     <option value="">Select a bank account</option>
                     {safeBeneficiaryBanks.map((bank) => (
                       <option key={bank.id} value={bank.id}>
-                        {bank.payment_method === "Swift"
-                          ? `${bank.benef_iban || "N/A"} - ${
-                              bank.swift || "N/A"
-                            }`
+                        {bank.payment_method === "swift"
+                          ? formValues.to === "USD" || formValues.to === "CAD"
+                            ? `[Swift] ${bank.bank_acc_no || "N/A"}` // Display bank_acc_no for USD and CAD
+                            : `[Swift] ${bank.benef_iban || "N/A"} - ${
+                                bank.swift || "N/A"
+                              }` // For other currencies, display IBAN and Swift code
                           : bank.rails === "Card"
-                          ? `(${bank.rails}) ${bank.bank_name} - ${
+                          ? `[Card] (${bank.rails}) ${bank.bank_name} - ${
                               bank.card_number || "N/A"
                             }`
                           : bank.bank_acc_no
-                          ? `${bank.bank_name} - ${bank.bank_acc_no}`
+                          ? `[Local] ${bank.bank_acc_no}`
                           : `${bank.benef_iban || "N/A"}`}
                       </option>
                     ))}

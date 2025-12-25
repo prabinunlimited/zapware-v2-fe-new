@@ -1,9 +1,12 @@
-import React from 'react'
+import React from "react";
+import Remittance from "../Remittance/remittance";
 
 function HomeRemit() {
   return (
-    <div>HomeRemit</div>
-  )
+    <div>
+      <Remittance />
+    </div>
+  );
 }
 
-export default HomeRemit
+export default HomeRemit;

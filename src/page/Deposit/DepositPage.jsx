@@ -46,10 +46,10 @@ import {
 
 // ✅ CORRECT: Import account selectors from AccountSlice (ONCE)
 import {
-  selectAccounts,
-  selectAccountLoading,
-  selectAccountError,
-} from "../../components/Dashboard/Account/AccountSummary/AccountSlice";
+  selectAccounts as selectHomeAccounts,
+  selectAccountLoading as selectHomeAccountLoading,
+  selectAccountError as selectHomeAccountError,
+} from "../../page/Home/HomeSlice";
 
 import { tokenService } from "../../services/authService";
 
@@ -74,13 +74,31 @@ import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 // Fixed useCurrency hook that uses existing Redux account data
 const useFixedCurrency = (initialCurrency) => {
   // Get accounts and loading state from Redux (same data used in AccountSummary)
-  const accounts = useSelector(selectAccounts);
-  const accountLoading = useSelector(selectAccountLoading);
-  const accountError = useSelector(selectAccountError);
+  const accounts = useSelector(selectHomeAccounts);
+  const accountLoading = useSelector(selectHomeAccountLoading);
+  const accountError = useSelector(selectHomeAccountError);
 
-  console.log("🔍 useFixedCurrency - Raw accounts from Redux:", accounts);
+  console.log("🔍 useFixedCurrency - Raw accounts from HomeSlice:", accounts);
+  console.log("🔍 useFixedCurrency - Accounts count:", accounts?.length || 0);
   console.log("⏳ useFixedCurrency - Loading state:", accountLoading);
   console.log("❌ useFixedCurrency - Error state:", accountError);
+
+  // Add debug to see the actual account structure
+  useEffect(() => {
+    if (accounts && accounts.length > 0) {
+      console.log("🔍 ACCOUNT STRUCTURE DEBUG:", {
+        firstAccount: accounts[0],
+        allCurrencies: accounts.map((acc) => ({
+          currency: acc.currency,
+          available_balance: acc.available_balance,
+          account_name: acc.account_name,
+          account_number: acc.account_number,
+          iban: acc.iban,
+          account_id: acc.account_id,
+        })),
+      });
+    }
+  }, [accounts]);
 
   useEffect(() => {
     // Pre-check and ensure token is available before any API calls
@@ -604,7 +622,7 @@ const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
       const navigationState = {
         customerId: customerId,
         amount: parseFloat(deposit.amount),
-        currency: deposit.selectedCurrency,
+        currency: deposit.selectedCurrency || selectedCurrency,
         purpose: deposit.purpose,
         paymentMethod: deposit.paymentMethod,
       };
@@ -1314,6 +1332,7 @@ const DepositPageContent = () => {
                         deposit={deposit}
                         navigate={navigate}
                         customerId={customerId}
+                        selectedCurrency={deposit.selectedCurrency}
                       />
                     ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
                     (deposit.selectedCurrency === "EUR" ||
