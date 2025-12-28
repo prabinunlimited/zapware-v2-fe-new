@@ -530,7 +530,7 @@ const initialState = {
     occupation: "",
     convertedValue: 0,
     transaction_type: "",
-    promocode: "",
+    promo_code: "",
     purpose: "",
     description: "",
     country_id: "",

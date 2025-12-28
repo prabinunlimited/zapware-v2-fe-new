@@ -38,6 +38,41 @@ export const initializePlaidLink = createAsyncThunk(
   }
 );
 
+export const initializePlaidLinkIframe = createAsyncThunk(
+  "plaid/initializePlaidLink",
+  async (requestId) => {
+    console.log("🔍 Initializing Plaid link for customer:", requestId);
+
+    const response = await fetch(`${API_URL}/link-bank-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN":
+          document.querySelector('meta[name="csrf-token"]')?.content || "",
+      },
+      body: JSON.stringify({ requestId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // ✅ ADD: Validate the response structure
+    console.log("🔍 Plaid API Response:", data);
+
+    if (!data.link_token) {
+      // Check if there's an error message in the response
+      const errorMessage =
+        data.message || data.error || "No link token received";
+      throw new Error(errorMessage);
+    }
+
+    return data;
+  }
+);
+
 export const storePlaidData = createAsyncThunk(
   "plaid/storePlaidData",
   async ({ public_token, accounts, customerId }) => {
@@ -52,6 +87,37 @@ export const storePlaidData = createAsyncThunk(
         public_token,
         accounts,
         customerId,
+      }),
+    });
+
+    const resultData = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        resultData.error
+          ? parsePlaidErrorMessage(resultData.error)
+          : resultData.message || "Failed to save bank details"
+      );
+    }
+
+    return resultData;
+  }
+);
+
+export const storePlaidDataIframe = createAsyncThunk(
+  "plaid/storePlaidDataIframe",
+  async ({ public_token, accounts, requestId }) => {
+    const response = await fetch(`${API_URL}/store-link-bank-data`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN":
+          document.querySelector('meta[name="csrf-token"]')?.content || "",
+      },
+      body: JSON.stringify({
+        public_token,
+        accounts,
+        requestId,
       }),
     });
 

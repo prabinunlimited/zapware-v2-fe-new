@@ -1,6 +1,7 @@
 // src/features/BankAccounts/slices/bankLinkSlice.js
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../../services/api";
+import { setCallbackUrl } from "./depositSliceIframe";
 
 // ✅ Async thunk for fetching Plaid-linked bank accounts (matching reference structure)
 export const fetchBankAccounts = createAsyncThunk(
@@ -28,6 +29,44 @@ export const fetchBankAccounts = createAsyncThunk(
         accounts.length,
         accounts
       );
+      return accounts;
+    } catch (error) {
+      console.error("❌ Failed to load bank accounts:", error);
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load bank accounts"
+      );
+    }
+  }
+);
+
+export const fetchLinkBankRequests = createAsyncThunk(
+  "bankLink/fetchLinkBankRequests",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.post("/link-bank-request-details", {
+        requestId: requestId,
+      });
+
+      // ✅ FIX: Handle the actual API response structure
+      let accounts = [];
+      const data = response.data;
+
+      if (data?.data && Array.isArray(data.data)) {
+        accounts = data.data; // This matches your API response
+      } else if (Array.isArray(data)) {
+        accounts = data;
+      } else if (data?.status === "success") {
+        accounts = data.data || [];
+      }
+
+      console.log(
+        "✅ link-bank-request-details loaded",
+        accounts.length,
+        accounts
+      );
+
+      setCustomerId(accounts.customer_id);
+      setCallbackUrl(accounts.callback_url);
       return accounts;
     } catch (error) {
       console.error("❌ Failed to load bank accounts:", error);
@@ -70,13 +109,10 @@ export const handleBankLinkSuccess = createAsyncThunk(
   "bankLink/handleBankLinkSuccess",
   async ({ response, customerId }, { rejectWithValue, dispatch }) => {
     try {
-      console.log("🎯 handleBankLinkSuccess STARTED with:", response);
-
       if (!response) {
         throw new Error("No response received from bank linking");
       }
 
-      // Check for KYC status
       if (
         (response.kyc_status && response.kyc_status === "pending") ||
         (response.message && response.message.includes("KYC"))
@@ -87,39 +123,22 @@ export const handleBankLinkSuccess = createAsyncThunk(
         };
       }
 
-      const hasSuccessAccounts = response.success_accounts?.length > 0;
-      const hasFailedAccounts = response.failed_accounts?.length > 0;
-
-      if (hasSuccessAccounts || !hasFailedAccounts) {
-        // This is a successful response
-        return {
-          type: "success",
-          data: response,
-          message: response.message || "Bank account linked successfully",
-        };
-      } else {
-        throw new Error(response.message || "Bank linking failed");
+      if (!response.success) {
+        throw new Error(
+          response.message || "Bank linking failed without error message"
+        );
       }
-    } catch (error) {
-      console.error("❌ handleBankLinkSuccess ERROR:", error);
-      return rejectWithValue(error.message || "Failed to process bank linking");
-    }
-  }
-);
 
-export const refreshAccountsAfterSuccess = createAsyncThunk(
-  "bankLink/refreshAccountsAfterSuccess",
-  async (customerId, { rejectWithValue, dispatch }) => {
-    try {
-      // Fetch bank accounts
+      // Refresh accounts after successful linking
       await dispatch(fetchBankAccounts(customerId));
 
-      // Note: If you need to fetch manual bank details too, add it here
-      // Example: await dispatch(fetchManualBankDetails(customerId));
-
-      return { success: true };
+      return {
+        type: "success",
+        data: response,
+        message: "Bank account linked successfully",
+      };
     } catch (error) {
-      return rejectWithValue("Failed to refresh accounts");
+      return rejectWithValue(error.message || "Failed to process bank linking");
     }
   }
 );
@@ -173,10 +192,6 @@ const bankLinkSlice = createSlice({
     },
     setKycStatus: (state, action) => {
       state.kycStatus = action.payload;
-    },
-
-    setIsProcessing: (state, action) => {
-      state.isProcessing = action.payload;
     },
 
     // Status management (matching reference)
@@ -252,40 +267,18 @@ const bankLinkSlice = createSlice({
       .addCase(handleBankLinkSuccess.fulfilled, (state, action) => {
         state.isAddingAccount = false;
 
-        console.log(
-          "🎯 handleBankLinkSuccess.fulfilled payload:",
-          action.payload
-        );
-
         if (action.payload.type === "kyc_pending") {
           state.kycStatus = action.payload.message;
         } else if (action.payload.type === "success") {
-          // ✅ FIX: Make sure we're setting the data correctly
-          state.apiResponse = action.payload.data || action.payload;
+          state.apiResponse = action.payload.data;
           state.showSuccessModal = true;
           state.showPlaidLink = false;
-
-          console.log("✅ Success modal should show now:", {
-            apiResponseSet: !!state.apiResponse,
-            showSuccessModal: state.showSuccessModal,
-          });
         }
       })
       .addCase(handleBankLinkSuccess.rejected, (state, action) => {
         state.isAddingAccount = false;
         state.error = action.payload;
         state.showPlaidLink = false;
-      })
-
-      .addCase(refreshAccountsAfterSuccess.pending, (state) => {
-        state.isProcessing = true;
-      })
-      .addCase(refreshAccountsAfterSuccess.fulfilled, (state) => {
-        state.isProcessing = false;
-      })
-      .addCase(refreshAccountsAfterSuccess.rejected, (state, action) => {
-        state.isProcessing = false;
-        state.error = action.payload;
       });
   },
 });
@@ -295,7 +288,6 @@ export const {
   setShowSuccessModal,
   setApiResponse,
   setCurrentPage,
-  setIsProcessing,
   setKycStatus,
   clearErrors,
   clearDeleteStatus,

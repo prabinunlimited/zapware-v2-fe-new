@@ -15,8 +15,8 @@ import {
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
-import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
-import CardPayment from "./components/Card/CardPayment";
+import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiationIframe";
+import CardPayment from "./components/Card/CardPaymentIframe";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -33,7 +33,8 @@ import {
   fetchManualAccountDetails,
   setShowPaymentInitiation,
   selectShowPaymentInitiation,
-} from "./slices/depositSlice";
+  fetchUniqueReferenceDetails,
+} from "./slices/depositSliceIframe";
 
 // ✅ CORRECT: Import USD account actions and selectors from bankAccountSlice
 import {
@@ -345,6 +346,7 @@ function getDepositFallback() {
     setSelectedBankAccount: () => {},
     handleSubmit: (e) => e.preventDefault(),
     resetTransaction: () => {},
+    setCallbackUrl: () => {},
   };
 }
 
@@ -537,7 +539,7 @@ const LoadingState = () => (
         transition={{ delay: 0.4 }}
         className="text-gray-500 text-sm"
       >
-        Preparing your deposit experience...
+        Preparing your Payment experience...
       </motion.p>
     </motion.div>
   </div>
@@ -584,10 +586,10 @@ const EmptyState = ({ navigate }) => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
     <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-lg font-sans">
       <h2 className="text-xl font-bold text-yellow-600 mb-4 font-sans">
-        No Accounts Available for Deposits
+        No Accounts Available for Payments
       </h2>
       <p className="text-gray-700 mb-4 font-sans">
-        You don't have any accounts set up for deposits. Please contact support
+        You don't have any accounts set up for Payments. Please contact support
         to set up your accounts.
       </p>
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
@@ -1134,7 +1136,7 @@ const DepositPageContent = () => {
                 }`}
               >
                 <FaUniversity className="inline mr-2" />
-                Make Deposit
+                Make Payment
               </button>
               <button
                 onClick={() => setActiveTab("bank-accounts")}
@@ -1155,7 +1157,7 @@ const DepositPageContent = () => {
             // Your existing deposit form content
             <div>
               <h1 className="text-3xl font-bold text-gray-900 font-sans">
-                Deposit Funds
+                Payment
               </h1>
               <p className="text-gray-600 mt-2 font-sans" {...textColorProps}>
                 Add money to your account using any of the available methods
@@ -1188,7 +1190,7 @@ const DepositPageContent = () => {
             <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 w-full">
               <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                 <h2 className="text-xl font-medium text-gray-900 font-sans">
-                  Deposit Details
+                  Payment Details
                 </h2>
               </div>
 

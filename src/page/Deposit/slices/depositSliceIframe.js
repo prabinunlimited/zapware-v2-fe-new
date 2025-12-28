@@ -18,7 +18,7 @@ export const submitDeposit = createAsyncThunk(
       }
 
       const response = await api.post(
-        "/transactions/remittance-transaction",
+        "/transactions/sila-transaction-payin",
         depositData,
         {
           headers: {
@@ -72,7 +72,7 @@ export const fetchManualAccountDetails = createAsyncThunk(
   "deposit/fetchManualAccountDetails",
   async (currency, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("authtoken");
+      const token = useParams();
 
       if (!token) throw new Error("Authentication required");
       if (!currency) throw new Error("Currency parameter is required");
@@ -113,6 +113,43 @@ export const fetchManualAccountDetails = createAsyncThunk(
         ...response.data,
         currency: response.data.currency || currency,
       };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+          error.message ||
+          `Failed to load ${currency} account details`
+      );
+    }
+  }
+);
+
+export const fetchUniqueReferenceDetails = createAsyncThunk(
+  "deposit/fetchUniqueReferenceDetails",
+  async (currency, { rejectWithValue }) => {
+    try {
+      const authtoken = useParams();
+      const uniqueReference = useParams();
+      const response = await fetch(
+        `${API_URL}/transactions/detail-by-unique-reference/${uniqueReference}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+        }
+      );
+
+      if (!response.ok)
+        throw new Error("Failed to fetch Customer Bank Accounts");
+
+      const data = await response.json();
+      const fetchedAccounts = data.data || [];
+      console.log("366424",fetchedAccounts);
+      setSelectedBankAccount(fetchedAccounts.customerBankAccountId);
+      setSelectedCurrency(fetchedAccounts.currency_code);
+      setPaymentMethod(fetchedAccounts.payment_method);
+      setCallbackUrl(fetchedAccounts.callback_url);
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
@@ -422,7 +459,7 @@ export const {
   setAmount,
   setPurpose,
   setSelectedBankAccount,
-
+  setCallbackUrl,
   // Form validation actions
   setFormErrors,
   clearFormError,
