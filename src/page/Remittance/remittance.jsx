@@ -67,11 +67,14 @@ import {
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 import {
-  checkSilaBankAccounts,
-  selectSilaBankAccounts,
+  fetchUSDBankAccounts,
+  selectUSDBankAccounts,
   selectHasSilaAccounts,
-  selectSilaAccountsLoading,
-  selectSilaAccountsError,
+  selectUSDAccountsLoading,
+  selectUSDAccountsError,
+} from "../../page/Deposit/slices/bankAccountSlice";
+
+import {
   setSelectedBankAccount,
   selectSelectedBankAccount,
 } from "../../page/Deposit/slices/depositSlice";
@@ -117,10 +120,10 @@ const Remittance = () => {
     (state) => state.remittanceStatic
   );
 
-  const silaBankAccounts = useSelector(selectSilaBankAccounts);
+  const silaBankAccounts = useSelector(selectUSDBankAccounts); // Changed selector
   const hasSilaAccounts = useSelector(selectHasSilaAccounts);
-  const silaAccountsLoading = useSelector(selectSilaAccountsLoading);
-  const silaAccountsError = useSelector(selectSilaAccountsError);
+  const silaAccountsLoading = useSelector(selectUSDAccountsLoading); // Changed selector
+  const silaAccountsError = useSelector(selectUSDAccountsError);
   const selectedSilaBankAccount = useSelector(selectSelectedBankAccount);
 
   // Local state for UI
@@ -311,28 +314,47 @@ const Remittance = () => {
     initializeData();
   }, [customerId, dispatch, navigate]);
 
-  useEffect(() => {
-  const customerIdToUse = customerId || localStorage.getItem("customerId") || "1720";
-  
-  if (customerIdToUse && !silaAccountsLoading) {
-    console.log("🔄 Remittance: Fetching Sila bank accounts for customer:", customerIdToUse);
-    dispatch(checkSilaBankAccounts(customerIdToUse))
-      .unwrap()
-      .then(result => {
-        console.log("✅ Sila bank accounts loaded:", result);
-      })
-      .catch(error => {
-        console.error("❌ Failed to load Sila bank accounts:", error);
-      });
-  }
-}, [dispatch, customerId, silaAccountsLoading]);
+  const hasFetchedSilaAccounts = useRef(false);
 
-// ✅ Add this to reset loading state when unmounting
-useEffect(() => {
-  return () => {
-    // Cleanup function - runs when component unmounts
-  };
-}, []);
+  useEffect(() => {
+    const customerIdToUse =
+      customerId || localStorage.getItem("customerId") || "1720";
+
+    // Only fetch if we haven't fetched already and not currently loading
+    if (
+      customerIdToUse &&
+      !silaAccountsLoading &&
+      !hasFetchedSilaAccounts.current
+    ) {
+      console.log("🔄 Remittance: Fetching Sila bank accounts...");
+
+      hasFetchedSilaAccounts.current = true; // Mark as fetched
+
+      dispatch(fetchUSDBankAccounts())
+        .unwrap()
+        .then((result) => {
+          console.log("✅ Sila bank accounts loaded:", result?.length || 0);
+        })
+        .catch((error) => {
+          console.error("❌ Failed to load Sila bank accounts:", error);
+          hasFetchedSilaAccounts.current = false; // Reset on error to allow retry
+        });
+    }
+  }, [dispatch, customerId, silaAccountsLoading]);
+
+  // ✅ Add this to reset loading state when unmounting
+  useEffect(() => {
+    return () => {
+      // Cleanup function - runs when component unmounts
+    };
+  }, []);
+
+  // ✅ Add this to reset loading state when unmounting
+  useEffect(() => {
+    return () => {
+      // Cleanup function - runs when component unmounts
+    };
+  }, []);
 
   useEffect(() => {
     if (!initialLoading && !formData.sendAmount) {
@@ -691,6 +713,14 @@ useEffect(() => {
     dispatch,
   ]);
 
+  useEffect(() => {
+    console.log(
+      "🔄 Remittance - Current paymentMethod:",
+      formData.paymentMethod
+    );
+    console.log("🔄 Remittance - Full formData:", formData);
+  }, [formData.paymentMethod, formData]);
+
   const formatNumberInput = (value) => {
     if (!value) return "";
 
@@ -1036,266 +1066,6 @@ useEffect(() => {
     }
   }, [beneficiaryCode, dispatch, handleBeneficiarySelect]);
 
-  const handleNextStep = useCallback(() => {
-    if (step === 1) {
-      // Validate minimum amount
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        toast.error(
-          `Minimum transfer amount is ${
-            formData.sendCurrency?.value || "USD"
-          } 5.00`,
-          {
-            position: "top-center",
-            autoClose: 5000,
-          }
-        );
-        return;
-      }
-
-      // Validate both currencies are selected
-      if (!formData.sendCurrency || !formData.receiveCurrency) {
-        toast.error("Please select both currencies", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      // Validate exchange rate is available
-      if (!exchangeRateData?.fxRate) {
-        toast.error(
-          "Exchange rate is not available. Please check your currency selection.",
-          {
-            position: "top-center",
-            autoClose: 5000,
-          }
-        );
-        return;
-      }
-
-      // ✅ ADDED: Validate Sila bank account for USD bank transfers
-      if (
-        formData.paymentMethod === "bank" &&
-        formData.sendCurrency?.value === "USD"
-      ) {
-        // Check if user has Sila accounts
-        if (!hasSilaAccounts) {
-          toast.error(
-            "No linked bank accounts found. Please link a bank account to proceed with USD transfers.",
-            {
-              position: "top-center",
-              autoClose: 5000,
-            }
-          );
-          return;
-        }
-
-        // Check if a Sila bank account is selected
-        if (!selectedSilaBankAccount) {
-          toast.error("Please select your bank account for USD transfers", {
-            position: "top-center",
-            autoClose: 5000,
-          });
-          return;
-        }
-
-        // Check if the selected account is verified
-        if (!selectedSilaBankAccount.web_debit_verified) {
-          toast.error(
-            "Selected bank account needs verification. Please select a verified account or verify this account first.",
-            {
-              position: "top-center",
-              autoClose: 5000,
-            }
-          );
-          return;
-        }
-      }
-
-      // Validate manual deposit details
-      if (formData.paymentMethod === "manual") {
-        if (!manualAccountDetails || manualAccountError) {
-          let errorMessage = "Bank details are not available for cash deposit.";
-
-          if (manualAccountError) {
-            if (typeof manualAccountError === "string") {
-              errorMessage = manualAccountError;
-            } else if (manualAccountError?.message) {
-              errorMessage = manualAccountError.message;
-            } else if (manualAccountError?.data?.message) {
-              errorMessage = manualAccountError.data.message;
-            } else if (manualAccountError?.status === 404) {
-              errorMessage =
-                "Bank details not found for the selected currency.";
-            }
-          }
-
-          toast.error(
-            `${errorMessage} Please choose a different payment method or currency.`,
-            {
-              position: "top-center",
-              autoClose: 5000,
-            }
-          );
-          return;
-        }
-      }
-
-      dispatch(setStep(2));
-      toast.success("Moving to recipient details", {
-        position: "top-right",
-        autoClose: 2000,
-      });
-    } else if (step === 2) {
-      // Validate beneficiary selection
-      if (!selectedBeneficiary) {
-        toast.error("Please select a beneficiary", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      // Validate purpose and income source
-      if (!formData.purpose || !formData.incomeSource) {
-        toast.error("Please fill in purpose and income source", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      // Validate payment method specific requirements
-      if (formData.paymentMethod === "manual") {
-        if (!formData.document) {
-          toast.error("Please upload payment proof for cash deposit", {
-            position: "top-center",
-            autoClose: 5000,
-          });
-          return;
-        }
-      }
-
-      if (formData.paymentMethod === "bank") {
-        // ✅ ADDED: Special validation for USD bank transfers
-        if (formData.sendCurrency?.value === "USD") {
-          // Validate Sila bank account for USD
-          if (!selectedSilaBankAccount) {
-            toast.error("Please select your bank account for USD transfers", {
-              position: "top-center",
-              autoClose: 5000,
-            });
-            return;
-          }
-
-          if (!selectedSilaBankAccount.web_debit_verified) {
-            toast.error("Selected bank account needs verification", {
-              position: "top-center",
-              autoClose: 5000,
-            });
-            return;
-          }
-
-          // Validate beneficiary bank for USD transfers
-          if (!selectedBank) {
-            toast.error("Please select a bank account for the beneficiary", {
-              position: "top-center",
-              autoClose: 5000,
-            });
-            return;
-          }
-        } else {
-          // For non-USD bank transfers, only validate beneficiary bank
-          if (!selectedBank) {
-            toast.error("Please select a bank account for the beneficiary", {
-              position: "top-center",
-              autoClose: 5000,
-            });
-            return;
-          }
-        }
-      }
-
-      // ✅ ADDED: Validate Sila bank account for card payments with USD
-      // if (
-      //   formData.paymentMethod === "card" &&
-      //   formData.sendCurrency?.value === "USD" &&
-      //   !selectedSilaBankAccount
-      // ) {
-      //   toast.error("Please select your bank account for USD card payments", {
-      //     position: "top-center",
-      //     autoClose: 5000,
-      //   });
-      //   return;
-      // }
-
-      dispatch(setStep(3));
-      toast.success("Moving to review and confirm", {
-        position: "top-right",
-        autoClose: 2000,
-      });
-    } else if (step === 3) {
-      // Validate terms agreement
-      if (!formData.agreeToTerms) {
-        toast.error("Please agree to the terms and conditions", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      // ✅ ADDED: Final validation for Sila bank accounts
-      if (
-        formData.paymentMethod === "bank" &&
-        formData.sendCurrency?.value === "USD" &&
-        !selectedSilaBankAccount
-      ) {
-        toast.error("Bank account selection is required for USD transfers", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      // Check for Open Banking availability
-      if (
-        formData.paymentMethod === "bank" &&
-        isOpenBankingAvailable() &&
-        formData.sendCurrency?.value !== "USD"
-      ) {
-        // For EUR/GBP/DKK, use Open Banking flow
-        handleInitiateOpenBanking();
-      } else {
-        // For USD or other methods, submit regular transaction
-        handleSubmitTransaction();
-      }
-    }
-  }, [
-    step,
-    formData,
-    exchangeRateData,
-    manualAccountDetails,
-    manualAccountError,
-    selectedBeneficiary,
-    selectedBank,
-    selectedSilaBankAccount, // ✅ ADDED
-    hasSilaAccounts, // ✅ ADDED
-    dispatch,
-    handleInitiateOpenBanking,
-    handleSubmitTransaction,
-    isOpenBankingAvailable,
-  ]);
-
-  const handlePreviousStep = useCallback(() => {
-    if (step > 1) {
-      dispatch(setStep(step - 1));
-      toast.info("Returning to previous step", {
-        position: "top-right",
-        autoClose: 2000,
-      });
-    }
-  }, [step, dispatch]);
-
   const isOpenBankingAvailable = useCallback(() => {
     const openBankingCurrencies = ["EUR", "GBP", "DKK"];
     const sendCurrency = formData.sendCurrency?.value;
@@ -1365,15 +1135,15 @@ useEffect(() => {
       from_currency: formData.sendCurrency?.value,
       to_currency: formData.receiveCurrency?.value,
 
-   ...(selectedSilaBankAccount && formData.paymentMethod === "bank" 
-  ? {
-      sila_account_id: selectedSilaBankAccount.id,
-      sila_payment_instrument_id: selectedSilaBankAccount.payment_instrument_id,
-      sila_account_name: selectedSilaBankAccount.account_name,
-      sila_routing_number: selectedSilaBankAccount.routing_number,
-    }
-  : {}
-),
+      ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
+        ? {
+            sila_account_id: selectedSilaBankAccount.id,
+            sila_payment_instrument_id:
+              selectedSilaBankAccount.payment_instrument_id,
+            sila_account_name: selectedSilaBankAccount.account_name,
+            sila_routing_number: selectedSilaBankAccount.routing_number,
+          }
+        : {}),
 
       // REQUIRED: Amount fields
       send_amount: parseFloat(formData.sendAmount),
@@ -1453,14 +1223,218 @@ useEffect(() => {
     selectedSilaBankAccount,
     formData.paymentMethod,
     formData.purpose,
-  formData.incomeSource,
-  formData.occupation,
-  formData.relation,
-  formData.payout_method,
-  formData.document,
-  formData.agreeToTerms,
-
+    formData.incomeSource,
+    formData.occupation,
+    formData.relation,
+    formData.payout_method,
+    formData.document,
+    formData.agreeToTerms,
   ]);
+
+  const handleNextStep = useCallback(() => {
+    if (step === 1) {
+      // ✅ STEP 1: Only validate basic transfer details
+      // Validate minimum amount
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        toast.error(
+          `Minimum transfer amount is ${
+            formData.sendCurrency?.value || "USD"
+          } 5.00`,
+          {
+            position: "top-center",
+            autoClose: 5000,
+          }
+        );
+        return;
+      }
+
+      // Validate both currencies are selected
+      if (!formData.sendCurrency || !formData.receiveCurrency) {
+        toast.error("Please select both currencies", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate exchange rate is available
+      if (!exchangeRateData?.fxRate) {
+        toast.error(
+          "Exchange rate is not available. Please check your currency selection.",
+          {
+            position: "top-center",
+            autoClose: 5000,
+          }
+        );
+        return;
+      }
+
+      // ✅ REMOVED Sila validation from Step 1
+
+      // Validate manual deposit details (this stays in Step 1)
+      if (formData.paymentMethod === "manual") {
+        if (!manualAccountDetails || manualAccountError) {
+          let errorMessage = "Bank details are not available for cash deposit.";
+          // ... error handling
+          toast.error(
+            `${errorMessage} Please choose a different payment method or currency.`,
+            {
+              position: "top-center",
+              autoClose: 5000,
+            }
+          );
+          return;
+        }
+      }
+
+      dispatch(setStep(2));
+      toast.success("Moving to recipient details", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    } else if (step === 2) {
+      // ✅ STEP 2: Validate recipient and Sila bank accounts
+      // Validate beneficiary selection
+      if (!selectedBeneficiary) {
+        toast.error("Please select a beneficiary", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate purpose and income source
+      if (!formData.purpose || !formData.incomeSource) {
+        toast.error("Please fill in purpose and income source", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate payment method specific requirements
+      if (formData.paymentMethod === "manual") {
+        if (!formData.document) {
+          toast.error("Please upload payment proof for cash deposit", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+      }
+
+      // ✅ MOVED HERE: Validate Sila bank accounts for USD transfers
+      if (formData.paymentMethod === "bank") {
+        // Special validation for USD bank transfers
+        if (formData.sendCurrency?.value === "USD") {
+          // Validate Sila bank account for USD
+          if (!hasSilaAccounts) {
+            toast.error(
+              "No linked bank accounts found. Please link a bank account to proceed with USD transfers.",
+              {
+                position: "top-center",
+                autoClose: 5000,
+              }
+            );
+            return;
+          }
+
+          if (!selectedSilaBankAccount) {
+            toast.error("Please select your bank account for USD transfers", {
+              position: "top-center",
+              autoClose: 5000,
+            });
+            return;
+          }
+
+          if (!selectedSilaBankAccount.web_debit_verified) {
+            toast.error(
+              "Selected bank account needs verification. Please select a verified account or verify this account first.",
+              {
+                position: "top-center",
+                autoClose: 5000,
+              }
+            );
+            return;
+          }
+        }
+
+        // Validate beneficiary bank for all bank transfers
+        if (!selectedBank) {
+          toast.error("Please select a bank account for the beneficiary", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+      }
+
+      dispatch(setStep(3));
+      toast.success("Moving to review and confirm", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    } else if (step === 3) {
+      // Validate terms agreement
+      if (!formData.agreeToTerms) {
+        toast.error("Please agree to the terms and conditions", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // ✅ ADDED: Final validation for Sila bank accounts
+      if (
+        formData.paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD" &&
+        !selectedSilaBankAccount
+      ) {
+        toast.error("Bank account selection is required for USD transfers", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Check for Open Banking availability
+      if (
+        formData.paymentMethod === "bank" &&
+        isOpenBankingAvailable() &&
+        formData.sendCurrency?.value !== "USD"
+      ) {
+        // For EUR/GBP/DKK, use Open Banking flow
+        handleInitiateOpenBanking();
+      } else {
+        // For USD or other methods, submit regular transaction
+        handleSubmitTransaction();
+      }
+    }
+  }, [
+    step,
+    formData,
+    exchangeRateData,
+    manualAccountDetails,
+    manualAccountError,
+    selectedBeneficiary,
+    selectedBank,
+    selectedSilaBankAccount, // ✅ ADDED
+    hasSilaAccounts, // ✅ ADDED
+    dispatch,
+    handleInitiateOpenBanking,
+    handleSubmitTransaction,
+    isOpenBankingAvailable,
+  ]);
+
+  const handlePreviousStep = useCallback(() => {
+    if (step > 1) {
+      dispatch(setStep(step - 1));
+      toast.info("Returning to previous step", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    }
+  }, [step, dispatch]);
 
   const handleReset = useCallback(() => {
     dispatch(resetForm());
@@ -1686,6 +1660,7 @@ useEffect(() => {
   const getPaymentMethodComponent = () => {
     switch (formData.paymentMethod) {
       case "manual":
+        console.log("📦 Rendering ManualDeposit");
         return (
           <ManualDeposit
             formData={formData}
@@ -1718,6 +1693,10 @@ useEffect(() => {
           />
         );
       case "bank":
+        console.log("📦 Rendering BankTransfer with formData:", {
+          paymentMethod: formData.paymentMethod,
+          sendCurrency: formData.sendCurrency?.value,
+        });
         return (
           <BankTransfer
             formData={formData}
@@ -2180,9 +2159,21 @@ useEffect(() => {
                         <motion.button
                           key={option.value}
                           type="button"
-                          onClick={() =>
-                            handlePaymentMethodChange(option.value)
-                          }
+                          onClick={() => {
+                            console.log(
+                              "🎯 Payment button clicked:",
+                              option.value
+                            );
+                            console.log(
+                              "Current paymentMethod before change:",
+                              formData.paymentMethod
+                            );
+                            handlePaymentMethodChange(option.value);
+                            console.log(
+                              "PaymentMethod change dispatched for:",
+                              option.value
+                            );
+                          }}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           className={`p-5 rounded-xl border-2 transition-all duration-300 text-left ${
@@ -2704,6 +2695,7 @@ useEffect(() => {
             isOpenBankingAvailable={isOpenBankingAvailable()}
             onInitiateOpenBanking={handleInitiateOpenBanking}
             openBankingProcessing={openBankingProcessing}
+            selectedBankAccount={selectedSilaBankAccount}
           />
         );
 
@@ -2821,29 +2813,30 @@ useEffect(() => {
               <button
                 onClick={handleNextStep}
                 disabled={
-  (step === 1 &&
-    (!formData.sendAmount ||
-      parseFloat(formData.sendAmount) < 5 ||
-      !exchangeRateData?.fxRate ||
-      (formData.paymentMethod === "manual" &&
-        (!manualAccountDetails || manualAccountError)))) ||
-  (step === 2 &&
-    (!selectedBeneficiary ||
-      !formData.purpose ||
-      !formData.incomeSource ||
-      (formData.paymentMethod === "manual" && !formData.document) ||
-      // ✅ FIXED: Only require Sila account for USD bank transfers
-      (formData.paymentMethod === "bank" && 
-       formData.sendCurrency?.value === "USD" && 
-       !selectedSilaBankAccount) ||
-      // Still require beneficiary bank for all bank transfers
-      (formData.paymentMethod === "bank" && !selectedBank))) ||
-  loading ||
-  exchangeRateLoading ||
-  manualDetailsLoading ||
-  beneficiaryLoading ||
-  openBankingProcessing
-}
+                  (step === 1 &&
+                    (!formData.sendAmount ||
+                      parseFloat(formData.sendAmount) < 5 ||
+                      !exchangeRateData?.fxRate ||
+                      (formData.paymentMethod === "manual" &&
+                        (!manualAccountDetails || manualAccountError)))) ||
+                  (step === 2 &&
+                    (!selectedBeneficiary ||
+                      !formData.purpose ||
+                      !formData.incomeSource ||
+                      (formData.paymentMethod === "manual" &&
+                        !formData.document) ||
+                      // ✅ FIXED: Only require Sila account for USD bank transfers
+                      (formData.paymentMethod === "bank" &&
+                        formData.sendCurrency?.value === "USD" &&
+                        !selectedSilaBankAccount) ||
+                      // Still require beneficiary bank for all bank transfers
+                      (formData.paymentMethod === "bank" && !selectedBank))) ||
+                  loading ||
+                  exchangeRateLoading ||
+                  manualDetailsLoading ||
+                  beneficiaryLoading ||
+                  openBankingProcessing
+                }
                 className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed relative group"
               >
                 {loading ? (
