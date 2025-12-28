@@ -98,7 +98,7 @@ const router = createBrowserRouter([
         element: <PlaidCallback />,
       },
       {
-        path: "depositiframe/:customerId/:authtoken/:transactionId/:instructedAmount",
+        path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
         element: <DepositPageIframe />,
       },
     ],

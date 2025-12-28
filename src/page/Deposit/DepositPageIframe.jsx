@@ -33,6 +33,7 @@ import {
   fetchManualAccountDetails,
   setShowPaymentInitiation,
   selectShowPaymentInitiation,
+  fetchUniqueReferenceDetails,
 } from "./slices/depositSliceIframe";
 
 // ✅ CORRECT: Import USD account actions and selectors from bankAccountSlice
@@ -345,6 +346,7 @@ function getDepositFallback() {
     setSelectedBankAccount: () => {},
     handleSubmit: (e) => e.preventDefault(),
     resetTransaction: () => {},
+    setCallbackUrl: () => {},
   };
 }
 
