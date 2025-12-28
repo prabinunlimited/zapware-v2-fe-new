@@ -1129,7 +1129,7 @@ const OpenCurrencyAccount = memo(() => {
             )}
 
             {/* Remittance Only Option */}
-            {((iswhitelabelledpartner === "1" &&
+            {((iswhitelabelledpartner === "Y" &&
               showRemittanceOnlyOnRegistration === "Y" &&
               show_remittance_only_on_registration === "Y") ||
               iswhitelabelledpartner === "0") && (
