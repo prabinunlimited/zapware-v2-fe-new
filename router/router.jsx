@@ -98,6 +98,10 @@ const router = createBrowserRouter([
         element: <PlaidCallback />,
       },
       {
+        path: "linkbankiframe/:requestId/:accessToken",
+        element: <BankLinkIframe />,
+      },
+      {
         path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
         element: <DepositPageIframe />,
       },

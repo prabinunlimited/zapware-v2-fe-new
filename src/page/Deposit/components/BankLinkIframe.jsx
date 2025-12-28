@@ -61,10 +61,10 @@ import {
   selectHasAccounts,
   selectCurrentPage,
   fetchLinkBankRequests,
-} from "../slices/bankLinkSlice";
+} from "../slices/bankLinkSliceIframe";
 
 // Import your existing UI components
-import ZapPlaidLink from "../../../components/ZapPlaidLink/ZapPlaidLink";
+import ZapPlaidLink from "../../../components/ZapPlaidLink/ZapPlaidLinkIframe";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 
 const BankLink = () => {
@@ -75,6 +75,8 @@ const BankLink = () => {
   const navigate = useNavigate();
   const [expandedAccount, setExpandedAccount] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [customerId, setCustomerId] = useState('0');
+  const [callbackUrl, setCallbackUrl] = useState(null);
 
   // Check if we should auto-open Plaid link (from card payment flow)
   const shouldAutoOpenPlaid = location.state?.autoOpenBankTab;
