@@ -527,7 +527,7 @@ export const generateOTP = createAsyncThunk(
 
       // ✅ Password is ALWAYS included - NO CONDITION
       const payload = {
-        country_code: cleanPhoneCode,
+        country_code: phone_code,
         mobile_number: cleanPhoneNumber,
         password: password, // ✅ ALWAYS INCLUDED
         hostname: window.location.hostname,
@@ -592,7 +592,7 @@ export const verifyOTP = createAsyncThunk(
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
 
       // Validate inputs
-      if (!cleanPhoneCode || !cleanMobileNumber || !formattedOTP || !password) {
+      if (!phone_code || !cleanMobileNumber || !formattedOTP || !password) {
         throw new Error("All fields are required");
       }
 
@@ -606,7 +606,7 @@ export const verifyOTP = createAsyncThunk(
         mobile_number: cleanMobileNumber,
         otp: formattedOTP,
         password,
-        phone_code: cleanPhoneCode,
+        phone_code: phone_code,
         sign_in_option: sign_in_option || "mobile",
         hostname: window.location.hostname,
       };

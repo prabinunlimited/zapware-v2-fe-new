@@ -198,7 +198,7 @@ function SignUpIndividualContent() {
   const {
     service_provide_ids = [],
     referral_code = "",
-    agent_code = "",
+    agent_id = "",
     package_currencies = [],
     bank_accounts = [],
     kyc_verify = [],
@@ -289,7 +289,7 @@ function SignUpIndividualContent() {
       flag_url: "",
       service_providers: service_provide_ids,
       referral_code: referral_code,
-      agent_code: agent_code,
+      agent_id: agent_id,
       middle_name: "",
       password: "",
       confirmPassword: "",

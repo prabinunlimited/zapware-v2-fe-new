@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
+import { motion } from "framer-motion";
 import * as Yup from "yup";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,6 +15,7 @@ import { AiOutlineClose } from "react-icons/ai";
 import { MdDownload } from "react-icons/md";
 import Select from "react-select";
 import { RingLoader } from "react-spinners";
+import { ArrowRight, UserPlus } from "lucide-react";
 
 // Components
 import Modal from "../../../components/PopupModal/Modal";
@@ -1527,17 +1529,22 @@ const Login = () => {
             </div>
           </form>
 
-          <div className="text-center mt-4">
-            <p className="text-gray-600">
-              Don't have an account?{" "}
-              <button
-                onClick={handleNavigation}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Sign Up
-              </button>
-            </p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-4 flex justify-center"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleNavigation}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition shadow-sm bg-white"
+            >
+              <UserPlus className="w-5 h-5" />
+              <span className="text-sm font-medium">Sign Up</span>
+            </motion.button>
+          </motion.div>
 
           <button
             onClick={handleManualDownload}

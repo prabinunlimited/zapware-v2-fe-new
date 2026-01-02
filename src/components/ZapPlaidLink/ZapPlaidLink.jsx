@@ -15,17 +15,19 @@ import {
 } from "./plaidSlice";
 
 const customStyles = {
+  overlay: {
+    zIndex: 9999,
+    background: "rgba(0,0,0,0.3)",
+  },
   content: {
-    top: "50%",
-    left: "50%",
-    right: "auto",
-    bottom: "auto",
-    marginRight: "-50%",
-    transform: "translate(-50%, -50%)",
-    maxWidth: "90%",
-    width: "600px",
-    maxHeight: "80vh",
-    overflow: "auto",
+    top: "0",
+    right: "0",
+    bottom: "0",
+    width: "380px",
+    left: "auto",
+    borderRadius: "0",
+    padding: "0",
+    overflow: "hidden",
   },
 };
 
@@ -433,12 +435,12 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
       {/* API Response Modal */}
       {apiResponse?.showModal && (
-        <Modal
-          isOpen={true}
-          onRequestClose={() => dispatch(clearApiResponse())}
-          style={customStyles}
-          contentLabel="API Response"
-        >
+          <Modal
+            isOpen={Boolean(apiResponse?.showModal)}
+            onRequestClose={() => dispatch(clearApiResponse())}
+            style={customStyles}
+            contentLabel="API Response"
+          >
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">
               {apiResponse.isError ? "Error Response" : "API Response"}

@@ -53,14 +53,14 @@ export const initializeInstitutionSignup =
       service_provide_ids = [],
       accountOptions = [],
       referral_code = [],
-      agent_code = [],
+      agent_id = [],
     } = locationState || {};
 
     dispatch(
       setFormField({ field: "service_providers", value: service_provide_ids })
     );
     dispatch(setFormField({ field: "referral_code", value: referral_code }));
-    dispatch(setFormField({ field: "agent_code", value: agent_code }));
+    dispatch(setFormField({ field: "agent_id", value: agent_id }));
 
     // Check for USD accounts
     const hasUSD = service_provide_ids.some((idWithType) => {

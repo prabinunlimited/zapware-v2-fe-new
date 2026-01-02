@@ -800,7 +800,7 @@ const institutionRegistrationSlice = createSlice({
 
       // Store other location data
       state.referralCode = locationState.referral_code;
-      state.agentCode = locationState.agent_code;
+      state.agentId = locationState.agent_id;
       state.packageCurrencies = locationState.package_currencies || [];
     },
 

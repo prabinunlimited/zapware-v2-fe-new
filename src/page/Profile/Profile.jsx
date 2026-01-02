@@ -58,7 +58,7 @@ const defaultProfileData = {
   kyc_status: "",
   customer_type: "",
   referral_code: "",
-  agent_code: "",
+  agent_id: "",
   country_name: "",
   nationality: "",
 };
@@ -492,7 +492,7 @@ const Profile = () => {
   const handleAgent = () => {
     navigate(`/agents/${customerId}`, {
       state: {
-        agent_code: profileData?.agent_code,
+        agent_id: profileData?.agent_id,
         customerId: customerId,
       },
     });
@@ -691,7 +691,7 @@ const Profile = () => {
                       },
                       {
                         label: "Agent Code",
-                        value: businessInfo.data.agent_code,
+                        value: businessInfo.data.agent_id,
                       },
                       {
                         label: "Status",
@@ -1730,7 +1730,7 @@ const Profile = () => {
                         whileTap={{ scale: 0.95 }}
                         className="text-xs bg-gray-600 hover:bg-gray-700 text-white py-1.5 px-3 rounded-md transition-colors"
                       >
-                        {displayProfileData.agent_code || "N/A"}
+                        {displayProfileData.agent_id || "N/A"}
                       </motion.button>
                     </div>
                     <div className="w-full h-1.5 bg-gray-200 rounded-full"></div>

@@ -514,7 +514,7 @@ const Institution = () => {
           dispatch(
             setReferralData({
               referralCode: data.referral_code,
-              agentCode: data.agent_code,
+              agentCode: data.agent_id,
             })
           );
         }
@@ -1233,7 +1233,7 @@ const Institution = () => {
 
         const finalData = {
           ...finalFormData,
-          agent_code: agentCode,
+          agent_id: agentId,
           referral_code: referralCode,
           ein: finalFormData.ein,
           naice_code: finalFormData.naice_code,
