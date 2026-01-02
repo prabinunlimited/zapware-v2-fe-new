@@ -3,10 +3,115 @@ import {
   createAsyncThunk,
   createSelector,
 } from "@reduxjs/toolkit";
+import { createBeneficiaryWithBanks } from "../AddBeneficiary/addBeneficiarySlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ===================== BENEFICIARY LIST ASYNC THUNKS =====================
+// ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
+export const createAndAddBeneficiary = createAsyncThunk(
+  "beneficiaries/createAndAddBeneficiary",
+  async (
+    { customerId, beneficiaryData, bankAccounts, currency, country_code },
+    { dispatch, rejectWithValue }
+  ) => {
+    try {
+      console.log("🔄 createAndAddBeneficiary: Starting...");
+      console.log("📦 Parameters:", {
+        customerId,
+        beneficiaryData,
+        bankAccountsCount: bankAccounts?.length || 0,
+        currency,
+        country_code,
+      });
+
+      // 1. Create the beneficiary
+      const createResult = await dispatch(
+        createBeneficiaryWithBanks({
+          customerId,
+          beneficiaryData,
+          bankAccounts,
+          currency,
+          country_code,
+        })
+      );
+
+      console.log("📦 Create result:", createResult);
+
+      // Check if creation was successful
+      if (createBeneficiaryWithBanks.rejected.match(createResult)) {
+        console.error("❌ Creation failed:", createResult.payload);
+        throw new Error(createResult.payload || "Failed to create beneficiary");
+      }
+
+      // 2. Get the newly created beneficiary ID
+      const createPayload = createResult.payload;
+      const newBeneficiaryId =
+        createPayload?.beneficiary_id ||
+        createPayload?.benef_id ||
+        createPayload?.id;
+
+      console.log("✅ Beneficiary created, ID:", newBeneficiaryId);
+
+      if (!newBeneficiaryId) {
+        console.error("❌ No beneficiary ID found in response:", createPayload);
+        throw new Error("No beneficiary ID returned from creation");
+      }
+
+      // 3. Add delay to allow DB sync (if needed)
+      console.log("⏳ Waiting for DB sync...");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // 4. Fetch the specific beneficiary to ensure it's available
+      console.log("🔄 Fetching newly created beneficiary...");
+      const fetchResult = await dispatch(
+        fetchBeneficiaryById(newBeneficiaryId)
+      );
+
+      // Check if fetch was successful
+      if (fetchBeneficiaryById.rejected.match(fetchResult)) {
+        console.warn(
+          "⚠️ Beneficiary fetch failed, but creation was successful:",
+          fetchResult.payload
+        );
+        // Continue anyway since creation was successful
+      }
+
+      // 5. Refresh the beneficiaries list
+      console.log("🔄 Refreshing beneficiaries list...");
+      await dispatch(fetchBeneficiaries(customerId));
+
+      // 6. Return the fetched beneficiary data
+      return {
+        success: true,
+        message: "Beneficiary created and fetched successfully",
+        beneficiaryId: newBeneficiaryId,
+        beneficiaryData: fetchResult.payload || createPayload,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ createAndAddBeneficiary error:", error);
+
+      // Even if something fails after creation, we might still want to indicate partial success
+      if (newBeneficiaryId) {
+        console.warn(
+          "⚠️ Beneficiary created but post-creation steps failed:",
+          error.message
+        );
+        return {
+          success: true,
+          warning: "Beneficiary created but some post-creation steps failed",
+          beneficiaryId: newBeneficiaryId,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      return rejectWithValue(error.message || "Failed to create beneficiary");
+    }
+  }
+);
+
+// ===================== ORIGINAL THUNKS =====================
 export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
@@ -28,8 +133,21 @@ export const fetchBeneficiaries = createAsyncThunk(
       }
 
       const result = await response.json();
+      console.log("📥 Fetched beneficiaries response:", result);
+
+      // Handle different response structures
+      if (
+        result.status === "200" &&
+        result.message === "No beneficiaries found"
+      ) {
+        console.log("📭 No beneficiaries found, returning empty array");
+        return []; // Explicit empty array
+      }
+
+      // Return data if it exists
       return result.data || [];
     } catch (error) {
+      console.error("❌ fetchBeneficiaries error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -43,7 +161,8 @@ export const fetchBeneficiaryById = createAsyncThunk(
         localStorage.getItem("bearertoken") ||
         localStorage.getItem("authtoken");
 
-      // Use fetch() instead of axios
+      console.log("📥 Fetching beneficiary:", beneficiaryId);
+
       const response = await fetch(
         `${API_URL}/beneficiaries/benef-view/${beneficiaryId}`,
         {
@@ -54,19 +173,35 @@ export const fetchBeneficiaryById = createAsyncThunk(
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
       if (!response.ok) {
         throw new Error("Failed to fetch beneficiary details");
       }
 
       const result = await response.json();
+      console.log("✅ API Response:", result);
 
-      // Handle the response structure based on the non-Redux version
+      let beneficiaryData = null;
+      let benefBanks = [];
+
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        return result.data[0]; // Return first item from array
+        beneficiaryData = result.data[0];
+      } else if (result.data && typeof result.data === "object") {
+        beneficiaryData = result.data;
       }
 
-      return result.data || result;
+      if (result.benef_banks && Array.isArray(result.benef_banks)) {
+        benefBanks = result.benef_banks;
+      }
+
+      if (beneficiaryData) {
+        beneficiaryData.benef_banks = benefBanks;
+      }
+
+      return beneficiaryData;
     } catch (error) {
+      console.error("❌ fetchBeneficiaryById error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -78,9 +213,8 @@ export const deleteBeneficiary = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
 
-      // Match the non-redux version API endpoint and payload
       const response = await fetch(
-        `${API_URL}/delete-beneficiary/${beneficiaryId}`, // ✅ Changed endpoint
+        `${API_URL}/delete-beneficiary/${beneficiaryId}`,
         {
           method: "DELETE",
           headers: {
@@ -88,11 +222,11 @@ export const deleteBeneficiary = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify({
-            customer_id: customerId, // ✅ Match payload field name
+            customer_id: customerId,
             current_date_time: new Date()
               .toISOString()
               .replace("T", " ")
-              .split(".")[0], // ✅ Match date format
+              .split(".")[0],
           }),
         }
       );
@@ -117,7 +251,6 @@ export const deleteBeneficiary = createAsyncThunk(
   }
 );
 
-// Update bulkDeleteBeneficiaries to use the same endpoint
 export const bulkDeleteBeneficiaries = createAsyncThunk(
   "beneficiaries/bulkDeleteBeneficiaries",
   async ({ customerId, beneficiaryIds }, { rejectWithValue }) => {
@@ -128,7 +261,6 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
         .replace("T", " ")
         .split(".")[0];
 
-      // Loop through single deletions using the correct endpoint
       const promises = beneficiaryIds.map((beneficiaryId) =>
         fetch(`${API_URL}/delete-beneficiary/${beneficiaryId}`, {
           method: "DELETE",
@@ -165,7 +297,6 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
   }
 );
 
-// Update deleteBeneficiaryWithUndo to use the same endpoint
 export const deleteBeneficiaryWithUndo = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryWithUndo",
   async (
@@ -175,7 +306,6 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
     try {
       const authtoken = localStorage.getItem("authtoken");
 
-      // Store for potential undo
       const state = getState();
       const beneficiary = state.beneficiaries.beneficiaries.find(
         (b) => b.id === beneficiaryId
@@ -191,7 +321,6 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
         );
       }
 
-      // Use the correct endpoint and payload
       const response = await fetch(
         `${API_URL}/delete-beneficiary/${beneficiaryId}`,
         {
@@ -237,7 +366,6 @@ export const undoDeleteBeneficiary = createAsyncThunk(
   "beneficiaries/undoDeleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
-      // Retrieve stored beneficiary data
       const storedData = localStorage.getItem(
         `undo_beneficiary_${beneficiaryId}`
       );
@@ -248,7 +376,6 @@ export const undoDeleteBeneficiary = createAsyncThunk(
       const beneficiaryData = JSON.parse(storedData);
       const authtoken = localStorage.getItem("authtoken");
 
-      // Restore the beneficiary (you'll need a restore endpoint or use create endpoint)
       const response = await fetch(
         `${API_URL}/beneficiaries/restore/${customerId}/${beneficiaryId}`,
         {
@@ -262,7 +389,6 @@ export const undoDeleteBeneficiary = createAsyncThunk(
       );
 
       if (!response.ok) {
-        // If no restore endpoint, try to create a new one
         const createResponse = await fetch(
           `${API_URL}/beneficiaries/create-benef/${customerId}`,
           {
@@ -298,7 +424,6 @@ export const undoDeleteBeneficiary = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     } finally {
-      // Clean up stored data
       localStorage.removeItem(`undo_beneficiary_${beneficiaryId}`);
     }
   }
@@ -390,380 +515,6 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
   }
 );
 
-// ===================== BENEFICIARY UPDATE ASYNC THUNKS =====================
-export const updateBeneficiary = createAsyncThunk(
-  "beneficiaries/updateBeneficiary",
-  async (
-    { customerId, beneficiaryId, beneficiaryData },
-    { rejectWithValue }
-  ) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(
-        `${API_URL}/beneficiaries/update/${customerId}/${beneficiaryId}`,
-        {
-          method: "POST", // Or PUT if this endpoint supports PUT
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-          body: JSON.stringify(beneficiaryData),
-        }
-      );
-
-      if (!response.ok) {
-        const errorResult = await response.json();
-        throw new Error(
-          errorResult.message ||
-            errorResult.error ||
-            "Failed to update beneficiary"
-        );
-      }
-
-      const result = await response.json();
-      return {
-        beneficiaryId,
-        beneficiary: result.data || beneficiaryData,
-        message: result.message || "Beneficiary updated successfully",
-      };
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-// ===================== CREATE BENEFICIARY ASYNC THUNKS =====================
-export const createBeneficiaryWithBanks = createAsyncThunk(
-  "beneficiaries/createBeneficiaryWithBanks",
-  async (
-    { customerId, beneficiaryData, bankAccounts, currency },
-    { rejectWithValue }
-  ) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const payload = {
-        ...beneficiaryData,
-        banks: bankAccounts.map((account) => {
-          let bankDetails = {
-            rails: account.rails,
-            currency_code: currency,
-            payment_method: account.paymentMethod,
-            benef_iban: account.iban,
-            swift_code: account.swift,
-            intermediary_bank_swift: account.intermediarySwift,
-            routing_number: account.routingNumber,
-            bank_acc_no: account.accountNumber,
-            sort_code: account.sortCode,
-            bank_name: account.bankName,
-            ifsc: account.ifsc,
-            bankCode: account.bankCode,
-            branchCode: account.branchCode,
-            bankState: account.bankState,
-            account_name: account.accountName,
-            account_title: account.accountTitle,
-            wallet_provider:
-              account.walletProvider === "Other"
-                ? account.otherProvider
-                : account.walletProvider,
-            mobile_number: account.mobileNumber,
-            account_type: account.accountType,
-          };
-
-          // Transform based on rails type
-          if (account.rails === "Swift") {
-            bankDetails = {
-              rails: "Swift",
-              currency_code: currency,
-              payment_method: "swift",
-              benef_iban: account.iban,
-              swift_code: account.swift,
-              intermediary_bank_swift: account.intermediarySwift,
-            };
-          } else if (account.rails === "Local") {
-            // Handle different currencies for local transfers
-            if (currency === "INR") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                account_type: account.accountType,
-                bank_name: account.bankName,
-                ifsc: account.ifsc,
-              };
-            } else if (currency === "USD") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: account.paymentMethod,
-                routing_number: account.routingNumber,
-                bank_acc_no: account.accountNumber,
-                account_type: account.accountType,
-                bankCode: account.routingNumber,
-                swift_code: account.swift,
-              };
-            } else if (currency === "AED") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                benef_iban: account.iban,
-                bic_code: account.swift,
-              };
-            } else if (currency === "NPR") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_name: account.bankName,
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-              };
-            } else if (currency === "KES") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-              };
-            } else if (currency === "NGN") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                account_name: account.accountName,
-              };
-            } else if (currency === "BDT") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "LKR") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "AUD") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-              };
-            } else if (currency === "PKR") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                bankCode: account.bankCode,
-                branchCode: account.branchCode,
-                bankState: account.bankState,
-                benef_iban: account.iban,
-                account_title: account.accountTitle,
-              };
-            } else if (currency === "GBP" || currency === "DKK") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                bank_acc_no: account.accountNumber,
-                sort_code: account.sortCode,
-              };
-            } else if (currency === "EUR") {
-              bankDetails = {
-                rails: "Local",
-                currency_code: currency,
-                payment_method: "",
-                benef_iban: account.iban,
-              };
-            }
-          } else if (account.rails === "Mobile") {
-            bankDetails = {
-              rails: "Mobile",
-              currency_code: currency,
-              payment_method: "mobile",
-              mobile_number: account.mobileNumber,
-              wallet_provider:
-                account.walletProvider === "Other"
-                  ? account.otherProvider
-                  : account.walletProvider,
-            };
-          }
-
-          return bankDetails;
-        }),
-      };
-
-      const response = await fetch(
-        `${API_URL}/beneficiaries/create-benef/${customerId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to create beneficiary");
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-// ===================== DROPDOWN DATA ASYNC THUNKS =====================
-export const fetchNationalities = createAsyncThunk(
-  "beneficiaries/fetchNationalities",
-  async (_, { rejectWithValue }) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(`${API_URL}/nationalities`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch nationalities");
-      }
-
-      const result = await response.json();
-      return result.data || result;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-export const fetchBanksByCurrency = createAsyncThunk(
-  "beneficiaries/fetchBanksByCurrency",
-  async (
-    { currency, bankType = "currency-payout-banks" },
-    { rejectWithValue }
-  ) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const endpoint =
-        bankType === "int-banks"
-          ? `/int-banks/${currency}`
-          : `/currency-payout-banks/${currency}`;
-
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch banks");
-      }
-
-      const result = await response.json();
-      return { currency, data: result.data || [], bankType };
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-export const fetchIdTypesByCurrency = createAsyncThunk(
-  "beneficiaries/fetchIdTypesByCurrency",
-  async (currency, { rejectWithValue }) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(`${API_URL}/currency-id-type/${currency}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch ID types");
-      }
-
-      const result = await response.json();
-      return { currency, data: result.data || [] };
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-export const fetchCitiesByCountry = createAsyncThunk(
-  "beneficiaries/fetchCitiesByCountry",
-  async (countryId, { rejectWithValue }) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(`${API_URL}/cities/${countryId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch cities");
-      }
-
-      const result = await response.json();
-      return { countryId, data: result.success ? result.data : [] };
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-export const fetchBankBranches = createAsyncThunk(
-  "beneficiaries/fetchBankBranches",
-  async (bankCode, { rejectWithValue }) => {
-    try {
-      const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(`${API_URL}/int-banks-branch/${bankCode}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch bank branches");
-      }
-
-      const result = await response.json();
-      return { bankCode, data: result.data || [] };
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
 // ===================== INITIAL STATE =====================
 const initialState = {
   // Beneficiaries list state
@@ -772,6 +523,7 @@ const initialState = {
   error: null,
   success: false,
 
+  // Edit beneficiary state
   editLoading: false,
   editError: null,
   beneficiaryDetails: null,
@@ -804,20 +556,33 @@ const initialState = {
     bulkDeleteTotal: 0,
   },
 
-  // Create beneficiary state
-  createLoading: false,
-  createError: null,
-  createSuccess: false,
-  beneficiaryId: null,
+  // Create state - UPDATED FOR CLARITY
+  createState: {
+    loading: false,
+    error: null,
+    success: false,
+    lastCreatedId: null,
+  },
 
-  // Dropdown data state
-  nationalities: [],
-  banks: {},
-  idTypes: {},
-  cities: {},
-  bankBranches: {},
-  dropdownLoading: false,
-  dropdownError: null,
+  // Email search state
+  emailSearch: {
+    loading: false,
+    error: null,
+    searched: false,
+    exists: false,
+    data: null,
+    processed: false,
+  },
+
+  // Phone search state
+  phoneSearch: {
+    loading: false,
+    error: null,
+    searched: false,
+    exists: false,
+    data: null,
+    processed: false,
+  },
 
   // Last updated timestamp
   lastUpdated: null,
@@ -828,19 +593,363 @@ const beneficiarySlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
+    // Phone search reducer
+    searchBeneficiaryByPhone: (state, action) => {
+      const { phoneNumber, countryPhoneCode } = action.payload;
+      console.log(
+        "🔍 Searching for phone in store:",
+        phoneNumber,
+        "with code:",
+        countryPhoneCode
+      );
+
+      if (!phoneNumber) {
+        state.phoneSearch = initialState.phoneSearch;
+        return;
+      }
+
+      // Format phone number for comparison (remove non-digit characters)
+      const cleanSearchPhone = phoneNumber.replace(/\D/g, "");
+      const searchFullPhone = countryPhoneCode
+        ? `${countryPhoneCode.replace(/\D/g, "")}${cleanSearchPhone}`
+        : cleanSearchPhone;
+
+      console.log("🔍 Clean search phone:", cleanSearchPhone);
+      console.log("🔍 Full search phone:", searchFullPhone);
+
+      const foundBeneficiary = state.beneficiaries.find((beneficiary) => {
+        // Check if beneficiary has any phone number field
+        if (!beneficiary.phone_number && !beneficiary.full_phone_number) {
+          return false;
+        }
+
+        // Clean beneficiary phone numbers
+        const beneficiaryPhone =
+          beneficiary.phone_number?.replace(/\D/g, "") || "";
+        const beneficiaryFullPhone =
+          beneficiary.full_phone_number?.replace(/\D/g, "") || "";
+
+        // Check if phone number matches (with or without country code)
+        const exactMatches =
+          beneficiaryPhone === cleanSearchPhone ||
+          beneficiaryFullPhone === cleanSearchPhone ||
+          beneficiaryFullPhone === searchFullPhone ||
+          beneficiaryPhone === searchFullPhone ||
+          beneficiary.phone_number === phoneNumber ||
+          beneficiary.full_phone_number === phoneNumber;
+
+        // Also check for partial matches (in case numbers are stored with different formatting)
+        const partialMatches =
+          beneficiaryPhone.includes(cleanSearchPhone) ||
+          beneficiaryFullPhone.includes(cleanSearchPhone) ||
+          beneficiaryFullPhone.includes(searchFullPhone) ||
+          beneficiaryPhone.includes(searchFullPhone);
+
+        // Return true if either exact or partial match
+        return exactMatches || partialMatches;
+      });
+
+      console.log("📊 Found beneficiary by phone:", foundBeneficiary);
+
+      if (foundBeneficiary) {
+        // Extract phone code from full_phone_number if available
+        let phoneCode = foundBeneficiary.country_phone_code;
+        let phoneNumber = foundBeneficiary.phone_number;
+
+        if (!phoneCode && foundBeneficiary.full_phone_number) {
+          const fullPhone = foundBeneficiary.full_phone_number;
+          if (fullPhone.startsWith("+")) {
+            if (fullPhone.startsWith("+1")) {
+              phoneCode = "+1";
+              phoneNumber = fullPhone.substring(2);
+            } else if (fullPhone.startsWith("+44")) {
+              phoneCode = "+44";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+91")) {
+              phoneCode = "+91";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+92")) {
+              phoneCode = "+92";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+880")) {
+              phoneCode = "+880";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+977")) {
+              phoneCode = "+977";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+254")) {
+              phoneCode = "+254";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+234")) {
+              phoneCode = "+234";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+971")) {
+              phoneCode = "+971";
+              phoneNumber = fullPhone.substring(4);
+            } else if (fullPhone.startsWith("+61")) {
+              phoneCode = "+61";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+45")) {
+              phoneCode = "+45";
+              phoneNumber = fullPhone.substring(3);
+            }
+          }
+        }
+
+        // Try to infer country_id from city/state if possible
+        let countryId = foundBeneficiary.country_id;
+        if (!countryId) {
+          if (
+            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
+            foundBeneficiary.state?.toUpperCase() === "TX"
+          ) {
+            countryId = "186"; // USA country ID
+            if (!phoneCode) phoneCode = "+1";
+          } else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
+            countryId = "185"; // UK country ID
+            if (!phoneCode) phoneCode = "+44";
+          } else if (
+            foundBeneficiary.city?.toUpperCase() === "MUMBAI" ||
+            foundBeneficiary.city?.toUpperCase() === "DELHI"
+          ) {
+            countryId = "88"; // India country ID
+            if (!phoneCode) phoneCode = "+91";
+          }
+        }
+
+        // Try to infer nationality if not set
+        let nationalityId = foundBeneficiary.nationality_id;
+        if (!nationalityId) {
+          if (countryId === "186") {
+            nationalityId = "186"; // American nationality
+          } else if (countryId === "185") {
+            nationalityId = "185"; // British nationality
+          } else if (countryId === "88") {
+            nationalityId = "88"; // Indian nationality
+          }
+        }
+
+        // Map relationship values
+        let relationValue = foundBeneficiary.relationtobenef;
+        const relationshipMap = {
+          Father: "father",
+          Mother: "mother",
+          Sister: "sister",
+          Brother: "brother",
+          Cousin: "cousin",
+          Friend: "friend",
+          Other: "other",
+          father: "father",
+          mother: "mother",
+          sister: "sister",
+          brother: "brother",
+          cousin: "cousin",
+          friend: "friend",
+          other: "other",
+          "Father/Mother": "father",
+          "Brother/Sister": "brother",
+          "Friend/Relative": "friend",
+        };
+
+        if (relationValue && relationshipMap[relationValue]) {
+          relationValue = relationshipMap[relationValue];
+        } else if (relationValue && typeof relationValue === "string") {
+          const lowerRelation = relationValue.toLowerCase();
+          if (
+            lowerRelation.includes("father") ||
+            lowerRelation.includes("mother")
+          ) {
+            relationValue = "father";
+          } else if (
+            lowerRelation.includes("sister") ||
+            lowerRelation.includes("brother")
+          ) {
+            relationValue = "brother";
+          } else if (lowerRelation.includes("friend")) {
+            relationValue = "friend";
+          } else if (lowerRelation.includes("cousin")) {
+            relationValue = "cousin";
+          }
+        }
+
+        const cleanData = {
+          id: foundBeneficiary.id || "",
+          name: foundBeneficiary.name || "",
+          email: foundBeneficiary.email || "",
+          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
+          country_id: countryId?.toString() || "",
+          country_phone_code: phoneCode || countryPhoneCode || "+1",
+          beneftype: foundBeneficiary.beneftype || "individual",
+          state: foundBeneficiary.state || "",
+          city: foundBeneficiary.city || "",
+          street: foundBeneficiary.street || foundBeneficiary.address || "",
+          postalcode: foundBeneficiary.postalcode || "",
+          relationtobenef: relationValue || "",
+          otherRelationship: foundBeneficiary.otherRelationship || "",
+          nationality_id: nationalityId?.toString() || "",
+          status: foundBeneficiary.status || 1,
+          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
+          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
+          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
+          currency: foundBeneficiary.currency || "USD",
+          banks: foundBeneficiary.banks || [],
+          _source: "phone_search",
+          _matchedPhone: cleanSearchPhone,
+        };
+
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
+
+        state.phoneSearch.data = cleanData;
+        state.phoneSearch.exists = true;
+        state.phoneSearch.searched = true;
+      } else {
+        state.phoneSearch = {
+          ...initialState.phoneSearch,
+          searched: true,
+          exists: false,
+        };
+      }
+
+      state.phoneSearch.loading = false;
+      state.phoneSearch.error = null;
+    },
+
+    // Keep email search for backward compatibility
+    searchBeneficiaryByEmail: (state, action) => {
+      const { email } = action.payload;
+      console.log("🔍 Searching for email in store:", email);
+
+      if (!email) {
+        state.emailSearch = initialState.emailSearch;
+        return;
+      }
+
+      const foundBeneficiary = state.beneficiaries.find(
+        (beneficiary) =>
+          beneficiary.email &&
+          beneficiary.email.toLowerCase() === email.toLowerCase()
+      );
+
+      console.log("📊 Found beneficiary:", foundBeneficiary);
+
+      if (foundBeneficiary) {
+        // Extract phone code from full_phone_number if available
+        let phoneCode = foundBeneficiary.country_phone_code;
+        let phoneNumber = foundBeneficiary.phone_number;
+
+        if (!phoneCode && foundBeneficiary.full_phone_number) {
+          const fullPhone = foundBeneficiary.full_phone_number;
+          if (fullPhone.startsWith("+")) {
+            if (fullPhone.startsWith("+1")) {
+              phoneCode = "+1";
+              phoneNumber = fullPhone.substring(2);
+            } else if (fullPhone.startsWith("+44")) {
+              phoneCode = "+44";
+              phoneNumber = fullPhone.substring(3);
+            } else if (fullPhone.startsWith("+91")) {
+              phoneCode = "+91";
+              phoneNumber = fullPhone.substring(3);
+            }
+          }
+        }
+
+        let countryId = foundBeneficiary.country_id;
+        if (!countryId) {
+          if (
+            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
+            foundBeneficiary.state?.toUpperCase() === "TX"
+          ) {
+            countryId = "186";
+            if (!phoneCode) phoneCode = "+1";
+          }
+        }
+
+        let nationalityId = foundBeneficiary.nationality_id;
+        if (!nationalityId && countryId === "186") {
+          nationalityId = "186";
+        }
+
+        let relationValue = foundBeneficiary.relationtobenef;
+        const relationshipMap = {
+          Father: "father",
+          Mother: "mother",
+          Sister: "sister",
+          Brother: "brother",
+          Cousin: "cousin",
+          Friend: "friend",
+          Other: "other",
+          father: "father",
+          mother: "mother",
+          sister: "sister",
+          brother: "brother",
+          cousin: "cousin",
+          friend: "friend",
+          other: "other",
+        };
+
+        if (relationValue && relationshipMap[relationValue]) {
+          relationValue = relationshipMap[relationValue];
+        }
+
+        const cleanData = {
+          id: foundBeneficiary.id || "",
+          name: foundBeneficiary.name || "",
+          email: foundBeneficiary.email || "",
+          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
+          country_id: countryId?.toString() || "",
+          country_phone_code: phoneCode || "+1",
+          beneftype: foundBeneficiary.beneftype || "individual",
+          state: foundBeneficiary.state || "",
+          city: foundBeneficiary.city || "",
+          street: foundBeneficiary.street || foundBeneficiary.address || "",
+          postalcode: foundBeneficiary.postalcode || "",
+          relationtobenef: relationValue || "",
+          otherRelationship: foundBeneficiary.otherRelationship || "",
+          nationality_id: nationalityId?.toString() || "",
+          status: foundBeneficiary.status || 1,
+          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
+          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
+          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
+          currency: foundBeneficiary.currency || "USD",
+          banks: foundBeneficiary.banks || [],
+        };
+
+        console.log(
+          "📋 Clean beneficiary data with inferred values:",
+          cleanData
+        );
+
+        state.emailSearch.data = cleanData;
+        state.emailSearch.exists = true;
+        state.emailSearch.searched = true;
+      } else {
+        state.emailSearch = {
+          ...initialState.emailSearch,
+          searched: true,
+          exists: false,
+        };
+      }
+
+      state.emailSearch.loading = false;
+      state.emailSearch.error = null;
+    },
+
     // Clear errors
     clearError: (state) => {
       state.error = null;
-      state.createError = null;
-      state.dropdownError = null;
-      state.codeLookupError = null;
+      state.editError = null;
       state.deleteState.error = null;
+      state.codeLookupError = null;
+      state.createState.error = null;
     },
 
     // Clear success messages
     clearSuccess: (state) => {
       state.success = false;
-      state.createSuccess = false;
+      state.createState.success = false;
     },
 
     // Reset state
@@ -848,16 +957,35 @@ const beneficiarySlice = createSlice({
       state.loading = false;
       state.error = null;
       state.success = false;
-      state.createLoading = false;
-      state.createError = null;
-      state.createSuccess = false;
       state.deleteState.error = null;
+      state.createState.error = null;
     },
 
     clearEditState: (state) => {
       state.editLoading = false;
       state.editError = null;
       state.beneficiaryDetails = null;
+    },
+
+    // Clear create state
+    clearCreateState: (state) => {
+      console.log("🧹 Clearing create state");
+      state.createState.loading = false;
+      state.createState.error = null;
+      state.createState.success = false;
+      state.createState.lastCreatedId = null;
+    },
+
+    // Clear create error only
+    clearCreateError: (state) => {
+      state.createState.error = null;
+    },
+
+    // Clear create success only
+    clearCreateSuccess: (state) => {
+      console.log("🧹 Clearing create success");
+      state.createState.success = false;
+      state.createState.lastCreatedId = null;
     },
 
     // Selected beneficiary management
@@ -891,6 +1019,30 @@ const beneficiarySlice = createSlice({
       state.codeLookupError = null;
     },
 
+    // Set email search as processed
+    setEmailSearchProcessed: (state) => {
+      if (state.emailSearch) {
+        state.emailSearch.processed = true;
+      }
+    },
+
+    // Set phone search as processed
+    setPhoneSearchProcessed: (state) => {
+      if (state.phoneSearch) {
+        state.phoneSearch.processed = true;
+      }
+    },
+
+    // Clear phone search
+    clearPhoneSearch: (state) => {
+      state.phoneSearch = initialState.phoneSearch;
+    },
+
+    // Clear email search
+    clearEmailSearch: (state) => {
+      state.emailSearch = initialState.emailSearch;
+    },
+
     // Reset beneficiaries list
     resetBeneficiaries: (state) => {
       state.beneficiaries = [];
@@ -905,6 +1057,7 @@ const beneficiarySlice = createSlice({
       state.filterVisibility = "all";
       state.currentPage = 1;
       state.deleteState = initialState.deleteState;
+      state.createState = initialState.createState;
     },
 
     // Update beneficiary in list
@@ -929,6 +1082,8 @@ const beneficiarySlice = createSlice({
       } else {
         state.beneficiaries = [newBeneficiary];
       }
+      state.success = true;
+      state.lastUpdated = new Date().toISOString();
     },
 
     // Search, filter and pagination
@@ -959,43 +1114,6 @@ const beneficiarySlice = createSlice({
           beneficiary.isVisible = true;
         }
       }
-    },
-
-    // Create beneficiary actions
-    clearCreateError: (state) => {
-      state.createError = null;
-    },
-
-    clearCreateSuccess: (state) => {
-      state.createSuccess = false;
-    },
-
-    resetCreateState: (state) => {
-      state.createLoading = false;
-      state.createError = null;
-      state.createSuccess = false;
-      state.beneficiaryId = null;
-    },
-
-    // Dropdown data actions
-    clearDropdownError: (state) => {
-      state.dropdownError = null;
-    },
-
-    clearDropdownData: (state) => {
-      state.nationalities = [];
-      state.banks = {};
-      state.idTypes = {};
-      state.cities = {};
-      state.bankBranches = {};
-    },
-
-    clearBanksData: (state) => {
-      state.banks = {};
-    },
-
-    clearIdTypesData: (state) => {
-      state.idTypes = {};
     },
 
     // Delete state actions
@@ -1030,13 +1148,42 @@ const beneficiarySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // ===================== CREATE AND ADD BENEFICIARY =====================
+      .addCase(createAndAddBeneficiary.pending, (state) => {
+        console.log("⏳ createAndAddBeneficiary PENDING");
+        state.createState.loading = true;
+        state.createState.error = null;
+        state.createState.success = false;
+        state.createState.lastCreatedId = null;
+      })
+      .addCase(createAndAddBeneficiary.fulfilled, (state, action) => {
+        console.log("✅ createAndAddBeneficiary FULFILLED", action.payload);
+        state.createState.loading = false;
+        state.createState.success = true;
+        state.createState.lastCreatedId = action.payload.beneficiaryId;
+        state.createState.error = null;
+
+        // Also set the main success flag for backward compatibility
+        state.success = true;
+        state.lastUpdated = new Date().toISOString();
+
+        console.log("🏁 createState after success:", state.createState);
+      })
+      .addCase(createAndAddBeneficiary.rejected, (state, action) => {
+        console.error("❌ createAndAddBeneficiary REJECTED:", action.payload);
+        state.createState.loading = false;
+        state.createState.error = action.payload;
+        state.createState.success = false;
+        state.createState.lastCreatedId = null;
+      })
+
       // ===================== FETCH BENEFICIARIES =====================
       .addCase(fetchBeneficiaries.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false
         const beneficiariesData = Array.isArray(action.payload)
           ? action.payload
           : action.payload.data || [];
@@ -1049,7 +1196,7 @@ const beneficiarySlice = createSlice({
         }
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
-        state.loading = false;
+        state.loading = false; // CRITICAL: Ensure loading is set to false even on error
         state.error = action.payload;
       })
 
@@ -1063,6 +1210,10 @@ const beneficiarySlice = createSlice({
         state.editLoading = false;
         state.beneficiaryDetails = action.payload;
         state.editError = null;
+
+        if (action.payload && action.payload.benef_banks) {
+          state.beneficiaryBanks = action.payload.benef_banks;
+        }
       })
       .addCase(fetchBeneficiaryById.rejected, (state, action) => {
         state.editLoading = false;
@@ -1166,7 +1317,6 @@ const beneficiarySlice = createSlice({
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
-        // Clear selected beneficiary if it was deleted
         if (
           state.selectedBeneficiary &&
           beneficiaryIds.includes(state.selectedBeneficiary.id)
@@ -1191,7 +1341,6 @@ const beneficiarySlice = createSlice({
         state.loading = false;
         const { beneficiaryId, beneficiaryData } = action.payload;
 
-        // Add the restored beneficiary back to the list
         if (beneficiaryData) {
           state.beneficiaries.unshift(beneficiaryData);
         }
@@ -1270,149 +1419,6 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaryBanks.rejected, (state) => {
         state.banksLoading = false;
         state.beneficiaryBanks = [];
-      })
-
-      // ===================== UPDATE BENEFICIARY =====================
-      .addCase(updateBeneficiary.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-        state.success = false;
-      })
-      .addCase(updateBeneficiary.fulfilled, (state, action) => {
-        state.loading = false;
-        state.error = null;
-        state.success = true;
-        state.lastUpdated = new Date().toISOString();
-
-        const { beneficiaryId, beneficiary } = action.payload;
-        if (Array.isArray(state.beneficiaries)) {
-          const beneficiaryIndex = state.beneficiaries.findIndex(
-            (b) => b.id === beneficiaryId
-          );
-
-          if (beneficiaryIndex !== -1) {
-            state.beneficiaries[beneficiaryIndex] = {
-              ...state.beneficiaries[beneficiaryIndex],
-              ...beneficiary,
-            };
-          }
-
-          if (state.selectedBeneficiary?.id === beneficiaryId) {
-            state.selectedBeneficiary = {
-              ...state.selectedBeneficiary,
-              ...beneficiary,
-            };
-          }
-        }
-      })
-      .addCase(updateBeneficiary.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.success = false;
-      })
-
-      // ===================== CREATE BENEFICIARY WITH BANKS =====================
-      .addCase(createBeneficiaryWithBanks.pending, (state) => {
-        state.createLoading = true;
-        state.createError = null;
-        state.createSuccess = false;
-      })
-      .addCase(createBeneficiaryWithBanks.fulfilled, (state, action) => {
-        state.createLoading = false;
-        state.createSuccess = true;
-        state.beneficiaryId = action.payload.beneficiary_id;
-        state.createError = null;
-        state.lastUpdated = new Date().toISOString();
-
-        if (action.payload.beneficiary) {
-          if (Array.isArray(state.beneficiaries)) {
-            state.beneficiaries.unshift(action.payload.beneficiary);
-          } else {
-            state.beneficiaries = [action.payload.beneficiary];
-          }
-
-          state.selectedBeneficiary = action.payload.beneficiary;
-        }
-      })
-      .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
-        state.createLoading = false;
-        state.createError = action.payload;
-        state.createSuccess = false;
-      })
-
-      // ===================== NATIONALITIES =====================
-      .addCase(fetchNationalities.pending, (state) => {
-        state.dropdownLoading = true;
-        state.dropdownError = null;
-      })
-      .addCase(fetchNationalities.fulfilled, (state, action) => {
-        state.dropdownLoading = false;
-        state.nationalities = action.payload;
-      })
-      .addCase(fetchNationalities.rejected, (state, action) => {
-        state.dropdownLoading = false;
-        state.dropdownError = action.payload;
-      })
-
-      // ===================== BANKS BY CURRENCY =====================
-      .addCase(fetchBanksByCurrency.pending, (state) => {
-        state.dropdownLoading = true;
-        state.dropdownError = null;
-      })
-      .addCase(fetchBanksByCurrency.fulfilled, (state, action) => {
-        state.dropdownLoading = false;
-        const { currency, data, bankType } = action.payload;
-        const key = bankType === "int-banks" ? `${currency}_int` : currency;
-        state.banks[key] = data;
-      })
-      .addCase(fetchBanksByCurrency.rejected, (state, action) => {
-        state.dropdownLoading = false;
-        state.dropdownError = action.payload;
-      })
-
-      // ===================== ID TYPES BY CURRENCY =====================
-      .addCase(fetchIdTypesByCurrency.pending, (state) => {
-        state.dropdownLoading = true;
-        state.dropdownError = null;
-      })
-      .addCase(fetchIdTypesByCurrency.fulfilled, (state, action) => {
-        state.dropdownLoading = false;
-        const { currency, data } = action.payload;
-        state.idTypes[currency] = data;
-      })
-      .addCase(fetchIdTypesByCurrency.rejected, (state, action) => {
-        state.dropdownLoading = false;
-        state.dropdownError = action.payload;
-      })
-
-      // ===================== CITIES BY COUNTRY =====================
-      .addCase(fetchCitiesByCountry.pending, (state) => {
-        state.dropdownLoading = true;
-        state.dropdownError = null;
-      })
-      .addCase(fetchCitiesByCountry.fulfilled, (state, action) => {
-        state.dropdownLoading = false;
-        const { countryId, data } = action.payload;
-        state.cities[countryId] = data;
-      })
-      .addCase(fetchCitiesByCountry.rejected, (state, action) => {
-        state.dropdownLoading = false;
-        state.dropdownError = action.payload;
-      })
-
-      // ===================== BANK BRANCHES =====================
-      .addCase(fetchBankBranches.pending, (state) => {
-        state.dropdownLoading = true;
-        state.dropdownError = null;
-      })
-      .addCase(fetchBankBranches.fulfilled, (state, action) => {
-        state.dropdownLoading = false;
-        const { bankCode, data } = action.payload;
-        state.bankBranches[bankCode] = data;
-      })
-      .addCase(fetchBankBranches.rejected, (state, action) => {
-        state.dropdownLoading = false;
-        state.dropdownError = action.payload;
       });
   },
 });
@@ -1423,6 +1429,9 @@ export const {
   clearSuccess,
   resetState,
   clearEditState,
+  clearCreateState,
+  clearCreateError,
+  clearCreateSuccess,
   setSelectedBeneficiary,
   clearSelectedBeneficiary,
   setSelectedBank,
@@ -1436,22 +1445,21 @@ export const {
   setFilterVisibility,
   setCurrentPage,
   toggleVisibilityLocal,
-  clearCreateError,
-  clearCreateSuccess,
-  resetCreateState,
-  clearDropdownError,
-  clearDropdownData,
-  clearBanksData,
-  clearIdTypesData,
   addToDeleteQueue,
   removeFromDeleteQueue,
   clearDeleteQueue,
   updateBulkDeleteProgress,
   clearDeleteState,
   clearUndoState,
+  searchBeneficiaryByEmail,
+  clearEmailSearch,
+  setEmailSearchProcessed,
+  searchBeneficiaryByPhone,
+  clearPhoneSearch,
+  setPhoneSearchProcessed,
 } = beneficiarySlice.actions;
 
-// ===================== SELECTORS =====================
+// ===================== SELECTOR DEFINITIONS =====================
 
 // Core selectors
 export const selectBeneficiaries = (state) =>
@@ -1464,6 +1472,17 @@ export const selectBeneficiariesSuccess = (state) =>
 export const selectBeneficiariesLastUpdated = (state) =>
   state.beneficiaries.lastUpdated;
 
+// Create state selectors
+export const selectCreateLoading = (state) =>
+  state.beneficiaries.createState.loading;
+export const selectCreateError = (state) =>
+  state.beneficiaries.createState.error;
+export const selectCreateSuccess = (state) =>
+  state.beneficiaries.createState.success;
+export const selectLastCreatedId = (state) =>
+  state.beneficiaries.createState.lastCreatedId;
+
+// Edit beneficiary selectors
 export const selectEditBeneficiaryLoading = (state) =>
   state.beneficiaries.editLoading || false;
 export const selectEditBeneficiaryError = (state) =>
@@ -1508,46 +1527,54 @@ export const selectUndoAvailable = (state) =>
 export const selectUndoData = (state) =>
   state.beneficiaries.deleteState.undoData;
 
-// Create beneficiary selectors
-export const selectCreateLoading = (state) => state.beneficiaries.createLoading;
-export const selectCreateError = (state) => state.beneficiaries.createError;
-export const selectCreateSuccess = (state) => state.beneficiaries.createSuccess;
-export const selectBeneficiaryId = (state) => state.beneficiaries.beneficiaryId;
+// Email search selectors
+export const selectEmailSearch = (state) => state.beneficiaries.emailSearch;
+export const selectEmailSearchLoading = (state) =>
+  state.beneficiaries.emailSearch.loading;
+export const selectEmailExists = (state) =>
+  state.beneficiaries.emailSearch.exists;
+export const selectEmailSearchData = (state) =>
+  state.beneficiaries.emailSearch.data;
+export const selectEmailSearchProcessed = (state) =>
+  state.beneficiaries.emailSearch.processed;
 
-// Dropdown data selectors
-export const selectNationalities = (state) => state.beneficiaries.nationalities;
-export const selectBanks = (state) => state.beneficiaries.banks;
-export const selectIdTypes = (state) => state.beneficiaries.idTypes;
-export const selectCities = (state) => state.beneficiaries.cities;
-export const selectBankBranches = (state) => state.beneficiaries.bankBranches;
-export const selectDropdownLoading = (state) =>
-  state.beneficiaries.dropdownLoading;
-export const selectDropdownError = (state) => state.beneficiaries.dropdownError;
+// Phone search selectors
+export const selectPhoneSearch = (state) => state.beneficiaries.phoneSearch;
+export const selectPhoneSearchLoading = (state) =>
+  state.beneficiaries.phoneSearch.loading;
+export const selectPhoneExists = (state) =>
+  state.beneficiaries.phoneSearch.exists;
+export const selectPhoneSearchData = (state) =>
+  state.beneficiaries.phoneSearch.data;
+export const selectPhoneSearchProcessed = (state) =>
+  state.beneficiaries.phoneSearch.processed;
 
-// ===================== HELPER SELECTORS =====================
+// ===================== UTILITY SELECTORS =====================
 
-// Helper function to get banks for currency
-export const selectBanksForCurrency = (currency) => (state) => {
-  if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
-    return state.beneficiaries.banks[`${currency}_int`] || [];
-  }
-  return state.beneficiaries.banks[currency] || [];
-};
+// Visible beneficiaries
+export const selectVisibleBeneficiaries = (state) =>
+  (state.beneficiaries.beneficiaries || []).filter(
+    (beneficiary) =>
+      beneficiary.is_visible !== false &&
+      beneficiary.isVisible !== false &&
+      beneficiary.status !== 0
+  );
 
-// Helper function to get ID types for currency
-export const selectIdTypesForCurrency = (currency) => (state) => {
-  return state.beneficiaries.idTypes[currency] || [];
-};
+// Beneficiary by ID
+export const selectBeneficiaryById = (beneficiaryId) => (state) =>
+  (state.beneficiaries.beneficiaries || []).find(
+    (beneficiary) => beneficiary.id === beneficiaryId
+  );
 
-// Helper function to get cities for country
-export const selectCitiesForCountry = (countryId) => (state) => {
-  return state.beneficiaries.cities[countryId] || [];
-};
+// Beneficiaries by currency
+export const selectBeneficiariesByCurrency = (currency) => (state) =>
+  (state.beneficiaries.beneficiaries || []).filter(
+    (beneficiary) => beneficiary.currency === currency
+  );
 
-// Helper function to get bank branches
-export const selectBankBranchesForBank = (bankCode) => (state) => {
-  return state.beneficiaries.bankBranches[bankCode] || [];
-};
+// Count selectors
+export const selectBeneficiariesCount = (state) =>
+  state.beneficiaries.beneficiaries?.length || 0;
 
 // ===================== MEMOIZED SELECTORS =====================
 
@@ -1616,9 +1643,20 @@ export const selectBeneficiariesWithDeleteStatus = createSelector(
   }
 );
 
+// Count selectors that depend on memoized selectors
+export const selectFilteredBeneficiariesCount = createSelector(
+  [selectFilteredBeneficiaries],
+  (filteredBeneficiaries) => filteredBeneficiaries.length
+);
+
+export const selectVisibleBeneficiariesCount = createSelector(
+  [selectVisibleBeneficiaries],
+  (visibleBeneficiaries) => visibleBeneficiaries.length
+);
+
 // ===================== REMITTANCE-SPECIFIC SELECTORS =====================
 
-// Selector for remittance-ready beneficiaries (with formatted labels)
+// Selector for remittance-ready beneficiaries
 export const selectRemittanceReadyBeneficiaries = createSelector(
   [selectBeneficiaries],
   (beneficiaries) => {
@@ -1656,7 +1694,7 @@ export const selectBeneficiaryForRemittance = (beneficiaryId) =>
     };
   });
 
-// Remittance-ready beneficiary banks (with formatted labels)
+// Remittance-ready beneficiary banks
 export const selectRemittanceReadyBanks = createSelector(
   [selectBeneficiaryBanks],
   (banks) => {
@@ -1673,55 +1711,5 @@ export const selectRemittanceReadyBanks = createSelector(
   }
 );
 
-// ===================== UTILITY SELECTORS =====================
-
-// Visible beneficiaries
-export const selectVisibleBeneficiaries = (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) =>
-      beneficiary.is_visible !== false &&
-      beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
-  );
-
-// Beneficiary by ID
-export const selectBeneficiaryById = (beneficiaryId) => (state) =>
-  (state.beneficiaries.beneficiaries || []).find(
-    (beneficiary) => beneficiary.id === beneficiaryId
-  );
-
-// Beneficiaries by currency
-export const selectBeneficiariesByCurrency = (currency) => (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) => beneficiary.currency === currency
-  );
-
-// Count selectors
-export const selectBeneficiariesCount = (state) =>
-  state.beneficiaries.beneficiaries?.length || 0;
-
-export const selectFilteredBeneficiariesCount = createSelector(
-  [selectFilteredBeneficiaries],
-  (filteredBeneficiaries) => filteredBeneficiaries.length
-);
-
-export const selectVisibleBeneficiariesCount = (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) =>
-      beneficiary.is_visible !== false &&
-      beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
-  ).length;
-
-// Remittance-specific counts
-export const selectRemittanceReadyBeneficiariesCount = createSelector(
-  [selectRemittanceReadyBeneficiaries],
-  (remittanceReadyBeneficiaries) => remittanceReadyBeneficiaries.length
-);
-
-export const selectRemittanceReadyBanksCount = createSelector(
-  [selectRemittanceReadyBanks],
-  (remittanceReadyBanks) => remittanceReadyBanks.length
-);
-
+// ===================== DEFAULT EXPORT =====================
 export default beneficiarySlice.reducer;

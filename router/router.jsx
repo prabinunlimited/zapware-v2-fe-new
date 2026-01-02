@@ -31,7 +31,9 @@ import URLDebugger from "./URLDebugger";
 import Profile from "../src/page/Profile/Profile";
 import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
 import DepositPage from "../src/page/Deposit/DepositPage";
+import DepositPageIframe from "../src/page/Deposit/DepositPageIframe";
 import BankLink from "../src/page/Deposit/components/BankLink";
+import BankLinkIframe from "../src/page/Deposit/components/BankLinkIframe";
 import CardPayment from "../src/page/Deposit/components/Card/CardPayment";
 import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIframe";
 import Team from "../src/page/Team/Team";
@@ -39,6 +41,10 @@ import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
+import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
+import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
+import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
+import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 
 const ProtectedLayout = () => {
   return (
@@ -64,6 +70,10 @@ const router = createBrowserRouter([
         element: <SelectAccountType />,
       },
       {
+        path:"selectcountry",
+        element: <SelectCountry />,
+      },
+      {
         path: "signupindividual",
         element: <SignUpIndividual />,
       },
@@ -87,6 +97,14 @@ const router = createBrowserRouter([
         path: "plaidcallback",
         element: <PlaidCallback />,
       },
+      {
+        path: "linkbankiframe/:requestId/:accessToken",
+        element: <BankLinkIframe />,
+      },
+      {
+        path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
+        element: <DepositPageIframe />,
+      },
     ],
   },
 
@@ -98,6 +116,14 @@ const router = createBrowserRouter([
       {
         path: "home/:customerId",
         element: <Home />,
+      },
+      {
+        path: "monthlytransactions/:customerId",
+        element: <MonthlyTransactions />,
+      },
+      {
+        path:"alltransactions/:customerId",
+        element: <AllTransactions />,
       },
       {
         path: "transfer/:customerId",
@@ -122,6 +148,10 @@ const router = createBrowserRouter([
       {
         path: "card",
         element: <CardPayment />,
+      },
+      {
+        path: "/card/success",
+        element: <CardPaymentSuccess />, // You need to create this component
       },
       {
         path: "cardiframe",

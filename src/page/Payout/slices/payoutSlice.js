@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api, {
   apiCoordinator,
-  forceRefreshEndpoint,
 } from "../../../services/api";
 import { countries } from "../../../features/Auth/slices/countrySlice";
 import axios from "axios";
@@ -531,7 +530,7 @@ const initialState = {
     occupation: "",
     convertedValue: 0,
     transaction_type: "",
-    promocode: "",
+    promo_code: "",
     purpose: "",
     description: "",
     country_id: "",
@@ -648,14 +647,14 @@ const payoutSlice = createSlice({
     },
 
     // Cache management
-    clearApiCache: (state, action) => {
-      const pattern = action.payload;
-      if (pattern) {
-        forceRefreshEndpoint(pattern);
-      } else {
-        apiCoordinator.clear();
-      }
-    },
+    // clearApiCache: (state, action) => {
+    //   const pattern = action.payload;
+    //   if (pattern) {
+    //     forceRefreshEndpoint(pattern);
+    //   } else {
+    //     apiCoordinator.clear();
+    //   }
+    // },
 
     clearBeneficiaryCache: (state) => {
       apiCoordinator.clear("/beneficiaries");

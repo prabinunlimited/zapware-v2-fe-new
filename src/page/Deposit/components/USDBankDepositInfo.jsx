@@ -17,7 +17,7 @@ import {
   FaFilter,
 } from "react-icons/fa";
 import { useSelector } from "react-redux";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 const USDBankDepositInfo = ({
   selectedCurrency,
@@ -168,7 +168,7 @@ const USDBankDepositInfo = ({
         </div>
         <div className="p-6">
           <div className="flex flex-col items-center justify-center py-12">
-            <ClipLoader color="#3B82F6" size={40} className="mb-4" />
+            <RingLoader color="#3B82F6" size={40} className="mb-4" />
             <p className="text-gray-600 font-medium">
               Loading your bank accounts...
             </p>

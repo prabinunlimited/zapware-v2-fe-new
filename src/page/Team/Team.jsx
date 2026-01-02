@@ -15,7 +15,7 @@ import {
 import { FaArrowLeft } from "react-icons/fa";
 import { FiUserPlus, FiUsers } from "react-icons/fi";
 import { HiOutlineUserGroup } from "react-icons/hi";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 import { useTeamActions, useTeamState } from "./Hooks/useTeamActions";
@@ -171,7 +171,7 @@ const Team = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <ClipLoader size={48} color="#3b82f6" />
+            <RingLoader size={48} color="#3b82f6" />
           </motion.div>
         ) : teamMembers.length === 0 ? (
           <motion.div
@@ -326,7 +326,7 @@ const Team = () => {
                               title="Delete member"
                             >
                               {deletingId === member.staff_id ? (
-                                <ClipLoader size={20} color="#ef4444" />
+                                <RingLoader size={20} color="#ef4444" />
                               ) : (
                                 <AiOutlineDelete className="text-xl" />
                               )}

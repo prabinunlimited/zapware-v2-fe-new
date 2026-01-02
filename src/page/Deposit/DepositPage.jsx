@@ -16,6 +16,7 @@ import {
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
 import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
+import CardPayment from "./components/Card/CardPayment";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -24,10 +25,14 @@ import { usePaymentMethods } from "./hooks/usePaymentMethods";
 import { useBankAccounts } from "./hooks/useBankAccounts";
 import { useUI } from "./hooks/useUI";
 
+import Select from "react-select";
+import { FaSearch, FaPlus } from "react-icons/fa";
+
 // ✅ CORRECT: Import from depositSlice
 import {
   fetchManualAccountDetails,
   setShowPaymentInitiation,
+  selectShowPaymentInitiation,
 } from "./slices/depositSlice";
 
 // ✅ CORRECT: Import USD account actions and selectors from bankAccountSlice
@@ -41,10 +46,10 @@ import {
 
 // ✅ CORRECT: Import account selectors from AccountSlice (ONCE)
 import {
-  selectAccounts,
-  selectAccountLoading,
-  selectAccountError,
-} from "../../components/Dashboard/Account/AccountSummary/AccountSlice";
+  selectAccounts as selectHomeAccounts,
+  selectAccountLoading as selectHomeAccountLoading,
+  selectAccountError as selectHomeAccountError,
+} from "../../page/Home/HomeSlice";
 
 import { tokenService } from "../../services/authService";
 
@@ -69,13 +74,31 @@ import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 // Fixed useCurrency hook that uses existing Redux account data
 const useFixedCurrency = (initialCurrency) => {
   // Get accounts and loading state from Redux (same data used in AccountSummary)
-  const accounts = useSelector(selectAccounts);
-  const accountLoading = useSelector(selectAccountLoading);
-  const accountError = useSelector(selectAccountError);
+  const accounts = useSelector(selectHomeAccounts);
+  const accountLoading = useSelector(selectHomeAccountLoading);
+  const accountError = useSelector(selectHomeAccountError);
 
-  console.log("🔍 useFixedCurrency - Raw accounts from Redux:", accounts);
+  console.log("🔍 useFixedCurrency - Raw accounts from HomeSlice:", accounts);
+  console.log("🔍 useFixedCurrency - Accounts count:", accounts?.length || 0);
   console.log("⏳ useFixedCurrency - Loading state:", accountLoading);
   console.log("❌ useFixedCurrency - Error state:", accountError);
+
+  // Add debug to see the actual account structure
+  useEffect(() => {
+    if (accounts && accounts.length > 0) {
+      console.log("🔍 ACCOUNT STRUCTURE DEBUG:", {
+        firstAccount: accounts[0],
+        allCurrencies: accounts.map((acc) => ({
+          currency: acc.currency,
+          available_balance: acc.available_balance,
+          account_name: acc.account_name,
+          account_number: acc.account_number,
+          iban: acc.iban,
+          account_id: acc.account_id,
+        })),
+      });
+    }
+  }, [accounts]);
 
   useEffect(() => {
     // Pre-check and ensure token is available before any API calls
@@ -585,18 +608,30 @@ const EmptyState = ({ navigate }) => (
 const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
   const handleCardPayment = async () => {
     try {
-      // ✅ SIMPLE: Direct navigation like original code
+      // Validate
+      if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+        toast.error("Please enter a valid amount");
+        return;
+      }
+
+      if (!deposit.purpose) {
+        toast.error("Please select a purpose");
+        return;
+      }
+
       const navigationState = {
         customerId: customerId,
         amount: parseFloat(deposit.amount),
-        currency: deposit.selectedCurrency,
+        currency: deposit.selectedCurrency || selectedCurrency,
+        purpose: deposit.purpose,
+        paymentMethod: deposit.paymentMethod,
       };
 
       console.log("🚀 Navigating to card payment:", navigationState);
       navigate("/card", { state: navigationState });
     } catch (error) {
-      console.error("❌ Error initiating card payment:", error);
-      toast.error("Failed to initiate card payment. Please try again.");
+      console.error("❌ Card payment error:", error);
+      toast.error("Failed to initiate card payment");
     }
   };
 
@@ -623,6 +658,7 @@ const DepositPageContent = () => {
 
   // ✅ TAB STATE
   const [activeTab, setActiveTab] = useState("deposit");
+  const [sessionData, setSessionData] = useState(null);
 
   // Safe parameter access with debugging
   const customerId = params.customerId;
@@ -650,6 +686,8 @@ const DepositPageContent = () => {
   const bankLinkAccounts = useSelector(
     (state) => state.bankLink?.bankAccounts || []
   );
+
+  const showPaymentInitiation = useSelector(selectShowPaymentInitiation);
 
   // ✅ ADD: Sync state
   const [syncInProgress, setSyncInProgress] = useState(false);
@@ -1033,7 +1071,36 @@ const DepositPageContent = () => {
         toastClassName="font-sans"
         progressClassName="bg-gradient-to-r from-blue-500 to-blue-600"
       />
-      <PaymentInitiation />
+      <PaymentInitiation
+        selectedCurrency={deposit.selectedCurrency}
+        amount={deposit.amount}
+        purpose={deposit.purpose}
+        paymentMethod={deposit.paymentMethod}
+        selectedBankAccount={deposit.selectedBankAccount}
+        // For deposits, we don't need beneficiary data
+        selectedBeneficiaryBank={null}
+        selectedBeneficiary={null}
+        customerId={customerId}
+        showPaymentInitiation={showPaymentInitiation}
+        transactionType="deposit" // ✅ IMPORTANT: Set to "deposit"
+        onClose={() => dispatch(setShowPaymentInitiation(false))}
+        onSuccess={(result) => {
+          console.log("Open Banking success:", result);
+          if (result.success) {
+            toast.success("Open Banking deposit initiated successfully!");
+
+            // ✅ Reset the form
+            deposit.resetTransaction();
+
+            // ✅ Optional: Close the modal after success
+            setTimeout(() => {
+              dispatch(setShowPaymentInitiation(false));
+            }, 2000);
+          } else {
+            toast.error(result.error || "Open Banking failed");
+          }
+        }}
+      />
       <DebugPanel />
       <ReceiptTemplate
         transactionSuccess={deposit.transactionSuccess}
@@ -1265,7 +1332,7 @@ const DepositPageContent = () => {
                         deposit={deposit}
                         navigate={navigate}
                         customerId={customerId}
-                        currency={currency}
+                        selectedCurrency={deposit.selectedCurrency}
                       />
                     ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
                     (deposit.selectedCurrency === "EUR" ||
@@ -1288,8 +1355,17 @@ const DepositPageContent = () => {
                               "Please enter a purpose for this deposit";
                           }
 
+                          // For Open Banking deposits, you might also need to check for selected bank account
+                          // Uncomment if needed:
+                          // if (!deposit.selectedBankAccount) {
+                          //   errors.bankAccount = "Please select a bank account";
+                          // }
+
                           if (Object.keys(errors).length > 0) {
-                            deposit.setFormErrors(errors);
+                            // You need to make sure deposit.setFormErrors exists
+                            if (deposit.setFormErrors) {
+                              deposit.setFormErrors(errors);
+                            }
                             toast.error("Please fill all required fields");
                             return;
                           }

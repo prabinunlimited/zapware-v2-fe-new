@@ -5,9 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:staging": "vite --mode staging",
+    "dev:production": "vite --mode production",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "build:staging": "vite build --mode staging",
+    "build:production": "vite build --mode production",
+    "preview": "vite preview",
+    "preview:staging": "vite preview --mode staging",
+    "preview:production": "vite preview --mode production",
+    "deploy:staging": "npm run build:staging && ./deploy-staging.sh",
+    "deploy:production": "npm run build:production && ./deploy-production.sh",
+    "analyze": "npm run build && npx vite-bundle-analyzer dist/stats.html",
+    "analyze:staging": "npm run build:staging && npx vite-bundle-analyzer dist/stats-staging.html",
+    "analyze:production": "npm run build:production && npx vite-bundle-analyzer dist/stats-production.html"
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.0.0",
@@ -28,6 +38,7 @@
     "html2canvas": "^1.4.1",
     "js-cookie": "^3.0.5",
     "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "jwt-decode": "^4.0.0",
     "laravel-echo": "^2.2.7",
     "lodash": "^4.17.21",
@@ -35,6 +46,7 @@
     "lucide-react": "^0.544.0",
     "pusher-js": "^8.4.0",
     "react": "^19.1.0",
+    "react-csv": "^2.2.2",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.61.0",
     "react-icons": "^5.5.0",
@@ -58,14 +70,18 @@
     "@eslint/js": "^9.30.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "autoprefixer": "^10.4.21",
+    "autoprefixer": "^10.4.22",
     "baseline-browser-mapping": "^2.9.3",
+    "cssnano": "^7.1.2",
     "eslint": "^9.30.1",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
     "postcss": "^8.5.6",
+    "rollup-plugin-visualizer": "^6.0.5",
     "tailwindcss": "^3.4.17",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vite-plugin-compression": "^0.5.1",
+    "vite-plugin-html": "^3.2.2"
   }
 }

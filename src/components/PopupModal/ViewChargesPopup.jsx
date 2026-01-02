@@ -10,7 +10,7 @@ import {
 } from "react-icons/io5";
 import { FiArrowUpRight, FiAlertCircle } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 // Import Redux actions and selectors for charges
 import {
@@ -319,7 +319,7 @@ const ViewChargesPopup = ({ isOpen, onClose, customerId, authtoken }) => {
                   animate={{ opacity: 1 }}
                   className="flex flex-col items-center justify-center py-16"
                 >
-                  <ClipLoader size={40} color="#3B82F6" />
+                  <RingLoader size={40} color="#3B82F6" />
                   <p className="mt-4 text-gray-600 font-medium">Loading charges information...</p>
                   <p className="text-sm text-gray-500 mt-2">Fetching the latest charges data</p>
                 </motion.div>

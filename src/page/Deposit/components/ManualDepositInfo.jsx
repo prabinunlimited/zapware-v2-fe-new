@@ -1,7 +1,7 @@
 // src/page/Deposit/components/ManualDepositInfo.jsx - COMPLETE FIXED VERSION
 import React from "react";
 import { motion } from "framer-motion";
-import { ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import {
   FaBuilding,
   FaRegFileAlt,
@@ -43,7 +43,7 @@ const ManualDepositInfo = ({
         className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl font-sans"
       >
         <div className="flex justify-center items-center py-4">
-          <ClipLoader color="#3B82F6" size={30} />
+          <RingLoader color="#3B82F6" size={30} />
           <span className="ml-3 text-gray-600 font-sans">
             Loading {selectedCurrency} account details...
           </span>
@@ -60,7 +60,7 @@ const ManualDepositInfo = ({
         className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl font-sans"
       >
         <div className="flex justify-center items-center py-4">
-          <ClipLoader color="#3B82F6" size={30} />
+          <RingLoader color="#3B82F6" size={30} />
           <span className="ml-3 text-gray-600 font-sans">
             Loading {selectedCurrency} account details...
           </span>
@@ -108,7 +108,7 @@ const ManualDepositInfo = ({
       >
         <div className="text-center">
           <div className="flex justify-center items-center py-2">
-            <ClipLoader color="#F59E0B" size={30} />
+            <RingLoader color="#F59E0B" size={30} />
             <span className="ml-3 text-orange-700 font-sans">
               Loading {selectedCurrency} account details...
             </span>

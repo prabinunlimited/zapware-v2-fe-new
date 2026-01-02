@@ -70,10 +70,13 @@ export const handleBankLinkSuccess = createAsyncThunk(
   "bankLink/handleBankLinkSuccess",
   async ({ response, customerId }, { rejectWithValue, dispatch }) => {
     try {
+      console.log("🎯 handleBankLinkSuccess STARTED with:", response);
+
       if (!response) {
         throw new Error("No response received from bank linking");
       }
 
+      // Check for KYC status
       if (
         (response.kyc_status && response.kyc_status === "pending") ||
         (response.message && response.message.includes("KYC"))
@@ -84,22 +87,39 @@ export const handleBankLinkSuccess = createAsyncThunk(
         };
       }
 
-      if (!response.success) {
-        throw new Error(
-          response.message || "Bank linking failed without error message"
-        );
-      }
+      const hasSuccessAccounts = response.success_accounts?.length > 0;
+      const hasFailedAccounts = response.failed_accounts?.length > 0;
 
-      // Refresh accounts after successful linking
+      if (hasSuccessAccounts || !hasFailedAccounts) {
+        // This is a successful response
+        return {
+          type: "success",
+          data: response,
+          message: response.message || "Bank account linked successfully",
+        };
+      } else {
+        throw new Error(response.message || "Bank linking failed");
+      }
+    } catch (error) {
+      console.error("❌ handleBankLinkSuccess ERROR:", error);
+      return rejectWithValue(error.message || "Failed to process bank linking");
+    }
+  }
+);
+
+export const refreshAccountsAfterSuccess = createAsyncThunk(
+  "bankLink/refreshAccountsAfterSuccess",
+  async (customerId, { rejectWithValue, dispatch }) => {
+    try {
+      // Fetch bank accounts
       await dispatch(fetchBankAccounts(customerId));
 
-      return {
-        type: "success",
-        data: response,
-        message: "Bank account linked successfully",
-      };
+      // Note: If you need to fetch manual bank details too, add it here
+      // Example: await dispatch(fetchManualBankDetails(customerId));
+
+      return { success: true };
     } catch (error) {
-      return rejectWithValue(error.message || "Failed to process bank linking");
+      return rejectWithValue("Failed to refresh accounts");
     }
   }
 );
@@ -153,6 +173,10 @@ const bankLinkSlice = createSlice({
     },
     setKycStatus: (state, action) => {
       state.kycStatus = action.payload;
+    },
+
+    setIsProcessing: (state, action) => {
+      state.isProcessing = action.payload;
     },
 
     // Status management (matching reference)
@@ -228,18 +252,40 @@ const bankLinkSlice = createSlice({
       .addCase(handleBankLinkSuccess.fulfilled, (state, action) => {
         state.isAddingAccount = false;
 
+        console.log(
+          "🎯 handleBankLinkSuccess.fulfilled payload:",
+          action.payload
+        );
+
         if (action.payload.type === "kyc_pending") {
           state.kycStatus = action.payload.message;
         } else if (action.payload.type === "success") {
-          state.apiResponse = action.payload.data;
+          // ✅ FIX: Make sure we're setting the data correctly
+          state.apiResponse = action.payload.data || action.payload;
           state.showSuccessModal = true;
           state.showPlaidLink = false;
+
+          console.log("✅ Success modal should show now:", {
+            apiResponseSet: !!state.apiResponse,
+            showSuccessModal: state.showSuccessModal,
+          });
         }
       })
       .addCase(handleBankLinkSuccess.rejected, (state, action) => {
         state.isAddingAccount = false;
         state.error = action.payload;
         state.showPlaidLink = false;
+      })
+
+      .addCase(refreshAccountsAfterSuccess.pending, (state) => {
+        state.isProcessing = true;
+      })
+      .addCase(refreshAccountsAfterSuccess.fulfilled, (state) => {
+        state.isProcessing = false;
+      })
+      .addCase(refreshAccountsAfterSuccess.rejected, (state, action) => {
+        state.isProcessing = false;
+        state.error = action.payload;
       });
   },
 });
@@ -249,6 +295,7 @@ export const {
   setShowSuccessModal,
   setApiResponse,
   setCurrentPage,
+  setIsProcessing,
   setKycStatus,
   clearErrors,
   clearDeleteStatus,

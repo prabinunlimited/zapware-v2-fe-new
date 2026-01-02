@@ -17,6 +17,7 @@ const institutionSchema = (currentStep, options = {}) => {
     showBusinessAliasField = false,
     showBusinessEmailField = false,
     showBusinessWebsiteField = false,
+    ssn_required = "N",
   } = options;
 
   // Common validation rules
@@ -62,23 +63,13 @@ const institutionSchema = (currentStep, options = {}) => {
     "ssn-format",
     "SSN must be in format XXX-XX-XXXX",
     function (value) {
-      // Safely access parent values
-      const parent = this?.parent || {};
-      const country = parent.country;
-
-      // Only validate SSN if:
-      // 1. User selected USD Named Account (isNamedAccount = true)
-      // 2. User is US resident (country = "United States")
-      const shouldValidateSSN = isNamedAccount && country === "United States";
-
-      // If no value and validation is required, return error
+      const shouldValidateSSN = isNamedAccount && ssn_required === "Y";
       if (shouldValidateSSN && (!value || value.trim() === "")) {
         return this.createError({
-          message: "SSN is required for USD Named Accounts for US residents",
+          message: "SSN is required for USD Named Accounts",
         });
       }
 
-      // If value exists and validation is required, validate format
       if (shouldValidateSSN && value) {
         const cleanSSN = value.replace(/-/g, "");
         if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
@@ -88,7 +79,6 @@ const institutionSchema = (currentStep, options = {}) => {
         }
       }
 
-      // If not USD Named Account OR not US resident, no validation needed
       return true;
     }
   );
@@ -102,22 +92,13 @@ const institutionSchema = (currentStep, options = {}) => {
         // Safely access parent values
         const parent = this?.parent || {};
         const is_controller = parent.is_controller;
-        const controller_country = parent.controller_country;
-
-        // Only validate if:
-        // 1. User selected USD Named Account (isNamedAccount = true)
-        // 2. User is not the controller (is_controller === "no")
-        // 3. Controller is US resident (controller_country === "United States")
         const shouldValidateControllerSSN =
-          isNamedAccount &&
-          is_controller === "no" &&
-          controller_country === "United States";
+          isNamedAccount && is_controller === "no" && ssn_required === "Y";
 
         if (shouldValidateControllerSSN) {
           if (!value || value.trim() === "") {
             return this.createError({
-              message:
-                "SSN is required for USD Named Accounts for US controllers",
+              message: "SSN is required for USD Named Accounts for controllers",
             });
           }
 
@@ -132,8 +113,6 @@ const institutionSchema = (currentStep, options = {}) => {
 
         return true;
       } catch (error) {
-        // If there's any error in validation, return true to avoid breaking the form
-        
         return true;
       }
     }

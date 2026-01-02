@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,16 +26,20 @@ import {
   FaIdCard,
   FaArrowDown,
   FaMoneyCheckAlt,
+  FaExclamationTriangle,
+  FaSpinner,
 } from "react-icons/fa";
 import { FiSend, FiCreditCard, FiCheck } from "react-icons/fi";
 import { HiCurrencyDollar, HiOutlineBanknotes } from "react-icons/hi2";
 import { MdAccountBalance, MdSecurity } from "react-icons/md";
 import { TbTransfer } from "react-icons/tb";
 import Select from "react-select";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
 
-// Redux actions (unchanged)
+// Redux actions
 import {
   setStep,
   setSendAmount,
@@ -48,7 +58,7 @@ import {
 
 import { fetchAllStaticData } from "./slices/staticDataSlice";
 
-// Import beneficiary actions (unchanged)
+// Import beneficiary actions
 import {
   setSelectedBeneficiary,
   setSelectedBank,
@@ -56,9 +66,22 @@ import {
   fetchBeneficiaryByCode,
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
+import {
+  fetchUSDBankAccounts,
+  selectUSDBankAccounts,
+  selectHasSilaAccounts,
+  selectUSDAccountsLoading,
+  selectUSDAccountsError,
+} from "../../page/Deposit/slices/bankAccountSlice";
+
+import {
+  setSelectedBankAccount,
+  selectSelectedBankAccount,
+} from "../../page/Deposit/slices/depositSlice";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Import child components (unchanged)
+// Import child components
 import ManualDeposit from "./subComponents/ManualDeposit";
 import BankTransfer from "./subComponents/BankTransfer";
 import CardPayment from "./subComponents/CardPayment";
@@ -66,14 +89,14 @@ import Step2Details from "./steps/Step2Details";
 import Step3Confirm from "./steps/Step3Confirm";
 import Step4Success from "./steps/Step4Success";
 
-import { RingLoader, ClipLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 
 const Remittance = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { customerId } = useParams();
 
-  // Select state from Redux store (unchanged)
+  // Select state from Redux store
   const {
     step,
     formData,
@@ -94,8 +117,14 @@ const Remittance = () => {
   } = useSelector((state) => state.beneficiaries);
 
   const { purposes, incomeSources, occupations, paymentMethods } = useSelector(
-    (state) => state.remittanceStatic // ✅ This matches your store configuration
+    (state) => state.remittanceStatic
   );
+
+  const silaBankAccounts = useSelector(selectUSDBankAccounts); // Changed selector
+  const hasSilaAccounts = useSelector(selectHasSilaAccounts);
+  const silaAccountsLoading = useSelector(selectUSDAccountsLoading); // Changed selector
+  const silaAccountsError = useSelector(selectUSDAccountsError);
+  const selectedSilaBankAccount = useSelector(selectSelectedBankAccount);
 
   // Local state for UI
   const [filePreview, setFilePreview] = useState(null);
@@ -110,9 +139,20 @@ const Remittance = () => {
   const [manualDetailsLoading, setManualDetailsLoading] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [showRecipientDetails, setShowRecipientDetails] = useState(true);
 
   const [showOpenBanking, setShowOpenBanking] = useState(false);
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
+
+  // Refs for preventing duplicate API calls
+  const isManualUpdate = useRef(false);
+  const lastRequestId = useRef(null);
+  const isRequestInProgress = useRef(false);
+  const lastApiCallTime = useRef(0);
+  const exchangeRateCache = useRef({});
+  const typingTimeout = useRef(null);
+  const activeInput = useRef("send");
+  const isTyping = useRef(false);
 
   // Professional payment method options
   const paymentOptions = useMemo(
@@ -198,14 +238,15 @@ const Remittance = () => {
     []
   );
 
-  // Memoized currency options (unchanged)
+  // Memoized currency options
   const sendCurrencyOptions = useMemo(
     () =>
       (bankAccounts || []).map((account) => ({
         value: account.currency_code,
-        label: account.currency_code,
+        label: `${account.currency_code} - ${account.bank_name || "Account"}`,
         bank_id: account.id,
         icon: account.icon,
+        balance: account.balance,
       })),
     [bankAccounts]
   );
@@ -217,16 +258,27 @@ const Remittance = () => {
 
   // Copy to clipboard function
   const copyToClipboard = useCallback((text, fieldName) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedField(fieldName);
-      setTimeout(() => setCopiedField(null), 2000);
-    });
+    if (!text) return;
+
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedField(fieldName);
+        toast.success(`Copied ${fieldName.replace("_", " ")} to clipboard`, {
+          position: "top-right",
+          autoClose: 2000,
+        });
+        setTimeout(() => setCopiedField(null), 2000);
+      })
+      .catch(() => {
+        toast.error("Failed to copy to clipboard", {
+          position: "top-right",
+          autoClose: 2000,
+        });
+      });
   }, []);
 
-  // All existing hooks and functions remain unchanged
-  // (Initialize data, fetch exchange rate, manual account details, handlers, etc.)
-
-  // Initialize data (unchanged)
+  // Initialize data
   useEffect(() => {
     const initializeData = async () => {
       if (customerId) {
@@ -234,105 +286,328 @@ const Remittance = () => {
           await Promise.all([
             dispatch(fetchBankAccounts(customerId)),
             dispatch(fetchPayoutCurrencies()),
-            dispatch(fetchAllStaticData()), // Add this line
+            dispatch(fetchAllStaticData()),
           ]);
+          toast.success("Data loaded successfully", {
+            position: "top-right",
+            autoClose: 2000,
+          });
         } catch (error) {
           console.error("Failed to initialize data:", error);
+          toast.error("Failed to load initial data", {
+            position: "top-right",
+            autoClose: 3000,
+          });
         } finally {
           setInitialLoading(false);
         }
       } else {
         setInitialLoading(false);
+        toast.error("Customer ID not found", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        navigate("/login");
       }
     };
 
     initializeData();
-  }, [customerId, dispatch]);
+  }, [customerId, dispatch, navigate]);
 
-  // Reset exchange rate data when currencies change (unchanged)
+  const hasFetchedSilaAccounts = useRef(false);
+
+  useEffect(() => {
+    const customerIdToUse =
+      customerId || localStorage.getItem("customerId") || "1720";
+
+    // Only fetch if we haven't fetched already and not currently loading
+    if (
+      customerIdToUse &&
+      !silaAccountsLoading &&
+      !hasFetchedSilaAccounts.current
+    ) {
+      console.log("🔄 Remittance: Fetching Sila bank accounts...");
+
+      hasFetchedSilaAccounts.current = true; // Mark as fetched
+
+      dispatch(fetchUSDBankAccounts())
+        .unwrap()
+        .then((result) => {
+          console.log("✅ Sila bank accounts loaded:", result?.length || 0);
+        })
+        .catch((error) => {
+          console.error("❌ Failed to load Sila bank accounts:", error);
+          hasFetchedSilaAccounts.current = false; // Reset on error to allow retry
+        });
+    }
+  }, [dispatch, customerId, silaAccountsLoading]);
+
+  // ✅ Add this to reset loading state when unmounting
+  useEffect(() => {
+    return () => {
+      // Cleanup function - runs when component unmounts
+    };
+  }, []);
+
+  // ✅ Add this to reset loading state when unmounting
+  useEffect(() => {
+    return () => {
+      // Cleanup function - runs when component unmounts
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initialLoading && !formData.sendAmount) {
+      // Set default send amount to 5 (minimum)
+      dispatch(setSendAmount("5"));
+      activeInput.current = "send";
+    }
+  }, [initialLoading, formData.sendAmount, dispatch]);
+
+  // Reset exchange rate data when currencies change
   useEffect(() => {
     if (formData.sendCurrency?.value || formData.receiveCurrency?.value) {
       setExchangeRateData(null);
       setExchangeRateError(null);
-      if (formData.sendAmount) {
-        dispatch(setReceiveAmount(""));
-      }
-    }
-  }, [
-    formData.sendCurrency,
-    formData.receiveCurrency,
-    formData.sendAmount,
-    dispatch,
-  ]);
+      // Reset manual update flag
+      isManualUpdate.current = false;
 
-  // Fetch exchange rate with cleanup (unchanged)
+      // Clear receive amount when currencies change
+      dispatch(setReceiveAmount(""));
+    }
+  }, [formData.sendCurrency, formData.receiveCurrency, dispatch]);
+
+  // Fetch exchange rate with deduplication and caching
   useEffect(() => {
     let isMounted = true;
+    let debounceTimer;
 
     const fetchRate = async () => {
       const sendCurrencyValue = formData.sendCurrency?.value;
       const receiveCurrencyValue = formData.receiveCurrency?.value;
-      const sendAmountValue = parseFloat(formData.sendAmount);
 
-      if (sendCurrencyValue && receiveCurrencyValue && sendAmountValue > 0) {
-        const payload = {
-          fromCurrency: sendCurrencyValue,
-          toCurrency: receiveCurrencyValue,
-          amount: sendAmountValue,
-          bankId: formData.sendCurrency?.bank_id,
-          customerId,
-        };
-
+      // Don't fetch if missing required data
+      if (!sendCurrencyValue || !receiveCurrencyValue) {
         if (isMounted) {
-          setExchangeRateLoading(true);
-          setExchangeRateError(null);
+          setExchangeRateLoading(false); // Ensure loading is false
         }
+        return;
+      }
 
-        try {
-          const response = await dispatch(fetchExchangeRate(payload)).unwrap();
-          if (isMounted && response && response.converted_value) {
-            dispatch(setReceiveAmount(response.converted_value));
-            setExchangeRateData(response);
-            setExchangeRateError(null);
-          } else if (isMounted) {
-            setExchangeRateError("Unable to fetch exchange rate");
-            setExchangeRateData(null);
-            dispatch(setReceiveAmount(""));
+      // Don't fetch if user is typing or it's a manual update
+      if (isTyping.current || isManualUpdate.current) {
+        if (isMounted) {
+          setExchangeRateLoading(false); // Ensure loading is false
+        }
+        return;
+      }
+
+      // Prevent duplicate requests
+      if (isRequestInProgress.current) {
+        console.log("⏳ Request already in progress, skipping duplicate");
+        return;
+      }
+
+      // Rate limiting - minimum 1.5 seconds between calls
+      const now = Date.now();
+      if (now - lastApiCallTime.current < 1500) {
+        console.log("⏱️ Rate limiting: Too soon since last call");
+        return;
+      }
+
+      // Determine which amount to use for calculation
+      let amountForCalculation;
+      if (activeInput.current === "receive" && formData.receiveAmount) {
+        // When user enters receive amount, use 1 to get the base rate
+        amountForCalculation = 1;
+      } else {
+        // Otherwise use send amount or default to 5 (minimum)
+        amountForCalculation = parseFloat(formData.sendAmount) || 5;
+      }
+
+      // Create cache key
+      const cacheKey = `${sendCurrencyValue}-${receiveCurrencyValue}-${amountForCalculation}`;
+
+      // Check cache (45 second cache)
+      const cachedData = exchangeRateCache.current[cacheKey];
+      if (cachedData && now - cachedData.timestamp < 45000) {
+        console.log("💾 Using cached exchange rate");
+        if (isMounted) {
+          setExchangeRateData(cachedData.data);
+          setExchangeRateLoading(false); // IMPORTANT: Set loading to false
+
+          // Calculate send amount if needed
+          if (activeInput.current === "receive" && formData.receiveAmount) {
+            const receiveNum = parseFloat(formData.receiveAmount);
+            if (!isNaN(receiveNum) && receiveNum > 0) {
+              const calculatedSendAmount = roundToDecimals(
+                receiveNum / cachedData.data.fxRate,
+                2
+              );
+              dispatch(setSendAmount(calculatedSendAmount.toString()));
+            }
           }
-        } catch (error) {
-          if (isMounted) {
-            console.error("Failed to fetch exchange rate:", error);
-            setExchangeRateError("Unable to fetch exchange rate");
-            setExchangeRateData(null);
-            dispatch(setReceiveAmount(""));
+        }
+        return;
+      }
+
+      isRequestInProgress.current = true;
+      lastApiCallTime.current = now;
+
+      const payload = {
+        fromCurrency: sendCurrencyValue,
+        toCurrency: receiveCurrencyValue,
+        amount: amountForCalculation,
+        bankId: formData.sendCurrency?.bank_id,
+        customerId,
+      };
+
+      if (isMounted) {
+        setExchangeRateLoading(true);
+        setExchangeRateError(null);
+      }
+
+      try {
+        const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+        if (isMounted && response && response.converted_value) {
+          isManualUpdate.current = true;
+
+          // Calculate exchange rate
+          const fxRate = response.converted_value / amountForCalculation;
+
+          const exchangeData = {
+            ...response,
+            fxRate: roundToDecimals(fxRate, 6),
+            fromCurrency: sendCurrencyValue,
+            toCurrency: receiveCurrencyValue,
+            originalAmount: amountForCalculation,
+            timestamp: Date.now(),
+          };
+
+          // Cache the result
+          exchangeRateCache.current[cacheKey] = {
+            data: exchangeData,
+            timestamp: Date.now(),
+          };
+
+          setExchangeRateData(exchangeData);
+
+          // If user entered receive amount, calculate the corresponding send amount
+          if (activeInput.current === "receive" && formData.receiveAmount) {
+            const receiveNum = parseFloat(formData.receiveAmount);
+            if (!isNaN(receiveNum) && receiveNum > 0) {
+              const calculatedSendAmount = roundToDecimals(
+                receiveNum / fxRate,
+                2
+              );
+
+              // Enforce minimum amount
+              if (calculatedSendAmount < 5) {
+                toast.warning(
+                  `Minimum amount is ${
+                    formData.sendCurrency?.value || "USD"
+                  } 5.00. Adjusting...`,
+                  { position: "top-center", autoClose: 3000 }
+                );
+                const minSendAmount = 5;
+                const adjustedReceiveAmount = roundToDecimals(
+                  minSendAmount * fxRate,
+                  2
+                );
+                dispatch(setSendAmount(minSendAmount.toString()));
+                dispatch(setReceiveAmount(adjustedReceiveAmount.toString()));
+              } else {
+                dispatch(setSendAmount(calculatedSendAmount.toString()));
+              }
+            }
           }
-        } finally {
-          if (isMounted) {
-            setExchangeRateLoading(false);
-          }
+
+          setExchangeRateError(null);
+          setExchangeRateLoading(false); // IMPORTANT: Set loading to false on success
+          toast.success("Exchange rate updated", {
+            position: "top-right",
+            autoClose: 2000,
+          });
+        } else if (isMounted) {
+          setExchangeRateError("Unable to fetch exchange rate");
+          setExchangeRateData(null);
+          setExchangeRateLoading(false); // IMPORTANT: Set loading to false on error
+          toast.error("Failed to fetch exchange rate", {
+            position: "top-right",
+            autoClose: 3000,
+          });
+        }
+      } catch (error) {
+        if (isMounted) {
+          setExchangeRateError("Unable to fetch exchange rate");
+          setExchangeRateData(null);
+          setExchangeRateLoading(false); // IMPORTANT: Set loading to false on catch
+          toast.error("Failed to fetch exchange rate", {
+            position: "top-right",
+            autoClose: 3000,
+          });
+        }
+      } finally {
+        if (isMounted) {
+          // Already set loading to false in try/catch blocks
+          setTimeout(() => {
+            isManualUpdate.current = false;
+            isRequestInProgress.current = false;
+          }, 200);
         }
       }
     };
 
-    const debounceTimer = setTimeout(() => {
-      fetchRate();
-    }, 500);
+    // Clear existing timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Set up debounce - 1200ms for better user experience
+    debounceTimer = setTimeout(() => {
+      if (!isTyping.current) {
+        fetchRate();
+      }
+    }, 1200);
 
     return () => {
       isMounted = false;
-      clearTimeout(debounceTimer);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
     };
   }, [
     formData.sendCurrency?.value,
     formData.receiveCurrency?.value,
     formData.sendAmount,
+    formData.receiveAmount,
     customerId,
     dispatch,
   ]);
 
-  // Fetch manual account details with cleanup (unchanged)
+  useEffect(() => {
+    return () => {
+      // Reset loading state when currencies change
+      setExchangeRateLoading(false);
+      isRequestInProgress.current = false;
+      isTyping.current = false;
+      isManualUpdate.current = false;
+    };
+  }, [formData.sendCurrency?.value, formData.receiveCurrency?.value]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+    };
+  }, []);
+
+  // Fetch manual account details with cleanup
   useEffect(() => {
     let isMounted = true;
+    let fetchTimer;
 
     const fetchDetails = async () => {
       if (
@@ -350,7 +625,7 @@ const Remittance = () => {
             fetchManualAccountDetails({
               bankId: formData.sendCurrency.bank_id,
               currencyCode: formData.sendCurrency.value,
-              amount: formData.sendAmount || "0",
+              amount: formData.sendAmount || "5",
               customerId: parseInt(customerId),
             })
           ).unwrap();
@@ -364,10 +639,22 @@ const Remittance = () => {
               setManualAccountError(
                 result.message || "Bank details unavailable"
               );
+              toast.error("Bank details unavailable", {
+                position: "top-right",
+                autoClose: 3000,
+              });
             } else if (result && Object.keys(result).length > 0) {
               setManualAccountError(null);
+              toast.success("Bank details loaded", {
+                position: "top-right",
+                autoClose: 2000,
+              });
             } else {
               setManualAccountError("Bank details unavailable");
+              toast.error("Bank details unavailable", {
+                position: "top-right",
+                autoClose: 3000,
+              });
             }
           }
         } catch (error) {
@@ -387,6 +674,10 @@ const Remittance = () => {
             }
 
             setManualAccountError(errorMessage);
+            toast.error(errorMessage, {
+              position: "top-right",
+              autoClose: 3000,
+            });
           }
         } finally {
           if (isMounted) {
@@ -398,7 +689,21 @@ const Remittance = () => {
       }
     };
 
-    fetchDetails();
+    // Debounce the manual details fetch
+    if (fetchTimer) {
+      clearTimeout(fetchTimer);
+    }
+
+    fetchTimer = setTimeout(() => {
+      fetchDetails();
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      if (fetchTimer) {
+        clearTimeout(fetchTimer);
+      }
+    };
   }, [
     formData.paymentMethod,
     formData.sendCurrency?.bank_id,
@@ -408,43 +713,229 @@ const Remittance = () => {
     dispatch,
   ]);
 
-  // All other handlers remain unchanged
+  useEffect(() => {
+    console.log(
+      "🔄 Remittance - Current paymentMethod:",
+      formData.paymentMethod
+    );
+    console.log("🔄 Remittance - Full formData:", formData);
+  }, [formData.paymentMethod, formData]);
+
+  const formatNumberInput = (value) => {
+    if (!value) return "";
+
+    // Remove all characters except digits and decimal point
+    const cleaned = value.replace(/[^0-9.]/g, "");
+
+    // Prevent multiple decimal points
+    const parts = cleaned.split(".");
+    if (parts.length > 2) {
+      return parts[0] + "." + parts.slice(1).join("");
+    }
+
+    // If the value starts with decimal point, add "0" prefix
+    if (cleaned === ".") return "0.";
+
+    return cleaned;
+  };
+
+  const fetchExchangeRateManual = useCallback(async () => {
+    if (!formData.sendCurrency || !formData.receiveCurrency) {
+      setExchangeRateLoading(false); // Reset loading
+      toast.error("Please select both currencies", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
+    // Clear cache for fresh fetch
+    const cacheKey = `${formData.sendCurrency.value}-${
+      formData.receiveCurrency.value
+    }-${parseFloat(formData.sendAmount) || 5}`;
+    delete exchangeRateCache.current[cacheKey];
+
+    setExchangeRateLoading(true);
+    setExchangeRateError(null);
+
+    try {
+      const payload = {
+        fromCurrency: formData.sendCurrency.value,
+        toCurrency: formData.receiveCurrency.value,
+        amount: parseFloat(formData.sendAmount) || 5,
+        bankId: formData.sendCurrency.bank_id,
+        customerId,
+      };
+
+      const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+      if (response && response.converted_value) {
+        const fxRate =
+          response.converted_value / (parseFloat(formData.sendAmount) || 5);
+        setExchangeRateData({
+          ...response,
+          fxRate: roundToDecimals(fxRate, 6),
+          fromCurrency: formData.sendCurrency.value,
+          toCurrency: formData.receiveCurrency.value,
+          originalAmount: parseFloat(formData.sendAmount) || 5,
+        });
+        setExchangeRateLoading(false); // Reset loading on success
+        toast.success("Exchange rate refreshed", {
+          position: "top-right",
+          autoClose: 2000,
+        });
+      } else {
+        setExchangeRateLoading(false); // Reset loading on empty response
+        toast.error("No exchange rate data received", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      }
+    } catch (error) {
+      setExchangeRateError("Unable to fetch exchange rate");
+      setExchangeRateData(null);
+      setExchangeRateLoading(false); // Reset loading on error
+      toast.error("Failed to fetch exchange rate", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    }
+  }, [
+    formData.sendCurrency,
+    formData.receiveCurrency,
+    formData.sendAmount,
+    customerId,
+    dispatch,
+  ]);
+
+  const roundToDecimals = (value, decimals = 2) => {
+    if (typeof value !== "number" || isNaN(value)) {
+      return value;
+    }
+    const factor = Math.pow(10, decimals);
+    return Math.round((value + Number.EPSILON) * factor) / factor;
+  };
+
   const handleSendAmountChange = useCallback(
     (value) => {
-      dispatch(setSendAmount(value));
-      if (value && exchangeRateData?.fxRate) {
-        const receiveAmount = (
-          parseFloat(value) * exchangeRateData.fxRate
-        ).toFixed(2);
-        dispatch(setReceiveAmount(receiveAmount));
-      } else {
-        dispatch(setReceiveAmount(""));
+      // Clean the input
+      const cleanedValue = formatNumberInput(value);
+
+      // Don't process if value hasn't changed
+      const currentValue = parseFloat(formData.sendAmount || 0);
+      const newValue = parseFloat(cleanedValue || 0);
+
+      if (!isNaN(currentValue) && !isNaN(newValue)) {
+        const difference = Math.abs(currentValue - newValue);
+        if (difference < 0.01 && cleanedValue !== "") {
+          return;
+        }
       }
+
+      // Set active input and update state
+      activeInput.current = "send";
+      dispatch(setSendAmount(cleanedValue));
+
+      // Clear existing timeout
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+
+      // Set typing state with timeout
+      isTyping.current = true;
+      typingTimeout.current = setTimeout(() => {
+        isTyping.current = false;
+      }, 1200);
     },
-    [dispatch, exchangeRateData]
+    [dispatch, formData.sendAmount]
+  );
+
+  const handleReceiveAmountChange = useCallback(
+    (value) => {
+      const cleanedValue = formatNumberInput(value);
+
+      activeInput.current = "receive";
+      dispatch(setReceiveAmount(cleanedValue));
+
+      // Clear existing timeout
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+
+      // Set typing state with timeout
+      isTyping.current = true;
+      typingTimeout.current = setTimeout(() => {
+        isTyping.current = false;
+      }, 1200);
+    },
+    [dispatch]
   );
 
   const handleSendCurrencyChange = useCallback(
     (option) => {
       dispatch(setSendCurrency(option));
+      activeInput.current = "send";
       setExchangeRateData(null);
       setExchangeRateError(null);
+      setShowRecipientDetails(false);
+
+      // Clear cache when currency changes
+      Object.keys(exchangeRateCache.current).forEach((key) => {
+        if (key.startsWith(option?.value)) {
+          delete exchangeRateCache.current[key];
+        }
+      });
+
+      // Set default amount to 5 when currency changes
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        dispatch(setSendAmount("5"));
+      }
+
+      dispatch(setReceiveAmount(""));
     },
-    [dispatch]
+    [dispatch, formData.sendAmount]
   );
 
   const handleReceiveCurrencyChange = useCallback(
     (option) => {
       dispatch(setReceiveCurrency(option));
+      activeInput.current = "receive";
       setExchangeRateData(null);
       setExchangeRateError(null);
+      setShowRecipientDetails(false);
+
+      // Clear cache when currency changes
+      Object.keys(exchangeRateCache.current).forEach((key) => {
+        if (key.includes(`-${option?.value}-`)) {
+          delete exchangeRateCache.current[key];
+        }
+      });
+
+      // Set default send amount to 5 if it's empty or below minimum
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        dispatch(setSendAmount("5"));
+      }
+
+      dispatch(setReceiveAmount(""));
     },
-    [dispatch]
+    [dispatch, formData.sendAmount]
   );
 
   const handlePaymentMethodChange = useCallback(
     (method) => {
       dispatch(setPaymentMethod(method));
+      toast.info(
+        `Payment method changed to ${
+          method === "bank"
+            ? "Bank Transfer"
+            : method === "manual"
+            ? "Cash Deposit"
+            : "Card Payment"
+        }`,
+        {
+          position: "top-right",
+          autoClose: 2000,
+        }
+      );
     },
     [dispatch]
   );
@@ -458,6 +949,33 @@ const Remittance = () => {
 
   const handleFileUpload = useCallback(
     (file) => {
+      if (!file) return;
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (file.size > maxSize) {
+        toast.error("File size must be less than 5MB", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        return;
+      }
+
+      // Validate file type
+      const validTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/jpg",
+        "application/pdf",
+      ];
+      if (!validTypes.includes(file.type)) {
+        toast.error("Only JPG, PNG, and PDF files are allowed", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        return;
+      }
+
       dispatch(setFormField({ field: "document", value: file }));
       if (file && file.type.startsWith("image/")) {
         const reader = new FileReader();
@@ -466,6 +984,11 @@ const Remittance = () => {
       } else {
         setFilePreview(null);
       }
+
+      toast.success("File uploaded successfully", {
+        position: "top-right",
+        autoClose: 2000,
+      });
     },
     [dispatch]
   );
@@ -476,6 +999,10 @@ const Remittance = () => {
       if (beneficiary?.id) {
         dispatch(fetchBeneficiaryBanks(beneficiary.id));
       }
+      toast.success(`Beneficiary ${beneficiary?.name} selected`, {
+        position: "top-right",
+        autoClose: 2000,
+      });
     },
     [dispatch]
   );
@@ -483,12 +1010,34 @@ const Remittance = () => {
   const handleBankSelect = useCallback(
     (bank) => {
       dispatch(setSelectedBank(bank));
+      toast.success(`Bank ${bank?.bank_name} selected`, {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    },
+    [dispatch]
+  );
+
+  const handleBankAccountSelect = useCallback(
+    (account) => {
+      dispatch(setSelectedBankAccount(account));
+      toast.success(`Selected ${account?.account_name || "bank account"}`, {
+        position: "top-right",
+        autoClose: 2000,
+      });
     },
     [dispatch]
   );
 
   const handleBeneficiaryCodeLookup = useCallback(async () => {
-    if (!beneficiaryCode.trim()) return;
+    if (!beneficiaryCode.trim()) {
+      toast.error("Please enter a beneficiary code", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     setIsLoadingCode(true);
     try {
       const result = await dispatch(
@@ -496,96 +1045,26 @@ const Remittance = () => {
       ).unwrap();
       if (result.data) {
         handleBeneficiarySelect(result.data);
+        toast.success("Beneficiary found", {
+          position: "top-right",
+          autoClose: 2000,
+        });
+      } else {
+        toast.error("Beneficiary not found", {
+          position: "top-right",
+          autoClose: 3000,
+        });
       }
     } catch (error) {
       console.error("Error fetching beneficiary:", error);
+      toast.error("Error finding beneficiary", {
+        position: "top-right",
+        autoClose: 3000,
+      });
     } finally {
       setIsLoadingCode(false);
     }
   }, [beneficiaryCode, dispatch, handleBeneficiarySelect]);
-
-  const handleNextStep = useCallback(() => {
-    if (step === 1) {
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        alert("Minimum transfer amount is $5.00");
-        return;
-      }
-      if (!formData.sendCurrency || !formData.receiveCurrency) {
-        alert("Please select currencies");
-        return;
-      }
-      if (!exchangeRateData?.fxRate) {
-        alert(
-          "Exchange rate is not available. Please check your currency selection."
-        );
-        return;
-      }
-
-      if (formData.paymentMethod === "manual") {
-        if (!manualAccountDetails || manualAccountError) {
-          let errorMessage = "Bank details are not available for cash deposit.";
-
-          if (manualAccountError) {
-            if (typeof manualAccountError === "string") {
-              errorMessage = manualAccountError;
-            } else if (manualAccountError?.message) {
-              errorMessage = manualAccountError.message;
-            } else if (manualAccountError?.data?.message) {
-              errorMessage = manualAccountError.data.message;
-            } else if (manualAccountError?.status === 404) {
-              errorMessage =
-                "Bank details not found for the selected currency.";
-            }
-          }
-
-          alert(
-            `${errorMessage} Please choose a different payment method or currency.`
-          );
-          return;
-        }
-      }
-      dispatch(setStep(2));
-    } else if (step === 2) {
-      if (!selectedBeneficiary) {
-        alert("Please select a beneficiary");
-        return;
-      }
-      if (!formData.purpose || !formData.incomeSource) {
-        alert("Please fill in purpose and income source");
-        return;
-      }
-      if (formData.paymentMethod === "manual" && !formData.document) {
-        alert("Please upload payment proof for cash deposit");
-        return;
-      }
-      if (formData.paymentMethod === "bank" && !selectedBank) {
-        alert("Please select a bank account for the beneficiary");
-        return;
-      }
-      dispatch(setStep(3));
-    } else if (step === 3) {
-      if (!formData.agreeToTerms) {
-        alert("Please agree to the terms and conditions");
-        return;
-      }
-      handleSubmitTransaction();
-    }
-  }, [
-    step,
-    formData,
-    exchangeRateData,
-    manualAccountDetails,
-    manualAccountError,
-    selectedBeneficiary,
-    selectedBank,
-    dispatch,
-  ]);
-
-  const handlePreviousStep = useCallback(() => {
-    if (step > 1) {
-      dispatch(setStep(step - 1));
-    }
-  }, [step, dispatch]);
 
   const isOpenBankingAvailable = useCallback(() => {
     const openBankingCurrencies = ["EUR", "GBP", "DKK"];
@@ -629,6 +1108,10 @@ const Remittance = () => {
   const handleOpenBankingClose = useCallback(() => {
     setShowOpenBanking(false);
     setOpenBankingProcessing(false);
+    toast.info("Open Banking cancelled", {
+      position: "top-right",
+      autoClose: 2000,
+    });
   }, []);
 
   const handleOpenBankingSuccess = useCallback(
@@ -636,7 +1119,10 @@ const Remittance = () => {
       console.log("🎉 Open Banking payment worked!", result);
       setShowOpenBanking(false);
       setOpenBankingProcessing(false);
-      toast.success("Open Banking payment started successfully!");
+      toast.success("Open Banking payment started successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
 
       dispatch(setStep(4));
     },
@@ -644,17 +1130,20 @@ const Remittance = () => {
   );
 
   const handleSubmitTransaction = useCallback(() => {
-    // Debug: Check what we have
-    console.log("🔍 Debug - Current state:");
-    console.log("formData.sendCurrency:", formData.sendCurrency);
-    console.log("formData.receiveCurrency:", formData.receiveCurrency);
-    console.log("selectedBeneficiary:", selectedBeneficiary);
-    console.log("selectedBank:", selectedBank);
-
     const transactionData = {
       // REQUIRED: Currency fields
       from_currency: formData.sendCurrency?.value,
       to_currency: formData.receiveCurrency?.value,
+
+      ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
+        ? {
+            sila_account_id: selectedSilaBankAccount.id,
+            sila_payment_instrument_id:
+              selectedSilaBankAccount.payment_instrument_id,
+            sila_account_name: selectedSilaBankAccount.account_name,
+            sila_routing_number: selectedSilaBankAccount.routing_number,
+          }
+        : {}),
 
       // REQUIRED: Amount fields
       send_amount: parseFloat(formData.sendAmount),
@@ -669,8 +1158,8 @@ const Remittance = () => {
       conversion_id: exchangeRateData?.conversion_id,
 
       // REQUIRED: Beneficiary (ID as string)
-      beneficiary: selectedBeneficiary?.id?.toString(), // ← MUST BE STRING
-      beneficiary_bank_id: selectedBank?.id, // ← MUST HAVE THIS
+      beneficiary: selectedBeneficiary?.id?.toString(),
+      beneficiary_bank_id: selectedBank?.id,
 
       // Optional but good to include
       beneficiary_name: selectedBeneficiary?.name,
@@ -705,28 +1194,6 @@ const Remittance = () => {
     });
 
     console.log("📤 Sending transaction data:", cleanData);
-    console.log("📤 Missing required fields check:");
-    console.log(
-      "- from_currency:",
-      !!cleanData.from_currency,
-      cleanData.from_currency
-    );
-    console.log(
-      "- to_currency:",
-      !!cleanData.to_currency,
-      cleanData.to_currency
-    );
-    console.log(
-      "- beneficiary:",
-      !!cleanData.beneficiary,
-      cleanData.beneficiary
-    );
-    console.log(
-      "- beneficiary_bank_id:",
-      !!cleanData.beneficiary_bank_id,
-      cleanData.beneficiary_bank_id
-    );
-    console.log("- is_remit:", !!cleanData.is_remit, cleanData.is_remit);
 
     // Validate required fields
     const required = [
@@ -738,7 +1205,10 @@ const Remittance = () => {
     const missing = required.filter((field) => !cleanData[field]);
 
     if (missing.length > 0) {
-      alert(`Missing required fields: ${missing.join(", ")}`);
+      toast.error(`Missing required fields: ${missing.join(", ")}`, {
+        position: "top-center",
+        autoClose: 5000,
+      });
       return;
     }
 
@@ -750,18 +1220,254 @@ const Remittance = () => {
     selectedBeneficiary,
     selectedBank,
     dispatch,
+    selectedSilaBankAccount,
+    formData.paymentMethod,
+    formData.purpose,
+    formData.incomeSource,
+    formData.occupation,
+    formData.relation,
+    formData.payout_method,
+    formData.document,
+    formData.agreeToTerms,
   ]);
+
+  const handleNextStep = useCallback(() => {
+    if (step === 1) {
+      // ✅ STEP 1: Only validate basic transfer details
+      // Validate minimum amount
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        toast.error(
+          `Minimum transfer amount is ${
+            formData.sendCurrency?.value || "USD"
+          } 5.00`,
+          {
+            position: "top-center",
+            autoClose: 5000,
+          }
+        );
+        return;
+      }
+
+      // Validate both currencies are selected
+      if (!formData.sendCurrency || !formData.receiveCurrency) {
+        toast.error("Please select both currencies", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate exchange rate is available
+      if (!exchangeRateData?.fxRate) {
+        toast.error(
+          "Exchange rate is not available. Please check your currency selection.",
+          {
+            position: "top-center",
+            autoClose: 5000,
+          }
+        );
+        return;
+      }
+
+      // ✅ REMOVED Sila validation from Step 1
+
+      // Validate manual deposit details (this stays in Step 1)
+      if (formData.paymentMethod === "manual") {
+        if (!manualAccountDetails || manualAccountError) {
+          let errorMessage = "Bank details are not available for cash deposit.";
+          // ... error handling
+          toast.error(
+            `${errorMessage} Please choose a different payment method or currency.`,
+            {
+              position: "top-center",
+              autoClose: 5000,
+            }
+          );
+          return;
+        }
+      }
+
+      dispatch(setStep(2));
+      toast.success("Moving to recipient details", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    } else if (step === 2) {
+      // ✅ STEP 2: Validate recipient and Sila bank accounts
+      // Validate beneficiary selection
+      if (!selectedBeneficiary) {
+        toast.error("Please select a beneficiary", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate purpose and income source
+      if (!formData.purpose || !formData.incomeSource) {
+        toast.error("Please fill in purpose and income source", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Validate payment method specific requirements
+      if (formData.paymentMethod === "manual") {
+        if (!formData.document) {
+          toast.error("Please upload payment proof for cash deposit", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+      }
+
+      // ✅ MOVED HERE: Validate Sila bank accounts for USD transfers
+      if (formData.paymentMethod === "bank") {
+        // Special validation for USD bank transfers
+        if (formData.sendCurrency?.value === "USD") {
+          // Validate Sila bank account for USD
+          if (!hasSilaAccounts) {
+            toast.error(
+              "No linked bank accounts found. Please link a bank account to proceed with USD transfers.",
+              {
+                position: "top-center",
+                autoClose: 5000,
+              }
+            );
+            return;
+          }
+
+          if (!selectedSilaBankAccount) {
+            toast.error("Please select your bank account for USD transfers", {
+              position: "top-center",
+              autoClose: 5000,
+            });
+            return;
+          }
+
+          if (!selectedSilaBankAccount.web_debit_verified) {
+            toast.error(
+              "Selected bank account needs verification. Please select a verified account or verify this account first.",
+              {
+                position: "top-center",
+                autoClose: 5000,
+              }
+            );
+            return;
+          }
+        }
+
+        // Validate beneficiary bank for all bank transfers
+        if (!selectedBank) {
+          toast.error("Please select a bank account for the beneficiary", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+      }
+
+      dispatch(setStep(3));
+      toast.success("Moving to review and confirm", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    } else if (step === 3) {
+      // Validate terms agreement
+      if (!formData.agreeToTerms) {
+        toast.error("Please agree to the terms and conditions", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // ✅ ADDED: Final validation for Sila bank accounts
+      if (
+        formData.paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD" &&
+        !selectedSilaBankAccount
+      ) {
+        toast.error("Bank account selection is required for USD transfers", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      // Check for Open Banking availability
+      if (
+        formData.paymentMethod === "bank" &&
+        isOpenBankingAvailable() &&
+        formData.sendCurrency?.value !== "USD"
+      ) {
+        // For EUR/GBP/DKK, use Open Banking flow
+        handleInitiateOpenBanking();
+      } else {
+        // For USD or other methods, submit regular transaction
+        handleSubmitTransaction();
+      }
+    }
+  }, [
+    step,
+    formData,
+    exchangeRateData,
+    manualAccountDetails,
+    manualAccountError,
+    selectedBeneficiary,
+    selectedBank,
+    selectedSilaBankAccount, // ✅ ADDED
+    hasSilaAccounts, // ✅ ADDED
+    dispatch,
+    handleInitiateOpenBanking,
+    handleSubmitTransaction,
+    isOpenBankingAvailable,
+  ]);
+
+  const handlePreviousStep = useCallback(() => {
+    if (step > 1) {
+      dispatch(setStep(step - 1));
+      toast.info("Returning to previous step", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    }
+  }, [step, dispatch]);
 
   const handleReset = useCallback(() => {
     dispatch(resetForm());
+    dispatch(setSelectedBankAccount(null));
+    toast.success("Form reset successfully", {
+      position: "top-right",
+      autoClose: 2000,
+    });
   }, [dispatch]);
 
   const handleGoBack = useCallback(() => {
     navigate(-1);
+    toast.info("Transfer cancelled", {
+      position: "top-right",
+      autoClose: 2000,
+    });
   }, [navigate]);
 
   const handleDownloadReceipt = useCallback(() => {
+    if (!transactionResult) {
+      toast.error("No transaction result available", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     console.log("Downloading receipt", transactionResult);
+    toast.success("Receipt download started", {
+      position: "top-right",
+      autoClose: 2000,
+    });
+    // Implement actual download logic here
   }, [transactionResult]);
 
   // Professional select styles
@@ -861,6 +1567,14 @@ const Remittance = () => {
             <p className="text-sm text-gray-600 max-w-sm">
               Loading your accounts and available currencies...
             </p>
+            <div className="pt-4">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full animate-pulse"
+                  style={{ width: "60%" }}
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -928,6 +1642,11 @@ const Remittance = () => {
                   >
                     {stepItem.label}
                   </span>
+                  {step === stepItem.number && (
+                    <div className="mt-1">
+                      <div className="h-1 w-8 bg-blue-500 rounded-full mx-auto"></div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -941,6 +1660,7 @@ const Remittance = () => {
   const getPaymentMethodComponent = () => {
     switch (formData.paymentMethod) {
       case "manual":
+        console.log("📦 Rendering ManualDeposit");
         return (
           <ManualDeposit
             formData={formData}
@@ -962,30 +1682,43 @@ const Remittance = () => {
             showCodeInput={showCodeInput}
             setShowCodeInput={setShowCodeInput}
             handleBeneficiaryCodeLookup={handleBeneficiaryCodeLookup}
-            purposeOptions={purposeOptions} // ADD THIS LINE
-            incomeSourceOptions={incomeSourceOptions} // ADD THIS LINE
-            relationOptions={relationOptions} // ADD THIS LINE
-            paymentOptions={paymentOptions} // ADD THIS LINE
-            onPaymentMethodChange={handlePaymentMethodChange} // ADD THIS LINE
-            onFieldChange={handleFieldChange} // ADD THIS LINE
+            purposeOptions={purposeOptions}
+            incomeSourceOptions={incomeSourceOptions}
+            relationOptions={relationOptions}
+            paymentOptions={paymentOptions}
+            onPaymentMethodChange={handlePaymentMethodChange}
+            onFieldChange={handleFieldChange}
+            copyToClipboard={copyToClipboard}
+            copiedField={copiedField}
           />
         );
       case "bank":
+        console.log("📦 Rendering BankTransfer with formData:", {
+          paymentMethod: formData.paymentMethod,
+          sendCurrency: formData.sendCurrency?.value,
+        });
         return (
           <BankTransfer
-            formData={formData} // ADD THIS
+            formData={formData}
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
             beneficiaryBanks={beneficiaryBanks}
             beneficiaryLoading={beneficiaryLoading}
-            onBeneficiarySelect={handleBeneficiarySelect} // ADD THIS
+            onBeneficiarySelect={handleBeneficiarySelect}
             onBankSelect={handleBankSelect}
-            onFieldChange={handleFieldChange} // ADD THIS
-            purposeOptions={purposeOptions} // ADD THIS
-            incomeSourceOptions={incomeSourceOptions} // ADD THIS
-            relationOptions={relationOptions} // ADD THIS
-            paymentOptions={paymentOptions} // ADD THIS
-            onFileUpload={handleFileUpload} // ADD THIS IF NEEDED
+            onFieldChange={handleFieldChange}
+            purposeOptions={purposeOptions}
+            incomeSourceOptions={incomeSourceOptions}
+            relationOptions={relationOptions}
+            paymentOptions={paymentOptions}
+            onFileUpload={handleFileUpload}
+            selectedCurrency={formData.sendCurrency?.value}
+            silaBankAccounts={silaBankAccounts}
+            hasSilaAccounts={hasSilaAccounts}
+            silaAccountsLoading={silaAccountsLoading}
+            silaAccountsError={silaAccountsError}
+            selectedBankAccount={selectedSilaBankAccount}
+            onBankAccountSelect={handleBankAccountSelect}
           />
         );
       case "card":
@@ -1047,9 +1780,44 @@ const Remittance = () => {
                           onChange={(e) =>
                             handleSendAmountChange(e.target.value)
                           }
-                          placeholder="0.00"
+                          onFocus={() => {
+                            activeInput.current = "send";
+                          }}
+                          onBlur={(e) => {
+                            // Round on blur
+                            let numValue = parseFloat(e.target.value);
+                            if (!isNaN(numValue)) {
+                              // ENFORCE MINIMUM
+                              if (numValue < 5) {
+                                numValue = 5;
+                                toast.info(
+                                  `Amount adjusted to minimum of ${
+                                    formData.sendCurrency?.value || "USD"
+                                  } 5.00`,
+                                  { position: "top-center", autoClose: 2000 }
+                                );
+                              }
+                              const rounded = roundToDecimals(numValue, 2);
+                              dispatch(setSendAmount(rounded.toString()));
+
+                              // Recalculate receive amount with corrected send amount
+                              if (exchangeRateData?.fxRate) {
+                                const correctedReceiveAmount = roundToDecimals(
+                                  numValue * exchangeRateData.fxRate,
+                                  2
+                                );
+                                dispatch(
+                                  setReceiveAmount(
+                                    correctedReceiveAmount.toString()
+                                  )
+                                );
+                              }
+                            }
+                          }}
+                          placeholder="5.00"
                           className="w-full px-6 py-5 text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
                           inputMode="decimal"
+                          autoComplete="off"
                         />
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                           <div className="w-36">
@@ -1062,9 +1830,32 @@ const Remittance = () => {
                               isSearchable
                               className="text-sm"
                               classNamePrefix="select"
+                              formatOptionLabel={({ label, balance }) => (
+                                <div className="flex justify-between items-center">
+                                  <span>{label.split(" - ")[0]}</span>
+                                  {balance && (
+                                    <span className="text-xs text-gray-500">
+                                      ${parseFloat(balance).toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             />
                           </div>
                         </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+                        <span>
+                          Minimum: {formData.sendCurrency?.value || "USD"} 5.00
+                        </span>
+                        {formData.sendCurrency?.balance && (
+                          <span className="text-emerald-600 font-medium">
+                            Available: {formData.sendCurrency?.value}{" "}
+                            {parseFloat(formData.sendCurrency.balance).toFixed(
+                              2
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1079,7 +1870,7 @@ const Remittance = () => {
                             Secure Transfer
                           </p>
                           <p className="text-xs text-gray-600">
-                            Bank-level encryption
+                            Bank-level encryption & PCI DSS compliant
                           </p>
                         </div>
                       </div>
@@ -1093,23 +1884,85 @@ const Remittance = () => {
                         <h3 className="text-lg font-semibold text-gray-900">
                           Recipient Receives
                         </h3>
-                        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
-                          Estimated
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                            Estimated
+                          </span>
+                          {exchangeRateData?.fxRate &&
+                            formData.receiveAmount && (
+                              <span className="text-xs text-gray-500">
+                                • Real-time
+                              </span>
+                            )}
+                        </div>
                       </div>
+
                       <div className="relative">
                         <input
                           type="text"
                           value={formData.receiveAmount || ""}
+                          onChange={(e) => {
+                            activeInput.current = "receive";
+                            handleReceiveAmountChange(e.target.value);
+                          }}
+                          onFocus={() => {
+                            activeInput.current = "receive";
+                            setShowRecipientDetails(true);
+                          }}
+                          onBlur={(e) => {
+                            // Keep details shown if there's a value
+                            if (!formData.receiveAmount) {
+                              setShowRecipientDetails(false);
+                            }
+
+                            // Check if resulting send amount meets minimum
+                            const receiveNumValue = parseFloat(e.target.value);
+                            if (
+                              !isNaN(receiveNumValue) &&
+                              exchangeRateData?.fxRate
+                            ) {
+                              const calculatedSendAmount =
+                                receiveNumValue / exchangeRateData.fxRate;
+
+                              if (calculatedSendAmount < 5) {
+                                // Calculate what receiver amount would be for minimum send amount
+                                const minSendAmount = 5;
+                                const adjustedReceiveAmount = roundToDecimals(
+                                  minSendAmount * exchangeRateData.fxRate,
+                                  2
+                                );
+
+                                toast.info(
+                                  `Amount adjusted to minimum equivalent of ${
+                                    formData.sendCurrency?.value || "USD"
+                                  } 5.00`,
+                                  { position: "top-center", autoClose: 2000 }
+                                );
+
+                                dispatch(
+                                  setSendAmount(minSendAmount.toString())
+                                );
+                                dispatch(
+                                  setReceiveAmount(
+                                    adjustedReceiveAmount.toString()
+                                  )
+                                );
+                              }
+                            }
+                          }}
                           placeholder="0.00"
                           className={`w-full px-6 py-5 text-3xl font-bold rounded-xl focus:outline-none transition-all duration-200 ${
-                            exchangeRateError || !exchangeRateData?.fxRate
+                            exchangeRateError
+                              ? "bg-red-50 border-2 border-red-200 text-red-900 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                              : exchangeRateLoading
                               ? "bg-gray-100 border-2 border-gray-200 text-gray-900"
-                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900"
+                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                           }`}
-                          readOnly
-                          disabled
+                          inputMode="decimal"
+                          autoComplete="off"
                         />
+
+                        {/* Currency Selector */}
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                           <div className="w-36">
                             <Select
@@ -1117,58 +1970,165 @@ const Remittance = () => {
                               value={formData.receiveCurrency}
                               onChange={handleReceiveCurrencyChange}
                               placeholder="Currency"
-                              styles={selectStyles}
+                              styles={{
+                                ...selectStyles,
+                                control: (base, state) => ({
+                                  ...base,
+                                  minHeight: "52px",
+                                  borderRadius: "10px",
+                                  borderColor: state.isFocused
+                                    ? "#10b981"
+                                    : "#e5e7eb",
+                                  borderWidth: "1px",
+                                  backgroundColor: exchangeRateLoading
+                                    ? "#f9fafb"
+                                    : "#ffffff",
+                                  boxShadow: state.isFocused
+                                    ? "0 0 0 3px rgba(16, 185, 129, 0.1)"
+                                    : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                                  "&:hover": { borderColor: "#10b981" },
+                                }),
+                              }}
                               isSearchable
                               className="text-sm"
                               classNamePrefix="select"
+                              isLoading={exchangeRateLoading}
                             />
                           </div>
                         </div>
+
+                        {/* Loading indicator */}
+                        {exchangeRateLoading ? (
+                          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                            <RingLoader color="#10b981" size={16} />
+                            <span className="text-xs text-emerald-600 font-medium">
+                              Updating rate...
+                            </span>
+                          </div>
+                        ) : (
+                          exchangeRateData?.fxRate && (
+                            <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                              <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
+                            </div>
+                          )
+                        )}
                       </div>
+
+                      {/* Exchange rate info */}
+                      {exchangeRateData?.fxRate && (
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
+                            <span>
+                              1 {formData.sendCurrency?.value} ={" "}
+                              {exchangeRateData.fxRate.toFixed(4)}{" "}
+                              {formData.receiveCurrency?.value}
+                            </span>
+                          </div>
+                          <button
+                            onClick={fetchExchangeRateManual}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                            disabled={exchangeRateLoading}
+                          >
+                            <FaSpinner
+                              className={`w-3 h-3 ${
+                                exchangeRateLoading ? "animate-spin" : ""
+                              }`}
+                            />
+                            Refresh Rate
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Minimal conversion info */}
+                      {formData.sendAmount &&
+                        formData.receiveAmount &&
+                        exchangeRateData?.fxRate && (
+                          <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700">
+                                You send
+                              </span>
+                              <span className="font-semibold text-gray-900">
+                                {formData.sendCurrency?.value}{" "}
+                                {parseFloat(formData.sendAmount).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-sm font-medium text-gray-700">
+                                They receive
+                              </span>
+                              <span className="font-semibold text-emerald-600">
+                                {formData.receiveCurrency?.value}{" "}
+                                {parseFloat(formData.receiveAmount).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                     </div>
 
-                    {/* Exchange Rate Display */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-white rounded-lg shadow-sm">
-                            <FaExchangeAlt className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">
-                              Exchange Rate
-                            </p>
-                            {exchangeRateLoading && (
-                              <div className="flex items-center gap-2 mt-1">
-                                <ClipLoader color="#3b82f6" size={14} />
-                                <span className="text-xs text-gray-600">
-                                  Fetching live rate...
-                                </span>
+                    {/* Collapsible details section */}
+                    <AnimatePresence>
+                      {exchangeRateData?.fxRate && (
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-200">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <FaExchangeAlt className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Exchange Rate
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    1 {formData.sendCurrency?.value} ={" "}
+                                    {exchangeRateData.fxRate.toFixed(6)}{" "}
+                                    {formData.receiveCurrency?.value}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <FaClock className="text-emerald-500 text-xs" />
+                                <p className="text-xs text-emerald-600 font-medium">
+                                  Live rate
+                                </p>
+                              </div>
+                            </div>
+
+                            {exchangeRateData.conversion_id && (
+                              <div className="mt-3 pt-3 border-t border-emerald-200">
+                                <p className="text-xs text-gray-600">
+                                  <span className="font-medium">Rate ID:</span>{" "}
+                                  <span className="font-mono">
+                                    {exchangeRateData.conversion_id}
+                                  </span>
+                                </p>
                               </div>
                             )}
                           </div>
                         </div>
-                        {exchangeRateData?.fxRate ? (
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gray-900">
-                              1 {formData.sendCurrency?.value} ={" "}
-                              {exchangeRateData.fxRate.toFixed(4)}{" "}
-                              {formData.receiveCurrency?.value}
-                            </p>
-                            <div className="flex items-center gap-1 justify-end mt-1">
-                              <FaClock className="text-emerald-500 text-xs" />
-                              <p className="text-xs text-emerald-600 font-medium">
-                                Live market rate
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">
-                            Select currencies
+                      )}
+                    </AnimatePresence>
+
+                    {/* Error message */}
+                    {exchangeRateError && (
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaExclamationTriangle className="w-4 h-4 text-red-500" />
+                          <p className="text-sm font-medium text-red-600">
+                            {exchangeRateError}
                           </p>
-                        )}
+                        </div>
+                        <button
+                          onClick={fetchExchangeRateManual}
+                          className="mt-1 text-xs text-red-700 hover:text-red-900 font-medium flex items-center gap-1"
+                        >
+                          <FaSpinner className="w-3 h-3" />
+                          Try again
+                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -1199,9 +2159,21 @@ const Remittance = () => {
                         <motion.button
                           key={option.value}
                           type="button"
-                          onClick={() =>
-                            handlePaymentMethodChange(option.value)
-                          }
+                          onClick={() => {
+                            console.log(
+                              "🎯 Payment button clicked:",
+                              option.value
+                            );
+                            console.log(
+                              "Current paymentMethod before change:",
+                              formData.paymentMethod
+                            );
+                            handlePaymentMethodChange(option.value);
+                            console.log(
+                              "PaymentMethod change dispatched for:",
+                              option.value
+                            );
+                          }}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           className={`p-5 rounded-xl border-2 transition-all duration-300 text-left ${
@@ -1317,7 +2289,7 @@ const Remittance = () => {
                     </div>
                     {manualDetailsLoading && (
                       <div className="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
-                        <ClipLoader color="#ffffff" size={16} />
+                        <RingLoader color="#ffffff" size={16} />
                         <span className="text-sm text-white">
                           Loading details...
                         </span>
@@ -1543,8 +2515,7 @@ const Remittance = () => {
                             <li className="flex items-start gap-2">
                               <span className="text-amber-500 mt-0.5">•</span>
                               <span>
-                                For assistance, contact our support team at
-                                support@example.com
+                                For assistance, contact our support team
                               </span>
                             </li>
                           </ul>
@@ -1662,6 +2633,17 @@ const Remittance = () => {
                     are secured with bank-level encryption and processed through
                     regulated financial institutions.
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="px-3 py-1 bg-white rounded-full text-sm font-medium text-gray-700 border border-gray-300">
+                      Live Exchange Rates
+                    </span>
+                    <span className="px-3 py-1 bg-white rounded-full text-sm font-medium text-gray-700 border border-gray-300">
+                      No Hidden Fees
+                    </span>
+                    <span className="px-3 py-1 bg-white rounded-full text-sm font-medium text-gray-700 border border-gray-300">
+                      24/7 Support
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1693,6 +2675,8 @@ const Remittance = () => {
             manualAccountError={manualAccountError}
             manualDetailsLoading={manualDetailsLoading}
             beneficiaryLoading={beneficiaryLoading}
+            copyToClipboard={copyToClipboard}
+            copiedField={copiedField}
           />
         );
 
@@ -1708,6 +2692,10 @@ const Remittance = () => {
             onSubmit={handleSubmitTransaction}
             loading={loading}
             paymentMethod={formData.paymentMethod}
+            isOpenBankingAvailable={isOpenBankingAvailable()}
+            onInitiateOpenBanking={handleInitiateOpenBanking}
+            openBankingProcessing={openBankingProcessing}
+            selectedBankAccount={selectedSilaBankAccount}
           />
         );
 
@@ -1721,6 +2709,10 @@ const Remittance = () => {
             exchangeRateData={exchangeRateData}
             onReset={handleReset}
             onDownloadReceipt={handleDownloadReceipt}
+            onNewTransfer={() => {
+              handleReset();
+              navigate("/remittance");
+            }}
           />
         );
 
@@ -1734,6 +2726,19 @@ const Remittance = () => {
       <main className="max-w-6xl mx-auto px-4 py-8">
         {/* Professional Progress Steps */}
         <ProgressSteps />
+
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
 
         {/* Step Content */}
         <AnimatePresence mode="wait">
@@ -1759,7 +2764,7 @@ const Remittance = () => {
           >
             <div className="flex items-center gap-4">
               <div className="p-2 bg-red-100 rounded-lg">
-                <FaInfoCircle className="w-5 h-5 text-red-500" />
+                <FaExclamationTriangle className="w-5 h-5 text-red-500" />
               </div>
               <div>
                 <h4 className="font-semibold text-red-800">
@@ -1777,7 +2782,6 @@ const Remittance = () => {
         )}
 
         {/* Professional Navigation Buttons */}
-        {/* Professional Navigation Buttons */}
         {step < 4 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1785,21 +2789,21 @@ const Remittance = () => {
             transition={{ delay: 0.1 }}
             className="flex flex-col sm:flex-row gap-4"
           >
-            {/* Back/Cancel button - UNCHANGED */}
+            {/* Back/Cancel button */}
             {step > 1 ? (
               <button
                 onClick={handlePreviousStep}
-                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm"
+                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm group"
               >
-                <FaArrowLeft className="w-5 h-5" />
+                <FaArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                 Back
               </button>
             ) : (
               <button
                 onClick={handleGoBack}
-                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm"
+                className="px-8 py-4 text-base border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-sm group"
               >
-                <FaArrowLeft className="w-5 h-5" />
+                <FaArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                 Cancel Transfer
               </button>
             )}
@@ -1821,6 +2825,11 @@ const Remittance = () => {
                       !formData.incomeSource ||
                       (formData.paymentMethod === "manual" &&
                         !formData.document) ||
+                      // ✅ FIXED: Only require Sila account for USD bank transfers
+                      (formData.paymentMethod === "bank" &&
+                        formData.sendCurrency?.value === "USD" &&
+                        !selectedSilaBankAccount) ||
+                      // Still require beneficiary bank for all bank transfers
                       (formData.paymentMethod === "bank" && !selectedBank))) ||
                   loading ||
                   exchangeRateLoading ||
@@ -1828,18 +2837,35 @@ const Remittance = () => {
                   beneficiaryLoading ||
                   openBankingProcessing
                 }
-                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed grayscale"
+                className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed relative group"
               >
                 {loading ? (
                   <>
-                    <ClipLoader color="#ffffff" size={18} />
+                    <RingLoader color="#ffffff" size={18} />
                     <span>Processing...</span>
+                  </>
+                ) : exchangeRateLoading ? (
+                  <>
+                    <RingLoader color="#ffffff" size={18} />
+                    <span>Updating rates...</span>
+                  </>
+                ) : manualDetailsLoading ? (
+                  <>
+                    <RingLoader color="#ffffff" size={18} />
+                    <span>Loading details...</span>
                   </>
                 ) : (
                   <>
                     <span>Continue to Next Step</span>
-                    <FaArrowRight className="w-5 h-5" />
+                    <FaArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </>
+                )}
+
+                {parseFloat(formData.sendAmount) < 5 && (
+                  <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                    Minimum amount: {formData.sendCurrency?.value || "USD"} 5.00
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900"></div>
+                  </div>
                 )}
               </button>
             )}
@@ -1848,7 +2874,8 @@ const Remittance = () => {
             {step === 3 && (
               <>
                 {/* BANK TRANSFER: Continue to Next Step (for Open Banking) */}
-                {formData.paymentMethod === "bank" && (
+                {formData.paymentMethod === "bank" &&
+                isOpenBankingAvailable() ? (
                   <button
                     onClick={handleInitiateOpenBanking}
                     disabled={
@@ -1860,21 +2887,41 @@ const Remittance = () => {
                       !formData.sendAmount ||
                       parseFloat(formData.sendAmount) <= 0
                     }
-                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group"
                   >
                     {openBankingProcessing ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Initializing Open Banking...</span>
                       </>
                     ) : (
                       <>
-                        <span>Continue to Next Step</span>
-                        <FaArrowRight className="w-5 h-5" />
+                        <span>Continue with Open Banking</span>
+                        <FaArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
                   </button>
-                )}
+                ) : formData.paymentMethod === "bank" ? (
+                  <button
+                    onClick={handleSubmitTransaction}
+                    disabled={
+                      !formData.agreeToTerms || loading || openBankingProcessing
+                    }
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group"
+                  >
+                    {loading ? (
+                      <>
+                        <RingLoader color="#ffffff" size={18} />
+                        <span>Processing Transaction...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Confirm & Send Transfer</span>
+                        <FaArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                ) : null}
 
                 {/* MANUAL DEPOSIT: Confirm & Send Transfer */}
                 {formData.paymentMethod === "manual" && (
@@ -1883,16 +2930,16 @@ const Remittance = () => {
                     disabled={
                       !formData.agreeToTerms || loading || openBankingProcessing
                     }
-                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-emerald-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-emerald-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group"
                   >
                     {loading ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Processing Transaction...</span>
                       </>
                     ) : (
                       <>
-                        <FiSend className="w-5 h-5" />
+                        <FiSend className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         <span>Confirm & Send Transfer</span>
                       </>
                     )}
@@ -1906,16 +2953,16 @@ const Remittance = () => {
                     disabled={
                       !formData.agreeToTerms || loading || openBankingProcessing
                     }
-                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-purple-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-8 py-4 text-base rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-3 shadow-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-purple-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group"
                   >
                     {loading ? (
                       <>
-                        <ClipLoader color="#ffffff" size={18} />
+                        <RingLoader color="#ffffff" size={18} />
                         <span>Processing Transaction...</span>
                       </>
                     ) : (
                       <>
-                        <FiCreditCard className="w-5 h-5" />
+                        <FiCreditCard className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         <span>Confirm & Pay</span>
                       </>
                     )}
@@ -1930,16 +2977,39 @@ const Remittance = () => {
       {showOpenBanking && (
         <PaymentInitiation
           selectedCurrency={formData.sendCurrency?.value}
-          amount={formData.sendAmount}
-          purpose={formData.purpose?.value || "remittance"}
-          paymentMethod="bank"
-          selectedBankAccount={formData.sendCurrency}
+          amount={formData?.sendAmount || ""}
+          purpose={formData?.purpose?.value || ""}
+          paymentMethod="bank_transfer"
           selectedBeneficiaryBank={selectedBank}
           selectedBeneficiary={selectedBeneficiary}
-          customerId={customerId} // Pass customerId directly
+          customerId={customerId || localStorage.getItem("authcustomer_id")}
           showPaymentInitiation={showOpenBanking}
-          onClose={handleOpenBankingClose}
-          onSuccess={handleOpenBankingSuccess}
+          transactionType="remittance"
+          onClose={() => {
+            setShowOpenBanking(false);
+            setOpenBankingProcessing(false);
+          }}
+          onSuccess={(result) => {
+            console.log("Open Banking remittance success:", result);
+            if (result.success) {
+              toast.success(
+                "Remittance initiated successfully via Open Banking!",
+                {
+                  position: "top-right",
+                  autoClose: 3000,
+                }
+              );
+              setShowOpenBanking(false);
+              setOpenBankingProcessing(false);
+              dispatch(setStep(4));
+            } else {
+              toast.error(result.error || "Open Banking remittance failed", {
+                position: "top-right",
+                autoClose: 3000,
+              });
+              setOpenBankingProcessing(false);
+            }
+          }}
         />
       )}
     </div>
