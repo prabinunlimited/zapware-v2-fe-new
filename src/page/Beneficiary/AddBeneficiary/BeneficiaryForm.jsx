@@ -2394,35 +2394,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         readOnly={usingExistingBeneficiary}
                       />
                     </div>
-                    <div className="mb-4">
-                      <FieldLabel>
-                        Account Title
-                        {usingExistingBeneficiary && (
-                          <span className="ml-1 text-xs text-gray-500">
-                            (Pre-filled)
-                          </span>
-                        )}
-                      </FieldLabel>
-                      <input
-                        type="text"
-                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                          usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
-                            : ""
-                        }`}
-                        placeholder="Enter account title"
-                        value={account.accountTitle}
-                        onChange={(e) =>
-                          handleBankAccountChange(
-                            index,
-                            "accountTitle",
-                            e.target.value
-                          )
-                        }
-                        disabled={usingExistingBeneficiary}
-                        readOnly={usingExistingBeneficiary}
-                      />
-                    </div>
                   </>
                 )}
               </div>

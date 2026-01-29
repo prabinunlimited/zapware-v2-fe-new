@@ -528,7 +528,7 @@ const HomepageContent = React.memo(() => {
                     {centralizedApi.dataManager.getPendingRequest(
                       centralizedApi.dataManager.getCacheKey({
                         method: "GET",
-                        url: `https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}`,
+                        url: `https://zapware.unlimitedremit.com/api/active-account-details/${customerId}`,
                         params: {},
                         data: {},
                       })
@@ -543,7 +543,7 @@ const HomepageContent = React.memo(() => {
                     {centralizedApi.dataManager.getPendingRequest(
                       centralizedApi.dataManager.getCacheKey({
                         method: "GET",
-                        url: `https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile`,
+                        url: `https://zapware.unlimitedremit.com/api/customers/${customerId}/profile`,
                         params: {},
                         data: {},
                       })
@@ -558,7 +558,7 @@ const HomepageContent = React.memo(() => {
                     {centralizedApi.dataManager.getPendingRequest(
                       centralizedApi.dataManager.getCacheKey({
                         method: "POST",
-                        url: `https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies`,
+                        url: `https://zapware.unlimitedremit.com/api/partner-fxcurrencies`,
                         params: {},
                         data: { partner_id: "9" },
                       })

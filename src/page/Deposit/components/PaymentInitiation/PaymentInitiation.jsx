@@ -104,7 +104,11 @@ const PaymentInitiation = ({
   // Fetch link token when showPaymentInitiation becomes true
   useEffect(() => {
     const fetchLinkToken = async () => {
-      if (!showPaymentInitiation || !customerId || plaidLinkInitialized.current) {
+      if (
+        !showPaymentInitiation ||
+        !customerId ||
+        plaidLinkInitialized.current
+      ) {
         return;
       }
 
@@ -131,7 +135,9 @@ const PaymentInitiation = ({
             benef_bank_account: null,
           },
           transaction_type: transactionType,
-          purpose: purpose || (transactionType === "deposit" ? "deposit" : "remittance"),
+          purpose:
+            purpose ||
+            (transactionType === "deposit" ? "deposit" : "remittance"),
         };
 
         // Add source account ID for deposits
@@ -140,7 +146,11 @@ const PaymentInitiation = ({
         }
 
         // Add beneficiary data for remittances
-        if (transactionType === "remittance" && selectedBeneficiary && selectedBeneficiaryBank) {
+        if (
+          transactionType === "remittance" &&
+          selectedBeneficiary &&
+          selectedBeneficiaryBank
+        ) {
           payload.amount.benef_account = selectedBeneficiary.id;
           payload.amount.benef_bank_account = selectedBeneficiaryBank.id;
         }
@@ -153,7 +163,10 @@ const PaymentInitiation = ({
         };
 
         const response = await axios.post(
-          `${import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api"}/plaidtoken`,
+          `${
+            import.meta.env.VITE_API_URL ||
+            "https://zapware.unlimitedremit.com/api"
+          }/plaidtoken`,
           payload,
           {
             headers,
@@ -172,13 +185,18 @@ const PaymentInitiation = ({
         // Handle response
         if (response.status === 200 || response.status === 201) {
           const data = response.data;
-          
-          // Extract link_token from response
+
+          // Extract link_token from response - FIXED FOR LARAVEL RESPONSE
           let link_token = null;
           let transactionId = null;
 
-          // Try different response structures
-          if (data.link_token) {
+          // Try Laravel response structure first
+          if (data.data && data.data.original) {
+            link_token = data.data.original.link_token;
+            transactionId = data.data.original.transactionId;
+          }
+          // Fallback to other structures
+          else if (data.link_token) {
             link_token = data.link_token;
           } else if (data.data && data.data.link_token) {
             link_token = data.data.link_token;
@@ -186,13 +204,13 @@ const PaymentInitiation = ({
             link_token = data.link;
           }
 
-          // Extract transaction ID
-          if (data.transactionId) {
+          // Extract transaction ID from same location
+          if (!transactionId && data.data && data.data.original) {
+            transactionId = data.data.original.transactionId;
+          } else if (!transactionId && data.transactionId) {
             transactionId = data.transactionId;
-          } else if (data.transaction_id) {
+          } else if (!transactionId && data.transaction_id) {
             transactionId = data.transaction_id;
-          } else if (data.data && data.data.transactionId) {
-            transactionId = data.data.transactionId;
           }
 
           if (link_token) {
@@ -200,30 +218,40 @@ const PaymentInitiation = ({
             setTransId(transactionId);
             setCurrentStep(2);
             plaidLinkInitialized.current = true;
-            console.log("✅ Link token received successfully");
+            console.log("✅ Link token received successfully:", {
+              link_token: link_token.substring(0, 20) + "...",
+              transactionId,
+            });
           } else {
-            throw new Error(data.message || "No link token in response");
+            // Log the full response for debugging
+            console.error("❌ Could not find link_token in response:", data);
+            throw new Error(
+              "Bank connection service returned invalid response format"
+            );
           }
         } else {
           // Handle error response
           let errorMsg = "Failed to initialize bank connection";
-          
-          if (typeof response.data === 'string') {
+
+          if (typeof response.data === "string") {
             // Check if it's a PHP error
-            if (response.data.includes('syntax error') || 
-                response.data.includes('Undefined variable') ||
-                response.data.includes('unexpected token')) {
+            if (
+              response.data.includes("syntax error") ||
+              response.data.includes("Undefined variable") ||
+              response.data.includes("unexpected token")
+            ) {
               errorMsg = "Server configuration error. Please contact support.";
             } else {
               errorMsg = response.data;
             }
-          } else if (response.data && typeof response.data === 'object') {
-            errorMsg = response.data.message || 
-                      response.data.error || 
-                      response.data.details || 
-                      errorMsg;
+          } else if (response.data && typeof response.data === "object") {
+            errorMsg =
+              response.data.message ||
+              response.data.error ||
+              response.data.details ||
+              errorMsg;
           }
-          
+
           throw new Error(errorMsg);
         }
       } catch (error) {
@@ -240,34 +268,43 @@ const PaymentInitiation = ({
         // Parse error message from different sources
         if (error.response?.data) {
           const errorData = error.response.data;
-          
+
           if (typeof errorData === "string") {
             // Check for PHP syntax errors
-            if (errorData.includes('syntax error') || 
-                errorData.includes('unexpected token') ||
-                errorData.includes('Undefined variable')) {
-              errorMessage = "Server configuration error. Please contact support.";
+            if (
+              errorData.includes("syntax error") ||
+              errorData.includes("unexpected token") ||
+              errorData.includes("Undefined variable")
+            ) {
+              errorMessage =
+                "Server configuration error. Please contact support.";
             } else {
               errorMessage = errorData.substring(0, 100); // Limit length
             }
           } else if (typeof errorData === "object") {
-            errorMessage = errorData.message || 
-                          errorData.error || 
-                          errorData.details || 
-                          errorMessage;
+            errorMessage =
+              errorData.message ||
+              errorData.error ||
+              errorData.details ||
+              errorMessage;
           }
         } else if (error.request) {
-          errorMessage = "No response from server. Please check your connection.";
-        } else if (error.code === 'ERR_NETWORK') {
-          errorMessage = "Network error. Please check your internet connection.";
+          errorMessage =
+            "No response from server. Please check your connection.";
+        } else if (error.code === "ERR_NETWORK") {
+          errorMessage =
+            "Network error. Please check your internet connection.";
         } else {
           errorMessage = error.message || errorMessage;
         }
 
         // Clean up any HTML or PHP error messages
         errorMessage = errorMessage
-          .replace(/<[^>]*>/g, '') // Remove HTML tags
-          .replace(/Parse error:|syntax error,|unexpected token/gi, 'Server error:')
+          .replace(/<[^>]*>/g, "") // Remove HTML tags
+          .replace(
+            /Parse error:|syntax error,|unexpected token/gi,
+            "Server error:"
+          )
           .substring(0, 150); // Limit message length
 
         setError(errorMessage);
@@ -342,7 +379,10 @@ const PaymentInitiation = ({
 
         // Call backend to complete the transaction
         const response = await axios.post(
-          `${import.meta.env.VITE_API_URL || "https://zapware.unlimitedremit.com/api"}/plaid/open-banking-success`,
+          `${
+            import.meta.env.VITE_API_URL ||
+            "https://zapware.unlimitedremit.com/api"
+          }/plaid/open-banking-success`,
           successData,
           {
             headers: {
@@ -384,7 +424,7 @@ const PaymentInitiation = ({
             const destination =
               transactionType === "deposit"
                 ? `/dashboard/${customerId}`
-                : `/remittance/success/${transId || 'success'}`;
+                : `/remittance/success/${transId || "success"}`;
 
             navigate(destination, {
               state: {
@@ -453,7 +493,8 @@ const PaymentInitiation = ({
 
       if (err) {
         console.error("Plaid Link error:", err);
-        const errorMsg = err.display_message || err.error_message || "Bank connection failed";
+        const errorMsg =
+          err.display_message || err.error_message || "Bank connection failed";
         toast.error(errorMsg);
 
         if (onSuccess) {

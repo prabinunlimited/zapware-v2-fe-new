@@ -1,66 +1,78 @@
-// src/features/BankAccounts/slices/bankAccountSlice.js - COMPLETE
+// src/features/BankAccounts/slices/bankAccountSlice.js - UPDATED
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
-// ✅ COMPLETE: USD Bank Accounts API Call
+// ✅ MODIFIED: Accept optional customerId parameter
 export const fetchUSDBankAccounts = createAsyncThunk(
   "bankAccounts/fetchUSDBankAccounts",
-  async (_, { rejectWithValue, getState }) => {
+  async (providedCustomerId = null, { rejectWithValue, getState }) => {
     try {
-      const customerId = localStorage.getItem("authcustomer_id");
+      // ✅ USE: providedCustomerId OR localStorage (maintains original logic)
+      const customerId =
+        providedCustomerId || localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
         throw new Error("Customer ID not found");
       }
 
-      // ✅ CORRECT ENDPOINT: Use sila-bank-details for Plaid-linked accounts
+      // ✅ ADD: Detect iframe context (optional)
+      const isIframe = window.self !== window.top;
+
       const response = await api.post("/sila/sila-bank-details", {
         customerId: customerId,
+        // ✅ OPTIONAL: Add iframe flag for backend if needed
+        is_iframe: isIframe,
       });
 
       let accounts = [];
       const data = response.data;
 
       if (data?.data && Array.isArray(data.data)) {
-        accounts = data.data; // This matches your API response structure
+        accounts = data.data;
       } else if (Array.isArray(data)) {
         accounts = data;
       } else if (data?.status === "success") {
         accounts = data.data || [];
       }
 
-      console.log("✅ Plaid-linked USD Bank Accounts loaded:", accounts.length);
+      console.log("✅ Plaid-linked USD Bank Accounts loaded:", {
+        count: accounts.length,
+        customerId: customerId,
+        source: providedCustomerId ? "URL params" : "localStorage",
+      });
       return accounts;
     } catch (error) {
       console.error("❌ Failed to load Plaid-linked USD bank accounts:", error);
 
-      // Fallback to bankLink accounts if available
+      // ✅ MAINTAIN ORIGINAL: Fallback to bankLink accounts if available
       const state = getState();
       const bankLinkAccounts = state.bankLink?.bankAccounts || [];
       const usdBankLinkAccounts = bankLinkAccounts.filter(
-        (account) => account.currency === "USD" || !account.currency
+        (account) => account.currency === "USD" || !account.currency,
       );
 
       if (usdBankLinkAccounts.length > 0) {
         console.log(
           "🔄 Using bankLink accounts as fallback:",
-          usdBankLinkAccounts.length
+          usdBankLinkAccounts.length,
         );
         return usdBankLinkAccounts;
       }
 
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load USD bank accounts"
+        error.response?.data?.message || "Failed to load USD bank accounts",
       );
     }
-  }
+  },
 );
 
 export const fetchCombinedUSDAccounts = createAsyncThunk(
   "bankAccounts/fetchCombinedUSDAccounts",
-  async (_, { dispatch, rejectWithValue }) => {
+  async (providedCustomerId = null, { dispatch, rejectWithValue }) => {
     try {
-      const customerId = localStorage.getItem("authcustomer_id");
+      // ✅ USE: providedCustomerId OR localStorage
+      const customerId =
+        providedCustomerId || localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
         throw new Error("Customer ID not found");
@@ -68,16 +80,23 @@ export const fetchCombinedUSDAccounts = createAsyncThunk(
 
       console.log("🔄 Fetching combined USD accounts...");
 
-      // Fetch both Plaid-linked and manual accounts in parallel
+      const isIframe = window.self !== window.top;
+
       const [plaidResponse, manualResponse] = await Promise.allSettled([
-        api.post("/sila/sila-bank-details", { customerId }),
-        api.post("/sila/manual-sila-bankdetails", { customerId }),
+        api.post("/sila/sila-bank-details", {
+          customerId: customerId,
+          is_iframe: isIframe,
+        }),
+        api.post("/sila/manual-sila-bankdetails", {
+          customerId: customerId,
+          is_iframe: isIframe,
+        }),
       ]);
 
       let plaidAccounts = [];
       let manualAccounts = [];
 
-      // Process Plaid accounts
+      // Process Plaid accounts (maintain original logic)
       if (plaidResponse.status === "fulfilled") {
         const data = plaidResponse.value.data;
         if (data?.data && Array.isArray(data.data)) {
@@ -90,7 +109,7 @@ export const fetchCombinedUSDAccounts = createAsyncThunk(
         console.log("✅ Plaid-linked USD accounts:", plaidAccounts.length);
       }
 
-      // Process Manual accounts
+      // Process Manual accounts (maintain original logic)
       if (manualResponse.status === "fulfilled") {
         const data = manualResponse.value.data;
         if (Array.isArray(data)) {
@@ -105,7 +124,6 @@ export const fetchCombinedUSDAccounts = createAsyncThunk(
         console.log("✅ Manual USD accounts:", manualAccounts.length);
       }
 
-      // Combine accounts (you might want to deduplicate or merge logic here)
       const combinedAccounts = [...plaidAccounts, ...manualAccounts];
 
       console.log("✅ Combined USD accounts total:", combinedAccounts.length);
@@ -113,31 +131,35 @@ export const fetchCombinedUSDAccounts = createAsyncThunk(
     } catch (error) {
       console.error("❌ Failed to load combined USD accounts:", error);
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load combined USD accounts"
+        error.response?.data?.message || "Failed to load combined USD accounts",
       );
     }
-  }
+  },
 );
 
-// ✅ ADD: Manual Bank Details API Call - For manual deposit accounts
+// ✅ MODIFIED: Accept optional customerId parameter
 export const fetchManualBankDetails = createAsyncThunk(
   "bankAccounts/fetchManualBankDetails",
-  async (_, { rejectWithValue }) => {
+  async (providedCustomerId = null, { rejectWithValue }) => {
     try {
-      const customerId = localStorage.getItem("authcustomer_id");
+      const customerId =
+        providedCustomerId || localStorage.getItem("authcustomer_id");
 
       if (!customerId) {
         throw new Error("Customer ID not found");
       }
 
-      // ✅ CORRECT ENDPOINT: Use manual-sila-bankdetails for manual accounts
+      const isIframe = window.self !== window.top;
+
       const response = await api.post("/sila/manual-sila-bankdetails", {
         customerId: customerId,
+        is_iframe: isIframe,
       });
 
       let accounts = [];
       const data = response.data;
 
+      // ✅ MAINTAIN ORIGINAL LOGIC
       if (Array.isArray(data)) {
         accounts = data;
       } else if (data?.accounts) {
@@ -153,20 +175,27 @@ export const fetchManualBankDetails = createAsyncThunk(
     } catch (error) {
       console.error("❌ Failed to load manual bank details:", error);
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load manual bank details"
+        error.response?.data?.message || "Failed to load manual bank details",
       );
     }
-  }
+  },
 );
 
-// ✅ COMPLETE: AED Account Details API Call
+// ✅ MODIFIED: Keep original signature but add iframe detection
 export const fetchAEDAccountDetails = createAsyncThunk(
   "bankAccounts/fetchAEDAccountDetails",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get("/manualaccount-detail/AED");
+      const isIframe = window.self !== window.top;
+
+      const response = await api.get("/manualaccount-detail/AED", {
+        params: {
+          is_iframe: isIframe,
+        },
+      });
 
       let accountDetails = response.data;
+      // ✅ MAINTAIN ORIGINAL LOGIC
       if (response.data?.data) {
         accountDetails = response.data.data;
       } else if (response.data?.status === "success") {
@@ -176,28 +205,58 @@ export const fetchAEDAccountDetails = createAsyncThunk(
       return accountDetails;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load AED account details"
+        error.response?.data?.message || "Failed to load AED account details",
       );
     }
-  }
+  },
 );
 
-// ✅ COMPLETE: Manual Account Details for all currencies
+// ✅ MODIFIED: Accept params object for flexibility
 export const fetchManualAccountDetails = createAsyncThunk(
   "bankAccounts/fetchManualAccountDetails",
-  async (currency, { rejectWithValue }) => {
+  async (params, { rejectWithValue }) => {
     try {
-      const customerId = localStorage.getItem("authcustomer_id");
+      // ✅ BETTER HANDLING OF ALL PARAMETER TYPES
+      let currency, customerId;
+
+      if (typeof params === "string") {
+        // Case 1: Just a currency string
+        currency = params;
+        customerId = localStorage.getItem("authcustomer_id");
+      } else if (typeof params === "object" && params !== null) {
+        // Case 2: Object with currency and/or customerId
+        currency = params.currency;
+        customerId =
+          params.customerId || localStorage.getItem("authcustomer_id");
+      } else {
+        // Case 3: Invalid parameter
+        throw new Error("Invalid parameters provided");
+      }
+
+      if (!currency) {
+        throw new Error("Currency parameter is required");
+      }
 
       if (!customerId) {
         throw new Error("Customer ID not found");
       }
 
-      const response = await api.get(`/active-account-details/${customerId}`);
+      console.log("🔍 Fetching manual account details:", {
+        currency,
+        customerId,
+      });
+
+      const isIframe = window.self !== window.top;
+
+      const response = await api.get(`/active-account-details/${customerId}`, {
+        params: {
+          is_iframe: isIframe,
+        },
+      });
 
       const accounts = response.data.account_details || [];
       const accountForCurrency = accounts.find(
-        (account) => account.currency === currency
+        (account) => account.currency === currency,
       );
 
       if (!accountForCurrency) {
@@ -206,12 +265,13 @@ export const fetchManualAccountDetails = createAsyncThunk(
 
       return accountForCurrency;
     } catch (error) {
+      console.error("❌ Failed to fetch manual account details:", error);
       return rejectWithValue(
         error.response?.data?.message ||
-          `Failed to load ${currency} account details`
+          `Failed to load ${currency} account details: ${error.message}`,
       );
     }
-  }
+  },
 );
 
 // ✅ COMPLETE: Bank Accounts Slice

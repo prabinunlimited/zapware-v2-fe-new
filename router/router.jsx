@@ -18,10 +18,15 @@ import Home from "../src/page/Home/Homepage";
 import HomeRemit from "../src/page/Home/HomeRemit";
 import Convert from "../src/page/Conversion/Convert";
 
-// Import Beneficiary Components (ONLY existing files)
+// Import Beneficiary Components
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
 import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiary";
 import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
+import PublicBeneficiaryRegistration from "../src/page/Beneficiary/AddBeneficiary/PublicBeneficiaryForm";
+
+// Request Remit
+import BeneficiaryHomepage from "../src/page/RequestRemit/Homepage/BeneficiaryHomepage";
+import BeneficiariesProfile from "../src/components/RequestRemit/Profile/BeneficiariesProfile";
 
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
@@ -46,14 +51,10 @@ import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
 import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 
-const ProtectedLayout = () => {
-  return (
-    <>
-      <URLDebugger />
-      <ProtectedRoute />
-    </>
-  );
-};
+// ✅ Import the Beneficiary Layout Component
+import BeneficiaryLayout from "./BeneficiaryLayout";
+import BeneficiaryTransactions from "../src/page/RequestRemit/Transactions/BeneficiaryTransactions";
+import BeneficiarySenders from "../src/page/RequestRemit/Senders/BeneficiarySenders";
 
 const router = createBrowserRouter([
   // Public routes - only accessible when not authenticated
@@ -70,7 +71,7 @@ const router = createBrowserRouter([
         element: <SelectAccountType />,
       },
       {
-        path:"selectcountry",
+        path: "selectcountry",
         element: <SelectCountry />,
       },
       {
@@ -98,17 +99,21 @@ const router = createBrowserRouter([
         element: <PlaidCallback />,
       },
       {
-        path: "linkbankiframe/:requestId/:accessToken",
+        path: "linkbankiframe/:customerId/:requestId/:accessToken",
         element: <BankLinkIframe />,
       },
       {
         path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
         element: <DepositPageIframe />,
       },
+      {
+        path: "register-beneficiary",
+        element: <PublicBeneficiaryRegistration />,
+      },
     ],
   },
 
-  // Protected routes - only accessible when authenticated
+  // ==================== CUSTOMER PORTAL ROUTES ====================
   {
     path: "/",
     element: <ProtectedRoute />,
@@ -122,7 +127,7 @@ const router = createBrowserRouter([
         element: <MonthlyTransactions />,
       },
       {
-        path:"alltransactions/:customerId",
+        path: "alltransactions/:customerId",
         element: <AllTransactions />,
       },
       {
@@ -151,7 +156,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/card/success",
-        element: <CardPaymentSuccess />, // You need to create this component
+        element: <CardPaymentSuccess />,
       },
       {
         path: "cardiframe",
@@ -161,22 +166,13 @@ const router = createBrowserRouter([
         path: "team/:customerId",
         element: <Team />,
       },
-      { path: "addteam/:customerId", element: <AddTeamMember /> },
+      {
+        path: "addteam/:customerId",
+        element: <AddTeamMember />,
+      },
       {
         path: "homeremit/:customerId",
         element: <HomeRemit />,
-      },
-      {
-        path: "beneficiaries/:customerId",
-        element: <Beneficiaries />,
-      },
-      {
-        path: "addbeneficiary/:customerId",
-        element: <AddBeneficiary />,
-      },
-      {
-        path: "editbeneficiary/:beneficiaryId",
-        element: <EditBeneficiary />,
       },
       {
         path: "profile/:customerId",
@@ -193,6 +189,71 @@ const router = createBrowserRouter([
       {
         path: "/bankletter/:accountId",
         element: <BankLetter />,
+      },
+
+      // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES
+      {
+        path: "beneficiaries/:customerId",
+        element: <Beneficiaries />,
+      },
+      {
+        path: "addbeneficiary/:customerId",
+        element: <AddBeneficiary />,
+      },
+      {
+        path: "editbeneficiary/:beneficiaryId",
+        element: <EditBeneficiary />,
+      },
+    ],
+  },
+
+  // ==================== BENEFICIARY PORTAL ROUTES ====================
+  // COMPLETELY SEPARATE - NOT wrapped in ProtectedRoute
+  // These routes will NOT have the customer header from ProtectedRoute
+  {
+    path: "/beneficiary",
+    element: <BeneficiaryLayout />, // ✅ Directly use BeneficiaryLayout, NOT ProtectedRoute
+    children: [
+      // Beneficiary Profile
+      {
+        path: "profile/:beneficiaryId",
+        element: <BeneficiariesProfile />,
+      },
+      // Beneficiary Dashboard/Homepage
+      {
+        path: "homepage/:beneficiaryId",
+        element: <BeneficiaryHomepage />,
+      },
+      {
+        path: "transactions/:beneficiaryId",
+        element: <BeneficiaryTransactions />,
+      },
+      {
+        path: "senders/:beneficiaryId",
+        element: <BeneficiarySenders />,
+      },
+    ],
+  },
+
+  // ==================== LEGACY ROUTES ====================
+  // Also separate - NOT wrapped in ProtectedRoute
+  {
+    path: "/benefprofile/:beneficiaryId",
+    element: <BeneficiaryLayout />,
+    children: [
+      {
+        index: true,
+        element: <BeneficiariesProfile />,
+      },
+    ],
+  },
+  {
+    path: "/benefhomepage/:beneficiaryId",
+    element: <BeneficiaryLayout />,
+    children: [
+      {
+        index: true,
+        element: <BeneficiaryHomepage />,
       },
     ],
   },

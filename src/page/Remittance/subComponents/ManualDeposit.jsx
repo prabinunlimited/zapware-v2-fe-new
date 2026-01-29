@@ -85,7 +85,7 @@ const ManualDeposit = ({
   console.log("Number of all beneficiaries:", allBeneficiaries.length);
   console.log(
     "Number of remittance ready beneficiaries:",
-    beneficiaries.length
+    beneficiaries.length,
   );
   console.log("Beneficiaries loading state:", beneficiariesLoading);
 
@@ -103,7 +103,7 @@ const ManualDeposit = ({
       { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
       { value: "fcy_deposit", label: "FCY Deposit" },
     ],
-    []
+    [],
   );
 
   const payoutMethodOptions =
@@ -134,7 +134,7 @@ const ManualDeposit = ({
         boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
       }),
     }),
-    []
+    [],
   );
 
   // Helper function to find matching option
@@ -147,7 +147,7 @@ const ManualDeposit = ({
         (option) =>
           String(option.value).toLowerCase() === valueStr ||
           String(option.label).toLowerCase() === valueStr ||
-          String(option.originalName || "").toLowerCase() === valueStr
+          String(option.originalName || "").toLowerCase() === valueStr,
       ) || null
     );
   }, []);
@@ -167,7 +167,7 @@ const ManualDeposit = ({
             (occupation) => ({
               value: occupation.name,
               label: occupation.name,
-            })
+            }),
           );
           setOccupations(transformedOccupations);
         }
@@ -236,7 +236,7 @@ const ManualDeposit = ({
 
         // Wait for the bank fetch to complete
         const result = await dispatch(
-          fetchBeneficiaryBanks(selectedOption.id)
+          fetchBeneficiaryBanks(selectedOption.id),
         ).unwrap();
 
         console.log("📋 Banks fetched successfully:", result);
@@ -244,24 +244,24 @@ const ManualDeposit = ({
         // Find matching options
         const matchedPurpose = findMatchingOption(
           purposeOptions,
-          selectedOption.transfer_purpose
+          selectedOption.transfer_purpose,
         );
 
         const matchedIncomeSource = findMatchingOption(
           incomeSourceOptions,
-          selectedOption.income_source
+          selectedOption.income_source,
         );
 
         const matchedRelation = findMatchingOption(
           relationOptions,
-          selectedOption.relationtobenef
+          selectedOption.relationtobenef,
         );
 
         const payoutMethodValue =
           selectedOption.payout_method || selectedOption.payment_method;
         const matchedPayoutMethod = findMatchingOption(
           payoutMethodOptions,
-          payoutMethodValue
+          payoutMethodValue,
         );
 
         // Update all form fields
@@ -307,69 +307,69 @@ const ManualDeposit = ({
       payoutMethodOptions,
       findMatchingOption,
       beneficiaryBanks, // Keep this dependency
-    ]
+    ],
   );
 
   // Handle beneficiary code lookup
-  // const handleBeneficiaryCodeLookupInternal = async () => {
-  //   if (!beneficiaryCode.trim()) {
-  //     toast.error("Please enter a beneficiary code");
-  //     return;
-  //   }
+  const handleBeneficiaryCodeLookupInternal = async () => {
+    if (!beneficiaryCode.trim()) {
+      toast.error("Please enter a beneficiary code");
+      return;
+    }
 
-  //   try {
-  //     setIsLoadingCode(true);
-  //     const result = await dispatch(
-  //       fetchBeneficiaryByCode(beneficiaryCode)
-  //     ).unwrap();
+    try {
+      setIsLoadingCode(true);
+      const result = await dispatch(
+        fetchBeneficiaryByCode(beneficiaryCode),
+      ).unwrap();
 
-  //     if (result.data) {
-  //       const beneficiaryData = result.data;
+      if (result.data) {
+        const beneficiaryData = result.data;
 
-  //       const transformedBeneficiary = {
-  //         value: beneficiaryData.id,
-  //         id: beneficiaryData.id,
-  //         label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
-  //         name: beneficiaryData.name,
-  //         benef_uuid: beneficiaryData.benef_uuid,
-  //         occupation: beneficiaryData.occupation,
-  //         relationtobenef: beneficiaryData.relationtobenef,
-  //         transfer_purpose: beneficiaryData.transfer_purpose,
-  //         income_source: beneficiaryData.income_source,
-  //         payout_method:
-  //           beneficiaryData.payout_method || beneficiaryData.payment_method,
-  //         ...beneficiaryData,
-  //       };
+        const transformedBeneficiary = {
+          value: beneficiaryData.id,
+          id: beneficiaryData.id,
+          label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
+          name: beneficiaryData.name,
+          benef_uuid: beneficiaryData.benef_uuid,
+          occupation: beneficiaryData.occupation,
+          relationtobenef: beneficiaryData.relationtobenef,
+          transfer_purpose: beneficiaryData.transfer_purpose,
+          income_source: beneficiaryData.income_source,
+          payout_method:
+            beneficiaryData.payout_method || beneficiaryData.payment_method,
+          ...beneficiaryData,
+        };
 
-  //       await handleBeneficiarySelect(transformedBeneficiary);
-  //       toast.success("Beneficiary details loaded successfully!");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching beneficiary by code:", error);
-  //     if (error.response?.status === 404) {
-  //       toast.error("No beneficiary found with this code");
-  //     } else {
-  //       toast.error("Failed to fetch beneficiary details");
-  //     }
-  //   } finally {
-  //     setIsLoadingCode(false);
-  //   }
-  // };
+        await handleBeneficiarySelect(transformedBeneficiary);
+        toast.success("Beneficiary details loaded successfully!");
+      }
+    } catch (error) {
+      console.error("Error fetching beneficiary by code:", error);
+      if (error.response?.status === 404) {
+        toast.error("No beneficiary found with this code");
+      } else {
+        toast.error("Failed to fetch beneficiary details");
+      }
+    } finally {
+      setIsLoadingCode(false);
+    }
+  };
 
   // Handle beneficiary code input change
-  // const handleBeneficiaryCodeInputChange = useCallback(
-  //   (e) => {
-  //     const value = e.target.value;
-  //     setBeneficiaryCode(value);
-  //     setShowCodeInput(value.trim().length > 0);
+  const handleBeneficiaryCodeInputChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setBeneficiaryCode(value);
+      setShowCodeInput(value.trim().length > 0);
 
-  //     // If clearing the code input, enable dropdown
-  //     if (!value.trim() && selectedBeneficiary) {
-  //       handleBeneficiarySelect(selectedBeneficiary);
-  //     }
-  //   },
-  //   [selectedBeneficiary, handleBeneficiarySelect]
-  // );
+      // If clearing the code input, enable dropdown
+      if (!value.trim() && selectedBeneficiary) {
+        handleBeneficiarySelect(selectedBeneficiary);
+      }
+    },
+    [selectedBeneficiary, handleBeneficiarySelect],
+  );
 
   // Handle file upload
   const handleFileUploadInternal = (e) => {
@@ -445,8 +445,8 @@ const ManualDeposit = ({
                 beneficiariesLoading
                   ? "Loading beneficiaries..."
                   : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
+                    ? "Disabled - Using beneficiary code"
+                    : "Select beneficiary..."
               }
               isSearchable
               getOptionLabel={(option) =>
@@ -458,14 +458,14 @@ const ManualDeposit = ({
           </div>
 
           {/* OR Separator */}
-          {/* <div className="flex items-center my-4">
+          <div className="flex items-center my-4">
             <div className="flex-1 border-t border-gray-300"></div>
             <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
             <div className="flex-1 border-t border-gray-300"></div>
-          </div> */}
+          </div>
 
           {/* Enter Beneficiary Code Field */}
-          {/* <div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Enter Beneficiary Code
             </label>
@@ -491,7 +491,7 @@ const ManualDeposit = ({
             <p className="mt-1 text-sm text-gray-500">
               Enter the beneficiary code to load their details automatically
             </p>
-          </div> */}
+          </div>
 
           {/* Payout Method */}
           <div>
@@ -548,7 +548,7 @@ const ManualDeposit = ({
                 options={occupations}
                 value={
                   occupations.find(
-                    (opt) => opt.value === formData.occupation
+                    (opt) => opt.value === formData.occupation,
                   ) || null
                 }
                 onChange={handleOccupationChange}
@@ -593,10 +593,10 @@ const ManualDeposit = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option.bank_name || "Unknown Bank";

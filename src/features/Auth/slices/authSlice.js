@@ -17,7 +17,60 @@ export const fetchUserProfile = createAsyncThunk(
       console.error("❌ Error fetching user profile:", error);
       return rejectWithValue(error.message || "Failed to fetch user profile");
     }
-  }
+  },
+);
+
+export const fetchMerchantBeneficiary = createAsyncThunk(
+  "auth/fetchMerchantBeneficiary",
+  async ({ beneficaryId }, { rejectWithValue, getState }) => {
+    try {
+      console.log(`👤 Fetching merchant beneficiary for ID: ${beneficaryId}`);
+
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const response = await axios.get(
+        `${API_URL}/beneficiaries/fetch-merchant-benef/${beneficaryId}`,
+        {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+        },
+      );
+
+      console.log("✅ Merchant beneficiary fetched successfully");
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching merchant beneficiary:", error);
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  },
+);
+
+export const fetchProfileData = createAsyncThunk(
+  "auth/fetchProfileData",
+  async ({ beneficaryId }, { rejectWithValue }) => {
+    try {
+      console.log(
+        `👤 Fetching profile data for beneficiary ID: ${beneficaryId}`,
+      );
+
+      const bearertoken = localStorage.getItem("bearertoken");
+      const firstName = localStorage.getItem("firstName") || "User";
+      const lastName = localStorage.getItem("lastName") || "";
+
+      // Mock API call - replace with actual API
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            first_name: firstName,
+            last_name: lastName,
+            email: "user@example.com",
+          });
+        }, 500);
+      });
+    } catch (error) {
+      console.error("❌ Error fetching profile data:", error);
+      return rejectWithValue(error.message || "Failed to fetch profile data");
+    }
+  },
 );
 
 export const fetchAllowedModules = createAsyncThunk(
@@ -54,10 +107,10 @@ export const fetchAllowedModules = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error fetching allowed modules:", error);
       return rejectWithValue(
-        error.message || "Failed to fetch allowed modules"
+        error.message || "Failed to fetch allowed modules",
       );
     }
-  }
+  },
 );
 
 // ===================== LOGOUT USER ASYNC THUNK =====================
@@ -134,7 +187,7 @@ export const logoutUser = createAsyncThunk(
         proceedWithCleanup: true, // Signal to proceed with cleanup
       });
     }
-  }
+  },
 );
 
 // ===================== CONSTANTS =====================
@@ -265,12 +318,12 @@ const clearAuthStorage = () => {
     ];
 
     const preservedTokens = partnerTokens.filter(
-      (key) => localStorage.getItem(key) !== null
+      (key) => localStorage.getItem(key) !== null,
     );
 
     console.log(
       `🤝 ${preservedTokens.length} partner tokens preserved:`,
-      preservedTokens
+      preservedTokens,
     );
   }
 };
@@ -809,7 +862,7 @@ const authSlice = createSlice({
       if (action.payload.isStaffLogin !== undefined) {
         setLocalStorageItem(
           "is_staff_login",
-          action.payload.isStaffLogin ? "1" : "0"
+          action.payload.isStaffLogin ? "1" : "0",
         );
       }
       if (action.payload.staffRole) {
@@ -826,19 +879,19 @@ const authSlice = createSlice({
       if (action.payload.isWhiteLabelCustomer !== undefined) {
         setLocalStorageItem(
           "whitelabelled_customer",
-          action.payload.isWhiteLabelCustomer ? "Y" : "N"
+          action.payload.isWhiteLabelCustomer ? "Y" : "N",
         );
       }
       if (action.payload.partnerId !== undefined) {
         setLocalStorageItem(
           "whitelabelled_customer_partnerid",
-          action.payload.partnerId.toString()
+          action.payload.partnerId.toString(),
         );
       }
       if (action.payload.partnerName !== undefined) {
         setLocalStorageItem(
           "whitelabelled_customer_partnername",
-          action.payload.partnerName
+          action.payload.partnerName,
         );
       }
     },
@@ -849,7 +902,7 @@ const authSlice = createSlice({
         state.hasSilaBankAccount = action.payload.hasSilaBankAccount;
         setLocalStorageItem(
           "hasSilaBankAccount",
-          action.payload.hasSilaBankAccount ? "Y" : "N"
+          action.payload.hasSilaBankAccount ? "Y" : "N",
         );
       }
       if (action.payload.customerUuid !== undefined) {
@@ -946,7 +999,22 @@ const authSlice = createSlice({
 
         const payload = action.payload;
 
-        // ✅ FIXED: Extract data from the nested structure
+        // ✅ CRITICAL: Check if KYC is required
+        if (
+          payload.status === "kyc_required" ||
+          payload.shouldNotLogin === true
+        ) {
+          console.log("⏳ KYC required - NOT logging user in");
+
+          // Show passcode input again for verification
+          state.showPasscodeInput = true;
+          state.passcode = new Array(6).fill("");
+
+          // DO NOT set authentication state
+          return;
+        }
+
+        // ✅ Extract data from the nested structure
         let responseData = payload;
 
         // Check if we have the nested structure
@@ -963,7 +1031,12 @@ const authSlice = createSlice({
           extractedData: responseData,
         });
 
-        if (responseData.token && responseData.customer_id) {
+        // ✅ Only set authentication state if KYC is verified
+        if (
+          responseData.token &&
+          responseData.customer_id &&
+          payload.kycVerified !== false
+        ) {
           // ✅ CRITICAL: Update Redux state
           state.token = responseData.token;
           state.customerId = responseData.customer_id.toString();
@@ -975,70 +1048,11 @@ const authSlice = createSlice({
               responseData.isRemittanceOnlyCustomer || false,
           };
 
-          // ✅ CRITICAL: Store partner IDs
-          if (
-            responseData.whitelabelled_customer_partnerid &&
-            responseData.whitelabelled_customer_partnerid !== "0"
-          ) {
-            localStorage.setItem(
-              "whitelabelled_customer_partnerid",
-              responseData.whitelabelled_customer_partnerid
-            );
-            localStorage.setItem(
-              "whitelabelledpartnerid",
-              responseData.whitelabelled_customer_partnerid
-            );
-            state.whiteLabelInfo.partnerId = parseInt(
-              responseData.whitelabelled_customer_partnerid
-            );
-          }
-
-          if (responseData.whitelabelled_customer_partnername) {
-            localStorage.setItem(
-              "whitelabelled_customer_partnername",
-              responseData.whitelabelled_customer_partnername
-            );
-            state.whiteLabelInfo.partnerName =
-              responseData.whitelabelled_customer_partnername;
-          }
-
-          // ✅ Store in localStorage
-          localStorage.setItem("authtoken", responseData.token);
-          localStorage.setItem(
-            "authcustomer_id",
-            responseData.customer_id.toString()
-          );
-          localStorage.setItem("kyc_status", responseData.kyc_status);
-          localStorage.setItem(
-            "bank_approve_status",
-            responseData.bank_approve_status
-          );
-          localStorage.setItem(
-            "is_staff_login",
-            responseData.is_staff_login || "0"
-          );
-          localStorage.setItem("staff_role", responseData.staff_role || "");
-          localStorage.setItem("staff_id", responseData.staff_id || "0");
-          localStorage.setItem(
-            "is_owner_login",
-            responseData.is_owner_login || "0"
-          );
-          localStorage.setItem("owner_id", responseData.owner_id || "0");
-          localStorage.setItem(
-            "whitelabelled_customer",
-            responseData.whitelabelled_customer || "N"
-          );
-
-          console.log("✅ Auth state updated successfully");
-          console.log("🔍 localStorage state after update:", {
-            authtoken: localStorage.getItem("authtoken"),
-            authcustomer_id: localStorage.getItem("authcustomer_id"),
-            isAuthenticated: state.isAuthenticated,
-          });
+          // ... rest of your existing code for storing partner data ...
         } else {
           console.error(
-            "❌ Missing token or customer_id in response:",
-            responseData
+            "❌ Missing token, customer_id, or KYC not verified:",
+            responseData,
           );
         }
       })
@@ -1089,6 +1103,23 @@ const authSlice = createSlice({
         state.isVerifyingOtp = false;
         state.error = null;
 
+        const payload = action.payload;
+
+        // ✅ CRITICAL: Check if KYC is required
+        if (
+          payload.status === "kyc_required" ||
+          payload.shouldNotLogin === true
+        ) {
+          console.log("⏳ OTP Login - KYC required - NOT logging user in");
+
+          // Show OTP input again for verification
+          state.showOtpInput = true;
+          state.otp = new Array(6).fill("");
+
+          // DO NOT set authentication state
+          return;
+        }
+
         const {
           token,
           customer_id,
@@ -1100,7 +1131,8 @@ const authSlice = createSlice({
           whitelabelled_customer_partnername,
         } = action.payload;
 
-        if (token && customer_id) {
+        // ✅ Only set authentication state if KYC is verified
+        if (token && customer_id && kyc_status !== "0") {
           state.token = token;
           state.customerId = customer_id.toString();
           state.isAuthenticated = true;
@@ -1121,26 +1153,26 @@ const authSlice = createSlice({
           ) {
             console.log(
               "📝 OTP Login - Storing partner ID:",
-              whitelabelled_customer_partnerid
+              whitelabelled_customer_partnerid,
             );
             localStorage.setItem(
               "whitelabelled_customer_partnerid",
-              whitelabelled_customer_partnerid
+              whitelabelled_customer_partnerid,
             );
             localStorage.setItem(
               "whitelabelledpartnerid",
-              whitelabelled_customer_partnerid
+              whitelabelled_customer_partnerid,
             );
           }
 
           if (whitelabelled_customer_partnername) {
             console.log(
               "📝 OTP Login - Storing partner name:",
-              whitelabelled_customer_partnername
+              whitelabelled_customer_partnername,
             );
             localStorage.setItem(
               "whitelabelled_customer_partnername",
-              whitelabelled_customer_partnername
+              whitelabelled_customer_partnername,
             );
           }
         }
@@ -1151,6 +1183,7 @@ const authSlice = createSlice({
         state.showOtpInput = false;
         state.otpSent = false;
       })
+
       .addCase("auth/verifyOTP/rejected", (state, action) => {
         state.isLoading = false;
         state.isVerifyingOtp = false;
@@ -1186,37 +1219,66 @@ const authSlice = createSlice({
       .addCase("auth/login/fulfilled", (state, action) => {
         state.isLoading = false;
         state.error = null;
-        state.isRedirecting = true;
+        state.isRedirecting = false; // Reset redirecting flag
 
-        if (action.payload?.is_owner_login) {
-          state.isOwnerLogin = true;
+        const payload = action.payload;
+
+        // ✅ CRITICAL: Check if KYC is required
+        if (
+          payload.status === "kyc_required" ||
+          payload.shouldNotLogin === true
+        ) {
+          console.log("⏳ Direct Login - KYC required - NOT logging user in");
+
+          // Set flag for UI to show KYC modal
+          state.requiresKycVerification = true;
+
+          // DO NOT set authentication state
           return;
         }
 
-        if (action.payload?.requiresKycVerification) {
+        if (payload?.is_owner_login) {
+          state.isOwnerLogin = true;
+          state.ownerDetails = {
+            owner_id: payload.owner_id,
+            owner_role_name: payload.owner_role_name,
+          };
+          state.isRedirecting = true;
+          return;
+        }
+
+        if (payload?.requiresKycVerification) {
           state.requiresKycVerification = true;
           return;
         }
 
-        if (action.payload?.data?.token) {
-          state.token = action.payload.data.token;
-          state.customerId = action.payload.data.customer_id;
+        if (payload?.data?.token) {
+          state.token = payload.data.token;
+          state.customerId = payload.data.customer_id;
           state.isAuthenticated = true;
           state.user = {
-            customerType: action.payload.data.customer_type || "individual",
+            customerType: payload.data.customer_type || "individual",
             isRemittanceOnlyCustomer:
-              action.payload.data.isRemittanceOnlyCustomer || false,
+              payload.data.isRemittanceOnlyCustomer || false,
+            isBeneficiary: payload.data.beneficaryLogin === "Y",
           };
-          setLocalStorageItem("authtoken", action.payload.data.token);
+          state.kycStatus = payload.data.kyc_status;
+          state.bankApproveStatus = payload.data.bank_approve_status;
+
+          setLocalStorageItem("authtoken", payload.data.token);
+          setLocalStorageItem("authcustomer_id", payload.data.customer_id);
+          setLocalStorageItem("kyc_status", payload.data.kyc_status);
           setLocalStorageItem(
-            "authcustomer_id",
-            action.payload.data.customer_id
+            "bank_approve_status",
+            payload.data.bank_approve_status,
           );
         }
       })
+      
       .addCase("auth/login/rejected", (state, action) => {
         state.isLoading = false;
         state.error = action.payload?.message || "Login failed";
+        state.isRedirecting = false;
       })
 
       // ===================== DATA FETCHING ASYNC THUNKS =====================

@@ -1,4 +1,4 @@
-// src/services/api.js - ENHANCED WITH CENTRALIZED DATA FETCHING
+// src/services/api.js - UPDATED WITHOUT COUNTRIES API
 import axios from "axios";
 import {
   tokenService,
@@ -25,7 +25,7 @@ class DataManager {
     // Configure stale times (in milliseconds)
     this.staleTimes.set("/partner-basic-setup/", 5 * 60 * 1000); // 5 minutes
     this.staleTimes.set("/partners/get-partner-detail/", 10 * 60 * 1000); // 10 minutes
-    this.staleTimes.set("/countries", 30 * 60 * 1000); // 30 minutes
+    // REMOVE THIS LINE: this.staleTimes.set("/countries", 30 * 60 * 1000); // 30 minutes
     this.staleTimes.set("/gif-images", 15 * 60 * 1000); // 15 minutes
     this.staleTimes.set("/logout", 1 * 60 * 1000); // 1 minute
   }
@@ -160,7 +160,7 @@ api.interceptors.request.use(
       "/reset-password",
       "/register",
       "/verify-email",
-      "/countries",
+      // REMOVE THIS: "/countries",  // <-- REMOVED
       "/partners/get-partner-detail/",
       "/partner-basic-setup/",
       "/gif-images",
@@ -413,31 +413,8 @@ class CentralizedApiService {
 
   // ========== COMMON DATA ==========
 
-  async getCountries(forceRefresh = false) {
-    const endpoint = `/countries`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending countries request`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error("❌ Failed to fetch countries:", error);
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
+  // ⚠️ REMOVED THE getCountries METHOD ENTIRELY ⚠️
+  // No more countries API calls from here!
 
   async getGifImages(forceRefresh = false) {
     const endpoint = `/gif-images`;
@@ -497,7 +474,6 @@ class CentralizedApiService {
     console.trace("centralizedApi.requestPasscodeLogin called");
     console.log("Payload:", payload);
 
-    // ✅ FIX: Use 'let' instead of 'const'
     let token = tokenService.getToken();
 
     console.log(
@@ -505,14 +481,12 @@ class CentralizedApiService {
       token ? token.substring(0, 20) + "..." : "No token"
     );
 
-    // ✅ Add debug logging
     console.log("🔍 Token validation check:", {
       hasToken: !!token,
       tokenPreview: token ? token.substring(0, 50) + "..." : "none",
       tokenValidation: token ? tokenService.safeValidateToken(token) : null,
     });
 
-    // ✅ Check if token is valid
     if (token) {
       const validation = tokenService.safeValidateToken(token);
       if (!validation.isValid || validation.isExpired) {
@@ -521,7 +495,6 @@ class CentralizedApiService {
       }
     }
 
-    // ✅ Only fetch new token if we don't have a valid one
     if (!token) {
       console.log("🔄 Token missing or invalid, fetching fresh token...");
 
@@ -533,8 +506,6 @@ class CentralizedApiService {
             "✅ Fresh token obtained:",
             token.substring(0, 20) + "..."
           );
-
-          // Store the new token
           tokenService.setToken(token);
         } else {
           throw new Error("Authentication token required");
@@ -547,9 +518,6 @@ class CentralizedApiService {
 
     console.log("🔄 Making request-passcode-login API call with token...");
     console.log("🔍 Final token to use:", token.substring(0, 50) + "...");
-
-    // ✅ Add the endpoint to publicEndpoints (already done in your code)
-    // This ensures Authorization header is NOT added automatically
 
     return this.api.post("/request-passcode-login", payload, {
       headers: {
@@ -576,7 +544,6 @@ class CentralizedApiService {
   }
 
   async logout() {
-    // Clear cache on logout
     dataManager.clearAll();
     return this.api.post("/logout");
   }
@@ -691,7 +658,6 @@ class CentralizedApiService {
   clearPartnerSpecificCache(partnerId) {
     console.log(`🧹 FORCE-CLEARING cache for partner ${partnerId}`);
 
-    // Clear localStorage cache for ALL partners first
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -705,7 +671,6 @@ class CentralizedApiService {
       console.log(`🔥 Removed localStorage cache: ${key}`);
     });
 
-    // Clear dataManager cache for wrong partners
     for (const [key, value] of this.dataManager.store) {
       if (key.includes("/partners/ourzap-modules/")) {
         const match = key.match(/\/partners\/ourzap-modules\/(\d+)/);
@@ -716,7 +681,6 @@ class CentralizedApiService {
       }
     }
 
-    // Also clear pending requests
     for (const [key] of this.dataManager.pendingRequests) {
       if (key.includes("/partners/ourzap-modules/")) {
         console.log(`🗑️ Clearing pending modules request: ${key}`);
@@ -729,7 +693,6 @@ class CentralizedApiService {
     const endpoint = `/partners/ourzap-modules/${partnerId}`;
     const cacheKey = `GET:${endpoint}::`;
 
-    // ⭐⭐⭐ CRITICAL FIX: ALWAYS Clear any existing cache for wrong partner IDs ⭐⭐⭐
     this.clearPartnerSpecificCache(partnerId);
 
     if (!forceRefresh) {
@@ -801,7 +764,6 @@ const centralizedApi = new CentralizedApiService();
 
 export const apiCoordinator = {
   isFetching: (signature) => {
-    // Parse signature to create config
     const parts = signature.split("-");
     if (parts.length >= 3) {
       const method = parts[0];
@@ -902,5 +864,5 @@ export const apiCoordinator = {
 };
 
 // ===================== EXPORTS =====================
-export default api; // Keep default export for backward compatibility
+export default api;
 export { centralizedApi, dataManager };

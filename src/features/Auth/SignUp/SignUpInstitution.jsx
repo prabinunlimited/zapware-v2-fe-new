@@ -513,7 +513,8 @@ const Institution = () => {
     remit_customer = 0,
   } = locationStateData;
 
-  const remittanceOnlyAccepted = remit_customer === 1 || remit_customer === true;
+  const remittanceOnlyAccepted =
+    remit_customer === 1 || remit_customer === true;
 
   // DEBUG: Log the location state data
   useEffect(() => {
@@ -691,7 +692,7 @@ const Institution = () => {
 
       // CRITICAL FIX: Set the showField flags based on conditions
       const shouldShowFields = hasUSDNamed || remittanceOnlyAccepted;
-      
+
       console.log("🎯 Setting field visibility:", {
         shouldShowFields,
         hasUSDNamed,
@@ -703,29 +704,39 @@ const Institution = () => {
       dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
       dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
       dispatch(setFormField({ field: "isNamedAccount", value: hasUSDNamed }));
-      
+
       // SET THE FIELD VISIBILITY FLAGS
-      dispatch(setFormField({ 
-        field: "showBusinessAliasField", 
-        value: shouldShowFields 
-      }));
-      dispatch(setFormField({ 
-        field: "showBusinessTypeField", 
-        value: shouldShowFields 
-      }));
-      dispatch(setFormField({ 
-        field: "showEINField", 
-        value: shouldShowFields 
-      }));
-      dispatch(setFormField({ 
-        field: "showNAICSField", 
-        value: shouldShowFields 
-      }));
-      
-      dispatch(setFormField({
-        field: "service_provide_ids",
-        value: serviceProviderIds,
-      }));
+      dispatch(
+        setFormField({
+          field: "showBusinessAliasField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showBusinessTypeField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showEINField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showNAICSField",
+          value: shouldShowFields,
+        })
+      );
+
+      dispatch(
+        setFormField({
+          field: "service_provide_ids",
+          value: serviceProviderIds,
+        })
+      );
     }
   }, [locationStateData, dispatch, remittanceOnlyAccepted]);
 
@@ -863,18 +874,21 @@ const Institution = () => {
 
         // Update all conditions to check both
         const shouldValidateFields = isNamedAccount || remittanceOnlyAccepted;
-        
+
         if (shouldValidateFields) {
           // Business Alias
-          if (!validationValues.business_alias || validationValues.business_alias.trim() === "") {
+          if (
+            !validationValues.business_alias ||
+            validationValues.business_alias.trim() === ""
+          ) {
             conditionalFieldsValid = false;
           }
-          
+
           // Business Type
           if (!validationValues.business_type) {
             conditionalFieldsValid = false;
           }
-          
+
           // EIN
           if (validationValues.ein && validationValues.ein.trim() !== "") {
             const cleanEIN = validationValues.ein.replace(/-/g, "");
@@ -882,9 +896,12 @@ const Institution = () => {
               conditionalFieldsValid = false;
             }
           }
-          
+
           // NAICS Code
-          if (!validationValues.naice_code || validationValues.naice_code.toString().trim() === "") {
+          if (
+            !validationValues.naice_code ||
+            validationValues.naice_code.toString().trim() === ""
+          ) {
             conditionalFieldsValid = false;
           }
         }
@@ -1062,9 +1079,14 @@ const Institution = () => {
 
           // Always include these fields if either condition is true
           if (isNamedAccount || remittanceOnlyAccepted) {
-            step1Fields.push("business_alias", "business_type", "ein", "naice_code");
+            step1Fields.push(
+              "business_alias",
+              "business_type",
+              "ein",
+              "naice_code"
+            );
           }
-          
+
           if (showBusinessEmailField) step1Fields.push("business_email");
           if (showBusinessWebsiteField) step1Fields.push("business_website");
           return step1Fields;
@@ -1503,7 +1525,6 @@ const Institution = () => {
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
           service_providers: serviceProviderIds,
-          bank_account_options: serviceProviderIds,
 
           user_images: userImagesArray,
 
@@ -1604,6 +1625,39 @@ const Institution = () => {
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
 
+          // ✅ ADD SSN LOGIC HERE: Determine if SSN was collected
+          // Check for SSN in responsible person (step 2)
+          const hasResponsiblePersonSSN = !!finalFormData.ssn;
+
+          // Check for SSN in controller (step 3)
+          const hasControllerSSN = !!finalFormData.controller_ssn;
+
+          // Check for SSN in owner details (step 4)
+          const hasOwnerSSN =
+            finalFormData.owner_details?.some((owner) => !!owner.ssn) || false;
+
+          // Overall SSN status: if ANY SSN was collected
+          const hasSSN =
+            hasResponsiblePersonSSN || hasControllerSSN || hasOwnerSSN;
+
+          console.log("🔍 Institution SSN Status:", {
+            hasResponsiblePersonSSN,
+            hasControllerSSN,
+            hasOwnerSSN,
+            overallHasSSN: hasSSN,
+            responsiblePersonSSN: finalFormData.ssn
+              ? "Provided"
+              : "Not provided",
+            controllerSSN: finalFormData.controller_ssn
+              ? "Provided"
+              : "Not provided",
+            ownerSSNs:
+              finalFormData.owner_details?.map((owner) => ({
+                name: owner.owner_first_name,
+                hasSSN: !!owner.ssn,
+              })) || [],
+          });
+
           navigate("/phoneverification", {
             state: {
               mobileNumber: mobileNumber,
@@ -1611,6 +1665,7 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
+              hasSSN: hasSSN, // ✅ Pass SSN status to phone verification
             },
           });
         } else {
@@ -2842,7 +2897,7 @@ const Institution = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* EIN and NAICS Code on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       {/* EIN Field - Always show if either condition is true */}
@@ -2853,7 +2908,10 @@ const Institution = () => {
                           name="ein"
                           value={values.ein || ""}
                           onChange={(e) => {
-                            const formatted = formatTaxId(e.target.value, "ein");
+                            const formatted = formatTaxId(
+                              e.target.value,
+                              "ein"
+                            );
                             enhancedHandleChange(
                               "ein",
                               setFieldValue,
@@ -2894,7 +2952,7 @@ const Institution = () => {
                         />
                       )}
                     </div>
-                    
+
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Country Information

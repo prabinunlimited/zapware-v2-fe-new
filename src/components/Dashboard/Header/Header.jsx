@@ -43,6 +43,7 @@ import {
   selectProfileData,
   selectProfileLoading,
   selectProfileError,
+  selectIsBeneficiaryUser,
 } from "../Header/headerSlice";
 
 // Import logoutUser
@@ -135,6 +136,7 @@ const Header = ({ customerId }) => {
   const profileData = useSelector(selectProfileData);
   const profileLoading = useSelector(selectProfileLoading);
   const profileError = useSelector(selectProfileError);
+  const isBeneficiaryUser = useSelector(selectIsBeneficiaryUser);
 
   const isStaffLogin = useSelector(selectIsStaffLogin);
   const staffRole = useSelector(selectStaffRole);
@@ -296,8 +298,15 @@ const Header = ({ customerId }) => {
     };
   }, [dispatch]);
 
-  // ✅ FIXED: Aggressive Profile fetch with duplicate handling
+  // ✅ FIXED: Aggressive Profile fetch with duplicate handling - WITH BENEFICIARY CHECK
   useEffect(() => {
+    // ✅ CRITICAL FIX: Check for beneficiary login BEFORE any fetch logic
+    const beneficiaryLogin = localStorage.getItem("beneficaryLogin") || localStorage.getItem("beneficiaryLogin");
+    if (beneficiaryLogin === "Y") {
+      console.log("🛑 Header: Skipping profile fetch for beneficiary");
+      return;
+    }
+
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
     }
@@ -485,6 +494,34 @@ const Header = ({ customerId }) => {
 
   // ✅ FIXED: Memoized profile section with ALL original animations and features
   const ProfileSection = useMemo(() => {
+    // ✅ Handle beneficiary case FIRST
+    if (isBeneficiaryUser) {
+      console.log(
+        "ℹ️ Header: User is beneficiary - showing simplified profile"
+      );
+      // Get beneficiary name from localStorage
+      const beneficiaryName =
+        localStorage.getItem("beneficiary_firstName") || "Beneficiary";
+      const beneficiaryRole = "Beneficiary";
+
+      return (
+        <div className="relative">
+          <div className="flex items-center cursor-default bg-white/10 rounded-2xl px-4 py-3">
+            <FaUserCircle className="w-10 h-10 text-white" />
+            <div className="ml-3 flex flex-col">
+              <span className="font-semibold text-white text-sm leading-tight">
+                {beneficiaryName}
+              </span>
+              <span className="text-xs text-white/80 leading-tight">
+                {beneficiaryRole}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Original loading state for regular customers
     if (profileLoading && !profileData) {
       return (
         <div className="flex items-center">
@@ -498,6 +535,7 @@ const Header = ({ customerId }) => {
       console.error("🔍 Profile error in ProfileSection:", profileError);
     }
 
+    // ✅ Safe access to profileData (for regular customers)
     const displayName =
       profileData?.first_name &&
       profileData.first_name !== "User" &&
@@ -510,6 +548,7 @@ const Header = ({ customerId }) => {
           localStorage.getItem("firstName") !== "null"
         ? localStorage.getItem("firstName")
         : "User";
+
     const userRole =
       isStaffLogin === "1"
         ? staffRole
@@ -517,6 +556,7 @@ const Header = ({ customerId }) => {
         ? ownerRoleName
         : "Customer";
 
+    // ✅ KEEP ALL YOUR ORIGINAL ANIMATIONS AND UI for regular customers
     return (
       <div
         className="relative"
@@ -524,6 +564,7 @@ const Header = ({ customerId }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        {/* KEEP ALL YOUR ORIGINAL ANIMATED UI HERE */}
         <motion.div
           whileHover={{ scale: 1.05 }}
           className="flex items-center cursor-pointer bg-white/10 hover:bg-white/20 rounded-2xl px-4 py-3 transition-all duration-300 backdrop-blur-sm border border-white/20"
@@ -724,6 +765,7 @@ const Header = ({ customerId }) => {
       </div>
     );
   }, [
+    isBeneficiaryUser,
     profileLoading,
     profileError,
     profileData,

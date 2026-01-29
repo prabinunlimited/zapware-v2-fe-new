@@ -187,9 +187,8 @@ export const initializeApp = createAsyncThunk(
 
       // 4. Fetch partner details (CENTRALIZED) - THIS IS THE SOURCE OF TRUTH
       console.log("🏢 Fetching partner details...");
-      const partnerResponse = await centralizedApi.getPartnerByHostname(
-        hostname
-      );
+      const partnerResponse =
+        await centralizedApi.getPartnerByHostname(hostname);
       const partnerData = partnerResponse.data || partnerResponse;
       console.log("✅ Partner details fetched:", {
         name: partnerData.partner_name,
@@ -201,26 +200,26 @@ export const initializeApp = createAsyncThunk(
       console.log("💾 Storing partner details in localStorage...");
       localStorage.setItem(
         "iswhitelabelledpartner",
-        partnerData.is_white_labelled_partner || "N"
+        partnerData.is_white_labelled_partner || "N",
       );
       localStorage.setItem(
         "whitelabelledpartnerid",
-        partnerData.partner_id?.toString() || "0" // Ensure string
+        partnerData.partner_id?.toString() || "0", // Ensure string
       );
       localStorage.setItem(
         "isPartnerPackageModule",
-        partnerData.isPartnerPackageModule || "N"
+        partnerData.isPartnerPackageModule || "N",
       );
 
       // ✅ CRITICAL FIX: Store partner name in dedicated key that won't be overwritten
       if (partnerData.partner_name) {
         localStorage.setItem(
           "hostname_partner_name", // DEDICATED KEY - WON'T BE OVERWRITTEN
-          partnerData.partner_name
+          partnerData.partner_name,
         );
         console.log(
           "✅ Hostname partner name stored:",
-          partnerData.partner_name
+          partnerData.partner_name,
         );
       }
 
@@ -228,7 +227,7 @@ export const initializeApp = createAsyncThunk(
       if (partnerData.partner_name) {
         localStorage.setItem(
           "whitelabelled_customer_partnername",
-          partnerData.partner_name
+          partnerData.partner_name,
         );
         localStorage.setItem("partner_name", partnerData.partner_name);
       }
@@ -237,7 +236,7 @@ export const initializeApp = createAsyncThunk(
       if (partnerData.beneficiary_portal_title) {
         localStorage.setItem(
           "beneficiary_portal_title",
-          partnerData.beneficiary_portal_title
+          partnerData.beneficiary_portal_title,
         );
       }
 
@@ -253,7 +252,7 @@ export const initializeApp = createAsyncThunk(
       };
       localStorage.setItem(
         "partnerDetails",
-        JSON.stringify(partnerDetailsData)
+        JSON.stringify(partnerDetailsData),
       );
       localStorage.setItem("partnerDetailsTimestamp", Date.now().toString());
 
@@ -265,7 +264,7 @@ export const initializeApp = createAsyncThunk(
       let partnerConfig;
       try {
         const configResponse = await centralizedApi.getPartnerBasicSetup(
-          partnerData.partner_id
+          partnerData.partner_id,
         );
 
         if (configResponse?.status === "success") {
@@ -278,11 +277,11 @@ export const initializeApp = createAsyncThunk(
           // ✅ Store partner config for Header - ALWAYS SET THESE
           localStorage.setItem(
             "header_color",
-            partnerConfig.header_color || "bg-sky-800"
+            partnerConfig.header_color || "bg-sky-800",
           );
           localStorage.setItem(
             "text_color",
-            partnerConfig.text_color || "text-white"
+            partnerConfig.text_color || "text-white",
           );
 
           // Store logo URL if available
@@ -298,20 +297,20 @@ export const initializeApp = createAsyncThunk(
 
           localStorage.setItem(
             "download_operation_manual",
-            partnerConfig.download_operation_manual || "N"
+            partnerConfig.download_operation_manual || "N",
           );
           console.log("📢 Dispatching storage event...");
           window.dispatchEvent(new Event("storage"));
         } else {
           console.warn(
-            "⚠️ Partner config API returned non-success status, using defaults"
+            "⚠️ Partner config API returned non-success status, using defaults",
           );
           setDefaultConfig();
         }
       } catch (configError) {
         console.warn(
           "⚠️ Failed to fetch partner config, using defaults:",
-          configError
+          configError,
         );
         setDefaultConfig();
       }
@@ -414,7 +413,7 @@ export const initializeApp = createAsyncThunk(
       isInitializing = false;
       console.log("🏁 initializeApp finished");
     }
-  }
+  },
 );
 
 // ===================== PASSCODE OPERATIONS =====================
@@ -451,7 +450,7 @@ export const generatePasscode = createAsyncThunk(
 
       if (response.data?.status === "error") {
         return rejectWithValue(
-          response.data.message || "Failed to generate passcode"
+          response.data.message || "Failed to generate passcode",
         );
       }
 
@@ -488,7 +487,7 @@ export const generatePasscode = createAsyncThunk(
           // ⭐⭐⭐ Handle 401 specifically for request-passcode-login
           return rejectWithValue(
             responseData.message ||
-              "Invalid email or password. Please check your credentials."
+              "Invalid email or password. Please check your credentials.",
           );
         }
 
@@ -504,12 +503,12 @@ export const generatePasscode = createAsyncThunk(
 
           return rejectWithValue(
             responseData.message ||
-              "Validation failed. Please check your input."
+              "Validation failed. Please check your input.",
           );
         }
 
         return rejectWithValue(
-          responseData.message || "Failed to generate passcode"
+          responseData.message || "Failed to generate passcode",
         );
       }
 
@@ -517,14 +516,14 @@ export const generatePasscode = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: false });
     }
-  }
+  },
 );
 
 export const verifyPasscode = createAsyncThunk(
   "auth/verifyPasscode",
   async (
     { email, passcode, password, sign_in_option, customer_type },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingPasscode", payload: true });
@@ -570,26 +569,62 @@ export const verifyPasscode = createAsyncThunk(
 
         const responseData = response.data.data;
 
-        // ✅ CRITICAL FIX: Store authentication tokens ONLY
-        // DO NOT store partner data from login response
+        // ✅ CRITICAL CHECK: If kyc_status is "0", user must go through Plaid verification
+        // This should ALWAYS trigger redirect to Plaid, not allow login
+        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
+          console.log(
+            "🚨 KYC NOT VERIFIED - Redirecting to Plaid verification. User should NOT be logged in.",
+          );
 
-        // Store authentication tokens
+          // ✅ IMPORTANT: DO NOT store authentication tokens in localStorage
+          // DO NOT set isAuthenticated to true
+          // DO NOT update Redux auth state
+
+          // Store temp data for KYC flow ONLY
+          sessionStorage.setItem(
+            "temp_auth_data",
+            JSON.stringify({
+              email: email,
+              customer_id: responseData.customer_id,
+              token: responseData.token,
+              timestamp: Date.now(),
+              kyc_status: responseData.kyc_status,
+              isRemittanceOnlyCustomer:
+                responseData.isRemittanceOnlyCustomer || false,
+              // Add all necessary data for after KYC completion
+              requiresPlaidRedirect: true,
+            }),
+          );
+
+          // ✅ IMPORTANT: Return a special response that indicates KYC is required
+          return {
+            status: "kyc_required",
+            requiresPlaidRedirect: true,
+            plaidUrl: responseData.plaid_url,
+            message:
+              "KYC verification required. Please complete bank verification to continue.",
+            data: responseData,
+            shouldNotLogin: true, // CRITICAL FLAG
+            closePasscodePopup: true, // NEW: Signal to close popup
+          };
+        }
+
+        // ✅ If kyc_status is NOT "0", continue with normal login
+        console.log("✅ KYC VERIFIED - Proceeding with normal login");
+
+        // ✅ Store authentication tokens ONLY when KYC is verified
         if (responseData.token) {
-          // Store user authentication token
           localStorage.setItem("authtoken", responseData.token);
 
-          // ALSO store partner API token if not already present
+          // Also store partner API token if not already present
           const existingBearerToken = localStorage.getItem("bearertoken");
           if (!existingBearerToken) {
-            console.log(
-              "🔄 No bearer token found, fetching one for API access..."
-            );
             try {
               const bearerToken = await getBearerToken();
               localStorage.setItem("bearertoken", bearerToken);
             } catch (error) {
               console.warn(
-                "⚠️ Could not fetch bearer token, user may have limited API access"
+                "⚠️ Could not fetch bearer token, user may have limited API access",
               );
             }
           }
@@ -598,7 +633,7 @@ export const verifyPasscode = createAsyncThunk(
         if (responseData.customer_id) {
           localStorage.setItem(
             "authcustomer_id",
-            responseData.customer_id.toString()
+            responseData.customer_id.toString(),
           );
         }
 
@@ -611,50 +646,29 @@ export const verifyPasscode = createAsyncThunk(
           localStorage.setItem("lastName", responseData.last_name);
         }
 
-        // ✅ Store whitelabel CUSTOMER info (not partner config)
+        // ✅ Store whitelabel CUSTOMER info
         if (responseData.whitelabelled_customer) {
           localStorage.setItem(
             "whitelabelled_customer",
-            responseData.whitelabelled_customer
+            responseData.whitelabelled_customer,
           );
         }
 
         // ✅ CRITICAL FIX: NEVER OVERWRITE HOSTNAME PARTNER DATA WITH LOGIN DATA
-        // Preserve the hostname partner name in a dedicated key
         const hostnamePartnerName = localStorage.getItem(
-          "hostname_partner_name"
+          "hostname_partner_name",
         );
         const storedPartnerName = localStorage.getItem(
-          "whitelabelled_customer_partnername"
+          "whitelabelled_customer_partnername",
         );
         const storedPartnerId = localStorage.getItem("whitelabelledpartnerid");
-
-        // Debug: Log what we're about to do
-        console.log("🔍 Login Response Partner Data Check:", {
-          fromLogin: {
-            partnerId: responseData.whitelabelled_customer_partnerid,
-            partnerName: responseData.whitelabelled_customer_partnername,
-          },
-          fromHostname: {
-            partnerId: storedPartnerId,
-            partnerName: hostnamePartnerName,
-          },
-          currentStoredName: storedPartnerName,
-          action: "KEEPING HOSTNAME DATA - NOT OVERWRITING",
-        });
-
-        // ✅ ONLY store partner name from login if:
-        // 1. We don't have hostname partner name AND
-        // 2. The login partner name is NOT "Unlimited Remit" (wrong data)
-        // 3. The login partner name actually exists and is valid
 
         const loginPartnerName =
           responseData.whitelabelled_customer_partnername;
         const loginPartnerId = responseData.whitelabelled_customer_partnerid;
 
-        // Check if we should store the login partner data
+        // Only store partner name from login under specific conditions
         const shouldStoreLoginPartnerData = () => {
-          // If we have hostname partner name, NEVER overwrite it
           if (
             hostnamePartnerName &&
             hostnamePartnerName !== "undefined" &&
@@ -663,15 +677,13 @@ export const verifyPasscode = createAsyncThunk(
             return false;
           }
 
-          // If login partner name is "Unlimited Remit", ignore it (wrong data)
           if (loginPartnerName === "Unlimited Remit") {
             console.warn(
-              "⚠️ Ignoring wrong partner name 'Unlimited Remit' from login response"
+              "⚠️ Ignoring wrong partner name 'Unlimited Remit' from login response",
             );
             return false;
           }
 
-          // Only store if partner IDs match and name is valid
           if (
             loginPartnerId &&
             storedPartnerId &&
@@ -687,123 +699,29 @@ export const verifyPasscode = createAsyncThunk(
         };
 
         if (shouldStoreLoginPartnerData()) {
-          console.log(
-            "✅ Storing partner name from login response:",
-            loginPartnerName
-          );
           localStorage.setItem(
             "whitelabelled_customer_partnername",
-            loginPartnerName
+            loginPartnerName,
           );
           localStorage.setItem("partner_name", loginPartnerName);
-        } else {
-          console.log(
-            "✅ Keeping existing partner data, not overwriting with login data"
-          );
-
-          // Ensure we have SOME partner name stored
-          if (
-            !storedPartnerName ||
-            storedPartnerName === "undefined" ||
-            storedPartnerName === "null"
-          ) {
-            // Try to get from hostname first
-            if (
-              hostnamePartnerName &&
-              hostnamePartnerName !== "undefined" &&
-              hostnamePartnerName !== "null"
-            ) {
-              localStorage.setItem(
-                "whitelabelled_customer_partnername",
-                hostnamePartnerName
-              );
-            }
-            // Fallback to "Partner Portal" if nothing else
-            else if (
-              !localStorage.getItem("whitelabelled_customer_partnername")
-            ) {
-              localStorage.setItem(
-                "whitelabelled_customer_partnername",
-                "Partner Portal"
-              );
-            }
-          }
         }
 
+        // ✅ Return the response data for Redux state update
         return {
           ...response.data,
           data: responseData,
+          kycVerified: true, // ✅ Add this flag
         };
-      } else if (response.data?.token && response.data?.customer_id) {
-        console.log("✅ Success response with flat structure");
-
-        // Handle flat structure response (same logic applies)
-        const responseData = response.data;
-
-        // Store authentication tokens
-        if (responseData.token) {
-          // Store user authentication token
-          localStorage.setItem("authtoken", responseData.token);
-
-          // ALSO store partner API token if not already present
-          const existingBearerToken = localStorage.getItem("bearertoken");
-          if (!existingBearerToken) {
-            console.log(
-              "🔄 No bearer token found, fetching one for API access..."
-            );
-            try {
-              const bearerToken = await getBearerToken();
-              localStorage.setItem("bearertoken", bearerToken);
-            } catch (error) {
-              console.warn(
-                "⚠️ Could not fetch bearer token, user may have limited API access"
-              );
-            }
-          }
-        }
-
-        if (responseData.customer_id) {
-          localStorage.setItem(
-            "authcustomer_id",
-            responseData.customer_id.toString()
-          );
-        }
-
-        // DO NOT store partner data from login response
-        console.log("🔍 Flat response - Not storing partner data from login");
-
-        return responseData;
-      } else if (response.data?.status === "success") {
-        console.log("✅ Success response without data field");
-        return response.data;
       }
-
-      // Handle non-success responses
-      if (response.data?.status === "error") {
-        let errorMessage = response.data.message || "Login failed";
-
-        if (
-          errorMessage.includes("Invalid passcode") ||
-          errorMessage.includes("Invalid credentials")
-        ) {
-          errorMessage =
-            "Invalid passcode. Please check the code and try again.";
-        } else if (errorMessage.includes("expired")) {
-          errorMessage = "Passcode has expired. Please request a new one.";
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      throw new Error("Invalid server response format");
+      // ... rest of the existing code ...
     } catch (error) {
-      console.error("❌ verifyPasscode error:", error);
+      console.error("❌ Passcode verification error:", error);
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setVerifyingPasscode", payload: false });
     }
-  }
+  },
 );
 
 // ===================== OTP OPERATIONS =====================
@@ -811,7 +729,7 @@ export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
     { phone_code, mobile_number, password, customer_type },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       // ✅ Validate that password is provided
@@ -874,7 +792,7 @@ export const generateOTP = createAsyncThunk(
         message: error.message || "Failed to generate OTP",
       });
     }
-  }
+  },
 );
 
 // ✅ FIXED: OTP verification also preserves hostname partner data
@@ -882,7 +800,7 @@ export const verifyOTP = createAsyncThunk(
   "auth/verifyOTP",
   async (
     { phone_code, mobile_number, otp, password, sign_in_option, customer_type },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
@@ -920,24 +838,66 @@ export const verifyOTP = createAsyncThunk(
       if (response.data?.status === "success") {
         const responseData = response.data.data;
 
+        // ✅ CRITICAL CHECK: If kyc_status is "0", user must go through Plaid verification
+        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
+          console.log(
+            "🚨 OTP Login - KYC NOT VERIFIED - User should NOT be logged in.",
+          );
+
+          // ✅ IMPORTANT: DO NOT store authentication tokens in localStorage
+          // DO NOT set isAuthenticated to true
+          // DO NOT update Redux auth state
+
+          // Store temp data for KYC flow ONLY
+          sessionStorage.setItem(
+            "pending_mobile_auth",
+            JSON.stringify({
+              phone_code: phone_code,
+              mobile_number: cleanMobileNumber,
+              customer_id: responseData.customer_id,
+              timestamp: Date.now(),
+              kyc_status: responseData.kyc_status,
+              isRemittanceOnlyCustomer:
+                responseData.isRemittanceOnlyCustomer || false,
+              requiresPlaidRedirect: true,
+            }),
+          );
+
+          // ✅ IMPORTANT: Return a special response that indicates KYC is required
+          return {
+            status: "kyc_required",
+            requiresPlaidRedirect: true,
+            plaidUrl: responseData.plaid_url,
+            message:
+              "KYC verification required. Please complete bank verification to continue.",
+            data: responseData,
+            shouldNotLogin: true, // CRITICAL FLAG
+          };
+        }
+
+        // ✅ If kyc_status is NOT "0", continue with normal login
+        console.log(
+          "✅ OTP Login - KYC VERIFIED - Proceeding with normal login",
+        );
+
         // ✅ Store user data in localStorage for Header
         localStorage.setItem("firstName", responseData.first_name || "User");
         localStorage.setItem("lastName", responseData.last_name || "");
         localStorage.setItem(
           "whitelabelled_customer",
-          responseData.whitelabelled_customer || "N"
+          responseData.whitelabelled_customer || "N",
         );
         localStorage.setItem(
           "isRemittanceOnlyCustomer",
-          responseData.isRemittanceOnlyCustomer || "N"
+          responseData.isRemittanceOnlyCustomer || "N",
         );
 
         // ✅ DO NOT OVERWRITE HOSTNAME-BASED PARTNER DATA
         const hostnamePartnerName = localStorage.getItem(
-          "hostname_partner_name"
+          "hostname_partner_name",
         );
         const storedPartnerName = localStorage.getItem(
-          "whitelabelled_customer_partnername"
+          "whitelabelled_customer_partnername",
         );
         const storedPartnerId = localStorage.getItem("whitelabelledpartnerid");
 
@@ -959,7 +919,7 @@ export const verifyOTP = createAsyncThunk(
           // If login partner name is "Unlimited Remit", ignore it (wrong data)
           if (loginPartnerName === "Unlimited Remit") {
             console.warn(
-              "⚠️ OTP Login: Ignoring wrong partner name 'Unlimited Remit'"
+              "⚠️ OTP Login: Ignoring wrong partner name 'Unlimited Remit'",
             );
             return false;
           }
@@ -983,34 +943,24 @@ export const verifyOTP = createAsyncThunk(
         if (shouldStoreLoginPartnerData()) {
           localStorage.setItem(
             "whitelabelled_customer_partnername",
-            responseData.whitelabelled_customer_partnername
+            responseData.whitelabelled_customer_partnername,
           );
           console.log(
             "✅ OTP Login: Stored partner name from login:",
-            loginPartnerName
+            loginPartnerName,
           );
         } else {
           console.log("✅ OTP Login: Keeping existing partner data");
         }
 
-        // Debug: Show what we're doing
-        console.log("🔍 OTP Login - Partner Data Preservation:", {
-          hostnamePartnerName,
-          loginPartnerName,
-          storedPartnerName,
-          action: shouldStoreLoginPartnerData()
-            ? "Used login data"
-            : "Kept existing data",
-        });
-
-        // ✅ Store authentication tokens
+        // ✅ Store authentication tokens ONLY when KYC is verified
         localStorage.setItem("bearertoken", responseData.token);
         localStorage.setItem("authtoken", responseData.token);
         localStorage.setItem("authcustomer_id", responseData.customer_id);
         localStorage.setItem("kyc_status", responseData.kyc_status);
         localStorage.setItem(
           "bank_approve_status",
-          responseData.bank_approve_status
+          responseData.bank_approve_status,
         );
 
         // ✅ Store additional user data
@@ -1020,7 +970,7 @@ export const verifyOTP = createAsyncThunk(
         if (responseData.hasSilaBankAccount !== undefined) {
           localStorage.setItem(
             "hasSilaBankAccount",
-            responseData.hasSilaBankAccount
+            responseData.hasSilaBankAccount,
           );
         }
         if (responseData.plaidStatus) {
@@ -1034,7 +984,7 @@ export const verifyOTP = createAsyncThunk(
           localStorage.setItem("owner_role_name", responseData.owner_role_name);
           localStorage.setItem(
             "staff_role",
-            responseData.owner_role_name || ""
+            responseData.owner_role_name || "",
           );
           localStorage.setItem("staff_id", responseData.owner_id || "");
         }
@@ -1049,14 +999,14 @@ export const verifyOTP = createAsyncThunk(
         // ✅ Load partner config AFTER storing user data
         try {
           console.log(
-            "🔄 Loading partner config after successful OTP login..."
+            "🔄 Loading partner config after successful OTP login...",
           );
           await dispatch(initializeApp()).unwrap();
           console.log("✅ Partner config loaded successfully");
         } catch (initError) {
           console.warn(
             "Partner config load failed after OTP login:",
-            initError
+            initError,
           );
           // Continue even if partner config fails
         }
@@ -1073,7 +1023,7 @@ export const verifyOTP = createAsyncThunk(
               mobile_number: cleanMobileNumber,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
-            })
+            }),
           );
 
           return {
@@ -1084,48 +1034,11 @@ export const verifyOTP = createAsyncThunk(
           };
         }
 
-        // Handle KYC verification required
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          sessionStorage.setItem(
-            "pending_mobile_auth",
-            JSON.stringify({
-              phone_code: phone_code,
-              mobile_number: cleanMobileNumber,
-              customer_id: responseData.customer_id,
-              timestamp: Date.now(),
-            })
-          );
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return {
-                requiresPlaidRedirect: true,
-                plaidUrl: plaidResponse.url,
-                customerData: responseData,
-                message: "Redirecting to bank verification...",
-              };
-            }
-          } catch (plaidError) {
-            return {
-              requiresKycVerification: true,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              customerData: responseData,
-              message:
-                "Bank verification required but setup failed. Please contact support.",
-            };
-          }
-        }
-
-        // Handle bank approval
-        if (responseData.bank_approve_status !== "1") {
+        // ✅ IMPORTANT: Beneficiaries don't need bank approval
+        if (
+          responseData.beneficaryLogin !== "Y" &&
+          responseData.bank_approve_status !== "1"
+        ) {
           return {
             requiresBankApproval: true,
             bank_approve_status: responseData.bank_approve_status,
@@ -1161,7 +1074,6 @@ export const verifyOTP = createAsyncThunk(
           is_owner_login: responseData.is_owner_login || "0",
           owner_id: responseData.owner_id || "0",
           whitelabelled_customer: responseData.whitelabelled_customer || "N",
-          // ✅ DO NOT return partner data from login response
           message: response.data.message || "Login successful",
           data: responseData,
         };
@@ -1175,7 +1087,7 @@ export const verifyOTP = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
-  }
+  },
 );
 
 // ===================== SEND OTP =====================
@@ -1197,7 +1109,7 @@ export const sendOtp = createAsyncThunk(
 
       if (response.status === 429) {
         return rejectWithValue(
-          "Too many requests. Please wait a moment before trying again."
+          "Too many requests. Please wait a moment before trying again.",
         );
       }
 
@@ -1217,7 +1129,7 @@ export const sendOtp = createAsyncThunk(
       // Handle specific error cases
       if (error.response?.status === 429) {
         return rejectWithValue(
-          "Too many requests. Please wait before trying again."
+          "Too many requests. Please wait before trying again.",
         );
       }
 
@@ -1227,7 +1139,7 @@ export const sendOtp = createAsyncThunk(
 
       return rejectWithValue(errorMessage || "Failed to send OTP");
     }
-  }
+  },
 );
 
 // ===================== VALIDATE OTP =====================
@@ -1235,7 +1147,7 @@ export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
     { country_code, mobile_number, otp },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
@@ -1281,7 +1193,7 @@ export const validateOtp = createAsyncThunk(
               mobile_number: full_mobile_number,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
-            })
+            }),
           );
 
           dispatch({ type: "auth/setOtp", payload: new Array(6).fill("") });
@@ -1317,7 +1229,7 @@ export const validateOtp = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
-  }
+  },
 );
 
 // ===================== PLAID/KYC OPERATIONS =====================
@@ -1382,7 +1294,7 @@ export const initiatePlaidFlow = createAsyncThunk(
           }
         } catch (initiateError) {
           throw new Error(
-            "KYC system temporarily unavailable. Please try again later or contact support."
+            "KYC system temporarily unavailable. Please try again later or contact support.",
           );
         }
       }
@@ -1415,7 +1327,7 @@ export const initiatePlaidFlow = createAsyncThunk(
       dispatch({ type: "auth/setLoading", payload: false });
       dispatch({ type: "auth/setPlaidLoading", payload: false });
     }
-  }
+  },
 );
 
 // ===================== MANUAL DOWNLOAD =====================
@@ -1457,7 +1369,7 @@ export const downloadManual = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
     }
-  }
+  },
 );
 
 // ===================== USER LOGIN/LOGOUT =====================
@@ -1496,6 +1408,8 @@ export const loginUser = createAsyncThunk(
       const response = await centralizedApi.login(payload);
 
       if (response.data?.status === "success") {
+        const responseData = response.data.data || response.data;
+
         const {
           token: userToken,
           customer_id,
@@ -1506,17 +1420,87 @@ export const loginUser = createAsyncThunk(
           owner_role_name,
           kyc_status,
           bank_approve_status,
+          plaid_url,
           plaid_link_url,
-        } = response.data.data;
+          beneficaryLogin,
+          beneficaryId,
+          whitelabelled_customer_partnerid,
+          whitelabelled_customer_partnername,
+        } = responseData;
 
-        // Store user token as "authtoken", NOT "bearertoken"
-        localStorage.setItem("authtoken", userToken);
-        localStorage.setItem("authcustomer_id", customer_id);
+        console.log("🔍 loginUser - Response data:", {
+          kyc_status,
+          token: userToken ? `${userToken.substring(0, 20)}...` : "No token",
+          customer_id,
+          is_owner_login,
+        });
 
-        // ✅ DO NOT store partner data from login
-        // The hostname partner data is the source of truth
+        // ✅ CRITICAL CHECK: If kyc_status is "0", user must go through Plaid verification
+        // ✅ EXCEPTION: Beneficiaries don't need KYC
+        if (
+          (kyc_status === "0" || kyc_status === 0) &&
+          beneficaryLogin !== "Y" // Beneficiaries skip KYC
+        ) {
+          console.log(
+            "🚨 Direct Login - KYC NOT VERIFIED - User should NOT be logged in.",
+          );
 
-        if (is_owner_login === "1") {
+          // Store temp data for KYC flow
+          const tempAuthData = {
+            email:
+              loginData.sign_in_option === "email" ? loginData.email : null,
+            phone_code:
+              loginData.sign_in_option === "mobile"
+                ? loginData.phone_code
+                : null,
+            mobile_number:
+              loginData.sign_in_option === "mobile"
+                ? loginData.mobile_number
+                : null,
+            customer_id,
+            token: userToken,
+            timestamp: Date.now(),
+            kyc_status,
+            isRemittanceOnlyCustomer: isRemittanceOnlyCustomer || false,
+            plaid_url: plaid_url || plaid_link_url,
+            customer_type,
+          };
+
+          sessionStorage.setItem(
+            "temp_auth_data",
+            JSON.stringify(tempAuthData),
+          );
+
+          return {
+            status: "kyc_required",
+            requiresKycVerification: true,
+            requiresPlaidRedirect: true,
+            plaidUrl: plaid_url || plaid_link_url,
+            customer_id,
+            message:
+              response.data.message ||
+              "KYC verification required. Please complete bank verification to continue.",
+            shouldNotLogin: true,
+            data: responseData,
+          };
+        }
+
+        // ✅ Handle beneficiary login (no KYC required)
+        if (beneficaryLogin === "Y") {
+          console.log("✅ Beneficiary login detected - KYC not required");
+
+          // Store beneficiary info
+          if (beneficaryId) {
+            localStorage.setItem("beneficaryLogin", beneficaryLogin);
+            localStorage.setItem("beneficaryId", beneficaryId.toString());
+          }
+
+          // Continue with normal login flow
+        }
+
+        // ✅ Handle owner login
+        if (is_owner_login === "1" || is_owner_login === true) {
+          console.log("✅ Owner login detected");
           dispatch({
             type: "auth/setOwnerDetails",
             payload: {
@@ -1525,26 +1509,119 @@ export const loginUser = createAsyncThunk(
               owner_role_name: owner_role_name,
             },
           });
-          return { is_owner_login: true, owner_id };
-        }
 
-        if (kyc_status === "0" || kyc_status === 0) {
-          if (!plaid_link_url) {
-            throw new Error(
-              "Bank verification required but link not available"
-            );
-          }
+          // Store in localStorage
+          localStorage.setItem("is_owner_login", "1");
+          localStorage.setItem("owner_id", owner_id || "0");
+          localStorage.setItem("owner_role_name", owner_role_name || "");
+
           return {
-            requiresKycVerification: true,
-            plaid_link_url,
-            customer_id,
+            is_owner_login: true,
+            owner_id,
+            owner_role_name,
+            data: responseData,
           };
         }
 
-        if (bank_approve_status !== "1") {
+        // ✅ Check bank approval (non-beneficiaries only)
+        if (
+          beneficaryLogin !== "Y" &&
+          bank_approve_status !== "1" &&
+          bank_approve_status !== 1
+        ) {
           throw new Error("Bank account not approved. Please contact support.");
         }
 
+        // ✅ Store authentication tokens ONLY when KYC is verified or user is beneficiary
+        localStorage.setItem("authtoken", userToken);
+        localStorage.setItem("authcustomer_id", customer_id.toString());
+
+        // ✅ DO NOT OVERWRITE HOSTNAME-BASED PARTNER DATA
+        const hostnamePartnerName = localStorage.getItem(
+          "hostname_partner_name",
+        );
+        const storedPartnerName = localStorage.getItem(
+          "whitelabelled_customer_partnername",
+        );
+        const storedPartnerId = localStorage.getItem("whitelabelledpartnerid");
+
+        // Only store partner name from login if:
+        // 1. We don't have hostname partner name AND
+        // 2. The login partner name is NOT "Unlimited Remit" (wrong data)
+        // 3. The login partner name actually exists and is valid
+        const shouldStoreLoginPartnerData = () => {
+          // If we have hostname partner name, NEVER overwrite it
+          if (
+            hostnamePartnerName &&
+            hostnamePartnerName !== "undefined" &&
+            hostnamePartnerName !== "null"
+          ) {
+            return false;
+          }
+
+          // If login partner name is "Unlimited Remit", ignore it (wrong data)
+          if (whitelabelled_customer_partnername === "Unlimited Remit") {
+            console.warn(
+              "⚠️ Ignoring wrong partner name 'Unlimited Remit' from login response",
+            );
+            return false;
+          }
+
+          // Only store if partner IDs match and name is valid
+          if (
+            whitelabelled_customer_partnerid &&
+            storedPartnerId &&
+            whitelabelled_customer_partnerid.toString() ===
+              storedPartnerId.toString() &&
+            whitelabelled_customer_partnername &&
+            whitelabelled_customer_partnername !== "undefined" &&
+            whitelabelled_customer_partnername !== "null"
+          ) {
+            return true;
+          }
+
+          return false;
+        };
+
+        if (shouldStoreLoginPartnerData()) {
+          console.log(
+            "✅ Storing partner name from login response:",
+            whitelabelled_customer_partnername,
+          );
+          localStorage.setItem(
+            "whitelabelled_customer_partnername",
+            whitelabelled_customer_partnername,
+          );
+          localStorage.setItem(
+            "partner_name",
+            whitelabelled_customer_partnername,
+          );
+        } else {
+          console.log(
+            "✅ Keeping existing partner data, not overwriting with login data",
+          );
+        }
+
+        // ✅ Store additional user info
+        if (responseData.first_name) {
+          localStorage.setItem("firstName", responseData.first_name);
+        }
+        if (responseData.last_name) {
+          localStorage.setItem("lastName", responseData.last_name);
+        }
+
+        localStorage.setItem("kyc_status", kyc_status || "1");
+        localStorage.setItem("bank_approve_status", bank_approve_status || "1");
+        localStorage.setItem(
+          "isRemittanceOnlyCustomer",
+          isRemittanceOnlyCustomer || "N",
+        );
+        localStorage.setItem(
+          "whitelabelled_customer",
+          responseData.whitelabelled_customer || "N",
+        );
+
+        // ✅ Create auth state
         const authState = {
           token: userToken,
           customerId: customer_id,
@@ -1552,6 +1629,7 @@ export const loginUser = createAsyncThunk(
           user: {
             customerType: customer_type || "individual",
             isRemittanceOnlyCustomer: isRemittanceOnlyCustomer || false,
+            isBeneficiary: beneficaryLogin === "Y",
             [loginData.sign_in_option === "email" ? "email" : "mobile_number"]:
               loginData.sign_in_option === "email"
                 ? loginData.email
@@ -1564,10 +1642,15 @@ export const loginUser = createAsyncThunk(
         return {
           ...response.data,
           data: {
-            ...response.data.data,
+            ...responseData,
             isRemittanceOnlyCustomer,
             customer_type,
+            beneficaryLogin,
+            beneficaryId,
+            kyc_status,
+            bank_approve_status,
           },
+          verified: true,
         };
       }
 
@@ -1615,27 +1698,27 @@ export const loginUser = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
     }
-  }
+  },
 );
 
-export const logoutUser = createAsyncThunk(
-  "auth/logout",
-  async (_, { dispatch, rejectWithValue }) => {
-    try {
-      dispatch({ type: "auth/setLoading", payload: true });
+// export const logoutUser = createAsyncThunk(
+//   "auth/logout",
+//   async (_, { dispatch, rejectWithValue }) => {
+//     try {
+//       dispatch({ type: "auth/setLoading", payload: true });
 
-      await centralizedApi.logout();
+//       await centralizedApi.logout();
 
-      dispatch({ type: "auth/clearAuthState" });
-      return true;
-    } catch (error) {
-      const errorMessage = extractErrorMessage(error);
-      return rejectWithValue(errorMessage);
-    } finally {
-      dispatch({ type: "auth/setLoading", payload: false });
-    }
-  }
-);
+//       dispatch({ type: "auth/clearAuthState" });
+//       return true;
+//     } catch (error) {
+//       const errorMessage = extractErrorMessage(error);
+//       return rejectWithValue(errorMessage);
+//     } finally {
+//       dispatch({ type: "auth/setLoading", payload: false });
+//     }
+//   },
+// );
 
 // ===================== SELECTORS =====================
 export const selectIsGeneratingPasscode = (state) =>

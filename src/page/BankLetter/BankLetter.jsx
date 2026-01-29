@@ -93,7 +93,7 @@ const BankLetter = () => {
 
   const isAllowedDomain =
     window.location.hostname === "ourzap-v2.unlimitedremit.com" ||
-    window.location.hostname === "unlimited.unlimitedremit.com" || 
+    window.location.hostname === "unlimited.unlimitedremit.com" ||
     window.location.hostname === "unlimited-v2.unlimitedremit.com";
 
   let whitelabelledpartnerid = null;
@@ -1034,6 +1034,15 @@ const BankLetter = () => {
                     <strong>Sort Code:</strong>
                     <div className="font-mono">
                       {displayAccountData.sort_code}
+                    </div>
+                  </div>
+                )}
+
+                {displayAccountData?.description && (
+                  <div className="account-detail-item">
+                    <strong>Reference Number</strong>
+                    <div className="font-mono">
+                      {displayAccountData.description}
                     </div>
                   </div>
                 )}

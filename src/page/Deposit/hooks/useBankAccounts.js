@@ -8,7 +8,11 @@ import {
   fetchManualAccountDetails,
 } from "../slices/bankAccountSlice";
 
-export const useBankAccounts = (selectedCurrency, paymentMethod) => {
+export const useBankAccounts = (
+  selectedCurrency,
+  paymentMethod,
+  customerId = null,
+) => {
   const dispatch = useDispatch();
 
   // Get all account data from Redux
@@ -48,10 +52,8 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
   // Also simplify the fetch effect:
   useEffect(() => {
     const fetchManualDetails = async () => {
-      // Clean up any existing requests
       cleanupPendingRequests();
 
-      // Create new controller
       abortControllerRef.current = new AbortController();
 
       if (paymentMethod === "manual_deposit" && selectedCurrency) {
@@ -73,15 +75,25 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
             dispatch(clearManualAccountDetails());
           }
 
+          // ✅ PASS CUSTOMER ID IF PROVIDED
+          const finalCustomerId =
+            customerId || localStorage.getItem("authcustomer_id");
+
+          if (!finalCustomerId) {
+            throw new Error("Customer ID not found");
+          }
+
           const resultAction = await dispatch(
-            fetchManualAccountDetails(selectedCurrency)
+            fetchManualAccountDetails({
+              currency: selectedCurrency,
+              customerId: finalCustomerId,
+            }),
           );
 
           if (fetchManualAccountDetails.fulfilled.match(resultAction)) {
             console.log("✅ Manual details loaded for:", selectedCurrency);
           }
         } catch (error) {
-          // Don't check for AbortError - Redux Toolkit doesn't pass it
           console.error("❌ Manual details fetch error:", error);
         }
       } else if (paymentMethod !== "manual_deposit" && manualAccountDetails) {
@@ -100,7 +112,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
     selectedCurrency,
     dispatch,
     manualAccountDetails,
-    cleanupPendingRequests,
+    customerId, // ✅ ADD CUSTOMER ID DEPENDENCY
   ]);
 
   // ✅ COMPLETE: Reset states when currency changes
@@ -159,7 +171,7 @@ export const useBankAccounts = (selectedCurrency, paymentMethod) => {
           }
 
           const resultAction = await dispatch(
-            fetchManualAccountDetails(selectedCurrency)
+            fetchManualAccountDetails(selectedCurrency),
           );
 
           // ✅ SAFE: Check if controller still exists before checking signal

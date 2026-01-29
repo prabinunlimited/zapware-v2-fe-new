@@ -12,7 +12,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
   "beneficiaries/createAndAddBeneficiary",
   async (
     { customerId, beneficiaryData, bankAccounts, currency, country_code },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       console.log("🔄 createAndAddBeneficiary: Starting...");
@@ -32,7 +32,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
           bankAccounts,
           currency,
           country_code,
-        })
+        }),
       );
 
       console.log("📦 Create result:", createResult);
@@ -64,14 +64,14 @@ export const createAndAddBeneficiary = createAsyncThunk(
       // 4. Fetch the specific beneficiary to ensure it's available
       console.log("🔄 Fetching newly created beneficiary...");
       const fetchResult = await dispatch(
-        fetchBeneficiaryById(newBeneficiaryId)
+        fetchBeneficiaryById(newBeneficiaryId),
       );
 
       // Check if fetch was successful
       if (fetchBeneficiaryById.rejected.match(fetchResult)) {
         console.warn(
           "⚠️ Beneficiary fetch failed, but creation was successful:",
-          fetchResult.payload
+          fetchResult.payload,
         );
         // Continue anyway since creation was successful
       }
@@ -95,7 +95,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
       if (newBeneficiaryId) {
         console.warn(
           "⚠️ Beneficiary created but post-creation steps failed:",
-          error.message
+          error.message,
         );
         return {
           success: true,
@@ -108,7 +108,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
 
       return rejectWithValue(error.message || "Failed to create beneficiary");
     }
-  }
+  },
 );
 
 // ===================== ORIGINAL THUNKS =====================
@@ -116,41 +116,65 @@ export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      // FIX: Use bearertoken instead of authtoken
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      if (!bearertoken) {
+        throw new Error("Authentication token not found");
+      }
+
+      console.log("🔑 Token available:", !!bearertoken);
+      console.log(
+        "📞 API URL:",
+        `${API_URL}/beneficiaries/customer-view/${customerId}`,
+      );
 
       const response = await fetch(
         `${API_URL}/beneficiaries/customer-view/${customerId}`,
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`,
           },
-        }
+        },
       );
 
+      console.log("📡 Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to fetch beneficiaries");
+        const errorText = await response.text();
+        console.error("❌ API Error:", errorText);
+        throw new Error(`Failed to fetch beneficiaries: ${response.status}`);
       }
 
       const result = await response.json();
-      console.log("📥 Fetched beneficiaries response:", result);
+      console.log("✅ API Response:", result);
 
       // Handle different response structures
       if (
         result.status === "200" &&
         result.message === "No beneficiaries found"
       ) {
-        console.log("📭 No beneficiaries found, returning empty array");
-        return []; // Explicit empty array
+        console.log("📭 No beneficiaries found");
+        return [];
       }
 
-      // Return data if it exists
-      return result.data || [];
+      // Try different response formats
+      if (result.data && Array.isArray(result.data)) {
+        return result.data;
+      } else if (Array.isArray(result)) {
+        return result;
+      } else if (result.beneficiaries && Array.isArray(result.beneficiaries)) {
+        return result.beneficiaries;
+      }
+
+      console.warn("⚠️ Unexpected response format:", result);
+      return [];
     } catch (error) {
       console.error("❌ fetchBeneficiaries error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchBeneficiaryById = createAsyncThunk(
@@ -170,7 +194,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       console.log("📡 API Response status:", response.status);
@@ -204,7 +228,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
       console.error("❌ fetchBeneficiaryById error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const deleteBeneficiary = createAsyncThunk(
@@ -228,7 +252,7 @@ export const deleteBeneficiary = createAsyncThunk(
               .replace("T", " ")
               .split(".")[0],
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -236,7 +260,7 @@ export const deleteBeneficiary = createAsyncThunk(
         throw new Error(
           errorResult.message ||
             errorResult.error ||
-            "Failed to delete beneficiary"
+            "Failed to delete beneficiary",
         );
       }
 
@@ -248,7 +272,7 @@ export const deleteBeneficiary = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const bulkDeleteBeneficiaries = createAsyncThunk(
@@ -277,11 +301,11 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
             const errorResult = await response.json();
             throw new Error(
               errorResult.message ||
-                `Failed to delete beneficiary ${beneficiaryId}`
+                `Failed to delete beneficiary ${beneficiaryId}`,
             );
           }
           return response.json();
-        })
+        }),
       );
 
       const results = await Promise.all(promises);
@@ -294,21 +318,21 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const deleteBeneficiaryWithUndo = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryWithUndo",
   async (
     { customerId, beneficiaryId, beneficiaryName },
-    { rejectWithValue, getState }
+    { rejectWithValue, getState },
   ) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
 
       const state = getState();
       const beneficiary = state.beneficiaries.beneficiaries.find(
-        (b) => b.id === beneficiaryId
+        (b) => b.id === beneficiaryId,
       );
 
       if (beneficiary) {
@@ -317,7 +341,7 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
           JSON.stringify({
             ...beneficiary,
             deletedAt: new Date().toISOString(),
-          })
+          }),
         );
       }
 
@@ -336,7 +360,7 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
               .replace("T", " ")
               .split(".")[0],
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -344,7 +368,7 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
         throw new Error(
           errorResult.message ||
             errorResult.error ||
-            "Failed to delete beneficiary"
+            "Failed to delete beneficiary",
         );
       }
 
@@ -358,7 +382,7 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== UNDO DELETE THUNK =====================
@@ -367,7 +391,7 @@ export const undoDeleteBeneficiary = createAsyncThunk(
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
       const storedData = localStorage.getItem(
-        `undo_beneficiary_${beneficiaryId}`
+        `undo_beneficiary_${beneficiaryId}`,
       );
       if (!storedData) {
         throw new Error("Undo data not found or expired");
@@ -385,7 +409,7 @@ export const undoDeleteBeneficiary = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(beneficiaryData),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -398,7 +422,7 @@ export const undoDeleteBeneficiary = createAsyncThunk(
               Authorization: `Bearer ${authtoken}`,
             },
             body: JSON.stringify(beneficiaryData),
-          }
+          },
         );
 
         if (!createResponse.ok) {
@@ -426,7 +450,7 @@ export const undoDeleteBeneficiary = createAsyncThunk(
     } finally {
       localStorage.removeItem(`undo_beneficiary_${beneficiaryId}`);
     }
-  }
+  },
 );
 
 export const toggleBeneficiaryVisibility = createAsyncThunk(
@@ -445,7 +469,7 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
           body: JSON.stringify({
             status: isVisible ? 1 : 0,
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -457,7 +481,7 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== REMITTANCE-SPECIFIC ASYNC THUNKS =====================
@@ -465,27 +489,50 @@ export const fetchBeneficiaryByCode = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryByCode",
   async (beneficiaryCode, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); 
+
+      // DEBUG: Log what we're trying to fetch
+      console.log("🔍 Fetching beneficiary by code:", beneficiaryCode);
+      console.log(
+        "🔍 API URL:",
+        `${API_URL}/beneficiaries/fetch-benef/${beneficiaryCode}`,
+      );
+
       const response = await fetch(
         `${API_URL}/beneficiaries/fetch-benef/${beneficiaryCode}`,
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`,
           },
-        }
+        },
       );
 
+      // DEBUG: Log response details
+      console.log("📡 Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to fetch beneficiary by code");
+        // Try to get more detailed error info
+        let errorMessage = "Failed to fetch beneficiary by code";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          console.error("❌ API Error:", errorData);
+        } catch (e) {
+          console.error("❌ Response not JSON:", response.statusText);
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log("✅ API Response:", result);
+
       return result;
     } catch (error) {
+      console.error("❌ fetchBeneficiaryByCode error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchBeneficiaryBanks = createAsyncThunk(
@@ -500,7 +547,7 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -512,7 +559,7 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== INITIAL STATE =====================
@@ -600,7 +647,7 @@ const beneficiarySlice = createSlice({
         "🔍 Searching for phone in store:",
         phoneNumber,
         "with code:",
-        countryPhoneCode
+        countryPhoneCode,
       );
 
       if (!phoneNumber) {
@@ -799,7 +846,7 @@ const beneficiarySlice = createSlice({
 
         console.log(
           "📋 Clean beneficiary data with inferred values:",
-          cleanData
+          cleanData,
         );
 
         state.phoneSearch.data = cleanData;
@@ -830,7 +877,7 @@ const beneficiarySlice = createSlice({
       const foundBeneficiary = state.beneficiaries.find(
         (beneficiary) =>
           beneficiary.email &&
-          beneficiary.email.toLowerCase() === email.toLowerCase()
+          beneficiary.email.toLowerCase() === email.toLowerCase(),
       );
 
       console.log("📊 Found beneficiary:", foundBeneficiary);
@@ -919,7 +966,7 @@ const beneficiarySlice = createSlice({
 
         console.log(
           "📋 Clean beneficiary data with inferred values:",
-          cleanData
+          cleanData,
         );
 
         state.emailSearch.data = cleanData;
@@ -1064,7 +1111,7 @@ const beneficiarySlice = createSlice({
     updateBeneficiaryInList: (state, action) => {
       const { beneficiaryId, updates } = action.payload;
       const index = state.beneficiaries.findIndex(
-        (b) => b.id === beneficiaryId
+        (b) => b.id === beneficiaryId,
       );
       if (index !== -1) {
         state.beneficiaries[index] = {
@@ -1103,7 +1150,7 @@ const beneficiarySlice = createSlice({
 
     toggleVisibilityLocal: (state, action) => {
       const beneficiary = state.beneficiaries.find(
-        (b) => b.id === action.payload
+        (b) => b.id === action.payload,
       );
       if (beneficiary) {
         if (beneficiary.hasOwnProperty("isVisible")) {
@@ -1124,7 +1171,7 @@ const beneficiarySlice = createSlice({
     removeFromDeleteQueue: (state, action) => {
       state.deleteState.pendingDeletions =
         state.deleteState.pendingDeletions.filter(
-          (id) => id !== action.payload
+          (id) => id !== action.payload,
         );
     },
 
@@ -1230,10 +1277,10 @@ const beneficiarySlice = createSlice({
       .addCase(deleteBeneficiary.fulfilled, (state, action) => {
         const { beneficiaryId } = action.payload;
         state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
-          (id) => id !== beneficiaryId
+          (id) => id !== beneficiaryId,
         );
         state.beneficiaries = state.beneficiaries.filter(
-          (beneficiary) => beneficiary.id !== beneficiaryId
+          (beneficiary) => beneficiary.id !== beneficiaryId,
         );
         state.success = true;
         state.error = null;
@@ -1248,7 +1295,7 @@ const beneficiarySlice = createSlice({
       .addCase(deleteBeneficiary.rejected, (state, action) => {
         const { beneficiaryId } = action.meta.arg;
         state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
-          (id) => id !== beneficiaryId
+          (id) => id !== beneficiaryId,
         );
         state.error = action.payload;
       })
@@ -1262,10 +1309,10 @@ const beneficiarySlice = createSlice({
       .addCase(deleteBeneficiaryWithUndo.fulfilled, (state, action) => {
         const { beneficiaryId } = action.payload;
         state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
-          (id) => id !== beneficiaryId
+          (id) => id !== beneficiaryId,
         );
         state.beneficiaries = state.beneficiaries.filter(
-          (beneficiary) => beneficiary.id !== beneficiaryId
+          (beneficiary) => beneficiary.id !== beneficiaryId,
         );
         state.deleteState.lastDeleted = action.payload;
         state.deleteState.undoAvailable = true;
@@ -1286,7 +1333,7 @@ const beneficiarySlice = createSlice({
       .addCase(deleteBeneficiaryWithUndo.rejected, (state, action) => {
         const { beneficiaryId } = action.meta.arg;
         state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
-          (id) => id !== beneficiaryId
+          (id) => id !== beneficiaryId,
         );
         state.deleteState.error = action.payload;
       })
@@ -1306,10 +1353,10 @@ const beneficiarySlice = createSlice({
       .addCase(bulkDeleteBeneficiaries.fulfilled, (state, action) => {
         const { beneficiaryIds } = action.payload;
         state.deleteState.loadingIds = state.deleteState.loadingIds.filter(
-          (id) => !beneficiaryIds.includes(id)
+          (id) => !beneficiaryIds.includes(id),
         );
         state.beneficiaries = state.beneficiaries.filter(
-          (beneficiary) => !beneficiaryIds.includes(beneficiary.id)
+          (beneficiary) => !beneficiaryIds.includes(beneficiary.id),
         );
         state.deleteState.bulkDeleteInProgress = false;
         state.deleteState.bulkDeleteProgress = 100;
@@ -1368,7 +1415,7 @@ const beneficiarySlice = createSlice({
         state.loading = false;
         const { beneficiaryId, isVisible } = action.payload;
         const beneficiary = state.beneficiaries.find(
-          (b) => b.id === beneficiaryId
+          (b) => b.id === beneficiaryId,
         );
         if (beneficiary) {
           beneficiary.status = isVisible ? 1 : 0;
@@ -1557,19 +1604,19 @@ export const selectVisibleBeneficiaries = (state) =>
     (beneficiary) =>
       beneficiary.is_visible !== false &&
       beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
+      beneficiary.status !== 0,
   );
 
 // Beneficiary by ID
 export const selectBeneficiaryById = (beneficiaryId) => (state) =>
   (state.beneficiaries.beneficiaries || []).find(
-    (beneficiary) => beneficiary.id === beneficiaryId
+    (beneficiary) => beneficiary.id === beneficiaryId,
   );
 
 // Beneficiaries by currency
 export const selectBeneficiariesByCurrency = (currency) => (state) =>
   (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) => beneficiary.currency === currency
+    (beneficiary) => beneficiary.currency === currency,
   );
 
 // Count selectors
@@ -1592,7 +1639,7 @@ export const selectFilteredBeneficiaries = createSelector(
           beneficiary.full_phone_number?.toLowerCase().includes(query) ||
           beneficiary.phone_number?.toLowerCase().includes(query) ||
           beneficiary.relationtobenef?.toLowerCase().includes(query) ||
-          beneficiary.email?.toLowerCase().includes(query)
+          beneficiary.email?.toLowerCase().includes(query),
       );
     }
 
@@ -1601,19 +1648,19 @@ export const selectFilteredBeneficiaries = createSelector(
         (beneficiary) =>
           beneficiary.isVisible === true ||
           beneficiary.is_visible === true ||
-          beneficiary.status === 1
+          beneficiary.status === 1,
       );
     } else if (filterVisibility === "hidden") {
       filtered = filtered.filter(
         (beneficiary) =>
           beneficiary.isVisible === false ||
           beneficiary.is_visible === false ||
-          beneficiary.status === 0
+          beneficiary.status === 0,
       );
     }
 
     return filtered;
-  }
+  },
 );
 
 // Paginated beneficiaries
@@ -1623,13 +1670,13 @@ export const selectPaginatedBeneficiaries = createSelector(
     const startIndex = (currentPage - 1) * 10;
     const endIndex = startIndex + 10;
     return filteredBeneficiaries.slice(startIndex, endIndex);
-  }
+  },
 );
 
 // Total pages
 export const selectTotalPages = createSelector(
   [selectFilteredBeneficiaries],
-  (filteredBeneficiaries) => Math.ceil(filteredBeneficiaries.length / 10)
+  (filteredBeneficiaries) => Math.ceil(filteredBeneficiaries.length / 10),
 );
 
 // Beneficiaries with deletion status
@@ -1640,18 +1687,18 @@ export const selectBeneficiariesWithDeleteStatus = createSelector(
       ...beneficiary,
       isDeleting: loadingIds.includes(beneficiary.id),
     }));
-  }
+  },
 );
 
 // Count selectors that depend on memoized selectors
 export const selectFilteredBeneficiariesCount = createSelector(
   [selectFilteredBeneficiaries],
-  (filteredBeneficiaries) => filteredBeneficiaries.length
+  (filteredBeneficiaries) => filteredBeneficiaries.length,
 );
 
 export const selectVisibleBeneficiariesCount = createSelector(
   [selectVisibleBeneficiaries],
-  (visibleBeneficiaries) => visibleBeneficiaries.length
+  (visibleBeneficiaries) => visibleBeneficiaries.length,
 );
 
 // ===================== REMITTANCE-SPECIFIC SELECTORS =====================
@@ -1671,7 +1718,7 @@ export const selectRemittanceReadyBeneficiaries = createSelector(
         benef.phone_number || benef.email || benef.benef_uuid
       })`,
     }));
-  }
+  },
 );
 
 // Select beneficiary by ID for remittance
@@ -1708,7 +1755,7 @@ export const selectRemittanceReadyBanks = createSelector(
         bank.bank_acc_no || bank.account_number || "No Account"
       }) - ${bank.rails || "Unknown"}`,
     }));
-  }
+  },
 );
 
 // ===================== DEFAULT EXPORT =====================

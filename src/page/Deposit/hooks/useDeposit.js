@@ -35,7 +35,7 @@ import {
   selectManualAccountDetails,
 } from "../slices/depositSlice";
 
-export const useDeposit = () => {
+export const useDeposit = (customerId = null) => {
   const dispatch = useDispatch();
 
   // Select state from Redux
@@ -53,29 +53,60 @@ export const useDeposit = () => {
 
   // Get bank accounts state for USD accounts check
   const usdBankAccounts = useSelector(
-    (state) => state.bankAccounts?.usdBankAccounts || []
+    (state) => state.bankAccounts?.usdBankAccounts || [],
   );
   const usdAccountsLoading = useSelector(
-    (state) => state.bankAccounts?.usdAccountsLoading || false
+    (state) => state.bankAccounts?.usdAccountsLoading || false,
   );
   const bankLinkAccounts = useSelector(
-    (state) => state.bankLink?.bankAccounts || []
+    (state) => state.bankLink?.bankAccounts || [],
   );
 
   // ✅ Fetch manual account details when manual deposit is selected
   useEffect(() => {
-    if (
-      paymentMethod === "manual_deposit" &&
-      selectedCurrency &&
-      !manualAccountDetails
-    ) {
+    if (paymentMethod === "manual_deposit" && selectedCurrency) {
       console.log(
         "🔄 useDeposit: Fetching manual account details for",
-        selectedCurrency
+        selectedCurrency,
       );
-      dispatch(fetchManualAccountDetails(selectedCurrency));
+
+      // ✅ ALWAYS PASS AS OBJECT
+      const finalCustomerId =
+        customerId || localStorage.getItem("authcustomer_id");
+
+      if (!finalCustomerId) {
+        console.error("❌ Customer ID not found");
+        return;
+      }
+
+      // Clear existing details if currency doesn't match
+      if (
+        manualAccountDetails &&
+        manualAccountDetails.currency !== selectedCurrency
+      ) {
+        dispatch(clearManualAccountDetails());
+      }
+
+      // Only fetch if we don't have the correct details already
+      if (
+        !manualAccountDetails ||
+        manualAccountDetails.currency !== selectedCurrency
+      ) {
+        dispatch(
+          fetchManualAccountDetails({
+            currency: selectedCurrency,
+            customerId: finalCustomerId,
+          }),
+        );
+      }
     }
-  }, [paymentMethod, selectedCurrency, manualAccountDetails, dispatch]);
+  }, [
+    paymentMethod,
+    selectedCurrency,
+    manualAccountDetails,
+    dispatch,
+    customerId,
+  ]);
 
   // ✅ Auto-advance steps based on user selections
   useEffect(() => {
@@ -134,82 +165,48 @@ export const useDeposit = () => {
     async (e) => {
       if (e) e.preventDefault();
 
-      console.log("🔄 useDeposit: Form submission started", {
-        selectedCurrency,
-        paymentMethod,
-        amount,
-        purpose,
-        selectedBankAccount,
-      });
-
       // Validate form
       const errors = validateForm();
       if (Object.keys(errors).length > 0) {
         console.log("❌ useDeposit: Form validation failed", errors);
         dispatch(setFormErrors(errors));
-
-        // Scroll to first error
-        const firstErrorField = Object.keys(errors)[0];
-        const errorElement = document.querySelector(
-          `[data-field="${firstErrorField}"]`
-        );
-        if (errorElement) {
-          errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-
         toast.error("Please fix the form errors before submitting");
         return;
       }
 
-      // Clear any previous errors
       dispatch(setFormErrors({}));
 
       try {
         console.log("✅ useDeposit: Form validation passed, submitting...");
 
-        // ✅ FIXED: Get authentication data
-        const customerId = localStorage.getItem("authcustomer_id");
-        let partnerId = localStorage.getItem("whitelabelledpartnerid");
+        // ✅ USE: provided customerId OR localStorage
+        const finalCustomerId =
+          customerId || localStorage.getItem("authcustomer_id");
 
-        // ✅ Parse partner ID properly
-        if (partnerId) {
-          partnerId = parseInt(partnerId, 10);
-          console.log("✅ Parsed partnerId:", partnerId);
+        // ✅ GET TOKEN BASED ON CONTEXT
+        const isIframe = window.self !== window.top;
+        let token;
+        if (isIframe) {
+          token =
+            sessionStorage.getItem("iframe_token") ||
+            localStorage.getItem("authtoken");
         } else {
-          console.warn("⚠️ Partner ID missing, using default");
-          partnerId = 9; // Default fallback
+          token = localStorage.getItem("authtoken");
         }
 
-        // ✅ FIXED: Build payload matching exact structure
+        // Build payload
         const depositData = {
-          customer_id: customerId, // ✅ Keep as string, NOT parseInt
-          send_amount: parseFloat(amount), // ✅ Numeric value from user
-          from_currency: selectedCurrency, // ✅ 3-letter currency code
-          payment_method: paymentMethod, // ✅ Method type (e.g., "bank_deposit")
-          is_remit: "N", // ✅ Hardcoded as "N"
-          purpose: purpose, // ✅ Purpose from dropdown
+          customer_id: finalCustomerId,
+          send_amount: parseFloat(amount),
+          from_currency: selectedCurrency,
+          payment_method: paymentMethod,
+          is_remit: "N",
+          purpose: purpose,
+          // ✅ ADD IFRAME CONTEXT
+          is_iframe: isIframe,
         };
 
-        // ✅ Add sender details ONLY for USD bank deposits
-        if (
-          selectedCurrency === "USD" &&
-          paymentMethod === "bank_deposit" &&
-          selectedBankAccount
-        ) {
-          // Make sure we have the correct field names from selectedBankAccount
-          depositData.sender_account_name = selectedBankAccount.account_name;
-          depositData.sender_bank_id = selectedBankAccount.id;
-
-          console.log("✅ Added sender details for SILA:", {
-            sender_account_name: depositData.sender_account_name,
-            sender_bank_id: depositData.sender_bank_id,
-            full_account_object: selectedBankAccount, // Debug what's in the object
-          });
-        }
-
-        console.log("🔍 FINAL PAYLOAD FOR API:", depositData);
-
-        // ✅ Add sender details only for USD bank deposits
+        // Add sender details for USD bank deposits
         if (
           selectedCurrency === "USD" &&
           paymentMethod === "bank_deposit" &&
@@ -217,35 +214,40 @@ export const useDeposit = () => {
         ) {
           depositData.sender_account_name = selectedBankAccount.account_name;
           depositData.sender_bank_id = selectedBankAccount.id;
-
-          console.log("✅ Added sender details:", {
-            sender_account_name: selectedBankAccount.account_name,
-            sender_bank_id: selectedBankAccount.id,
-          });
         }
 
         console.log("📦 useDeposit: Final deposit payload", depositData);
-        console.log("🔍 useDeposit: Selected bank account details", {
-          account_name: selectedBankAccount?.account_name,
-          account_id: selectedBankAccount?.id,
-          full_account: selectedBankAccount,
-        });
 
         const result = await dispatch(submitDeposit(depositData)).unwrap();
 
         console.log("✅ useDeposit: Deposit submitted successfully", result);
 
-        // Show success message based on payment method
+        // Show success message
         if (paymentMethod === "manual_deposit") {
           toast.success("Deposit instructions generated successfully!");
         } else {
           toast.success("Deposit submitted successfully!");
         }
+
+        // ✅ OPTIONAL: Send success message to parent if in iframe
+        if (isIframe && window.parent) {
+          window.parent.postMessage(
+            {
+              type: "DEPOSIT_SUCCESS",
+              payload: {
+                transactionId: result.reference_id || result.transaction_id,
+                amount: amount,
+                currency: selectedCurrency,
+                customerId: finalCustomerId,
+              },
+            },
+            "*",
+          );
+        }
       } catch (error) {
         console.error("❌ useDeposit: Deposit submission failed", error);
 
         let errorMessage = "Failed to submit deposit";
-
         if (typeof error === "string") {
           errorMessage = error;
         } else if (error?.message) {
@@ -266,7 +268,8 @@ export const useDeposit = () => {
       selectedBankAccount,
       validateForm,
       dispatch,
-    ]
+      customerId, // ✅ ADD CUSTOMER ID DEPENDENCY
+    ],
   );
 
   // ✅ Action handlers
@@ -285,7 +288,7 @@ export const useDeposit = () => {
         dispatch(setFormErrors({ ...formErrors, currency: "" }));
       }
     },
-    [dispatch, selectedBankAccount, formErrors]
+    [dispatch, selectedBankAccount, formErrors],
   );
 
   const setPaymentMethodHandler = useCallback(
@@ -309,7 +312,7 @@ export const useDeposit = () => {
         dispatch(setFormErrors({ ...formErrors, paymentMethod: "" }));
       }
     },
-    [dispatch, selectedBankAccount, formErrors]
+    [dispatch, selectedBankAccount, formErrors],
   );
 
   const setAmountHandler = useCallback(
@@ -321,7 +324,7 @@ export const useDeposit = () => {
         dispatch(setFormErrors({ ...formErrors, amount: "" }));
       }
     },
-    [dispatch, formErrors]
+    [dispatch, formErrors],
   );
 
   const setPurposeHandler = useCallback(
@@ -333,7 +336,7 @@ export const useDeposit = () => {
         dispatch(setFormErrors({ ...formErrors, purpose: "" }));
       }
     },
-    [dispatch, formErrors]
+    [dispatch, formErrors],
   );
 
   // ✅ FIXED: Accept full account object instead of just accountId
@@ -353,7 +356,7 @@ export const useDeposit = () => {
         dispatch(setFormErrors({ ...formErrors, bankAccount: "" }));
       }
     },
-    [dispatch, formErrors]
+    [dispatch, formErrors],
   );
 
   const resetTransactionHandler = useCallback(() => {
@@ -368,22 +371,22 @@ export const useDeposit = () => {
       (account) =>
         (account.currency === "USD" || !account.currency) &&
         account.is_frozen !== 1 &&
-        account.status !== 1
+        account.status !== 1,
     );
     return activeUSDAccounts.length > 0;
   }, [usdBankAccounts, bankLinkAccounts]);
 
   const isManualDeposit = useMemo(
     () => paymentMethod === "manual_deposit",
-    [paymentMethod]
+    [paymentMethod],
   );
   const isUSDBankDeposit = useMemo(
     () => selectedCurrency === "USD" && paymentMethod === "bank_deposit",
-    [selectedCurrency, paymentMethod]
+    [selectedCurrency, paymentMethod],
   );
   const isCardDeposit = useMemo(
     () => paymentMethod === "card_deposit",
-    [paymentMethod]
+    [paymentMethod],
   );
 
   // ✅ Debug logging

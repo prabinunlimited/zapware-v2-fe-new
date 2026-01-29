@@ -4,6 +4,63 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE BENEFICIARY ASYNC THUNKS =====================
 
+const getHeaders = () => {
+  const token = localStorage.getItem("bearertoken");
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+};
+
+// ===================== NEW: PUBLIC REGISTRATION THUNK =====================
+export const createPublicBeneficiary = createAsyncThunk(
+  "beneficiaries/createPublic",
+  async (
+    { beneficiaryData, bankAccounts, currency, country_code },
+    { rejectWithValue }
+  ) => {
+    try {
+      // Reuse the logic to format the banks payload for the API
+      const banksPayload = bankAccounts.map((account) => ({
+        rails: account.rails,
+        currency_code: account.currency || currency,
+        payment_method: account.paymentMethod || "",
+        benef_iban: account.iban || "",
+        swift_code: account.swift || "",
+        routing_number: account.routingNumber || "",
+        bank_acc_no: account.accountNumber || "",
+        bank_name: account.bankName || "",
+        ifsc: account.ifsc || "",
+        bankCode: account.bankCode || "",
+        branchCode: account.branchCode || "",
+        account_name: account.accountName || "",
+        account_type: account.accountType || "",
+      }));
+
+      const payload = {
+        ...beneficiaryData,
+        banks: banksPayload,
+        country_phone_code: country_code,
+      };
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/create-requestremit-benef`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.message || "Public Registration Failed");
+      return result;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
@@ -37,7 +94,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 
       console.log("🔧 Final Country Code to use:", finalCountryCode);
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
 
       // Validate that all bank accounts have rails
       const missingRailsAccounts = bankAccounts.filter(
@@ -192,7 +249,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`,
           },
           body: JSON.stringify(payload),
         }
@@ -232,14 +289,14 @@ export const updateBeneficiaryBank = createAsyncThunk(
   "beneficiaries/updateBeneficiaryBank",
   async ({ beneficiaryId, bankId, bankData }, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
           body: JSON.stringify(bankData),
         }
@@ -261,14 +318,14 @@ export const addBeneficiaryBank = createAsyncThunk(
   "beneficiaries/addBeneficiaryBank",
   async ({ beneficiaryId, bankData }, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
           body: JSON.stringify(bankData),
         }
@@ -290,14 +347,14 @@ export const deleteBeneficiaryBank = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryBank",
   async ({ beneficiaryId, bankId }, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
         }
       );
@@ -318,7 +375,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryById",
   async (beneficiaryId, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
 
       console.log("📥 Fetching beneficiary with ID:", beneficiaryId);
       console.log(
@@ -332,7 +389,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
         }
       );
@@ -386,7 +443,7 @@ export const updateBeneficiary = createAsyncThunk(
         beneficiaryData,
       });
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const currentDateTime = new Date().toLocaleString();
 
       // Create payload exactly like your non-redux version
@@ -414,7 +471,7 @@ export const updateBeneficiary = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
           body: JSON.stringify(payload),
         }
@@ -452,11 +509,11 @@ export const fetchNationalities = createAsyncThunk(
   "beneficiaries/fetchNationalities",
   async (_, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(`${API_URL}/nationalities`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`, // CHANGED
         },
       });
 
@@ -479,7 +536,7 @@ export const fetchBanksByCurrency = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const endpoint =
         bankType === "int-banks"
           ? `/int-banks/${currency}`
@@ -488,7 +545,7 @@ export const fetchBanksByCurrency = createAsyncThunk(
       const response = await fetch(`${API_URL}${endpoint}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`, // CHANGED
         },
       });
 
@@ -510,11 +567,11 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
     try {
       console.log(`API: Fetching ID types for currency: ${currency}`);
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(`${API_URL}/currency-id-type/${currency}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`, // CHANGED
         },
       });
 
@@ -539,11 +596,11 @@ export const fetchCitiesByCountry = createAsyncThunk(
   "beneficiaries/fetchCitiesByCountry",
   async (countryId, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(`${API_URL}/cities/${countryId}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`, // CHANGED
         },
       });
 
@@ -563,11 +620,11 @@ export const fetchBankBranches = createAsyncThunk(
   "beneficiaries/fetchBankBranches",
   async (bankCode, { rejectWithValue }) => {
     try {
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
       const response = await fetch(`${API_URL}/int-banks-branch/${bankCode}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`, // CHANGED
         },
       });
 
@@ -594,7 +651,9 @@ export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
     try {
       console.log("📧 Sending registration passcode to:", email);
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken");
+      console.log("📧 Bearer token exists:", !!bearertoken);
+
       const payload = {
         email: email.trim().toLowerCase(),
         user_type: "beneficiary",
@@ -603,22 +662,35 @@ export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
       };
 
       console.log("📧 Payload:", payload);
+      console.log("📧 API URL:", `${API_URL}/send-passcode-registration`);
 
       const response = await fetch(`${API_URL}/send-passcode-registration`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`,
         },
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
-      console.log("📧 Response:", result);
+      console.log("📧 Response Status:", response.status);
+
+      // Handle 302 redirect specifically
+      if (response.status === 302) {
+        console.error("❌ 302 Redirect detected - Token may be invalid");
+        throw new Error(
+          "Authentication token expired or invalid. Please refresh the page."
+        );
+      }
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to send passcode");
+        const errorText = await response.text();
+        console.error("❌ API Error Response:", errorText);
+        throw new Error("Failed to send passcode");
       }
+
+      const result = await response.json();
+      console.log("📧 Response:", result);
 
       return {
         status: "success",
@@ -641,7 +713,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
     try {
       console.log("✅ Validating registration passcode for:", email);
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken");
       const payload = {
         email: email.trim().toLowerCase(),
         passcode: passcode,
@@ -655,7 +727,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`,
           },
           body: JSON.stringify(payload),
         }
@@ -698,7 +770,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
       const cleanMobileNumber = mobile_number.replace(/\D/g, "");
       const cleanCountryCode = country_code.replace(/\D/g, "");
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken");
       const payload = {
         country_code: cleanCountryCode,
         mobile_number: cleanMobileNumber,
@@ -713,7 +785,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -755,7 +827,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
       const cleanCountryCode = country_code.replace(/\D/g, "");
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken");
       const payload = {
         country_code: cleanCountryCode,
         mobile_number: cleanMobileNumber,
@@ -768,7 +840,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authtoken}`,
+          Authorization: `Bearer ${bearertoken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -809,20 +881,17 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
   async (beneficiaryData, { rejectWithValue }) => {
     try {
       console.log("🔧 Creating beneficiary with request-remit flow...");
-      console.log("🔧 Beneficiary Data:", beneficiaryData);
 
-      const authtoken = localStorage.getItem("authtoken");
+      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
 
-      // Add hostname if not present
-      if (!beneficiaryData.hostname) {
-        beneficiaryData.hostname = window.location.hostname;
-      }
+      // Get partner ID from localStorage (set by getBearerToken)
+      const partnerId = localStorage.getItem("whitelabelledpartnerid") || "0";
 
-      // Add partner_id if not present
-      if (!beneficiaryData.partner_id) {
-        beneficiaryData.partner_id =
-          localStorage.getItem("whitelabelledpartnerid") || "0";
-      }
+      // Add partner_id to beneficiaryData
+      beneficiaryData.partner_id = partnerId;
+
+      // Add hostname
+      beneficiaryData.hostname = window.location.hostname;
 
       console.log(
         "📡 Final payload:",
@@ -835,49 +904,34 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authtoken}`,
+            Authorization: `Bearer ${bearertoken}`, // CHANGED
           },
           body: JSON.stringify(beneficiaryData),
         }
       );
 
-      console.log("📡 API Response status:", response.status);
-
       const responseText = await response.text();
       console.log("📡 API Response text:", responseText);
 
       if (!response.ok) {
-        console.error("❌ API Error Response:", responseText);
         const errorData = JSON.parse(responseText);
+        const errorMessages = [];
 
         // Handle field-specific errors
-        if (errorData.message) {
-          const errorMessages = [];
-
-          // Handle phone number errors
-          if (errorData.message.phone_number) {
-            errorMessages.push(...errorData.message.phone_number);
-          }
-
-          // Handle email errors
-          if (errorData.message.email) {
-            errorMessages.push(...errorData.message.email);
-          }
-
-          // Handle password errors
-          if (errorData.message.password) {
-            errorMessages.push(...errorData.message.password);
-          }
-
-          // Handle general errors
-          if (errorData.message && typeof errorData.message === "string") {
-            errorMessages.push(errorData.message);
-          }
-
-          throw new Error(errorMessages.join(", "));
+        if (errorData.message?.phone_number) {
+          errorMessages.push(...errorData.message.phone_number);
+        }
+        if (errorData.message?.email) {
+          errorMessages.push(...errorData.message.email);
+        }
+        if (errorData.message?.password) {
+          errorMessages.push(...errorData.message.password);
+        }
+        if (errorData.message && typeof errorData.message === "string") {
+          errorMessages.push(errorData.message);
         }
 
-        throw new Error(errorData.message || "Failed to create beneficiary");
+        throw new Error(errorMessages.join(", "));
       }
 
       const result = JSON.parse(responseText);
@@ -887,7 +941,7 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
         status: "success",
         message: result.message || "Beneficiary created successfully",
         data: result.data || {},
-        benefCode: result.benefCode,
+        benefCode: result.benefCode, // Extract beneficiary code
       };
     } catch (error) {
       console.error("❌ createBeneficiaryRequestRemit error:", error);

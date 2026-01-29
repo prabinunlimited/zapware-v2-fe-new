@@ -121,7 +121,7 @@ const useFixedCurrency = (initialCurrency) => {
             {
               headers: { "Content-Type": "application/json" },
               timeout: 10000,
-            }
+            },
           );
 
           if (response.data?.data?.token) {
@@ -150,7 +150,7 @@ const useFixedCurrency = (initialCurrency) => {
   const currencies = useMemo(() => {
     if (accountLoading) {
       console.log(
-        "⏳ useFixedCurrency - Still loading accounts, returning empty array"
+        "⏳ useFixedCurrency - Still loading accounts, returning empty array",
       );
       return [];
     }
@@ -164,7 +164,7 @@ const useFixedCurrency = (initialCurrency) => {
 
     console.log(
       "🔄 useFixedCurrency - Transforming accounts to currencies. Account count:",
-      safeAccounts.length
+      safeAccounts.length,
     );
 
     const transformed = safeAccounts.map((account, index) => {
@@ -195,11 +195,11 @@ const useFixedCurrency = (initialCurrency) => {
 
     console.log(
       "✅ useFixedCurrency - Successfully transformed currencies:",
-      transformed.length
+      transformed.length,
     );
     console.log(
       "📋 Available currencies:",
-      transformed.map((c) => c.currency_code).join(", ")
+      transformed.map((c) => c.currency_code).join(", "),
     );
 
     return transformed;
@@ -220,17 +220,17 @@ const useFixedCurrency = (initialCurrency) => {
     ) {
       console.log(
         "✅ useFixedCurrency - Initial currency is available:",
-        initialCurrency
+        initialCurrency,
       );
     } else if (currencies.length > 0) {
       console.log(
         "ℹ️ useFixedCurrency - No initial currency provided, but",
         currencies.length,
-        "currencies available"
+        "currencies available",
       );
     } else {
       console.log(
-        "📭 useFixedCurrency - No currencies available for initial selection"
+        "📭 useFixedCurrency - No currencies available for initial selection",
       );
     }
   }, [initialCurrency, currencies]);
@@ -275,9 +275,9 @@ const useSafeCurrency = (initialCurrency) => {
   }
 };
 
-const useSafeDeposit = () => {
+const useSafeDeposit = (customerId) => {
   try {
-    const result = useDeposit();
+    const result = useDeposit(customerId);
 
     // Enhanced safety check
     if (!result || typeof result !== "object") {
@@ -370,39 +370,39 @@ const useSafePaymentMethods = (selectedCurrency, currencies) => {
 const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
   try {
     const manualAccountDetails = useSelector(
-      (state) => state.deposit?.manualAccountDetails
+      (state) => state.deposit?.manualAccountDetails,
     );
     const manualDetailsLoading = useSelector(
-      (state) => state.deposit?.manualDetailsLoading
+      (state) => state.deposit?.manualDetailsLoading,
     );
     const manualDetailsError = useSelector(
-      (state) => state.deposit?.formErrors?.manualDetails || null
+      (state) => state.deposit?.formErrors?.manualDetails || null,
     );
 
     // ✅ CORRECTED: Use selectors from bankAccountSlice
     const usdBankAccounts = useSelector(selectUSDBankAccounts);
     const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
     const usdAccountsError = useSelector(
-      (state) => state.bankAccounts?.usdAccountsError || null
+      (state) => state.bankAccounts?.usdAccountsError || null,
     );
 
     // ✅ ADD: Get bankLink accounts
     const bankLinkAccounts = useSelector(
-      (state) => state.bankLink?.bankAccounts || []
+      (state) => state.bankLink?.bankAccounts || [],
     );
     const bankLinkLoading = useSelector(
-      (state) => state.bankLink?.loading || false
+      (state) => state.bankLink?.loading || false,
     );
     const bankLinkError = useSelector((state) => state.bankLink?.error || null);
 
     const aedAccountDetails = useSelector(
-      (state) => state.bankAccounts?.aedAccountDetails || null
+      (state) => state.bankAccounts?.aedAccountDetails || null,
     );
     const aedDetailsError = useSelector(
-      (state) => state.bankAccounts?.aedDetailsError || null
+      (state) => state.bankAccounts?.aedDetailsError || null,
     );
     const aedDetailsLoading = useSelector(
-      (state) => state.bankAccounts?.aedDetailsLoading || false
+      (state) => state.bankAccounts?.aedDetailsLoading || false,
     );
 
     // ✅ COMBINE: USD accounts from all sources
@@ -421,7 +421,7 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       const uniqueAccounts = usdAccounts.filter(
         (account, index, self) =>
           index ===
-          self.findIndex((a) => a.account_number === account.account_number)
+          self.findIndex((a) => a.account_number === account.account_number),
       );
 
       console.log("🔍 COMBINED USD ACCOUNTS DEBUG:", {
@@ -668,15 +668,16 @@ const DepositPageContent = () => {
   console.log("🔍 FULL REDUX STATE STRUCTURE:", fullReduxState);
 
   // Custom hooks with safe access
-  const deposit = useSafeDeposit();
+  const deposit = useSafeDeposit(customerId);
   const currency = useSafeCurrency(initialCurrency);
   const paymentMethods = useSafePaymentMethods(
     deposit.selectedCurrency,
-    currency.currencies
+    currency.currencies,
   );
   const bankAccounts = useSafeBankAccounts(
     deposit.selectedCurrency,
-    deposit.paymentMethod
+    deposit.paymentMethod,
+    customerId,
   );
   const ui = useUI();
 
@@ -684,7 +685,7 @@ const DepositPageContent = () => {
   const allUsdBankAccounts = useSelector(selectUSDBankAccounts);
   const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
   const bankLinkAccounts = useSelector(
-    (state) => state.bankLink?.bankAccounts || []
+    (state) => state.bankLink?.bankAccounts || [],
   );
 
   const showPaymentInitiation = useSelector(selectShowPaymentInitiation);
@@ -725,7 +726,7 @@ const DepositPageContent = () => {
       const uniqueAccounts = allAccounts.filter(
         (account, index, self) =>
           index ===
-          self.findIndex((a) => a.account_number === account.account_number)
+          self.findIndex((a) => a.account_number === account.account_number),
       );
 
       console.log("✅ Combined USD accounts:", uniqueAccounts.length);
@@ -787,7 +788,7 @@ const DepositPageContent = () => {
     ) {
       console.log(
         "🎯 Open Banking Bank Transfer selected for:",
-        deposit.selectedCurrency
+        deposit.selectedCurrency,
       );
       // This will be handled by your PaymentInitiation component
       // Do NOT call Sila endpoints for Open Banking currencies
@@ -798,7 +799,7 @@ const DepositPageContent = () => {
   useEffect(() => {
     if (bankLinkAccounts.length > 0 && allUsdBankAccounts.length === 0) {
       console.log(
-        "🔄 BankLink accounts available but no USD accounts, triggering sync"
+        "🔄 BankLink accounts available but no USD accounts, triggering sync",
       );
       syncCombinedUSDAccounts();
     }
@@ -898,7 +899,7 @@ const DepositPageContent = () => {
       deposit.selectedCurrency
     ) {
       console.log(
-        `🔄 Manual deposit active for ${deposit.selectedCurrency}, ensuring data consistency`
+        `🔄 Manual deposit active for ${deposit.selectedCurrency}, ensuring data consistency`,
       );
 
       // If we have manual details but they don't match, they'll be cleared by useSafeBankAccounts
@@ -1006,7 +1007,7 @@ const DepositPageContent = () => {
     console.log("Safe Selected Currency:", deposit.selectedCurrency);
     console.log(
       "Should show payment methods:",
-      deposit.selectedCurrency && currency.currencies?.length > 0
+      deposit.selectedCurrency && currency.currencies?.length > 0,
     );
     console.log("Payment Methods hook state:", paymentMethods);
   }, [deposit.selectedCurrency, currency.currencies?.length, paymentMethods]);
@@ -1373,7 +1374,7 @@ const DepositPageContent = () => {
                           // Then trigger Open Banking
                           console.log(
                             "🎯 Initiating Open Banking for:",
-                            deposit.selectedCurrency
+                            deposit.selectedCurrency,
                           );
                           dispatch(setShowPaymentInitiation(true));
                         }}

@@ -1,6 +1,7 @@
 // src/services/authService.js - UPDATED VERSION (Removed unnecessary API call)
 import api from "./api";
 import axios from "axios";
+import { countries as staticCountries } from "../features/Auth/slices/countrySlice";
 
 // ===================== TOKEN SERVICE =====================
 const TOKEN_KEY = "bearertoken";
@@ -33,7 +34,7 @@ export const tokenService = {
         // Add padding if needed
         const paddedPayload = base64Payload.padEnd(
           base64Payload.length + ((4 - (base64Payload.length % 4)) % 4),
-          "="
+          "=",
         );
         const payload = JSON.parse(atob(paddedPayload));
         const expiryTime = payload.exp;
@@ -128,7 +129,7 @@ export const tokenService = {
         const base64Payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
         const paddedPayload = base64Payload.padEnd(
           base64Payload.length + ((4 - (base64Payload.length % 4)) % 4),
-          "="
+          "=",
         );
         const payload = JSON.parse(atob(paddedPayload));
         const currentTime = Math.floor(Date.now() / 1000);
@@ -194,11 +195,11 @@ export const tokenService = {
       if (partnerData.beneficiary_portal_title) {
         localStorage.setItem(
           "beneficiary_portal_title",
-          partnerData.beneficiary_portal_title
+          partnerData.beneficiary_portal_title,
         );
         console.log(
           "✅ Beneficiary portal title stored:",
-          partnerData.beneficiary_portal_title
+          partnerData.beneficiary_portal_title,
         );
       }
 
@@ -206,17 +207,17 @@ export const tokenService = {
       if (partnerData.is_white_labelled_partner !== undefined) {
         localStorage.setItem(
           "is_white_labelled_partner",
-          partnerData.is_white_labelled_partner
+          partnerData.is_white_labelled_partner,
         );
         console.log(
           "✅ is_white_labelled_partner stored:",
-          partnerData.is_white_labelled_partner
+          partnerData.is_white_labelled_partner,
         );
 
         // Also store in the old key for backward compatibility
         localStorage.setItem(
           "iswhitelabelledpartner",
-          partnerData.is_white_labelled_partner === "1" ? "Y" : "N"
+          partnerData.is_white_labelled_partner === "1" ? "Y" : "N",
         );
       }
 
@@ -230,11 +231,11 @@ export const tokenService = {
       if (partnerData.isPartnerPackageModule !== undefined) {
         localStorage.setItem(
           "isPartnerPackageModule",
-          partnerData.isPartnerPackageModule
+          partnerData.isPartnerPackageModule,
         );
         console.log(
           "✅ isPartnerPackageModule stored:",
-          partnerData.isPartnerPackageModule
+          partnerData.isPartnerPackageModule,
         );
       }
 
@@ -242,22 +243,39 @@ export const tokenService = {
       if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
         localStorage.setItem(
           "showRemittanceOnlyOnRegistration",
-          partnerData.showRemittanceOnlyOnRegistration
+          partnerData.showRemittanceOnlyOnRegistration,
         );
         console.log(
           "✅ showRemittanceOnlyOnRegistration stored:",
-          partnerData.showRemittanceOnlyOnRegistration
+          partnerData.showRemittanceOnlyOnRegistration,
         );
       }
 
-      // Store partner name if available
-      if (partnerData.partner_name) {
-        localStorage.setItem("partner_name", partnerData.partner_name);
+      // ✅ FIX 1: Store partner name from 'name' field
+      if (partnerData.name) {
+        localStorage.setItem("partner_name", partnerData.name);
+        console.log("✅ partner_name stored:", partnerData.name);
       }
 
-      // Store logo if available
-      if (partnerData.logo_url) {
+      // ✅ FIX 2: Store logo from 'logo' field (not 'logo_url')
+      if (partnerData.logo) {
+        localStorage.setItem("partner_logo", partnerData.logo);
+        console.log(
+          "✅ partner_logo stored via tokenService:",
+          partnerData.logo,
+        );
+      } else if (partnerData.logo_url) {
+        // Fallback for backward compatibility
         localStorage.setItem("partner_logo", partnerData.logo_url);
+        console.log(
+          "✅ partner_logo (from logo_url) stored via tokenService:",
+          partnerData.logo_url,
+        );
+      } else {
+        console.warn(
+          "⚠️ No logo field found in partnerData:",
+          Object.keys(partnerData),
+        );
       }
     } catch (error) {
       console.error("❌ Error storing partner data:", error);
@@ -434,7 +452,7 @@ export const partnerLogin = async () => {
           "Content-Type": "application/json",
         },
         timeout: 50000,
-      }
+      },
     );
 
     console.log("🔍 Partner login response:", {
@@ -456,18 +474,17 @@ export const partnerLogin = async () => {
       try {
         console.log(
           "🔍 Fetching complete partner details for:",
-          currentHostname
+          currentHostname,
         );
 
         // This will call /partners/get-partner-detail/{hostname}
-        const partnerDetailsResponse = await fetchPartnerDetails(
-          currentHostname
-        );
+        const partnerDetailsResponse =
+          await fetchPartnerDetails(currentHostname);
 
         if (partnerDetailsResponse?.data?.data) {
           console.log(
             "✅ Complete partner details stored:",
-            partnerDetailsResponse.data.data
+            partnerDetailsResponse.data.data,
           );
 
           // Update tokenService with the complete data
@@ -477,14 +494,14 @@ export const partnerLogin = async () => {
           if (partnerDetailsResponse.data.data.partner_id) {
             localStorage.setItem(
               "whitelabelledpartnerid",
-              String(partnerDetailsResponse.data.data.partner_id)
+              String(partnerDetailsResponse.data.data.partner_id),
             );
           }
         }
       } catch (partnerDetailsError) {
         console.warn(
           "⚠️ Could not fetch complete partner details:",
-          partnerDetailsError.message
+          partnerDetailsError.message,
         );
         // Don't fail the entire login if this fails - we already have basic partner data
       }
@@ -570,7 +587,7 @@ export const getBearerToken = async (forceRefresh = false) => {
         {
           headers: { "Content-Type": "application/json" },
           timeout: 15000,
-        }
+        },
       );
 
       console.log("🔍 Partner-login API response received:", {
@@ -598,18 +615,17 @@ export const getBearerToken = async (forceRefresh = false) => {
         try {
           console.log(
             "🔍 Fetching complete partner details for:",
-            currentHostname
+            currentHostname,
           );
 
           // This will call /partners/get-partner-detail/{hostname}
-          const partnerDetailsResponse = await fetchPartnerDetails(
-            currentHostname
-          );
+          const partnerDetailsResponse =
+            await fetchPartnerDetails(currentHostname);
 
           if (partnerDetailsResponse?.data?.data) {
             console.log(
               "✅ Complete partner details stored:",
-              partnerDetailsResponse.data.data
+              partnerDetailsResponse.data.data,
             );
 
             // Update tokenService with the complete data
@@ -619,14 +635,14 @@ export const getBearerToken = async (forceRefresh = false) => {
             if (partnerDetailsResponse.data.data.partner_id) {
               localStorage.setItem(
                 "whitelabelledpartnerid",
-                String(partnerDetailsResponse.data.data.partner_id)
+                String(partnerDetailsResponse.data.data.partner_id),
               );
             }
           }
         } catch (partnerDetailsError) {
           console.warn(
             "⚠️ Could not fetch complete partner details:",
-            partnerDetailsError.message
+            partnerDetailsError.message,
           );
           // Don't fail the entire token fetch if this fails
         }
@@ -674,12 +690,12 @@ export const initializePartnerToken = async () => {
     // ✅ IMPROVED: Call partnerLogin if we're missing ANY of: token, partner data, or logo
     if (!tokenDebug.exists || !partnerDebug.exists || !hasLogo) {
       console.log(
-        "🔍 Missing token, partner data, or logo, calling partnerLogin"
+        "🔍 Missing token, partner data, or logo, calling partnerLogin",
       );
       await partnerLogin();
     } else {
       console.log(
-        "🔍 Token, partner data, and logo already exist, skipping API call"
+        "🔍 Token, partner data, and logo already exist, skipping API call",
       );
     }
   } catch (error) {
@@ -691,95 +707,156 @@ export const initializePartnerToken = async () => {
 // ===================== AUTH API FUNCTIONS =====================
 
 export const fetchCountries = async () => {
-  return debouncedApiCall("countries", () => api.get("/countries"));
+  console.log("🌍 Using static countries data from countrySlice");
+  return { data: staticCountries, status: "success" };
 };
 
 export const fetchPartnerDetails = async (hostName) => {
   return debouncedApiCall(`partner-${hostName}`, async () => {
-    const response = await api.get(`/partners/get-partner-detail/${hostName}`);
+    try {
+      console.log(`🔍 Fetching partner details for hostname: ${hostName}`);
 
-    // ✅ STORE THE RESPONSE DATA TO localStorage
-    if (response.data?.status === "success" && response.data?.data) {
-      const partnerData = response.data.data;
+      // Make API call to get partner details
+      const response = await api.get(
+        `/partners/get-partner-detail/${hostName}`,
+      );
 
-      console.log("🔍 Storing partner details from API response:", partnerData);
-
-      // Store all partner data fields
-      if (partnerData.is_white_labelled_partner !== undefined) {
-        localStorage.setItem(
-          "is_white_labelled_partner",
-          partnerData.is_white_labelled_partner
-        );
-        console.log(
-          "✅ is_white_labelled_partner stored:",
-          partnerData.is_white_labelled_partner
-        );
-      }
-
-      if (partnerData.partner_id !== undefined) {
-        localStorage.setItem(
-          "whitelabelledpartnerid",
-          String(partnerData.partner_id)
-        );
-        console.log("✅ partner_id stored:", partnerData.partner_id);
-      }
-
-      if (partnerData.partner_uuid !== undefined) {
-        localStorage.setItem("partner_uuid", partnerData.partner_uuid);
-        console.log("✅ partner_uuid stored:", partnerData.partner_uuid);
-      }
-
-      if (partnerData.isPartnerPackageModule !== undefined) {
-        localStorage.setItem(
-          "isPartnerPackageModule",
-          partnerData.isPartnerPackageModule
-        );
-        console.log(
-          "✅ isPartnerPackageModule stored:",
-          partnerData.isPartnerPackageModule
-        );
-      }
-
-      if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
-        localStorage.setItem(
-          "showRemittanceOnlyOnRegistration",
-          partnerData.showRemittanceOnlyOnRegistration
-        );
-        console.log(
-          "✅ showRemittanceOnlyOnRegistration stored:",
-          partnerData.showRemittanceOnlyOnRegistration
-        );
-      }
-
-      // ✅ STORE LOGO - The API returns 'logo' not 'logo_url'
-      if (partnerData.logo) {
-        localStorage.setItem("partner_logo", partnerData.logo);
-        console.log("✅ partner_logo stored:", partnerData.logo);
-      }
-
-      // ✅ STORE PARTNER NAME - The API returns 'name' not 'partner_name'
-      if (partnerData.name) {
-        localStorage.setItem("partner_name", partnerData.name);
-        console.log("✅ partner_name stored:", partnerData.name);
-
-        // Also store in the old key for backward compatibility
-        localStorage.setItem(
-          "whitelabelled_customer_partnername",
-          partnerData.name
-        );
-      }
-
-      // Also update tokenService's partner data storage
-      tokenService.setPartnerData({
-        ...partnerData,
-        // Map 'name' to 'partner_name' for tokenService compatibility
-        partner_name: partnerData.name,
-        // Map 'logo' to 'logo_url' for tokenService compatibility
-        logo_url: partnerData.logo,
+      console.log("🔍 Partner details API response:", {
+        status: response.data?.status,
+        hasData: !!response.data?.data,
+        logoPresent: !!response.data?.data?.logo,
+        logoValue: response.data?.data?.logo,
+        fullResponse: response.data?.data,
       });
-    }
 
-    return response;
+      // ✅ STORE THE RESPONSE DATA TO localStorage
+      if (response.data?.status === "success" && response.data?.data) {
+        const partnerData = response.data.data;
+
+        console.log("🔍 Partner data to store:", {
+          name: partnerData.name,
+          logo: partnerData.logo,
+          partner_id: partnerData.partner_id,
+          allKeys: Object.keys(partnerData),
+        });
+
+        // Store all partner data fields
+        if (partnerData.is_white_labelled_partner !== undefined) {
+          localStorage.setItem(
+            "is_white_labelled_partner",
+            partnerData.is_white_labelled_partner,
+          );
+          console.log(
+            "✅ is_white_labelled_partner stored:",
+            partnerData.is_white_labelled_partner,
+          );
+        }
+
+        if (partnerData.partner_id !== undefined) {
+          localStorage.setItem(
+            "whitelabelledpartnerid",
+            String(partnerData.partner_id),
+          );
+          console.log("✅ partner_id stored:", partnerData.partner_id);
+        }
+
+        if (partnerData.partner_uuid !== undefined) {
+          localStorage.setItem("partner_uuid", partnerData.partner_uuid);
+          console.log("✅ partner_uuid stored:", partnerData.partner_uuid);
+        }
+
+        if (partnerData.isPartnerPackageModule !== undefined) {
+          localStorage.setItem(
+            "isPartnerPackageModule",
+            partnerData.isPartnerPackageModule,
+          );
+          console.log(
+            "✅ isPartnerPackageModule stored:",
+            partnerData.isPartnerPackageModule,
+          );
+        }
+
+        if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
+          localStorage.setItem(
+            "showRemittanceOnlyOnRegistration",
+            partnerData.showRemittanceOnlyOnRegistration,
+          );
+          console.log(
+            "✅ showRemittanceOnlyOnRegistration stored:",
+            partnerData.showRemittanceOnlyOnRegistration,
+          );
+        }
+
+        // ✅ CRITICAL FIX: Store logo from 'logo' field - FIXED VERSION
+        let finalLogoUrl = null;
+
+        if (partnerData.logo) {
+          // Sanitize the URL (remove escaped slashes if present)
+          finalLogoUrl = partnerData.logo.replace(/\\\//g, "/");
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("✅ partner_logo stored in localStorage:", finalLogoUrl);
+        } else if (partnerData.logo_url) {
+          // Fallback to logo_url field
+          finalLogoUrl = partnerData.logo_url.replace(/\\\//g, "/");
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("✅ Using logo_url instead:", finalLogoUrl);
+        } else {
+          console.warn("⚠️ Logo is null or empty in API response!");
+
+          // Create a default logo URL based on partner ID
+          const partnerId = partnerData.partner_id || "default";
+          finalLogoUrl = `https://zapware.unlimitedremit.com/image/partners/default-logo-${partnerId}.png`;
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("⚠️ Using default logo:", finalLogoUrl);
+        }
+
+        // ✅ STORE PARTNER NAME
+        if (partnerData.name) {
+          localStorage.setItem("partner_name", partnerData.name);
+          console.log("✅ partner_name stored:", partnerData.name);
+
+          // Also store in the old key for backward compatibility
+          localStorage.setItem(
+            "whitelabelled_customer_partnername",
+            partnerData.name,
+          );
+        }
+
+        // Update tokenService with all data
+        tokenService.setPartnerData({
+          ...partnerData,
+          partner_name: partnerData.name,
+          logo_url: finalLogoUrl, // Use the sanitized/final logo URL
+        });
+
+        // ✅ DEBUG: Verify storage worked
+        const storedLogo = localStorage.getItem("partner_logo");
+        const storedName = localStorage.getItem("partner_name");
+
+        console.log("🔍 Storage verification:", {
+          storedLogo: storedLogo ? "PRESENT" : "MISSING",
+          storedName: storedName || "MISSING",
+          timestamp: new Date().toISOString(),
+        });
+
+        // Log what's actually in localStorage for debugging
+        console.log("🔍 Current localStorage partner-related items:", {
+          partner_logo: localStorage.getItem("partner_logo"),
+          partner_name: localStorage.getItem("partner_name"),
+          whitelabelledpartnerid: localStorage.getItem(
+            "whitelabelledpartnerid",
+          ),
+          partner_uuid: localStorage.getItem("partner_uuid"),
+        });
+      } else {
+        console.warn("⚠️ Invalid response structure from partner details API");
+      }
+
+      return response;
+    } catch (error) {
+      console.error("❌ Error in fetchPartnerDetails:", error);
+      throw error;
+    }
   });
 };
 
@@ -910,7 +987,7 @@ export const logout = async () => {
   } catch (error) {
     console.error(
       "❌ Backend logout failed, but local data was cleared:",
-      error.message
+      error.message,
     );
     return { status: "local_logout_complete" };
   }
@@ -922,7 +999,7 @@ export const getLogoutTime = async () => {
 
 export const getPartnerConfig = async (partnerId) => {
   return debouncedApiCall(`partner-config-${partnerId}`, () =>
-    api.get(`/partner-basic-setup/${partnerId}`)
+    api.get(`/partner-basic-setup/${partnerId}`),
   );
 };
 
@@ -960,7 +1037,7 @@ export const fetchUserProfile = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -970,7 +1047,7 @@ export const fetchAllowedModules = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -1000,7 +1077,7 @@ export const initiateKycProcess = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    }
+    },
   );
 };
 
@@ -1010,7 +1087,7 @@ export const getKycStatus = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -1160,8 +1237,6 @@ export const initializeAppWithPartnerData = async () => {
       hostname !== "localhost";
 
     if (isPartnerDomain) {
-      console.log("🌍 Fetching countries from centralized API...");
-
       // Step 4: Call partnerLogin to get fresh partner data
       try {
         const loginResult = await partnerLogin();
@@ -1173,7 +1248,7 @@ export const initializeAppWithPartnerData = async () => {
       } catch (loginError) {
         console.warn(
           "⚠️ partnerLogin failed, trying getBearerToken:",
-          loginError.message
+          loginError.message,
         );
 
         // Fallback to getBearerToken
@@ -1183,7 +1258,7 @@ export const initializeAppWithPartnerData = async () => {
         } catch (bearerError) {
           console.warn(
             "⚠️ Both partnerLogin and getBearerToken failed:",
-            bearerError.message
+            bearerError.message,
           );
           // Continue without partner token - non-partner flow
         }
@@ -1198,7 +1273,7 @@ export const initializeAppWithPartnerData = async () => {
       }
     } else {
       console.log(
-        "🏠 Running in non-partner mode (localhost or non-partner domain)"
+        "🏠 Running in non-partner mode (localhost or non-partner domain)",
       );
     }
 

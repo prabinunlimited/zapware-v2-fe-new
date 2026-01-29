@@ -117,7 +117,7 @@ const Remittance = () => {
   } = useSelector((state) => state.beneficiaries);
 
   const { purposes, incomeSources, occupations, paymentMethods } = useSelector(
-    (state) => state.remittanceStatic
+    (state) => state.remittanceStatic,
   );
 
   const silaBankAccounts = useSelector(selectUSDBankAccounts); // Changed selector
@@ -185,7 +185,7 @@ const Remittance = () => {
         borderColor: "border-purple-200",
       },
     ],
-    []
+    [],
   );
 
   const purposeOptions = useMemo(
@@ -204,7 +204,7 @@ const Remittance = () => {
             { value: "savings", label: "Savings" },
             { value: "other", label: "Other" },
           ],
-    [purposes]
+    [purposes],
   );
 
   const incomeSourceOptions = useMemo(
@@ -222,7 +222,7 @@ const Remittance = () => {
             { value: "inheritance", label: "Inheritance" },
             { value: "other", label: "Other" },
           ],
-    [incomeSources]
+    [incomeSources],
   );
 
   const relationOptions = useMemo(
@@ -235,7 +235,7 @@ const Remittance = () => {
       { value: "friend", label: "Friend" },
       { value: "other", label: "Other" },
     ],
-    []
+    [],
   );
 
   // Memoized currency options
@@ -248,12 +248,12 @@ const Remittance = () => {
         icon: account.icon,
         balance: account.balance,
       })),
-    [bankAccounts]
+    [bankAccounts],
   );
 
   const receiveCurrencyOptions = useMemo(
     () => currencies?.receiveOptions || [],
-    [currencies?.receiveOptions]
+    [currencies?.receiveOptions],
   );
 
   // Copy to clipboard function
@@ -442,7 +442,7 @@ const Remittance = () => {
             if (!isNaN(receiveNum) && receiveNum > 0) {
               const calculatedSendAmount = roundToDecimals(
                 receiveNum / cachedData.data.fxRate,
-                2
+                2,
               );
               dispatch(setSendAmount(calculatedSendAmount.toString()));
             }
@@ -498,7 +498,7 @@ const Remittance = () => {
             if (!isNaN(receiveNum) && receiveNum > 0) {
               const calculatedSendAmount = roundToDecimals(
                 receiveNum / fxRate,
-                2
+                2,
               );
 
               // Enforce minimum amount
@@ -507,12 +507,12 @@ const Remittance = () => {
                   `Minimum amount is ${
                     formData.sendCurrency?.value || "USD"
                   } 5.00. Adjusting...`,
-                  { position: "top-center", autoClose: 3000 }
+                  { position: "top-center", autoClose: 3000 },
                 );
                 const minSendAmount = 5;
                 const adjustedReceiveAmount = roundToDecimals(
                   minSendAmount * fxRate,
-                  2
+                  2,
                 );
                 dispatch(setSendAmount(minSendAmount.toString()));
                 dispatch(setReceiveAmount(adjustedReceiveAmount.toString()));
@@ -627,7 +627,7 @@ const Remittance = () => {
               currencyCode: formData.sendCurrency.value,
               amount: formData.sendAmount || "5",
               customerId: parseInt(customerId),
-            })
+            }),
           ).unwrap();
 
           if (isMounted) {
@@ -637,7 +637,7 @@ const Remittance = () => {
               result.status !== 201
             ) {
               setManualAccountError(
-                result.message || "Bank details unavailable"
+                result.message || "Bank details unavailable",
               );
               toast.error("Bank details unavailable", {
                 position: "top-right",
@@ -716,7 +716,7 @@ const Remittance = () => {
   useEffect(() => {
     console.log(
       "🔄 Remittance - Current paymentMethod:",
-      formData.paymentMethod
+      formData.paymentMethod,
     );
     console.log("🔄 Remittance - Full formData:", formData);
   }, [formData.paymentMethod, formData]);
@@ -846,7 +846,7 @@ const Remittance = () => {
         isTyping.current = false;
       }, 1200);
     },
-    [dispatch, formData.sendAmount]
+    [dispatch, formData.sendAmount],
   );
 
   const handleReceiveAmountChange = useCallback(
@@ -867,7 +867,7 @@ const Remittance = () => {
         isTyping.current = false;
       }, 1200);
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleSendCurrencyChange = useCallback(
@@ -892,7 +892,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     },
-    [dispatch, formData.sendAmount]
+    [dispatch, formData.sendAmount],
   );
 
   const handleReceiveCurrencyChange = useCallback(
@@ -917,7 +917,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     },
-    [dispatch, formData.sendAmount]
+    [dispatch, formData.sendAmount],
   );
 
   const handlePaymentMethodChange = useCallback(
@@ -928,23 +928,23 @@ const Remittance = () => {
           method === "bank"
             ? "Bank Transfer"
             : method === "manual"
-            ? "Cash Deposit"
-            : "Card Payment"
+              ? "Cash Deposit"
+              : "Card Payment"
         }`,
         {
           position: "top-right",
           autoClose: 2000,
-        }
+        },
       );
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleFieldChange = useCallback(
     (field, value) => {
       dispatch(setFormField({ field, value }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleFileUpload = useCallback(
@@ -990,7 +990,7 @@ const Remittance = () => {
         autoClose: 2000,
       });
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleBeneficiarySelect = useCallback(
@@ -1004,7 +1004,7 @@ const Remittance = () => {
         autoClose: 2000,
       });
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleBankSelect = useCallback(
@@ -1015,7 +1015,7 @@ const Remittance = () => {
         autoClose: 2000,
       });
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleBankAccountSelect = useCallback(
@@ -1026,7 +1026,7 @@ const Remittance = () => {
         autoClose: 2000,
       });
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleBeneficiaryCodeLookup = useCallback(async () => {
@@ -1041,7 +1041,7 @@ const Remittance = () => {
     setIsLoadingCode(true);
     try {
       const result = await dispatch(
-        fetchBeneficiaryByCode(beneficiaryCode)
+        fetchBeneficiaryByCode(beneficiaryCode),
       ).unwrap();
       if (result.data) {
         handleBeneficiarySelect(result.data);
@@ -1126,7 +1126,7 @@ const Remittance = () => {
 
       dispatch(setStep(4));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleSubmitTransaction = useCallback(() => {
@@ -1243,7 +1243,7 @@ const Remittance = () => {
           {
             position: "top-center",
             autoClose: 5000,
-          }
+          },
         );
         return;
       }
@@ -1264,7 +1264,7 @@ const Remittance = () => {
           {
             position: "top-center",
             autoClose: 5000,
-          }
+          },
         );
         return;
       }
@@ -1281,7 +1281,7 @@ const Remittance = () => {
             {
               position: "top-center",
               autoClose: 5000,
-            }
+            },
           );
           return;
         }
@@ -1334,7 +1334,7 @@ const Remittance = () => {
               {
                 position: "top-center",
                 autoClose: 5000,
-              }
+              },
             );
             return;
           }
@@ -1353,7 +1353,7 @@ const Remittance = () => {
               {
                 position: "top-center",
                 autoClose: 5000,
-              }
+              },
             );
             return;
           }
@@ -1494,8 +1494,8 @@ const Remittance = () => {
         backgroundColor: isSelected
           ? "#eff6ff"
           : isFocused
-          ? "#f8fafc"
-          : "white",
+            ? "#f8fafc"
+            : "white",
         color: isSelected ? "#1e40af" : "#374151",
         fontWeight: isSelected ? "600" : "500",
         "&:hover": {
@@ -1536,7 +1536,7 @@ const Remittance = () => {
         backgroundColor: "#e5e7eb",
       }),
     }),
-    []
+    [],
   );
 
   const stepVariants = useMemo(
@@ -1545,19 +1545,18 @@ const Remittance = () => {
       visible: { opacity: 1, x: 0 },
       exit: { opacity: 0, x: 20 },
     }),
-    []
+    [],
   );
 
   if (initialLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-4">
         <div className="text-center space-y-6">
-          <div className="relative">
-            <div className="relative">
-              <RingLoader color="#2563eb" size={60} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-8 h-8 bg-white rounded-full shadow-md"></div>
-              </div>
+          {/* Simplified structure - removed extra relative wrapper */}
+          <div className="relative flex justify-center">
+            <RingLoader color="#2563eb" size={60} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-white rounded-full shadow-md"></div>
             </div>
           </div>
           <div className="space-y-2">
@@ -1617,8 +1616,8 @@ const Remittance = () => {
                     step > stepItem.number
                       ? "bg-gradient-to-br from-green-500 to-emerald-400 text-white shadow-green-200"
                       : step === stepItem.number
-                      ? "bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-blue-200"
-                      : "bg-white text-gray-400 border-2 border-gray-300 shadow-sm"
+                        ? "bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-blue-200"
+                        : "bg-white text-gray-400 border-2 border-gray-300 shadow-sm"
                   }`}
                 >
                   {step > stepItem.number ? (
@@ -1794,7 +1793,7 @@ const Remittance = () => {
                                   `Amount adjusted to minimum of ${
                                     formData.sendCurrency?.value || "USD"
                                   } 5.00`,
-                                  { position: "top-center", autoClose: 2000 }
+                                  { position: "top-center", autoClose: 2000 },
                                 );
                               }
                               const rounded = roundToDecimals(numValue, 2);
@@ -1804,12 +1803,12 @@ const Remittance = () => {
                               if (exchangeRateData?.fxRate) {
                                 const correctedReceiveAmount = roundToDecimals(
                                   numValue * exchangeRateData.fxRate,
-                                  2
+                                  2,
                                 );
                                 dispatch(
                                   setReceiveAmount(
-                                    correctedReceiveAmount.toString()
-                                  )
+                                    correctedReceiveAmount.toString(),
+                                  ),
                                 );
                               }
                             }
@@ -1852,7 +1851,7 @@ const Remittance = () => {
                           <span className="text-emerald-600 font-medium">
                             Available: {formData.sendCurrency?.value}{" "}
                             {parseFloat(formData.sendCurrency.balance).toFixed(
-                              2
+                              2,
                             )}
                           </span>
                         )}
@@ -1929,23 +1928,23 @@ const Remittance = () => {
                                 const minSendAmount = 5;
                                 const adjustedReceiveAmount = roundToDecimals(
                                   minSendAmount * exchangeRateData.fxRate,
-                                  2
+                                  2,
                                 );
 
                                 toast.info(
                                   `Amount adjusted to minimum equivalent of ${
                                     formData.sendCurrency?.value || "USD"
                                   } 5.00`,
-                                  { position: "top-center", autoClose: 2000 }
+                                  { position: "top-center", autoClose: 2000 },
                                 );
 
                                 dispatch(
-                                  setSendAmount(minSendAmount.toString())
+                                  setSendAmount(minSendAmount.toString()),
                                 );
                                 dispatch(
                                   setReceiveAmount(
-                                    adjustedReceiveAmount.toString()
-                                  )
+                                    adjustedReceiveAmount.toString(),
+                                  ),
                                 );
                               }
                             }
@@ -1955,8 +1954,8 @@ const Remittance = () => {
                             exchangeRateError
                               ? "bg-red-50 border-2 border-red-200 text-red-900 focus:border-red-400 focus:ring-4 focus:ring-red-100"
                               : exchangeRateLoading
-                              ? "bg-gray-100 border-2 border-gray-200 text-gray-900"
-                              : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                                ? "bg-gray-100 border-2 border-gray-200 text-gray-900"
+                                : "bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-900 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                           }`}
                           inputMode="decimal"
                           autoComplete="off"
@@ -2008,7 +2007,7 @@ const Remittance = () => {
                         ) : (
                           exchangeRateData?.fxRate && (
                             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                              <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
+                              {/* <FaExchangeAlt className="w-4 h-4 text-emerald-500" /> */}
                             </div>
                           )
                         )}
@@ -2017,14 +2016,6 @@ const Remittance = () => {
                       {/* Exchange rate info */}
                       {exchangeRateData?.fxRate && (
                         <div className="mt-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
-                            <span>
-                              1 {formData.sendCurrency?.value} ={" "}
-                              {exchangeRateData.fxRate.toFixed(4)}{" "}
-                              {formData.receiveCurrency?.value}
-                            </span>
-                          </div>
                           <button
                             onClick={fetchExchangeRateManual}
                             className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -2039,32 +2030,6 @@ const Remittance = () => {
                           </button>
                         </div>
                       )}
-
-                      {/* Minimal conversion info */}
-                      {formData.sendAmount &&
-                        formData.receiveAmount &&
-                        exchangeRateData?.fxRate && (
-                          <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700">
-                                You send
-                              </span>
-                              <span className="font-semibold text-gray-900">
-                                {formData.sendCurrency?.value}{" "}
-                                {parseFloat(formData.sendAmount).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between mt-1">
-                              <span className="text-sm font-medium text-gray-700">
-                                They receive
-                              </span>
-                              <span className="font-semibold text-emerald-600">
-                                {formData.receiveCurrency?.value}{" "}
-                                {parseFloat(formData.receiveAmount).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
                     </div>
 
                     {/* Collapsible details section */}
@@ -2162,16 +2127,16 @@ const Remittance = () => {
                           onClick={() => {
                             console.log(
                               "🎯 Payment button clicked:",
-                              option.value
+                              option.value,
                             );
                             console.log(
                               "Current paymentMethod before change:",
-                              formData.paymentMethod
+                              formData.paymentMethod,
                             );
                             handlePaymentMethodChange(option.value);
                             console.log(
                               "PaymentMethod change dispatched for:",
-                              option.value
+                              option.value,
                             );
                           }}
                           whileHover={{ scale: 1.02 }}
@@ -2239,7 +2204,7 @@ const Remittance = () => {
                             {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
-                            }
+                            },
                           )}
                         </span>
                       </div>
@@ -2349,7 +2314,7 @@ const Remittance = () => {
                                   onClick={() =>
                                     copyToClipboard(
                                       manualAccountDetails.account_number,
-                                      "account_number"
+                                      "account_number",
                                     )
                                   }
                                   className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -2462,7 +2427,7 @@ const Remittance = () => {
                                 <p className="text-lg font-bold text-emerald-600 mt-1">
                                   {formData.sendCurrency?.value}{" "}
                                   {parseFloat(formData.sendAmount || 0).toFixed(
-                                    2
+                                    2,
                                   )}
                                 </p>
                               </div>
@@ -2591,7 +2556,7 @@ const Remittance = () => {
                                     {item.value}
                                   </p>
                                 </div>
-                              )
+                              ),
                           )}
                         </div>
                       </motion.div>
@@ -2997,7 +2962,7 @@ const Remittance = () => {
                 {
                   position: "top-right",
                   autoClose: 3000,
-                }
+                },
               );
               setShowOpenBanking(false);
               setOpenBankingProcessing(false);
