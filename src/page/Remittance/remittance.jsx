@@ -28,9 +28,8 @@ import {
   FaMoneyCheckAlt,
   FaExclamationTriangle,
   FaSpinner,
-  FaSync,
 } from "react-icons/fa";
-import { FiSend, FiCreditCard, FiCheck } from "react-icons/fi";
+import { FiSend, FiCheck } from "react-icons/fi";
 import { HiCurrencyDollar, HiOutlineBanknotes } from "react-icons/hi2";
 import { MdAccountBalance, MdSecurity } from "react-icons/md";
 import { TbTransfer } from "react-icons/tb";
@@ -175,15 +174,6 @@ const Remittance = () => {
         bgColor: "bg-gradient-to-br from-emerald-50 to-emerald-100",
         borderColor: "border-emerald-200",
       },
-      {
-        value: "card",
-        label: "Card Payment",
-        description: "Secure card payment",
-        icon: <FiCreditCard className="w-6 h-6" />,
-        color: "from-purple-600 to-purple-700",
-        bgColor: "bg-gradient-to-br from-purple-50 to-purple-100",
-        borderColor: "border-purple-200",
-      },
     ],
     [],
   );
@@ -320,7 +310,6 @@ const Remittance = () => {
     const customerIdToUse =
       customerId || localStorage.getItem("customerId") || "1720";
 
-    // Only fetch if we haven't fetched already and not currently loading
     if (
       customerIdToUse &&
       !silaAccountsLoading &&
@@ -343,12 +332,6 @@ const Remittance = () => {
   }, [dispatch, customerId, silaAccountsLoading]);
 
   useEffect(() => {
-    return () => {
-      // Cleanup function
-    };
-  }, []);
-
-  useEffect(() => {
     if (!initialLoading && !formData.sendAmount) {
       dispatch(setSendAmount("5"));
       activeInput.current = "send";
@@ -365,65 +348,6 @@ const Remittance = () => {
     }
   }, [formData.sendCurrency, formData.receiveCurrency, dispatch]);
 
-  // NEW: Calculate receive amount when send amount changes and exchange rate is available
-  useEffect(() => {
-    if (
-      exchangeRateData?.fxRate &&
-      activeInput.current === "send" &&
-      formData.sendAmount &&
-      parseFloat(formData.sendAmount) > 0
-    ) {
-      const sendNum = parseFloat(formData.sendAmount);
-      if (!isNaN(sendNum)) {
-        const calculatedReceive = roundToDecimals(
-          sendNum * exchangeRateData.fxRate,
-          2,
-        );
-        const currentReceive = parseFloat(formData.receiveAmount || 0);
-
-        // Only update if there's a meaningful difference
-        if (Math.abs(calculatedReceive - currentReceive) > 0.01) {
-          dispatch(setReceiveAmount(calculatedReceive.toString()));
-        }
-      }
-    }
-  }, [formData.sendAmount, exchangeRateData, dispatch]);
-
-  // NEW: Calculate send amount when receive amount changes and exchange rate is available
-  useEffect(() => {
-    if (
-      exchangeRateData?.fxRate &&
-      activeInput.current === "receive" &&
-      formData.receiveAmount &&
-      parseFloat(formData.receiveAmount) > 0
-    ) {
-      const receiveNum = parseFloat(formData.receiveAmount);
-      if (!isNaN(receiveNum)) {
-        const calculatedSend = roundToDecimals(
-          receiveNum / exchangeRateData.fxRate,
-          2,
-        );
-        const currentSend = parseFloat(formData.sendAmount || 0);
-
-        // Only update if there's a meaningful difference
-        if (Math.abs(calculatedSend - currentSend) > 0.01) {
-          // Enforce minimum amount
-          if (calculatedSend < 5) {
-            const minSendAmount = 5;
-            const adjustedReceiveAmount = roundToDecimals(
-              minSendAmount * exchangeRateData.fxRate,
-              2,
-            );
-            dispatch(setSendAmount(minSendAmount.toString()));
-            dispatch(setReceiveAmount(adjustedReceiveAmount.toString()));
-          } else {
-            dispatch(setSendAmount(calculatedSend.toString()));
-          }
-        }
-      }
-    }
-  }, [formData.receiveAmount, exchangeRateData, dispatch]);
-
   // Fetch exchange rate with deduplication and caching
   useEffect(() => {
     let isMounted = true;
@@ -433,7 +357,6 @@ const Remittance = () => {
       const sendCurrencyValue = formData.sendCurrency?.value;
       const receiveCurrencyValue = formData.receiveCurrency?.value;
 
-      // Don't fetch if missing required data
       if (!sendCurrencyValue || !receiveCurrencyValue) {
         if (isMounted) {
           setExchangeRateLoading(false);
@@ -441,7 +364,6 @@ const Remittance = () => {
         return;
       }
 
-      // Don't fetch if user is typing or it's a manual update
       if (isTyping.current || isManualUpdate.current) {
         if (isMounted) {
           setExchangeRateLoading(false);
@@ -449,20 +371,17 @@ const Remittance = () => {
         return;
       }
 
-      // Prevent duplicate requests
       if (isRequestInProgress.current) {
         console.log("⏳ Request already in progress, skipping duplicate");
         return;
       }
 
-      // Rate limiting - minimum 1.5 seconds between calls
       const now = Date.now();
       if (now - lastApiCallTime.current < 1500) {
         console.log("⏱️ Rate limiting: Too soon since last call");
         return;
       }
 
-      // Determine which amount to use for calculation
       let amountForCalculation;
       if (activeInput.current === "receive" && formData.receiveAmount) {
         amountForCalculation = 1;
@@ -470,10 +389,8 @@ const Remittance = () => {
         amountForCalculation = parseFloat(formData.sendAmount) || 5;
       }
 
-      // Create cache key
       const cacheKey = `${sendCurrencyValue}-${receiveCurrencyValue}-${amountForCalculation}`;
 
-      // Check cache (45 second cache)
       const cachedData = exchangeRateCache.current[cacheKey];
       if (cachedData && now - cachedData.timestamp < 45000) {
         console.log("💾 Using cached exchange rate");
@@ -481,29 +398,14 @@ const Remittance = () => {
           setExchangeRateData(cachedData.data);
           setExchangeRateLoading(false);
 
-          // Calculate amounts based on cached rate
-          if (cachedData.data.fxRate) {
-            if (activeInput.current === "send" && formData.sendAmount) {
-              const sendNum = parseFloat(formData.sendAmount);
-              if (!isNaN(sendNum) && sendNum > 0) {
-                const calculatedReceive = roundToDecimals(
-                  sendNum * cachedData.data.fxRate,
-                  2,
-                );
-                dispatch(setReceiveAmount(calculatedReceive.toString()));
-              }
-            } else if (
-              activeInput.current === "receive" &&
-              formData.receiveAmount
-            ) {
-              const receiveNum = parseFloat(formData.receiveAmount);
-              if (!isNaN(receiveNum) && receiveNum > 0) {
-                const calculatedSend = roundToDecimals(
-                  receiveNum / cachedData.data.fxRate,
-                  2,
-                );
-                dispatch(setSendAmount(calculatedSend.toString()));
-              }
+          if (activeInput.current === "receive" && formData.receiveAmount) {
+            const receiveNum = parseFloat(formData.receiveAmount);
+            if (!isNaN(receiveNum) && receiveNum > 0) {
+              const calculatedSendAmount = roundToDecimals(
+                receiveNum / cachedData.data.fxRate,
+                2,
+              );
+              dispatch(setSendAmount(calculatedSendAmount.toString()));
             }
           }
         }
@@ -528,11 +430,14 @@ const Remittance = () => {
 
       try {
         const response = await dispatch(fetchExchangeRate(payload)).unwrap();
-        if (isMounted && response && response.converted_value) {
+        if (isMounted && response) {
           isManualUpdate.current = true;
 
-          // Calculate exchange rate
-          const fxRate = response.converted_value / amountForCalculation;
+          // ✅ FIX: Use fxRate directly from response if available
+          const fxRate =
+            response.fxRate ||
+            response.converted_value / amountForCalculation ||
+            115;
 
           const exchangeData = {
             ...response,
@@ -543,6 +448,16 @@ const Remittance = () => {
             timestamp: Date.now(),
           };
 
+          // Debug log to check values
+          console.log("🔄 Exchange rate data received:", {
+            fxRate: fxRate,
+            converted_value: response.converted_value,
+            sendAmount: formData.sendAmount,
+            calculatedReceive: fxRate
+              ? (parseFloat(formData.sendAmount || 5) * fxRate).toFixed(2)
+              : "N/A",
+          });
+
           // Cache the result
           exchangeRateCache.current[cacheKey] = {
             data: exchangeData,
@@ -551,20 +466,8 @@ const Remittance = () => {
 
           setExchangeRateData(exchangeData);
 
-          // ✅ FIXED: Calculate amounts based on the new exchange rate
-          if (activeInput.current === "send" && formData.sendAmount) {
-            const sendNum = parseFloat(formData.sendAmount);
-            if (!isNaN(sendNum) && sendNum > 0) {
-              const calculatedReceiveAmount = roundToDecimals(
-                sendNum * fxRate,
-                2,
-              );
-              dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
-            }
-          } else if (
-            activeInput.current === "receive" &&
-            formData.receiveAmount
-          ) {
+          // If user entered receive amount, calculate the corresponding send amount
+          if (activeInput.current === "receive" && formData.receiveAmount) {
             const receiveNum = parseFloat(formData.receiveAmount);
             if (!isNaN(receiveNum) && receiveNum > 0) {
               const calculatedSendAmount = roundToDecimals(
@@ -628,12 +531,10 @@ const Remittance = () => {
       }
     };
 
-    // Clear existing timer
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
 
-    // Set up debounce - 1200ms for better user experience
     debounceTimer = setTimeout(() => {
       if (!isTyping.current) {
         fetchRate();
@@ -654,6 +555,116 @@ const Remittance = () => {
     customerId,
     dispatch,
   ]);
+
+  useEffect(() => {
+    // Check if all initial APIs have loaded (success or failure)
+    if (!initialLoading && !loading) {
+      console.log("✅ All initial APIs loaded, checking for exchange rate...");
+
+      // Check if we have currencies selected but no exchange rate data
+      if (
+        formData.sendCurrency?.value &&
+        formData.receiveCurrency?.value &&
+        !exchangeRateData?.fxRate &&
+        !exchangeRateLoading &&
+        !isRequestInProgress.current &&
+        !isTyping.current
+      ) {
+        console.log("🔄 Auto-triggering exchange rate fetch...");
+
+        // Small delay to ensure UI is ready
+        const timer = setTimeout(() => {
+          // Clear cache for this currency pair to force fresh fetch
+          const cacheKey = `${formData.sendCurrency?.value}-${
+            formData.receiveCurrency?.value
+          }-${parseFloat(formData.sendAmount) || 5}`;
+
+          if (exchangeRateCache.current[cacheKey]) {
+            delete exchangeRateCache.current[cacheKey];
+            console.log("🗑️ Cleared cached exchange rate for fresh fetch");
+          }
+
+          // Trigger manual fetch
+          fetchExchangeRateManual();
+        }, 500);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [
+    initialLoading,
+    loading,
+    formData.sendCurrency?.value,
+    formData.receiveCurrency?.value,
+    exchangeRateData?.fxRate,
+    exchangeRateLoading,
+    formData.sendAmount,
+  ]);
+
+  // 2. Auto-calculate receive amount when exchange rate loads
+  useEffect(() => {
+    if (
+      exchangeRateData?.fxRate &&
+      formData.sendAmount &&
+      parseFloat(formData.sendAmount) >= 5 &&
+      !isManualUpdate.current &&
+      !isTyping.current
+    ) {
+      console.log("🔄 Auto-calculating receive amount based on exchange rate");
+
+      const sendNum = parseFloat(formData.sendAmount);
+      if (!isNaN(sendNum) && sendNum >= 5) {
+        const calculatedReceiveAmount = roundToDecimals(
+          sendNum * exchangeRateData.fxRate,
+          2,
+        );
+
+        const currentReceive = parseFloat(formData.receiveAmount || 0);
+        if (Math.abs(calculatedReceiveAmount - currentReceive) > 0.01) {
+          console.log("💰 Setting receive amount:", calculatedReceiveAmount);
+          dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
+        }
+      }
+    }
+  }, [
+    exchangeRateData?.fxRate,
+    formData.sendAmount,
+    formData.receiveAmount,
+    dispatch,
+  ]);
+
+  // 3. Clean up timeout on unmount (This already exists - keep it here)
+  useEffect(() => {
+    return () => {
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+    };
+  }, []);
+
+  // ✅ FIXED: Calculate receive amount when send amount changes
+  useEffect(() => {
+    if (
+      !isTyping.current &&
+      activeInput.current === "send" &&
+      formData.sendAmount &&
+      exchangeRateData?.fxRate &&
+      !isManualUpdate.current
+    ) {
+      const sendNum = parseFloat(formData.sendAmount);
+      if (!isNaN(sendNum) && sendNum >= 5) {
+        const calculatedReceiveAmount = roundToDecimals(
+          sendNum * exchangeRateData.fxRate,
+          2,
+        );
+
+        const currentReceive = parseFloat(formData.receiveAmount || 0);
+        if (Math.abs(calculatedReceiveAmount - currentReceive) > 0.01) {
+          dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
+        }
+      }
+    }
+  }, [formData.sendAmount, exchangeRateData, dispatch, formData.receiveAmount]);
 
   useEffect(() => {
     return () => {
@@ -758,7 +769,6 @@ const Remittance = () => {
       }
     };
 
-    // Debounce the manual details fetch
     if (fetchTimer) {
       clearTimeout(fetchTimer);
     }
@@ -793,16 +803,13 @@ const Remittance = () => {
   const formatNumberInput = (value) => {
     if (!value) return "";
 
-    // Remove all characters except digits and decimal point
     const cleaned = value.replace(/[^0-9.]/g, "");
 
-    // Prevent multiple decimal points
     const parts = cleaned.split(".");
     if (parts.length > 2) {
       return parts[0] + "." + parts.slice(1).join("");
     }
 
-    // If the value starts with decimal point, add "0" prefix
     if (cleaned === ".") return "0.";
 
     return cleaned;
@@ -818,7 +825,6 @@ const Remittance = () => {
       return;
     }
 
-    // Clear cache for fresh fetch
     const cacheKey = `${formData.sendCurrency.value}-${
       formData.receiveCurrency.value
     }-${parseFloat(formData.sendAmount) || 5}`;
@@ -837,28 +843,42 @@ const Remittance = () => {
       };
 
       const response = await dispatch(fetchExchangeRate(payload)).unwrap();
-      if (response && response.converted_value) {
+      if (response) {
         const fxRate =
-          response.converted_value / (parseFloat(formData.sendAmount) || 5);
-        setExchangeRateData({
+          response.fxRate ||
+          response.converted_value / (parseFloat(formData.sendAmount) || 5) ||
+          115;
+
+        const exchangeData = {
           ...response,
           fxRate: roundToDecimals(fxRate, 6),
           fromCurrency: formData.sendCurrency.value,
           toCurrency: formData.receiveCurrency.value,
           originalAmount: parseFloat(formData.sendAmount) || 5,
-        });
-        setExchangeRateLoading(false);
+        };
 
-        // Calculate receive amount with new rate
-        if (formData.sendAmount && parseFloat(formData.sendAmount) > 0) {
-          const calculatedReceive = roundToDecimals(
-            parseFloat(formData.sendAmount) * fxRate,
-            2,
+        // Cache the result
+        exchangeRateCache.current[cacheKey] = {
+          data: exchangeData,
+          timestamp: Date.now(),
+        };
+
+        setExchangeRateData(exchangeData);
+
+        // ✅ CRITICAL: Auto-calculate receive amount here
+        if (formData.sendAmount && parseFloat(formData.sendAmount) >= 5) {
+          const sendNum = parseFloat(formData.sendAmount);
+          const calculatedReceiveAmount = roundToDecimals(sendNum * fxRate, 2);
+
+          console.log(
+            "📊 Auto-calculated receive amount:",
+            calculatedReceiveAmount,
           );
-          dispatch(setReceiveAmount(calculatedReceive.toString()));
+          dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
         }
 
-        toast.success("Exchange rate refreshed", {
+        setExchangeRateLoading(false);
+        toast.success("Exchange rate refreshed and amount calculated", {
           position: "top-right",
           autoClose: 2000,
         });
@@ -894,13 +914,10 @@ const Remittance = () => {
     return Math.round((value + Number.EPSILON) * factor) / factor;
   };
 
-  // ✅ FIXED: handleSendAmountChange with immediate calculation
   const handleSendAmountChange = useCallback(
     (value) => {
-      // Clean the input
       const cleanedValue = formatNumberInput(value);
 
-      // Don't process if value hasn't changed
       const currentValue = parseFloat(formData.sendAmount || 0);
       const newValue = parseFloat(cleanedValue || 0);
 
@@ -911,82 +928,61 @@ const Remittance = () => {
         }
       }
 
-      // Set active input and update state
       activeInput.current = "send";
       dispatch(setSendAmount(cleanedValue));
 
-      // ✅ NEW: Calculate receive amount immediately if we have exchange rate
-      if (
-        exchangeRateData?.fxRate &&
-        cleanedValue &&
-        parseFloat(cleanedValue) > 0
-      ) {
-        const calculatedReceive = roundToDecimals(
-          parseFloat(cleanedValue) * exchangeRateData.fxRate,
-          2,
-        );
-        dispatch(setReceiveAmount(calculatedReceive.toString()));
-      }
-
-      // Clear existing timeout
       if (typingTimeout.current) {
         clearTimeout(typingTimeout.current);
       }
 
-      // Set typing state with timeout
       isTyping.current = true;
       typingTimeout.current = setTimeout(() => {
         isTyping.current = false;
       }, 1200);
     },
-    [dispatch, formData.sendAmount, exchangeRateData],
+    [dispatch, formData.sendAmount],
   );
 
-  // ✅ FIXED: handleReceiveAmountChange with immediate calculation
   const handleReceiveAmountChange = useCallback(
     (value) => {
       const cleanedValue = formatNumberInput(value);
 
-      activeInput.current = "receive";
-      dispatch(setReceiveAmount(cleanedValue));
+      if (exchangeRateData?.fxRate) {
+        activeInput.current = "receive";
+        dispatch(setReceiveAmount(cleanedValue));
 
-      // ✅ NEW: Calculate send amount immediately if we have exchange rate
-      if (
-        exchangeRateData?.fxRate &&
-        cleanedValue &&
-        parseFloat(cleanedValue) > 0
-      ) {
-        const calculatedSend = roundToDecimals(
-          parseFloat(cleanedValue) / exchangeRateData.fxRate,
-          2,
-        );
-
-        // Enforce minimum amount
-        if (calculatedSend < 5) {
-          const minSendAmount = 5;
-          const adjustedReceiveAmount = roundToDecimals(
-            minSendAmount * exchangeRateData.fxRate,
+        const receiveNum = parseFloat(cleanedValue);
+        if (!isNaN(receiveNum) && receiveNum > 0) {
+          const calculatedSendAmount = roundToDecimals(
+            receiveNum / exchangeRateData.fxRate,
             2,
           );
-          dispatch(setSendAmount(minSendAmount.toString()));
-          dispatch(setReceiveAmount(adjustedReceiveAmount.toString()));
-        } else {
-          dispatch(setSendAmount(calculatedSend.toString()));
+
+          if (calculatedSendAmount < 5) {
+            toast.warning(
+              `Minimum send amount is ${formData.sendCurrency?.value || "USD"} 5.00`,
+              { position: "top-center", autoClose: 3000 },
+            );
+            return;
+          }
+
+          dispatch(setSendAmount(calculatedSendAmount.toString()));
         }
+      } else {
+        activeInput.current = "receive";
+        dispatch(setReceiveAmount(cleanedValue));
       }
 
-      // Clear existing timeout
       if (typingTimeout.current) {
         clearTimeout(typingTimeout.current);
       }
 
-      // Set typing state with timeout
       isTyping.current = true;
       typingTimeout.current = setTimeout(() => {
         isTyping.current = false;
       }, 1200);
     },
-    [dispatch, exchangeRateData],
+    [dispatch, exchangeRateData, formData.sendCurrency?.value],
   );
 
   const handleSendCurrencyChange = useCallback(
@@ -997,14 +993,12 @@ const Remittance = () => {
       setExchangeRateError(null);
       setShowRecipientDetails(false);
 
-      // Clear cache when currency changes
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.startsWith(option?.value)) {
           delete exchangeRateCache.current[key];
         }
       });
 
-      // Set default amount to 5 when currency changes
       if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
         dispatch(setSendAmount("5"));
       }
@@ -1022,14 +1016,12 @@ const Remittance = () => {
       setExchangeRateError(null);
       setShowRecipientDetails(false);
 
-      // Clear cache when currency changes
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.includes(`-${option?.value}-`)) {
           delete exchangeRateCache.current[key];
         }
       });
 
-      // Set default send amount to 5 if it's empty or below minimum
       if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
         dispatch(setSendAmount("5"));
       }
@@ -1042,13 +1034,10 @@ const Remittance = () => {
   const handlePaymentMethodChange = useCallback(
     (method) => {
       dispatch(setPaymentMethod(method));
+
       toast.info(
         `Payment method changed to ${
-          method === "bank"
-            ? "Bank Transfer"
-            : method === "manual"
-              ? "Cash Deposit"
-              : "Card Payment"
+          method === "bank" ? "Bank Transfer" : "Cash Deposit"
         }`,
         {
           position: "top-right",
@@ -1264,23 +1253,31 @@ const Remittance = () => {
       send_amount: parseFloat(formData.sendAmount),
       receive_amount: parseFloat(formData.receiveAmount),
       exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
+
       customer_id: parseInt(customerId),
+
       payment_method: formData.paymentMethod,
       conversion_id: exchangeRateData?.conversion_id,
+
       beneficiary: selectedBeneficiary?.id?.toString(),
       beneficiary_bank_id: selectedBank?.id,
+
       beneficiary_name: selectedBeneficiary?.name,
       beneficiary_bank_name: selectedBank?.bank_name,
       beneficiary_account_number:
         selectedBank?.account_number || selectedBank?.bank_acc_no,
+
       is_remit: "Y",
+
       purpose: formData.purpose?.value || formData.purpose,
       income_source: formData.incomeSource?.value || formData.incomeSource,
       occupation: formData.occupation || "",
       relation: formData.relation?.value || formData.relation || "",
       payout_method: formData.payout_method?.value || formData.paymentMethod,
+
       document: formData.document,
       agree_to_terms: formData.agreeToTerms ? "1" : "0",
+
       rails: "Local",
     };
 
@@ -1545,30 +1542,6 @@ const Remittance = () => {
     });
   }, [transactionResult]);
 
-  // ✅ NEW: Function to manually recalculate amounts
-  const handleRecalculateAmounts = useCallback(() => {
-    if (!exchangeRateData?.fxRate) {
-      toast.error("Exchange rate not available", {
-        position: "top-right",
-        autoClose: 3000,
-      });
-      return;
-    }
-
-    if (formData.sendAmount && parseFloat(formData.sendAmount) > 0) {
-      const sendNum = parseFloat(formData.sendAmount);
-      const calculatedReceive = roundToDecimals(
-        sendNum * exchangeRateData.fxRate,
-        2,
-      );
-      dispatch(setReceiveAmount(calculatedReceive.toString()));
-      toast.success("Amounts recalculated", {
-        position: "top-right",
-        autoClose: 2000,
-      });
-    }
-  }, [exchangeRateData, formData.sendAmount, dispatch]);
-
   const selectStyles = useMemo(
     () => ({
       control: (base, state) => ({
@@ -1680,6 +1653,7 @@ const Remittance = () => {
   const totalToPay = parseFloat(formData.sendAmount || 0);
   const fee = 0;
 
+  // Professional Progress Steps
   const ProgressSteps = () => {
     const steps = [
       { number: 1, label: "Transfer Details", icon: <TbTransfer /> },
@@ -1806,25 +1780,28 @@ const Remittance = () => {
             onBankAccountSelect={handleBankAccountSelect}
           />
         );
-      case "card":
-        return (
-          <CardPayment formData={formData} onFieldChange={handleFieldChange} />
-        );
+      // case "card":
+      //   return (
+      //     <CardPayment formData={formData} onFieldChange={handleFieldChange} />
+      //   );
       default:
         return null;
     }
   };
 
+  // Render step based on current step
   const renderStep = () => {
     switch (step) {
       case 1:
         return (
           <div className="space-y-8">
+            {/* Transfer Details Card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
             >
+              {/* Header */}
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1841,8 +1818,10 @@ const Remittance = () => {
                 </div>
               </div>
 
+              {/* Content */}
               <div className="p-8">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column - Send Amount */}
                   <div className="space-y-6">
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -1936,6 +1915,7 @@ const Remittance = () => {
                       </div>
                     </div>
 
+                    {/* Security Badge */}
                     <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl border border-gray-200">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -1953,6 +1933,7 @@ const Remittance = () => {
                     </div>
                   </div>
 
+                  {/* Right Column - Receive Amount */}
                   <div className="space-y-6">
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -2078,34 +2059,32 @@ const Remittance = () => {
                         ) : (
                           exchangeRateData?.fxRate && (
                             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                              <FaExchangeAlt className="w-4 h-4 text-emerald-500" />
+                              {/* <FaExchangeAlt className="w-4 h-4 text-emerald-500" /> */}
                             </div>
                           )
                         )}
                       </div>
 
-                      {/* ✅ FIXED: Recalculate button and exchange rate display */}
+                      {/* Exchange rate info */}
                       {exchangeRateData?.fxRate && (
                         <div className="mt-3 flex items-center justify-between">
                           <button
-                            onClick={handleRecalculateAmounts}
+                            onClick={fetchExchangeRateManual}
                             className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                            disabled={
-                              exchangeRateLoading || !formData.sendAmount
-                            }
+                            disabled={exchangeRateLoading}
                           >
-                            <FaSync className="w-3 h-3" />
-                            Recalculate
+                            <FaSpinner
+                              className={`w-3 h-3 ${
+                                exchangeRateLoading ? "animate-spin" : ""
+                              }`}
+                            />
+                            Refresh Rate
                           </button>
-                          <span className="text-xs text-gray-600">
-                            1 {formData.sendCurrency?.value} ={" "}
-                            {exchangeRateData.fxRate.toFixed(4)}{" "}
-                            {formData.receiveCurrency?.value}
-                          </span>
                         </div>
                       )}
                     </div>
 
+                    {/* Collapsible details section */}
                     <AnimatePresence>
                       {exchangeRateData?.fxRate && (
                         <div className="space-y-4">
@@ -2149,6 +2128,7 @@ const Remittance = () => {
                       )}
                     </AnimatePresence>
 
+                    {/* Error message */}
                     {exchangeRateError && (
                       <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
@@ -2169,6 +2149,7 @@ const Remittance = () => {
                   </div>
                 </div>
 
+                {/* Payment Method Section */}
                 <div className="mt-10 pt-8 border-t border-gray-200">
                   <div className="flex items-center justify-between mb-6">
                     <div>
@@ -2187,7 +2168,7 @@ const Remittance = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
                     {paymentOptions.map((option) => {
                       const isSelected =
                         formData.paymentMethod === option.value;
@@ -2247,6 +2228,7 @@ const Remittance = () => {
                   </div>
                 </div>
 
+                {/* Fee Summary */}
                 {exchangeRateData?.fxRate && (
                   <div className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">
@@ -2286,6 +2268,7 @@ const Remittance = () => {
               </div>
             </motion.div>
 
+            {/* Enhanced Manual Deposit Section */}
             {formData.paymentMethod === "manual" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -2628,6 +2611,7 @@ const Remittance = () => {
               </motion.div>
             )}
 
+            {/* Info Panel */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm">
@@ -2945,7 +2929,7 @@ const Remittance = () => {
                     )}
                   </button>
                 )}
-
+                {/* 
                 {formData.paymentMethod === "card" && (
                   <button
                     onClick={handleSubmitTransaction}
@@ -2966,7 +2950,7 @@ const Remittance = () => {
                       </>
                     )}
                   </button>
-                )}
+                )} */}
               </>
             )}
           </motion.div>
