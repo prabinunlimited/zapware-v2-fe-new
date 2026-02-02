@@ -1162,7 +1162,7 @@ const BankTransfer = ({
           </div>
 
           {/* Document Upload Section - Only show if onFileUpload prop is provided */}
-          {onFileUpload && (
+          {/* {onFileUpload && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Supporting Document (Optional)
@@ -1196,7 +1196,7 @@ const BankTransfer = ({
                 </div>
               )}
             </div>
-          )}
+          )} */}
         </div>
       </div>
 

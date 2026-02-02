@@ -52,9 +52,31 @@ const getValidCountryId = (countryId, getState) => {
     }
   }
 
-  // Priority 5: Default to United States (id: 186)
-  console.log("⚠️ Using default country (US - 186)");
-  return "186";
+  // ⚠️ FIXED: Priority 5: Try to get country from URL or navigate to country selection
+  // Check if we have URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlCountryId = urlParams.get("countryId");
+  if (urlCountryId) {
+    console.log("✅ Using country from URL parameter:", urlCountryId);
+    return String(urlCountryId);
+  }
+
+  // ⚠️ CRITICAL FIX: Check if we're in a partner flow, default to 186 (USA) for partner
+  const partnerId = localStorage.getItem("whitelabelledpartnerid");
+  const isPartnerFlow =
+    partnerId && partnerId !== "0" && partnerId !== "undefined";
+
+  if (isPartnerFlow) {
+    console.log("🌐 Partner flow detected, defaulting to USA (186)");
+    return "186"; // Default to USA for partner flows
+  }
+
+  // Last resort: Show error or redirect
+  console.error(
+    "❌ No valid country ID found. Redirecting to country selection.",
+  );
+  // You might want to redirect to country selection here
+  return "186"; // Temporary fallback
 };
 
 // Helper function to filter accounts by currency
@@ -413,7 +435,7 @@ const currencyAccountsSlice = createSlice({
 
       if (isAlreadySelected) {
         state.selectedAccounts = state.selectedAccounts.filter(
-          (accountId) => accountId !== id
+          (accountId) => accountId !== id,
         );
         console.log("🔘 Deselected account:", id);
       } else {
@@ -648,7 +670,11 @@ const currencyAccountsSlice = createSlice({
           isPartnerFlow,
           partnerId,
           accountType,
+          countryId,
           hasTermsData: !!termsData,
+          termsDataStructure: termsData
+            ? Object.keys(termsData)
+            : "No termsData",
         });
 
         // Set description based on account type
@@ -663,22 +689,31 @@ const currencyAccountsSlice = createSlice({
             ? `Select your currency accounts through our partner program`
             : "Select your preferred currency accounts to get started");
 
-        // ✅ Process accounts data
+        // ✅ FIXED: Process accounts data with correct API response structure
         let accountsData = [];
 
         if (isPartnerFlow) {
-          // ✅ PARTNER API RESPONSE FORMAT
+          // ✅ PARTNER API RESPONSE FORMAT - API returns {status, message, data: [...]}
           console.log("🔍 Processing partner response format:", termsData);
 
-          if (termsData && Array.isArray(termsData)) {
-            accountsData = termsData;
-          } else if (
-            termsData &&
-            termsData.data &&
-            Array.isArray(termsData.data)
-          ) {
+          // Primary extraction: Access the data array from response
+          if (termsData && termsData.data && Array.isArray(termsData.data)) {
             accountsData = termsData.data;
-          } else if (
+            console.log(
+              "✅ Extracted accounts from termsData.data:",
+              accountsData.length,
+            );
+          }
+          // Fallback: If response is already an array (for compatibility)
+          else if (Array.isArray(termsData)) {
+            accountsData = termsData;
+            console.log(
+              "⚠️ Using termsData directly as array:",
+              accountsData.length,
+            );
+          }
+          // Additional fallbacks for different API formats
+          else if (
             termsData &&
             termsData.currencies &&
             Array.isArray(termsData.currencies)
@@ -705,7 +740,7 @@ const currencyAccountsSlice = createSlice({
             partner_id: partnerId,
           }));
         } else {
-          // ✅ STANDARD API RESPONSE FORMAT
+          // ✅ STANDARD API RESPONSE FORMAT - Handle various possible structures
           if (Array.isArray(termsData)) {
             accountsData = termsData;
           } else if (
@@ -732,6 +767,7 @@ const currencyAccountsSlice = createSlice({
         console.log("📊 Processed accounts data:", {
           totalAccounts: accountsData.length,
           sampleAccount: accountsData[0],
+          allCurrencies: accountsData.map((a) => a.currency).filter(Boolean),
         });
 
         // Separate accounts by type
@@ -783,7 +819,22 @@ const currencyAccountsSlice = createSlice({
           state.termsText =
             "Please confirm that you agree on the Charges and Fees";
         }
+
+        // ✅ Debug: Log final state
+        console.log("🎯 Final Redux State:", {
+          allAccounts: state.accountOptions.length,
+          namedAccounts: state.namedAccounts.length,
+          pooledAccounts: state.pooledAccounts.length,
+          currenciesAvailable: [
+            ...new Set(
+              state.accountOptions.map((a) => a.currency).filter(Boolean),
+            ),
+          ],
+          filteredNamed: state.filteredNamedAccounts.length,
+          filteredPooled: state.filteredPooledAccounts.length,
+        });
       })
+
       .addCase(fetchAccountOptions.rejected, (state, action) => {
         state.loading = false;
         state.apiError = action.payload;

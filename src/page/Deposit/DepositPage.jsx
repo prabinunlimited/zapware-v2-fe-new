@@ -10,13 +10,12 @@ import {
   FaCheck,
   FaUniversity,
   FaTimes,
-  FaCreditCard,
   FaExclamationTriangle,
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
 import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
-import CardPayment from "./components/Card/CardPayment";
+// import CardPayment from "./components/Card/CardPayment";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -605,48 +604,48 @@ const EmptyState = ({ navigate }) => (
   </div>
 );
 
-const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
-  const handleCardPayment = async () => {
-    try {
-      // Validate
-      if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
-        toast.error("Please enter a valid amount");
-        return;
-      }
+// const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
+//   const handleCardPayment = async () => {
+//     try {
+//       // Validate
+//       if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+//         toast.error("Please enter a valid amount");
+//         return;
+//       }
 
-      if (!deposit.purpose) {
-        toast.error("Please select a purpose");
-        return;
-      }
+//       if (!deposit.purpose) {
+//         toast.error("Please select a purpose");
+//         return;
+//       }
 
-      const navigationState = {
-        customerId: customerId,
-        amount: parseFloat(deposit.amount),
-        currency: deposit.selectedCurrency || selectedCurrency,
-        purpose: deposit.purpose,
-        paymentMethod: deposit.paymentMethod,
-      };
+//       const navigationState = {
+//         customerId: customerId,
+//         amount: parseFloat(deposit.amount),
+//         currency: deposit.selectedCurrency || selectedCurrency,
+//         purpose: deposit.purpose,
+//         paymentMethod: deposit.paymentMethod,
+//       };
 
-      console.log("🚀 Navigating to card payment:", navigationState);
-      navigate("/card", { state: navigationState });
-    } catch (error) {
-      console.error("❌ Card payment error:", error);
-      toast.error("Failed to initiate card payment");
-    }
-  };
+//       console.log("🚀 Navigating to card payment:", navigationState);
+//       navigate("/card", { state: navigationState });
+//     } catch (error) {
+//       console.error("❌ Card payment error:", error);
+//       toast.error("Failed to initiate card payment");
+//     }
+//   };
 
-  return (
-    <motion.button
-      type="button"
-      onClick={handleCardPayment}
-      disabled={!deposit.amount || deposit.isSubmitting}
-      className="inline-flex justify-center items-center px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-all font-sans"
-    >
-      <FaCreditCard className="mr-2" />
-      Pay with Card
-    </motion.button>
-  );
-};
+//   return (
+//     <motion.button
+//       type="button"
+//       onClick={handleCardPayment}
+//       disabled={!deposit.amount || deposit.isSubmitting}
+//       className="inline-flex justify-center items-center px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-all font-sans"
+//     >
+//       <FaCreditCard className="mr-2" />
+//       Pay with Card
+//     </motion.button>
+//   );
+// };
 
 // Main component content without error boundary
 const DepositPageContent = () => {
@@ -1041,7 +1040,7 @@ const DepositPageContent = () => {
   const safeSelectedCurrency = deposit.selectedCurrency || "";
 
   // Check if card deposit is selected
-  const isCardDeposit = deposit.paymentMethod === "card_deposit";
+  const isCardDeposit = deposit.paymentMethod === false;
   const isManualDeposit = deposit.paymentMethod === "manual_deposit";
   const isBankDeposit = deposit.paymentMethod === "bank_deposit";
   const isBankTransfer = deposit.paymentMethod === "bank_transfer";
@@ -1327,19 +1326,13 @@ const DepositPageContent = () => {
                       Cancel
                     </motion.button>
 
-                    {/* ✅ FIXED: Different buttons for different payment methods */}
-                    {isCardDeposit ? (
-                      <CardPaymentHandler
-                        deposit={deposit}
-                        navigate={navigate}
-                        customerId={customerId}
-                        selectedCurrency={deposit.selectedCurrency}
-                      />
-                    ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
-                    (deposit.selectedCurrency === "EUR" ||
-                        deposit.selectedCurrency === "GBP" ||
-                        deposit.selectedCurrency === "DKK") &&
-                      deposit.paymentMethod === "bank_transfer" ? (
+                    {/* ✅ REMOVED: Card Payment Handler since card deposit is no longer available */}
+
+                    {/* ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK */}
+                    {(deposit.selectedCurrency === "EUR" ||
+                      deposit.selectedCurrency === "GBP" ||
+                      deposit.selectedCurrency === "DKK") &&
+                    deposit.paymentMethod === "bank_transfer" ? (
                       <motion.button
                         type="button" // Change to button type, not submit
                         onClick={() => {
@@ -1355,12 +1348,6 @@ const DepositPageContent = () => {
                             errors.purpose =
                               "Please enter a purpose for this deposit";
                           }
-
-                          // For Open Banking deposits, you might also need to check for selected bank account
-                          // Uncomment if needed:
-                          // if (!deposit.selectedBankAccount) {
-                          //   errors.bankAccount = "Please select a bank account";
-                          // }
 
                           if (Object.keys(errors).length > 0) {
                             // You need to make sure deposit.setFormErrors exists

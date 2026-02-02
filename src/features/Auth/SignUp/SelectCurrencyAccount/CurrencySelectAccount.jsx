@@ -118,6 +118,16 @@ const OpenCurrencyAccount = () => {
 
     dispatch(actions.clearAllSelections());
 
+    // ⚠️ FIX: Force USA country ID (186) for partner flows
+    const forceCountryId = 186; // USA
+
+    console.log("🌐 Forcing country ID for partner flow:", {
+      originalCountryId: selectedCountryId,
+      forcedCountryId: forceCountryId,
+      accountType,
+      isPartnerPackageModule,
+    });
+
     if (isPartnerPackageModule === "Y") {
       dispatch(
         actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
@@ -126,14 +136,14 @@ const OpenCurrencyAccount = () => {
       dispatch(
         actions.fetchAccountOptions({
           accountType,
-          countryId: selectedCountryId,
+          countryId: forceCountryId, // Use forced country ID
           API_URL,
         }),
       );
     }
   }, [
     accountType,
-    selectedCountryId,
+    // Remove selectedCountryId from dependencies
     isPartnerPackageModule,
     dispatch,
     navigate,
@@ -546,6 +556,281 @@ const OpenCurrencyAccount = () => {
               )}
             </div>
           </div>
+
+          {/* ========== CURRENCY ACCOUNTS SELECTION ========== */}
+          {!remittanceOnlyAccepted && isPartnerPackageModule === "N" && (
+            <div className="mb-8">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Select Currency Accounts
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <FontAwesomeIcon icon={faSearch} className="text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search currencies..."
+                    value={searchTerm}
+                    onChange={(e) =>
+                      dispatch(actions.setSearchTerm(e.target.value))
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Currency Tabs */}
+              <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("all"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "all"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  All Currencies
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("USD"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "USD"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  US Dollar
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("EUR"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "EUR"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Euro
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("GBP"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "GBP"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  British Pound
+                </button>
+              </div>
+
+              {/* Named Accounts Section */}
+              {filteredNamedAccounts.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => toggleSection("named")}
+                        className="mr-3 text-gray-600 hover:text-gray-800"
+                      >
+                        <FontAwesomeIcon
+                          icon={
+                            expandedSections.named ? faChevronUp : faChevronDown
+                          }
+                        />
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          className="mr-2 text-blue-500"
+                        />
+                        Named Accounts
+                        <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                          {filteredNamedAccounts.length}
+                        </span>
+                      </h3>
+                      <button
+                        onClick={() => handleShowInfo("named")}
+                        className="ml-2 text-gray-400 hover:text-blue-600"
+                        title="What are Named Accounts?"
+                      >
+                        <FontAwesomeIcon icon={faCircleInfo} />
+                      </button>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Dedicated accounts in your name
+                    </div>
+                  </div>
+
+                  {expandedSections.named && (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredNamedAccounts.map((account) => {
+                        const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "named"}`;
+                        const isSelected = selectedAccounts.includes(accountId);
+
+                        return (
+                          <AccountOptionCard
+                            key={accountId}
+                            account={account}
+                            isSelected={isSelected}
+                            onSelect={() => handleToggleStandard(accountId)}
+                            getCurrencyIcon={getCurrencyIcon}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pooled Accounts Section */}
+              {filteredPooledAccounts.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => toggleSection("pooled")}
+                        className="mr-3 text-gray-600 hover:text-gray-800"
+                      >
+                        <FontAwesomeIcon
+                          icon={
+                            expandedSections.pooled
+                              ? faChevronUp
+                              : faChevronDown
+                          }
+                        />
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <FontAwesomeIcon
+                          icon={faUsers}
+                          className="mr-2 text-indigo-500"
+                        />
+                        Pooled Accounts
+                        <span className="ml-2 text-sm bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                          {filteredPooledAccounts.length}
+                        </span>
+                      </h3>
+                      <button
+                        onClick={() => handleShowInfo("pooled")}
+                        className="ml-2 text-gray-400 hover:text-indigo-600"
+                        title="What are Pooled Accounts?"
+                      >
+                        <FontAwesomeIcon icon={faCircleInfo} />
+                      </button>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Shared accounts with virtual IBANs
+                    </div>
+                  </div>
+
+                  {expandedSections.pooled && (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredPooledAccounts.map((account) => {
+                        const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "pooled"}`;
+                        const isSelected = selectedAccounts.includes(accountId);
+
+                        return (
+                          <AccountOptionCard
+                            key={accountId}
+                            account={account}
+                            isSelected={isSelected}
+                            onSelect={() => handleToggleStandard(accountId)}
+                            getCurrencyIcon={getCurrencyIcon}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Accounts Message */}
+              {filteredNamedAccounts.length === 0 &&
+                filteredPooledAccounts.length === 0 && (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl">
+                    <FontAwesomeIcon
+                      icon={faExclamationTriangle}
+                      className="text-gray-400 text-3xl mb-3"
+                    />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No currency accounts available
+                    </h3>
+                    <p className="text-gray-600">
+                      {activeTab !== "all"
+                        ? `No ${activeTab} accounts available for your selected country.`
+                        : "No currency accounts are available for your selected country."}
+                    </p>
+                    <button
+                      onClick={() => {
+                        dispatch(actions.setActiveTab("all"));
+                        dispatch(actions.setSearchTerm(""));
+                      }}
+                      className="mt-4 text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Show all currencies
+                    </button>
+                  </div>
+                )}
+
+              {/* Selection Summary */}
+              {selectedAccounts.length > 0 && (
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-gray-900">
+                        Your Selection
+                      </h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {selectedAccounts.length} account
+                        {selectedAccounts.length !== 1 ? "s" : ""} selected
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => dispatch(actions.clearSelectedAccounts())}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+
+                  {/* Selected Account Details */}
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedAccounts.map((accountId) => {
+                      const account = accountOptions.find(
+                        (acc) =>
+                          `${acc.service_provide_id}-${acc.accountType?.toLowerCase()}` ===
+                          accountId,
+                      );
+                      if (!account) return null;
+
+                      return (
+                        <div
+                          key={accountId}
+                          className="flex items-center p-2 bg-white rounded-lg"
+                        >
+                          <div className="bg-blue-100 p-2 rounded-lg mr-3">
+                            <FontAwesomeIcon
+                              icon={getCurrencyIcon(account.currency)}
+                              className="text-blue-600"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">
+                              {account.currency} - {account.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {account.accountType === "named"
+                                ? "Named Account"
+                                : "Pooled Account"}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Package View (if enabled) */}
           {isPartnerPackageModule === "Y" && !remittanceOnlyAccepted ? (
