@@ -27,15 +27,12 @@ export const fetchCustomerProfile = createAsyncThunk(
       }
 
       // ✅ USING api.js INSTEAD OF fetch
-      const response = await api.get(
-        `/customers/${customerId}/profile`,
-        {
-          headers: {
-            Authorization: `Bearer ${authtoken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await api.get(`/customers/${customerId}/profile`, {
+        headers: {
+          Authorization: `Bearer ${authtoken}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.data.status === "success") {
         return response.data;
@@ -53,9 +50,18 @@ export const fetchAllowedModules = createAsyncThunk(
   "navigateSection/fetchAllowedModules",
   async ({ partnerId, bearertoken }, { rejectWithValue }) => {
     try {
-      // ✅ USING api.js INSTEAD OF fetch
+      // ⭐⭐⭐ CRITICAL FIX: Use the CURRENT partner ID from localStorage ⭐⭐⭐
+      const currentPartnerId =
+        localStorage.getItem("whitelabelledpartnerid") ||
+        localStorage.getItem("whitelabelled_customer_partnerid") ||
+        partnerId; // fallback to passed param
+
+      console.log(
+        `🎯 fetchAllowedModules: Using partner ID ${currentPartnerId} (was ${partnerId})`
+      );
+
       const response = await api.get(
-        `/partners/ourzap-modules/${partnerId}`,
+        `/partners/ourzap-modules/${currentPartnerId}`, // <-- USING CURRENT partnerId
         {
           headers: {
             Authorization: `Bearer ${bearertoken}`,

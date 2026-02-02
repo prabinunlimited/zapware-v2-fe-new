@@ -1,55 +1,133 @@
-// src/router/router.js
+// src/router/router.js - COMPLETE UPDATED VERSION
 import {
   createBrowserRouter,
   RouterProvider,
   Navigate,
 } from "react-router-dom";
+import { lazy, Suspense } from "react";
 
-// Import components
+// ✅ Keep Login static - it's the entry point
 import Login from "../src/features/Auth/Login/Login";
-import SignUpIndividual from "../src/features/Auth/SignUp/SignUpIndividual";
-import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
-import SelectAccountType from "../src/features/Auth/Registration/AccountType";
-import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
-import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
-import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
-import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
-import Home from "../src/page/Home/Homepage";
-import HomeRemit from "../src/page/Home/HomeRemit";
-import Convert from "../src/page/Conversion/Convert";
 
-// Import Beneficiary Components (ONLY existing files)
-import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
-import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiary";
-import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
-
-// Import route guards
+// ✅ IMPORTANT: Import route guards statically
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 
-import URLDebugger from "./URLDebugger";
-import Profile from "../src/page/Profile/Profile";
-import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
-import DepositPage from "../src/page/Deposit/DepositPage";
-import BankLink from "../src/page/Deposit/components/BankLink";
-import CardPayment from "../src/page/Deposit/components/Card/CardPayment";
-import CardPaymentIframe from "../src/page/Deposit/components/Card/CardPaymentIframe";
-import Team from "../src/page/Team/Team";
-import AddTeamMember from "../src/page/Team/AddNewMember";
-import PayoutPage from "../src/page/Payout/PayoutPage";
-import BankLetter from "./../src/page/BankLetter/BankLetter";
-import Remittance from "../src/page/Remittance/remittance";
-import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
-import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
+// ✅ CRITICAL: Lazy load ALL heavy components
+const SignUpIndividual = lazy(
+  () => import("../src/features/Auth/SignUp/SignUpIndividual"),
+);
+const SignUpInstitution = lazy(
+  () => import("../src/features/Auth/SignUp/SignUpInstitution"),
+);
+const SelectAccountType = lazy(
+  () => import("../src/features/Auth/Registration/AccountType"),
+);
+const OpenCurrencyAccount = lazy(
+  () =>
+    import("../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount"),
+);
+const PhoneVerification = lazy(
+  () => import("../src/features/Auth/Verification/PhoneVerification"),
+);
+const PlaidCallback = lazy(
+  () => import("../src/features/Auth/Registration/Plaid/PlaidCallback"),
+);
+const ForgotPassword = lazy(
+  () => import("../src/features/Auth/Password/ForgotPassword"),
+);
 
-const ProtectedLayout = () => {
-  return (
-    <>
-      <URLDebugger />
-      <ProtectedRoute />
-    </>
-  );
-};
+// ✅ CRITICAL: Lazy load heavy pages that were in the warning
+const Home = lazy(() => import("../src/page/Home/Homepage"));
+const HomeRemit = lazy(() => import("../src/page/Home/HomeRemit"));
+const Convert = lazy(() => import("../src/page/Conversion/Convert"));
+
+// ✅ EXTREMELY CRITICAL: Lazy load Deposit and Payment components (3.2MB bundle)
+const DepositPage = lazy(() => import("../src/page/Deposit/DepositPage"));
+const DepositPageIframe = lazy(
+  () => import("../src/page/Deposit/DepositPageIframe"),
+);
+const CardPayment = lazy(
+  () => import("../src/page/Deposit/components/Card/CardPayment"),
+);
+const CardPaymentIframe = lazy(
+  () => import("../src/page/Deposit/components/Card/CardPaymentIframe"),
+);
+const BankLink = lazy(() => import("../src/page/Deposit/components/BankLink"));
+const BankLinkIframe = lazy(
+  () => import("../src/page/Deposit/components/BankLinkIframe"),
+);
+const CardPaymentSuccess = lazy(
+  () => import("../src/page/Deposit/components/Card/CardPaymentSuccess"),
+);
+
+// ✅ CRITICAL: Lazy load Payout page
+const PayoutPage = lazy(() => import("../src/page/Payout/PayoutPage"));
+
+// Lazy load other heavy components
+const Beneficiaries = lazy(
+  () => import("../src/page/Beneficiary/MyBeneficiaries/Beneficiaries"),
+);
+const AddBeneficiary = lazy(
+  () => import("../src/page/Beneficiary/AddBeneficiary/AddBeneficiary"),
+);
+const EditBeneficiary = lazy(
+  () => import("../src/page/Beneficiary/EditBeneficiary/EditBeneficiary"),
+);
+const PublicBeneficiaryRegistration = lazy(
+  () => import("../src/page/Beneficiary/AddBeneficiary/PublicBeneficiaryForm"),
+);
+const BeneficiaryHomepage = lazy(
+  () => import("../src/page/RequestRemit/Homepage/BeneficiaryHomepage"),
+);
+const BeneficiariesProfile = lazy(
+  () => import("../src/components/RequestRemit/Profile/BeneficiariesProfile"),
+);
+const Profile = lazy(() => import("../src/page/Profile/Profile"));
+const TransferBalancePage = lazy(
+  () => import("../src/page/Transfer/TransferBalancePage"),
+);
+const Team = lazy(() => import("../src/page/Team/Team"));
+const AddTeamMember = lazy(() => import("../src/page/Team/AddNewMember"));
+const BankLetter = lazy(() => import("../src/page/BankLetter/BankLetter"));
+const Remittance = lazy(() => import("../src/page/Remittance/remittance"));
+const MonthlyTransactions = lazy(
+  () =>
+    import("../src/components/Dashboard/Account/Transaction/MonthlyTransactions"),
+);
+const SelectCountry = lazy(
+  () => import("../src/features/Auth/SignUp/SelectCountry"),
+);
+const AllTransactions = lazy(
+  () =>
+    import("../src/components/Dashboard/Account/Transaction/AllTransactions"),
+);
+const BeneficiaryLayout = lazy(() => import("./BeneficiaryLayout"));
+const BeneficiaryTransactions = lazy(
+  () => import("../src/page/RequestRemit/Transactions/BeneficiaryTransactions"),
+);
+const BeneficiarySenders = lazy(
+  () => import("../src/page/RequestRemit/Senders/BeneficiarySenders"),
+);
+
+// ✅ Shared Loading Component
+const PageLoading = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
+    <div className="text-center">
+      <div className="relative inline-block mb-4">
+        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+      <p className="text-gray-600 text-sm">Loading page...</p>
+    </div>
+  </div>
+);
+
+// ✅ Helper function to wrap components with Suspense
+const withSuspense = (Component) => (
+  <Suspense fallback={<PageLoading />}>
+    <Component />
+  </Suspense>
+);
 
 const router = createBrowserRouter([
   // Public routes - only accessible when not authenticated
@@ -59,120 +137,194 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Login />,
+        element: <Login />, // Keep static - first page
       },
       {
         path: "selectaccounttype",
-        element: <SelectAccountType />,
+        element: withSuspense(SelectAccountType),
+      },
+      {
+        path: "selectcountry",
+        element: withSuspense(SelectCountry),
       },
       {
         path: "signupindividual",
-        element: <SignUpIndividual />,
+        element: withSuspense(SignUpIndividual), // ✅ Now lazy loaded
       },
       {
         path: "signupinstitution",
-        element: <SignUpInstitution />,
+        element: withSuspense(SignUpInstitution),
       },
       {
         path: "opencurrencyaccount",
-        element: <OpenCurrencyAccount />,
+        element: withSuspense(OpenCurrencyAccount),
       },
       {
         path: "phoneverification",
-        element: <PhoneVerification />,
+        element: withSuspense(PhoneVerification),
       },
       {
         path: "forgotpassword",
-        element: <ForgotPassword />,
+        element: withSuspense(ForgotPassword),
       },
       {
         path: "plaidcallback",
-        element: <PlaidCallback />,
+        element: withSuspense(PlaidCallback),
+      },
+      {
+        path: "linkbankiframe/:customerId/:requestId/:accessToken",
+        element: withSuspense(BankLinkIframe),
+      },
+      {
+        path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
+        element: withSuspense(DepositPageIframe), // ✅ Now lazy loaded
+      },
+      {
+        path: "register-beneficiary",
+        element: withSuspense(PublicBeneficiaryRegistration),
       },
     ],
   },
 
-  // Protected routes - only accessible when authenticated
+  // ==================== CUSTOMER PORTAL ROUTES ====================
   {
     path: "/",
     element: <ProtectedRoute />,
     children: [
       {
         path: "home/:customerId",
-        element: <Home />,
+        element: withSuspense(Home),
       },
       {
         path: "monthlytransactions/:customerId",
-        element: <MonthlyTransactions />,
+        element: withSuspense(MonthlyTransactions),
+      },
+      {
+        path: "alltransactions/:customerId",
+        element: withSuspense(AllTransactions),
       },
       {
         path: "transfer/:customerId",
-        element: <TransferBalancePage />,
+        element: withSuspense(TransferBalancePage),
       },
+      // ✅ CRITICAL: Deposit routes now lazy loaded
       {
         path: "deposit/:customerId",
-        element: <DepositPage />,
+        element: withSuspense(DepositPage), // ✅ Now lazy loaded
       },
       {
         path: "convert/:customerId",
-        element: <Convert />,
+        element: withSuspense(Convert),
       },
       {
         path: "linkbank/:customerId",
-        element: <BankLink />,
+        element: withSuspense(BankLink),
       },
       {
         path: "deposit/:customerId/:currency",
-        element: <DepositPage />,
+        element: withSuspense(DepositPage), // ✅ Now lazy loaded
       },
+      // ✅ CRITICAL: Payment routes now lazy loaded
       {
         path: "card",
-        element: <CardPayment />,
+        element: withSuspense(CardPayment), // ✅ Now lazy loaded
       },
       {
         path: "/card/success",
-        element: <CardPaymentSuccess />, // You need to create this component
+        element: withSuspense(CardPaymentSuccess),
       },
       {
         path: "cardiframe",
-        element: <CardPaymentIframe />,
+        element: withSuspense(CardPaymentIframe), // ✅ Now lazy loaded
       },
       {
         path: "team/:customerId",
-        element: <Team />,
+        element: withSuspense(Team),
       },
-      { path: "addteam/:customerId", element: <AddTeamMember /> },
+      {
+        path: "addteam/:customerId",
+        element: withSuspense(AddTeamMember),
+      },
       {
         path: "homeremit/:customerId",
-        element: <HomeRemit />,
-      },
-      {
-        path: "beneficiaries/:customerId",
-        element: <Beneficiaries />,
-      },
-      {
-        path: "addbeneficiary/:customerId",
-        element: <AddBeneficiary />,
-      },
-      {
-        path: "editbeneficiary/:beneficiaryId",
-        element: <EditBeneficiary />,
+        element: withSuspense(HomeRemit),
       },
       {
         path: "profile/:customerId",
-        element: <Profile />,
+        element: withSuspense(Profile),
       },
+      // ✅ CRITICAL: Payout route now lazy loaded
       {
         path: "payout/:customerId",
-        element: <PayoutPage />,
+        element: withSuspense(PayoutPage), // ✅ Now lazy loaded
       },
       {
         path: "remittance/:customerId",
-        element: <Remittance />,
+        element: withSuspense(Remittance),
       },
       {
         path: "/bankletter/:accountId",
-        element: <BankLetter />,
+        element: withSuspense(BankLetter),
+      },
+
+      // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES (lazy loaded)
+      {
+        path: "beneficiaries/:customerId",
+        element: withSuspense(Beneficiaries),
+      },
+      {
+        path: "addbeneficiary/:customerId",
+        element: withSuspense(AddBeneficiary),
+      },
+      {
+        path: "editbeneficiary/:beneficiaryId",
+        element: withSuspense(EditBeneficiary),
+      },
+    ],
+  },
+
+  // ==================== BENEFICIARY PORTAL ROUTES ====================
+  {
+    path: "/beneficiary",
+    element: withSuspense(BeneficiaryLayout),
+    children: [
+      {
+        path: "profile/:beneficiaryId",
+        element: withSuspense(BeneficiariesProfile),
+      },
+      {
+        path: "homepage/:beneficiaryId",
+        element: withSuspense(BeneficiaryHomepage),
+      },
+      {
+        path: "transactions/:beneficiaryId",
+        element: withSuspense(BeneficiaryTransactions),
+      },
+      {
+        path: "senders/:beneficiaryId",
+        element: withSuspense(BeneficiarySenders),
+      },
+    ],
+  },
+
+  // ==================== LEGACY ROUTES ====================
+  {
+    path: "/benefprofile/:beneficiaryId",
+    element: withSuspense(BeneficiaryLayout),
+    children: [
+      {
+        index: true,
+        element: withSuspense(BeneficiariesProfile),
+      },
+    ],
+  },
+  {
+    path: "/benefhomepage/:beneficiaryId",
+    element: withSuspense(BeneficiaryLayout),
+    children: [
+      {
+        index: true,
+        element: withSuspense(BeneficiaryHomepage),
       },
     ],
   },

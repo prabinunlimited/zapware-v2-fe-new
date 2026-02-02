@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
@@ -63,10 +63,15 @@ const Beneficiaries = ({ mode = "list" }) => {
   const isMounted = useRef(true);
 
   // Get customerId from params or location state
-  const customerId = params.customerId || location.state?.customerId || localStorage.getItem("currentCustomerId");
+  const customerId =
+    params.customerId ||
+    location.state?.customerId ||
+    localStorage.getItem("currentCustomerId");
 
   // Redux selectors
   const beneficiaries = useSelector(selectBeneficiaries);
+  console.log("🔍 Full Redux state:", useSelector(state => state));
+
   const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
   const loading = useSelector(selectBeneficiariesLoading);
   const error = useSelector(selectBeneficiariesError);
@@ -85,23 +90,72 @@ const Beneficiaries = ({ mode = "list" }) => {
   const [searchInput, setSearchInput] = useState("");
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Cleanup function
+  // Search timeout ref
+  const searchTimeoutRef = useRef(null);
+
+  // Combined cleanup function for component unmount
   useEffect(() => {
     return () => {
       isMounted.current = false;
       dispatch(clearError());
       dispatch(clearSuccess());
+
+      // Clear any pending timeouts
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      // Always reset searching state on unmount
+      setIsSearching(false);
     };
   }, [dispatch]);
 
   // Fetch beneficiaries on component mount
   useEffect(() => {
-    if (customerId && isMounted.current) {
-      console.log("🔍 Beneficiaries Component mounted with customerId:", customerId);
-      dispatch(fetchBeneficiaries(customerId));
+    if (customerId && isMounted.current && !hasFetchedOnce) {
+      console.log(
+        "🔍 Beneficiaries Component mounted with customerId:",
+        customerId,
+      );
+
+      const loadBeneficiaries = async () => {
+        try {
+          const result = await dispatch(
+            fetchBeneficiaries(customerId),
+          ).unwrap();
+          console.log("📥 Fetched beneficiaries count:", result?.length || 0);
+          setHasFetchedOnce(true);
+        } catch (error) {
+          console.error("❌ Error loading beneficiaries:", error);
+          if (isMounted.current) {
+            toast.error("Failed to load beneficiaries");
+          }
+        }
+      };
+
+      loadBeneficiaries();
     }
-  }, [dispatch, customerId]);
+  }, [dispatch, customerId, hasFetchedOnce]);
+
+  useEffect(() => {
+    console.log("🔄 Beneficiaries state changed:", {
+      loading,
+      error,
+      beneficiariesCount: beneficiaries?.length || 0,
+      beneficiaries: beneficiaries?.slice(0, 3), // Show first 3 for debugging
+      filteredCount: filteredBeneficiaries?.length || 0,
+    });
+  }, [beneficiaries, loading, error, filteredBeneficiaries]);
+
+  // Sync search input with Redux search query
+  useEffect(() => {
+    setSearchInput(searchQuery || "");
+    // Reset searching state when search query changes
+    setIsSearching(false);
+  }, [searchQuery]);
 
   // Handle success and error messages
   useEffect(() => {
@@ -116,18 +170,46 @@ const Beneficiaries = ({ mode = "list" }) => {
     }
   }, [success, error, dispatch]);
 
-  // Handle search input changes
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchInput(value);
-    dispatch(setSearchQuery(value));
-  };
+  // Handle search input changes with debounce - FIXED
+  const handleSearchChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setSearchInput(value);
+
+      // Clear previous timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      // Show searching indicator only when there's text
+      if (value.trim()) {
+        setIsSearching(true);
+      } else {
+        setIsSearching(false);
+      }
+
+      // Debounce the search dispatch
+      searchTimeoutRef.current = setTimeout(() => {
+        dispatch(setSearchQuery(value));
+        // Always reset searching after dispatch
+        setIsSearching(false);
+      }, 300); // 300ms debounce
+    },
+    [dispatch],
+  );
 
   // Handle clear search
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearchInput("");
     dispatch(setSearchQuery(""));
-  };
+    setIsSearching(false);
+
+    // Clear any pending timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+  }, [dispatch]);
 
   // Toggle filter visibility
   const handleToggleFilter = () => {
@@ -142,7 +224,7 @@ const Beneficiaries = ({ mode = "list" }) => {
   // Navigate to edit beneficiary page
   const handleEditBeneficiary = (beneficiary) => {
     navigate(`/editbeneficiary/${beneficiary.id}`, {
-      state: { customerId, beneficiaryData: beneficiary }
+      state: { customerId, beneficiaryData: beneficiary },
     });
   };
 
@@ -165,11 +247,13 @@ const Beneficiaries = ({ mode = "list" }) => {
     if (beneficiaryToDelete && customerId) {
       setIsLoading(true);
       try {
-        await dispatch(deleteBeneficiary({
-          customerId,
-          beneficiaryId: beneficiaryToDelete.id
-        })).unwrap();
-        
+        await dispatch(
+          deleteBeneficiary({
+            customerId,
+            beneficiaryId: beneficiaryToDelete.id,
+          }),
+        ).unwrap();
+
         toast.success("Beneficiary deleted successfully!");
         // Refresh the list
         dispatch(fetchBeneficiaries(customerId));
@@ -193,11 +277,13 @@ const Beneficiaries = ({ mode = "list" }) => {
   const handleToggleVisibility = async (beneficiaryId) => {
     if (customerId) {
       try {
-        await dispatch(toggleBeneficiaryVisibility({
-          customerId,
-          beneficiaryId
-        })).unwrap();
-        
+        await dispatch(
+          toggleBeneficiaryVisibility({
+            customerId,
+            beneficiaryId,
+          }),
+        ).unwrap();
+
         // Refresh the list
         dispatch(fetchBeneficiaries(customerId));
       } catch (error) {
@@ -208,9 +294,9 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Handle beneficiary selection for bulk actions
   const handleBeneficiarySelect = (beneficiaryId) => {
-    setSelectedBeneficiaries(prev => {
+    setSelectedBeneficiaries((prev) => {
       if (prev.includes(beneficiaryId)) {
-        return prev.filter(id => id !== beneficiaryId);
+        return prev.filter((id) => id !== beneficiaryId);
       } else {
         return [...prev, beneficiaryId];
       }
@@ -222,7 +308,7 @@ const Beneficiaries = ({ mode = "list" }) => {
     if (selectedBeneficiaries.length === filteredBeneficiaries.length) {
       setSelectedBeneficiaries([]);
     } else {
-      setSelectedBeneficiaries(filteredBeneficiaries.map(b => b.id));
+      setSelectedBeneficiaries(filteredBeneficiaries.map((b) => b.id));
     }
   };
 
@@ -243,14 +329,18 @@ const Beneficiaries = ({ mode = "list" }) => {
       try {
         // Delete each selected beneficiary
         for (const beneficiaryId of selectedBeneficiaries) {
-          await dispatch(deleteBeneficiary({
-            customerId,
-            beneficiaryId
-          })).unwrap();
+          await dispatch(
+            deleteBeneficiary({
+              customerId,
+              beneficiaryId,
+            }),
+          ).unwrap();
         }
-        
-        toast.success(`${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`);
-        
+
+        toast.success(
+          `${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`,
+        );
+
         // Clear selection and refresh list
         setSelectedBeneficiaries([]);
         dispatch(fetchBeneficiaries(customerId));
@@ -281,12 +371,16 @@ const Beneficiaries = ({ mode = "list" }) => {
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
-      day: "numeric"
+      day: "numeric",
     });
   };
 
-  // Loading overlay
-  if (loading) {
+  // Determine if we should show initial loading
+  const showInitialLoading =
+    loading && !hasFetchedOnce && beneficiaries.length === 0;
+
+  // Loading overlay for initial load
+  if (showInitialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -303,8 +397,12 @@ const Beneficiaries = ({ mode = "list" }) => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8 bg-white rounded-lg shadow-lg">
           <FaExclamationTriangle className="text-red-500 text-5xl mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Customer ID Missing</h2>
-          <p className="text-gray-600 mb-6">Please navigate to this page through the proper route.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            Customer ID Missing
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Please navigate to this page through the proper route.
+          </p>
           <button
             onClick={() => navigate("/dashboard")}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -318,7 +416,7 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      {/* Loading overlay */}
+      {/* Loading overlay for actions */}
       {isLoading && (
         <div className="fixed inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-50 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
@@ -362,11 +460,13 @@ const Beneficiaries = ({ mode = "list" }) => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Beneficiaries</p>
-                    <p className="text-2xl font-bold text-gray-800">{beneficiariesCount}</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {beneficiariesCount}
+                    </p>
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-green-50 p-4 rounded-xl border border-green-200">
                 <div className="flex items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600 mr-3">
@@ -380,7 +480,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
                 <div className="flex items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 text-yellow-600 mr-3">
@@ -394,7 +494,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                 <button
                   onClick={handleAddBeneficiary}
@@ -406,11 +506,17 @@ const Beneficiaries = ({ mode = "list" }) => {
               </div>
             </div>
 
-            {/* Search and Filter Bar */}
+            {/* Search and Filter Bar - FIXED */}
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="flex-1 relative">
                 <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  <FaSearch />
+                  {isSearching ? (
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      <RingLoader size={14} color="#3B82F6" />
+                    </div>
+                  ) : (
+                    <FaSearch />
+                  )}
                 </div>
                 <input
                   type="text"
@@ -418,20 +524,24 @@ const Beneficiaries = ({ mode = "list" }) => {
                   onChange={handleSearchChange}
                   placeholder="Search beneficiaries by name, phone, or email..."
                   className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading && !hasFetchedOnce}
                 />
-                {searchInput && (
+                {searchInput && !isSearching && (
                   <button
                     onClick={handleClearSearch}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    type="button"
+                    disabled={loading}
                   >
                     <FaTimes />
                   </button>
                 )}
               </div>
-              
+
               <button
                 onClick={handleToggleFilter}
-                className={`px-6 py-3 rounded-xl flex items-center transition-all duration-300 ${
+                disabled={loading && !hasFetchedOnce}
+                className={`px-6 py-3 rounded-xl flex items-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
                   filterVisibility
                     ? "bg-blue-600 text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -440,11 +550,12 @@ const Beneficiaries = ({ mode = "list" }) => {
                 <FaFilter className="mr-2" />
                 Filter
               </button>
-              
+
               {selectedBeneficiaries.length > 0 && (
                 <button
                   onClick={handleBulkDeleteClick}
-                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-300 flex items-center"
+                  disabled={isLoading}
+                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-300 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FaTrash className="mr-2" />
                   Delete Selected ({selectedBeneficiaries.length})
@@ -497,12 +608,20 @@ const Beneficiaries = ({ mode = "list" }) => {
 
         {/* Beneficiaries Table */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {filteredBeneficiaries.length === 0 ? (
+          {/* Show loading indicator only when searching within existing data */}
+          {loading && !hasFetchedOnce ? (
+            <div className="p-12 text-center">
+              <div className="flex flex-col items-center">
+                <RingLoader size={40} color="#3B82F6" />
+                <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
+              </div>
+            </div>
+          ) : filteredBeneficiaries.length === 0 ? (
             <div className="p-12 text-center">
               <div className="flex flex-col items-center">
                 <FaUser className="text-gray-300 text-6xl mb-4" />
                 <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                  No Beneficiaries Found
+                  {searchQuery ? "No Results Found" : "No Beneficiaries Found"}
                 </h3>
                 <p className="text-gray-500 mb-6">
                   {searchQuery
@@ -530,11 +649,17 @@ const Beneficiaries = ({ mode = "list" }) => {
                         <div className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={selectedBeneficiaries.length === filteredBeneficiaries.length}
+                            checked={
+                              selectedBeneficiaries.length ===
+                                filteredBeneficiaries.length &&
+                              filteredBeneficiaries.length > 0
+                            }
                             onChange={handleSelectAll}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                           />
-                          <span className="ml-3 text-sm font-semibold text-gray-700">Select</span>
+                          <span className="ml-3 text-sm font-semibold text-gray-700">
+                            Select
+                          </span>
                         </div>
                       </th>
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
@@ -569,8 +694,12 @@ const Beneficiaries = ({ mode = "list" }) => {
                         <td className="py-4 px-6">
                           <input
                             type="checkbox"
-                            checked={selectedBeneficiaries.includes(beneficiary.id)}
-                            onChange={() => handleBeneficiarySelect(beneficiary.id)}
+                            checked={selectedBeneficiaries.includes(
+                              beneficiary.id,
+                            )}
+                            onChange={() =>
+                              handleBeneficiarySelect(beneficiary.id)
+                            }
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                           />
                         </td>
@@ -610,25 +739,35 @@ const Beneficiaries = ({ mode = "list" }) => {
                         <td className="py-4 px-6">
                           <div className="flex items-center">
                             <button
-                              onClick={() => handleToggleVisibility(beneficiary.id)}
+                              onClick={() =>
+                                handleToggleVisibility(beneficiary.id)
+                              }
                               className={`p-2 rounded-full ${
-                                beneficiary.status === 1 || beneficiary.active_status === 1
+                                beneficiary.status === 1 ||
+                                beneficiary.active_status === 1
                                   ? "text-green-600 hover:bg-green-50"
                                   : "text-gray-400 hover:bg-gray-100"
                               }`}
                             >
-                              {beneficiary.status === 1 || beneficiary.active_status === 1 ? (
+                              {beneficiary.status === 1 ||
+                              beneficiary.active_status === 1 ? (
                                 <FaEye size={16} />
                               ) : (
                                 <FaEyeSlash size={16} />
                               )}
                             </button>
-                            <span className={`ml-2 px-3 py-1 text-xs font-semibold rounded-full ${
-                              beneficiary.status === 1 || beneficiary.active_status === 1
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}>
-                              {beneficiary.status === 1 || beneficiary.active_status === 1 ? "Visible" : "Hidden"}
+                            <span
+                              className={`ml-2 px-3 py-1 text-xs font-semibold rounded-full ${
+                                beneficiary.status === 1 ||
+                                beneficiary.active_status === 1
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {beneficiary.status === 1 ||
+                              beneficiary.active_status === 1
+                                ? "Visible"
+                                : "Hidden"}
                             </span>
                           </div>
                         </td>
@@ -665,18 +804,21 @@ const Beneficiaries = ({ mode = "list" }) => {
                   </tbody>
                 </table>
               </div>
-              
+
               {/* Pagination or footer */}
               <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <div className="flex flex-col md:flex-row justify-between items-center">
                   <div className="text-sm text-gray-500 mb-4 md:mb-0">
-                    Showing {filteredBeneficiaries.length} of {beneficiariesCount} beneficiaries
+                    Showing {filteredBeneficiaries.length} of{" "}
+                    {beneficiariesCount} beneficiaries
                   </div>
                   <div className="flex items-center space-x-2">
                     <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Previous
                     </button>
-                    <span className="px-4 py-2 text-sm text-gray-700">Page 1 of 1</span>
+                    <span className="px-4 py-2 text-sm text-gray-700">
+                      Page 1 of 1
+                    </span>
                     <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Next
                     </button>
@@ -715,8 +857,8 @@ const Beneficiaries = ({ mode = "list" }) => {
               <h3 className="text-xl font-bold">Confirm Bulk Delete</h3>
             </div>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete {selectedBeneficiaries.length} selected beneficiary(ies)?
-              This action cannot be undone.
+              Are you sure you want to delete {selectedBeneficiaries.length}{" "}
+              selected beneficiary(ies)? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-4">
               <button

@@ -33,8 +33,8 @@ import {
   selectHasFetchedAccount,
 } from "./HomeSlice";
 
-// Import API Coordinator
-import { apiCoordinator } from "../../services/api";
+// Import centralizedApi directly
+import { centralizedApi } from "../../services/api";
 
 import {
   extractErrorMessage,
@@ -166,64 +166,92 @@ const HomepageContent = React.memo(() => {
     );
   }, [accounts]);
 
-  // ✅ FIXED: SINGLE COORDINATED API CALL
+  // ✅ FIXED: SINGLE COORDINATED API CALL - RUNS ONLY ONCE
   useEffect(() => {
-    if (!customerId || !authtoken || !bearertoken || apiCallsCoordinatedRef.current) {
+    // Early returns to prevent unnecessary executions
+    if (!customerId || !authtoken || !bearertoken) {
       return;
     }
 
-    console.log("🚀 Homepage: Starting coordinated API calls");
+    // Use a ref to track if we've already triggered the API calls
+    if (apiCallsCoordinatedRef.current) {
+      console.log("🚀 Homepage: API calls already coordinated, skipping");
+      return;
+    }
+
+    console.log("🚀 Homepage: Starting coordinated API calls ONCE");
     apiCallsCoordinatedRef.current = true;
-    fetchCountRef.current += 1;
 
-    // Generate signatures for coordination
-    const accountsSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`;
-    const profileSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
-    const fxSig = `POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`;
+    // Use existing centralizedApi functions - no new functions needed
+    const checkAndFetchAccounts = () => {
+      console.log("🔍 checkAndFetchAccounts DEBUG:", {
+        customerId,
+        authtoken: authtoken ? "Present" : "Missing",
+        hasFetchedAccount,
+        accountLoading,
+        shouldFetch: !hasFetchedAccount && !accountLoading,
+      });
 
-    // Check if we need to fetch accounts
-    const shouldFetchAccounts = 
-      !hasFetchedAccount && 
-      !accountLoading && 
-      !apiCoordinator.isFetching(accountsSig) &&
-      !apiCoordinator.hasRecentData(accountsSig);
+      if (!hasFetchedAccount && !accountLoading) {
+        console.log(
+          "📊 Homepage: Fetching account details for customer",
+          customerId
+        );
 
-    if (shouldFetchAccounts) {
-      console.log("📊 Homepage: Fetching account details");
-      dispatch(fetchAccountDetails({ customerId, authtoken }));
-    }
+        // Make sure we have required data
+        if (!customerId || !authtoken) {
+          console.error("❌ Missing required data for account fetch:", {
+            customerId,
+            authtoken: authtoken ? "Present" : "Missing",
+          });
+          return;
+        }
 
-    // Check if we need to fetch profile
-    const hasProfileData = profileData?.first_name || localStorage.getItem("firstName");
-    const shouldFetchProfile = 
-      !hasFetchedProfile && 
-      !profileLoading && 
-      !hasProfileData && 
-      !apiCoordinator.isFetching(profileSig) &&
-      !apiCoordinator.hasRecentData(profileSig);
+        dispatch(fetchAccountDetails({ customerId, authtoken }))
+          .then((result) => {
+            console.log("✅ Homepage: Account fetch completed");
+          })
+          .catch((error) => {
+            console.error("❌ Homepage: Account fetch failed", error);
+          });
+      } else {
+        console.log("📊 Homepage: Accounts already fetched or loading", {
+          hasFetchedAccount,
+          accountLoading,
+        });
+      }
+    };
 
-    if (shouldFetchProfile) {
-      console.log("👤 Homepage: Fetching user profile");
-      dispatch(fetchUserProfile({ customerId, bearertoken }));
-    }
+    const checkAndFetchProfile = () => {
+      const hasProfileData =
+        profileData?.first_name || localStorage.getItem("firstName");
+      if (!hasFetchedProfile && !profileLoading && !hasProfileData) {
+        console.log("👤 Homepage: Fetching user profile");
+        dispatch(fetchUserProfile({ customerId, bearertoken }));
+      } else {
+        console.log(
+          "👤 Homepage: Profile already fetched, loading, or has data"
+        );
+      }
+    };
 
-    // Check if we need to fetch FX data
-    const shouldFetchFX = 
-      !hasFxData && 
-      !apiCoordinator.isFetching(fxSig) &&
-      !apiCoordinator.hasRecentData(fxSig);
+    const checkAndFetchFX = () => {
+      if (!hasFxData) {
+        console.log("💱 Homepage: Fetching FX currencies");
+        dispatch(fetchPartnerFxCurrencies(bearertoken));
+      } else {
+        console.log("💱 Homepage: FX data already available");
+      }
+    };
 
-    if (shouldFetchFX) {
-      console.log("💱 Homepage: Fetching FX currencies");
-      dispatch(fetchPartnerFxCurrencies(bearertoken));
-    }
+    // Execute all checks
+    checkAndFetchAccounts();
+    checkAndFetchProfile();
+    checkAndFetchFX();
 
-  }, [
-    customerId, authtoken, bearertoken, 
-    hasFetchedAccount, accountLoading,
-    hasFetchedProfile, profileLoading,
-    hasFxData, profileData, dispatch
-  ]);
+    // Track that we've attempted the initial fetch
+    initialFetchDoneRef.current = true;
+  }, []); // <-- IMPORTANT: Empty dependency array means this runs ONCE on mount
 
   // Setup background and text color - optimized
   useEffect(() => {
@@ -304,6 +332,28 @@ const HomepageContent = React.memo(() => {
     }
   }, [authtoken, customerId]);
 
+  useEffect(() => {
+    console.log("🔍 Homepage Redux State:", {
+      customerId,
+      authtoken: authtoken ? "Present" : "Missing",
+      hasFetchedAccount,
+      accountLoading,
+      accountsCount: safeArray(accounts).length,
+      hasFetchedProfile,
+      profileLoading,
+      hasFxData,
+    });
+  }, [
+    customerId,
+    authtoken,
+    hasFetchedAccount,
+    accountLoading,
+    accounts,
+    hasFetchedProfile,
+    profileLoading,
+    hasFxData,
+  ]);
+
   // Currency change handler - memoized
   const handleCurrencyChange = useCallback((currency) => {
     // This would dispatch setSelectedCurrency action
@@ -364,8 +414,8 @@ const HomepageContent = React.memo(() => {
     initialFetchDoneRef.current = false;
     apiCallsCoordinatedRef.current = false;
 
-    // Clear API cache
-    apiCoordinator.clear();
+    // Clear API cache using centralizedApi
+    centralizedApi.clearAllCache();
 
     // Small delay to allow state update
     setTimeout(() => {
@@ -466,26 +516,61 @@ const HomepageContent = React.memo(() => {
           )}
 
           {/* API Coordination Debug Panel */}
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <div className="fixed top-4 left-4 z-50 bg-green-600 text-white p-3 rounded-lg text-xs max-w-xs">
-              <div className="font-bold mb-2">API Coordination</div>
+              <div className="font-bold mb-2">
+                API Coordination (centralizedApi)
+              </div>
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span>Accounts:</span>
-                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`) ? '🔄' : '✅'}</span>
+                  <span>
+                    {centralizedApi.dataManager.getPendingRequest(
+                      centralizedApi.dataManager.getCacheKey({
+                        method: "GET",
+                        url: `https://zapware.unlimitedremit.com/api/active-account-details/${customerId}`,
+                        params: {},
+                        data: {},
+                      })
+                    )
+                      ? "🔄"
+                      : "✅"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Profile:</span>
-                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`) ? '🔄' : '✅'}</span>
+                  <span>
+                    {centralizedApi.dataManager.getPendingRequest(
+                      centralizedApi.dataManager.getCacheKey({
+                        method: "GET",
+                        url: `https://zapware.unlimitedremit.com/api/customers/${customerId}/profile`,
+                        params: {},
+                        data: {},
+                      })
+                    )
+                      ? "🔄"
+                      : "✅"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>FX:</span>
-                  <span>{apiCoordinator.isFetching(`POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`) ? '🔄' : '✅'}</span>
+                  <span>
+                    {centralizedApi.dataManager.getPendingRequest(
+                      centralizedApi.dataManager.getCacheKey({
+                        method: "POST",
+                        url: `https://zapware.unlimitedremit.com/api/partner-fxcurrencies`,
+                        params: {},
+                        data: { partner_id: "9" },
+                      })
+                    )
+                      ? "🔄"
+                      : "✅"}
+                  </span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => {
-                  apiCoordinator.clear();
+                  centralizedApi.clearAllCache();
                   window.location.reload();
                 }}
                 className="mt-2 bg-red-500 px-2 py-1 rounded text-xs w-full"
@@ -547,7 +632,9 @@ const HomepageContent = React.memo(() => {
               <div>FX Data: {hasFxData ? "Yes" : "No"}</div>
               <div>Loading: {isLoading ? "Yes" : "No"}</div>
               <div>Emergency Stop: {emergencyStop ? "Yes" : "No"}</div>
-              <div>API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}</div>
+              <div>
+                API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}
+              </div>
             </div>
           )}
         </motion.div>

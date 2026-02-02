@@ -34,6 +34,11 @@ import transferReducer from "../page/Transfer/transferSlice";
 import beneficiariesReducer from "../page/Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 import addBeneficiaryReducer from "../page/Beneficiary/AddBeneficiary/addBeneficiarySlice";
 import modalReducer from "../page/Beneficiary/MyBeneficiaries/ModalSlice";
+import beneficiariesHeaderReducer from "../components/RequestRemit/Header/BeneficiariesHeaderSlice";
+import beneficiariesHomepageReducer from "../page/RequestRemit/Homepage/beneficiaryHomepageSlice";
+import beneficiaryNavigationReducer from "../components/RequestRemit/Navigation/Slices/BeneficiaryNavigationSlice";
+import beneficiaryTransactionReducer from "../page/RequestRemit/Transactions/BeneficiaryTransactionSlice";
+import beneficiarySendersReducer from "../page/RequestRemit/Senders/Slice/beneficiarySendersSlice";
 
 // ===================== DEPOSIT SLICES =====================
 import depositReducer from "../page/Deposit/slices/depositSlice";
@@ -43,7 +48,7 @@ import uiDepositReducer from "../page/Deposit/slices/uiSlice";
 import bankLinkReducer from "../page/Deposit/slices/bankLinkSlice";
 
 // ===================== CONVERSION SLICES =====================
-import conversionReducer from "../page/Conversion/slice/ConversionSlice"
+import conversionReducer from "../page/Conversion/slice/ConversionSlice";
 
 // ===================== CARD PAYMENT SLICES =====================
 import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
@@ -351,6 +356,11 @@ export const store = configureStore({
     beneficiaries: beneficiariesReducer,
     addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
+    beneficiariesHeader: beneficiariesHeaderReducer,
+    beneficiaryNavigation: beneficiaryNavigationReducer,
+    beneficiaryHomepage: beneficiariesHomepageReducer,
+    beneficiaryTransaction: beneficiaryTransactionReducer,
+    beneficiarySenders: beneficiarySendersReducer,
 
     // Payout
     payout: payoutReducer,

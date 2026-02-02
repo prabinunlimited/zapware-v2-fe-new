@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -11,7 +17,7 @@ import {
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
 
@@ -36,6 +42,7 @@ import {
   selectIsNamedAccount,
   selectSelectedAccounts,
   selectAccountOptions,
+  selectHasAnyNamedAccounts,
 } from "../SignUp/SelectCurrencyAccount/currencyAccountsSelectors";
 
 import {
@@ -226,7 +233,7 @@ const Institution = () => {
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
   const zipLookup = useSelector(selectZipLookup);
-  const locationLoading = useSelector(selectLocationLoading); 
+  const locationLoading = useSelector(selectLocationLoading);
 
   const isNamedAccount = useSelector(selectIsNamedAccount);
   const selectedAccounts = useSelector(selectSelectedAccounts);
@@ -236,19 +243,23 @@ const Institution = () => {
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
 
-   // ADD THESE STATE VARIABLES:
+  // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
   const [zipApiError, setZipApiError] = useState(null);
-  const countryCodeRef = useRef('');
-
-  
+  const countryCodeRef = useRef("");
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
     const isNamedAccount = useSelector(selectIsNamedAccount);
     const selectedAccounts = useSelector(selectSelectedAccounts);
     const accountOptions = useSelector(selectAccountOptions);
+
+    console.log("🔍 SelectorDebug:", {
+      isNamedAccount,
+      selectedAccountsCount: selectedAccounts?.length || 0,
+      accountOptionsCount: accountOptions?.length || 0,
+    });
 
     return null;
   };
@@ -489,13 +500,45 @@ const Institution = () => {
 
   const locationStateData = location.state || {};
 
+  const {
+    service_provide_ids = [],
+    referral_code = "",
+    agent_code = "",
+    package_currencies = [],
+    kyc_verify = [],
+    document_upload = null,
+    owner_add = "Y",
+    ssn_required = "N",
+    ein_required = "N",
+    remit_customer = 0,
+  } = locationStateData;
+
+  const remittanceOnlyAccepted =
+    remit_customer === 1 || remit_customer === true;
+
+  // DEBUG: Log the location state data
+  useEffect(() => {
+    console.log("🔍 locationStateData check:", {
+      hasData: !!locationStateData,
+      remit_customer: locationStateData?.remit_customer,
+      remittanceOnlyAccepted,
+      accountOptions: locationStateData?.accountOptions,
+      service_provide_ids: locationStateData?.service_provide_ids,
+    });
+  }, [locationStateData, remittanceOnlyAccepted]);
+
   const processLocationState = useCallback(
     (data) => {
       if (data && Object.keys(data).length > 0) {
         dispatch(setLocationStateData(data));
 
         if (data.service_provide_ids) {
-          // Process service provider IDs silently
+          console.log("📦 Service Provider IDs:", data.service_provide_ids);
+
+          setLocalFormData((prev) => ({
+            ...prev,
+            service_provide_ids: data.service_provide_ids,
+          }));
         }
 
         if (data.package_currencies) {
@@ -545,8 +588,157 @@ const Institution = () => {
   useEffect(() => {
     if (locationStateData && Object.keys(locationStateData).length > 0) {
       processLocationState(locationStateData);
+
+      // Check SSN requirement from the actual API response
+      if (
+        locationStateData.service_provide_ids &&
+        locationStateData.accountOptions
+      ) {
+        // Find if any selected account requires SSN
+        const selectedAccountNeedsSSN =
+          locationStateData.service_provide_ids.some((idWithType) => {
+            const [serviceId, type] = idWithType.split("-");
+            const account = locationStateData.accountOptions.find(
+              (a) =>
+                a.service_provide_id.toString() === serviceId &&
+                a.accountType === type
+            );
+            return account && account.ssn_required === "Y";
+          }) || false;
+
+        console.log("🔍 SSN Requirement Check:", {
+          selectedAccountNeedsSSN,
+          accountOptions: locationStateData.accountOptions,
+          selectedIds: locationStateData.service_provide_ids,
+          selectedAccounts: locationStateData.service_provide_ids.map((id) => {
+            const [serviceId, type] = id.split("-");
+            const account = locationStateData.accountOptions.find(
+              (a) =>
+                a.service_provide_id.toString() === serviceId &&
+                a.accountType === type
+            );
+            return {
+              id,
+              currency: account?.currency,
+              type: account?.accountType,
+              ssn_required: account?.ssn_required,
+            };
+          }),
+        });
+
+        // Store this in Redux
+        dispatch(
+          setFormField({
+            field: "ssnRequiredForSelectedAccount",
+            value: selectedAccountNeedsSSN,
+          })
+        );
+      }
     }
-  }, [locationStateData, processLocationState]);
+  }, [locationStateData, processLocationState, dispatch]);
+
+  useEffect(() => {
+    if (
+      locationStateData?.service_provide_ids &&
+      locationStateData?.accountOptions
+    ) {
+      const serviceProviderIds = locationStateData.service_provide_ids;
+      const accountOptions = locationStateData.accountOptions;
+
+      let hasNamed = false;
+      let hasUSD = false;
+      let hasUSDNamed = false;
+
+      try {
+        hasNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            return parts.length > 1 && parts[1] === "named";
+          }) || false;
+
+        hasUSD =
+          serviceProviderIds.some((idWithType) => {
+            const id = parseInt(idWithType.split("-")[0]);
+            const account = accountOptions.find(
+              (opt) => opt.service_provide_id === id
+            );
+            return account && account.currency === "USD";
+          }) || false;
+
+        hasUSDNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            if (parts.length > 1 && parts[1] === "named") {
+              const id = parseInt(parts[0]);
+              const account = accountOptions.find(
+                (opt) => opt.service_provide_id === id
+              );
+              return account && account.currency === "USD";
+            }
+            return false;
+          }) || false;
+      } catch (error) {
+        console.error("❌ Error determining institution account types:", error);
+      }
+
+      console.log("🏢 Institution Account Analysis:", {
+        hasNamed,
+        hasUSD,
+        hasUSDNamed,
+        serviceProviderIds,
+        accountOptions,
+        remittanceOnlyAccepted,
+      });
+
+      // CRITICAL FIX: Set the showField flags based on conditions
+      const shouldShowFields = hasUSDNamed || remittanceOnlyAccepted;
+
+      console.log("🎯 Setting field visibility:", {
+        shouldShowFields,
+        hasUSDNamed,
+        remittanceOnlyAccepted,
+        isNamedAccount: hasUSDNamed, // This should match the selector
+      });
+
+      // Store in Redux
+      dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
+      dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
+      dispatch(setFormField({ field: "isNamedAccount", value: hasUSDNamed }));
+
+      // SET THE FIELD VISIBILITY FLAGS
+      dispatch(
+        setFormField({
+          field: "showBusinessAliasField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showBusinessTypeField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showEINField",
+          value: shouldShowFields,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "showNAICSField",
+          value: shouldShowFields,
+        })
+      );
+
+      dispatch(
+        setFormField({
+          field: "service_provide_ids",
+          value: serviceProviderIds,
+        })
+      );
+    }
+  }, [locationStateData, dispatch, remittanceOnlyAccepted]);
 
   useEffect(() => {
     if (!initialLoadRef.current) {
@@ -577,8 +769,13 @@ const Institution = () => {
 
   const validateEIN = useCallback(
     (ein) => {
-      if (isNamedAccount && (!ein || ein.trim() === "")) {
-        return "EIN is required for USD Named Accounts";
+      if (
+        (isNamedAccount || remittanceOnlyAccepted) && // Check both
+        (!ein || ein.trim() === "")
+      ) {
+        return isNamedAccount
+          ? "EIN is required for USD Named Accounts"
+          : "EIN is required for Remittance Services Only";
       }
       if (ein && ein.trim() !== "") {
         const cleanEIN = ein.replace(/-/g, "");
@@ -588,14 +785,25 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted]
   );
 
   const validateSSN = useCallback(
-    (ssn, isUSSelected) => {
-      if (isNamedAccount && isUSSelected) {
+    (ssn, currentCountry = "") => {
+      const hasUSDNamedAccount = isNamedAccount;
+      const isRemittanceOnly = remittanceOnlyAccepted;
+      const isUSCountry =
+        currentCountry === "United States" || currentCountry === 186;
+
+      // Validate SSN if EITHER condition is met AND country is NOT US:
+      const shouldValidate =
+        (hasUSDNamedAccount || isRemittanceOnly) && !isUSCountry;
+
+      if (shouldValidate) {
         if (!ssn || ssn.trim() === "") {
-          return "SSN is required for USD Named Accounts for US residents";
+          return hasUSDNamedAccount
+            ? "SSN is required for USD Named Accounts"
+            : "SSN is required for Remittance Services Only accounts";
         }
         const cleanSSN = ssn.replace(/-/g, "");
         if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
@@ -604,17 +812,22 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted]
   );
 
   const validateBusinessAliasField = useCallback(
     (businessAlias) => {
-      if (isNamedAccount && (!businessAlias || businessAlias.trim() === "")) {
-        return "Business alias is required for USD Named Accounts";
+      if (
+        (isNamedAccount || remittanceOnlyAccepted) && // Check both
+        (!businessAlias || businessAlias.trim() === "")
+      ) {
+        return isNamedAccount
+          ? "Business alias is required for USD Named Accounts"
+          : "Business alias is required for Remittance Services Only";
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted]
   );
 
   const formatTaxId = useCallback((value, type) => {
@@ -658,28 +871,39 @@ const Institution = () => {
         });
 
         let conditionalFieldsValid = true;
-        if (showEINField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.ein &&
-            !validateEIN(validationValues.ein);
-        }
-        // FIXED: NAICS validation for named accounts
-        if (showNAICSField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.naice_code &&
-            validationValues.naice_code.toString().trim() !== "";
-        }
-        if (showBusinessTypeField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid && validationValues.business_type;
-        }
-        if (showBusinessAliasField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.business_alias &&
-            !validateBusinessAliasField(validationValues.business_alias);
+
+        // Update all conditions to check both
+        const shouldValidateFields = isNamedAccount || remittanceOnlyAccepted;
+
+        if (shouldValidateFields) {
+          // Business Alias
+          if (
+            !validationValues.business_alias ||
+            validationValues.business_alias.trim() === ""
+          ) {
+            conditionalFieldsValid = false;
+          }
+
+          // Business Type
+          if (!validationValues.business_type) {
+            conditionalFieldsValid = false;
+          }
+
+          // EIN
+          if (validationValues.ein && validationValues.ein.trim() !== "") {
+            const cleanEIN = validationValues.ein.replace(/-/g, "");
+            if (cleanEIN.length !== 9 || !/^\d+$/.test(cleanEIN)) {
+              conditionalFieldsValid = false;
+            }
+          }
+
+          // NAICS Code
+          if (
+            !validationValues.naice_code ||
+            validationValues.naice_code.toString().trim() === ""
+          ) {
+            conditionalFieldsValid = false;
+          }
         }
 
         const hasValidationErrors = Object.keys(errors).some((key) => {
@@ -720,12 +944,17 @@ const Institution = () => {
         const hasValidationErrors = requiredFields.some(
           (field) => errors[field] && touched[field]
         );
-        const isUSSelected = validationValues.country === "United States";
+
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = remittanceOnlyAccepted;
+        const isUSCountry =
+          validationValues.country === "United States" ||
+          validationValues.country === 186;
+
         const ssnValid =
-          !showSSNField ||
-          !isUSSelected ||
+          !((hasUSDNamedAccount || isRemittanceOnly) && isUSCountry) ||
           (validationValues.ssn &&
-            !validateSSN(validationValues.ssn, isUSSelected));
+            !validateSSN(validationValues.ssn, validationValues.country));
 
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
@@ -775,16 +1004,23 @@ const Institution = () => {
           }
         );
 
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = remittanceOnlyAccepted;
         const isControllerUSSelected =
-          validationValues.controller_country_address === "United States";
+          validationValues.controller_country === "United States" ||
+          validationValues.controller_country === 186;
+
         const ssnValid =
-          !showSSNField ||
-          !isControllerUSSelected ||
+          !(
+            (hasUSDNamedAccount || isRemittanceOnly) &&
+            isControllerUSSelected
+          ) ||
           (validationValues.controller_ssn &&
             !validateSSN(
               validationValues.controller_ssn,
-              isControllerUSSelected
+              validationValues.controller_country
             ));
+
         const passwordsMatch =
           validationValues.controller_password ===
           validationValues.controller_confirm_password;
@@ -840,13 +1076,21 @@ const Institution = () => {
             "date_incorporation",
             "industry_type",
           ];
-          if (showEINField) step1Fields.push("ein");
-          if (showNAICSField) step1Fields.push("naice_code");
-          if (showBusinessTypeField) step1Fields.push("business_type");
-          if (showBusinessAliasField) step1Fields.push("business_alias");
+
+          // Always include these fields if either condition is true
+          if (isNamedAccount || remittanceOnlyAccepted) {
+            step1Fields.push(
+              "business_alias",
+              "business_type",
+              "ein",
+              "naice_code"
+            );
+          }
+
           if (showBusinessEmailField) step1Fields.push("business_email");
           if (showBusinessWebsiteField) step1Fields.push("business_website");
           return step1Fields;
+
         case 2:
           const step2Fields = [
             "first_name",
@@ -867,9 +1111,19 @@ const Institution = () => {
             "gender",
             "dob",
           ];
-          if (showSSNField && values.country === "United States")
+
+          // Add SSN field if (USD named account OR remittance only) AND country is NOT US
+          const hasUSDNamedAccount = isNamedAccount;
+          const isRemittanceOnly = remittanceOnlyAccepted;
+          const isUSCountry =
+            values.country === "United States" || values.country === 186;
+
+          // Show SSN only when NOT US country
+          if ((hasUSDNamedAccount || isRemittanceOnly) && !isUSCountry) {
             step2Fields.push("ssn");
+          }
           return step2Fields;
+
         case 3:
           const step3Fields = ["is_controller"];
           if (values.is_controller === "no") {
@@ -892,11 +1146,22 @@ const Institution = () => {
               "controller_gender",
               "controller_dob"
             );
-            if (showSSNField && values.controller_country === "United States") {
+
+            // ADD controller SSN condition
+            const hasUSDNamedAccount = isNamedAccount;
+            const isControllerUSCountry =
+              values.controller_country === "United States" ||
+              values.controller_country === 186;
+
+            if (
+              (hasUSDNamedAccount && isControllerUSCountry) ||
+              (remittanceOnlyAccepted && isControllerUSCountry)
+            ) {
               step3Fields.push("controller_ssn");
             }
           }
           return step3Fields;
+
         case 4:
           const ownerFields = [];
           if (values.owner_details && values.owner_details.length > 0) {
@@ -924,9 +1189,10 @@ const Institution = () => {
                   ownerFields.push(`owner_details[${index}].owner_role_id`);
                 }
               }
+              // Update to check both conditions
               if (
-                owner.owner_country_id === "United States" &&
-                isNamedAccount
+                (isNamedAccount || remittanceOnlyAccepted) &&
+                ssn_required === "Y"
               ) {
                 ownerFields.push(
                   `owner_details[${index}].ssn`,
@@ -937,6 +1203,7 @@ const Institution = () => {
             });
           }
           return ownerFields;
+
         case 5:
           const step5Fields = ["terms_agreement"];
           if (documentUpload) {
@@ -951,16 +1218,14 @@ const Institution = () => {
       }
     },
     [
-      showEINField,
-      showNAICSField,
-      showBusinessTypeField,
-      showBusinessAliasField,
       showBusinessEmailField,
       showBusinessWebsiteField,
       showSSNField,
       documentUpload,
       isNamedAccount,
       documents,
+      remittanceOnlyAccepted,
+      ssn_required,
     ]
   );
 
@@ -1036,9 +1301,21 @@ const Institution = () => {
   const handleNextStep = useCallback(
     async (values, { setErrors, setTouched, validateForm }) => {
       try {
+        // SSN confirmation check - moved inside where values is available
+        if (
+          currentStep === 2 &&
+          (isNamedAccount || remittanceOnlyAccepted) && // Check both
+          !(values.country === "United States" || values.country === 186) // Only if NOT US
+        ) {
+          setPendingNextStep(true);
+          setShowSSNConfirmation(true);
+          return;
+        }
+
         if (currentStep === 2) {
           validateStepDataFlow(2, 4, values);
         }
+
         setFormValues(values);
         setLocalFormData((prev) => ({ ...prev, ...values }));
 
@@ -1091,15 +1368,6 @@ const Institution = () => {
             return;
           }
 
-          if (
-            currentStep === 2 &&
-            isNamedAccount &&
-            values.country === "United States"
-          ) {
-            setPendingNextStep(true);
-            setShowSSNConfirmation(true);
-            return;
-          }
           proceedToNextStep();
         } else {
           dispatch(
@@ -1123,6 +1391,7 @@ const Institution = () => {
       isStepComplete,
       getFirstErrorMessage,
       isNamedAccount,
+      remittanceOnlyAccepted,
       proceedToNextStep,
     ]
   );
@@ -1130,16 +1399,26 @@ const Institution = () => {
   const handleSSNConfirm = useCallback(() => {
     setShowSSNConfirmation(false);
     if (pendingNextStep) {
+      console.log(
+        `SSN confirmed for ${
+          isNamedAccount
+            ? "USD Named Account"
+            : "Remittance Services Only account"
+        }`
+      );
       proceedToNextStep();
     }
-  }, [pendingNextStep, proceedToNextStep]);
+  }, [
+    pendingNextStep,
+    proceedToNextStep,
+    isNamedAccount,
+    remittanceOnlyAccepted,
+  ]);
 
   const handleSSNCancel = useCallback(() => {
     setShowSSNConfirmation(false);
     setPendingNextStep(false);
   }, []);
-
-
 
   const handleSubmit = useCallback(
     async (values, { setSubmitting, setErrors }) => {
@@ -1148,6 +1427,8 @@ const Institution = () => {
         setShowFullScreenLoader(true);
 
         const finalFormData = { ...getInitialFormData(), ...values };
+
+        const serviceProviderIds = locationStateData.service_provide_ids || [];
 
         const userImagesArray = [];
 
@@ -1243,6 +1524,7 @@ const Institution = () => {
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
+          service_providers: serviceProviderIds,
 
           user_images: userImagesArray,
 
@@ -1291,7 +1573,7 @@ const Institution = () => {
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
-          isPartnerPackageModule: institutionState.partnerPackageModule,
+          isPartnerPackageModule: "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
           kycVerify: kycVerify,
@@ -1321,6 +1603,7 @@ const Institution = () => {
             };
           }),
 
+          bank_account_options: service_provide_ids,
           is_named_account: isNamedAccount,
           has_usd_named_account: isNamedAccount,
           customer_type: "institution",
@@ -1342,6 +1625,39 @@ const Institution = () => {
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
 
+          // ✅ ADD SSN LOGIC HERE: Determine if SSN was collected
+          // Check for SSN in responsible person (step 2)
+          const hasResponsiblePersonSSN = !!finalFormData.ssn;
+
+          // Check for SSN in controller (step 3)
+          const hasControllerSSN = !!finalFormData.controller_ssn;
+
+          // Check for SSN in owner details (step 4)
+          const hasOwnerSSN =
+            finalFormData.owner_details?.some((owner) => !!owner.ssn) || false;
+
+          // Overall SSN status: if ANY SSN was collected
+          const hasSSN =
+            hasResponsiblePersonSSN || hasControllerSSN || hasOwnerSSN;
+
+          console.log("🔍 Institution SSN Status:", {
+            hasResponsiblePersonSSN,
+            hasControllerSSN,
+            hasOwnerSSN,
+            overallHasSSN: hasSSN,
+            responsiblePersonSSN: finalFormData.ssn
+              ? "Provided"
+              : "Not provided",
+            controllerSSN: finalFormData.controller_ssn
+              ? "Provided"
+              : "Not provided",
+            ownerSSNs:
+              finalFormData.owner_details?.map((owner) => ({
+                name: owner.owner_first_name,
+                hasSSN: !!owner.ssn,
+              })) || [],
+          });
+
           navigate("/phoneverification", {
             state: {
               mobileNumber: mobileNumber,
@@ -1349,6 +1665,7 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
+              hasSSN: hasSSN, // ✅ Pass SSN status to phone verification
             },
           });
         } else {
@@ -1422,6 +1739,7 @@ const Institution = () => {
       showBusinessWebsiteField,
       institutionState,
       countryOptions,
+      locationStateData,
     ]
   );
 
@@ -1533,8 +1851,32 @@ const Institution = () => {
       formatTaxId,
       handleControllerZipLookup,
       isZipLoading,
-      activeField, 
+      activeField,
     }) => {
+      console.log("🎯 Formik Render - SSN Debug:", {
+        currentStep,
+        country: values.country,
+        isUS: values.country === "United States",
+        institutionStateSSN: institutionState.ssnRequiredForSelectedAccount,
+        locationStateDataSSNCheck: (() => {
+          if (
+            !locationStateData.accountOptions ||
+            !locationStateData.service_provide_ids
+          ) {
+            return "No data";
+          }
+          const needsSSN = locationStateData.accountOptions.some(
+            (account) =>
+              locationStateData.service_provide_ids.includes(
+                `${account.service_provide_id}-${account.accountType}`
+              ) && account.ssn_required === "Y"
+          );
+          return needsSSN ? "YES" : "NO";
+        })(),
+        shouldShowSSN:
+          institutionState.ssnRequiredForSelectedAccount &&
+          values.country === "United States",
+      });
       const dispatch = useDispatch();
       const syncControllerFromPrimary = useCallback(() => {
         const primaryContactFields = {
@@ -1904,20 +2246,24 @@ const Institution = () => {
                 onChange={(e) => {
                   const zipCode = e.target.value;
                   enhancedHandleChange("controller_zip_code", setFieldValue)(e);
-                  
+
                   // Clear previous timer
                   if (zipDebounceTimer) {
                     clearTimeout(zipDebounceTimer);
                   }
-                  
+
                   // Set debounced lookup
                   const timer = setTimeout(() => {
                     const countryId = values.controller_country;
-                    if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                    if (
+                      zipCode &&
+                      countryId &&
+                      zipCode.replace(/\s+/g, "").length >= 3
+                    ) {
                       handleControllerZipLookup(zipCode, countryId);
                     }
                   }, 1000);
-                  
+
                   setZipDebounceTimer(timer);
                 }}
                 onBlur={handleBlur}
@@ -2001,7 +2347,7 @@ const Institution = () => {
               />
 
               {/* Row 9: Gender */}
-          
+
               <SelectField
                 id="controller_gender"
                 label="Gender"
@@ -2058,34 +2404,57 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 11: SSN Field (Conditional - Full Width) */}
-              {values.controller_country === "United States" &&
-                isNamedAccount &&
-                values.is_controller === "no" && (
+              {(function () {
+                // Check if either USD named account OR remittance only is selected
+                const hasUSDNamedAccount = isNamedAccount;
+                const isRemittanceOnly = remittanceOnlyAccepted;
+
+                // Check if country is United States
+                const isUSCountry =
+                  values.country === "United States" || values.country === 186;
+
+                // Show SSN field if EITHER condition is true AND country is US
+                const shouldShowSSNField =
+                  (hasUSDNamedAccount || isRemittanceOnly) && isUSCountry;
+
+                console.log("🔍 Step 2 SSN Field Conditions Check:", {
+                  hasUSDNamedAccount,
+                  isRemittanceOnly,
+                  isUSCountry,
+                  shouldShowSSNField,
+                  countryValue: values.country,
+                  isNamedAccount,
+                  remittanceOnlyAccepted,
+                });
+
+                return shouldShowSSNField ? (
                   <div className="md:col-span-2">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <FormField
-                          id="controller_ssn"
+                          id="ssn"
                           label="Social Security Number (SSN)"
-                          name="controller_ssn"
-                          value={values.controller_ssn || ""}
+                          name="ssn"
+                          value={values.ssn || ""}
                           onChange={(e) => {
                             const formatted = formatTaxId(
                               e.target.value,
                               "ssn"
                             );
                             enhancedHandleChange(
-                              "controller_ssn",
+                              "ssn",
                               setFieldValue
-                            )({ target: { value: formatted } });
+                            )({
+                              target: { value: formatted },
+                            });
                           }}
                           onBlur={handleBlur}
-                          touched={touched.controller_ssn}
-                          error={errors.controller_ssn}
+                          onFocus={() => setActiveField("ssn")}
+                          touched={touched.ssn}
+                          error={errors.ssn}
                           required={true}
-                          disabled={values.is_controller === "yes"}
                           placeholder="XXX-XX-XXXX"
+                          activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                       </div>
@@ -2094,11 +2463,13 @@ const Institution = () => {
                       </div>
                     </div>
                     <p className="text-xs text-gray-600 mt-1">
-                      Required for US residents with USD Named Accounts for tax
-                      reporting purposes.
+                      {hasUSDNamedAccount
+                        ? "Required for USD Named Accounts with United States as registered country."
+                        : "Required for Remittance Services Only accounts with United States as registered country."}
                     </p>
                   </div>
-                )}
+                ) : null;
+              })()}
             </div>
           </div>
         </div>
@@ -2161,20 +2532,22 @@ const Institution = () => {
         initialValues={getInitialFormData()}
         validationSchema={institutionSchema(currentStep, {
           isNamedAccount,
+          remittanceOnlyAccepted,
           country: getInitialFormData().country_of_registration,
           currency: defaultCurrency?.code || defaultCurrency?.currency_code,
           kycVerify,
           documentUpload,
-          ssnRequired: isNamedAccount,
-          einRequired: isNamedAccount,
+          ssnRequired: ssn_required,
+          einRequired: isNamedAccount || remittanceOnlyAccepted,
           accountType,
-          showNAICSField: isNamedAccount,
-          showEINField,
-          showBusinessTypeField,
+          showNAICSField: isNamedAccount || remittanceOnlyAccepted,
+          showEINField: isNamedAccount || remittanceOnlyAccepted,
+          showBusinessTypeField: isNamedAccount || remittanceOnlyAccepted,
           showIndustryTypeField,
-          showBusinessAliasField,
+          showBusinessAliasField: isNamedAccount || remittanceOnlyAccepted,
           showBusinessEmailField,
           showBusinessWebsiteField,
+          ssn_required: ssn_required,
         })}
         validateOnBlur={true}
         validateOnChange={false}
@@ -2197,101 +2570,145 @@ const Institution = () => {
             setFormValues(values);
           }, [values]);
 
-           // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
-          const handleBusinessZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) {
-              console.log('❌ Country code not found for ID:', countryId);
-              return;
-            }
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                // Auto-fill city and state for business address
-                if (result.city) {
-                  setFieldValue('registered_address_street_city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('registered_address_street_state', result.state);
-                }
+          // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
+          const handleBusinessZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) {
+                console.log("❌ Country code not found for ID:", countryId);
+                return;
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-              setZipApiError(error.message || 'Unable to fetch location data');
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]); // Now setFieldValue is in scope!
 
-          const handleResponsiblePersonZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('state', result.state);
-                }
-              }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+              setIsZipLoading(true);
+              setZipApiError(null);
 
-          const handleControllerZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('controller_city', result.city);
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  // Auto-fill city and state for business address
+                  if (result.city) {
+                    setFieldValue(
+                      "registered_address_street_city",
+                      result.city
+                    );
+                  }
+                  if (result.state) {
+                    setFieldValue(
+                      "registered_address_street_state",
+                      result.state
+                    );
+                  }
                 }
-                if (result.state) {
-                  setFieldValue('controller_state', result.state);
-                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+                setZipApiError(
+                  error.message || "Unable to fetch location data"
+                );
+              } finally {
+                setIsZipLoading(false);
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+            },
+            [dispatch, countryOptions, setFieldValue]
+          );
+
+          const handleResponsiblePersonZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("city", result.city);
+                  }
+                  if (result.state) {
+                    setFieldValue("state", result.state);
+                  }
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue]
+          );
+
+          const handleControllerZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("controller_city", result.city);
+                  }
+                  if (result.state) {
+                    setFieldValue("controller_state", result.state);
+                  }
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue]
+          );
 
           React.useEffect(() => {
             setFormValues(values);
           }, [values]);
 
           const shouldShowSSNField = isNamedAccount && values.country === 186;
+
+          // Debug log for field visibility
+          console.log("🎯 FIELD VISIBILITY DEBUG:", {
+            isNamedAccount,
+            remittanceOnlyAccepted,
+            shouldShowBusinessFields: isNamedAccount || remittanceOnlyAccepted,
+            showBusinessAliasField,
+            showBusinessTypeField,
+            showEINField,
+            showNAICSField,
+            valuesHasBusinessAlias: !!values.business_alias,
+            valuesHasBusinessType: !!values.business_type,
+            valuesHasEIN: !!values.ein,
+            valuesHasNAICS: !!values.naice_code,
+          });
 
           return (
             <Form className="space-y-6">
@@ -2334,7 +2751,6 @@ const Institution = () => {
                     <h2 className="text-xl font-semibold mb-4">
                       Business Information
                     </h2>
-
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <FormField
@@ -2374,9 +2790,10 @@ const Institution = () => {
                       />
                     </div>
 
-                    {/* Business Alias and Business Type on same row */}
+                    {/* Business Alias and Business Type on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {showBusinessAliasField && (
+                      {/* Business Alias - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
                         <FormField
                           id="business_alias"
                           label="Business Alias"
@@ -2391,13 +2808,15 @@ const Institution = () => {
                           onFocus={() => setActiveField("business_alias")}
                           touched={touched.business_alias}
                           error={errors.business_alias}
-                          required={showBusinessAliasField}
+                          required={true}
                           activeField={activeField}
                           placeholder="Unique business identifier"
                           fieldStyles={FIELD_STYLES}
                         />
                       )}
-                      {showBusinessTypeField && (
+
+                      {/* Business Type - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
                         <SelectField
                           id="business_type"
                           label="Business Type"
@@ -2412,58 +2831,6 @@ const Institution = () => {
                           )}
                           touched={touched.business_type}
                           error={errors.business_type}
-                          required={showBusinessTypeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      )}
-                    </div>
-
-                    {/* EIN and NAICS Code on same row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {showEINField && (
-                        <FormField
-                          id="ein"
-                          label="EIN (Employer Identification Number)"
-                          name="ein"
-                          value={values.ein || ""}
-                          onChange={(e) => {
-                            const formatted = formatTaxId(
-                              e.target.value,
-                              "ein"
-                            );
-                            enhancedHandleChange(
-                              "ein",
-                              setFieldValue,
-                              setBusinessInstitutionEIN
-                            )({ target: { value: formatted } });
-                          }}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("ein")}
-                          touched={touched.ein}
-                          error={errors.ein}
-                          required={showEINField}
-                          placeholder="XX-XXXXXXX"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      )}
-
-                      {/* NAICS Code Field */}
-                      {showNAICSField && isNamedAccount && (
-                        <SelectField
-                          id="naice_code"
-                          label="NAICS Code (Required for USD Named Accounts)"
-                          options={naicsOptions}
-                          onChange={enhancedSelectChange(
-                            "naice_code",
-                            setFieldValue,
-                            setBusinessInstitutionNAICS
-                          )}
-                          value={naicsOptions.find(
-                            (opt) => opt.value === values.naice_code
-                          )}
-                          touched={touched.naice_code}
-                          error={errors.naice_code}
                           required={true}
                           fieldStyles={FIELD_STYLES}
                         />
@@ -2528,6 +2895,61 @@ const Institution = () => {
                         <div className="text-red-500 text-xs mt-1">
                           {errors.industry_type}
                         </div>
+                      )}
+                    </div>
+
+                    {/* EIN and NAICS Code on same row - FIXED CONDITION */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      {/* EIN Field - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
+                        <FormField
+                          id="ein"
+                          label="EIN (Employer Identification Number)"
+                          name="ein"
+                          value={values.ein || ""}
+                          onChange={(e) => {
+                            const formatted = formatTaxId(
+                              e.target.value,
+                              "ein"
+                            );
+                            enhancedHandleChange(
+                              "ein",
+                              setFieldValue,
+                              setBusinessInstitutionEIN
+                            )({
+                              target: { value: formatted },
+                            });
+                          }}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("ein")}
+                          touched={touched.ein}
+                          error={errors.ein}
+                          required={true}
+                          placeholder="XX-XXXXXXX"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      )}
+
+                      {/* NAICS Code Field - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
+                        <SelectField
+                          id="naice_code"
+                          label="NAICS Code (Required for USD Named Accounts)"
+                          options={naicsOptions}
+                          onChange={enhancedSelectChange(
+                            "naice_code",
+                            setFieldValue,
+                            setBusinessInstitutionNAICS
+                          )}
+                          value={naicsOptions.find(
+                            (opt) => opt.value === values.naice_code
+                          )}
+                          touched={touched.naice_code}
+                          error={errors.naice_code}
+                          required={true}
+                          fieldStyles={FIELD_STYLES}
+                        />
                       )}
                     </div>
 
@@ -2616,7 +3038,6 @@ const Institution = () => {
                         />
                       </div>
                     </div>
-
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-3">
                         Registered Address
@@ -2624,7 +3045,7 @@ const Institution = () => {
 
                       {/* ZIP/Postal Code and Registered Address Country on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <SelectField
+                        <SelectField
                           id="registered_address_street_country"
                           label="Country"
                           options={countryOptions}
@@ -2645,7 +3066,7 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                       <FormField
+                        <FormField
                           id="registered_address_street_zip"
                           label="ZIP/Postal Code"
                           name="registered_address_street_zip"
@@ -2656,41 +3077,48 @@ const Institution = () => {
                               "registered_address_street_zip",
                               setFieldValue
                             )(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
-                              const countryId = values.registered_address_street_country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                              const countryId =
+                                values.registered_address_street_country;
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
                                 handleBusinessZipLookup(zipCode, countryId);
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_address_street_zip")}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_zip")
+                          }
                           touched={touched.registered_address_street_zip}
                           error={errors.registered_address_street_zip}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        {isZipLoading && activeField === "registered_address_street_zip" && (
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <RingLoader size={16} color="#3b82f6" />
-                          </div>
-                        )}
-                       
+                        {isZipLoading &&
+                          activeField === "registered_address_street_zip" && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <RingLoader size={16} color="#3b82f6" />
+                            </div>
+                          )}
                       </div>
 
                       {/* City and State/Province on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <FormField
+                        <FormField
                           id="registered_address_street_state"
                           label="State/Province"
                           name="registered_address_street_state"
@@ -2728,7 +3156,6 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       
                       </div>
 
                       {/* Street Address and Street Address 2 on same row */}
@@ -2985,7 +3412,7 @@ const Institution = () => {
                                 onBlur={handleBlur}
                                 placeholder="Select Country Code"
                                 formatOptionLabel={formatOptionLabel}
-                                filterOption={filterOption} // Add this line
+                                filterOption={filterOption}
                                 isSearchable
                                 isLoading={countriesLoading}
                                 styles={{
@@ -3163,46 +3590,75 @@ const Institution = () => {
                         fieldStyles={FIELD_STYLES}
                       />
 
-                      {/* FIXED: Check by country ID instead of name */}
-                      {isNamedAccount && values.country === 186 && (
-                        <div className="md:col-span-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <FormField
-                                id="ssn"
-                                label="Social Security Number (SSN)"
-                                name="ssn"
-                                value={values.ssn || ""}
-                                onChange={(e) => {
-                                  const formatted = formatTaxId(
-                                    e.target.value,
-                                    "ssn"
-                                  );
-                                  enhancedHandleChange(
-                                    "ssn",
-                                    setFieldValue
-                                  )({ target: { value: formatted } });
-                                }}
-                                onBlur={handleBlur}
-                                onFocus={() => setActiveField("ssn")}
-                                touched={touched.ssn}
-                                error={errors.ssn}
-                                required={true}
-                                placeholder="XXX-XX-XXXX"
-                                activeField={activeField}
-                                fieldStyles={FIELD_STYLES}
-                              />
+                      {(function () {
+                        // Check if either USD named account OR remittance only is selected
+                        const hasUSDNamedAccount = isNamedAccount;
+                        const isRemittanceOnly = remittanceOnlyAccepted;
+
+                        // Check if country is United States
+                        const isUSCountry =
+                          values.country === "United States" ||
+                          values.country === 186;
+
+                        // SHOW SSN field if BOTH conditions are true:
+                        // 1. Either hasUSDNamedAccount OR isRemittanceOnly is true
+                        // 2. AND isUSCountry is true
+                        const shouldShowSSNField =
+                          (hasUSDNamedAccount || isRemittanceOnly) &&
+                          isUSCountry;
+
+                        console.log("🔍 Step 2 SSN Field Logic:", {
+                          hasUSDNamedAccount,
+                          isRemittanceOnly,
+                          isUSCountry,
+                          shouldShowSSNField,
+                          countryValue: values.country,
+                        });
+
+                        return shouldShowSSNField ? (
+                          <div className="md:col-span-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <FormField
+                                  id="ssn"
+                                  label="Social Security Number (SSN)"
+                                  name="ssn"
+                                  value={values.ssn || ""}
+                                  onChange={(e) => {
+                                    const formatted = formatTaxId(
+                                      e.target.value,
+                                      "ssn"
+                                    );
+                                    enhancedHandleChange(
+                                      "ssn",
+                                      setFieldValue
+                                    )({
+                                      target: { value: formatted },
+                                    });
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField("ssn")}
+                                  touched={touched.ssn}
+                                  error={errors.ssn}
+                                  required={true}
+                                  placeholder="XXX-XX-XXXX"
+                                  activeField={activeField}
+                                  fieldStyles={FIELD_STYLES}
+                                />
+                              </div>
+                              <div className="mt-6">
+                                <SSNInfoPopup />
+                              </div>
                             </div>
-                            <div className="mt-6">
-                              <SSNInfoPopup />
-                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                              Required for{" "}
+                              {hasUSDNamedAccount
+                                ? "USD Named Accounts"
+                                : "Remittance Services Only accounts"}
+                            </p>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">
-                            Required for US residents with USD Named Accounts
-                            for tax reporting purposes.
-                          </p>
-                        </div>
-                      )}
+                        ) : null;
+                      })()}
                     </div>
 
                     <div className="mt-8">
@@ -3239,20 +3695,27 @@ const Institution = () => {
                           onChange={(e) => {
                             const zipCode = e.target.value;
                             enhancedHandleChange("zip_code", setFieldValue)(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
                               const countryId = values.country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
-                                handleResponsiblePersonZipLookup(zipCode, countryId);
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
+                                handleResponsiblePersonZipLookup(
+                                  zipCode,
+                                  countryId
+                                );
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
@@ -3299,12 +3762,11 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                     
                       </div>
 
                       {/* Street Address 2 and ZIP/Postal Code on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                         <FormField
+                        <FormField
                           id="street_address_1"
                           label="Street Address 1"
                           name="street_address_1"
@@ -3337,9 +3799,7 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       
                       </div>
-
                     </div>
 
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">
@@ -3473,7 +3933,7 @@ const Institution = () => {
                       passwordValidationRules={passwordValidationRules}
                       formatTaxId={formatTaxId}
                       handleControllerZipLookup={handleControllerZipLookup}
-                      isZipLoading={isZipLoading} 
+                      isZipLoading={isZipLoading}
                       activeField={activeField}
                     />
                   </motion.div>
@@ -3707,9 +4167,13 @@ const Institution = () => {
                 <SSNConfirmationPopup
                   onClose={handleSSNCancel}
                   onConfirm={handleSSNConfirm}
+                  accountType={
+                    isNamedAccount
+                      ? "USD Named Account"
+                      : "Remittance Services Only"
+                  }
                 />
               )}
-              
             </Form>
           );
         }}

@@ -1,7 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
 import {
-  FaCreditCard,
   FaUniversity,
   FaMoneyBillWave,
   FaInfoCircle,
@@ -32,13 +31,6 @@ const PaymentMethodSelection = ({
     }
 
     const paymentMethodDefinitions = {
-      card_deposit: {
-        value: "card_deposit",
-        label: "Card Deposit",
-        icon: <FaCreditCard />,
-        description: "Instant deposit using debit/credit card",
-        help: "Instant deposit using your debit or credit card. Processed immediately with secure encryption.",
-      },
       manual_deposit: {
         value: "manual_deposit",
         label: "Manual Deposit",
@@ -83,16 +75,18 @@ const PaymentMethodSelection = ({
       });
     }
 
-    // Default methods based on currency
+    // Default methods based on currency (CARD PAYMENT REMOVED)
     const defaultMethods = {
-      USD: ["card_deposit", "manual_deposit", "bank_deposit"],
-      EUR: ["card_deposit", "manual_deposit", "bank_transfer"],
-      GBP: ["card_deposit", "manual_deposit", "bank_transfer"],
-      DKK: ["card_deposit", "manual_deposit", "bank_transfer"],
-      AED: ["manual_deposit", "card_deposit"],
+      USD: ["manual_deposit", "bank_deposit"],
+      EUR: ["manual_deposit", "bank_transfer"],
+      GBP: ["manual_deposit", "bank_transfer"],
+      DKK: ["manual_deposit", "bank_transfer"],
+      AED: ["manual_deposit"], // Removed card_deposit from AED
     };
 
-    const allowedMethods = defaultMethods[selectedCurrency] || ["card_deposit", "manual_deposit"];
+    const allowedMethods = defaultMethods[selectedCurrency] || [
+      "manual_deposit",
+    ];
     return allowedMethods
       .filter((method) => paymentMethodDefinitions[method])
       .map((method) => paymentMethodDefinitions[method]);
@@ -135,19 +129,34 @@ const PaymentMethodSelection = ({
         </span>
       </div>
 
-      {/* Currency-specific hints */}
+      {/* Currency-specific hints - UPDATED */}
       {selectedCurrency === "USD" && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-700">
-            <strong>USD Deposits:</strong> Use "Link Bank Account" to connect your US bank via Plaid
+            <strong>USD Deposits:</strong> Use "Bank Transfer" to connect your
+            US bank via Plaid or "Manual Deposit" for account transfer
           </p>
         </div>
       )}
-      
-      {(selectedCurrency === "EUR" || selectedCurrency === "GBP" || selectedCurrency === "DKK") && (
+
+      {(selectedCurrency === "EUR" ||
+        selectedCurrency === "GBP" ||
+        selectedCurrency === "DKK") && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-sm text-green-700">
-            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer" for instant Open Banking transfers
+            <strong>{selectedCurrency} Deposits:</strong> Use "Bank Transfer"
+            for instant Open Banking transfers or "Manual Deposit" for account
+            transfer
+          </p>
+        </div>
+      )}
+
+      {/* ✅ UPDATED: AED-specific hint */}
+      {selectedCurrency === "AED" && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm text-purple-700">
+            <strong>AED Deposits:</strong> Use "Manual Deposit" for bank
+            transfer (card payment not available for AED)
           </p>
         </div>
       )}

@@ -1,7 +1,6 @@
-// CurrencySelectAccount.jsx (Redux Version)
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowRight,
@@ -31,204 +30,179 @@ import {
   faCircleInfo,
   faUserTie,
 } from "@fortawesome/free-solid-svg-icons";
-import { RingLoader } from "react-spinners";
-import PropTypes from "prop-types";
+import { ClipLoader, RingLoader } from "react-spinners";
 
-import RegistrationLayout from "../../../../components/ProgressBar/RegistrationLayout";
-import ProgressBar from "../../../../components/ProgressBar/ProgressBar";
-import useCurrentStep from "../../../../components/ProgressBar/useCurrentStep";
+// 1. SELECTORS
+import * as selectors from "./currencyAccountsSelectors";
 
-// Import Redux actions and selectors
-import {
-  fetchAccountOptions,
-  fetchTermsContent,
-  setReferralCode,
-  setTermsAccepted,
-  setSearchTerm,
-  setActiveTab,
-  setRemittanceOnlyAccepted,
-  setTermsModalOpen,
-  toggleAccountSelection,
-  clearError,
-  setSelectedAccounts,
-  setReferralError,
-  setAgentCode,
-  setAgentError,
-  validateReferralCode,
-  validateAgentCode,
-  clearValidationMessage,
-} from "./currencyAccountsSlice";
-import {
-  selectAccountOptions,
-  selectNamedAccounts,
-  selectPooledAccounts,
-  selectUcaDescription,
-  selectSelectedAccounts,
-  selectReferralCode,
-  selectReferralError,
-  selectLoading,
-  selectTermsText,
-  selectTermsAccepted,
-  selectApiError,
-  selectTermsContent,
-  selectSearchTerm,
-  selectFilteredNamedAccounts,
-  selectFilteredPooledAccounts,
-  selectActiveTab,
-  selectRemittanceOnlyAccepted,
-  selectTermsModalOpen,
-  selectAgentCode,
-  selectAgentError,
-  selectIsReferralValidating,
-  selectIsAgentValidating,
-  selectValidationMessage,
-  selectIsSubmitDisabled,
-  selectReferralSuccessMessage,
-  selectAgentSuccessMessage,
-} from "./currencyAccountsSelectors";
+// 2. ACTIONS
+import * as actions from "./currencyAccountsSlice";
 
-const CurrencySelectAccount = () => {
+const OpenCurrencyAccount = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
 
-  const { accountType } = location.state || {};
+  const { accountType, selectedCountryId } = location.state || {};
+  const API_URL = import.meta.env.VITE_API_URL;
 
-  // Select state from Redux store
-  const accountOptions = useSelector(selectAccountOptions);
-  const namedAccounts = useSelector(selectNamedAccounts);
-  const pooledAccounts = useSelector(selectPooledAccounts);
-  const ucaDescription = useSelector(selectUcaDescription);
-  const selectedAccounts = useSelector(selectSelectedAccounts);
-  const referralCode = useSelector(selectReferralCode);
-  const referralError = useSelector(selectReferralError);
-  const loading = useSelector(selectLoading);
-  const termsText = useSelector(selectTermsText);
-  const termsAccepted = useSelector(selectTermsAccepted);
-  const apiError = useSelector(selectApiError);
-  const termsContent = useSelector(selectTermsContent);
-  const searchTerm = useSelector(selectSearchTerm);
-  const filteredNamedAccounts = useSelector(selectFilteredNamedAccounts);
-  const filteredPooledAccounts = useSelector(selectFilteredPooledAccounts);
-  const activeTab = useSelector(selectActiveTab);
-  const remittanceOnlyAccepted = useSelector(selectRemittanceOnlyAccepted);
-  const termsModalOpen = useSelector(selectTermsModalOpen);
-  const agentCode = useSelector(selectAgentCode);
-  const agentError = useSelector(selectAgentError);
-  const isReferralValidating = useSelector(selectIsReferralValidating);
-  const isAgentValidating = useSelector(selectIsAgentValidating);
-  const validationMessage = useSelector(selectValidationMessage);
-  const isSubmitDisabled = useSelector(selectIsSubmitDisabled);
-  const referralSuccessMessage = useSelector(selectReferralSuccessMessage);
-  const agentSuccessMessage = useSelector(selectAgentSuccessMessage);
-
-  // Local component state
+  // Local UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+  const [monthlyCharge, setMonthlyCharge] = useState("");
   const [expandedSections, setExpandedSections] = useState({
     named: true,
     pooled: true,
   });
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-
+  const [expandedDetails, setExpandedDetails] = useState({});
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
-  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
-  const API_URL = `${API_BASE_URL}`;
-  // 🎉 NO MORE bearertoken variable needed!
-  const currentStep = useCurrentStep();
+  // Storage variables
+  const bearertoken = localStorage.getItem("bearertoken");
+  const partnerId = localStorage.getItem("whitelabelledpartnerid");
+  const isPartner = localStorage.getItem("iswhitelabelledpartner");
+  const showRemitOnly = localStorage.getItem(
+    "showRemittanceOnlyOnRegistration",
+  );
+  const hostName = window.location.hostname;
 
-  // Handle missing accountType on component mount
+  // Redux Selectors
+  const accountOptions = useSelector(selectors.selectAccountOptions) || [];
+  const ucaDescription = useSelector(selectors.selectUcaDescription);
+  const selectedAccounts = useSelector(selectors.selectSelectedAccounts) || [];
+  const referralCode = useSelector(selectors.selectReferralCode);
+  const referralError = useSelector(selectors.selectReferralError);
+  const loading = useSelector(selectors.selectLoading);
+  const termsAccepted = useSelector(selectors.selectTermsAccepted);
+  const searchTerm = useSelector(selectors.selectSearchTerm);
+  const filteredNamedAccounts =
+    useSelector(selectors.selectFilteredNamedAccounts) || [];
+  const filteredPooledAccounts =
+    useSelector(selectors.selectFilteredPooledAccounts) || [];
+  const activeTab = useSelector(selectors.selectActiveTab);
+  const remittanceOnlyAccepted = useSelector(
+    selectors.selectRemittanceOnlyAccepted,
+  );
+  const isReferralValidating = useSelector(
+    selectors.selectIsReferralValidating,
+  );
+  const isPartnerPackageModule = useSelector(
+    selectors.selectIsPartnerPackageModule,
+  );
+  const packageOptions = useSelector(selectors.selectPackageOptions) || [];
+  const selectedPackageCurrencies =
+    useSelector(selectors.selectSelectedPackageCurrencies) || [];
+  const packageLoading = useSelector(selectors.selectPackageLoading);
+  const isPackageValidating = useSelector(selectors.selectIsPackageValidating);
+  const isSubmitDisabled = useSelector(selectors.selectIsSubmitDisabled);
+  const referralSuccessMessage = useSelector(
+    selectors.selectReferralSuccessMessage,
+  );
+
+  // Validate environment
+  useEffect(() => {
+    if (!API_URL) {
+      console.error("❌ VITE_API_URL is not defined!");
+      setModalMessage("Configuration error: API URL is missing");
+      setIsModalOpen(true);
+    }
+  }, [API_URL]);
+
+  // 1. INITIALIZATION
   useEffect(() => {
     if (!accountType) {
-      setModalMessage(
-        "Account type is not defined. Please go back and select an account type."
+      navigate("/selectaccounttype");
+      return;
+    }
+
+    dispatch(actions.clearAllSelections());
+
+    // ⚠️ FIX: Force USA country ID (186) for partner flows
+    const forceCountryId = 186; // USA
+
+    console.log("🌐 Forcing country ID for partner flow:", {
+      originalCountryId: selectedCountryId,
+      forcedCountryId: forceCountryId,
+      accountType,
+      isPartnerPackageModule,
+    });
+
+    if (isPartnerPackageModule === "Y") {
+      dispatch(
+        actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
       );
-      setIsModalOpen(true);
-      setIsInitialLoading(false);
+    } else {
+      dispatch(
+        actions.fetchAccountOptions({
+          accountType,
+          countryId: forceCountryId, // Use forced country ID
+          API_URL,
+        }),
+      );
     }
-  }, [accountType]);
+  }, [
+    accountType,
+    // Remove selectedCountryId from dependencies
+    isPartnerPackageModule,
+    dispatch,
+    navigate,
+    partnerId,
+    API_URL,
+  ]);
 
-  // ✅ SIMPLIFIED: Fetch data when accountType is available
+  // 2. PRICE FETCHING
   useEffect(() => {
-    if (accountType && accountOptions.length === 0) {
-      dispatch(fetchAccountOptions({ accountType, API_URL }))
-        .unwrap()
-        .then(() => {
-          setIsInitialLoading(false);
+    const count =
+      isPartnerPackageModule === "Y"
+        ? selectedPackageCurrencies.length
+        : selectedAccounts.length;
+    if (
+      (isPartner === "Y" || isPartner === "1") &&
+      isPartnerPackageModule === "N" &&
+      count > 0
+    ) {
+      fetch(`${API_URL}/package/list/${partnerId}/${accountType}`, {
+        headers: { Authorization: `Bearer ${bearertoken}` },
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          const pkgs = res.data || res.packages || res.result || [];
+          const match = pkgs.find((p) => p.package_accountCount === count);
+          setMonthlyCharge(match?.package_name || "");
         })
-        .catch((error) => {
-          setIsInitialLoading(false);
-        });
+        .catch(() => setMonthlyCharge(""));
     } else {
-      // Data already exists, just stop loading
-      setIsInitialLoading(false);
+      setMonthlyCharge("");
     }
-  }, [accountType, API_URL, dispatch, accountOptions.length]); // ✅ Simplified dependencies
+  }, [
+    selectedAccounts,
+    selectedPackageCurrencies,
+    isPartnerPackageModule,
+    isPartner,
+    partnerId,
+    accountType,
+    API_URL,
+    bearertoken,
+  ]);
 
-  // Handle API errors
-  useEffect(() => {
-    if (apiError) {
-      setModalMessage(`Failed to load account options: ${apiError}`);
+  // 3. ACTION HANDLERS
+  const handleToggleStandard = (id) => {
+    if (remittanceOnlyAccepted) {
+      dispatch(actions.setRemittanceOnlyAccepted(false));
+    }
+    if (id && typeof actions.toggleAccountSelection === "function") {
+      dispatch(actions.toggleAccountSelection(id));
+    } else {
+      console.error("❌ toggleAccountSelection is not a function!");
+      setModalMessage("System error: Action not available");
       setIsModalOpen(true);
     }
-  }, [apiError]);
-
-  // Handle agent code input
-  const handleAgent = (event) => {
-    const value = event.target.value;
-    dispatch(setAgentCode(value));
-
-    // Basic validation - check if more than 10 characters
-    if (value.length > 10) {
-      dispatch(setAgentError("The provided Agent Code is invalid"));
-    } else {
-      dispatch(setAgentError(""));
-    }
   };
 
-  // Handle account selection
-  const handleAccountSelect = (accountId) => {
-    if (remittanceOnlyAccepted) {
-      // Auto-switch to currency accounts mode
-      dispatch(setRemittanceOnlyAccepted(false));
-    }
-    dispatch(toggleAccountSelection(accountId));
-  };
-
-  // Handle remittance only selection
-  const handleRemittanceOnlySelect = (checked) => {
-    if (checked && selectedAccounts.length > 0) {
-      // Auto-clear currency selections and switch to remittance mode
-      dispatch(setSelectedAccounts([]));
-    }
-    dispatch(setRemittanceOnlyAccepted(checked));
-  };
-
-  // Handle direct service type selection
-  const handleServiceTypeSelect = (type) => {
-    if (type === "currency") {
-      dispatch(setRemittanceOnlyAccepted(false));
-      // Keep existing currency selections if any
-    } else if (type === "remittance") {
-      dispatch(setRemittanceOnlyAccepted(true));
-      dispatch(setSelectedAccounts([])); // Clear any currency selections
-    }
-  };
-
-  // ✅ SIMPLIFIED: Remove bearertoken from retry
-  const handleRetry = () => {
-    dispatch(clearError());
-    if (accountType) {
-      dispatch(fetchAccountOptions({ accountType, API_URL }));
-    }
-  };
-
-  const handleReferral = (event) => {
-    const value = event.target.value;
-    dispatch(setReferralCode(value));
+  const handleTogglePackage = (id) => {
+    if (id)
+      dispatch(actions.togglePackageCurrencySelection({ currencyId: id }));
   };
 
   const toggleSection = (section) => {
@@ -243,90 +217,111 @@ const CurrencySelectAccount = () => {
     setShowInfoModal(true);
   };
 
-  const handleSubmit = async () => {
-    if (isRedirecting) return; // Prevent multiple clicks
+  const handleServiceTypeSelect = (type) => {
+    if (type === "currency") {
+      dispatch(actions.setRemittanceOnlyAccepted(false));
+    } else if (type === "remittance") {
+      dispatch(actions.setRemittanceOnlyAccepted(true));
+      dispatch(actions.setSelectedAccounts([]));
+    }
+  };
 
-    if (selectedAccounts.length === 0 && !remittanceOnlyAccepted) {
-      setModalMessage(
-        "Please select at least one currency account or choose Remittance Services Only to proceed"
-      );
+  // 4. SUBMIT HANDLER (ORIGINAL LOGIC)
+  const onFinalSubmit = useCallback(async () => {
+    if (isSubmitDisabled) return;
+
+    if (
+      isPartnerPackageModule === "N" &&
+      selectedAccounts.length === 0 &&
+      !remittanceOnlyAccepted
+    ) {
+      setModalMessage("Please select at least one account to proceed.");
       setIsModalOpen(true);
       return;
     }
 
-    if (!termsAccepted) {
-      setModalMessage("Please confirm that you agree on the Charges and Fees");
+    if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
+      setModalMessage("Please confirm that you agree on the Charges and Fees.");
       setIsModalOpen(true);
       return;
     }
 
-    let validationSuccessful = true;
-
-    // Validate referral code using Redux thunk
-    if (referralCode && !referralError) {
-      const result = await dispatch(validateReferralCode(referralCode));
-      if (validateReferralCode.rejected.match(result)) {
-        validationSuccessful = false;
+    if (referralCode) {
+      try {
+        await dispatch(actions.validateReferralCode(referralCode)).unwrap();
+      } catch {
+        setModalMessage("Invalid Referral Code");
+        setIsModalOpen(true);
+        return;
       }
     }
 
-    // Validate agent code using Redux thunk
-    if (agentCode && !agentError && validationSuccessful) {
-      const result = await dispatch(validateAgentCode(agentCode));
-      if (validateAgentCode.rejected.match(result)) {
-        validationSuccessful = false;
+    if (
+      isPartnerPackageModule === "Y" &&
+      selectedPackageCurrencies.length > 0
+    ) {
+      try {
+        await dispatch(
+          actions.validatePackageCurrencies({
+            selectedPackageCurrencies,
+            partnerId,
+          }),
+        ).unwrap();
+      } catch (err) {
+        setModalMessage(
+          typeof err === "string" ? err : err?.message || "Validation failed",
+        );
+        setIsModalOpen(true);
+        return;
       }
     }
 
-    if (!validationSuccessful) {
-      return; // Errors are already shown inline
-    }
+    const navState = {
+      service_provide_ids:
+        isPartnerPackageModule === "Y" ? [] : selectedAccounts,
+      accountOptions,
+      referral_code: referralCode,
+      remit_customer: remittanceOnlyAccepted,
+      document_upload: "Y",
+      kyc_verify: "Y",
+      owner_add: "Y",
+      ssn_required: "Y",
+      package_currencies: selectedPackageCurrencies,
+    };
 
-    // Set redirecting state
-    setIsRedirecting(true);
+    navigate(
+      accountType === "individual" ? "/signupindividual" : "/signupinstitution",
+      {
+        state: navState,
+      },
+    );
+  }, [
+    isSubmitDisabled,
+    isPartnerPackageModule,
+    selectedAccounts,
+    remittanceOnlyAccepted,
+    termsAccepted,
+    hostName,
+    referralCode,
+    selectedPackageCurrencies,
+    dispatch,
+    partnerId,
+    accountOptions,
+    accountType,
+    navigate,
+  ]);
 
-    // If codes were validated, wait 2 seconds, otherwise proceed immediately
-    const delay = referralCode || agentCode ? 2000 : 0;
+  const currenciesList = useMemo(
+    () => [...new Set(accountOptions.map((a) => a.currency).filter(Boolean))],
+    [accountOptions],
+  );
 
-    setTimeout(() => {
-      const stateData = {
-        service_provide_ids: selectedAccounts,
-        accountOptions: accountOptions,
-        referral_code: referralCode,
-        agent_code: agentCode,
-        is_remit: remittanceOnlyAccepted ? 1 : 0,
-      };
-
-      if (accountType === "individual") {
-        navigate("/signupindividual", { state: stateData });
-      } else if (accountType === "institution") {
-        navigate("/signupinstitution", { state: stateData });
-      }
-    }, delay);
-  };
-
-  const handleCancel = () => {
-    navigate("/selectaccounttype");
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalMessage("");
-    dispatch(clearError());
-  };
-
-  const handleViewTerms = (url) => {
-    dispatch(fetchTermsContent(url));
-  };
-
-  const getAccountTypeIcon = (type) => {
-    switch (type) {
+  const getAccountTypeIcon = () => {
+    switch (accountType) {
       case "individual":
         return faUser;
       case "institution":
         return faBuilding;
-      case "partner":
-        return faHandshake;
       default:
         return faGlobe;
     }
@@ -338,8 +333,6 @@ const CurrencySelectAccount = () => {
         return "Individual Account";
       case "institution":
         return "Business Account";
-      case "partner":
-        return "Partner Account";
       default:
         return "Universal Currency Account";
     }
@@ -347,7 +340,6 @@ const CurrencySelectAccount = () => {
 
   const getCurrencyIcon = (currency) => {
     if (!currency) return faDollarSign;
-
     const curr = currency.toUpperCase();
     if (curr === "GBP") return faPoundSign;
     if (curr === "EUR") return faEuroSign;
@@ -362,14 +354,11 @@ const CurrencySelectAccount = () => {
     { id: "GBP", name: "British Pound" },
   ];
 
-  if (isInitialLoading && !accountType) {
+  if (loading || packageLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="text-center">
-          <div className="relative">
-            <RingLoader color="#3B82F6" size={60} />
-            <div className="absolute inset-0 animate-spin"></div>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center">
+        <div className="text-center flex flex-col items-center">
+          <RingLoader color="#3B82F6" size={60} />
           <p className="mt-4 text-gray-600 font-medium">
             Loading account options...
           </p>
@@ -382,571 +371,861 @@ const CurrencySelectAccount = () => {
   }
 
   return (
-    <RegistrationLayout>
-      <div className="min-h-screen bg-transparent flex justify-center items-center relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-r from-blue-500/5 to-indigo-500/5"></div>
-        <div className="absolute bottom-0 right-0 w-full h-full bg-blue-400/5 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center relative overflow-hidden">
+      {/* Decorative elements */}
+      <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-r from-blue-500/5 to-indigo-500/5"></div>
+      <div className="absolute bottom-0 right-0 w-full h-full bg-blue-400/5 rounded-full blur-3xl"></div>
 
-        {/* API Error Banner */}
-        {apiError && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between shadow-lg">
-              <div className="flex items-center">
-                <div className="bg-red-100 p-2 rounded-full mr-3">
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    className="text-red-600"
-                  />
-                </div>
-                <div>
-                  <span className="text-red-800 font-medium block">
-                    Connection Error
-                  </span>
-                  <span className="text-red-700 text-sm">{apiError}</span>
-                </div>
+      {/* Main Content */}
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100 my-8">
+        {/* Header Section */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/20 rounded-full -translate-x-12 translate-y-12"></div>
+
+          <div className="relative z-10">
+            <div className="flex items-center justify-center mb-4">
+              <div className="bg-white/20 p-4 rounded-2xl mr-4 backdrop-blur-sm">
+                <FontAwesomeIcon
+                  icon={getAccountTypeIcon()}
+                  className="text-2xl"
+                />
               </div>
-              <button
-                onClick={handleRetry}
-                className="ml-4 flex items-center text-white bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm hover:shadow-md"
+              <h1 className="text-2xl sm:text-3xl font-bold">
+                {getAccountTypeTitle()}
+              </h1>
+            </div>
+            <p className="text-center text-blue-100 text-sm opacity-90">
+              {ucaDescription ||
+                "Select your currency accounts for international transactions"}
+            </p>
+          </div>
+
+          {/* Close Button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute top-6 right-6 z-10 p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
+            aria-label="Close"
+          >
+            <FontAwesomeIcon
+              icon={faTimes}
+              className="text-lg text-white group-hover:text-gray-200 transition-colors"
+            />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Service Type Selection */}
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 text-center">
+              Choose Your Service Type
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Currency Accounts Option */}
+              <div
+                className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
+                  !remittanceOnlyAccepted
+                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
+                    : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
+                }`}
+                onClick={() => handleServiceTypeSelect("currency")}
               >
-                <FontAwesomeIcon icon={faSyncAlt} className="mr-2" />
-                Retry
-              </button>
+                <div className="flex items-start">
+                  <div
+                    className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
+                      !remittanceOnlyAccepted
+                        ? "bg-blue-600 border-blue-700"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    {!remittanceOnlyAccepted && (
+                      <FontAwesomeIcon
+                        icon={faCheckCircle}
+                        className="text-white text-sm"
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center mb-3">
+                      <div className="bg-blue-100 p-3 rounded-xl mr-3">
+                        <FontAwesomeIcon
+                          icon={faMoneyBillWave}
+                          className="text-blue-600 text-lg"
+                        />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Multi-Currency Accounts
+                      </h3>
+                    </div>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Open foreign currency accounts to hold, send, and receive
+                      multiple currencies with competitive exchange rates.
+                    </p>
+                    <div className="flex items-center text-sm text-blue-600">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>Hold multiple currencies</span>
+                    </div>
+                    <div className="flex items-center text-sm text-blue-600 mt-1">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>Better exchange rates</span>
+                    </div>
+                    <div className="flex items-center text-sm text-blue-600 mt-1">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>Send & receive internationally</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remittance Only Option */}
+              <div
+                className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
+                  remittanceOnlyAccepted
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
+                    : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
+                }`}
+                onClick={() => handleServiceTypeSelect("remittance")}
+              >
+                <div className="flex items-start">
+                  <div
+                    className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
+                      remittanceOnlyAccepted
+                        ? "bg-green-600 border-green-700"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    {remittanceOnlyAccepted && (
+                      <FontAwesomeIcon
+                        icon={faCheckCircle}
+                        className="text-white text-sm"
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center mb-3">
+                      <div className="bg-green-100 p-3 rounded-xl mr-3">
+                        <FontAwesomeIcon
+                          icon={faExchangeAlt}
+                          className="text-green-600 text-lg"
+                        />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Remittance Services Only
+                      </h3>
+                    </div>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Only need money transfer services without opening currency
+                      accounts. Perfect for occasional international transfers.
+                    </p>
+                    <div className="flex items-center text-sm text-green-600">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>No account maintenance</span>
+                    </div>
+                    <div className="flex items-center text-sm text-green-600 mt-1">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>Fast international transfers</span>
+                    </div>
+                    <div className="flex items-center text-sm text-green-600 mt-1">
+                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                      <span>Simple and straightforward</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Selection Status */}
+            <div className="mt-4 text-center">
+              {!remittanceOnlyAccepted && selectedAccounts.length > 0 && (
+                <div className="inline-flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
+                  <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                  {selectedAccounts.length} currency account(s) selected
+                </div>
+              )}
+              {!remittanceOnlyAccepted && selectedAccounts.length === 0 && (
+                <div className="inline-flex items-center bg-blue-50 text-blue-600 px-4 py-2 rounded-full text-sm font-medium">
+                  <FontAwesomeIcon icon={faInfoCircle} className="mr-2" />
+                  Select currency accounts above
+                </div>
+              )}
+              {remittanceOnlyAccepted && (
+                <div className="inline-flex items-center bg-green-50 text-green-700 px-4 py-2 rounded-full text-sm font-medium">
+                  <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
+                  Remittance Services Only selected
+                </div>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Main Content */}
-        <div className="w-full bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100">
-          {/* Header Section */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/20 rounded-full -translate-x-12 translate-y-12"></div>
-
-            <div className="relative z-10">
-              <div className="flex items-center justify-center mb-4">
-                <div className="bg-white/20 p-4 rounded-2xl mr-4 backdrop-blur-sm">
-                  <FontAwesomeIcon
-                    icon={getAccountTypeIcon(accountType)}
-                    className="text-2xl"
+          {/* ========== CURRENCY ACCOUNTS SELECTION ========== */}
+          {!remittanceOnlyAccepted && isPartnerPackageModule === "N" && (
+            <div className="mb-8">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Select Currency Accounts
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <FontAwesomeIcon icon={faSearch} className="text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search currencies..."
+                    value={searchTerm}
+                    onChange={(e) =>
+                      dispatch(actions.setSearchTerm(e.target.value))
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-bold">
-                  {getAccountTypeTitle()}
-                </h1>
               </div>
-              <p className="text-center text-blue-100 text-sm opacity-90">
-                {ucaDescription}
-              </p>
-            </div>
 
-            {/* Close Button */}
-            <button
-              onClick={handleCancel}
-              className="absolute top-6 right-6 z-10 p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
-              aria-label="Close"
-            >
-              <FontAwesomeIcon
-                icon={faTimes}
-                className="text-lg text-white group-hover:text-gray-200 transition-colors"
-              />
-            </button>
-          </div>
-
-          <div className="p-6">
-            {/* Service Type Selection */}
-            <div className="mb-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 text-center">
-                Choose Your Service Type
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Currency Accounts Option */}
-                <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
-                    !remittanceOnlyAccepted
-                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
-                      : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
+              {/* Currency Tabs */}
+              <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("all"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "all"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
-                  onClick={() => handleServiceTypeSelect("currency")}
                 >
-                  <div className="flex items-start">
-                    <div
-                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
-                        !remittanceOnlyAccepted
-                          ? "bg-blue-600 border-blue-700"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {!remittanceOnlyAccepted && (
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="text-white text-sm"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-blue-100 p-3 rounded-xl mr-3">
-                          <FontAwesomeIcon
-                            icon={faMoneyBillWave}
-                            className="text-blue-600 text-lg"
-                          />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Multi-Currency Accounts
-                        </h3>
-                      </div>
-                      <p className="text-gray-600 text-sm mb-4">
-                        Open foreign currency accounts to hold, send, and
-                        receive multiple currencies with competitive exchange
-                        rates.
-                      </p>
-                      <div className="flex items-center text-sm text-blue-600">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>Hold multiple currencies</span>
-                      </div>
-                      <div className="flex items-center text-sm text-blue-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>Better exchange rates</span>
-                      </div>
-                      <div className="flex items-center text-sm text-blue-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>Send & receive internationally</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Remittance Only Option */}
-                <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
-                    remittanceOnlyAccepted
-                      ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
-                      : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
+                  All Currencies
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("USD"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "USD"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
-                  onClick={() => handleServiceTypeSelect("remittance")}
                 >
-                  <div className="flex items-start">
-                    <div
-                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
-                        remittanceOnlyAccepted
-                          ? "bg-green-600 border-green-700"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {remittanceOnlyAccepted && (
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="text-white text-sm"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-green-100 p-3 rounded-xl mr-3">
-                          <FontAwesomeIcon
-                            icon={faExchangeAlt}
-                            className="text-green-600 text-lg"
-                          />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Remittance Services Only
-                        </h3>
-                      </div>
-                      <p className="text-gray-600 text-sm mb-4">
-                        Only need money transfer services without opening
-                        currency accounts. Perfect for occasional international
-                        transfers.
-                      </p>
-                      <div className="flex items-center text-sm text-green-600">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>No account maintenance</span>
-                      </div>
-                      <div className="flex items-center text-sm text-green-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>Fast international transfers</span>
-                      </div>
-                      <div className="flex items-center text-sm text-green-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
-                        <span>Simple and straightforward</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  US Dollar
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("EUR"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "EUR"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Euro
+                </button>
+                <button
+                  onClick={() => dispatch(actions.setActiveTab("GBP"))}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                    activeTab === "GBP"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  British Pound
+                </button>
               </div>
 
-              {/* Selection Status */}
-              <div className="mt-4 text-center">
-                {!remittanceOnlyAccepted && selectedAccounts.length > 0 && (
-                  <div className="inline-flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
-                    <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-                    {selectedAccounts.length} currency account(s) selected
-                  </div>
-                )}
-                {!remittanceOnlyAccepted && selectedAccounts.length === 0 && (
-                  <div className="inline-flex items-center bg-blue-50 text-blue-600 px-4 py-2 rounded-full text-sm font-medium">
-                    <FontAwesomeIcon icon={faInfoCircle} className="mr-2" />
-                    Select currency accounts above
-                  </div>
-                )}
-                {remittanceOnlyAccepted && (
-                  <div className="inline-flex items-center bg-green-50 text-green-700 px-4 py-2 rounded-full text-sm font-medium">
-                    <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-                    Remittance Services Only selected
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Currency Accounts Section (Only show if not remittance only) */}
-            {!remittanceOnlyAccepted && (
-              <>
-                {/* Search and Filter Section */}
+              {/* Named Accounts Section */}
+              {filteredNamedAccounts.length > 0 && (
                 <div className="mb-8">
-                  <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FontAwesomeIcon
-                          icon={faSearch}
-                          className="text-gray-400"
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Search currency accounts..."
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
-                        value={searchTerm}
-                        onChange={(e) =>
-                          dispatch(setSearchTerm(e.target.value))
-                        }
-                      />
-                    </div>
-
-                    <div className="flex md:justify-end">
-                      <div className="flex bg-gray-100 p-1 rounded-xl">
-                        {currencyTabs.map((tab) => (
-                          <button
-                            key={tab.id}
-                            onClick={() => {
-                              dispatch(setActiveTab(tab.id));
-                            }}
-                            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                              activeTab === tab.id
-                                ? "bg-white text-blue-600 shadow-sm"
-                                : "text-gray-600 hover:text-gray-900"
-                            }`}
-                          >
-                            {tab.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Active Filter Display */}
-                  {activeTab !== "all" && (
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center text-sm text-blue-600">
-                        <FontAwesomeIcon icon={faFilter} className="mr-2" />
-                        Showing only {activeTab} accounts
-                        <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                          {filteredNamedAccounts.length +
-                            filteredPooledAccounts.length}{" "}
-                          accounts
-                        </span>
-                      </div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
                       <button
-                        onClick={() => dispatch(setActiveTab("all"))}
-                        className="text-sm text-gray-500 hover:text-gray-700 flex items-center"
+                        onClick={() => toggleSection("named")}
+                        className="mr-3 text-gray-600 hover:text-gray-800"
                       >
-                        <FontAwesomeIcon icon={faTimes} className="mr-1" />
-                        Clear filter
+                        <FontAwesomeIcon
+                          icon={
+                            expandedSections.named ? faChevronUp : faChevronDown
+                          }
+                        />
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          className="mr-2 text-blue-500"
+                        />
+                        Named Accounts
+                        <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                          {filteredNamedAccounts.length}
+                        </span>
+                      </h3>
+                      <button
+                        onClick={() => handleShowInfo("named")}
+                        className="ml-2 text-gray-400 hover:text-blue-600"
+                        title="What are Named Accounts?"
+                      >
+                        <FontAwesomeIcon icon={faCircleInfo} />
                       </button>
                     </div>
-                  )}
-                </div>
-
-                {/* Account Benefits Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center">
-                    <div className="bg-blue-100 p-3 rounded-xl mr-4">
-                      <FontAwesomeIcon
-                        icon={faShieldAlt}
-                        className="text-blue-600"
-                      />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        Secure & Regulated
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        Fully protected funds
-                      </p>
+                    <div className="text-sm text-gray-500">
+                      Dedicated accounts in your name
                     </div>
                   </div>
 
-                  <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center">
-                    <div className="bg-indigo-100 p-3 rounded-xl mr-4">
-                      <FontAwesomeIcon
-                        icon={faPercent}
-                        className="text-indigo-600"
-                      />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        Competitive Rates
-                      </h3>
-                      <p className="text-sm text-gray-600">Better than banks</p>
-                    </div>
-                  </div>
+                  {expandedSections.named && (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredNamedAccounts.map((account) => {
+                        const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "named"}`;
+                        const isSelected = selectedAccounts.includes(accountId);
 
-                  <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 flex items-center">
-                    <div className="bg-purple-100 p-3 rounded-xl mr-4">
-                      <FontAwesomeIcon
-                        icon={faClock}
-                        className="text-purple-600"
-                      />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        Fast Transfers
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        24-48 hours typically
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Named Accounts Section */}
-                {filteredNamedAccounts.length > 0 && (
-                  <div className="mb-8">
-                    <div
-                      className="flex justify-between items-center cursor-pointer p-5 bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl border border-blue-200 shadow-md hover:shadow-lg transition-all"
-                      onClick={() => toggleSection("named")}
-                      aria-expanded={expandedSections.named}
-                    >
-                      <h2 className="text-lg font-semibold text-gray-800 flex items-center">
-                        <div className="bg-blue-500 p-2.5 rounded-xl mr-3 text-white shadow">
-                          <FontAwesomeIcon icon={faUser} />
-                        </div>
-                        Named Accounts
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleShowInfo("named");
-                          }}
-                          className="ml-2 text-blue-500 hover:text-blue-700 transition-colors"
-                          aria-label="What are Named Accounts?"
-                        >
-                          {" "}
-                          <FontAwesomeIcon
-                            icon={faCircleInfo}
-                            className="text-sm"
-                          />
-                        </button>
-                        <span className="ml-3 text-xs font-medium text-blue-800 bg-blue-100 border border-blue-200 px-3 py-0.5 rounded-full">
-                          {filteredNamedAccounts.length} options
-                        </span>
-                      </h2>
-                      <FontAwesomeIcon
-                        icon={
-                          expandedSections.named ? faChevronUp : faChevronDown
-                        }
-                        className={`text-gray-600 transition-transform duration-300 ${
-                          expandedSections.named ? "rotate-180" : ""
-                        }`}
-                      />
-                    </div>
-
-                    <div
-                      className={`transition-all duration-500 ease-in-out overflow-hidden ${
-                        expandedSections.named
-                          ? "max-h-screen opacity-100 mt-4"
-                          : "max-h-0 opacity-0"
-                      }`}
-                    >
-                      <div className="grid grid-cols-1 text-sm gap-4">
-                        {filteredNamedAccounts.map((account, index) => (
+                        return (
                           <AccountOptionCard
-                            key={index}
+                            key={accountId}
                             account={account}
-                            isSelected={selectedAccounts.includes(
-                              account.service_provide_id_type ||
-                                account.service_provide_id ||
-                                account.id
-                            )}
-                            onSelect={() =>
-                              handleAccountSelect(
-                                account.service_provide_id_type ||
-                                  account.service_provide_id ||
-                                  account.id
-                              )
-                            }
-                            onViewTerms={handleViewTerms}
+                            isSelected={isSelected}
+                            onSelect={() => handleToggleStandard(accountId)}
                             getCurrencyIcon={getCurrencyIcon}
                           />
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              )}
 
-                {/* Pooled Accounts Section */}
-                {filteredPooledAccounts.length > 0 && (
-                  <div className="mb-8">
-                    <div
-                      className="flex justify-between items-center cursor-pointer p-5 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 shadow-md hover:shadow-lg transition-all"
-                      onClick={() => toggleSection("pooled")}
-                      aria-expanded={expandedSections.pooled}
-                    >
-                      <h2 className="text-lg font-semibold text-gray-800 flex items-center">
-                        <div className="bg-indigo-500 p-2.5 rounded-xl mr-3 text-white shadow">
-                          <FontAwesomeIcon icon={faUsers} />
-                        </div>
+              {/* Pooled Accounts Section */}
+              {filteredPooledAccounts.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => toggleSection("pooled")}
+                        className="mr-3 text-gray-600 hover:text-gray-800"
+                      >
+                        <FontAwesomeIcon
+                          icon={
+                            expandedSections.pooled
+                              ? faChevronUp
+                              : faChevronDown
+                          }
+                        />
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <FontAwesomeIcon
+                          icon={faUsers}
+                          className="mr-2 text-indigo-500"
+                        />
                         Pooled Accounts
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleShowInfo("pooled");
-                          }}
-                          className="ml-2 text-indigo-500 hover:text-indigo-700 transition-colors"
-                          aria-label="What are Pooled Accounts?"
-                        >
-                          <FontAwesomeIcon
-                            icon={faCircleInfo}
-                            className="text-sm"
-                          />
-                        </button>
-                        <span className="ml-3 text-xs font-medium text-indigo-800 bg-indigo-100 border border-indigo-200 px-3 py-0.5 rounded-full">
-                          {filteredPooledAccounts.length} options
+                        <span className="ml-2 text-sm bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                          {filteredPooledAccounts.length}
                         </span>
-                      </h2>
-                      <FontAwesomeIcon
-                        icon={
-                          expandedSections.pooled ? faChevronUp : faChevronDown
-                        }
-                        className={`text-gray-600 transition-transform duration-300 ${
-                          expandedSections.pooled ? "rotate-180" : ""
-                        }`}
-                      />
+                      </h3>
+                      <button
+                        onClick={() => handleShowInfo("pooled")}
+                        className="ml-2 text-gray-400 hover:text-indigo-600"
+                        title="What are Pooled Accounts?"
+                      >
+                        <FontAwesomeIcon icon={faCircleInfo} />
+                      </button>
                     </div>
+                    <div className="text-sm text-gray-500">
+                      Shared accounts with virtual IBANs
+                    </div>
+                  </div>
 
-                    <div
-                      className={`transition-all duration-500 ease-in-out overflow-hidden ${
-                        expandedSections.pooled
-                          ? "max-h-screen opacity-100 mt-4"
-                          : "max-h-0 opacity-0"
-                      }`}
-                    >
-                      <div className="grid grid-cols-1 gap-4">
-                        {filteredPooledAccounts.map((account, index) => (
+                  {expandedSections.pooled && (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredPooledAccounts.map((account) => {
+                        const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "pooled"}`;
+                        const isSelected = selectedAccounts.includes(accountId);
+
+                        return (
                           <AccountOptionCard
-                            key={index}
+                            key={accountId}
                             account={account}
-                            isSelected={selectedAccounts.includes(
-                              account.service_provide_id_type ||
-                                account.service_provide_id ||
-                                account.id
-                            )}
-                            onSelect={() =>
-                              handleAccountSelect(
-                                account.service_provide_id_type ||
-                                  account.service_provide_id ||
-                                  account.id
-                              )
-                            }
-                            onViewTerms={handleViewTerms}
+                            isSelected={isSelected}
+                            onSelect={() => handleToggleStandard(accountId)}
                             getCurrencyIcon={getCurrencyIcon}
                           />
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Accounts Message */}
+              {filteredNamedAccounts.length === 0 &&
+                filteredPooledAccounts.length === 0 && (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl">
+                    <FontAwesomeIcon
+                      icon={faExclamationTriangle}
+                      className="text-gray-400 text-3xl mb-3"
+                    />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No currency accounts available
+                    </h3>
+                    <p className="text-gray-600">
+                      {activeTab !== "all"
+                        ? `No ${activeTab} accounts available for your selected country.`
+                        : "No currency accounts are available for your selected country."}
+                    </p>
+                    <button
+                      onClick={() => {
+                        dispatch(actions.setActiveTab("all"));
+                        dispatch(actions.setSearchTerm(""));
+                      }}
+                      className="mt-4 text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Show all currencies
+                    </button>
                   </div>
                 )}
 
-                {/* No Accounts Available Message */}
-                {namedAccounts.length === 0 &&
-                  pooledAccounts.length === 0 &&
-                  !isInitialLoading && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6">
-                      <div className="flex items-center">
-                        <div className="bg-yellow-100 p-3 rounded-xl mr-4">
-                          <FontAwesomeIcon
-                            icon={faExclamationTriangle}
-                            className="text-yellow-600 text-xl"
-                          />
+              {/* Selection Summary */}
+              {selectedAccounts.length > 0 && (
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-gray-900">
+                        Your Selection
+                      </h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {selectedAccounts.length} account
+                        {selectedAccounts.length !== 1 ? "s" : ""} selected
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => dispatch(actions.clearSelectedAccounts())}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+
+                  {/* Selected Account Details */}
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedAccounts.map((accountId) => {
+                      const account = accountOptions.find(
+                        (acc) =>
+                          `${acc.service_provide_id}-${acc.accountType?.toLowerCase()}` ===
+                          accountId,
+                      );
+                      if (!account) return null;
+
+                      return (
+                        <div
+                          key={accountId}
+                          className="flex items-center p-2 bg-white rounded-lg"
+                        >
+                          <div className="bg-blue-100 p-2 rounded-lg mr-3">
+                            <FontAwesomeIcon
+                              icon={getCurrencyIcon(account.currency)}
+                              className="text-blue-600"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">
+                              {account.currency} - {account.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {account.accountType === "named"
+                                ? "Named Account"
+                                : "Pooled Account"}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-lg font-medium text-yellow-800">
-                            No Accounts Available
-                          </h3>
-                          <p className="mt-1 text-yellow-700">
-                            There are currently no account options available for
-                            your selected account type. Please contact support
-                            for assistance.
-                          </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Package View (if enabled) */}
+          {isPartnerPackageModule === "Y" && !remittanceOnlyAccepted ? (
+            <div className="mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Premium Currency Packages
+                </h3>
+                <p className="text-gray-600">
+                  Choose a package that fits your international needs
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {packageOptions.map((pkg) => {
+                  const isActivePackage = monthlyCharge === pkg.package_name;
+                  const selectedCount = selectedPackageCurrencies.length;
+                  const isPackageCompatible =
+                    selectedCount <= pkg.package_accountCount;
+                  const remainingAccounts =
+                    pkg.package_accountCount - selectedCount;
+
+                  return (
+                    <div
+                      key={pkg.package_id}
+                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-6 transition-all hover:shadow-md ${
+                        isActivePackage
+                          ? "border-blue-500 ring-2 ring-blue-100 shadow-sm"
+                          : "border-slate-200"
+                      } ${
+                        !isPackageCompatible && selectedCount > 0
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:border-blue-300"
+                      }`}
+                      onClick={() => {
+                        if (isPackageCompatible || selectedCount === 0) {
+                          // Allow interaction if compatible or no selections
+                        }
+                      }}
+                    >
+                      {/* Package Header */}
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="text-xl font-bold text-gray-900">
+                              {pkg.package_name}
+                            </h4>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                pkg.account_type === "named"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-indigo-100 text-indigo-800"
+                              }`}
+                            >
+                              {pkg.account_type === "named"
+                                ? "Named Account"
+                                : "Pooled Account"}
+                            </span>
+                          </div>
+
+                          {pkg.package_services && (
+                            <p className="text-sm text-gray-600 mb-2">
+                              <span className="font-medium">Services:</span>{" "}
+                              {pkg.package_services}
+                            </p>
+                          )}
+
+                          {/* Account Count Indicator */}
+                          <div className="flex items-center gap-2 mt-3">
+                            <div className="flex items-center text-sm text-gray-600">
+                              <FontAwesomeIcon
+                                icon={faUsers}
+                                className="mr-1"
+                              />
+                              <span className="font-medium">
+                                {pkg.package_accountCount}
+                              </span>
+                              <span className="ml-1">
+                                {pkg.package_accountCount === 1
+                                  ? "Account"
+                                  : "Accounts"}{" "}
+                                included
+                              </span>
+                            </div>
+
+                            {selectedCount > 0 && (
+                              <div
+                                className={`text-sm px-3 py-1 rounded-full ${
+                                  isPackageCompatible
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {isPackageCompatible
+                                  ? `${remainingAccounts} account${remainingAccounts !== 1 ? "s" : ""} remaining`
+                                  : `Exceeds package limit by ${selectedCount - pkg.package_accountCount}`}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Price Section */}
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {pkg.package_fee} {pkg.package_currency}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {pkg.package_fee === "0.00"
+                              ? "Free forever"
+                              : "Monthly fee"}
+                          </div>
+                          {isActivePackage && (
+                            <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                              Your current selection
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Currencies Grid */}
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-medium text-gray-700">
+                            Available Currencies ({pkg.currencies?.length || 0})
+                          </h5>
+                          <div className="text-sm text-gray-500">
+                            Select up to {pkg.package_accountCount} currency
+                            {pkg.package_accountCount !== 1 ? "s" : ""}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {pkg.currencies?.map((curr) => {
+                            const isSel = selectedPackageCurrencies.includes(
+                              curr.currency_id,
+                            );
+                            const isDisabled = !isPackageCompatible && !isSel;
+
+                            return (
+                              <div
+                                key={curr.currency_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isDisabled) {
+                                    handleTogglePackage(curr.currency_id);
+                                  }
+                                }}
+                                className={`p-3 rounded-lg border-2 flex items-center gap-3 transition-all ${
+                                  isSel
+                                    ? "border-blue-500 bg-blue-50 shadow-sm"
+                                    : isDisabled
+                                      ? "border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed"
+                                      : "border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
+                                }`}
+                              >
+                                <div
+                                  className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${
+                                    isSel
+                                      ? "bg-blue-500 border-blue-500"
+                                      : "bg-white border-gray-300"
+                                  } ${isDisabled ? "opacity-50" : ""}`}
+                                >
+                                  {isSel && (
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="text-white text-xs"
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-800 truncate">
+                                    {curr.currency_code}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-1">
+                                    {curr.ssn_required === "Y" && (
+                                      <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">
+                                        SSN
+                                      </span>
+                                    )}
+                                    {curr.document_upload === "Y" && (
+                                      <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                                        Docs
+                                      </span>
+                                    )}
+                                    {curr.kyc_verify === "Y" && (
+                                      <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                                        KYC
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Fees Link */}
+                        {pkg.currencies?.[0]?.fees_url && (
+                          <div className="mt-3 text-center">
+                            <a
+                              href={pkg.currencies[0].fees_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <FontAwesomeIcon
+                                icon={faInfoCircle}
+                                className="mr-1"
+                              />
+                              View fees and charges for this package
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Package Features Summary */}
+                      <div className="pt-4 border-t border-gray-100">
+                        <div className="flex flex-wrap gap-2">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                            <span>
+                              {pkg.package_accountCount} currency account
+                              {pkg.package_accountCount !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                            <span>
+                              {pkg.account_type === "named"
+                                ? "Dedicated IBAN"
+                                : "Shared IBAN"}
+                            </span>
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <div className="w-2 h-2 rounded-full bg-purple-500 mr-2"></div>
+                            <span>
+                              {pkg.package_services?.split(",").length || 0}{" "}
+                              services
+                            </span>
+                          </div>
+                          {pkg.package_fee !== "0.00" && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <div className="w-2 h-2 rounded-full bg-orange-500 mr-2"></div>
+                              <span>Monthly billing</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  )}
+                  );
+                })}
+              </div>
 
-                {/* No Search Results Message */}
-                {searchTerm &&
-                  filteredNamedAccounts.length === 0 &&
-                  filteredPooledAccounts.length === 0 && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
-                      <div className="flex items-center">
-                        <div className="bg-gray-100 p-3 rounded-xl mr-4">
+              {/* Package Selection Summary */}
+              {selectedPackageCurrencies.length > 0 && (
+                <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-gray-900">
+                        Your Package Selection
+                      </h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Selected {selectedPackageCurrencies.length} currency
+                        account
+                        {selectedPackageCurrencies.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {monthlyCharge ? (
+                        <>
+                          <div className="text-lg font-bold text-blue-600">
+                            {monthlyCharge}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Recommended package
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-sm text-gray-500">
+                          Select a compatible package
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : isPartnerPackageModule === "Y" && remittanceOnlyAccepted ? (
+            // Remittance Only View for Package Module
+            <div className="mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  International Payments Account
+                </h3>
+                <p className="text-gray-600">
+                  Send and receive money internationally without maintaining
+                  currency accounts
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                    <FontAwesomeIcon
+                      icon={faExchangeAlt}
+                      className="text-green-600 text-2xl"
+                    />
+                  </div>
+
+                  <h4 className="text-xl font-bold text-gray-900 mb-3">
+                    Remittance Services Only
+                  </h4>
+
+                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+                    You've selected the remittance-only service. This allows you
+                    to send and receive international payments without the need
+                    to maintain multiple currency accounts. Perfect for
+                    occasional transfers or when you don't need to hold foreign
+                    currencies.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white p-4 rounded-xl border border-green-100">
+                      <div className="flex items-center mb-2">
+                        <div className="bg-green-100 p-2 rounded-lg mr-3">
                           <FontAwesomeIcon
-                            icon={faSearch}
-                            className="text-gray-500 text-xl"
+                            icon={faClock}
+                            className="text-green-600"
                           />
                         </div>
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-800">
-                            No matching accounts found
-                          </h3>
-                          <p className="mt-1 text-gray-700">
-                            No accounts match your search for "{searchTerm}".
-                            Try a different search term or filter.
-                          </p>
-                        </div>
+                        <h5 className="font-semibold text-gray-900">
+                          Fast Transfers
+                        </h5>
                       </div>
+                      <p className="text-sm text-gray-600">
+                        Send money internationally in 1-2 business days
+                      </p>
                     </div>
-                  )}
-              </>
-            )}
 
-            {/* Terms Acceptance */}
-            <div className="flex items-start p-4 bg-gray-50 rounded-xl mb-6 border border-gray-200">
+                    <div className="bg-white p-4 rounded-xl border border-green-100">
+                      <div className="flex items-center mb-2">
+                        <div className="bg-green-100 p-2 rounded-lg mr-3">
+                          <FontAwesomeIcon
+                            icon={faPercent}
+                            className="text-green-600"
+                          />
+                        </div>
+                        <h5 className="font-semibold text-gray-900">
+                          Competitive Rates
+                        </h5>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Better exchange rates than traditional banks
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-green-100">
+                      <div className="flex items-center mb-2">
+                        <div className="bg-green-100 p-2 rounded-lg mr-3">
+                          <FontAwesomeIcon
+                            icon={faShieldAlt}
+                            className="text-green-600"
+                          />
+                        </div>
+                        <h5 className="font-semibold text-gray-900">Secure</h5>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Bank-level security for all your transactions
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="inline-flex items-center gap-3 bg-green-100 text-green-800 px-4 py-3 rounded-xl">
+                    <FontAwesomeIcon icon={faInfoCircle} />
+                    <span className="font-medium">
+                      No monthly fees - Pay only for transactions you make
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Terms and Remittance Checkbox */}
+          <div className="mb-6 space-y-3">
+            <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
               <div>
                 <input
                   type="checkbox"
                   id="termsAcceptance"
                   checked={termsAccepted}
-                  onChange={(e) => dispatch(setTermsAccepted(e.target.checked))}
+                  onChange={(e) =>
+                    dispatch(actions.setTermsAccepted(e.target.checked))
+                  }
                   className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                 />
               </div>
@@ -960,7 +1239,7 @@ const CurrencySelectAccount = () => {
                     type="button"
                     onClick={() => {
                       setModalMessage(
-                        "Terms and conditions would be displayed here. In a real implementation, this would show the actual terms content."
+                        "Terms and conditions would be displayed here. In a real implementation, this would show the actual terms content.",
                       );
                       setIsModalOpen(true);
                     }}
@@ -972,254 +1251,215 @@ const CurrencySelectAccount = () => {
               </label>
             </div>
 
-            {/* Put these inputs side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {/* Referral Code Input */}
-              <div>
-                <label
-                  htmlFor="referralCode"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Referral Code (Optional)
-                </label>
-                <div className="relative">
+            {((isPartner === "Y" && showRemitOnly === "Y") ||
+              isPartner === "0") && (
+              <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div>
                   <input
-                    type="text"
-                    id="referralCode"
-                    value={referralCode}
-                    onChange={handleReferral}
-                    placeholder="Enter referral code"
-                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
+                    type="checkbox"
+                    id="remittanceOnly"
+                    checked={remittanceOnlyAccepted}
+                    onChange={(e) =>
+                      dispatch(
+                        actions.setRemittanceOnlyAccepted(e.target.checked),
+                      )
+                    }
+                    className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  {isReferralValidating && (
-                    <div className="absolute right-3 top-3">
-                      <RingLoader color="#3B82F6" size={20} />
-                    </div>
-                  )}
-                  {referralError && (
-                    <p className="text-red-500 text-sm mt-1 flex items-center">
-                      <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
-                      {referralError}
-                    </p>
-                  )}
-                  {referralSuccessMessage && (
-                    <p className="text-green-600 text-sm mt-1 flex items-center">
-                      <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                      {referralSuccessMessage}
-                    </p>
-                  )}
                 </div>
+                <label
+                  htmlFor="remittanceOnly"
+                  className="ml-3 text-gray-700 text-sm flex flex-col"
+                >
+                  <div className="flex items-center">
+                    <span className="mr-1">Activate</span>
+                    <span className="text-blue-600 font-medium mr-1">
+                      Remittance Only
+                    </span>
+                    <span>mode (for money transfers only)</span>
+                  </div>
+                </label>
               </div>
+            )}
+          </div>
 
-              {/* Agent Code Input */}
-              <div>
-                <label
-                  htmlFor="agentCode"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Agent Code (Optional)
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    id="agentCode"
-                    value={agentCode}
-                    onChange={handleAgent}
-                    placeholder="Enter agent code"
-                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
-                  />
-                  {isAgentValidating && (
-                    <div className="absolute right-3 top-3">
-                      <RingLoader color="#3B82F6" size={20} />
-                    </div>
-                  )}
-                  {agentError && (
-                    <p className="text-red-500 text-sm mt-1 flex items-center">
-                      <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
-                      {agentError}
-                    </p>
-                  )}
-                  {agentSuccessMessage && (
-                    <p className="text-green-600 text-sm mt-1 flex items-center">
-                      <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                      {agentSuccessMessage}
-                    </p>
-                  )}
+          {/* Referral Code */}
+          <div className="mb-6">
+            <label
+              htmlFor="referralCode"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
+              Referral Code (Optional)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                id="referralCode"
+                value={referralCode}
+                onChange={(e) =>
+                  dispatch(actions.setReferralCode(e.target.value))
+                }
+                placeholder="Enter referral code"
+                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-gray-50 focus:bg-white"
+              />
+              {isReferralValidating && (
+                <div className="absolute right-3 top-3 flex items-center justify-center">
+                  <RingLoader color="#3B82F6" size={20} />
                 </div>
+              )}
+              {referralError && (
+                <p className="text-red-500 text-sm mt-1 flex items-center">
+                  <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
+                  {referralError}
+                </p>
+              )}
+              {referralSuccessMessage && (
+                <p className="text-green-600 text-sm mt-1 flex items-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                  {referralSuccessMessage}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={onFinalSubmit}
+              disabled={isSubmitDisabled}
+              className="flex-1 py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPackageValidating || isReferralValidating ? (
+                <div className="flex items-center justify-center">
+                  <RingLoader color="#ffffff" size={20} className="mr-2" />
+                  Validating...
+                </div>
+              ) : (
+                <>
+                  <span>Continue to Verification</span>
+                  <FontAwesomeIcon icon={faArrowRight} className="ml-2" />
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => navigate(-1)}
+              className="py-3 px-6 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium shadow-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Error Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center justify-center text-blue-500 mb-4">
+              <div className="bg-blue-100 p-3 rounded-full">
+                <FontAwesomeIcon icon={faInfoCircle} size="lg" />
               </div>
             </div>
-
-            {/* Action Buttons - Update disabled state */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            <h3 className="text-lg font-medium text-gray-900 text-center mb-4">
+              {modalMessage}
+            </h3>
+            <div className="flex gap-3">
+              {modalMessage.includes("Account type is not defined") && (
+                <button
+                  onClick={() => navigate("/selectaccounttype")}
+                  className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Go Back
+                </button>
+              )}
               <button
-                onClick={handleSubmit}
-                disabled={isSubmitDisabled || loading || isRedirecting}
-                className="flex-1 py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
               >
-                {loading ||
-                isReferralValidating ||
-                isAgentValidating ||
-                isRedirecting ? (
-                  <>
-                    <RingLoader color="#ffffff" size={20} className="mr-2" />
-                    {isRedirecting ? "Redirecting..." : "Validating..."}
-                  </>
-                ) : (
-                  <>
-                    <span>Continue to Register</span>
-                    <FontAwesomeIcon icon={faArrowRight} className="ml-2" />
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={handleCancel}
-                className="py-3 px-6 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium shadow-sm"
-              >
-                Cancel
+                OK
               </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Error Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-              <div className="flex items-center justify-center text-blue-500 mb-4">
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <FontAwesomeIcon icon={faInfoCircle} size="lg" />
-                </div>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 text-center mb-4">
-                {modalMessage}
-              </h3>
-              <div className="flex gap-3">
-                {modalMessage.includes("Account type is not defined") && (
-                  <button
-                    onClick={() => navigate("/selectaccount")}
-                    className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
-                  >
-                    Go Back
-                  </button>
-                )}
-                <button
-                  onClick={closeModal}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Terms Modal */}
-        {termsModalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-xl max-h-[80vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Terms and Conditions
-                </h3>
-                <button
-                  onClick={() => dispatch(setTermsModalOpen(false))}
-                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <FontAwesomeIcon icon={faTimes} />
-                </button>
-              </div>
-              <div
-                className="prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: termsContent }}
-              />
-              <button
-                onClick={() => dispatch(setTermsModalOpen(false))}
-                className="w-full mt-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Info Modal */}
-        {showInfoModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                  {infoType === "named" ? (
-                    <>
-                      <FontAwesomeIcon
-                        icon={faUser}
-                        className="mr-2 text-blue-500"
-                      />
-                      Named Accounts
-                    </>
-                  ) : (
-                    <>
-                      <FontAwesomeIcon
-                        icon={faUsers}
-                        className="mr-2 text-indigo-500"
-                      />
-                      Pooled Accounts
-                    </>
-                  )}
-                </h3>
-                <button
-                  onClick={() => setShowInfoModal(false)}
-                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                  aria-label="Close"
-                >
-                  <FontAwesomeIcon icon={faTimes} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
+      {/* Info Modal */}
+      {showInfoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center">
                 {infoType === "named" ? (
                   <>
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <p className="text-gray-700">
-                        A Named Account is a dedicated bank account issued in
-                        the customer’s name. All transactions are processed
-                        directly through this account, allowing funds to be
-                        received and sent in the customer's own identity. This
-                        provides higher transparency, better reconciliation, and
-                        improved trust for business and high-volume customers.
-                      </p>
-                    </div>
+                    <FontAwesomeIcon
+                      icon={faUser}
+                      className="mr-2 text-blue-500"
+                    />
+                    Named Accounts
                   </>
                 ) : (
                   <>
-                    <div className="bg-indigo-50 p-4 rounded-lg">
-                      <p className="text-gray-700">
-                        A Pooled Account is a shared account operated by the
-                        platform on behalf of multiple customers. Individual
-                        customer balances are maintained virtually within the
-                        system, while actual transactions are settled through
-                        the pooled account. This allows faster onboarding and
-                        efficient handling for customers who do not require a
-                        dedicated bank account.
-                      </p>
-                    </div>
+                    <FontAwesomeIcon
+                      icon={faUsers}
+                      className="mr-2 text-indigo-500"
+                    />
+                    Pooled Accounts
                   </>
                 )}
-              </div>
+              </h3>
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
 
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowInfoModal(false)}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
-                >
-                  Got it
-                </button>
-              </div>
+            <div className="space-y-4">
+              {infoType === "named" ? (
+                <>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-gray-700">
+                      A Named Account is a dedicated bank account issued in the
+                      customer's name. All transactions are processed directly
+                      through this account, allowing funds to be received and
+                      sent in the customer's own identity. This provides higher
+                      transparency, better reconciliation, and improved trust
+                      for business and high-volume customers.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-indigo-50 p-4 rounded-lg">
+                    <p className="text-gray-700">
+                      A Pooled Account is a shared account operated by the
+                      platform on behalf of multiple customers. Individual
+                      customer balances are maintained virtually within the
+                      system, while actual transactions are settled through the
+                      pooled account. This allows faster onboarding and
+                      efficient handling for customers who do not require a
+                      dedicated bank account.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+              >
+                Got it
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </RegistrationLayout>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1227,7 +1467,6 @@ const AccountOptionCard = ({
   account,
   isSelected,
   onSelect,
-  onViewTerms,
   getCurrencyIcon,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1235,7 +1474,6 @@ const AccountOptionCard = ({
   const formatAccountDetails = (text, currency) => {
     if (!text) return "No details available";
     if (!currency) return text;
-
     const cleanedText = text.replace(/\([A-Z]{3}\)\s*/g, "");
     return `${cleanedText}`;
   };
@@ -1249,13 +1487,6 @@ const AccountOptionCard = ({
 
   const accountCurrency =
     account.currency || account.currency_code || account.currency_type || "";
-
-  const accountUrl =
-    account.url ||
-    account.charges_url ||
-    account.fees_url ||
-    account.terms_url ||
-    "";
 
   const formattedText = formatAccountDetails(accountDetails, accountCurrency);
 
@@ -1309,7 +1540,7 @@ const AccountOptionCard = ({
             </div>
           </div>
 
-          {(formattedText.length > 50 || accountUrl) && (
+          {formattedText.length > 50 && (
             <div className="flex justify-between items-center mt-2 w-full">
               {formattedText.length > 50 && (
                 <button
@@ -1326,19 +1557,6 @@ const AccountOptionCard = ({
                   />
                 </button>
               )}
-
-              {accountUrl && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onViewTerms(accountUrl);
-                  }}
-                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center transition-colors"
-                >
-                  <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
-                  View Charges and Fees
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -1347,12 +1565,4 @@ const AccountOptionCard = ({
   );
 };
 
-CurrencySelectAccount.propTypes = {
-  location: PropTypes.shape({
-    state: PropTypes.shape({
-      accountType: PropTypes.string,
-    }),
-  }),
-};
-
-export default CurrencySelectAccount;
+export default OpenCurrencyAccount;

@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  useMemo,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiDownload, FiArrowLeft, FiPrinter } from "react-icons/fi";
@@ -7,7 +13,6 @@ import { jsPDF } from "jspdf";
 import { RingLoader } from "react-spinners";
 
 // Components
-// REMOVED: UnlimitedLogo static import
 import DefaultLogo from "../../assets/images/Logo/unlimited remit logo.png"; // Fallback logo
 
 // Redux
@@ -26,7 +31,9 @@ import {
 
 import { selectAuth } from "../../features/Auth/slices/authSlice";
 
-// NEW: Import partner config hook
+import { useTransactionData } from "../../hooks/transactionHooks";
+
+// Import the corrected usePartnerConfig hook
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -36,19 +43,15 @@ const BankLetter = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { accountId } = useParams();
+  const customerId = localStorage.getItem("authcustomer_id");
+  const { fetchTransactions } = useTransactionData();
 
-  // NEW: Get partner config including logo
-  const { 
-    logoUrl, 
-    logoAltText, 
-    loading: partnerConfigLoading,
-    config: partnerConfig,
-    headerColor,
-    textColor,
-    isConfigured 
-  } = usePartnerConfig();
+  // ========== ALL SELECTORS AT THE TOP ==========
+  const reduxAccountData = useSelector(
+    (state) => state.bankLetter?.accountData
+  );
 
-  // Redux Selectors
+  // Redux Selectors from bankLetterSlice
   const {
     loading: bankLetterLoading,
     pdfGenerating,
@@ -61,17 +64,201 @@ const BankLetter = () => {
   const isWhitelabelled = useSelector(selectIsWhitelabelled);
   const { token } = useSelector(selectAuth);
 
+  // Use the corrected usePartnerConfig hook
+  const {
+    logoUrl,
+    logoAltText,
+    loading: partnerConfigLoading,
+    config: partnerConfig,
+    headerColor,
+    textColor,
+    isConfigured,
+    partnerName,
+    hasLogo,
+    debugInfo,
+  } = usePartnerConfig();
+
   // Local Refs
   const pdfContentRef = useRef(null);
   const originalAccountData = useRef(null);
+  const loadingTimeoutRef = useRef(null);
+
+  // Local state for logos with fallback
+  const [effectiveLogo, setEffectiveLogo] = useState(null);
+  const [effectiveLogoAlt, setEffectiveLogoAlt] = useState("");
+  const [logoType, setLogoType] = useState("default");
+
+  // Loading state management
+  const [showLoading, setShowLoading] = useState(true);
+
+  const isAllowedDomain =
+    window.location.hostname === "ourzap-v2.unlimitedremit.com" ||
+    window.location.hostname === "unlimited.unlimitedremit.com" ||
+    window.location.hostname === "unlimited-v2.unlimitedremit.com";
+
+  let whitelabelledpartnerid = null;
+  try {
+    const storedId = localStorage.getItem("whitelabelledpartnerid");
+    if (storedId) {
+      whitelabelledpartnerid = parseInt(storedId, 10);
+    }
+  } catch (error) {
+    console.error(
+      "Error reading whitelabelledpartnerid from localStorage:",
+      error
+    );
+    whitelabelledpartnerid = null;
+  }
+
+  // ========== FIXED: Move useMemo BEFORE any conditional returns ==========
+  const displayAccountData = useMemo(() => {
+    // Priority 1: Account data that matches the selected currency from location state
+    if (location.state?.selectedCurrency) {
+      // Check if accountData matches the selected currency
+      if (
+        accountData &&
+        accountData.currency === location.state.selectedCurrency
+      ) {
+        return accountData;
+      }
+
+      // Check if location state accountData matches
+      if (
+        location.state?.accountData &&
+        location.state.accountData.currency === location.state.selectedCurrency
+      ) {
+        return location.state.accountData;
+      }
+
+      // Check if originalAccountData matches
+      if (
+        originalAccountData.current &&
+        originalAccountData.current.currency === location.state.selectedCurrency
+      ) {
+        return originalAccountData.current;
+      }
+    }
+
+    // Priority 2: Fallback to existing logic
+    return (
+      accountData || originalAccountData.current || location.state?.accountData
+    );
+  }, [accountData, originalAccountData.current, location.state]);
+
+  // ========== DEBUG EFFECTS ==========
+  useEffect(() => {
+    console.log("🔍 BankLetter Mount Debug:", {
+      accountId,
+      locationState: location.state,
+      hasAccountData: !!accountData,
+      hasOriginalAccountData: !!originalAccountData.current,
+      pathname: location.pathname,
+      customerId: localStorage.getItem("authcustomer_id"),
+      selectedAccountFromStorage: localStorage.getItem("selectedAccount"),
+      search: location.search,
+    });
+  }, [
+    accountId,
+    location.state,
+    accountData,
+    location.pathname,
+    location.search,
+  ]);
+
+  // Debug 2: Log Redux state
+  useEffect(() => {
+    console.log("🔍 BankLetter Redux Debug:", {
+      accountData: accountData,
+      reduxAccountData: reduxAccountData,
+      isWhitelabelled,
+      partnerProfileData,
+      bankLetterLoading,
+    });
+  }, [
+    accountData,
+    reduxAccountData,
+    isWhitelabelled,
+    partnerProfileData,
+    bankLetterLoading,
+  ]);
+
+  // Debug 3: Log when account data changes
+  useEffect(() => {
+    if (accountData) {
+      console.log("✅ BankLetter has account data:", {
+        accountNumber: accountData.account_number,
+        currency: accountData.currency,
+        accountName: accountData.account_name,
+      });
+    } else {
+      console.log("❌ BankLetter missing account data");
+    }
+  }, [accountData]);
+
+  // Debug 4: Log partner config info
+  useEffect(() => {
+    console.log("🔍 BankLetter Partner Config Debug:", {
+      logoUrl,
+      logoAltText,
+      partnerConfigLoading,
+      headerColor,
+      textColor,
+      isConfigured,
+      partnerName,
+      hasLogo,
+      debugInfo,
+    });
+  }, [
+    logoUrl,
+    logoAltText,
+    partnerConfigLoading,
+    headerColor,
+    textColor,
+    isConfigured,
+    partnerName,
+    hasLogo,
+    debugInfo,
+  ]);
 
   // Initialize account data from location state
   useEffect(() => {
-    if (location.state?.accountData && !accountData) {
-      dispatch(setAccountData(location.state.accountData));
-      originalAccountData.current = location.state.accountData;
+    if (location.state?.accountData) {
+      // Check if we need to update
+      const shouldUpdate =
+        !accountData || // No account data yet
+        accountData.currency !== location.state.accountData.currency || // Different currency
+        accountData.account_number !==
+          location.state.accountData.account_number; // Different account
+
+      if (shouldUpdate) {
+        console.log(
+          "🔄 BankLetter - Setting/Updating account data from location state"
+        );
+        dispatch(setAccountData(location.state.accountData));
+        originalAccountData.current = location.state.accountData;
+      }
     }
-  }, [location.state, accountData, dispatch]);
+  }, [location.state, dispatch, accountData]);
+
+  // ========== LISTEN FOR CURRENCY CHANGES VIA LOCALSTORAGE ==========
+  useEffect(() => {
+    // Listen for currency changes from Account Summary via localStorage
+    const handleStorageChange = (event) => {
+      if (event.key === "selectedCurrency") {
+        console.log(
+          "🔄 BankLetter - Currency changed via storage:",
+          event.newValue
+        );
+        // You could trigger a refetch or update here if needed
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   // Fetch partner profile if whitelabelled
   useEffect(() => {
@@ -85,44 +272,70 @@ const BankLetter = () => {
     }
   }, [isWhitelabelled, token, dispatch]);
 
-  // Determine which logo to display
-  const getLogoToDisplay = () => {
-    if (isWhitelabelled) {
-      // For whitelabelled partners, use the profile logo first, then partner config logo
-      if (partnerProfileData?.logo) {
-        return {
-          src: partnerProfileData.logo,
-          alt: partnerProfileData.partner_name || "Partner Logo",
-          type: "partner-profile"
-        };
-      } else if (logoUrl) {
-        return {
-          src: logoUrl,
-          alt: logoAltText,
-          type: "partner-config"
-        };
-      }
-    } else {
-      // For regular users, use partner config logo if available, otherwise default
-      if (isConfigured && logoUrl) {
-        return {
-          src: logoUrl,
-          alt: logoAltText,
-          type: "partner-config"
-        };
-      }
-    }
-    
-    // Fallback to default logo
-    return {
-      src: DefaultLogo,
-      alt: "Unlimited Remit Logo",
-      type: "default"
-    };
-  };
+  // ========== INSTANT LOGO LOADING ==========
+  useEffect(() => {
+    // Check localStorage FIRST for instant logo display
+    const storedLogo = localStorage.getItem("partner_logo");
+    const storedName =
+      localStorage.getItem("whitelabelled_customer_partnername") ||
+      "Partner Logo";
 
-  // Get the current logo
-  const currentLogo = getLogoToDisplay();
+    console.log("🎨 BankLetter - Checking for logos:", {
+      localStorageLogo: storedLogo,
+      localStoragePartnerName: storedName,
+      hookLogoUrl: logoUrl,
+      hookLoading: partnerConfigLoading,
+    });
+
+    // Priority 1: Try localStorage for INSTANT display
+    if (storedLogo) {
+      setEffectiveLogo(storedLogo);
+      setEffectiveLogoAlt(storedName);
+      setLogoType("localStorage");
+      console.log("✅ Using logo from localStorage (instant):", storedLogo);
+      setShowLoading(false); // Hide loading immediately
+      return;
+    }
+
+    // Priority 2: If partner config is already loaded, use hook logo
+    if (!partnerConfigLoading && logoUrl) {
+      setEffectiveLogo(logoUrl);
+      setEffectiveLogoAlt(logoAltText || "Partner Logo");
+      setLogoType("hook");
+      console.log("✅ Using logo from hook:", logoUrl);
+      setShowLoading(false);
+      return;
+    }
+
+    // Priority 3: Default logo (only if we have no other options)
+    setEffectiveLogo(DefaultLogo);
+    setEffectiveLogoAlt("Unlimited Remit Logo");
+    setLogoType("default");
+    console.log("✅ Using default logo");
+
+    // Don't wait for partner config to finish loading
+    setShowLoading(false);
+  }, []); // Empty dependency array - run once on mount
+
+  // Optional: Update logo when partner config finishes loading (for cache refresh)
+  useEffect(() => {
+    if (!partnerConfigLoading && logoUrl && logoUrl !== effectiveLogo) {
+      console.log("🔄 Updating logo after partner config loaded:", logoUrl);
+      setEffectiveLogo(logoUrl);
+      setEffectiveLogoAlt(logoAltText || "Partner Logo");
+      setLogoType("hook");
+    }
+  }, [partnerConfigLoading, logoUrl, logoAltText, effectiveLogo]);
+
+  // Safety timeout for loading state
+  useEffect(() => {
+    // Set a very short timeout as safety net
+    const timer = setTimeout(() => {
+      setShowLoading(false);
+    }, 500); // Reduced from 3000ms to 500ms
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle missing account data
   const handleMissingData = () => {
@@ -141,7 +354,7 @@ const BankLetter = () => {
     );
   };
 
-  // Generate PDF (unchanged from your code)
+  // Generate PDF
   const generatePDF = useCallback(async () => {
     dispatch(setPdfGenerating(true));
 
@@ -222,6 +435,30 @@ const BankLetter = () => {
           font-size: 1rem;
           font-weight: 500;
         }
+        
+        /* Partner color styling */
+        ${
+          headerColor
+            ? `
+          .pdf-container {
+            border-top: 4px solid ${headerColor} !important;
+          }
+          h1, h2 {
+            color: ${headerColor} !important;
+          }
+        `
+            : ""
+        }
+        
+        ${
+          textColor
+            ? `
+          body {
+            color: ${textColor} !important;
+          }
+        `
+            : ""
+        }
       </style>
     `;
 
@@ -262,11 +499,10 @@ const BankLetter = () => {
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
-        width: 794, // 210mm in pixels
+        width: 794,
         windowWidth: 794,
         removeContainer: false,
         onclone: (clonedDoc) => {
-          // Ensure styles are applied in cloned document
           const clonedContainer = clonedDoc.body.firstChild;
           if (clonedContainer) {
             clonedContainer.style.width = "210mm";
@@ -311,9 +547,9 @@ const BankLetter = () => {
       console.error("Error generating PDF:", error);
       dispatch(setPdfGenerating(false));
     }
-  }, [accountData, dispatch]);
+  }, [accountData, dispatch, headerColor, textColor]);
 
-  // Enhanced Print Document (unchanged from your code)
+  // Enhanced Print Document
   const printDocument = useCallback(() => {
     const content = pdfContentRef.current;
     if (!content) return;
@@ -331,6 +567,7 @@ const BankLetter = () => {
       box-shadow: none !important;
       border: none !important;
       border-radius: 0 !important;
+      ${headerColor ? `border-top: 4px solid ${headerColor} !important;` : ""}
     `;
 
     // Clone the content to modify for print
@@ -344,6 +581,14 @@ const BankLetter = () => {
       logo.style.width = "auto";
       logo.style.height = "auto";
       logo.classList.add("print-logo");
+    }
+
+    // Apply partner colors to headings if available
+    if (headerColor) {
+      const headings = printContent.querySelectorAll("h1, h2");
+      headings.forEach((heading) => {
+        heading.style.color = headerColor;
+      });
     }
 
     // Create print-specific styles
@@ -370,23 +615,31 @@ const BankLetter = () => {
             padding: 15mm !important;
             margin: 0 auto !important;
             background: white !important;
+            ${
+              headerColor
+                ? `border-top: 4px solid ${headerColor} !important;`
+                : ""
+            }
           }
           
           h1 {
             font-size: 24pt !important;
             margin-top: 20px !important;
             margin-bottom: 15px !important;
+            ${headerColor ? `color: ${headerColor} !important;` : ""}
           }
           
           h2 {
             font-size: 18pt !important;
             margin-top: 15px !important;
             margin-bottom: 10px !important;
+            ${headerColor ? `color: ${headerColor} !important;` : ""}
           }
           
           p, li, span, div {
             font-size: 12pt !important;
             line-height: 1.5 !important;
+            ${textColor ? `color: ${textColor} !important;` : ""}
           }
           
           strong {
@@ -439,21 +692,30 @@ const BankLetter = () => {
         }
       }, 500);
     }, 250);
-  }, [accountData]);
+  }, [accountData, headerColor, textColor]);
 
+  // ========== FIXED: Check for missing data AFTER all hooks ==========
   // Check for missing data
-  if (!accountData && !originalAccountData.current) {
+  if (!displayAccountData) {
     return handleMissingData();
   }
 
-  const displayAccountData = accountData || originalAccountData.current;
-
-  // Loading state for partner config
-  if (partnerConfigLoading && isWhitelabelled) {
+  // Only show loading if we truly have no data
+  if (showLoading && (!displayAccountData || !effectiveLogo)) {
     return (
       <div className="container mx-auto py-20 text-center">
-        <RingLoader size={50} color="#3b82f6" className="mx-auto mb-4" />
-        <p className="text-gray-600">Loading partner configuration...</p>
+        <RingLoader
+          size={50}
+          color={headerColor || "#3b82f6"}
+          className="mx-auto mb-4"
+        />
+        <p className="text-gray-600">Loading configuration...</p>
+        <button
+          className="mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+          onClick={() => setShowLoading(false)}
+        >
+          Skip Loading
+        </button>
       </div>
     );
   }
@@ -480,6 +742,10 @@ const BankLetter = () => {
           id="pdfContent"
           ref={pdfContentRef}
           className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl border border-gray-200 pdf-container"
+          style={{
+            ...(headerColor ? { borderTop: `4px solid ${headerColor}` } : {}),
+            ...(textColor ? { color: textColor } : {}),
+          }}
         >
           {/* Inline styles with print media queries */}
           <style>
@@ -507,7 +773,6 @@ const BankLetter = () => {
               /* Main content styles */
               #pdfContent {
                 font-family: 'Arial', sans-serif;
-                color: #333;
                 line-height: 1.6;
               }
               
@@ -528,21 +793,14 @@ const BankLetter = () => {
                 margin-bottom: 1rem;
               }
               
-              /* Partner config logo size */
-              #pdfContent header img[data-logo-type="partner-config"],
-              #pdfContent header img[data-logo-type="partner-profile"] {
-                max-width: 150px;
-                max-height: 50px;
-              }
-              
               #pdfContent h1 {
-                color: #2d3748;
+                color: ${headerColor || "#2d3748"};
                 font-size: 1.875rem;
                 margin-top: 0.5rem;
               }
               
               #pdfContent h2 {
-                color: #2d3748;
+                color: ${headerColor || "#2d3748"};
                 font-size: 1.25rem;
                 margin-top: 1.5rem;
                 margin-bottom: 0.75rem;
@@ -574,22 +832,6 @@ const BankLetter = () => {
                 color: #718096;
               }
               
-              /* Apply partner colors if available */
-              ${headerColor ? `
-                .pdf-container {
-                  border-top: 4px solid ${headerColor};
-                }
-                h1, h2 {
-                  color: ${headerColor};
-                }
-              ` : ''}
-              
-              ${textColor ? `
-                body {
-                  color: ${textColor};
-                }
-              ` : ''}
-              
               /* Print media query */
               @media print {
                 body { 
@@ -604,7 +846,7 @@ const BankLetter = () => {
                   box-shadow: none !important;
                   border: none !important;
                   border-radius: 0 !important;
-                  border-top: 4px solid ${headerColor || '#3b82f6'} !important;
+                  border-top: 4px solid ${headerColor || "#3b82f6"} !important;
                 }
                 
                 #pdfContent header img {
@@ -616,6 +858,10 @@ const BankLetter = () => {
                 
                 .no-print {
                   display: none !important;
+                }
+                
+                h1, h2 {
+                  color: ${headerColor || "#2d3748"} !important;
                 }
               }
               
@@ -650,30 +896,20 @@ const BankLetter = () => {
           </style>
 
           <header className="text-center pb-6 flex flex-col justify-center items-center">
-            {/* Loading state for whitelabelled partner */}
-            {isWhitelabelled && bankLetterLoading ? (
-              <div className="flex justify-center py-4">
-                <RingLoader size={30} color="#3b82f6" />
-              </div>
-            ) : (
-              <img
-                src={currentLogo.src}
-                alt={currentLogo.alt}
-                data-logo-type={currentLogo.type}
-                className={`mb-6 object-contain ${
-                  currentLogo.type === 'default' 
-                    ? 'default-logo' 
-                    : 'partner-logo'
-                }`}
-                onError={(e) => {
-                  console.error(`Failed to load logo: ${currentLogo.src}`);
-                  e.target.src = DefaultLogo;
-                  e.target.alt = "Default Logo";
-                  e.target.dataset.logoType = "default";
-                }}
-              />
-            )}
-            <h1 className="text-2xl font-bold text-gray-800">
+            {/* Logo with error handling - Will show instantly from localStorage */}
+            <img
+              src={effectiveLogo || DefaultLogo}
+              alt={effectiveLogoAlt || "Unlimited Remit Logo"}
+              data-logo-type={logoType}
+              className="mb-6 object-contain"
+              onError={(e) => {
+                console.error(`Failed to load logo: ${effectiveLogo}`);
+                e.target.src = DefaultLogo;
+                e.target.alt = "Default Logo";
+                e.target.dataset.logoType = "default";
+              }}
+            />
+            <h1 className="text-2xl font-bold" style={{ color: headerColor }}>
               Bank Confirmation Letter
             </h1>
           </header>
@@ -684,42 +920,56 @@ const BankLetter = () => {
             </div>
 
             <div className="text-justify">
-              {isWhitelabelled ? (
-                bankLetterLoading ? (
-                  <div className="flex justify-center py-4">
-                    <RingLoader size={30} color="#3b82f6" />
-                  </div>
-                ) : (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: partnerProfileData?.text || "",
-                    }}
-                    className="prose max-w-none"
-                  />
-                )
-              ) : (
-                <>
-                  <p className="mb-6 text-lg font-medium text-gray-800">
-                    Dear Customer,
-                  </p>
-                  <p className="mb-4">
-                    Founded in 1992, Unlimited is one of the largest
-                    organizations with its sister concerns in education,
-                    internet services, software development, outsourcing, and
-                    running a cooperative bank and digital wallet for remittance
-                    services in the country.
-                  </p>
-                  <p className="mb-6">
-                    Please be advised that we have established an account for
-                    you on our platform. This account is used for collecting and
-                    disbursing payments for your business.
-                  </p>
-                </>
-              )}
+              {
+                isAllowedDomain ? (
+                  <>
+                    <p className="mb-6 text-lg font-medium text-gray-800">
+                      Dear Customer,
+                    </p>
+
+                    {/* Company description only for non-whitelabel on allowed domain */}
+                    {!isWhitelabelled && (
+                      <>
+                        <p className="mb-4">
+                          Founded in 1992, Unlimited is one of the largest
+                          organizations with its sister concerns in education,
+                          internet services, software development, outsourcing,
+                          and running a cooperative bank and digital wallet for
+                          remittance services in the country.
+                        </p>
+
+                        <p className="mb-6">
+                          Please be advised that we have established an account
+                          for you on our platform. This account is used for
+                          collecting and disbursing payments for your business.
+                        </p>
+                      </>
+                    )}
+                  </>
+                ) : // For non-allowed domains (like partner domains)
+                isWhitelabelled ? (
+                  bankLetterLoading ? (
+                    <div className="flex justify-center py-4">
+                      <RingLoader size={30} color={headerColor || "#3b82f6"} />
+                    </div>
+                  ) : (
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: partnerProfileData?.text || "",
+                      }}
+                      className="prose max-w-none"
+                      style={textColor ? { color: textColor } : {}}
+                    />
+                  )
+                ) : null // Or add a default message for non-whitelabel on non-allowed domains
+              }
             </div>
 
             <div className="mt-8">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              <h2
+                className="text-xl font-semibold mb-4"
+                style={{ color: headerColor }}
+              >
                 Account Details ({displayAccountData?.currency || "N/A"}{" "}
                 Account)
               </h2>
@@ -787,12 +1037,21 @@ const BankLetter = () => {
                     </div>
                   </div>
                 )}
+
+                {displayAccountData?.description && (
+                  <div className="account-detail-item">
+                    <strong>Reference Number</strong>
+                    <div className="font-mono">
+                      {displayAccountData.description}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {!isWhitelabelled && (
+            {isAllowedDomain && (
               <footer className="mt-8 pt-6 border-t border-gray-200">
-                <p className="text-gray-600 mb-4">
+                <p className="mb-4">
                   If you have any questions, please do not hesitate to contact
                   our support team. We are here to assist you.
                 </p>
@@ -804,47 +1063,43 @@ const BankLetter = () => {
             )}
           </main>
 
-          {!isWhitelabelled && (
-            <footer className="mt-10 pt-6 border-t border-gray-200 text-center text-gray-600 text-sm">
+          {isAllowedDomain && (
+            <footer className="mt-10 pt-6 border-t border-gray-200 text-center text-sm">
               <div className="font-medium mb-4">
                 We are licensed in the following jurisdictions:
               </div>
 
               <div className="space-y-3 text-left">
                 <div>
-                  <strong className="text-gray-700">NEPAL:</strong> Lalit Money
-                  Transfer Pvt Ltd Unlimited Building, Kichapokhari, PO Box 856,
-                  Kathmandu, NEPAL holds a license for Remittances from Nepal
-                  Rastra Bank.
+                  <strong>NEPAL:</strong> Lalit Money Transfer Pvt Ltd Unlimited
+                  Building, Kichapokhari, PO Box 856, Kathmandu, NEPAL holds a
+                  license for Remittances from Nepal Rastra Bank.
                 </div>
                 <div>
-                  <strong className="text-gray-700">USA:</strong> Unlimited
-                  Cloud LLC, 10685-B Hazelhurst Dr 18549, Houston, TX 77043, USA
-                  holds MSD Registration No. 31000204408346 from Financial
-                  Crimes Enforcement Network.
+                  <strong>USA:</strong> Unlimited Cloud LLC, 10685-B Hazelhurst
+                  Dr 18549, Houston, TX 77043, USA holds MSD Registration No.
+                  31000204408346 from Financial Crimes Enforcement Network.
                 </div>
                 <div>
-                  <strong className="text-gray-700">Singapore:</strong>{" "}
-                  Unlimited Cloud Pte Ltd, 68 Circular Road #02-01, Singapore
-                  049422.
+                  <strong>Singapore:</strong> Unlimited Cloud Pte Ltd, 68
+                  Circular Road #02-01, Singapore 049422.
                 </div>
                 <div>
-                  <strong className="text-gray-700">QATAR:</strong> Unlimited
-                  Remit Middle East LLC, QFC Tower 1, Doha, Qatar holds fintech
-                  license No. 01576 from Qatar Financial Center.
+                  <strong>QATAR:</strong> Unlimited Remit Middle East LLC, QFC
+                  Tower 1, Doha, Qatar holds fintech license No. 01576 from
+                  Qatar Financial Center.
                 </div>
                 <div>
-                  <strong className="text-gray-700">CANADA:</strong> Asimit
-                  Remittance Ltd 1224-13351 Commerce Pkwy, Richmond, BC V6V 2X7,
-                  Canada.
+                  <strong>CANADA:</strong> Asimit Remittance Ltd 1224-13351
+                  Commerce Pkwy, Richmond, BC V6V 2X7, Canada.
                 </div>
                 <div>
-                  <strong className="text-gray-700">UAE:</strong> Asimit Portal
-                  Est., Dubai Mall, Downtown Dubai, UAE.
+                  <strong>UAE:</strong> Asimit Portal Est., Dubai Mall, Downtown
+                  Dubai, UAE.
                 </div>
               </div>
 
-              <div className="font-semibold mt-8 text-lg text-gray-800">
+              <div className="font-semibold mt-8 text-lg">
                 Unlimited Remittance Ltd
               </div>
             </footer>
@@ -856,6 +1111,7 @@ const BankLetter = () => {
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
         <button
           className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          style={{ backgroundColor: headerColor || "#3b82f6" }}
           onClick={generatePDF}
           disabled={isPdfGenerating}
         >

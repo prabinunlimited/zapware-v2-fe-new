@@ -57,7 +57,11 @@ function PhoneVerification() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { mobileNumber } = location.state || { mobileNumber: "" };
+  const {
+    mobileNumber,
+    hasSSN = false, // ← Extract it
+    customerData,
+  } = location.state || {};
   const otpRefs = useRef(new Array(6).fill(null));
 
   // Extract country code and number for display and submission
@@ -101,30 +105,52 @@ function PhoneVerification() {
   // ========== PLAID HANDLER FUNCTIONS ==========
 
   const handleKycVerification = async (response) => {
-    
+    // ⚠️ CRITICAL CHANGE: If user provided SSN, skip Plaid and go directly to home
+    if (hasSSN) {
+      console.log("✅ User provided SSN, skipping Plaid verification");
+      toast.success("SSN verification will be processed separately!");
 
-    // If Plaid URL is provided, show modal for KYC verification
+      // Store authentication data if available
+      if (response.token) {
+        localStorage.setItem("authtoken", response.token);
+      }
+      if (response.customer_id) {
+        localStorage.setItem("authcustomer_id", response.customer_id);
+      }
+
+      // Navigate to home immediately
+      setTimeout(() => {
+        navigate("/");
+      }, 1500);
+
+      return null; // Return null to prevent further processing
+    }
+
+    // Original Plaid logic continues here for users WITHOUT SSN
     if (response.plaid_url && response.plaid_url !== "") {
       setPlaidUrl(response.plaid_url);
-      
+
       // For whitelabeled partners, open directly in new tab
       if (response.is_whitelabelled_partner_customer === "1") {
         window.open(response.plaid_url, "_blank");
         toast.info("Bank verification opened in new tab");
-        
+
         // Store auth data temporarily
         if (response.token) {
           localStorage.setItem("authtoken", response.token);
         }
         if (response.customer_id) {
           localStorage.setItem("authcustomer_id", response.customer_id);
-          sessionStorage.setItem("pending_kyc_auth", JSON.stringify({
-            customer_id: response.customer_id,
-            timestamp: Date.now(),
-            plaidUrl: response.plaid_url,
-          }));
+          sessionStorage.setItem(
+            "pending_kyc_auth",
+            JSON.stringify({
+              customer_id: response.customer_id,
+              timestamp: Date.now(),
+              plaidUrl: response.plaid_url,
+            })
+          );
         }
-        
+
         return null;
       } else {
         // For regular customers, show modal with options
@@ -189,14 +215,14 @@ function PhoneVerification() {
       if (plaidWindow.closed) {
         clearInterval(checkWindow);
         setIsPlaidLoading(false);
-        
+
         setTimeout(() => {
           toast.success("Bank verification completed!");
-          
+
           // Check if we have stored auth data
           const customerId = localStorage.getItem("authcustomer_id");
           const token = localStorage.getItem("authtoken");
-          
+
           if (customerId && token) {
             navigate(`/home/${customerId}`);
           } else {
@@ -216,7 +242,7 @@ function PhoneVerification() {
       toast.error("No verification URL available");
       return;
     }
-    
+
     navigator.clipboard.writeText(plaidUrl);
     setCopied(true);
     toast.success("Verification link copied to clipboard!");
@@ -233,14 +259,11 @@ function PhoneVerification() {
         otp: otp.join(""),
       };
 
-      
-
       try {
         const result = await dispatch(validateOtp(loginData));
 
         if (result.payload) {
           const data = result.payload;
-          
 
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
@@ -278,7 +301,6 @@ function PhoneVerification() {
           toast.error(errorMessage);
         }
       } catch (error) {
-        
         toast.error("An unexpected error occurred. Please try again.");
       }
     },
@@ -354,7 +376,6 @@ function PhoneVerification() {
       await dispatch(sendOtp(storedMobileNumber)).unwrap();
       toast.success("Verification code has been sent to your phone!");
     } catch (error) {
-      
       toast.error("Failed to send OTP. Please try again.");
     }
   };
@@ -379,8 +400,6 @@ function PhoneVerification() {
       mobile_number: number,
       otp: otp.join(""),
     };
-
-    
 
     formikSubmit();
   };
@@ -443,8 +462,8 @@ function PhoneVerification() {
                     Secure KYC Verification
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    You need to complete KYC verification to access your account. 
-                    This is a secure process powered by Plaid.
+                    You need to complete KYC verification to access your
+                    account. This is a secure process powered by Plaid.
                   </p>
                 </div>
 
@@ -456,7 +475,7 @@ function PhoneVerification() {
                         Secure & Encrypted
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Your information is protected with bank-level security. 
+                        Your information is protected with bank-level security.
                         We never store your banking credentials.
                       </p>
                     </div>
@@ -475,7 +494,9 @@ function PhoneVerification() {
                       <FaExternalLinkAlt className="text-lg" />
                     )}
                     <span>
-                      {isPlaidLoading ? "Opening..." : "Open in New Window (Recommended)"}
+                      {isPlaidLoading
+                        ? "Opening..."
+                        : "Open in New Window (Recommended)"}
                     </span>
                   </button>
 
@@ -501,7 +522,8 @@ function PhoneVerification() {
 
               <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
                 <p className="text-xs text-gray-500 text-center">
-                  By continuing, you agree to our Terms of Service and Privacy Policy
+                  By continuing, you agree to our Terms of Service and Privacy
+                  Policy
                 </p>
               </div>
             </div>

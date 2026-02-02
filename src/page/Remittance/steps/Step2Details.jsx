@@ -168,7 +168,6 @@ const Step2Details = ({
           <h3 className="text-xl font-bold text-white">
             {formData.paymentMethod === "manual" && "Manual Deposit"}
             {formData.paymentMethod === "bank" && "Bank Transfer"}
-            {formData.paymentMethod === "card" && "Card Payment"}
           </h3>
           <p className="text-blue-100 mt-1">
             Complete the details for your selected payment method

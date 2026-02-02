@@ -1,6 +1,7 @@
-// src/services/authService.js - FIXED VERSION
+// src/services/authService.js - UPDATED VERSION (Removed unnecessary API call)
 import api from "./api";
 import axios from "axios";
+import { countries as staticCountries } from "../features/Auth/slices/countrySlice";
 
 // ===================== TOKEN SERVICE =====================
 const TOKEN_KEY = "bearertoken";
@@ -33,7 +34,7 @@ export const tokenService = {
         // Add padding if needed
         const paddedPayload = base64Payload.padEnd(
           base64Payload.length + ((4 - (base64Payload.length % 4)) % 4),
-          "="
+          "=",
         );
         const payload = JSON.parse(atob(paddedPayload));
         const expiryTime = payload.exp;
@@ -128,7 +129,7 @@ export const tokenService = {
         const base64Payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
         const paddedPayload = base64Payload.padEnd(
           base64Payload.length + ((4 - (base64Payload.length % 4)) % 4),
-          "="
+          "=",
         );
         const payload = JSON.parse(atob(paddedPayload));
         const currentTime = Math.floor(Date.now() / 1000);
@@ -173,8 +174,6 @@ export const tokenService = {
   },
 
   // ===================== PARTNER DATA MANAGEMENT =====================
-
-  // Store partner data from partner-login API response
   setPartnerData: (partnerData) => {
     try {
       if (!partnerData) {
@@ -196,23 +195,86 @@ export const tokenService = {
       if (partnerData.beneficiary_portal_title) {
         localStorage.setItem(
           "beneficiary_portal_title",
-          partnerData.beneficiary_portal_title
+          partnerData.beneficiary_portal_title,
         );
         console.log(
           "✅ Beneficiary portal title stored:",
-          partnerData.beneficiary_portal_title
+          partnerData.beneficiary_portal_title,
         );
       }
 
-      // Store any other partner data that might be useful
-      if (partnerData.partner_name) {
-        localStorage.setItem("partner_name", partnerData.partner_name);
-      }
+      // Store white labelled partner status
+      if (partnerData.is_white_labelled_partner !== undefined) {
+        localStorage.setItem(
+          "is_white_labelled_partner",
+          partnerData.is_white_labelled_partner,
+        );
+        console.log(
+          "✅ is_white_labelled_partner stored:",
+          partnerData.is_white_labelled_partner,
+        );
 
-      if (partnerData.is_white_labelled_partner) {
+        // Also store in the old key for backward compatibility
         localStorage.setItem(
           "iswhitelabelledpartner",
-          partnerData.is_white_labelled_partner
+          partnerData.is_white_labelled_partner === "1" ? "Y" : "N",
+        );
+      }
+
+      // Store partner UUID
+      if (partnerData.partner_uuid) {
+        localStorage.setItem("partner_uuid", partnerData.partner_uuid);
+        console.log("✅ partner_uuid stored:", partnerData.partner_uuid);
+      }
+
+      // Store partner package module flag
+      if (partnerData.isPartnerPackageModule !== undefined) {
+        localStorage.setItem(
+          "isPartnerPackageModule",
+          partnerData.isPartnerPackageModule,
+        );
+        console.log(
+          "✅ isPartnerPackageModule stored:",
+          partnerData.isPartnerPackageModule,
+        );
+      }
+
+      // Store remittance only flag
+      if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
+        localStorage.setItem(
+          "showRemittanceOnlyOnRegistration",
+          partnerData.showRemittanceOnlyOnRegistration,
+        );
+        console.log(
+          "✅ showRemittanceOnlyOnRegistration stored:",
+          partnerData.showRemittanceOnlyOnRegistration,
+        );
+      }
+
+      // ✅ FIX 1: Store partner name from 'name' field
+      if (partnerData.name) {
+        localStorage.setItem("partner_name", partnerData.name);
+        console.log("✅ partner_name stored:", partnerData.name);
+      }
+
+      // ✅ FIX 2: Store logo from 'logo' field (not 'logo_url')
+      if (partnerData.logo) {
+        localStorage.setItem("partner_logo", partnerData.logo);
+        console.log(
+          "✅ partner_logo stored via tokenService:",
+          partnerData.logo,
+        );
+      } else if (partnerData.logo_url) {
+        // Fallback for backward compatibility
+        localStorage.setItem("partner_logo", partnerData.logo_url);
+        console.log(
+          "✅ partner_logo (from logo_url) stored via tokenService:",
+          partnerData.logo_url,
+        );
+      } else {
+        console.warn(
+          "⚠️ No logo field found in partnerData:",
+          Object.keys(partnerData),
         );
       }
     } catch (error) {
@@ -352,17 +414,20 @@ export const partnerLogin = async () => {
 
     // First check if we have a valid token using our service
     const existingToken = tokenService.getToken();
-    if (existingToken) {
+    const existingLogo = localStorage.getItem("partner_logo");
+
+    if (existingToken && existingLogo) {
       const validation = tokenService.safeValidateToken(existingToken);
 
       if (validation.isValid && !validation.isExpired) {
-        console.log("🔍 Existing token is valid, returning it");
+        console.log("🔍 Existing token and logo are valid, returning");
         return {
           status: "success",
           data: {
             token: existingToken,
             partner_id: tokenService.getPartnerId(),
             beneficiary_portal_title: tokenService.getBeneficiaryPortalTitle(),
+            logo_url: existingLogo,
           },
         };
       } else {
@@ -380,14 +445,14 @@ export const partnerLogin = async () => {
       {
         client_id: "HK6V7709",
         client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-        hostname: currentHostname, // Add hostname to payload
+        hostname: currentHostname,
       },
       {
         headers: {
           "Content-Type": "application/json",
         },
         timeout: 50000,
-      }
+      },
     );
 
     console.log("🔍 Partner login response:", {
@@ -398,10 +463,48 @@ export const partnerLogin = async () => {
     if (response.data.status === "success" && response.data.data?.token) {
       const token = response.data.data.token;
       const partnerData = response.data.data;
+      const partnerId = partnerData.partner_id;
 
       // ✅ STORE PARTNER DATA USING TOKEN SERVICE
       tokenService.setPartnerData(partnerData);
       console.log("✅ Partner data stored from partnerLogin");
+
+      // ✅ FETCH COMPLETE PARTNER DETAILS FROM get-partner-detail API
+      // This includes logo, partner name, and all other partner config
+      try {
+        console.log(
+          "🔍 Fetching complete partner details for:",
+          currentHostname,
+        );
+
+        // This will call /partners/get-partner-detail/{hostname}
+        const partnerDetailsResponse =
+          await fetchPartnerDetails(currentHostname);
+
+        if (partnerDetailsResponse?.data?.data) {
+          console.log(
+            "✅ Complete partner details stored:",
+            partnerDetailsResponse.data.data,
+          );
+
+          // Update tokenService with the complete data
+          tokenService.setPartnerData(partnerDetailsResponse.data.data);
+
+          // Also ensure partner_id is stored (in case it's different)
+          if (partnerDetailsResponse.data.data.partner_id) {
+            localStorage.setItem(
+              "whitelabelledpartnerid",
+              String(partnerDetailsResponse.data.data.partner_id),
+            );
+          }
+        }
+      } catch (partnerDetailsError) {
+        console.warn(
+          "⚠️ Could not fetch complete partner details:",
+          partnerDetailsError.message,
+        );
+        // Don't fail the entire login if this fails - we already have basic partner data
+      }
 
       // Store the token using our service
       tokenService.setToken(token);
@@ -410,7 +513,13 @@ export const partnerLogin = async () => {
       const storedToken = tokenService.getToken();
       if (storedToken === token) {
         console.log("✅ Token storage verified successfully");
-        return response.data;
+        return {
+          ...response.data,
+          data: {
+            ...response.data.data,
+            logo_url: localStorage.getItem("partner_logo"),
+          },
+        };
       } else {
         console.error("❌ Token storage verification failed");
         throw new Error("Token storage verification failed");
@@ -430,22 +539,30 @@ export const partnerLogin = async () => {
 
 // ===================== GET BEARER TOKEN (KEEP THIS ONE) =====================
 export const getBearerToken = async (forceRefresh = false) => {
-  // Use tokenService instead of direct localStorage access
+  // ✅ FIX 1: Use tokenService instead of direct localStorage access
   const existingToken = tokenService.getToken();
   const partnerId = tokenService.getPartnerId();
 
-  // ✅ IMPROVED CHECK: Return existing token ONLY if we have both token AND partner data
-  if (existingToken && partnerId && !forceRefresh) {
-    console.log("🔍 Returning existing bearer token with partner data");
+  // ✅ FIX 2: Add token validation check
+  let tokenIsValid = false;
+  if (existingToken) {
+    const validation = tokenService.safeValidateToken(existingToken);
+    tokenIsValid = validation.isValid && !validation.isExpired;
+  }
+
+  // ✅ FIX 3: Check if we should return existing token
+  if (existingToken && partnerId && tokenIsValid && !forceRefresh) {
+    console.log("🔍 Returning validated existing bearer token");
     return existingToken;
   }
 
-  // ✅ FIX: If we have token but NO partner data, force refresh to get partner data
-  if (existingToken && !partnerId && !forceRefresh) {
-    console.log("🔍 Token exists but partner data missing, forcing refresh");
-    return getBearerToken(true); // Recursive call with forceRefresh
+  // ✅ FIX 4: If token exists but is invalid, clear it
+  if (existingToken && !tokenIsValid) {
+    console.log("🔍 Token exists but invalid/expired, clearing...");
+    tokenService.clearToken();
   }
 
+  // ✅ FIX 5: Prevent multiple simultaneous token refreshes
   if (tokenRefreshPromise) {
     console.log("🔍 Token refresh already in progress, waiting...");
     return tokenRefreshPromise;
@@ -453,12 +570,11 @@ export const getBearerToken = async (forceRefresh = false) => {
 
   tokenRefreshPromise = (async () => {
     try {
-      console.log("🔍 Fetching new bearer token...");
+      console.log("🔍 Fetching new bearer token with partner details...");
 
       // Get current hostname
       const currentHostname = window.location.hostname;
       console.log("🔍 Current hostname:", currentHostname);
-      console.log("🔍 Full URL:", window.location.href);
 
       // Call partner-login API
       const response = await axios.post(
@@ -466,103 +582,87 @@ export const getBearerToken = async (forceRefresh = false) => {
         {
           client_id: "HK6V7709",
           client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-          hostname: currentHostname, // Add hostname to payload
+          hostname: currentHostname,
         },
         {
           headers: { "Content-Type": "application/json" },
           timeout: 15000,
-        }
+        },
       );
 
       console.log("🔍 Partner-login API response received:", {
         status: response.data?.status,
         hasToken: !!response.data?.data?.token,
         partnerId: response.data?.data?.partner_id,
-        beneficiaryTitle: response.data?.data?.beneficiary_portal_title,
       });
 
       if (response.data?.data?.token) {
         const token = response.data.data.token;
         const partnerData = response.data.data;
+        const partnerId = partnerData.partner_id;
 
         console.log("🔍 Token received:", token.substring(0, 20) + "...");
-        console.log("🔍 Partner data:", partnerData);
 
-        // ✅ STORE PARTNER DATA USING TOKEN SERVICE
-        try {
-          tokenService.setPartnerData(partnerData);
-          console.log("✅ Partner data stored successfully");
+        // ✅ Store basic partner data
+        tokenService.setPartnerData(partnerData);
+        console.log("✅ Basic partner data stored successfully");
 
-          // Verify storage
-          const storedPartnerId = tokenService.getPartnerId();
-          const storedTitle = tokenService.getBeneficiaryPortalTitle();
-          console.log("✅ Verification - Stored Partner ID:", storedPartnerId);
-          console.log("✅ Verification - Stored Title:", storedTitle);
-        } catch (partnerDataError) {
-          console.error("❌ Failed to store partner data:", partnerDataError);
-          // Don't throw here - we still want to proceed with token storage
-        }
-
-        // Validate token before storing
-        const validation = tokenService.safeValidateToken(token);
-        console.log("🔍 Token validation:", {
-          isValid: validation.isValid,
-          isJWT: validation.isJWT,
-          isExpired: validation.isExpired,
-        });
-
-        if (!validation.isValid) {
-          throw new Error("Invalid token format received from API");
-        }
-
-        // Use tokenService to store the token
+        // ✅ Store the token
         tokenService.setToken(token);
+        console.log("✅ Token stored successfully");
 
-        // Verify token storage worked
+        // ✅ FETCH COMPLETE PARTNER DETAILS (INCLUDES LOGO)
+        try {
+          console.log(
+            "🔍 Fetching complete partner details for:",
+            currentHostname,
+          );
+
+          // This will call /partners/get-partner-detail/{hostname}
+          const partnerDetailsResponse =
+            await fetchPartnerDetails(currentHostname);
+
+          if (partnerDetailsResponse?.data?.data) {
+            console.log(
+              "✅ Complete partner details stored:",
+              partnerDetailsResponse.data.data,
+            );
+
+            // Update tokenService with the complete data
+            tokenService.setPartnerData(partnerDetailsResponse.data.data);
+
+            // Also ensure partner_id is stored (in case it's different)
+            if (partnerDetailsResponse.data.data.partner_id) {
+              localStorage.setItem(
+                "whitelabelledpartnerid",
+                String(partnerDetailsResponse.data.data.partner_id),
+              );
+            }
+          }
+        } catch (partnerDetailsError) {
+          console.warn(
+            "⚠️ Could not fetch complete partner details:",
+            partnerDetailsError.message,
+          );
+          // Don't fail the entire token fetch if this fails
+        }
+
+        // ✅ Verify token storage
         const storedToken = tokenService.getToken();
         if (storedToken !== token) {
           console.error("❌ Token storage verification failed");
-          console.error("Original token:", token.substring(0, 20) + "...");
-          console.error("Stored token:", storedToken?.substring(0, 20) + "...");
           throw new Error("Token storage verification failed");
         }
 
-        console.log("✅ Token stored successfully");
-
-        // Debug final state
-        const tokenDebug = tokenService.debugToken();
-        const partnerDebug = tokenService.debugPartnerData();
-        console.log("🔍 Final token state:", tokenDebug);
-        console.log("🔍 Final partner state:", partnerDebug);
-
+        console.log("✅ Token and partner details stored successfully");
         return token;
       } else {
         console.error("❌ Invalid token response structure:", response.data);
         throw new Error("Invalid token response structure");
       }
     } catch (error) {
-      console.error("❌ Error in getBearerToken:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-
-      // Use tokenService to clear the token and partner data
+      console.error("❌ Error in getBearerToken:", error.message);
       tokenService.clearAll();
-
-      // Re-throw the error
-      if (error.response) {
-        if (error.response.status === 400 || error.response.status === 401) {
-          throw new Error(
-            "Authentication failed. Please check your credentials."
-          );
-        } else if (error.response.status === 429) {
-          throw new Error("Too many requests. Please try again later.");
-        } else if (error.response.status >= 500) {
-          throw new Error("Server error. Please try again later.");
-        }
-      }
-
       throw error;
     } finally {
       tokenRefreshPromise = null;
@@ -578,19 +678,25 @@ export const initializePartnerToken = async () => {
   try {
     const tokenDebug = tokenService.debugToken();
     const partnerDebug = tokenService.debugPartnerData();
+    const hasLogo = !!localStorage.getItem("partner_logo");
 
     console.log("🔍 initializePartnerToken check:", {
       tokenExists: tokenDebug.exists,
       partnerExists: partnerDebug.exists,
       partnerId: partnerDebug.partnerId,
+      hasLogo,
     });
 
-    // ✅ IMPROVED: Only call partnerLogin if we're missing EITHER token OR partner data
-    if (!tokenDebug.exists || !partnerDebug.exists) {
-      console.log("🔍 Missing token or partner data, calling partnerLogin");
+    // ✅ IMPROVED: Call partnerLogin if we're missing ANY of: token, partner data, or logo
+    if (!tokenDebug.exists || !partnerDebug.exists || !hasLogo) {
+      console.log(
+        "🔍 Missing token, partner data, or logo, calling partnerLogin",
+      );
       await partnerLogin();
     } else {
-      console.log("🔍 Token and partner data already exist, skipping API call");
+      console.log(
+        "🔍 Token, partner data, and logo already exist, skipping API call",
+      );
     }
   } catch (error) {
     console.error("❌ Error in initializePartnerToken:", error.message);
@@ -601,13 +707,157 @@ export const initializePartnerToken = async () => {
 // ===================== AUTH API FUNCTIONS =====================
 
 export const fetchCountries = async () => {
-  return debouncedApiCall("countries", () => api.get("/countries"));
+  console.log("🌍 Using static countries data from countrySlice");
+  return { data: staticCountries, status: "success" };
 };
 
 export const fetchPartnerDetails = async (hostName) => {
-  return debouncedApiCall(`partner-${hostName}`, () =>
-    api.get(`/partners/get-partner-detail/${hostName}`)
-  );
+  return debouncedApiCall(`partner-${hostName}`, async () => {
+    try {
+      console.log(`🔍 Fetching partner details for hostname: ${hostName}`);
+
+      // Make API call to get partner details
+      const response = await api.get(
+        `/partners/get-partner-detail/${hostName}`,
+      );
+
+      console.log("🔍 Partner details API response:", {
+        status: response.data?.status,
+        hasData: !!response.data?.data,
+        logoPresent: !!response.data?.data?.logo,
+        logoValue: response.data?.data?.logo,
+        fullResponse: response.data?.data,
+      });
+
+      // ✅ STORE THE RESPONSE DATA TO localStorage
+      if (response.data?.status === "success" && response.data?.data) {
+        const partnerData = response.data.data;
+
+        console.log("🔍 Partner data to store:", {
+          name: partnerData.name,
+          logo: partnerData.logo,
+          partner_id: partnerData.partner_id,
+          allKeys: Object.keys(partnerData),
+        });
+
+        // Store all partner data fields
+        if (partnerData.is_white_labelled_partner !== undefined) {
+          localStorage.setItem(
+            "is_white_labelled_partner",
+            partnerData.is_white_labelled_partner,
+          );
+          console.log(
+            "✅ is_white_labelled_partner stored:",
+            partnerData.is_white_labelled_partner,
+          );
+        }
+
+        if (partnerData.partner_id !== undefined) {
+          localStorage.setItem(
+            "whitelabelledpartnerid",
+            String(partnerData.partner_id),
+          );
+          console.log("✅ partner_id stored:", partnerData.partner_id);
+        }
+
+        if (partnerData.partner_uuid !== undefined) {
+          localStorage.setItem("partner_uuid", partnerData.partner_uuid);
+          console.log("✅ partner_uuid stored:", partnerData.partner_uuid);
+        }
+
+        if (partnerData.isPartnerPackageModule !== undefined) {
+          localStorage.setItem(
+            "isPartnerPackageModule",
+            partnerData.isPartnerPackageModule,
+          );
+          console.log(
+            "✅ isPartnerPackageModule stored:",
+            partnerData.isPartnerPackageModule,
+          );
+        }
+
+        if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
+          localStorage.setItem(
+            "showRemittanceOnlyOnRegistration",
+            partnerData.showRemittanceOnlyOnRegistration,
+          );
+          console.log(
+            "✅ showRemittanceOnlyOnRegistration stored:",
+            partnerData.showRemittanceOnlyOnRegistration,
+          );
+        }
+
+        // ✅ CRITICAL FIX: Store logo from 'logo' field - FIXED VERSION
+        let finalLogoUrl = null;
+
+        if (partnerData.logo) {
+          // Sanitize the URL (remove escaped slashes if present)
+          finalLogoUrl = partnerData.logo.replace(/\\\//g, "/");
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("✅ partner_logo stored in localStorage:", finalLogoUrl);
+        } else if (partnerData.logo_url) {
+          // Fallback to logo_url field
+          finalLogoUrl = partnerData.logo_url.replace(/\\\//g, "/");
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("✅ Using logo_url instead:", finalLogoUrl);
+        } else {
+          console.warn("⚠️ Logo is null or empty in API response!");
+
+          // Create a default logo URL based on partner ID
+          const partnerId = partnerData.partner_id || "default";
+          finalLogoUrl = `https://zapware.unlimitedremit.com/image/partners/default-logo-${partnerId}.png`;
+          localStorage.setItem("partner_logo", finalLogoUrl);
+          console.log("⚠️ Using default logo:", finalLogoUrl);
+        }
+
+        // ✅ STORE PARTNER NAME
+        if (partnerData.name) {
+          localStorage.setItem("partner_name", partnerData.name);
+          console.log("✅ partner_name stored:", partnerData.name);
+
+          // Also store in the old key for backward compatibility
+          localStorage.setItem(
+            "whitelabelled_customer_partnername",
+            partnerData.name,
+          );
+        }
+
+        // Update tokenService with all data
+        tokenService.setPartnerData({
+          ...partnerData,
+          partner_name: partnerData.name,
+          logo_url: finalLogoUrl, // Use the sanitized/final logo URL
+        });
+
+        // ✅ DEBUG: Verify storage worked
+        const storedLogo = localStorage.getItem("partner_logo");
+        const storedName = localStorage.getItem("partner_name");
+
+        console.log("🔍 Storage verification:", {
+          storedLogo: storedLogo ? "PRESENT" : "MISSING",
+          storedName: storedName || "MISSING",
+          timestamp: new Date().toISOString(),
+        });
+
+        // Log what's actually in localStorage for debugging
+        console.log("🔍 Current localStorage partner-related items:", {
+          partner_logo: localStorage.getItem("partner_logo"),
+          partner_name: localStorage.getItem("partner_name"),
+          whitelabelledpartnerid: localStorage.getItem(
+            "whitelabelledpartnerid",
+          ),
+          partner_uuid: localStorage.getItem("partner_uuid"),
+        });
+      } else {
+        console.warn("⚠️ Invalid response structure from partner details API");
+      }
+
+      return response;
+    } catch (error) {
+      console.error("❌ Error in fetchPartnerDetails:", error);
+      throw error;
+    }
+  });
 };
 
 export const login = async (credentials) => {
@@ -619,6 +869,41 @@ export const requestPasscodeLogin = async ({
   password,
   customer_type,
 }) => {
+  // ✅ ADD DEBUG HERE FIRST
+  console.trace("request-passcode-login called from authService.js");
+  console.log("Token at time of call:", localStorage.getItem("bearertoken"));
+  console.log("Call parameters:", {
+    email,
+    hasPassword: !!password,
+    customer_type,
+  });
+
+  // Get the bearer token
+  const token =
+    localStorage.getItem("bearertoken") || localStorage.getItem("authtoken");
+
+  if (!token) {
+    console.error("❌ NO bearer token available for request-passcode-login");
+    console.log("Current localStorage tokens:", {
+      bearertoken: localStorage.getItem("bearertoken"),
+      authtoken: localStorage.getItem("authtoken"),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Try to get a fresh token if none exists
+    try {
+      console.log("🔄 Attempting to get fresh bearer token...");
+      const freshToken = await getBearerToken();
+      if (freshToken) {
+        console.log("✅ Fresh token obtained");
+        token = freshToken;
+      }
+    } catch (tokenError) {
+      console.error("❌ Failed to get fresh token:", tokenError);
+      throw new Error("Authentication token not available");
+    }
+  }
+
   const payload = {
     email,
     password,
@@ -629,7 +914,18 @@ export const requestPasscodeLogin = async ({
     payload.customer_type = customer_type;
   }
 
-  return api.post("/request-passcode-login", payload);
+  console.log("🔄 Making request-passcode-login API call with:", {
+    payload,
+    hasToken: !!token,
+    tokenPreview: token ? token.substring(0, 20) + "..." : "none",
+  });
+
+  return api.post("/request-passcode-login", payload, {
+    headers: {
+      Authorization: `Bearer ${token}`, // ✅ ADD THIS LINE - CRITICAL FIX
+      "Content-Type": "application/json",
+    },
+  });
 };
 
 export const sendOtpLogin = async ({
@@ -691,7 +987,7 @@ export const logout = async () => {
   } catch (error) {
     console.error(
       "❌ Backend logout failed, but local data was cleared:",
-      error.message
+      error.message,
     );
     return { status: "local_logout_complete" };
   }
@@ -703,7 +999,7 @@ export const getLogoutTime = async () => {
 
 export const getPartnerConfig = async (partnerId) => {
   return debouncedApiCall(`partner-config-${partnerId}`, () =>
-    api.get(`/partner-basic-setup/${partnerId}`)
+    api.get(`/partner-basic-setup/${partnerId}`),
   );
 };
 
@@ -741,7 +1037,7 @@ export const fetchUserProfile = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -751,7 +1047,7 @@ export const fetchAllowedModules = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -781,7 +1077,7 @@ export const initiateKycProcess = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    }
+    },
   );
 };
 
@@ -791,7 +1087,7 @@ export const getKycStatus = async (customerId, token) => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    })
+    }),
   );
 };
 
@@ -905,6 +1201,104 @@ export const clearApiCache = () => {
 // Clear cache for specific key
 export const clearCacheForKey = (key) => {
   apiCallCache.delete(key);
+};
+
+export const initializeAppWithPartnerData = async () => {
+  try {
+    console.log("🚀 Initializing app with centralized data...");
+
+    // Step 1: Get current hostname
+    const hostname = window.location.hostname;
+    console.log("🌍 Current hostname:", hostname);
+
+    // Step 2: Check if we have existing valid token and partner data
+    const existingToken = tokenService.getToken();
+    const existingPartnerId = tokenService.getPartnerId();
+    const hasLogo = !!localStorage.getItem("partner_logo");
+
+    const tokenValidation = existingToken
+      ? tokenService.safeValidateToken(existingToken)
+      : null;
+    const hasValidToken =
+      tokenValidation?.isValid && !tokenValidation?.isExpired;
+
+    console.log("🔍 Initial state check:", {
+      hasToken: !!existingToken,
+      hasValidToken,
+      hasPartnerId: !!existingPartnerId,
+      hasLogo,
+      tokenValidation,
+    });
+
+    // Step 3: Always call partnerLogin on app startup if we're on a partner domain
+    const isPartnerDomain =
+      hostname.includes("unlimitedremit.com") ||
+      hostname.includes("partner-domain") ||
+      hostname !== "localhost";
+
+    if (isPartnerDomain) {
+      // Step 4: Call partnerLogin to get fresh partner data
+      try {
+        const loginResult = await partnerLogin();
+        console.log("✅ partnerLogin successful:", {
+          status: loginResult.status,
+          partnerId: loginResult.data?.partner_id,
+          hasToken: !!loginResult.data?.token,
+        });
+      } catch (loginError) {
+        console.warn(
+          "⚠️ partnerLogin failed, trying getBearerToken:",
+          loginError.message,
+        );
+
+        // Fallback to getBearerToken
+        try {
+          await getBearerToken(true); // Force refresh
+          console.log("✅ Fallback getBearerToken successful");
+        } catch (bearerError) {
+          console.warn(
+            "⚠️ Both partnerLogin and getBearerToken failed:",
+            bearerError.message,
+          );
+          // Continue without partner token - non-partner flow
+        }
+      }
+
+      // Step 5: Fetch partner details for complete data
+      try {
+        await fetchPartnerDetails(hostname);
+        console.log("✅ Partner details fetched successfully");
+      } catch (detailsError) {
+        console.warn("⚠️ Partner details fetch failed:", detailsError.message);
+      }
+    } else {
+      console.log(
+        "🏠 Running in non-partner mode (localhost or non-partner domain)",
+      );
+    }
+
+    // Step 6: Log debug state
+    console.log("🔍 Auth State Debug:", {
+      isAuthenticated: tokenService.isValid(),
+      token: tokenService.debugToken(),
+      customerId: localStorage.getItem("authcustomer_id"),
+      isVerifyingPasscode: false,
+      localStorageToken: localStorage.getItem("bearertoken"),
+      partnerId: tokenService.getPartnerId(),
+      isWhiteLabelled: tokenService.isWhiteLabelledPartner(),
+      partnerName: tokenService.getPartnerName(),
+      beneficiaryPortalTitle: tokenService.getBeneficiaryPortalTitle(),
+      hasLogo: !!localStorage.getItem("partner_logo"),
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log("✅ App initialization completed");
+    return true;
+  } catch (error) {
+    console.error("❌ App initialization failed:", error);
+    // Don't throw - let the app continue
+    return false;
+  }
 };
 
 // ===================== EXPORT DEFAULT =====================

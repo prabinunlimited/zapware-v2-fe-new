@@ -182,8 +182,6 @@ const TransactionDetails = React.memo(
       [selectedCurrencyCode]
     );
 
-    // INDIVIDUAL TRANSACTION EXPORT FUNCTIONS
-
     const exportSingleTransactionPDF = useCallback(
       async (transaction) => {
         if (!transaction) return;
@@ -191,119 +189,93 @@ const TransactionDetails = React.memo(
         setExportingTransactionId(transaction.id);
 
         try {
-          const doc = new jsPDF();
-          const pageWidth = doc.internal.pageSize.getWidth();
-
-          // Title
-          doc.setFontSize(18);
-          doc.setFont("helvetica", "bold");
-          doc.text("TRANSACTION RECEIPT", pageWidth / 2, 20, {
-            align: "center",
-          });
-
-          doc.setFontSize(11);
-          doc.setFont("helvetica", "normal");
-          doc.text(
-            `ID: ${transaction.transaction_id || "N/A"}`,
-            pageWidth / 2,
-            28,
-            { align: "center" }
-          );
-
-          // Main details box
-          autoTable(doc, {
-            startY: 40,
-            head: [["Transaction Details", ""]],
-            body: [
-              ["Date & Time", formatDate(transaction.transaction_datetime)],
-              [
-                "Amount",
-                `${transaction.instructed_amount || "0"} ${
-                  transaction.currency_code
-                }`,
-              ],
-              ["Type", transaction.particulars || "N/A"],
-              ["Status", transaction.status || "Unknown"],
-              ["Direction", transaction.direction || "N/A"],
-              ["Reference", transaction.external_reference || "N/A"],
-            ],
-            theme: "grid",
-            headStyles: {
-              fillColor: [59, 130, 246],
-              textColor: [255, 255, 255],
-              fontSize: 11,
-              fontStyle: "bold",
-            },
-            bodyStyles: { fontSize: 10 },
-            styles: { cellPadding: 5 },
-            columnStyles: {
-              0: { cellWidth: 60, fontStyle: "bold" },
-              1: { cellWidth: 60 },
-            },
-          });
-
-          // Sender/Beneficiary details
-          const lastY = doc.lastAutoTable.finalY + 10;
-
-          if (transaction.sender_name || transaction.sender_iban) {
-            autoTable(doc, {
-              startY: lastY,
-              head: [["Sender Details", ""]],
-              body: [
-                ["Name", transaction.sender_name || "N/A"],
-                ["Account", transaction.sender_iban || "N/A"],
-              ],
-              theme: "grid",
-              headStyles: {
-                fillColor: [107, 114, 128],
-                textColor: [255, 255, 255],
-                fontSize: 11,
-              },
-              bodyStyles: { fontSize: 10 },
-              styles: { cellPadding: 4 },
-            });
+          // Check if transaction_id is available
+          if (!transaction.transaction_id) {
+            throw new Error("Transaction ID is missing");
           }
 
-          if (transaction.beneficiary_name || transaction.beneficiary_iban) {
-            autoTable(doc, {
-              startY: doc.lastAutoTable.finalY + 10,
-              head: [["Beneficiary Details", ""]],
-              body: [
-                ["Name", transaction.beneficiary_name || "N/A"],
-                ["Account", transaction.beneficiary_iban || "N/A"],
-              ],
-              theme: "grid",
-              headStyles: {
-                fillColor: [16, 185, 129],
-                textColor: [255, 255, 255],
-                fontSize: 11,
-              },
-              bodyStyles: { fontSize: 10 },
-              styles: { cellPadding: 4 },
-            });
+          // Get authentication token
+          const bearertoken =
+            localStorage.getItem("bearertoken") ||
+            localStorage.getItem("authtoken");
+          if (!bearertoken) {
+            throw new Error("Authentication token not found");
           }
 
-          // Footer
-          const pageHeight = doc.internal.pageSize.getHeight();
-          doc.setFontSize(8);
-          doc.setTextColor(100, 100, 100);
-          doc.text(
-            `Generated on ${new Date().toLocaleString()} • This is an official receipt`,
-            pageWidth / 2,
-            pageHeight - 10,
-            { align: "center" }
+          // Call the API to generate PDF receipt - EXACTLY LIKE THE OTHER COMPONENT
+          const API_URL = import.meta.env.VITE_API_URL;
+          const response = await fetch(
+            `${API_URL}/transactions/generate-receipt-blob/${transaction.id}`,
+            {
+              responseType: "blob",
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+              },
+            }
           );
 
-          // Download
-          doc.save(generateSingleFileName(transaction, "pdf"));
+          if (!response.ok) {
+            throw new Error(
+              `API request failed with status ${response.status}`
+            );
+          }
+
+          // Get the PDF blob
+          const blob = await response.blob();
+
+          // Check if it's actually a PDF
+          if (!blob.type.includes("pdf")) {
+            throw new Error("Server did not return a valid PDF file");
+          }
+
+          // Create a blob URL from the response data (EXACTLY LIKE THE OTHER COMPONENT)
+          const downloadUrl = window.URL.createObjectURL(blob);
+
+          // Create a temporary download link
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+
+          // Generate filename - keep your existing naming convention
+          const fileName = generateSingleFileName(transaction, "pdf");
+          link.download = fileName; // This forces download
+
+          // Trigger download
+          document.body.appendChild(link);
+          link.click();
+
+          // Clean up
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+
+          console.log("✅ PDF downloaded successfully from API");
         } catch (error) {
           console.error("Single PDF export failed:", error);
-          alert("Failed to generate receipt. Please try again.");
+
+          // Enhanced error handling
+          let errorMessage = "Failed to download receipt. Please try again.";
+
+          if (error.message.includes("401")) {
+            errorMessage = "Session expired. Please log in again.";
+          } else if (error.message.includes("403")) {
+            errorMessage =
+              "You don't have permission to download this receipt.";
+          } else if (error.message.includes("404")) {
+            errorMessage =
+              "Receipt generation service is currently unavailable.";
+          } else if (
+            error.message.includes("missing") ||
+            error.message.includes("Transaction ID")
+          ) {
+            errorMessage =
+              "Transaction ID is missing. Cannot generate receipt.";
+          }
+
+          alert(errorMessage);
         } finally {
           setExportingTransactionId(null);
         }
       },
-      [formatDate, generateSingleFileName]
+      [generateSingleFileName] // Only need this dependency
     );
 
     const exportSingleTransactionExcel = useCallback(

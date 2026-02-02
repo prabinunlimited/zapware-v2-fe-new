@@ -9,6 +9,8 @@ import {
   FaUniversity,
   FaFileUpload,
   FaUser,
+  FaBuilding,
+  FaCreditCard,
 } from "react-icons/fa";
 
 const Step3Confirm = ({
@@ -20,6 +22,8 @@ const Step3Confirm = ({
   onAgreeToTerms,
   onSubmit,
   loading,
+  paymentMethod,
+  selectedBankAccount = null, // ✅ Add this prop for selected bank account
 }) => {
   // Calculate total amount
   const totalAmount =
@@ -100,7 +104,7 @@ const Step3Confirm = ({
                       {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      }
+                      },
                     )}
                   </span>
                 </div>
@@ -162,7 +166,7 @@ const Step3Confirm = ({
                       {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      }
+                      },
                     )}
                   </span>
                 </div>
@@ -192,6 +196,113 @@ const Step3Confirm = ({
           </div>
         </div>
       </div>
+
+      {/* ✅ YOUR BANK ACCOUNT SECTION - For USD Bank Transfers */}
+      {paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD" &&
+        selectedBankAccount && (
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 overflow-hidden shadow-lg">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FaBuilding />
+                Your Bank Account
+              </h3>
+            </div>
+
+            <div className="p-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-100 rounded-xl">
+                    <FaUniversity className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg text-gray-900">
+                      {selectedBankAccount.account_name}
+                    </h4>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Provider:</span>
+                        <span className="font-medium">
+                          {selectedBankAccount.provider || "Bank"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Type:</span>
+                        <span className="font-medium">
+                          {selectedBankAccount.account_type || "Checking"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Status:</span>
+                        {selectedBankAccount.web_debit_verified ? (
+                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full flex items-center gap-1">
+                            <FaCheckCircle className="w-3 h-3" />
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                            Pending Verification
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200">
+                  <p className="text-sm text-gray-600 mb-2">
+                    Account Information
+                  </p>
+                  <div className="space-y-1">
+                    {selectedBankAccount.routing_number && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">
+                          Routing #:
+                        </span>
+                        <span className="font-mono text-sm font-medium">
+                          {selectedBankAccount.routing_number}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Account #:</span>
+                      <span className="font-mono text-sm font-medium">
+                        {selectedBankAccount.accountNumberHash || "••••••••"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Features */}
+              {(selectedBankAccount.fednow_credit_enabled ||
+                selectedBankAccount.rtp_credit_enabled) && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Payment Features:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBankAccount.fednow_credit_enabled && (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                        FedNow Enabled
+                      </span>
+                    )}
+                    {selectedBankAccount.rtp_credit_enabled && (
+                      <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                        RTP Enabled
+                      </span>
+                    )}
+                    {selectedBankAccount.is_default && (
+                      <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                        Default Account
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       {/* Recipient Information */}
       {selectedBeneficiary && (
@@ -368,33 +479,15 @@ const Step3Confirm = ({
               {formData.paymentMethod === "manual" && (
                 <FaMoneyBillWave className="w-6 h-6 text-green-600" />
               )}
-              {formData.paymentMethod === "card" && (
-                <svg
-                  className="w-6 h-6 text-purple-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                  />
-                </svg>
-              )}
             </div>
             <div>
               <div className="font-medium">
                 {formData.paymentMethod === "bank" && "Bank Transfer"}
-                {formData.paymentMethod === "manual" && "Manual Deposit"}
-                {formData.paymentMethod === "card" && "Card Payment"}
+                {formData.paymentMethod === "manual" && "Cash Deposit"}
               </div>
               <div className="text-sm text-gray-500">
                 {formData.paymentMethod === "manual" &&
                   "Please upload payment proof"}
-                {formData.paymentMethod === "card" &&
-                  "Instant payment processing"}
                 {formData.paymentMethod === "bank" && "Direct bank transfer"}
               </div>
             </div>
@@ -403,9 +496,7 @@ const Step3Confirm = ({
             <div className="text-sm text-gray-500">Processing Time</div>
             <div className="font-medium flex items-center gap-1">
               <FaClock className="text-blue-600" />
-              {formData.paymentMethod === "card"
-                ? "Instant"
-                : "1-2 Business Days"}
+              {"1-2 Business Days"}
             </div>
           </div>
         </div>
