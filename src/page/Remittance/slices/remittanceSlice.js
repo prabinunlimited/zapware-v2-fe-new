@@ -464,6 +464,13 @@ export const submitTransaction = createAsyncThunk(
       console.log("🚀 Starting transaction submission...");
       console.log("📦 Transaction data received:", transactionData);
 
+      if (transactionData.isRecurring === "1") {
+        console.log("🔄 Processing Recurring Payment:", {
+          frequency: transactionData.Frequency,
+          custom_days: transactionData.recurring_custom_days,
+        });
+      }
+
       const state = getState();
       const formDataState = state.remittance.formData;
 
@@ -538,6 +545,14 @@ export const submitTransaction = createAsyncThunk(
         rails: transactionData.rails || "Local",
         sender_account_name: transactionData.sender_account_name,
         sender_bank_id: transactionData.sender_bank_id,
+
+        ...(transactionData.isRecurring
+          ? {
+              isRecurring: transactionData.isRecurring,
+              frequency: transactionData.frequency,
+              recurring_custom_days: transactionData.recurring_custom_days,
+            }
+          : {}),
 
         agree_to_terms: "1",
         file:

@@ -1,6 +1,6 @@
 // src/components/NavigateSection.js - UPDATED WITH CONVERT ROUTING
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { AiOutlineStop } from "react-icons/ai";
 import { IoIosArrowForward } from "react-icons/io";
@@ -84,6 +84,7 @@ function NavigateSectionContent({
   const { customerId } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Redux selectors
   const customerStatus = useSelector(selectCustomerStatus);
@@ -93,7 +94,7 @@ function NavigateSectionContent({
   const manualLoading = useSelector(selectManualLoading);
   const profileLoading = useSelector(selectProfileLoading);
   const customerBankApprovedStatus = useSelector(
-    selectCustomerBankApprovedStatus
+    selectCustomerBankApprovedStatus,
   );
   const download_operation_manual = useSelector(selectDownloadOperationManual);
   const isWhiteLabelledPartner = useSelector(selectIsWhiteLabelledPartner);
@@ -121,6 +122,18 @@ function NavigateSectionContent({
 
   const bearertoken = useSelector(selectAuthToken);
   const authtoken = useSelector(selectAuthToken);
+
+  const isRemittancePage = location.pathname.startsWith(
+    `/remittance/${customerId}`,
+  );
+  console.log("🔍 DEBUG Navigation:", {
+    locationPath: location.pathname,
+    customerId,
+    expectedPath: `/remittance/${customerId}`,
+    isRemittancePage: location.pathname.startsWith(`/remittance/${customerId}`),
+    isExactMatch: location.pathname === `/remittance/${customerId}`,
+    hasParams: location.pathname.includes("?"),
+  });
 
   // Performance monitoring
   useWhyDidYouUpdate("NavigateSection", {
@@ -173,7 +186,7 @@ function NavigateSectionContent({
           fetchAllowedModules({
             partnerId: urlPartnerId,
             bearertoken,
-          })
+          }),
         ).unwrap();
       }
     } catch (error) {
@@ -254,13 +267,13 @@ function NavigateSectionContent({
     try {
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot perform this transaction."
+          "Your account is deactivated. You cannot perform this transaction.",
         );
         return;
       }
       if (customerBankApprovedStatus === "0") {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
@@ -278,7 +291,7 @@ function NavigateSectionContent({
       }
       if (customerBankApprovedStatus === "0") {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
@@ -293,13 +306,13 @@ function NavigateSectionContent({
     try {
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot perform currency conversion."
+          "Your account is deactivated. You cannot perform currency conversion.",
         );
         return;
       }
       if (customerBankApprovedStatus === "0") {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
@@ -317,7 +330,7 @@ function NavigateSectionContent({
     }
     if (customerBankApprovedStatus === "0") {
       showPopup(
-        "Your Bank account is not approved. You cannot perform this transaction."
+        "Your Bank account is not approved. You cannot perform this transaction.",
       );
       return;
     }
@@ -353,13 +366,82 @@ function NavigateSectionContent({
     try {
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot link a bank account."
+          "Your account is deactivated. You cannot link a bank account.",
         );
         return;
       }
       navigate(`/linkbank/${customerId}`);
     } catch (error) {
       setLocalError("Failed to navigate to link bank");
+    }
+  };
+
+  // Add this function with other handler functions
+  // const handleRecurringRemitClick = async () => {
+  //   console.log("🔄 DEBUG: handleRecurringRemitClick called");
+  //   console.log("📝 Navigation details:", {
+  //     from: location.pathname,
+  //     to: `/recurring-remit/${customerId}`,
+  //     customerId,
+  //   });
+
+  //   try {
+  //     if (customerStatus === "Deactivated") {
+  //       showPopup(
+  //         "Your account is deactivated. You cannot schedule recurring remittances.",
+  //       );
+  //       return;
+  //     }
+  //     if (customerBankApprovedStatus === "0") {
+  //       showPopup(
+  //         "Your Bank account is not approved. You cannot perform this transaction.",
+  //       );
+  //       return;
+  //     }
+
+  //     console.log("✅ Attempting navigation to recurring remit");
+
+  //     // Try different navigation approaches
+  //     console.log("🔄 Method 1: Using navigate()");
+
+  //     // Use absolute path
+  //     const fullPath = `/recurring-remit/${customerId}`;
+  //     console.log("🌐 Full path:", fullPath);
+
+  //     // Try with state to see if it helps
+  //     const result = navigate(fullPath, {
+  //       state: { from: location.pathname },
+  //       replace: false,
+  //     });
+  //     console.log("📊 Navigate result:", result);
+
+  //     // Check immediately
+  //     console.log("📍 Current path after navigate:", window.location.pathname);
+
+  //     // Also try programmatic navigation as fallback
+  //     setTimeout(() => {
+  //       if (window.location.pathname !== fullPath) {
+  //         console.warn("⚠️ Navigation didn't work, trying window.location");
+  //         window.location.href = fullPath;
+  //       }
+  //     }, 100);
+  //   } catch (error) {
+  //     console.error("❌ Navigation error:", error);
+  //     console.error("❌ Error stack:", error.stack);
+  //     setLocalError("Failed to navigate to recurring remit");
+  //   }
+  // };
+
+  const handleRecurringRemitClick = async () => {
+    console.log("🔄 DEBUG: handleRecurringRemitClick called");
+
+    // FIRST: Just try navigation without any checks
+    try {
+      console.log("✅ SIMPLE NAVIGATION TEST");
+      navigate(`/recurring-remit/${customerId}`);
+      console.log("✅ Navigation function called");
+    } catch (error) {
+      console.error("❌ Simple navigation error:", error);
     }
   };
 
@@ -370,7 +452,7 @@ function NavigateSectionContent({
           partnerId:
             whiteLabelledPartnerId === undefined ? 0 : whiteLabelledPartnerId,
           placement: "Home Screen",
-        })
+        }),
       ).unwrap();
 
       if (result.status === "success" && result.data?.file_path) {
@@ -450,10 +532,10 @@ function NavigateSectionContent({
   return (
     <>
       <div
-        className="px-2 sm:px-4 md:px-6 w-full max-w-md lg:max-w-lg xl:max-w-xl mx-auto lg:mx-0 lg:ml-4"
+        className="h-full px-4 py-6 overflow-y-auto"
         style={{ color: textColor }}
       >
-        <div className="w-full flex flex-col gap-3 sm:gap-4">
+        <div className="w-full flex flex-col gap-4">
           {/* Transfer Money */}
           {allowedModules.some((module) => module.module_name === "Transfer") &&
             (hostName === "localhost" ||
@@ -516,7 +598,7 @@ function NavigateSectionContent({
 
           {/* Deposit */}
           {allowedModules.some(
-            (module) => module.module_name === "Deposit"
+            (module) => module.module_name === "Deposit",
           ) && (
             <div onClick={handleDepositClick} className="w-full cursor-pointer">
               <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
@@ -603,7 +685,7 @@ function NavigateSectionContent({
 
           {/* Remittance - UPDATED: Remove Coming Soon indicators */}
           {allowedModules.some(
-            (module) => module.module_name === "Remittance"
+            (module) => module.module_name === "Remittance",
           ) && (
             <div onClick={handleRemitClick} className="w-full cursor-pointer">
               <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
@@ -631,7 +713,7 @@ function NavigateSectionContent({
           )}
           {/* Add More Accounts */}
           {allowedModules.some(
-            (module) => module.module_name === "Add More Accounts"
+            (module) => module.module_name === "Add More Accounts",
           ) && (
             <div
               onClick={() => navigate(`/addaccount/${customerId}`)}
@@ -680,6 +762,39 @@ function NavigateSectionContent({
                         {...textColorProps}
                       >
                         Connect your bank
+                      </p>
+                    </div>
+                  </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                </div>
+              </div>
+            )}
+
+          {/* Recurring Remit - ONLY SHOWS ON REMITTANCE PAGE */}
+          {isRemittancePage &&
+            allowedModules.some(
+              (module) => module.module_name === "Remittance",
+            ) && (
+              <div
+                onClick={handleRecurringRemitClick}
+                className="w-full cursor-pointer"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={remitImg} // You might want a different icon for recurring
+                      alt="Recurring Remit Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Recurring Remit
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Schedule recurring transfers
                       </p>
                     </div>
                   </div>
