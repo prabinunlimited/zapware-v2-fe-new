@@ -109,6 +109,12 @@ const BeneficiaryTransactions = lazy(
 const BeneficiarySenders = lazy(
   () => import("../src/page/RequestRemit/Senders/BeneficiarySenders"),
 );
+const RecurringRemit = lazy(
+  () => import("../src/page/Remittance/RecurringRemit/RecurringRemit"),
+);
+const RecurringRemitDetail = lazy(
+  () => import("../src/page/Remittance/RecurringRemit/RecurringRemitDetail"),
+);
 
 // ✅ Shared Loading Component
 const PageLoading = () => (
@@ -265,6 +271,14 @@ const router = createBrowserRouter([
       {
         path: "/bankletter/:accountId",
         element: withSuspense(BankLetter),
+      },
+      {
+        path: "recurring-remit/:customerId",
+        element: withSuspense(RecurringRemit),
+      },
+      {
+        path: "recurring-remit/:uuidToUse/:recurringRemittanceId",
+        element: withSuspense(RecurringRemitDetail),
       },
 
       // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES (lazy loaded)

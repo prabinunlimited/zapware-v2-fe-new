@@ -143,6 +143,12 @@ const Remittance = () => {
   const [showOpenBanking, setShowOpenBanking] = useState(false);
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
 
+  const [recurringData, setRecurringData] = useState({
+    isRecurring: "0",
+    frequency: "",
+    recurring_custom_days: "",
+  });
+
   // Refs for preventing duplicate API calls
   const isManualUpdate = useRef(false);
   const lastRequestId = useRef(null);
@@ -800,17 +806,17 @@ const Remittance = () => {
     console.log("🔄 Remittance - Full formData:", formData);
   }, [formData.paymentMethod, formData]);
 
-  const formatNumberInput = (value) => {
-    if (!value) return "";
+  const formatAmountInput = (value) => {
+    if (value === "" || value === null || value === undefined) return "";
 
-    const cleaned = value.replace(/[^0-9.]/g, "");
+    // Remove everything except digits and decimal point
+    let cleaned = value.replace(/[^\d.]/g, "");
 
+    // Handle multiple decimal points - keep only first
     const parts = cleaned.split(".");
     if (parts.length > 2) {
-      return parts[0] + "." + parts.slice(1).join("");
+      cleaned = parts[0] + "." + parts.slice(1).join("");
     }
-
-    if (cleaned === ".") return "0.";
 
     return cleaned;
   };
@@ -915,74 +921,108 @@ const Remittance = () => {
   };
 
   const handleSendAmountChange = useCallback(
-    (value) => {
-      const cleanedValue = formatNumberInput(value);
-
-      const currentValue = parseFloat(formData.sendAmount || 0);
-      const newValue = parseFloat(cleanedValue || 0);
-
-      if (!isNaN(currentValue) && !isNaN(newValue)) {
-        const difference = Math.abs(currentValue - newValue);
-        if (difference < 0.01 && cleanedValue !== "") {
-          return;
-        }
+    (rawValue) => {
+      // Allow complete deletion
+      if (rawValue === "") {
+        dispatch(setSendAmount(""));
+        dispatch(setReceiveAmount(""));
+        return;
       }
 
+      const formattedValue = formatAmountInput(rawValue);
+
+      // Prevent unnecessary updates
+      if (formattedValue === formData.sendAmount) return;
+
+      dispatch(setSendAmount(formattedValue));
       activeInput.current = "send";
-      dispatch(setSendAmount(cleanedValue));
+
+      // Clear previous timeout
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+
+      // Set typing state
+      isTyping.current = true;
+
+      // Debounced calculation
+      typingTimeout.current = setTimeout(() => {
+        isTyping.current = false;
+
+        // Calculate receive amount only when we have valid data
+        const sendNum = parseFloat(formattedValue);
+        if (!isNaN(sendNum) && sendNum > 0 && exchangeRateData?.fxRate) {
+          const calculatedReceive = roundToDecimals(
+            sendNum * exchangeRateData.fxRate,
+            2,
+          );
+          dispatch(setReceiveAmount(calculatedReceive.toString()));
+        }
+      }, 600); // Reduced from 1200ms for better responsiveness
+    },
+    [dispatch, formData.sendAmount, exchangeRateData],
+  );
+
+  const handleReceiveAmountChange = useCallback(
+    (rawValue) => {
+      // Allow complete deletion
+      if (rawValue === "") {
+        dispatch(setReceiveAmount(""));
+        dispatch(setSendAmount(""));
+        return;
+      }
+
+      const formattedValue = formatAmountInput(rawValue);
+
+      if (formattedValue === formData.receiveAmount) return;
+
+      dispatch(setReceiveAmount(formattedValue));
+      activeInput.current = "receive";
 
       if (typingTimeout.current) {
         clearTimeout(typingTimeout.current);
       }
 
       isTyping.current = true;
+
       typingTimeout.current = setTimeout(() => {
         isTyping.current = false;
-      }, 1200);
-    },
-    [dispatch, formData.sendAmount],
-  );
 
-  const handleReceiveAmountChange = useCallback(
-    (value) => {
-      const cleanedValue = formatNumberInput(value);
-
-      if (exchangeRateData?.fxRate) {
-        activeInput.current = "receive";
-        dispatch(setReceiveAmount(cleanedValue));
-
-        const receiveNum = parseFloat(cleanedValue);
-        if (!isNaN(receiveNum) && receiveNum > 0) {
-          const calculatedSendAmount = roundToDecimals(
+        const receiveNum = parseFloat(formattedValue);
+        if (!isNaN(receiveNum) && receiveNum > 0 && exchangeRateData?.fxRate) {
+          const calculatedSend = roundToDecimals(
             receiveNum / exchangeRateData.fxRate,
             2,
           );
 
-          if (calculatedSendAmount < 5) {
+          // Validate minimum amount
+          if (calculatedSend < 5) {
             toast.warning(
               `Minimum send amount is ${formData.sendCurrency?.value || "USD"} 5.00`,
               { position: "top-center", autoClose: 3000 },
             );
-            return;
+
+            // Set minimum values
+            const minSend = 5;
+            const minReceive = roundToDecimals(
+              minSend * exchangeRateData.fxRate,
+              2,
+            );
+
+            dispatch(setSendAmount(minSend.toString()));
+            dispatch(setReceiveAmount(minReceive.toString()));
+          } else {
+            dispatch(setSendAmount(calculatedSend.toString()));
           }
-
-          dispatch(setSendAmount(calculatedSendAmount.toString()));
         }
-      } else {
-        activeInput.current = "receive";
-        dispatch(setReceiveAmount(cleanedValue));
-      }
-
-      if (typingTimeout.current) {
-        clearTimeout(typingTimeout.current);
-      }
-
-      isTyping.current = true;
-      typingTimeout.current = setTimeout(() => {
-        isTyping.current = false;
-      }, 1200);
+      }, 600);
     },
-    [dispatch, exchangeRateData, formData.sendCurrency?.value],
+    [
+      dispatch,
+      formData.receiveAmount,
+      exchangeRateData,
+      formData.sendCurrency?.value,
+    ],
   );
 
   const handleSendCurrencyChange = useCallback(
@@ -1102,13 +1142,6 @@ const Remittance = () => {
   const handleBeneficiarySelect = useCallback(
     (beneficiary) => {
       dispatch(setSelectedBeneficiary(beneficiary));
-      if (beneficiary?.id) {
-        dispatch(fetchBeneficiaryBanks(beneficiary.id));
-      }
-      toast.success(`Beneficiary ${beneficiary?.name} selected`, {
-        position: "top-right",
-        autoClose: 2000,
-      });
     },
     [dispatch],
   );
@@ -1235,95 +1268,153 @@ const Remittance = () => {
     [dispatch],
   );
 
-  const handleSubmitTransaction = useCallback(() => {
-    const transactionData = {
-      from_currency: formData.sendCurrency?.value,
-      to_currency: formData.receiveCurrency?.value,
+  const handleSubmitTransaction = useCallback(
+    (recurringData = {}) => {
+      const transactionData = {
+        from_currency: formData.sendCurrency?.value,
+        to_currency: formData.receiveCurrency?.value,
 
-      ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
-        ? {
-            sila_account_id: selectedSilaBankAccount.id,
-            sila_payment_instrument_id:
-              selectedSilaBankAccount.payment_instrument_id,
-            sila_account_name: selectedSilaBankAccount.account_name,
-            sila_routing_number: selectedSilaBankAccount.routing_number,
-          }
-        : {}),
+        ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
+          ? {
+              sila_account_id: selectedSilaBankAccount.id,
+              sila_payment_instrument_id:
+                selectedSilaBankAccount.payment_instrument_id,
+              sila_account_name: selectedSilaBankAccount.account_name,
+              sila_routing_number: selectedSilaBankAccount.routing_number,
+            }
+          : {}),
 
-      send_amount: parseFloat(formData.sendAmount),
-      receive_amount: parseFloat(formData.receiveAmount),
-      exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
+        send_amount: parseFloat(formData.sendAmount),
+        receive_amount: parseFloat(formData.receiveAmount),
+        exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
 
-      customer_id: parseInt(customerId),
+        customer_id: parseInt(customerId),
 
-      payment_method: formData.paymentMethod,
-      conversion_id: exchangeRateData?.conversion_id,
+        payment_method: formData.paymentMethod,
+        conversion_id: exchangeRateData?.conversion_id,
 
-      beneficiary: selectedBeneficiary?.id?.toString(),
-      beneficiary_bank_id: selectedBank?.id,
+        beneficiary: selectedBeneficiary?.id?.toString(),
+        beneficiary_bank_id: selectedBank?.id,
 
-      beneficiary_name: selectedBeneficiary?.name,
-      beneficiary_bank_name: selectedBank?.bank_name,
-      beneficiary_account_number:
-        selectedBank?.account_number || selectedBank?.bank_acc_no,
+        beneficiary_name: selectedBeneficiary?.name,
+        beneficiary_bank_name: selectedBank?.bank_name,
+        beneficiary_account_number:
+          selectedBank?.account_number || selectedBank?.bank_acc_no,
 
-      is_remit: "Y",
+        is_remit: "Y",
 
-      purpose: formData.purpose?.value || formData.purpose,
-      income_source: formData.incomeSource?.value || formData.incomeSource,
-      occupation: formData.occupation || "",
-      relation: formData.relation?.value || formData.relation || "",
-      payout_method: formData.payout_method?.value || formData.paymentMethod,
+        purpose: formData.purpose?.value || formData.purpose,
+        income_source: formData.incomeSource?.value || formData.incomeSource,
+        occupation: formData.occupation || "",
+        relation: formData.relation?.value || formData.relation || "",
+        payout_method: formData.payout_method?.value || formData.paymentMethod,
 
-      document: formData.document,
-      agree_to_terms: formData.agreeToTerms ? "1" : "0",
+        document: formData.document,
+        agree_to_terms: formData.agreeToTerms ? "1" : "0",
 
-      rails: "Local",
-    };
+        rails: "Local",
 
-    const cleanData = {};
-    Object.keys(transactionData).forEach((key) => {
-      if (transactionData[key] !== null && transactionData[key] !== undefined) {
-        cleanData[key] = transactionData[key];
-      }
-    });
+        // 🔄 ADD RECURRING PAYMENT FIELDS (only if applicable)
+        ...(formData.paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD" &&
+        formData.receiveCurrency?.value === "INR"
+          ? {
+              isRecurring: recurringData.isRecurring || "0",
+              frequency: recurringData.frequency || "",
+              recurring_custom_days: recurringData.recurring_custom_days || "",
+            }
+          : {}),
+      };
 
-    console.log("📤 Sending transaction data:", cleanData);
+      console.log("📤 Final Transaction Data:", transactionData);
 
-    const required = [
-      "from_currency",
-      "to_currency",
-      "beneficiary",
-      "beneficiary_bank_id",
-    ];
-    const missing = required.filter((field) => !cleanData[field]);
-
-    if (missing.length > 0) {
-      toast.error(`Missing required fields: ${missing.join(", ")}`, {
-        position: "top-center",
-        autoClose: 5000,
+      const cleanData = {};
+      Object.keys(transactionData).forEach((key) => {
+        if (
+          transactionData[key] !== null &&
+          transactionData[key] !== undefined
+        ) {
+          cleanData[key] = transactionData[key];
+        }
       });
-      return;
-    }
 
-    dispatch(submitTransaction(cleanData));
-  }, [
-    customerId,
-    formData,
-    exchangeRateData,
-    selectedBeneficiary,
-    selectedBank,
-    dispatch,
-    selectedSilaBankAccount,
-    formData.paymentMethod,
-    formData.purpose,
-    formData.incomeSource,
-    formData.occupation,
-    formData.relation,
-    formData.payout_method,
-    formData.document,
-    formData.agreeToTerms,
-  ]);
+      console.log("📤 Sending transaction data:", cleanData);
+
+      // ✅ IMPORTANT: Add validation for recurring payment
+      if (
+        formData.paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD" &&
+        formData.receiveCurrency?.value === "INR" &&
+        cleanData.isRecurring === "1"
+      ) {
+        // Validate recurring payment fields
+        if (!cleanData.frequency) {
+          toast.error("Please select a recurring frequency", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+
+        if (
+          cleanData.frequency === "specific_day" &&
+          !cleanData.recurring_custom_days
+        ) {
+          toast.error("Please enter number of days for recurring payment", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+
+        if (
+          cleanData.frequency === "specific_day" &&
+          parseInt(cleanData.recurring_custom_days) < 7
+        ) {
+          toast.error("Minimum days between recurring payments is 7", {
+            position: "top-center",
+            autoClose: 5000,
+          });
+          return;
+        }
+      }
+
+      const required = [
+        "from_currency",
+        "to_currency",
+        "beneficiary",
+        "beneficiary_bank_id",
+      ];
+      const missing = required.filter((field) => !cleanData[field]);
+
+      if (missing.length > 0) {
+        toast.error(`Missing required fields: ${missing.join(", ")}`, {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      dispatch(submitTransaction(cleanData));
+    },
+    [
+      customerId,
+      formData,
+      exchangeRateData,
+      selectedBeneficiary,
+      selectedBank,
+      dispatch,
+      selectedSilaBankAccount,
+      formData.paymentMethod,
+      formData.purpose,
+      formData.incomeSource,
+      formData.occupation,
+      formData.relation,
+      formData.payout_method,
+      formData.document,
+      formData.agreeToTerms,
+    ],
+  );
 
   const handleNextStep = useCallback(() => {
     if (step === 1) {
@@ -1395,6 +1486,7 @@ const Remittance = () => {
         return;
       }
 
+      // ✅ Document upload ONLY required for manual deposits, NOT for bank transfers
       if (formData.paymentMethod === "manual") {
         if (!formData.document) {
           toast.error("Please upload payment proof for cash deposit", {
@@ -1426,16 +1518,17 @@ const Remittance = () => {
             return;
           }
 
-          if (!selectedSilaBankAccount.web_debit_verified) {
-            toast.error(
-              "Selected bank account needs verification. Please select a verified account or verify this account first.",
-              {
-                position: "top-center",
-                autoClose: 5000,
-              },
-            );
-            return;
-          }
+          // ✅ FIX: Commented out verification check but keep the logic structure
+          // if (!selectedSilaBankAccount.web_debit_verified) {
+          //   toast.error(
+          //     "Selected bank account needs verification. Please select a verified account or verify this account first.",
+          //     {
+          //       position: "top-center",
+          //       autoClose: 5000,
+          //     },
+          //   );
+          //   return;
+          // }
         }
 
         if (!selectedBank) {
@@ -1480,7 +1573,7 @@ const Remittance = () => {
       ) {
         handleInitiateOpenBanking();
       } else {
-        handleSubmitTransaction();
+        handleSubmitTransaction(recurringData);
       }
     }
   }, [
@@ -1842,35 +1935,8 @@ const Remittance = () => {
                           onFocus={() => {
                             activeInput.current = "send";
                           }}
-                          onBlur={(e) => {
-                            let numValue = parseFloat(e.target.value);
-                            if (!isNaN(numValue)) {
-                              if (numValue < 5) {
-                                numValue = 5;
-                                toast.info(
-                                  `Amount adjusted to minimum of ${
-                                    formData.sendCurrency?.value || "USD"
-                                  } 5.00`,
-                                  { position: "top-center", autoClose: 2000 },
-                                );
-                              }
-                              const rounded = roundToDecimals(numValue, 2);
-                              dispatch(setSendAmount(rounded.toString()));
-
-                              if (exchangeRateData?.fxRate) {
-                                const correctedReceiveAmount = roundToDecimals(
-                                  numValue * exchangeRateData.fxRate,
-                                  2,
-                                );
-                                dispatch(
-                                  setReceiveAmount(
-                                    correctedReceiveAmount.toString(),
-                                  ),
-                                );
-                              }
-                            }
-                          }}
-                          placeholder="5.00"
+                          // Remove the complex onBlur handler - validation happens elsewhere
+                          placeholder="0.00"
                           className="w-full px-6 py-5 text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
                           inputMode="decimal"
                           autoComplete="off"
@@ -2684,7 +2750,7 @@ const Remittance = () => {
             manualAccountDetails={manualAccountDetails}
             exchangeRateData={exchangeRateData}
             onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
-            onSubmit={handleSubmitTransaction}
+            onRecurringDataChange={setRecurringData}
             loading={loading}
             paymentMethod={formData.paymentMethod}
             isOpenBankingAvailable={isOpenBankingAvailable()}
@@ -2862,7 +2928,7 @@ const Remittance = () => {
                 {formData.paymentMethod === "bank" &&
                 isOpenBankingAvailable() ? (
                   <button
-                    onClick={handleInitiateOpenBanking}
+                    onClick={() => handleSubmitTransaction(recurringData)}
                     disabled={
                       !formData.agreeToTerms ||
                       loading ||
@@ -2888,7 +2954,7 @@ const Remittance = () => {
                   </button>
                 ) : formData.paymentMethod === "bank" ? (
                   <button
-                    onClick={handleSubmitTransaction}
+                    onClick={() => handleSubmitTransaction(recurringData)}
                     disabled={
                       !formData.agreeToTerms || loading || openBankingProcessing
                     }

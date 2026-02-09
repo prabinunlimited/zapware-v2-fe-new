@@ -257,31 +257,6 @@ const BankTransfer = ({
     fetchOccupations();
   }, [API_URL]);
 
-  // Auto-select first beneficiary if none selected
-  useEffect(() => {
-    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
-      const firstBeneficiary = beneficiaries[0];
-      if (firstBeneficiary && onBeneficiarySelect) {
-        handleBeneficiarySelect(firstBeneficiary);
-      }
-    }
-  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
-
-  // Auto-select first bank when banks are loaded
-  useEffect(() => {
-    if (
-      beneficiaryBanks?.length > 0 &&
-      selectedBeneficiary &&
-      !selectedBank &&
-      onBankSelect
-    ) {
-      const firstBank = beneficiaryBanks[0];
-      if (firstBank) {
-        onBankSelect(firstBank);
-      }
-    }
-  }, [beneficiaryBanks, selectedBeneficiary, selectedBank, onBankSelect]);
-
   // Handle beneficiary selection
   const handleBeneficiarySelect = async (selectedOption) => {
     console.log("BankTransfer: Beneficiary selected:", selectedOption);
@@ -363,19 +338,6 @@ const BankTransfer = ({
         if (selectedOption?.occupation) {
           onFieldChange("occupation", selectedOption.occupation);
         }
-      }
-
-      // Auto-select first bank if available
-      if (result?.length > 0) {
-        setTimeout(() => {
-          const firstBank = beneficiaryBanks?.[0];
-          if (firstBank && onBankSelect) {
-            onBankSelect(firstBank);
-            toast.success("Beneficiary details loaded successfully!");
-          }
-        }, 100);
-      } else {
-        toast.warning("No bank accounts found for this beneficiary");
       }
     } catch (error) {
       console.error("Error fetching beneficiary banks:", error);
@@ -695,15 +657,6 @@ const BankTransfer = ({
     }
   }, [dispatch, paramCustomerId]);
 
-  useEffect(() => {
-    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
-      const firstBeneficiary = beneficiaries[0];
-      if (firstBeneficiary && onBeneficiarySelect) {
-        handleBeneficiarySelect(firstBeneficiary);
-      }
-    }
-  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
-
   return (
     <div className="space-y-6">
       {/* Main container */}
@@ -844,7 +797,7 @@ const BankTransfer = ({
             </div>
             <Select
               options={beneficiaries}
-              value={selectedBeneficiary || null}
+              value={selectedBeneficiary || null} // Will be null initially
               onChange={handleBeneficiarySelect}
               isLoading={beneficiariesLoading}
               isDisabled={beneficiariesLoading || showCodeInput}
@@ -855,7 +808,7 @@ const BankTransfer = ({
                   ? "Loading beneficiaries..."
                   : showCodeInput
                     ? "Disabled - Using beneficiary code"
-                    : "Select beneficiary..."
+                    : "Select beneficiary..." // This will show by default
               }
               isSearchable
               getOptionLabel={(option) =>
