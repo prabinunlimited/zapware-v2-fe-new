@@ -12,6 +12,7 @@ import {
   syncLocalStorageState,
   setAuthState,
   clearAuthState,
+  syncAuthFromLocalStorage,
 } from "../src/features/Auth/slices/authSlice";
 import Footer from "../src/components/Dashboard/Footer/Footer";
 import Header from "../src/components/Dashboard/Header/Header";
@@ -34,6 +35,9 @@ const ProtectedRoute = () => {
       try {
         await dispatch(syncLocalStorageState());
 
+        // ✅ ADD THIS: Force sync auth from localStorage
+        dispatch(syncAuthFromLocalStorage());
+
         // ✅ Additional validation
         const storedToken = localStorage.getItem("authtoken");
         const storedCustomerId = localStorage.getItem("authcustomer_id");
@@ -46,6 +50,10 @@ const ProtectedRoute = () => {
           storedCustomerId !== "null"
         ) {
           if (!token || !customerId) {
+            console.log("🔄 Forcing auth state update from localStorage", {
+              storedCustomerId,
+              currentReduxCustomerId: customerId,
+            });
             dispatch(
               setAuthState({
                 token: storedToken,

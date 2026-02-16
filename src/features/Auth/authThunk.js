@@ -407,6 +407,7 @@ export const initializeApp = createAsyncThunk(
       isInitializing = false;
       const errorMessage = extractErrorMessage(error);
       console.error("❌ initializeApp error:", errorMessage);
+      dispatch({ type: "auth/setInitialized", payload: true });
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });

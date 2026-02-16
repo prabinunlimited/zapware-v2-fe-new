@@ -1,9 +1,5 @@
-// src/router/router.js - COMPLETE UPDATED VERSION
-import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
-} from "react-router-dom";
+// src/router/router.js - FIXED VERSION
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
 // ✅ Keep Login static - it's the entry point
@@ -37,12 +33,12 @@ const ForgotPassword = lazy(
   () => import("../src/features/Auth/Password/ForgotPassword"),
 );
 
-// ✅ CRITICAL: Lazy load heavy pages that were in the warning
+// ✅ CRITICAL: Lazy load heavy pages
 const Home = lazy(() => import("../src/page/Home/Homepage"));
 const HomeRemit = lazy(() => import("../src/page/Home/HomeRemit"));
 const Convert = lazy(() => import("../src/page/Conversion/Convert"));
 
-// ✅ EXTREMELY CRITICAL: Lazy load Deposit and Payment components (3.2MB bundle)
+// ✅ EXTREMELY CRITICAL: Lazy load Deposit and Payment components
 const DepositPage = lazy(() => import("../src/page/Deposit/DepositPage"));
 const DepositPageIframe = lazy(
   () => import("../src/page/Deposit/DepositPageIframe"),
@@ -135,15 +131,16 @@ const withSuspense = (Component) => (
   </Suspense>
 );
 
+// ✅ FIXED: Keep the original path structure
 const router = createBrowserRouter([
-  // Public routes - only accessible when not authenticated
+  // ========== PUBLIC ROUTES ==========
   {
     path: "/",
     element: <PublicRoute />,
     children: [
       {
         index: true,
-        element: <Login />, // Keep static - first page
+        element: <Login />,
       },
       {
         path: "selectaccounttype",
@@ -155,7 +152,7 @@ const router = createBrowserRouter([
       },
       {
         path: "signupindividual",
-        element: withSuspense(SignUpIndividual), // ✅ Now lazy loaded
+        element: withSuspense(SignUpIndividual),
       },
       {
         path: "signupinstitution",
@@ -183,7 +180,7 @@ const router = createBrowserRouter([
       },
       {
         path: "depositiframe/:customerId/:authtoken/:uniqueReference/:instructedAmount",
-        element: withSuspense(DepositPageIframe), // ✅ Now lazy loaded
+        element: withSuspense(DepositPageIframe),
       },
       {
         path: "register-beneficiary",
@@ -192,7 +189,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // ==================== CUSTOMER PORTAL ROUTES ====================
+  // ========== PROTECTED ROUTES ==========
   {
     path: "/",
     element: <ProtectedRoute />,
@@ -200,6 +197,10 @@ const router = createBrowserRouter([
       {
         path: "home/:customerId",
         element: withSuspense(Home),
+      },
+      {
+        path: "homeremit/:customerId",
+        element: withSuspense(HomeRemit),
       },
       {
         path: "monthlytransactions/:customerId",
@@ -213,10 +214,9 @@ const router = createBrowserRouter([
         path: "transfer/:customerId",
         element: withSuspense(TransferBalancePage),
       },
-      // ✅ CRITICAL: Deposit routes now lazy loaded
       {
         path: "deposit/:customerId",
-        element: withSuspense(DepositPage), // ✅ Now lazy loaded
+        element: withSuspense(DepositPage),
       },
       {
         path: "convert/:customerId",
@@ -228,20 +228,19 @@ const router = createBrowserRouter([
       },
       {
         path: "deposit/:customerId/:currency",
-        element: withSuspense(DepositPage), // ✅ Now lazy loaded
+        element: withSuspense(DepositPage),
       },
-      // ✅ CRITICAL: Payment routes now lazy loaded
       {
         path: "card",
-        element: withSuspense(CardPayment), // ✅ Now lazy loaded
+        element: withSuspense(CardPayment),
       },
       {
-        path: "/card/success",
+        path: "card/success",
         element: withSuspense(CardPaymentSuccess),
       },
       {
         path: "cardiframe",
-        element: withSuspense(CardPaymentIframe), // ✅ Now lazy loaded
+        element: withSuspense(CardPaymentIframe),
       },
       {
         path: "team/:customerId",
@@ -252,24 +251,19 @@ const router = createBrowserRouter([
         element: withSuspense(AddTeamMember),
       },
       {
-        path: "homeremit/:customerId",
-        element: withSuspense(HomeRemit),
-      },
-      {
         path: "profile/:customerId",
         element: withSuspense(Profile),
       },
-      // ✅ CRITICAL: Payout route now lazy loaded
       {
         path: "payout/:customerId",
-        element: withSuspense(PayoutPage), // ✅ Now lazy loaded
+        element: withSuspense(PayoutPage),
       },
       {
         path: "remittance/:customerId",
         element: withSuspense(Remittance),
       },
       {
-        path: "/bankletter/:accountId",
+        path: "bankletter/:accountId",
         element: withSuspense(BankLetter),
       },
       {
@@ -280,8 +274,6 @@ const router = createBrowserRouter([
         path: "recurring-remit/:uuidToUse/:recurringRemittanceId",
         element: withSuspense(RecurringRemitDetail),
       },
-
-      // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES (lazy loaded)
       {
         path: "beneficiaries/:customerId",
         element: withSuspense(Beneficiaries),
@@ -297,7 +289,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // ==================== BENEFICIARY PORTAL ROUTES ====================
+  // ========== BENEFICIARY PORTAL ROUTES ==========
   {
     path: "/beneficiary",
     element: withSuspense(BeneficiaryLayout),
@@ -321,7 +313,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // ==================== LEGACY ROUTES ====================
+  // ========== LEGACY ROUTES ==========
   {
     path: "/benefprofile/:beneficiaryId",
     element: withSuspense(BeneficiaryLayout),
@@ -343,7 +335,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Fallback route
+  // ========== CATCH-ALL ==========
   {
     path: "*",
     element: <Navigate to="/" replace />,

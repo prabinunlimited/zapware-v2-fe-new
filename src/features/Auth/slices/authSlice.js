@@ -576,6 +576,50 @@ const authSlice = createSlice({
       }
     },
 
+    // ===================== FORCE SYNC AUTH FROM LOCALSTORAGE =====================
+    syncAuthFromLocalStorage: (state) => {
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("authtoken");
+        const customerId = localStorage.getItem("authcustomer_id");
+
+        console.log("🔄 Force syncing auth from localStorage:", {
+          token: token ? `${token.substring(0, 20)}...` : "Missing",
+          customerId,
+        });
+
+        const isValidToken =
+          token &&
+          token !== "undefined" &&
+          token !== "null" &&
+          token !== "false" &&
+          token.length > 10;
+
+        const isValidCustomerId =
+          customerId &&
+          customerId !== "undefined" &&
+          customerId !== "null" &&
+          customerId !== "false" &&
+          !isNaN(Number(customerId)) &&
+          Number(customerId) > 0;
+
+        if (isValidToken && isValidCustomerId) {
+          state.token = token;
+          state.customerId = customerId;
+          state.isAuthenticated = true;
+          state.isInitialized = true;
+          console.log("✅ Auth synced successfully from localStorage", {
+            customerId: state.customerId,
+            isAuthenticated: state.isAuthenticated,
+          });
+        } else {
+          console.warn("⚠️ Invalid auth data in localStorage", {
+            token: isValidToken ? "Valid" : "Invalid",
+            customerId: isValidCustomerId ? "Valid" : "Invalid",
+          });
+        }
+      }
+    },
+
     // ===================== LOADING STATES =====================
     setLoading: (state, action) => {
       state.isLoading = action.payload;
@@ -1274,7 +1318,7 @@ const authSlice = createSlice({
           );
         }
       })
-      
+
       .addCase("auth/login/rejected", (state, action) => {
         state.isLoading = false;
         state.error = action.payload?.message || "Login failed";
@@ -1602,6 +1646,7 @@ export const {
   setLogoutLoading,
   setLogoutError,
   clearLogoutState,
+  syncAuthFromLocalStorage,
 } = authSlice.actions;
 
 export default authSlice.reducer;
