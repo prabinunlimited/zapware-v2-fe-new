@@ -131,38 +131,85 @@ const extractResponseData = (response) => {
 
 // ===================== CUSTOM HOOK FOR CENTRALIZED DATA =====================
 const useCentralizedData = () => {
+  const dispatch = useDispatch();
   const [cachedCountries, setCachedCountries] = useState(null);
   const [isFetchingCountries, setIsFetchingCountries] = useState(false);
   const fetchAttemptedRef = useRef(false);
 
+  // Get countries from Redux
+  const reduxCountries = useSelector(selectCountries);
+
   const fetchCountriesData = useCallback(async () => {
+    // Prevent multiple fetch attempts
     if (isFetchingCountries || fetchAttemptedRef.current) {
       console.log("🌍 Countries fetch already in progress or attempted");
       return cachedCountries;
     }
 
-    if (cachedCountries) {
+    // Return cached data if available
+    if (cachedCountries && cachedCountries.length > 0) {
       console.log("🌍 Using cached countries data");
       return cachedCountries;
+    }
+
+    // If Redux already has countries, use them immediately
+    if (reduxCountries && reduxCountries.length > 0) {
+      console.log(
+        `🌍 Using Redux countries data (${reduxCountries.length} countries)`,
+      );
+      setCachedCountries(reduxCountries);
+      fetchAttemptedRef.current = true;
+      return reduxCountries;
     }
 
     try {
       fetchAttemptedRef.current = true;
       setIsFetchingCountries(true);
-      console.log("🌍 Fetching countries from centralized API...");
+      console.log("🌍 Waiting for Redux to populate countries data...");
 
-      const countriesData = await centralizedApi.getCountries();
+      // Wait for Redux to have countries data (from static import in countrySlice)
+      let attempts = 0;
+      const maxAttempts = 20; // 2 seconds max wait
+
+      const waitForCountries = () => {
+        return new Promise((resolve) => {
+          const checkInterval = setInterval(() => {
+            attempts++;
+
+            // Check if countries are now in Redux
+            const state = window.store?.getState?.();
+            const countries = state?.countries?.countries || [];
+
+            if (countries.length > 0) {
+              clearInterval(checkInterval);
+              resolve(countries);
+            } else if (attempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              // Fallback to static import if Redux not available
+              import("../../../features/Auth/slices/countrySlice")
+                .then((module) => {
+                  resolve(module.countries || []);
+                })
+                .catch(() => resolve([]));
+            }
+          }, 100);
+        });
+      };
+
+      const countriesData = await waitForCountries();
       setCachedCountries(countriesData);
-      console.log("✅ Countries data fetched and cached");
+      console.log(
+        `✅ Countries data ready (${countriesData.length} countries)`,
+      );
       return countriesData;
     } catch (error) {
-      console.error("❌ Failed to fetch countries:", error);
+      console.error("❌ Failed to get countries data:", error);
       fetchAttemptedRef.current = false;
-      return null;
+      return [];
     } finally {
       setIsFetchingCountries(false);
     }
-  }, [cachedCountries, isFetchingCountries]);
+  }, [cachedCountries, isFetchingCountries, reduxCountries]);
 
   return {
     fetchCountriesData,
@@ -261,6 +308,22 @@ const Login = () => {
     }),
   });
 
+  // ==================== NEW HELPER: UNDER REVIEW MODAL ====================
+  const showUnderReviewModal = () => {
+    dispatch(
+      openModal({
+        title: "Account Application Submitted",
+        message:
+          "Your account opening request has been received and is currently under review. The approval process may take 24–48 hours.\n\nFor any queries, please contact Customer Service:\n📞 +977-1-5970800 (Nepal)\n📞 +1-888-226-0712 (International)",
+        type: "info",
+        modalProps: {
+          showCloseButton: true,
+        },
+      }),
+    );
+  };
+  // ========================================================================
+
   useEffect(() => {
     const initializeAppData = async () => {
       try {
@@ -286,7 +349,7 @@ const Login = () => {
     return () => {
       // Optional cleanup if needed
     };
-  }, [dispatch]);
+  }, [dispatch, fetchCountriesData]);
 
   // ✅ Reset stuck loading state
   useEffect(() => {
@@ -562,7 +625,7 @@ const Login = () => {
     navigate(redirectPath, { replace: true });
   };
 
-  // ✅ KYC verification handler - UPDATED: Beneficiaries don't need KYC
+  // ✅ KYC verification handler - UPDATED: Beneficiaries don't need KYC, Check for 'N'
   const handleKycVerification = async (response, values) => {
     // Extract data from response (handle nested structure)
     const responseData = extractResponseData(response);
@@ -586,6 +649,13 @@ const Login = () => {
       responseData.is_owner_login === "1"
     ) {
       return responseData;
+    }
+
+    // ✅ NEW FEATURE: Check if KYC is required but marked 'N' (Under Review)
+    if (responseData.plaid_kyc_required === "N") {
+      console.log("⏳ Account is under review (plaid_kyc_required: N)");
+      showUnderReviewModal();
+      return null;
     }
 
     if (responseData.requiresPlaidRedirect && responseData.plaidUrl) {
@@ -1290,6 +1360,26 @@ const Login = () => {
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
       console.log("✅ Passcode verification result:", result);
 
+      // ✅ Handle nested data structure
+      const responseData = extractResponseData(result);
+
+      // ✅ NEW FEATURE: Check if KYC is required but marked 'N' (Under Review)
+      if (
+        result.plaid_kyc_required === "N" ||
+        responseData.plaid_kyc_required === "N"
+      ) {
+        console.log("⏳ Account is under review (plaid_kyc_required: N)");
+
+        // CRITICAL: Close the passcode popup IMMEDIATELY
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        // Show the info modal
+        showUnderReviewModal();
+        return;
+      }
+
       // ✅ Handle KYC required scenario
       if (result.status === "kyc_required" || result.shouldNotLogin === true) {
         console.log("⏳ KYC verification required - showing Plaid modal");
@@ -1331,9 +1421,6 @@ const Login = () => {
         }
         return;
       }
-
-      // ✅ Handle nested data structure
-      const responseData = extractResponseData(result);
 
       // Check for owner login FIRST with proper validation
       if (
@@ -1575,6 +1662,24 @@ const Login = () => {
       }
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
+      const responseData = extractResponseData(result);
+
+      // ✅ NEW FEATURE: Check if KYC is required but marked 'N' (Under Review)
+      if (
+        result.plaid_kyc_required === "N" ||
+        responseData.plaid_kyc_required === "N"
+      ) {
+        console.log("⏳ Account is under review (plaid_kyc_required: N)");
+
+        // CRITICAL: Close the OTP popup IMMEDIATELY
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        // Show the info modal
+        showUnderReviewModal();
+        return;
+      }
 
       // ✅ Handle KYC required scenario for OTP login
       if (result.status === "kyc_required" || result.shouldNotLogin === true) {
@@ -1619,9 +1724,6 @@ const Login = () => {
         }
         return;
       }
-
-      // ✅ Handle nested data structure
-      const responseData = extractResponseData(result);
 
       // ✅ IMPORTANT: Check if beneficiary before KYC
       if (responseData.beneficaryLogin === "Y") {
@@ -2384,24 +2486,24 @@ const Login = () => {
 
       {/* ========== EXISTING PASSCODE MODAL ========== */}
       {showPasscodeInput && passcodeSent && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 md:p-6">
+          <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-6 md:p-8 w-full max-w-sm sm:max-w-md relative mx-auto">
             <button
               onClick={() => {
                 dispatch(setShowPasscodeInput(false));
                 dispatch(setPasscodeSent(false));
                 dispatch(setPasscode(new Array(6).fill("")));
               }}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-500 hover:text-gray-700 transition-colors"
             >
-              <AiOutlineClose size={24} />
+              <AiOutlineClose size={20} className="sm:w-6 sm:h-6" />
             </button>
 
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-8 w-8 text-blue-600"
+                  className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -2414,21 +2516,21 @@ const Login = () => {
                   />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1 sm:mb-2">
                 Enter Verification Code
               </h2>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 We've sent a 6-digit code to your email
               </p>
             </div>
 
             {auth.error && (
-              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
+              <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-100 text-red-700 rounded-lg text-center text-sm sm:text-base">
                 {auth.error}
               </div>
             )}
 
-            <div className="flex justify-center gap-3 mb-8">
+            <div className="flex justify-center gap-2 sm:gap-3 mb-6 sm:mb-8">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <input
                   key={index}
@@ -2477,7 +2579,7 @@ const Login = () => {
                       }, 10);
                     }
                   }}
-                  className="w-14 h-14 text-center text-2xl font-medium border-2 border-gray-200 rounded-lg 
+                  className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 text-center text-xl sm:text-2xl font-medium border-2 border-gray-200 rounded-lg 
               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
               transition-all duration-150"
                   maxLength={1}
@@ -2490,13 +2592,17 @@ const Login = () => {
             <button
               type="button"
               onClick={handleVerifyPasscode}
-              className="w-full bg-blue-600 text-white py-3.5 rounded-lg hover:bg-blue-700 
-          disabled:opacity-70 transition-colors flex items-center justify-center gap-3"
+              className="w-full bg-blue-600 text-white py-3 sm:py-3.5 rounded-lg hover:bg-blue-700 
+          disabled:opacity-70 transition-colors flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base"
               disabled={isVerifyingPasscode || passcode.join("").length !== 6}
             >
               {isVerifyingPasscode ? (
                 <>
-                  <RingLoader size={20} color="#ffffff" />
+                  <RingLoader
+                    size={16}
+                    className="sm:w-5 sm:h-5"
+                    color="#ffffff"
+                  />
                   <span>Verifying...</span>
                 </>
               ) : (
@@ -2504,8 +2610,8 @@ const Login = () => {
               )}
             </button>
 
-            <div className="mt-6 text-center">
-              <p className="text-gray-500 text-sm mb-2">
+            <div className="mt-4 sm:mt-6 text-center">
+              <p className="text-gray-500 text-xs sm:text-sm mb-2">
                 Didn't receive the code?
               </p>
               <button
@@ -2553,12 +2659,16 @@ const Login = () => {
                     );
                   }
                 }}
-                className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto"
+                className="text-blue-600 hover:text-blue-800 font-medium text-xs sm:text-sm flex items-center justify-center gap-1 sm:gap-2 mx-auto"
                 disabled={isGeneratingPasscode}
               >
                 {isGeneratingPasscode ? (
                   <>
-                    <RingLoader size={16} color="#3b82f6" />
+                    <RingLoader
+                      size={14}
+                      className="sm:w-4 sm:h-4"
+                      color="#3b82f6"
+                    />
                     <span>Resending...</span>
                   </>
                 ) : (

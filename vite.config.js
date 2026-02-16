@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => {
       react(),
       visualizer({
         filename: "dist/stats.html",
-        open: false, // Changed to false so it doesn't auto-open
+        open: false,
         gzipSize: true,
         brotliSize: true,
       }),
@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: !isProduction,
       rollupOptions: {
         output: {
-          // ✅ IMPROVED: Use this better chunking strategy
+          // ✅ FIXED: REMOVED the problematic auth-services chunk
           manualChunks: {
             // React core
             "react-vendor": ["react", "react-dom", "react-router-dom"],
@@ -67,13 +67,7 @@ export default defineConfig(({ mode }) => {
             // HTTP client
             "axios-vendor": ["axios"],
 
-            // ✅ CRITICAL: Group your heavy services that were causing warnings
-            "auth-services": [
-              "./src/services/authService.js",
-              "./src/services/api.js",
-            ],
-
-            // ✅ Group deposit-related code
+            // ✅ FIXED: Split deposit modules correctly (keep these)
             "deposit-module": [
               "./src/page/Deposit/api/apiClient.js",
               "./src/page/Deposit/slices/depositSlice.js",
@@ -82,30 +76,30 @@ export default defineConfig(({ mode }) => {
               "./src/page/Deposit/slices/bankLinkSliceIframe.js",
             ],
 
-            // ✅ Group payment components (Adyen SDK heavy)
+            // ✅ FIXED: Split payment components
             "payment-components": [
               "./src/page/Deposit/components/Card/CardPayment.jsx",
               "./src/page/Deposit/components/Card/CardPaymentIframe.jsx",
             ],
 
-            // ✅ Group auth features
+            // ✅ FIXED: Split auth features
             "auth-features": [
               "./src/features/Auth/authThunk.js",
               "./src/features/Auth/slices/authSlice.js",
               "./src/features/Auth/slices/signupSlice.js",
             ],
 
-            // ✅ Group payout features
+            // ✅ FIXED: Split payout features
             "payout-module": ["./src/page/Payout/slices/payoutSlice.js"],
 
-            // ✅ Group beneficiary features
+            // ✅ FIXED: Split beneficiary features
             "beneficiary-module": [
               "./src/page/RequestRemit/Homepage/beneficiaryApi.js",
               "./src/page/RequestRemit/Homepage/beneficiaryHomepageSlice.js",
             ],
           },
 
-          // Asset naming
+          // Asset naming (keep as is)
           assetFileNames: (assetInfo) => {
             const info = assetInfo.name.split(".");
             const extType = info[info.length - 1];
@@ -134,11 +128,10 @@ export default defineConfig(({ mode }) => {
         },
       },
 
-      // Keep console logs for debugging
       terserOptions: isProduction
         ? {
             compress: {
-              drop_console: false, // Keep console logs
+              drop_console: false,
               drop_debugger: false,
               pure_funcs: [],
             },
@@ -172,7 +165,6 @@ export default defineConfig(({ mode }) => {
       cors: true,
     },
 
-    // Don't drop console
     esbuild: {
       drop: [],
     },

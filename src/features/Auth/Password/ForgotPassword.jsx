@@ -115,19 +115,23 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen p-8 w-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-      <div className="max-w-xl w-full mx-auto px-4 sm:px-6">
+    <div className="min-h-screen p-4 sm:p-6 md:p-8 w-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+      <div className="max-w-md w-full mx-auto px-3 sm:px-4">
         <motion.div
-          className="bg-white shadow-xl rounded-xl px-8 py-10 overflow-hidden relative border border-gray-100"
+          className="bg-white shadow-xl rounded-xl px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-10 overflow-hidden relative border border-gray-100"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* Progress bar */}
-          <div className="absolute top-0 left-0 w-full h-1.5 bg-gray-100">
+          <div className="absolute top-0 left-0 w-full h-1 sm:h-1.5 bg-gray-100">
             <motion.div
               className={`h-full ${
-                step === 1 ? "bg-blue-500" : step === 2 ? "bg-indigo-500" : "bg-green-500"
+                step === 1
+                  ? "bg-blue-500"
+                  : step === 2
+                    ? "bg-indigo-500"
+                    : "bg-green-500"
               }`}
               initial={{ width: 0 }}
               animate={{ width: `${progressBarWidth}%` }}
@@ -135,26 +139,26 @@ const ForgotPassword = () => {
             />
           </div>
 
-          <div className="text-center mb-8">
-            <motion.div className="flex justify-center items-center mb-4">
-              <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                <FaKey className="h-6 w-6" />
+          <div className="text-center mb-6 sm:mb-8">
+            <motion.div className="flex justify-center items-center mb-3 sm:mb-4">
+              <div className="p-2 sm:p-3 rounded-full bg-blue-100 text-blue-600">
+                <FaKey className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
             </motion.div>
 
-            <motion.h1 className="text-2xl font-bold text-gray-900">
+            <motion.h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {step === 1
                 ? "Reset Your Password"
                 : step === 2
-                ? "Verify Your Identity"
-                : "Create New Password"}
+                  ? "Verify Your Identity"
+                  : "Create New Password"}
             </motion.h1>
-            <motion.p className="text-gray-500 mt-2 text-sm">
+            <motion.p className="text-gray-500 mt-1 sm:mt-2 text-xs sm:text-sm">
               {step === 1
                 ? "Enter your email to receive a verification code"
                 : step === 2
-                ? "We sent a 6-digit code to your email"
-                : "Your new password must be different from previous ones"}
+                  ? "We sent a 6-digit code to your email"
+                  : "Your new password must be different from previous ones"}
             </motion.p>
           </div>
 
@@ -164,22 +168,29 @@ const ForgotPassword = () => {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="mb-4 p-3 rounded-lg bg-red-50 border-l-4 border-red-500"
+              className="mb-3 sm:mb-4 p-2 sm:p-3 rounded-lg bg-red-50 border-l-4 border-red-500"
             >
               <div className="flex items-start">
-                <FaExclamationCircle className="flex-shrink-0 h-5 w-5 text-red-500 mr-3 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-red-800">{error}</p>
+                <FaExclamationCircle className="flex-shrink-0 h-4 w-4 sm:h-5 sm:w-5 text-red-500 mr-2 sm:mr-3 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-red-800 break-words">
+                    {error}
+                  </p>
                   {isLastThreePasswordsError(error) && (
-                    <div className="mt-2 text-xs text-red-700">
+                    <div className="mt-1 sm:mt-2 text-xs text-red-700">
                       <p className="font-semibold">Password requirements:</p>
-                      <ul className="list-disc pl-5 space-y-1 mt-1">
+                      <ul className="list-disc pl-3 sm:pl-5 space-y-0.5 sm:space-y-1 mt-0.5 sm:mt-1">
                         <li>Must be at least 12 characters</li>
                         <li>Cannot be one of your last 3 passwords</li>
-                        <li>Should include uppercase, lowercase, numbers, and symbols</li>
+                        <li>
+                          Should include uppercase, lowercase, numbers, and
+                          symbols
+                        </li>
                       </ul>
-                      <p className="mt-2 font-medium">Try these suggestions:</p>
-                      <ul className="list-disc pl-5 space-y-1">
+                      <p className="mt-1 sm:mt-2 font-medium">
+                        Try these suggestions:
+                      </p>
+                      <ul className="list-disc pl-3 sm:pl-5 space-y-0.5 sm:space-y-1">
                         <li>Add numbers or symbols to your current password</li>
                         <li>Create a completely new password</li>
                       </ul>
@@ -195,11 +206,13 @@ const ForgotPassword = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mb-4 p-3 rounded-lg bg-green-50 border-l-4 border-green-500"
+              className="mb-3 sm:mb-4 p-2 sm:p-3 rounded-lg bg-green-50 border-l-4 border-green-500"
             >
               <div className="flex items-center">
-                <FaCheckCircle className="flex-shrink-0 h-5 w-5 text-green-500 mr-3" />
-                <p className="text-sm font-medium text-green-800">{successMessage}</p>
+                <FaCheckCircle className="flex-shrink-0 h-4 w-4 sm:h-5 sm:w-5 text-green-500 mr-2 sm:mr-3" />
+                <p className="text-xs sm:text-sm font-medium text-green-800">
+                  {successMessage}
+                </p>
               </div>
             </motion.div>
           )}
@@ -207,20 +220,23 @@ const ForgotPassword = () => {
           <AnimatePresence mode="wait">
             {step === 1 && (
               <motion.div key="step1" variants={containerVariants}>
-                <motion.div variants={itemVariants} className="mb-5">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                <motion.div variants={itemVariants} className="mb-4 sm:mb-5">
+                  <label
+                    htmlFor="email"
+                    className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
+                  >
                     Email Address
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaEnvelope className="h-5 w-5 text-gray-400" />
+                      <FaEnvelope className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                     </div>
                     <input
                       id="email"
                       type="email"
                       value={email}
                       onChange={(e) => dispatch(setEmail(e.target.value))}
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400"
+                      className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-sm sm:text-base"
                       placeholder="your.email@example.com"
                       autoFocus
                     />
@@ -232,21 +248,39 @@ const ForgotPassword = () => {
                   onClick={() => dispatch(requestPasscode(email))}
                   disabled={isLoading || !email}
                   className={`w-full ${
-                    email ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center`}
+                    email
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "bg-gray-300 cursor-not-allowed"
+                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       Sending Code...
                     </span>
                   ) : (
                     <span className="flex items-center">
                       Continue
-                      <FaArrowRight className="ml-2 h-4 w-4" />
+                      <FaArrowRight className="ml-2 h-3 w-3 sm:h-4 sm:w-4" />
                     </span>
                   )}
                 </motion.button>
@@ -255,14 +289,19 @@ const ForgotPassword = () => {
 
             {step === 2 && (
               <motion.div key="step2" variants={containerVariants}>
-                <motion.div variants={itemVariants} className="mb-5">
-                  <div className="flex justify-between items-center mb-2">
-                    <label htmlFor="passcode" className="block text-sm font-medium text-gray-700">
+                <motion.div variants={itemVariants} className="mb-4 sm:mb-5">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 sm:mb-2 gap-1 sm:gap-0">
+                    <label
+                      htmlFor="passcode"
+                      className="block text-xs sm:text-sm font-medium text-gray-700"
+                    >
                       Verification Code
                     </label>
-                    <span className="text-xs text-gray-500">Sent to {email}</span>
+                    <span className="text-xs text-gray-500 truncate">
+                      Sent to {email}
+                    </span>
                   </div>
-                  <div className="flex space-x-3 justify-center">
+                  <div className="flex space-x-2 sm:space-x-3 justify-center">
                     {passcode.map((digit, index) => (
                       <input
                         key={index}
@@ -270,9 +309,11 @@ const ForgotPassword = () => {
                         type="text"
                         maxLength={1}
                         value={digit}
-                        onChange={(e) => handlePasscodeChangeLocal(index, e.target.value)}
+                        onChange={(e) =>
+                          handlePasscodeChangeLocal(index, e.target.value)
+                        }
                         onKeyDown={(e) => handleKeyDown(index, e)}
-                        className="w-12 h-12 text-center text-xl font-medium border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-10 h-10 sm:w-12 sm:h-12 text-center text-lg sm:text-xl font-medium border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         autoFocus={index === 0}
                       />
                     ))}
@@ -284,30 +325,51 @@ const ForgotPassword = () => {
                   onClick={() => dispatch(validatePasscode(email, passcode))}
                   disabled={isLoading || passcode.some((d) => !d)}
                   className={`w-full ${
-                    passcode.every((d) => d) ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center mb-3`}
+                    passcode.every((d) => d)
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-gray-300 cursor-not-allowed"
+                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center mb-2 sm:mb-3 text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       Verifying...
                     </span>
                   ) : (
                     <span className="flex items-center">
                       Verify Code
-                      <FaArrowRight className="ml-2 h-4 w-4" />
+                      <FaArrowRight className="ml-2 h-3 w-3 sm:h-4 sm:w-4" />
                     </span>
                   )}
                 </motion.button>
 
-                <motion.p variants={itemVariants} className="text-center text-sm text-gray-500 mt-3">
+                <motion.p
+                  variants={itemVariants}
+                  className="text-center text-xs sm:text-sm text-gray-500 mt-2 sm:mt-3"
+                >
                   Didn't receive the code?{" "}
                   <button
                     onClick={() => dispatch(requestPasscode(email))}
-                    className="text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none"
+                    className="text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none text-xs sm:text-sm"
                     disabled={isLoading}
                   >
                     Resend Code
@@ -318,20 +380,23 @@ const ForgotPassword = () => {
 
             {step === 3 && (
               <motion.div key="step3" variants={containerVariants}>
-                <motion.div variants={itemVariants} className="mb-5">
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <motion.div variants={itemVariants} className="mb-4 sm:mb-5">
+                  <label
+                    htmlFor="newPassword"
+                    className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
+                  >
                     New Password
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaLock className="h-5 w-5 text-gray-400" />
+                      <FaLock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                     </div>
                     <input
                       id="newPassword"
                       type={showPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={handleNewPasswordChange}
-                      className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-400"
+                      className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-400 text-sm sm:text-base"
                       placeholder="Create a secure password"
                       autoFocus
                     />
@@ -341,30 +406,43 @@ const ForgotPassword = () => {
                       className="absolute inset-y-0 right-0 pr-3 flex items-center focus:outline-none"
                     >
                       {showPassword ? (
-                        <FaEyeSlash className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                        <FaEyeSlash className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-500" />
                       ) : (
-                        <FaEye className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                        <FaEye className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-500" />
                       )}
                     </button>
                   </div>
 
                   {newPassword && (
-                    <div className="mt-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-500">Password Strength:</span>
-                        <span className={`font-medium ${
-                          passwordStrength < 30 ? "text-red-500" :
-                          passwordStrength < 70 ? "text-yellow-500" : "text-green-500"
-                        }`}>
-                          {passwordStrength < 30 ? "Weak" :
-                           passwordStrength < 70 ? "Moderate" : "Strong"}
+                    <div className="mt-1 sm:mt-2">
+                      <div className="flex justify-between text-xs mb-0.5 sm:mb-1">
+                        <span className="text-gray-500">
+                          Password Strength:
+                        </span>
+                        <span
+                          className={`font-medium ${
+                            passwordStrength < 30
+                              ? "text-red-500"
+                              : passwordStrength < 70
+                                ? "text-yellow-500"
+                                : "text-green-500"
+                          }`}
+                        >
+                          {passwordStrength < 30
+                            ? "Weak"
+                            : passwordStrength < 70
+                              ? "Moderate"
+                              : "Strong"}
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="w-full bg-gray-200 rounded-full h-1 sm:h-1.5">
                         <div
-                          className={`h-1.5 rounded-full ${
-                            passwordStrength < 30 ? "bg-red-500" :
-                            passwordStrength < 70 ? "bg-yellow-500" : "bg-green-500"
+                          className={`h-1 sm:h-1.5 rounded-full ${
+                            passwordStrength < 30
+                              ? "bg-red-500"
+                              : passwordStrength < 70
+                                ? "bg-yellow-500"
+                                : "bg-green-500"
                           }`}
                           style={{ width: `${passwordStrength}%` }}
                         ></div>
@@ -373,20 +451,25 @@ const ForgotPassword = () => {
                   )}
                 </motion.div>
 
-                <motion.div variants={itemVariants} className="mb-6">
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <motion.div variants={itemVariants} className="mb-4 sm:mb-6">
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
+                  >
                     Confirm Password
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaLock className="h-5 w-5 text-gray-400" />
+                      <FaLock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                     </div>
                     <input
                       id="confirmPassword"
                       type={showPassword ? "text" : "password"}
                       value={confirmPassword}
-                      onChange={(e) => dispatch(setConfirmPassword(e.target.value))}
-                      className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-400"
+                      onChange={(e) =>
+                        dispatch(setConfirmPassword(e.target.value))
+                      }
+                      className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-400 text-sm sm:text-base"
                       placeholder="Confirm your password"
                     />
                     <button
@@ -395,18 +478,22 @@ const ForgotPassword = () => {
                       className="absolute inset-y-0 right-0 pr-3 flex items-center focus:outline-none"
                     >
                       {showPassword ? (
-                        <FaEyeSlash className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                        <FaEyeSlash className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-500" />
                       ) : (
-                        <FaEye className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                        <FaEye className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-500" />
                       )}
                     </button>
                   </div>
 
                   {confirmPassword && (
-                    <div className="mt-2 text-xs">
-                      <div className={`flex items-center ${
-                        newPassword === confirmPassword && newPassword ? "text-green-500" : "text-red-500"
-                      }`}>
+                    <div className="mt-1 sm:mt-2 text-xs">
+                      <div
+                        className={`flex items-center ${
+                          newPassword === confirmPassword && newPassword
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
                         {newPassword === confirmPassword && newPassword ? (
                           <>
                             <FaCheckCircle className="mr-2 h-3 w-3 flex-shrink-0" />
@@ -425,7 +512,17 @@ const ForgotPassword = () => {
 
                 <motion.button
                   variants={itemVariants}
-                  onClick={() => dispatch(resetPassword(email, newPassword, confirmPassword, bearertoken, navigate))}
+                  onClick={() =>
+                    dispatch(
+                      resetPassword(
+                        email,
+                        newPassword,
+                        confirmPassword,
+                        bearertoken,
+                        navigate,
+                      ),
+                    )
+                  }
                   disabled={
                     isLoading ||
                     !newPassword ||
@@ -433,23 +530,41 @@ const ForgotPassword = () => {
                     newPassword !== confirmPassword
                   }
                   className={`w-full ${
-                    newPassword && confirmPassword && newPassword === confirmPassword
+                    newPassword &&
+                    confirmPassword &&
+                    newPassword === confirmPassword
                       ? "bg-green-600 hover:bg-green-700"
                       : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center`}
+                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       Updating Password...
                     </span>
                   ) : (
                     <span className="flex items-center">
                       Update Password
-                      <FaArrowRight className="ml-2 h-4 w-4" />
+                      <FaArrowRight className="ml-2 h-3 w-3 sm:h-4 sm:w-4" />
                     </span>
                   )}
                 </motion.button>
@@ -457,7 +572,7 @@ const ForgotPassword = () => {
             )}
           </AnimatePresence>
 
-          <motion.div className="flex justify-between items-center mt-6 text-sm">
+          <motion.div className="flex justify-between items-center mt-4 sm:mt-6 text-xs sm:text-sm">
             {step > 1 && (
               <button
                 onClick={() => navigate(-1)}
@@ -468,13 +583,16 @@ const ForgotPassword = () => {
                 Back
               </button>
             )}
-            <div className="ml-auto text-gray-500">Step {step} of 3</div>
+            <div
+              className={`text-gray-500 ${step > 1 ? "ml-auto" : "w-full text-center"}`}
+            >
+              Step {step} of 3
+            </div>
           </motion.div>
         </motion.div>
       </div>
     </div>
   );
 };
-
 
 export default ForgotPassword;

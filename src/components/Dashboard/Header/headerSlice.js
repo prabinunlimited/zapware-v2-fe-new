@@ -62,7 +62,7 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
             Authorization: `Bearer ${bearertoken}`,
           },
           timeout: 10000,
-        }
+        },
       );
 
       const rates = response.data.rates || [];
@@ -71,7 +71,7 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
       console.error("❌ fetchPartnerFxCurrencies error:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
-  }
+  },
 );
 
 // Profile fetching thunk with coordination
@@ -88,7 +88,7 @@ export const fetchUserProfile = createAsyncThunk(
       if (isBeneficiary) {
         console.log("🛑 SKIPPING: fetchUserProfile - User is a beneficiary");
         console.log(
-          "📍 Beneficiary data is fetched via beneficiaries/fetch-merchant-benef endpoint"
+          "📍 Beneficiary data is fetched via beneficiaries/fetch-merchant-benef endpoint",
         );
         return {
           _beneficiarySkipped: true,
@@ -102,7 +102,7 @@ export const fetchUserProfile = createAsyncThunk(
 
       console.log(
         "🔍 fetchUserProfile: Fetching customer profile for ID:",
-        customerId
+        customerId,
       );
 
       const response = await api.get(`/customers/${customerId}/profile`, {
@@ -133,7 +133,7 @@ export const fetchUserProfile = createAsyncThunk(
       } else {
         console.error(
           "❌ Profile API returned non-success status:",
-          response.data
+          response.data,
         );
         throw new Error("Failed to fetch profile - non-success status");
       }
@@ -157,7 +157,7 @@ export const fetchUserProfile = createAsyncThunk(
 
       return rejectWithValue(error.response?.data || error.message);
     }
-  }
+  },
 );
 
 // Charges data thunk with coordination
@@ -177,7 +177,7 @@ export const fetchChargesData = createAsyncThunk(
 
       console.log(
         "🔍 fetchChargesData: Fetching charges for customer:",
-        customerId
+        customerId,
       );
 
       const response = await api.get(`/get-charges/${customerId}`, {
@@ -196,7 +196,7 @@ export const fetchChargesData = createAsyncThunk(
       if (chargesData.length > 0) {
         console.log(
           "✅ Charges data fetched successfully, count:",
-          chargesData.length
+          chargesData.length,
         );
         return chargesData;
       } else {
@@ -221,7 +221,7 @@ export const fetchChargesData = createAsyncThunk(
       console.error("❌ Charges fetch failed:", errorMessage);
       return rejectWithValue(errorMessage);
     }
-  }
+  },
 );
 
 // New thunk: Check if user is beneficiary before fetching
@@ -229,7 +229,7 @@ export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
   "header/fetchCustomerDataWithBeneficiaryCheck",
   async (
     { customerId, bearertoken, authtoken },
-    { dispatch, rejectWithValue }
+    { dispatch, rejectWithValue },
   ) => {
     try {
       // ✅ FIX: Check for both spellings
@@ -251,7 +251,7 @@ export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
 
       // Fetch profile data
       const profileResult = await dispatch(
-        fetchUserProfile({ customerId, bearertoken })
+        fetchUserProfile({ customerId, bearertoken }),
       );
 
       // Fetch FX data
@@ -259,7 +259,7 @@ export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
 
       // Fetch charges data
       const chargesResult = await dispatch(
-        fetchChargesData({ customerId, authtoken })
+        fetchChargesData({ customerId, authtoken }),
       );
 
       return {
@@ -272,7 +272,7 @@ export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
       console.error("❌ fetchCustomerDataWithBeneficiaryCheck error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 const initialState = {
@@ -346,7 +346,7 @@ const headerSlice = createSlice({
       state.ownerRoleName = localStorage.getItem("owner_role_name");
       state.staffId = localStorage.getItem("staff_id");
       state.isRemittanceOnlyCustomer = localStorage.getItem(
-        "isRemittanceOnlyCustomer"
+        "isRemittanceOnlyCustomer",
       );
       state.isWhitelabelledCustomerPartnerId =
         localStorage.getItem("whitelabelledpartnerid") || null;
@@ -466,7 +466,7 @@ const headerSlice = createSlice({
           "✅ REDUX: Profile fetch completed:",
           action.payload?.first_name || action.payload?._beneficiarySkipped
             ? "Skipped for beneficiary"
-            : "Empty"
+            : "Empty",
         );
 
         state.profileLoading = false;
@@ -477,7 +477,7 @@ const headerSlice = createSlice({
           console.log("✅ Profile data stored in Redux");
         } else {
           console.log(
-            "ℹ️ Profile fetch skipped or returned empty for beneficiary"
+            "ℹ️ Profile fetch skipped or returned empty for beneficiary",
           );
           // Keep existing profileData or null, don't overwrite
         }
@@ -515,7 +515,7 @@ const headerSlice = createSlice({
           state.fetchStatus.profile = "failed";
           console.error(
             "❌ Profile fetch rejected in reducer:",
-            action.payload
+            action.payload,
           );
         } else {
           state.fetchStatus.profile = "idle";
@@ -563,7 +563,7 @@ const headerSlice = createSlice({
           } else {
             console.log("✅ Skipped customer data fetch for beneficiary");
           }
-        }
+        },
       )
       .addCase(
         fetchCustomerDataWithBeneficiaryCheck.rejected,
@@ -572,9 +572,9 @@ const headerSlice = createSlice({
           state.error = action.payload;
           console.error(
             "❌ fetchCustomerDataWithBeneficiaryCheck error:",
-            action.payload
+            action.payload,
           );
-        }
+        },
       );
   },
 });

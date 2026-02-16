@@ -37,6 +37,9 @@ import Select from "react-select";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
 import PaymentInitiation from "../../page/Deposit/components/PaymentInitiation/PaymentInitiation";
 
 // Redux actions
@@ -143,12 +146,6 @@ const Remittance = () => {
   const [showOpenBanking, setShowOpenBanking] = useState(false);
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
 
-  const [recurringData, setRecurringData] = useState({
-    isRecurring: "0",
-    frequency: "",
-    recurring_custom_days: "",
-  });
-
   // Refs for preventing duplicate API calls
   const isManualUpdate = useRef(false);
   const lastRequestId = useRef(null);
@@ -158,6 +155,7 @@ const Remittance = () => {
   const typingTimeout = useRef(null);
   const activeInput = useRef("send");
   const isTyping = useRef(false);
+  const isUserEditing = useRef(false);
 
   // Professional payment method options
   const paymentOptions = useMemo(
@@ -338,11 +336,12 @@ const Remittance = () => {
   }, [dispatch, customerId, silaAccountsLoading]);
 
   useEffect(() => {
-    if (!initialLoading && !formData.sendAmount) {
+    // Only set default on initial load, not when user clears the field
+    if (!initialLoading && !formData.sendAmount && step === 1) {
       dispatch(setSendAmount("5"));
       activeInput.current = "send";
     }
-  }, [initialLoading, formData.sendAmount, dispatch]);
+  }, [initialLoading, dispatch, step]);
 
   // Reset exchange rate data when currencies change
   useEffect(() => {
@@ -921,44 +920,90 @@ const Remittance = () => {
   };
 
   const handleSendAmountChange = useCallback(
-    (rawValue) => {
-      // Allow complete deletion
-      if (rawValue === "") {
+    (value) => {
+      console.log("🔍 handleSendAmountChange called:", {
+        inputValue: value,
+        currentState: formData.sendAmount,
+        isEqual: value === formData.sendAmount,
+      });
+
+      // Clear any pending auto-set timeout
+      if (window.autoSetTimeout) {
+        clearTimeout(window.autoSetTimeout);
+        delete window.autoSetTimeout;
+      }
+
+      // Allow complete deletion - set empty string immediately
+      if (value === "") {
+        console.log("✅ Setting empty string");
         dispatch(setSendAmount(""));
+        activeInput.current = "send";
+
+        // Clear receive amount when send is empty
         dispatch(setReceiveAmount(""));
+
+        // Clear typing timeout
+        if (typingTimeout.current) {
+          clearTimeout(typingTimeout.current);
+        }
+
+        isTyping.current = true;
+        typingTimeout.current = setTimeout(() => {
+          isTyping.current = false;
+        }, 600);
         return;
       }
 
-      const formattedValue = formatAmountInput(rawValue);
+      // Only allow numbers and one decimal point
+      const cleaned = value.replace(/[^0-9.]/g, "");
 
-      // Prevent unnecessary updates
-      if (formattedValue === formData.sendAmount) return;
+      // Handle multiple decimal points - keep only first
+      const parts = cleaned.split(".");
+      const formattedValue =
+        parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
 
-      dispatch(setSendAmount(formattedValue));
+      // Prevent updating with invalid value (like just a dot)
+      if (formattedValue === "." || formattedValue === "") {
+        console.log("⚠️ Invalid value, not updating");
+        return;
+      }
+
+      // Always update if different from current value (including empty)
+      if (formattedValue !== formData.sendAmount) {
+        console.log(
+          "✅ Updating state from",
+          formData.sendAmount,
+          "to",
+          formattedValue,
+        );
+        dispatch(setSendAmount(formattedValue));
+      } else {
+        console.log("⏭️ Same value, skipping update");
+        return;
+      }
+
       activeInput.current = "send";
 
-      // Clear previous timeout
+      // Clear timeout and set typing state
       if (typingTimeout.current) {
         clearTimeout(typingTimeout.current);
       }
 
-      // Set typing state
       isTyping.current = true;
-
-      // Debounced calculation
       typingTimeout.current = setTimeout(() => {
         isTyping.current = false;
 
-        // Calculate receive amount only when we have valid data
+        // Calculate receive amount after typing stops
         const sendNum = parseFloat(formattedValue);
         if (!isNaN(sendNum) && sendNum > 0 && exchangeRateData?.fxRate) {
           const calculatedReceive = roundToDecimals(
             sendNum * exchangeRateData.fxRate,
             2,
           );
+          console.log("💰 Calculated receive amount:", calculatedReceive);
           dispatch(setReceiveAmount(calculatedReceive.toString()));
         }
-      }, 600); // Reduced from 1200ms for better responsiveness
+      }, 600);
     },
     [dispatch, formData.sendAmount, exchangeRateData],
   );
@@ -1142,6 +1187,13 @@ const Remittance = () => {
   const handleBeneficiarySelect = useCallback(
     (beneficiary) => {
       dispatch(setSelectedBeneficiary(beneficiary));
+      if (beneficiary?.id) {
+        dispatch(fetchBeneficiaryBanks(beneficiary.id));
+      }
+      toast.success(`Beneficiary ${beneficiary?.name} selected`, {
+        position: "top-right",
+        autoClose: 2000,
+      });
     },
     [dispatch],
   );
@@ -1268,157 +1320,100 @@ const Remittance = () => {
     [dispatch],
   );
 
-  const handleSubmitTransaction = useCallback(
-    (recurringData = {}) => {
-      const transactionData = {
-        from_currency: formData.sendCurrency?.value,
-        to_currency: formData.receiveCurrency?.value,
+  const handleSubmitTransaction = useCallback(() => {
+    const transactionData = {
+      from_currency: formData.sendCurrency?.value,
+      to_currency: formData.receiveCurrency?.value,
 
-        ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
-          ? {
-              sila_account_id: selectedSilaBankAccount.id,
-              sila_payment_instrument_id:
-                selectedSilaBankAccount.payment_instrument_id,
-              sila_account_name: selectedSilaBankAccount.account_name,
-              sila_routing_number: selectedSilaBankAccount.routing_number,
-            }
-          : {}),
+      ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
+        ? {
+            sila_account_id: selectedSilaBankAccount.id,
+            sila_payment_instrument_id:
+              selectedSilaBankAccount.payment_instrument_id,
+            sila_account_name: selectedSilaBankAccount.account_name,
+            sila_routing_number: selectedSilaBankAccount.routing_number,
+          }
+        : {}),
 
-        send_amount: parseFloat(formData.sendAmount),
-        receive_amount: parseFloat(formData.receiveAmount),
-        exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
+      send_amount: parseFloat(formData.sendAmount),
+      receive_amount: parseFloat(formData.receiveAmount),
+      exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
 
-        customer_id: parseInt(customerId),
+      customer_id: parseInt(customerId),
 
-        payment_method: formData.paymentMethod,
-        conversion_id: exchangeRateData?.conversion_id,
+      payment_method: formData.paymentMethod,
+      conversion_id: exchangeRateData?.conversion_id,
 
-        beneficiary: selectedBeneficiary?.id?.toString(),
-        beneficiary_bank_id: selectedBank?.id,
+      beneficiary: selectedBeneficiary?.id?.toString(),
+      beneficiary_bank_id: selectedBank?.id,
 
-        beneficiary_name: selectedBeneficiary?.name,
-        beneficiary_bank_name: selectedBank?.bank_name,
-        beneficiary_account_number:
-          selectedBank?.account_number || selectedBank?.bank_acc_no,
+      beneficiary_name: selectedBeneficiary?.name,
+      beneficiary_bank_name: selectedBank?.bank_name,
+      beneficiary_account_number:
+        selectedBank?.account_number || selectedBank?.bank_acc_no,
 
-        is_remit: "Y",
+      is_remit: "Y",
 
-        purpose: formData.purpose?.value || formData.purpose,
-        income_source: formData.incomeSource?.value || formData.incomeSource,
-        occupation: formData.occupation || "",
-        relation: formData.relation?.value || formData.relation || "",
-        payout_method: formData.payout_method?.value || formData.paymentMethod,
+      purpose: formData.purpose?.value || formData.purpose,
+      income_source: formData.incomeSource?.value || formData.incomeSource,
+      occupation: formData.occupation || "",
+      relation: formData.relation?.value || formData.relation || "",
+      payout_method: formData.payout_method?.value || formData.paymentMethod,
 
-        document: formData.document,
-        agree_to_terms: formData.agreeToTerms ? "1" : "0",
+      document: formData.document,
+      agree_to_terms: formData.agreeToTerms ? "1" : "0",
 
-        rails: "Local",
+      rails: "Local",
+    };
 
-        // 🔄 ADD RECURRING PAYMENT FIELDS (only if applicable)
-        ...(formData.paymentMethod === "bank" &&
-        formData.sendCurrency?.value === "USD" &&
-        formData.receiveCurrency?.value === "INR"
-          ? {
-              isRecurring: recurringData.isRecurring || "0",
-              frequency: recurringData.frequency || "",
-              recurring_custom_days: recurringData.recurring_custom_days || "",
-            }
-          : {}),
-      };
+    const cleanData = {};
+    Object.keys(transactionData).forEach((key) => {
+      if (transactionData[key] !== null && transactionData[key] !== undefined) {
+        cleanData[key] = transactionData[key];
+      }
+    });
 
-      console.log("📤 Final Transaction Data:", transactionData);
+    console.log("📤 Sending transaction data:", cleanData);
 
-      const cleanData = {};
-      Object.keys(transactionData).forEach((key) => {
-        if (
-          transactionData[key] !== null &&
-          transactionData[key] !== undefined
-        ) {
-          cleanData[key] = transactionData[key];
-        }
+    const required = [
+      "from_currency",
+      "to_currency",
+      "beneficiary",
+      "beneficiary_bank_id",
+    ];
+    const missing = required.filter((field) => !cleanData[field]);
+
+    if (missing.length > 0) {
+      toast.error(`Missing required fields: ${missing.join(", ")}`, {
+        position: "top-center",
+        autoClose: 5000,
       });
+      return;
+    }
 
-      console.log("📤 Sending transaction data:", cleanData);
-
-      // ✅ IMPORTANT: Add validation for recurring payment
-      if (
-        formData.paymentMethod === "bank" &&
-        formData.sendCurrency?.value === "USD" &&
-        formData.receiveCurrency?.value === "INR" &&
-        cleanData.isRecurring === "1"
-      ) {
-        // Validate recurring payment fields
-        if (!cleanData.frequency) {
-          toast.error("Please select a recurring frequency", {
-            position: "top-center",
-            autoClose: 5000,
-          });
-          return;
-        }
-
-        if (
-          cleanData.frequency === "specific_day" &&
-          !cleanData.recurring_custom_days
-        ) {
-          toast.error("Please enter number of days for recurring payment", {
-            position: "top-center",
-            autoClose: 5000,
-          });
-          return;
-        }
-
-        if (
-          cleanData.frequency === "specific_day" &&
-          parseInt(cleanData.recurring_custom_days) < 7
-        ) {
-          toast.error("Minimum days between recurring payments is 7", {
-            position: "top-center",
-            autoClose: 5000,
-          });
-          return;
-        }
-      }
-
-      const required = [
-        "from_currency",
-        "to_currency",
-        "beneficiary",
-        "beneficiary_bank_id",
-      ];
-      const missing = required.filter((field) => !cleanData[field]);
-
-      if (missing.length > 0) {
-        toast.error(`Missing required fields: ${missing.join(", ")}`, {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      dispatch(submitTransaction(cleanData));
-    },
-    [
-      customerId,
-      formData,
-      exchangeRateData,
-      selectedBeneficiary,
-      selectedBank,
-      dispatch,
-      selectedSilaBankAccount,
-      formData.paymentMethod,
-      formData.purpose,
-      formData.incomeSource,
-      formData.occupation,
-      formData.relation,
-      formData.payout_method,
-      formData.document,
-      formData.agreeToTerms,
-    ],
-  );
+    dispatch(submitTransaction(cleanData));
+  }, [
+    customerId,
+    formData,
+    exchangeRateData,
+    selectedBeneficiary,
+    selectedBank,
+    dispatch,
+    selectedSilaBankAccount,
+    formData.paymentMethod,
+    formData.purpose,
+    formData.incomeSource,
+    formData.occupation,
+    formData.relation,
+    formData.payout_method,
+    formData.document,
+    formData.agreeToTerms,
+  ]);
 
   const handleNextStep = useCallback(() => {
     if (step === 1) {
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+      const sendNum = parseFloat(formData.sendAmount || 0);
+      if (isNaN(sendNum) || sendNum < 5) {
         toast.error(
           `Minimum transfer amount is ${
             formData.sendCurrency?.value || "USD"
@@ -1486,7 +1481,6 @@ const Remittance = () => {
         return;
       }
 
-      // ✅ Document upload ONLY required for manual deposits, NOT for bank transfers
       if (formData.paymentMethod === "manual") {
         if (!formData.document) {
           toast.error("Please upload payment proof for cash deposit", {
@@ -1518,17 +1512,16 @@ const Remittance = () => {
             return;
           }
 
-          // ✅ FIX: Commented out verification check but keep the logic structure
-          // if (!selectedSilaBankAccount.web_debit_verified) {
-          //   toast.error(
-          //     "Selected bank account needs verification. Please select a verified account or verify this account first.",
-          //     {
-          //       position: "top-center",
-          //       autoClose: 5000,
-          //     },
-          //   );
-          //   return;
-          // }
+          if (!selectedSilaBankAccount.web_debit_verified) {
+            toast.error(
+              "Selected bank account needs verification. Please select a verified account or verify this account first.",
+              {
+                position: "top-center",
+                autoClose: 5000,
+              },
+            );
+            return;
+          }
         }
 
         if (!selectedBank) {
@@ -1573,7 +1566,7 @@ const Remittance = () => {
       ) {
         handleInitiateOpenBanking();
       } else {
-        handleSubmitTransaction(recurringData);
+        handleSubmitTransaction();
       }
     }
   }, [
@@ -1619,6 +1612,7 @@ const Remittance = () => {
     });
   }, [navigate]);
 
+  // In your component:
   const handleDownloadReceipt = useCallback(() => {
     if (!transactionResult) {
       toast.error("No transaction result available", {
@@ -1628,12 +1622,182 @@ const Remittance = () => {
       return;
     }
 
-    console.log("Downloading receipt", transactionResult);
-    toast.success("Receipt download started", {
-      position: "top-right",
-      autoClose: 2000,
-    });
-  }, [transactionResult]);
+    try {
+      console.log("Downloading receipt", transactionResult);
+
+      // Create PDF document
+      const doc = new jsPDF();
+
+      // Add company logo/header
+      doc.setFillColor(37, 99, 235); // Blue color
+      doc.rect(0, 0, 210, 40, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont("helvetica", "bold");
+      doc.text("Transfer Receipt", 15, 25);
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Transaction completed successfully", 15, 35);
+
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+
+      // Transaction ID
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Transaction ID:", 15, 55);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        transactionResult.transaction_id || transactionResult.id || "N/A",
+        60,
+        55,
+      );
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Date:", 15, 65);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        60,
+        65,
+      );
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Status:", 15, 75);
+      doc.setFont("helvetica", "normal");
+      doc.text(transactionResult.status || "Completed", 60, 75);
+
+      // Transfer Details Table
+      doc.setFillColor(243, 244, 246);
+      doc.rect(15, 90, 180, 10, "F");
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Transfer Details", 20, 97);
+
+      const transferData = [
+        [
+          "You Sent",
+          `${formData.sendCurrency?.value || ""} ${parseFloat(formData.sendAmount || 0).toFixed(2)}`,
+        ],
+        [
+          "Recipient Receives",
+          `${formData.receiveCurrency?.value || ""} ${parseFloat(formData.receiveAmount || 0).toFixed(2)}`,
+        ],
+        [
+          "Exchange Rate",
+          `1 ${formData.sendCurrency?.value || ""} = ${(exchangeRateData?.fxRate || transactionResult.exchange_rate || 0).toFixed(6)} ${formData.receiveCurrency?.value || ""}`,
+        ],
+        ["Transfer Fee", `${formData.sendCurrency?.value || ""} 0.00`],
+        [
+          "Total Amount",
+          `${formData.sendCurrency?.value || ""} ${parseFloat(formData.sendAmount || 0).toFixed(2)}`,
+        ],
+      ];
+
+      // ✅ FIX: Use imported autoTable function
+      autoTable(doc, {
+        startY: 105,
+        head: [["Description", "Amount"]],
+        body: transferData,
+        theme: "striped",
+        headStyles: { fillColor: [37, 99, 235] },
+        styles: { fontSize: 10 },
+        margin: { left: 15, right: 15 },
+      });
+
+      // Recipient Information
+      const finalY = doc.lastAutoTable.finalY + 10;
+
+      doc.setFillColor(243, 244, 246);
+      doc.rect(15, finalY, 180, 10, "F");
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Recipient Information", 20, finalY + 7);
+
+      const recipientData = [
+        ["Beneficiary Name", selectedBeneficiary?.name || "N/A"],
+        ["Bank Name", selectedBank?.bank_name || "N/A"],
+        [
+          "Account Number",
+          selectedBank?.account_number
+            ? `****${selectedBank.account_number.slice(-4)}`
+            : selectedBank?.bank_acc_no
+              ? `****${selectedBank.bank_acc_no.slice(-4)}`
+              : "N/A",
+        ],
+        ["Account Currency", formData.receiveCurrency?.value || "N/A"],
+      ];
+
+      // ✅ FIX: Use imported autoTable function
+      autoTable(doc, {
+        startY: finalY + 15,
+        body: recipientData,
+        theme: "plain",
+        styles: { fontSize: 10, cellPadding: 5 },
+        columnStyles: {
+          0: { fontStyle: "bold", cellWidth: 50 },
+          1: { cellWidth: 130 },
+        },
+        margin: { left: 15, right: 15 },
+      });
+
+      // Footer
+      const pageHeight = doc.internal.pageSize.height;
+
+      doc.setDrawColor(200, 200, 200);
+      doc.line(15, pageHeight - 30, 195, pageHeight - 30);
+
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        "This is an electronically generated receipt",
+        15,
+        pageHeight - 20,
+      );
+      doc.text(
+        "For any inquiries, please contact our support team",
+        15,
+        pageHeight - 15,
+      );
+      doc.text(
+        `© ${new Date().getFullYear()} Your Company Name. All rights reserved.`,
+        15,
+        pageHeight - 10,
+      );
+
+      // Save the PDF
+      doc.save(
+        `receipt_${transactionResult.transaction_id || transactionResult.id || "transaction"}.pdf`,
+      );
+
+      toast.success("Receipt downloaded successfully", {
+        position: "top-right",
+        autoClose: 2000,
+      });
+    } catch (error) {
+      console.error("Error downloading receipt:", error);
+      toast.error("Failed to download receipt. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    }
+  }, [
+    transactionResult,
+    formData,
+    selectedBeneficiary,
+    selectedBank,
+    exchangeRateData,
+  ]);
 
   const selectStyles = useMemo(
     () => ({
@@ -1899,7 +2063,7 @@ const Remittance = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold text-white">
-                      International Transfer
+                      International Transfer 2
                     </h2>
                     <p className="text-blue-100 mt-1">
                       Send money securely worldwide
@@ -1917,11 +2081,11 @@ const Remittance = () => {
                   {/* Left Column - Send Amount */}
                   <div className="space-y-6">
                     <div>
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                         <h3 className="text-lg font-semibold text-gray-900">
                           You Send
                         </h3>
-                        <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                        <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full self-start sm:self-auto">
                           Your Account
                         </span>
                       </div>
@@ -1935,14 +2099,14 @@ const Remittance = () => {
                           onFocus={() => {
                             activeInput.current = "send";
                           }}
-                          // Remove the complex onBlur handler - validation happens elsewhere
                           placeholder="0.00"
-                          className="w-full px-6 py-5 text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
+                          className="w-full pl-6 pr-28 sm:pr-40 py-5 text-2xl sm:text-3xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200"
                           inputMode="decimal"
                           autoComplete="off"
                         />
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-36">
+                        {/* Currency Dropdown - Positioned absolutely on desktop, but moved to below input on mobile */}
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 hidden sm:block">
+                          <div className="w-32 sm:w-36">
                             <Select
                               options={sendCurrencyOptions}
                               value={formData.sendCurrency}
@@ -1953,10 +2117,12 @@ const Remittance = () => {
                               className="text-sm"
                               classNamePrefix="select"
                               formatOptionLabel={({ label, balance }) => (
-                                <div className="flex justify-between items-center">
-                                  <span>{label.split(" - ")[0]}</span>
+                                <div className="flex justify-between items-center truncate">
+                                  <span className="truncate">
+                                    {label.split(" - ")[0]}
+                                  </span>
                                   {balance && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-gray-500 ml-1">
                                       ${parseFloat(balance).toFixed(2)}
                                     </span>
                                   )}
@@ -1966,7 +2132,43 @@ const Remittance = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+
+                      {/* Mobile Currency Dropdown - Shows below input on small screens */}
+                      <div className="mt-4 sm:hidden">
+                        <div className="w-full">
+                          <Select
+                            options={sendCurrencyOptions}
+                            value={formData.sendCurrency}
+                            onChange={handleSendCurrencyChange}
+                            placeholder="Select Currency"
+                            styles={{
+                              ...selectStyles,
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "44px",
+                                borderRadius: "8px",
+                              }),
+                            }}
+                            isSearchable
+                            className="text-sm"
+                            classNamePrefix="select"
+                            formatOptionLabel={({ label, balance }) => (
+                              <div className="flex justify-between items-center truncate">
+                                <span className="truncate">
+                                  {label.split(" - ")[0]}
+                                </span>
+                                {balance && (
+                                  <span className="text-xs text-gray-500 ml-1">
+                                    ${parseFloat(balance).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs text-gray-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <span>
                           Minimum: {formData.sendCurrency?.value || "USD"} 5.00
                         </span>
@@ -2002,7 +2204,7 @@ const Remittance = () => {
                   {/* Right Column - Receive Amount */}
                   <div className="space-y-6">
                     <div>
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                         <h3 className="text-lg font-semibold text-gray-900">
                           Recipient Receives
                         </h3>
@@ -2070,7 +2272,7 @@ const Remittance = () => {
                             }
                           }}
                           placeholder="0.00"
-                          className={`w-full px-6 py-5 text-3xl font-bold rounded-xl focus:outline-none transition-all duration-200 ${
+                          className={`w-full pl-6 pr-28 sm:pr-40 py-5 text-2xl sm:text-3xl font-bold rounded-xl focus:outline-none transition-all duration-200 ${
                             exchangeRateError
                               ? "bg-red-50 border-2 border-red-200 text-red-900 focus:border-red-400 focus:ring-4 focus:ring-red-100"
                               : exchangeRateLoading
@@ -2081,8 +2283,9 @@ const Remittance = () => {
                           autoComplete="off"
                         />
 
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-36">
+                        {/* Desktop Currency Dropdown */}
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 hidden sm:block">
+                          <div className="w-32 sm:w-36">
                             <Select
                               options={receiveCurrencyOptions}
                               value={formData.receiveCurrency}
@@ -2115,20 +2318,53 @@ const Remittance = () => {
                           </div>
                         </div>
 
+                        {/* Loading Indicator - Adjusted for mobile */}
                         {exchangeRateLoading ? (
-                          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
                             <RingLoader color="#10b981" size={16} />
-                            <span className="text-xs text-emerald-600 font-medium">
+                            <span className="text-xs text-emerald-600 font-medium hidden sm:block">
                               Updating rate...
                             </span>
                           </div>
                         ) : (
                           exchangeRateData?.fxRate && (
-                            <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                              {/* <FaExchangeAlt className="w-4 h-4 text-emerald-500" /> */}
+                            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                              {/* Exchange icon hidden on mobile for more space */}
                             </div>
                           )
                         )}
+                      </div>
+
+                      {/* Mobile Currency Dropdown */}
+                      <div className="mt-4 sm:hidden">
+                        <div className="w-full">
+                          <Select
+                            options={receiveCurrencyOptions}
+                            value={formData.receiveCurrency}
+                            onChange={handleReceiveCurrencyChange}
+                            placeholder="Select Currency"
+                            styles={{
+                              ...selectStyles,
+                              control: (base, state) => ({
+                                ...base,
+                                minHeight: "44px",
+                                borderRadius: "8px",
+                                borderColor: state.isFocused
+                                  ? "#10b981"
+                                  : "#e5e7eb",
+                                borderWidth: "1px",
+                                backgroundColor: exchangeRateLoading
+                                  ? "#f9fafb"
+                                  : "#ffffff",
+                                "&:hover": { borderColor: "#10b981" },
+                              }),
+                            }}
+                            isSearchable
+                            className="text-sm"
+                            classNamePrefix="select"
+                            isLoading={exchangeRateLoading}
+                          />
+                        </div>
                       </div>
 
                       {/* Exchange rate info */}
@@ -2155,7 +2391,7 @@ const Remittance = () => {
                       {exchangeRateData?.fxRate && (
                         <div className="space-y-4">
                           <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-200">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <div className="p-2 bg-white rounded-lg shadow-sm">
                                   <FaExchangeAlt className="w-5 h-5 text-emerald-600" />
@@ -2164,14 +2400,14 @@ const Remittance = () => {
                                   <p className="text-sm font-semibold text-gray-900">
                                     Exchange Rate
                                   </p>
-                                  <p className="text-xs text-gray-600">
+                                  <p className="text-xs text-gray-600 break-words">
                                     1 {formData.sendCurrency?.value} ={" "}
                                     {exchangeRateData.fxRate.toFixed(6)}{" "}
                                     {formData.receiveCurrency?.value}
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 ml-0 sm:ml-auto">
                                 <FaClock className="text-emerald-500 text-xs" />
                                 <p className="text-xs text-emerald-600 font-medium">
                                   Live rate
@@ -2181,7 +2417,7 @@ const Remittance = () => {
 
                             {exchangeRateData.conversion_id && (
                               <div className="mt-3 pt-3 border-t border-emerald-200">
-                                <p className="text-xs text-gray-600">
+                                <p className="text-xs text-gray-600 break-words">
                                   <span className="font-medium">Rate ID:</span>{" "}
                                   <span className="font-mono">
                                     {exchangeRateData.conversion_id}
@@ -2750,7 +2986,7 @@ const Remittance = () => {
             manualAccountDetails={manualAccountDetails}
             exchangeRateData={exchangeRateData}
             onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
-            onRecurringDataChange={setRecurringData}
+            onSubmit={handleSubmitTransaction}
             loading={loading}
             paymentMethod={formData.paymentMethod}
             isOpenBankingAvailable={isOpenBankingAvailable()}
@@ -2928,7 +3164,7 @@ const Remittance = () => {
                 {formData.paymentMethod === "bank" &&
                 isOpenBankingAvailable() ? (
                   <button
-                    onClick={() => handleSubmitTransaction(recurringData)}
+                    onClick={handleInitiateOpenBanking}
                     disabled={
                       !formData.agreeToTerms ||
                       loading ||
@@ -2954,7 +3190,7 @@ const Remittance = () => {
                   </button>
                 ) : formData.paymentMethod === "bank" ? (
                   <button
-                    onClick={() => handleSubmitTransaction(recurringData)}
+                    onClick={handleSubmitTransaction}
                     disabled={
                       !formData.agreeToTerms || loading || openBankingProcessing
                     }

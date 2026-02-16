@@ -70,7 +70,10 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Redux selectors
   const beneficiaries = useSelector(selectBeneficiaries);
-  console.log("🔍 Full Redux state:", useSelector(state => state));
+  console.log(
+    "🔍 Full Redux state:",
+    useSelector((state) => state),
+  );
 
   const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
   const loading = useSelector(selectBeneficiariesLoading);
@@ -383,7 +386,7 @@ const Beneficiaries = ({ mode = "list" }) => {
   if (showInitialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
+        <div className="flex flex-col items-center">
           <RingLoader size={60} color="#3B82F6" />
           <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
         </div>
@@ -610,20 +613,20 @@ const Beneficiaries = ({ mode = "list" }) => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Show loading indicator only when searching within existing data */}
           {loading && !hasFetchedOnce ? (
-            <div className="p-12 text-center">
+            <div className="p-8 sm:p-12 text-center">
               <div className="flex flex-col items-center">
                 <RingLoader size={40} color="#3B82F6" />
                 <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
               </div>
             </div>
           ) : filteredBeneficiaries.length === 0 ? (
-            <div className="p-12 text-center">
+            <div className="p-8 sm:p-12 text-center">
               <div className="flex flex-col items-center">
-                <FaUser className="text-gray-300 text-6xl mb-4" />
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                <FaUser className="text-gray-300 text-4xl sm:text-6xl mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-700 mb-2">
                   {searchQuery ? "No Results Found" : "No Beneficiaries Found"}
                 </h3>
-                <p className="text-gray-500 mb-6">
+                <p className="text-gray-500 mb-6 text-sm sm:text-base">
                   {searchQuery
                     ? `No beneficiaries found matching "${searchQuery}"`
                     : "You haven't added any beneficiaries yet."}
@@ -631,7 +634,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                 {!searchQuery && (
                   <button
                     onClick={handleAddBeneficiary}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl"
+                    className="px-4 py-3 sm:px-6 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
                   >
                     <FaPlus className="inline mr-2" />
                     Add Your First Beneficiary
@@ -641,7 +644,8 @@ const Beneficiaries = ({ mode = "list" }) => {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Desktop Table (hidden on mobile) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
@@ -805,21 +809,155 @@ const Beneficiaries = ({ mode = "list" }) => {
                 </table>
               </div>
 
+              {/* Mobile Cards (visible on mobile) */}
+              <div className="md:hidden">
+                {filteredBeneficiaries.map((beneficiary) => (
+                  <div
+                    key={beneficiary.id}
+                    className="border-b border-gray-200 p-4 hover:bg-gray-50 transition-colors duration-150"
+                  >
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedBeneficiaries.includes(
+                            beneficiary.id,
+                          )}
+                          onChange={() =>
+                            handleBeneficiarySelect(beneficiary.id)
+                          }
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-1"
+                        />
+                        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-lg">
+                          {beneficiary.name?.charAt(0) || "?"}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {beneficiary.name || "N/A"}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {beneficiary.relationtobenef || "N/A"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleViewBankDetails(beneficiary)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                          title="View Bank Details"
+                        >
+                          <FaUniversity size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleEditBeneficiary(beneficiary)}
+                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                          title="Edit"
+                        >
+                          <FaEdit size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Card Body - Details */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">
+                          Contact
+                        </div>
+                        <div className="font-medium text-gray-900 truncate">
+                          {beneficiary.phone_number || "N/A"}
+                        </div>
+                        <div className="text-sm text-gray-600 truncate">
+                          {beneficiary.email || "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">
+                          Country
+                        </div>
+                        <div className="font-medium text-gray-900">
+                          {beneficiary.country_id || "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">
+                          Currency
+                        </div>
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                          {beneficiary.currency || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Status</div>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() =>
+                              handleToggleVisibility(beneficiary.id)
+                            }
+                            className={`p-1 rounded-full ${
+                              beneficiary.status === 1 ||
+                              beneficiary.active_status === 1
+                                ? "text-green-600 hover:bg-green-50"
+                                : "text-gray-400 hover:bg-gray-100"
+                            }`}
+                          >
+                            {beneficiary.status === 1 ||
+                            beneficiary.active_status === 1 ? (
+                              <FaEye size={14} />
+                            ) : (
+                              <FaEyeSlash size={14} />
+                            )}
+                          </button>
+                          <span
+                            className={`ml-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
+                              beneficiary.status === 1 ||
+                              beneficiary.active_status === 1
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {beneficiary.status === 1 ||
+                            beneficiary.active_status === 1
+                              ? "Visible"
+                              : "Hidden"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Footer */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <div className="text-sm text-gray-500">
+                        Added: {formatDate(beneficiary.created_at)}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteClick(beneficiary)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                        title="Delete"
+                      >
+                        <FaTrash size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Pagination or footer */}
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="px-4 py-4 sm:px-6 sm:py-4 bg-gray-50 border-t border-gray-200">
                 <div className="flex flex-col md:flex-row justify-between items-center">
-                  <div className="text-sm text-gray-500 mb-4 md:mb-0">
+                  <div className="text-sm text-gray-500 mb-4 md:mb-0 text-center md:text-left">
                     Showing {filteredBeneficiaries.length} of{" "}
                     {beneficiariesCount} beneficiaries
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Previous
                     </button>
-                    <span className="px-4 py-2 text-sm text-gray-700">
+                    <span className="px-3 py-2 text-sm text-gray-700">
                       Page 1 of 1
                     </span>
-                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Next
                     </button>
                   </div>

@@ -116,18 +116,11 @@ export const fetchBeneficiaries = createAsyncThunk(
   "beneficiaries/fetchBeneficiaries",
   async (customerId, { rejectWithValue }) => {
     try {
-      // FIX: Use bearertoken instead of authtoken
       const bearertoken = localStorage.getItem("bearertoken");
 
       if (!bearertoken) {
         throw new Error("Authentication token not found");
       }
-
-      console.log("🔑 Token available:", !!bearertoken);
-      console.log(
-        "📞 API URL:",
-        `${API_URL}/beneficiaries/customer-view/${customerId}`,
-      );
 
       const response = await fetch(
         `${API_URL}/beneficiaries/customer-view/${customerId}`,
@@ -139,40 +132,50 @@ export const fetchBeneficiaries = createAsyncThunk(
         },
       );
 
-      console.log("📡 Response status:", response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`Failed to fetch beneficiaries: ${response.status}`);
       }
 
       const result = await response.json();
       console.log("✅ API Response:", result);
 
-      // Handle different response structures
+      // Handle "No beneficiaries found" response
       if (
         result.status === "200" &&
         result.message === "No beneficiaries found"
       ) {
-        console.log("📭 No beneficiaries found");
-        return [];
+        console.log("📭 No beneficiaries found - returning empty array");
+        return {
+          data: [],
+          message: result.message,
+          status: "success",
+          empty: true, // Add this flag
+        };
       }
 
       // Try different response formats
+      let beneficiariesData = [];
       if (result.data && Array.isArray(result.data)) {
-        return result.data;
+        beneficiariesData = result.data;
       } else if (Array.isArray(result)) {
-        return result;
+        beneficiariesData = result;
       } else if (result.beneficiaries && Array.isArray(result.beneficiaries)) {
-        return result.beneficiaries;
+        beneficiariesData = result.beneficiaries;
       }
 
-      console.warn("⚠️ Unexpected response format:", result);
-      return [];
+      return {
+        data: beneficiariesData,
+        message: "Successfully fetched beneficiaries",
+        status: "success",
+        empty: beneficiariesData.length === 0,
+      };
     } catch (error) {
       console.error("❌ fetchBeneficiaries error:", error);
-      return rejectWithValue(error.message);
+      return rejectWithValue({
+        message: error.message,
+        empty: true,
+      });
     }
   },
 );
@@ -489,7 +492,7 @@ export const fetchBeneficiaryByCode = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryByCode",
   async (beneficiaryCode, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); 
+      const bearertoken = localStorage.getItem("bearertoken");
 
       // DEBUG: Log what we're trying to fetch
       console.log("🔍 Fetching beneficiary by code:", beneficiaryCode);
@@ -569,6 +572,7 @@ const initialState = {
   loading: false,
   error: null,
   success: false,
+  hasFetched: false,
 
   // Edit beneficiary state
   editLoading: false,
@@ -1231,6 +1235,7 @@ const beneficiarySlice = createSlice({
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
         state.loading = false; // CRITICAL: Ensure loading is set to false
+        state.hasFetched = true;
         const beneficiariesData = Array.isArray(action.payload)
           ? action.payload
           : action.payload.data || [];
@@ -1240,6 +1245,7 @@ const beneficiarySlice = createSlice({
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
         state.loading = false; // CRITICAL: Ensure loading is set to false even on error
+        state.hasFetched = true;
         state.error = action.payload;
       })
 
@@ -1506,6 +1512,7 @@ export const selectBeneficiariesLoading = (state) =>
 export const selectBeneficiariesError = (state) => state.beneficiaries.error;
 export const selectBeneficiariesSuccess = (state) =>
   state.beneficiaries.success;
+export const selectHasFetched = (state) => state.beneficiaries.hasFetched;
 export const selectBeneficiariesLastUpdated = (state) =>
   state.beneficiaries.lastUpdated;
 
