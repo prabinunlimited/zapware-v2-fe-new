@@ -48,7 +48,7 @@ const BankLetter = () => {
 
   // ========== ALL SELECTORS AT THE TOP ==========
   const reduxAccountData = useSelector(
-    (state) => state.bankLetter?.accountData
+    (state) => state.bankLetter?.accountData,
   );
 
   // Redux Selectors from bankLetterSlice
@@ -105,7 +105,7 @@ const BankLetter = () => {
   } catch (error) {
     console.error(
       "Error reading whitelabelledpartnerid from localStorage:",
-      error
+      error,
     );
     whitelabelledpartnerid = null;
   }
@@ -232,7 +232,7 @@ const BankLetter = () => {
 
       if (shouldUpdate) {
         console.log(
-          "🔄 BankLetter - Setting/Updating account data from location state"
+          "🔄 BankLetter - Setting/Updating account data from location state",
         );
         dispatch(setAccountData(location.state.accountData));
         originalAccountData.current = location.state.accountData;
@@ -247,7 +247,7 @@ const BankLetter = () => {
       if (event.key === "selectedCurrency") {
         console.log(
           "🔄 BankLetter - Currency changed via storage:",
-          event.newValue
+          event.newValue,
         );
         // You could trigger a refetch or update here if needed
       }
@@ -264,7 +264,7 @@ const BankLetter = () => {
   useEffect(() => {
     if (isWhitelabelled && token) {
       const partnerId = localStorage.getItem(
-        "whitelabelled_customer_partnerid"
+        "whitelabelled_customer_partnerid",
       );
       if (partnerId) {
         dispatch(fetchPartnerProfile(partnerId));
@@ -340,12 +340,12 @@ const BankLetter = () => {
   // Handle missing account data
   const handleMissingData = () => {
     return (
-      <div className="container mx-auto py-10 text-center">
-        <p className="text-red-500 font-semibold">
+      <div className="container mx-auto py-6 px-4 text-center">
+        <p className="text-red-500 font-semibold text-sm md:text-base">
           Account data is missing. Please go back and try again.
         </p>
         <button
-          className="mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-lg shadow-lg transform hover:scale-105 transition duration-300"
+          className="mt-3 md:mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 text-sm md:text-base rounded-lg shadow-lg transform hover:scale-105 transition duration-300"
           onClick={() => navigate(-1)}
         >
           Go Back
@@ -703,15 +703,17 @@ const BankLetter = () => {
   // Only show loading if we truly have no data
   if (showLoading && (!displayAccountData || !effectiveLogo)) {
     return (
-      <div className="container mx-auto py-20 text-center">
+      <div className="container mx-auto py-10 md:py-20 px-4 text-center">
         <RingLoader
-          size={50}
+          size={40}
+          className="md:w-12 md:h-12 mx-auto mb-3 md:mb-4"
           color={headerColor || "#3b82f6"}
-          className="mx-auto mb-4"
         />
-        <p className="text-gray-600">Loading configuration...</p>
+        <p className="text-gray-600 text-sm md:text-base">
+          Loading configuration...
+        </p>
         <button
-          className="mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+          className="mt-3 md:mt-4 px-3 py-1.5 md:px-4 md:py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm md:text-base"
           onClick={() => setShowLoading(false)}
         >
           Skip Loading
@@ -721,27 +723,27 @@ const BankLetter = () => {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="container mx-auto py-4 md:py-8 px-3 sm:px-4 lg:px-8">
       {/* Header with navigation */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0 mb-4 md:mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center text-blue-600 hover:text-blue-800 font-medium"
+          className="flex items-center text-blue-600 hover:text-blue-800 font-medium text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
         >
-          <FiArrowLeft className="mr-2" /> Back
+          <FiArrowLeft className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" /> Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-800">
+        <h1 className="text-lg md:text-2xl font-bold text-gray-800 text-center">
           Bank Confirmation Letter
         </h1>
-        <div className="w-24"></div>
+        <div className="w-full sm:w-24"></div> {/* Spacer */}
       </div>
 
       {/* PDF Content */}
-      <div className="flex justify-center mb-8">
+      <div className="flex justify-center mb-6 md:mb-8">
         <div
           id="pdfContent"
           ref={pdfContentRef}
-          className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl border border-gray-200 pdf-container"
+          className="bg-white p-4 md:p-6 lg:p-8 rounded-lg md:rounded-xl shadow-lg w-full max-w-4xl border border-gray-200 pdf-container"
           style={{
             ...(headerColor ? { borderTop: `4px solid ${headerColor}` } : {}),
             ...(textColor ? { color: textColor } : {}),
@@ -753,7 +755,7 @@ const BankLetter = () => {
               /* Screen styles */
               @media screen {
                 .pdf-container {
-                  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
                 }
               }
               
@@ -778,58 +780,99 @@ const BankLetter = () => {
               
               #pdfContent header {
                 border-bottom: 2px solid #e2e8f0;
-                padding-bottom: 1.5rem;
-                margin-bottom: 1.5rem;
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
                 text-align: center;
               }
               
               /* Control logo size for screen */
               #pdfContent header img {
-                max-width: 200px;
-                max-height: 80px;
+                max-width: 150px;
+                max-height: 60px;
                 width: auto;
                 height: auto;
                 object-fit: contain;
-                margin-bottom: 1rem;
+                margin-bottom: 0.75rem;
               }
               
               #pdfContent h1 {
                 color: ${headerColor || "#2d3748"};
-                font-size: 1.875rem;
-                margin-top: 0.5rem;
+                font-size: 1.25rem;
+                margin-top: 0.25rem;
+              }
+              
+              @media (min-width: 640px) {
+                #pdfContent h1 {
+                  font-size: 1.5rem;
+                }
+              }
+              
+              @media (min-width: 768px) {
+                #pdfContent h1 {
+                  font-size: 1.875rem;
+                  margin-top: 0.5rem;
+                }
+                
+                #pdfContent header img {
+                  max-width: 200px;
+                  max-height: 80px;
+                  margin-bottom: 1rem;
+                }
               }
               
               #pdfContent h2 {
                 color: ${headerColor || "#2d3748"};
-                font-size: 1.25rem;
-                margin-top: 1.5rem;
-                margin-bottom: 0.75rem;
+                font-size: 1.125rem;
+                margin-top: 1rem;
+                margin-bottom: 0.5rem;
                 border-bottom: 1px solid #e2e8f0;
                 padding-bottom: 0.25rem;
               }
               
+              @media (min-width: 768px) {
+                #pdfContent h2 {
+                  font-size: 1.25rem;
+                  margin-top: 1.5rem;
+                  margin-bottom: 0.75rem;
+                }
+              }
+              
               #pdfContent ul {
-                margin-top: 0.75rem;
-                margin-bottom: 1rem;
+                margin-top: 0.5rem;
+                margin-bottom: 0.75rem;
               }
               
               #pdfContent li {
-                margin-bottom: 0.5rem;
-                padding-left: 0.5rem;
+                margin-bottom: 0.375rem;
+                padding-left: 0.375rem;
               }
               
               #pdfContent strong {
                 color: #4a5568;
-                min-width: 160px;
+                min-width: 120px;
                 display: inline-block;
               }
               
+              @media (min-width: 768px) {
+                #pdfContent strong {
+                  min-width: 160px;
+                }
+              }
+              
               #pdfContent footer {
-                margin-top: 2rem;
-                padding-top: 1.5rem;
+                margin-top: 1.5rem;
+                padding-top: 1rem;
                 border-top: 1px solid #e2e8f0;
-                font-size: 0.875rem;
+                font-size: 0.75rem;
                 color: #718096;
+              }
+              
+              @media (min-width: 768px) {
+                #pdfContent footer {
+                  margin-top: 2rem;
+                  padding-top: 1.5rem;
+                  font-size: 0.875rem;
+                }
               }
               
               /* Print media query */
@@ -868,40 +911,60 @@ const BankLetter = () => {
               /* Grid styles */
               .account-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 1rem;
-                margin-bottom: 1.5rem;
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+              }
+              
+              @media (min-width: 640px) {
+                .account-grid {
+                  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                  gap: 1rem;
+                }
               }
               
               .account-detail-item {
                 background: #f8fafc;
-                padding: 1rem;
-                border-radius: 0.5rem;
+                padding: 0.75rem;
+                border-radius: 0.375rem;
                 border: 1px solid #e2e8f0;
               }
               
               .account-detail-item strong {
                 display: block;
                 color: #4a5568;
-                font-size: 0.875rem;
+                font-size: 0.75rem;
                 margin-bottom: 0.25rem;
+                min-width: auto;
+              }
+              
+              @media (min-width: 768px) {
+                .account-detail-item strong {
+                  font-size: 0.875rem;
+                }
               }
               
               .account-detail-item div {
                 color: #2d3748;
-                font-size: 1rem;
+                font-size: 0.875rem;
                 font-weight: 500;
+              }
+              
+              @media (min-width: 768px) {
+                .account-detail-item div {
+                  font-size: 1rem;
+                }
               }
             `}
           </style>
 
-          <header className="text-center pb-6 flex flex-col justify-center items-center">
+          <header className="text-center pb-4 md:pb-6 flex flex-col justify-center items-center">
             {/* Logo with error handling - Will show instantly from localStorage */}
             <img
               src={effectiveLogo || DefaultLogo}
               alt={effectiveLogoAlt || "Unlimited Remit Logo"}
               data-logo-type={logoType}
-              className="mb-6 object-contain"
+              className="mb-3 md:mb-6 object-contain"
               onError={(e) => {
                 console.error(`Failed to load logo: ${effectiveLogo}`);
                 e.target.src = DefaultLogo;
@@ -909,13 +972,16 @@ const BankLetter = () => {
                 e.target.dataset.logoType = "default";
               }}
             />
-            <h1 className="text-2xl font-bold" style={{ color: headerColor }}>
+            <h1
+              className="text-lg md:text-2xl font-bold"
+              style={{ color: headerColor }}
+            >
               Bank Confirmation Letter
             </h1>
           </header>
 
-          <main className="px-2">
-            <div className="text-right text-sm text-gray-600 mb-6">
+          <main className="px-1 md:px-2">
+            <div className="text-right text-xs md:text-sm text-gray-600 mb-4 md:mb-6">
               {currentDate}
             </div>
 
@@ -923,14 +989,14 @@ const BankLetter = () => {
               {
                 isAllowedDomain ? (
                   <>
-                    <p className="mb-6 text-lg font-medium text-gray-800">
+                    <p className="mb-4 md:mb-6 text-base md:text-lg font-medium text-gray-800">
                       Dear Customer,
                     </p>
 
                     {/* Company description only for non-whitelabel on allowed domain */}
                     {!isWhitelabelled && (
                       <>
-                        <p className="mb-4">
+                        <p className="mb-3 md:mb-4 text-sm md:text-base">
                           Founded in 1992, Unlimited is one of the largest
                           organizations with its sister concerns in education,
                           internet services, software development, outsourcing,
@@ -938,7 +1004,7 @@ const BankLetter = () => {
                           remittance services in the country.
                         </p>
 
-                        <p className="mb-6">
+                        <p className="mb-4 md:mb-6 text-sm md:text-base">
                           Please be advised that we have established an account
                           for you on our platform. This account is used for
                           collecting and disbursing payments for your business.
@@ -949,15 +1015,19 @@ const BankLetter = () => {
                 ) : // For non-allowed domains (like partner domains)
                 isWhitelabelled ? (
                   bankLetterLoading ? (
-                    <div className="flex justify-center py-4">
-                      <RingLoader size={30} color={headerColor || "#3b82f6"} />
+                    <div className="flex justify-center py-3 md:py-4">
+                      <RingLoader
+                        size={24}
+                        className="md:w-7 md:h-7"
+                        color={headerColor || "#3b82f6"}
+                      />
                     </div>
                   ) : (
                     <div
                       dangerouslySetInnerHTML={{
                         __html: partnerProfileData?.text || "",
                       }}
-                      className="prose max-w-none"
+                      className="prose max-w-none text-sm md:text-base"
                       style={textColor ? { color: textColor } : {}}
                     />
                   )
@@ -965,9 +1035,9 @@ const BankLetter = () => {
               }
             </div>
 
-            <div className="mt-8">
+            <div className="mt-6 md:mt-8">
               <h2
-                className="text-xl font-semibold mb-4"
+                className="text-lg md:text-xl font-semibold mb-3 md:mb-4"
                 style={{ color: headerColor }}
               >
                 Account Details ({displayAccountData?.currency || "N/A"}{" "}
@@ -1016,7 +1086,7 @@ const BankLetter = () => {
                 {displayAccountData?.account_number && (
                   <div className="account-detail-item">
                     <strong>Account Number:</strong>
-                    <div className="font-mono">
+                    <div className="font-mono text-sm md:text-base">
                       {displayAccountData.account_number}
                     </div>
                   </div>
@@ -1032,7 +1102,7 @@ const BankLetter = () => {
                 {displayAccountData?.sort_code && (
                   <div className="account-detail-item">
                     <strong>Sort Code:</strong>
-                    <div className="font-mono">
+                    <div className="font-mono text-sm md:text-base">
                       {displayAccountData.sort_code}
                     </div>
                   </div>
@@ -1041,7 +1111,7 @@ const BankLetter = () => {
                 {displayAccountData?.description && (
                   <div className="account-detail-item">
                     <strong>Reference Number</strong>
-                    <div className="font-mono">
+                    <div className="font-mono text-sm md:text-base">
                       {displayAccountData.description}
                     </div>
                   </div>
@@ -1050,12 +1120,12 @@ const BankLetter = () => {
             </div>
 
             {isAllowedDomain && (
-              <footer className="mt-8 pt-6 border-t border-gray-200">
-                <p className="mb-4">
+              <footer className="mt-6 md:mt-8 pt-4 md:pt-6 border-t border-gray-200">
+                <p className="mb-3 md:mb-4 text-sm md:text-base">
                   If you have any questions, please do not hesitate to contact
                   our support team. We are here to assist you.
                 </p>
-                <div className="text-sm text-gray-500 italic">
+                <div className="text-xs md:text-sm text-gray-500 italic">
                   Note: This is a computer generated letter so no signature is
                   required.
                 </div>
@@ -1064,12 +1134,12 @@ const BankLetter = () => {
           </main>
 
           {isAllowedDomain && (
-            <footer className="mt-10 pt-6 border-t border-gray-200 text-center text-sm">
-              <div className="font-medium mb-4">
+            <footer className="mt-6 md:mt-10 pt-4 md:pt-6 border-t border-gray-200 text-center text-xs md:text-sm">
+              <div className="font-medium mb-3 md:mb-4">
                 We are licensed in the following jurisdictions:
               </div>
 
-              <div className="space-y-3 text-left">
+              <div className="space-y-2 md:space-y-3 text-left text-xs md:text-sm">
                 <div>
                   <strong>NEPAL:</strong> Lalit Money Transfer Pvt Ltd Unlimited
                   Building, Kichapokhari, PO Box 856, Kathmandu, NEPAL holds a
@@ -1099,7 +1169,7 @@ const BankLetter = () => {
                 </div>
               </div>
 
-              <div className="font-semibold mt-8 text-lg">
+              <div className="font-semibold mt-6 md:mt-8 text-base md:text-lg">
                 Unlimited Remittance Ltd
               </div>
             </footer>
@@ -1108,45 +1178,49 @@ const BankLetter = () => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 mt-6 md:mt-8">
         <button
-          className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
           style={{ backgroundColor: headerColor || "#3b82f6" }}
           onClick={generatePDF}
           disabled={isPdfGenerating}
         >
           {isPdfGenerating ? (
             <>
-              <RingLoader size={18} color="#ffffff" className="mr-2" />
-              Generating PDF...
+              <RingLoader
+                size={16}
+                className="mr-2 md:w-4 md:h-4"
+                color="#ffffff"
+              />
+              <span className="text-xs md:text-sm">Generating PDF...</span>
             </>
           ) : (
             <>
-              <FiDownload className="mr-2" />
-              Download PDF
+              <FiDownload className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+              <span>Download PDF</span>
             </>
           )}
         </button>
 
         <button
-          className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
           onClick={printDocument}
         >
-          <FiPrinter className="mr-2" />
-          Print
+          <FiPrinter className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+          <span>Print</span>
         </button>
 
         <button
-          className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
           onClick={() => navigate(-1)}
         >
-          <FiArrowLeft className="mr-2" />
-          Close
+          <FiArrowLeft className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+          <span>Close</span>
         </button>
       </div>
 
       {bankLetterError && (
-        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-center">
+        <div className="mt-3 md:mt-4 p-2 md:p-3 bg-red-100 border border-red-400 text-red-700 rounded text-center text-xs md:text-sm">
           {bankLetterError}
         </div>
       )}

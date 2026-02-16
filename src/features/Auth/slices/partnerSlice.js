@@ -11,60 +11,90 @@ export const fetchPartnerConfig = createAsyncThunk(
   async (hostname, { rejectWithValue }) => {
     try {
       console.log("🔍 Checking for existing partner config in localStorage");
-      
+
       // Check if authService has already stored the data
       const partnerId = localStorage.getItem("whitelabelledpartnerid");
-      const isWhiteLabelled = localStorage.getItem("is_white_labelled_partner") || 
-                              localStorage.getItem("iswhitelabelledpartner");
-      
-      if (partnerId && partnerId !== "0" && partnerId !== "null" && isWhiteLabelled) {
-        console.log("✅ Partner config already exists in localStorage from authService");
-        
+      const isWhiteLabelled =
+        localStorage.getItem("is_white_labelled_partner") ||
+        localStorage.getItem("iswhitelabelledpartner");
+
+      if (
+        partnerId &&
+        partnerId !== "0" &&
+        partnerId !== "null" &&
+        isWhiteLabelled
+      ) {
+        console.log(
+          "✅ Partner config already exists in localStorage from authService",
+        );
+
         // Return the existing data from localStorage
         return {
           is_white_labelled_partner: isWhiteLabelled,
           partner_id: partnerId,
           partner_uuid: localStorage.getItem("partner_uuid") || "",
-          isPartnerPackageModule: localStorage.getItem("isPartnerPackageModule") || "N",
-          showRemittanceOnlyOnRegistration: localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
-          beneficiary_portal_title: localStorage.getItem("beneficiary_portal_title") || "",
+          isPartnerPackageModule:
+            localStorage.getItem("isPartnerPackageModule") || "N",
+          showRemittanceOnlyOnRegistration:
+            localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
+          beneficiary_portal_title:
+            localStorage.getItem("beneficiary_portal_title") || "",
           partner_name: localStorage.getItem("partner_name") || "",
         };
       }
-      
+
       // Only fetch if we don't have the data
       console.log("🔄 Fetching partner config from API (fallback)...");
-      const partnerResponse = await centralizedApi.getPartnerByHostname(hostname);
+      const partnerResponse =
+        await centralizedApi.getPartnerByHostname(hostname);
 
       if (partnerResponse?.data) {
         const partnerData = partnerResponse.data;
 
         // Store in localStorage (as backup to authService)
         if (partnerData.is_white_labelled_partner !== undefined) {
-          localStorage.setItem("is_white_labelled_partner", partnerData.is_white_labelled_partner);
-          localStorage.setItem("iswhitelabelledpartner", partnerData.is_white_labelled_partner);
+          localStorage.setItem(
+            "is_white_labelled_partner",
+            partnerData.is_white_labelled_partner,
+          );
+          localStorage.setItem(
+            "iswhitelabelledpartner",
+            partnerData.is_white_labelled_partner,
+          );
         }
-        
+
         if (partnerData.partner_id !== undefined) {
-          localStorage.setItem("whitelabelledpartnerid", String(partnerData.partner_id));
+          localStorage.setItem(
+            "whitelabelledpartnerid",
+            String(partnerData.partner_id),
+          );
         }
-        
+
         if (partnerData.partner_uuid !== undefined) {
           localStorage.setItem("partner_uuid", partnerData.partner_uuid);
         }
-        
+
         if (partnerData.isPartnerPackageModule !== undefined) {
-          localStorage.setItem("isPartnerPackageModule", partnerData.isPartnerPackageModule);
+          localStorage.setItem(
+            "isPartnerPackageModule",
+            partnerData.isPartnerPackageModule,
+          );
         }
-        
+
         if (partnerData.showRemittanceOnlyOnRegistration !== undefined) {
-          localStorage.setItem("showRemittanceOnlyOnRegistration", partnerData.showRemittanceOnlyOnRegistration);
+          localStorage.setItem(
+            "showRemittanceOnlyOnRegistration",
+            partnerData.showRemittanceOnlyOnRegistration,
+          );
         }
-        
+
         if (partnerData.beneficiary_portal_title) {
-          localStorage.setItem("beneficiary_portal_title", partnerData.beneficiary_portal_title);
+          localStorage.setItem(
+            "beneficiary_portal_title",
+            partnerData.beneficiary_portal_title,
+          );
         }
-        
+
         if (partnerData.partner_name) {
           localStorage.setItem("partner_name", partnerData.partner_name);
         }
@@ -77,7 +107,7 @@ export const fetchPartnerConfig = createAsyncThunk(
       console.error("❌ Error fetching partner config:", error);
       return rejectWithValue(error.message || "Failed to fetch partner config");
     }
-  }
+  },
 );
 
 // Async thunk for fetching partner basic setup (colors, etc.) - UNCHANGED
@@ -102,9 +132,8 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
 
       console.log("🎨 Fetching partner basic setup for partnerId:", partnerId);
 
-      const partnerConfig = await centralizedApi.getPartnerBasicSetup(
-        partnerId
-      );
+      const partnerConfig =
+        await centralizedApi.getPartnerBasicSetup(partnerId);
 
       if (partnerConfig?.status === "success") {
         console.log("✅ Partner basic setup fetched successfully");
@@ -126,7 +155,7 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
         if (partnerConfig.download_operation_manual) {
           localStorage.setItem(
             "download_operation_manual",
-            partnerConfig.download_operation_manual
+            partnerConfig.download_operation_manual,
           );
         }
 
@@ -135,7 +164,7 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
           localStorage.setItem("partner_logo", partnerConfig.logo_url);
           console.log(
             "🖼️ Partner logo stored from basic setup:",
-            partnerConfig.logo_url
+            partnerConfig.logo_url,
           );
         }
 
@@ -160,7 +189,7 @@ export const fetchPartnerBasicSetup = createAsyncThunk(
 
       return rejectWithValue(error.message || "Failed to fetch partner config");
     }
-  }
+  },
 );
 
 // Async thunk for fetching partner details with logo - FIXED VERSION
@@ -180,7 +209,7 @@ export const fetchPartnerDetails = createAsyncThunk(
 
       console.log("🔍 DEBUG: Fetching partner details for ID:", partnerId, {
         fromAuthService: !!localStorage.getItem("is_white_labelled_partner"),
-        partnerName: localStorage.getItem("partner_name")
+        partnerName: localStorage.getItem("partner_name"),
       });
 
       if (!partnerId || partnerId === "0") {
@@ -191,8 +220,8 @@ export const fetchPartnerDetails = createAsyncThunk(
           profile: {
             id: partnerId || "0",
             name: localStorage.getItem("partner_name") || "Partner Portal",
-            logo: localStorage.getItem("partner_logo") || null
-          }
+            logo: localStorage.getItem("partner_logo") || null,
+          },
         };
         localStorage.setItem("partnerDetails", JSON.stringify(defaultDetails));
         localStorage.setItem("partnerDetailsTimestamp", Date.now().toString());
@@ -205,42 +234,46 @@ export const fetchPartnerDetails = createAsyncThunk(
         partnerDetails = await centralizedApi.getPartnerDetails(partnerId);
         console.log("✅ Partner details API response:", partnerDetails);
       } catch (apiError) {
-        console.warn("⚠️ Partner details API failed, using localStorage data:", apiError);
-        
+        console.warn(
+          "⚠️ Partner details API failed, using localStorage data:",
+          apiError,
+        );
+
         // Use data from localStorage (set by authService)
         partnerDetails = {
           status: "success",
           profile: {
             id: partnerId,
-            name: localStorage.getItem("partner_name") || 
-                  localStorage.getItem("whitelabelled_customer_partnername") || 
-                  "Partner Portal",
-            logo: localStorage.getItem("partner_logo") || null
-          }
+            name:
+              localStorage.getItem("partner_name") ||
+              localStorage.getItem("whitelabelled_customer_partnername") ||
+              "Partner Portal",
+            logo: localStorage.getItem("partner_logo") || null,
+          },
         };
       }
 
       // Store data
       if (partnerDetails) {
         const profile = partnerDetails.profile || partnerDetails.data || {};
-        
+
         // Get partner name from multiple sources
-        const partnerName = 
-          profile.name || 
-          profile.partner_name || 
+        const partnerName =
+          profile.name ||
+          profile.partner_name ||
           localStorage.getItem("partner_name") ||
-          localStorage.getItem("whitelabelled_customer_partnername") || 
+          localStorage.getItem("whitelabelled_customer_partnername") ||
           "Partner Portal";
-        
+
         localStorage.setItem("whitelabelled_customer_partnername", partnerName);
         console.log("✅ Stored partner name:", partnerName);
 
         // Get logo from multiple sources
-        const logoUrl = 
-          profile.logo || 
-          profile.logo_url || 
+        const logoUrl =
+          profile.logo ||
+          profile.logo_url ||
           localStorage.getItem("partner_logo");
-        
+
         if (logoUrl) {
           localStorage.setItem("partner_logo", logoUrl);
           console.log("✅ Stored partner logo:", logoUrl);
@@ -253,12 +286,14 @@ export const fetchPartnerDetails = createAsyncThunk(
             id: partnerId,
             name: partnerName,
             logo: logoUrl,
-            is_white_labelled_partner: localStorage.getItem("is_white_labelled_partner") || "N",
+            is_white_labelled_partner:
+              localStorage.getItem("is_white_labelled_partner") || "N",
             partner_uuid: localStorage.getItem("partner_uuid") || "",
-            showRemittanceOnlyOnRegistration: localStorage.getItem("showRemittanceOnlyOnRegistration") || "N"
-          }
+            showRemittanceOnlyOnRegistration:
+              localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
+          },
         };
-        
+
         localStorage.setItem("partnerDetails", JSON.stringify(detailsToStore));
         localStorage.setItem("partnerDetailsTimestamp", Date.now().toString());
 
@@ -268,26 +303,28 @@ export const fetchPartnerDetails = createAsyncThunk(
       return rejectWithValue("No partner details available");
     } catch (error) {
       console.error("❌ Error in fetchPartnerDetails:", error);
-      
+
       // Return minimal details from localStorage instead of failing completely
       const minimalDetails = {
         status: "partial",
         profile: {
           id: localStorage.getItem("whitelabelledpartnerid") || "0",
-          name: localStorage.getItem("partner_name") || 
-                localStorage.getItem("whitelabelled_customer_partnername") || 
-                "Partner Portal",
+          name:
+            localStorage.getItem("partner_name") ||
+            localStorage.getItem("whitelabelled_customer_partnername") ||
+            "Partner Portal",
           logo: localStorage.getItem("partner_logo") || null,
-          is_white_labelled_partner: localStorage.getItem("is_white_labelled_partner") || "N",
-          source: "localStorage_fallback"
-        }
+          is_white_labelled_partner:
+            localStorage.getItem("is_white_labelled_partner") || "N",
+          source: "localStorage_fallback",
+        },
       };
-      
+
       localStorage.setItem("partnerDetails", JSON.stringify(minimalDetails));
       localStorage.setItem("partnerDetailsTimestamp", Date.now().toString());
       return minimalDetails;
     }
-  }
+  },
 );
 
 // Async thunk for fetching partner detail by slug
@@ -312,10 +349,10 @@ export const fetchPartnerDetailBySlug = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error fetching partner detail by slug:", error);
       return rejectWithValue(
-        error.message || "Failed to fetch partner detail by slug"
+        error.message || "Failed to fetch partner detail by slug",
       );
     }
-  }
+  },
 );
 
 // Async thunk for fetching partner FX currencies
@@ -325,12 +362,11 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
     try {
       console.log(
         "💰 Fetching partner FX currencies for partnerId:",
-        partnerId
+        partnerId,
       );
 
-      const fxCurrencies = await centralizedApi.getPartnerFxCurrencies(
-        partnerId
-      );
+      const fxCurrencies =
+        await centralizedApi.getPartnerFxCurrencies(partnerId);
 
       if (fxCurrencies) {
         console.log("✅ Partner FX currencies fetched");
@@ -341,10 +377,10 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error fetching partner FX currencies:", error);
       return rejectWithValue(
-        error.message || "Failed to fetch partner FX currencies"
+        error.message || "Failed to fetch partner FX currencies",
       );
     }
-  }
+  },
 );
 
 // Async thunk for fetching partner modules
@@ -365,10 +401,10 @@ export const fetchPartnerModules = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error fetching partner modules:", error);
       return rejectWithValue(
-        error.message || "Failed to fetch partner modules"
+        error.message || "Failed to fetch partner modules",
       );
     }
-  }
+  },
 );
 
 // ===================== INITIAL STATE =====================
@@ -382,15 +418,19 @@ const initialPartnerDetails = cachedDetails ? JSON.parse(cachedDetails) : null;
 // Use the correct localStorage keys that authService sets
 const initialState = {
   // Core partner config (from authService)
-  isWhiteLabelledPartner: localStorage.getItem("is_white_labelled_partner") || 
-                         localStorage.getItem("iswhitelabelledpartner") || "N",
+  isWhiteLabelledPartner:
+    localStorage.getItem("is_white_labelled_partner") ||
+    localStorage.getItem("iswhitelabelledpartner") ||
+    "N",
   whiteLabelledPartnerId: localStorage.getItem("whitelabelledpartnerid") || "0",
   partnerUUID: localStorage.getItem("partner_uuid") || "",
   isPartnerPackageModule: localStorage.getItem("isPartnerPackageModule") || "N",
-  showRemittanceOnlyOnRegistration: localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
-  beneficiaryPortalTitle: localStorage.getItem("beneficiary_portal_title") || "",
+  showRemittanceOnlyOnRegistration:
+    localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
+  beneficiaryPortalTitle:
+    localStorage.getItem("beneficiary_portal_title") || "",
   partnerName: localStorage.getItem("partner_name") || "",
-  
+
   status: "idle",
   error: null,
 
@@ -430,56 +470,84 @@ const partnerSlice = createSlice({
     // Set partner config from authService data
     setPartnerConfig: (state, action) => {
       const payload = action.payload;
-      
+
       state.isWhiteLabelledPartner = payload.is_white_labelled_partner || "N";
       state.whiteLabelledPartnerId = payload.partner_id || "0";
       state.partnerUUID = payload.partner_uuid || "";
       state.isPartnerPackageModule = payload.isPartnerPackageModule || "N";
-      state.showRemittanceOnlyOnRegistration = payload.showRemittanceOnlyOnRegistration || "N";
+      state.showRemittanceOnlyOnRegistration =
+        payload.showRemittanceOnlyOnRegistration || "N";
       state.beneficiaryPortalTitle = payload.beneficiary_portal_title || "";
       state.partnerName = payload.partner_name || "";
 
       // Update localStorage to match authService
       if (payload.is_white_labelled_partner !== undefined) {
-        localStorage.setItem("is_white_labelled_partner", payload.is_white_labelled_partner);
-        localStorage.setItem("iswhitelabelledpartner", payload.is_white_labelled_partner);
+        localStorage.setItem(
+          "is_white_labelled_partner",
+          payload.is_white_labelled_partner,
+        );
+        localStorage.setItem(
+          "iswhitelabelledpartner",
+          payload.is_white_labelled_partner,
+        );
       }
-      
+
       if (payload.partner_id !== undefined) {
-        localStorage.setItem("whitelabelledpartnerid", String(payload.partner_id));
+        localStorage.setItem(
+          "whitelabelledpartnerid",
+          String(payload.partner_id),
+        );
       }
-      
+
       if (payload.partner_uuid !== undefined) {
         localStorage.setItem("partner_uuid", payload.partner_uuid);
       }
-      
+
       if (payload.isPartnerPackageModule !== undefined) {
-        localStorage.setItem("isPartnerPackageModule", payload.isPartnerPackageModule);
+        localStorage.setItem(
+          "isPartnerPackageModule",
+          payload.isPartnerPackageModule,
+        );
       }
-      
+
       if (payload.showRemittanceOnlyOnRegistration !== undefined) {
-        localStorage.setItem("showRemittanceOnlyOnRegistration", payload.showRemittanceOnlyOnRegistration);
+        localStorage.setItem(
+          "showRemittanceOnlyOnRegistration",
+          payload.showRemittanceOnlyOnRegistration,
+        );
       }
-      
+
       if (payload.beneficiary_portal_title) {
-        localStorage.setItem("beneficiary_portal_title", payload.beneficiary_portal_title);
+        localStorage.setItem(
+          "beneficiary_portal_title",
+          payload.beneficiary_portal_title,
+        );
       }
-      
+
       if (payload.partner_name) {
         localStorage.setItem("partner_name", payload.partner_name);
-        localStorage.setItem("whitelabelled_customer_partnername", payload.partner_name);
+        localStorage.setItem(
+          "whitelabelled_customer_partnername",
+          payload.partner_name,
+        );
       }
     },
 
     // Sync Redux state with localStorage (useful after authService updates)
     syncWithLocalStorage: (state) => {
-      state.isWhiteLabelledPartner = localStorage.getItem("is_white_labelled_partner") || 
-                                     localStorage.getItem("iswhitelabelledpartner") || "N";
-      state.whiteLabelledPartnerId = localStorage.getItem("whitelabelledpartnerid") || "0";
+      state.isWhiteLabelledPartner =
+        localStorage.getItem("is_white_labelled_partner") ||
+        localStorage.getItem("iswhitelabelledpartner") ||
+        "N";
+      state.whiteLabelledPartnerId =
+        localStorage.getItem("whitelabelledpartnerid") || "0";
       state.partnerUUID = localStorage.getItem("partner_uuid") || "";
-      state.isPartnerPackageModule = localStorage.getItem("isPartnerPackageModule") || "N";
-      state.showRemittanceOnlyOnRegistration = localStorage.getItem("showRemittanceOnlyOnRegistration") || "N";
-      state.beneficiaryPortalTitle = localStorage.getItem("beneficiary_portal_title") || "";
+      state.isPartnerPackageModule =
+        localStorage.getItem("isPartnerPackageModule") || "N";
+      state.showRemittanceOnlyOnRegistration =
+        localStorage.getItem("showRemittanceOnlyOnRegistration") || "N";
+      state.beneficiaryPortalTitle =
+        localStorage.getItem("beneficiary_portal_title") || "";
       state.partnerName = localStorage.getItem("partner_name") || "";
     },
 
@@ -603,25 +671,25 @@ const partnerSlice = createSlice({
       state.showRemittanceOnlyOnRegistration = "N";
       state.beneficiaryPortalTitle = "";
       state.partnerName = "";
-      
+
       state.basicConfig = null;
       state.basicConfigLoading = false;
       state.basicConfigError = null;
       state.basicConfigLastUpdated = null;
-      
+
       state.partnerDetails = null;
       state.partnerDetailsLoading = false;
       state.partnerDetailsError = null;
       state.partnerDetailsLastUpdated = null;
-      
+
       state.partnerDetailBySlug = null;
       state.partnerDetailBySlugLoading = false;
       state.partnerDetailBySlugError = null;
-      
+
       state.fxCurrencies = null;
       state.fxCurrenciesLoading = false;
       state.fxCurrenciesError = null;
-      
+
       state.modules = null;
       state.modulesLoading = false;
       state.modulesError = null;
@@ -637,7 +705,7 @@ const partnerSlice = createSlice({
         "showRemittanceOnlyOnRegistration",
         "beneficiary_portal_title",
         "partner_name",
-        
+
         // partnerSlice keys
         "partnerConfig",
         "partnerConfigTimestamp",
@@ -645,17 +713,17 @@ const partnerSlice = createSlice({
         "partnerDetailsTimestamp",
         "whitelabelled_customer_partnerid",
         "whitelabelled_customer_partnername",
-        
+
         // Style/config keys
         "header_color",
         "text_color",
         "download_operation_manual",
-        
+
         // Don't remove partner_logo here - it's managed separately
         // "partner_logo",
       ];
 
-      keysToRemove.forEach(key => {
+      keysToRemove.forEach((key) => {
         try {
           localStorage.removeItem(key);
         } catch (e) {
@@ -680,12 +748,12 @@ const partnerSlice = createSlice({
     setPartnerNameManually: (state, action) => {
       const partnerName = action.payload;
       state.partnerName = partnerName;
-      
+
       if (state.partnerDetails?.profile) {
         state.partnerDetails.profile.name = partnerName;
         state.partnerDetails.profile.partner_name = partnerName;
       }
-      
+
       localStorage.setItem("partner_name", partnerName);
       localStorage.setItem("whitelabelled_customer_partnername", partnerName);
     },
@@ -707,19 +775,20 @@ const partnerSlice = createSlice({
         whiteLabelledPartnerId: state.whiteLabelledPartnerId,
         partnerUUID: state.partnerUUID,
         isPartnerPackageModule: state.isPartnerPackageModule,
-        showRemittanceOnlyOnRegistration: state.showRemittanceOnlyOnRegistration,
+        showRemittanceOnlyOnRegistration:
+          state.showRemittanceOnlyOnRegistration,
         beneficiaryPortalTitle: state.beneficiaryPortalTitle,
         partnerName: state.partnerName,
-        
+
         // Other state
         hasBasicConfig: !!state.basicConfig,
         hasPartnerDetails: !!state.partnerDetails,
         partnerLogo: state.partnerDetails?.profile?.logo,
-        
+
         // Loading states
         basicConfigLoading: state.basicConfigLoading,
         partnerDetailsLoading: state.partnerDetailsLoading,
-        
+
         // localStorage verification
         localStorage: {
           partnerId: localStorage.getItem("whitelabelledpartnerid"),
@@ -727,10 +796,12 @@ const partnerSlice = createSlice({
           partnerName: localStorage.getItem("partner_name"),
           partnerLogo: localStorage.getItem("partner_logo"),
           partnerUUID: localStorage.getItem("partner_uuid"),
-          showRemittanceOnly: localStorage.getItem("showRemittanceOnlyOnRegistration"),
-        }
+          showRemittanceOnly: localStorage.getItem(
+            "showRemittanceOnlyOnRegistration",
+          ),
+        },
       });
-    }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -741,12 +812,16 @@ const partnerSlice = createSlice({
       })
       .addCase(fetchPartnerConfig.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.isWhiteLabelledPartner = action.payload.is_white_labelled_partner || "N";
+        state.isWhiteLabelledPartner =
+          action.payload.is_white_labelled_partner || "N";
         state.whiteLabelledPartnerId = action.payload.partner_id || "0";
         state.partnerUUID = action.payload.partner_uuid || "";
-        state.isPartnerPackageModule = action.payload.isPartnerPackageModule || "N";
-        state.showRemittanceOnlyOnRegistration = action.payload.showRemittanceOnlyOnRegistration || "N";
-        state.beneficiaryPortalTitle = action.payload.beneficiary_portal_title || "";
+        state.isPartnerPackageModule =
+          action.payload.isPartnerPackageModule || "N";
+        state.showRemittanceOnlyOnRegistration =
+          action.payload.showRemittanceOnlyOnRegistration || "N";
+        state.beneficiaryPortalTitle =
+          action.payload.beneficiary_portal_title || "";
         state.partnerName = action.payload.partner_name || "";
         state.error = null;
 
@@ -754,7 +829,7 @@ const partnerSlice = createSlice({
         if (action.payload.partner_name) {
           localStorage.setItem(
             "whitelabelled_customer_partnername",
-            action.payload.partner_name
+            action.payload.partner_name,
           );
         }
       })
@@ -794,13 +869,13 @@ const partnerSlice = createSlice({
         state.partnerDetails = action.payload;
         state.partnerDetailsLastUpdated = Date.now();
         state.partnerDetailsError = null;
-        
+
         // Update partner name if available
         if (action.payload.profile?.name) {
           state.partnerName = action.payload.profile.name;
           localStorage.setItem("partner_name", action.payload.profile.name);
         }
-        
+
         console.log("✅ Partner details stored in Redux:", {
           hasProfile: !!action.payload.profile,
           profileName: action.payload.profile?.name,
@@ -809,12 +884,12 @@ const partnerSlice = createSlice({
       })
       .addCase(fetchPartnerDetails.rejected, (state, action) => {
         state.partnerDetailsLoading = false;
-        
+
         // Even if rejected, we might have gotten minimal details in the thunk
-        if (action.payload && typeof action.payload === 'object') {
+        if (action.payload && typeof action.payload === "object") {
           state.partnerDetails = action.payload;
           state.partnerDetailsError = null;
-          
+
           // Update partner name from fallback
           if (action.payload.profile?.name) {
             state.partnerName = action.payload.profile.name;
@@ -919,8 +994,7 @@ export const selectIsWhiteLabelledPartner = (state) =>
   state.partner.isWhiteLabelledPartner;
 export const selectWhiteLabelledPartnerId = (state) =>
   state.partner.whiteLabelledPartnerId;
-export const selectPartnerUUID = (state) =>
-  state.partner.partnerUUID;
+export const selectPartnerUUID = (state) => state.partner.partnerUUID;
 export const selectIsPartnerPackageModule = (state) =>
   state.partner.isPartnerPackageModule;
 export const selectShowRemittanceOnlyOnRegistration = (state) =>
@@ -928,9 +1002,9 @@ export const selectShowRemittanceOnlyOnRegistration = (state) =>
 export const selectBeneficiaryPortalTitle = (state) =>
   state.partner.beneficiaryPortalTitle;
 export const selectPartnerName = (state) =>
-  state.partner.partnerName || 
+  state.partner.partnerName ||
   localStorage.getItem("partner_name") ||
-  localStorage.getItem("whitelabelled_customer_partnername") || 
+  localStorage.getItem("whitelabelled_customer_partnername") ||
   "Partner Portal";
 export const selectPartnerStatus = (state) => state.partner.status;
 export const selectPartnerError = (state) => state.partner.error;
@@ -944,11 +1018,17 @@ export const selectPartnerBasicConfigError = (state) =>
 export const selectPartnerBasicConfigLastUpdated = (state) =>
   state.partner.basicConfigLastUpdated;
 export const selectHeaderColor = (state) =>
-  state.partner.basicConfig?.header_color || localStorage.getItem("header_color") || "bg-sky-800";
+  state.partner.basicConfig?.header_color ||
+  localStorage.getItem("header_color") ||
+  "bg-sky-800";
 export const selectTextColor = (state) =>
-  state.partner.basicConfig?.text_color || localStorage.getItem("text_color") || null;
+  state.partner.basicConfig?.text_color ||
+  localStorage.getItem("text_color") ||
+  null;
 export const selectDownloadManualEnabled = (state) =>
-  state.partner.basicConfig?.download_operation_manual || localStorage.getItem("download_operation_manual") || null;
+  state.partner.basicConfig?.download_operation_manual ||
+  localStorage.getItem("download_operation_manual") ||
+  null;
 
 // Partner details selectors
 export const selectPartnerDetails = (state) => state.partner.partnerDetails;
@@ -959,8 +1039,8 @@ export const selectPartnerDetailsError = (state) =>
 export const selectPartnerDetailsLastUpdated = (state) =>
   state.partner.partnerDetailsLastUpdated;
 export const selectPartnerLogo = (state) =>
-  state.partner.partnerDetails?.profile?.logo || 
-  localStorage.getItem("partner_logo") || 
+  state.partner.partnerDetails?.profile?.logo ||
+  localStorage.getItem("partner_logo") ||
   null;
 export const selectHasPartnerLogo = (state) => !!selectPartnerLogo(state);
 
@@ -992,21 +1072,22 @@ export const selectAllPartnerData = (state) => ({
   partnerId: selectWhiteLabelledPartnerId(state),
   partnerUUID: selectPartnerUUID(state),
   isPartnerPackageModule: selectIsPartnerPackageModule(state),
-  showRemittanceOnlyOnRegistration: selectShowRemittanceOnlyOnRegistration(state),
+  showRemittanceOnlyOnRegistration:
+    selectShowRemittanceOnlyOnRegistration(state),
   beneficiaryPortalTitle: selectBeneficiaryPortalTitle(state),
   partnerName: selectPartnerName(state),
-  
+
   // Basic config
   basicConfig: selectPartnerBasicConfig(state),
   headerColor: selectHeaderColor(state),
   textColor: selectTextColor(state),
   downloadManualEnabled: selectDownloadManualEnabled(state),
-  
+
   // Details
   details: selectPartnerDetails(state),
   logo: selectPartnerLogo(state),
   hasLogo: selectHasPartnerLogo(state),
-  
+
   // Other
   detailBySlug: selectPartnerDetailBySlug(state),
   fxCurrencies: selectPartnerFxCurrencies(state),
@@ -1035,7 +1116,8 @@ export const selectPartnerUI = (state) => ({
   name: selectPartnerName(state),
   isWhiteLabelled: selectIsWhiteLabelledPartner(state),
   canDownloadManual: selectDownloadManualEnabled(state),
-  showRemittanceOnlyOnRegistration: selectShowRemittanceOnlyOnRegistration(state),
+  showRemittanceOnlyOnRegistration:
+    selectShowRemittanceOnlyOnRegistration(state),
   beneficiaryPortalTitle: selectBeneficiaryPortalTitle(state),
 });
 
@@ -1047,7 +1129,8 @@ export const selectPartnerDebugInfo = (state) => ({
     whiteLabelledPartnerId: state.partner.whiteLabelledPartnerId,
     partnerUUID: state.partner.partnerUUID,
     isPartnerPackageModule: state.partner.isPartnerPackageModule,
-    showRemittanceOnlyOnRegistration: state.partner.showRemittanceOnlyOnRegistration,
+    showRemittanceOnlyOnRegistration:
+      state.partner.showRemittanceOnlyOnRegistration,
     beneficiaryPortalTitle: state.partner.beneficiaryPortalTitle,
     partnerName: state.partner.partnerName,
     hasBasicConfig: !!state.partner.basicConfig,
@@ -1063,21 +1146,28 @@ export const selectPartnerDebugInfo = (state) => ({
     partnerName: localStorage.getItem("partner_name"),
     partnerLogo: localStorage.getItem("partner_logo"),
     partnerUUID: localStorage.getItem("partner_uuid"),
-    showRemittanceOnly: localStorage.getItem("showRemittanceOnlyOnRegistration"),
+    showRemittanceOnly: localStorage.getItem(
+      "showRemittanceOnlyOnRegistration",
+    ),
     beneficiaryPortalTitle: localStorage.getItem("beneficiary_portal_title"),
-    partnerConfig: localStorage.getItem("partnerConfig") ? JSON.parse(localStorage.getItem("partnerConfig")) : null,
-    partnerDetails: localStorage.getItem("partnerDetails") ? JSON.parse(localStorage.getItem("partnerDetails")) : null,
+    partnerConfig: localStorage.getItem("partnerConfig")
+      ? JSON.parse(localStorage.getItem("partnerConfig"))
+      : null,
+    partnerDetails: localStorage.getItem("partnerDetails")
+      ? JSON.parse(localStorage.getItem("partnerDetails"))
+      : null,
   },
   // Status
   status: {
     basicConfigLoading: state.partner.basicConfigLoading,
     partnerDetailsLoading: state.partner.partnerDetailsLoading,
-    isFetching: state.partner.basicConfigLoading || state.partner.partnerDetailsLoading,
+    isFetching:
+      state.partner.basicConfigLoading || state.partner.partnerDetailsLoading,
     lastUpdated: {
       basicConfig: state.partner.basicConfigLastUpdated,
       partnerDetails: state.partner.partnerDetailsLastUpdated,
-    }
-  }
+    },
+  },
 });
 
 export default partnerSlice.reducer;
@@ -1122,28 +1212,33 @@ export const refreshAllPartnerData = () => async (dispatch) => {
 export const initializePartnerData = (hostname) => async (dispatch) => {
   try {
     console.log("🚀 Initializing partner data...");
-    
+
     // First sync with localStorage (authService should have already set the data)
     dispatch(syncWithLocalStorage());
-    
+
     // Check if we have valid partner data from authService
     const partnerId = localStorage.getItem("whitelabelledpartnerid");
     const isWhiteLabelled = localStorage.getItem("is_white_labelled_partner");
-    
+
     if (partnerId && partnerId !== "0" && isWhiteLabelled) {
       console.log("✅ Partner config already loaded by authService");
-      
+
       // Update Redux state with existing localStorage values
-      dispatch(setPartnerConfig({
-        is_white_labelled_partner: isWhiteLabelled,
-        partner_id: partnerId,
-        partner_uuid: localStorage.getItem("partner_uuid") || "",
-        isPartnerPackageModule: localStorage.getItem("isPartnerPackageModule") || "N",
-        showRemittanceOnlyOnRegistration: localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
-        beneficiary_portal_title: localStorage.getItem("beneficiary_portal_title") || "",
-        partner_name: localStorage.getItem("partner_name") || "",
-      }));
-      
+      dispatch(
+        setPartnerConfig({
+          is_white_labelled_partner: isWhiteLabelled,
+          partner_id: partnerId,
+          partner_uuid: localStorage.getItem("partner_uuid") || "",
+          isPartnerPackageModule:
+            localStorage.getItem("isPartnerPackageModule") || "N",
+          showRemittanceOnlyOnRegistration:
+            localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
+          beneficiary_portal_title:
+            localStorage.getItem("beneficiary_portal_title") || "",
+          partner_name: localStorage.getItem("partner_name") || "",
+        }),
+      );
+
       // Fetch additional partner data (colors, logo, etc.)
       await Promise.allSettled([
         dispatch(fetchPartnerDetails()).unwrap(),
@@ -1155,7 +1250,7 @@ export const initializePartnerData = (hostname) => async (dispatch) => {
       console.log("🔄 No valid partner data found, fetching from API...");
       // Fallback: fetch partner config from API
       await dispatch(fetchPartnerConfig(hostname)).unwrap();
-      
+
       // Then fetch additional data
       const newPartnerId = localStorage.getItem("whitelabelledpartnerid");
       if (newPartnerId && newPartnerId !== "0") {
@@ -1165,10 +1260,9 @@ export const initializePartnerData = (hostname) => async (dispatch) => {
         ]);
       }
     }
-    
+
     // Log final state
     dispatch(logPartnerState());
-    
   } catch (error) {
     console.error("❌ Error initializing partner data:", error);
     // Continue with default settings
@@ -1178,34 +1272,34 @@ export const initializePartnerData = (hostname) => async (dispatch) => {
 // Quick fix function to manually set partner data when APIs fail
 export const manuallySetPartnerData = (data) => async (dispatch) => {
   const { name, logoUrl, partnerId } = data;
-  
+
   console.log("🔧 Manually setting partner data:", data);
-  
+
   // Set in localStorage
   if (name) {
     localStorage.setItem("partner_name", name);
     localStorage.setItem("whitelabelled_customer_partnername", name);
   }
-  
+
   if (logoUrl) {
     localStorage.setItem("partner_logo", logoUrl);
   }
-  
+
   if (partnerId) {
     localStorage.setItem("whitelabelledpartnerid", partnerId);
   }
-  
+
   // Update Redux state
   dispatch(setPartnerNameManually(name || "Partner Portal"));
   if (logoUrl) {
     dispatch(setPartnerLogoManually(logoUrl));
   }
-  
+
   // Sync other state
   dispatch(syncWithLocalStorage());
-  
+
   console.log("✅ Partner data manually set");
-  
+
   // Dispatch storage event to trigger UI updates
   window.dispatchEvent(new Event("storage"));
 };
@@ -1222,12 +1316,16 @@ export const hasAuthServicePartnerData = () => {
 // Helper to get all partner data from authService
 export const getAuthServicePartnerData = () => {
   return {
-    is_white_labelled_partner: localStorage.getItem("is_white_labelled_partner") || "N",
+    is_white_labelled_partner:
+      localStorage.getItem("is_white_labelled_partner") || "N",
     partner_id: localStorage.getItem("whitelabelledpartnerid") || "0",
     partner_uuid: localStorage.getItem("partner_uuid") || "",
-    isPartnerPackageModule: localStorage.getItem("isPartnerPackageModule") || "N",
-    showRemittanceOnlyOnRegistration: localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
-    beneficiary_portal_title: localStorage.getItem("beneficiary_portal_title") || "",
+    isPartnerPackageModule:
+      localStorage.getItem("isPartnerPackageModule") || "N",
+    showRemittanceOnlyOnRegistration:
+      localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
+    beneficiary_portal_title:
+      localStorage.getItem("beneficiary_portal_title") || "",
     partner_name: localStorage.getItem("partner_name") || "",
   };
 };

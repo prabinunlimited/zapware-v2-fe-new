@@ -1,4 +1,4 @@
-// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - COMPLETE FIXED VERSION
+// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - MOBILE RESPONSIVE VERSION
 import React, {
   useEffect,
   useRef,
@@ -509,12 +509,14 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   // ✅ Render loading state
   if (isLoading) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-6">
-        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="flex justify-center items-center h-32">
-            <RingLoader color="#3B82F6" size={40} />
+      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
+        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
+          <div className="flex justify-center items-center h-24 md:h-32">
+            <RingLoader color="#3B82F6" size={30} className="md:w-10 md:h-10" />
           </div>
-          <p className="text-gray-500 mt-4">Loading your accounts...</p>
+          <p className="text-gray-500 mt-3 md:mt-4 text-sm md:text-base">
+            Loading your accounts...
+          </p>
         </div>
       </div>
     );
@@ -523,16 +525,18 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   // ✅ Show empty state
   if (shouldShowEmptyState) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-6">
-        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-          <FiCreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">
+      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
+        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
+          <FiCreditCard className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
+          <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1 md:mb-2">
             No Accounts Found
           </h3>
-          <p className="text-gray-500">You don't have any accounts yet.</p>
+          <p className="text-gray-500 text-sm md:text-base">
+            You don't have any accounts yet.
+          </p>
           <button
             onClick={refreshAccounts}
-            className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+            className="mt-3 md:mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200"
           >
             Retry
           </button>
@@ -544,15 +548,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   // ✅ Show error state
   if (shouldShowErrorState) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-6">
-        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="text-red-500 text-lg font-semibold mb-4">
+      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
+        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
+          <div className="text-red-500 text-base md:text-lg font-semibold mb-3 md:mb-4">
             Error Loading Accounts
           </div>
-          <p className="text-gray-700 mb-4">{accountError}</p>
+          <p className="text-gray-700 text-sm md:text-base mb-3 md:mb-4">
+            {accountError}
+          </p>
           <button
             onClick={refreshAccounts}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200"
           >
             Try Again
           </button>
@@ -564,20 +570,22 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   // ✅ Don't render until we have content
   if (!shouldShowContent) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-6">
-        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="flex justify-center items-center h-32">
-            <RingLoader color="#3B82F6" size={40} />
+      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
+        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
+          <div className="flex justify-center items-center h-24 md:h-32">
+            <RingLoader color="#3B82F6" size={30} className="md:w-10 md:h-10" />
           </div>
-          <p className="text-gray-500 mt-4">Preparing your accounts...</p>
-          <div className="mt-4 space-y-2">
+          <p className="text-gray-500 mt-3 md:mt-4 text-sm md:text-base">
+            Preparing your accounts...
+          </p>
+          <div className="mt-3 md:mt-4 space-y-2">
             <button
               onClick={refreshAccounts}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200 w-full sm:w-auto"
             >
               Load Accounts Now
             </button>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 text-center sm:text-left">
               Status: {hasFetchedAccount ? "Fetched" : "Not fetched"} |
               Accounts: {safeAccounts.length} | Loading:{" "}
               {accountLoading ? "Yes" : "No"}
@@ -594,42 +602,42 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col justify-center items-center w-full space-y-6"
+      className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4"
     >
       {/* Main Account Card */}
       <motion.div
         variants={itemVariants}
-        className="w-full bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border border-gray-200 overflow-y-auto"
+        className="w-full bg-gradient-to-br from-white to-gray-50 rounded-xl md:rounded-2xl shadow-xl border border-gray-200 overflow-y-auto"
       >
-        <div className="p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-4 md:space-y-6">
           {/* Header Section */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6">
             {/* Account Selector */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative w-full lg:flex-1 lg:max-w-md">
               <motion.button
                 ref={buttonRef}
                 onClick={handleDropdownToggle}
-                className="w-full p-4 rounded-xl bg-white border border-gray-300 shadow-sm hover:shadow-md transition-all duration-300 group"
+                className="w-full p-3 md:p-4 rounded-lg md:rounded-xl bg-white border border-gray-300 shadow-sm hover:shadow-md transition-all duration-300 group"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 disabled={accountLoading}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     {selectedAccount?.flag_url ? (
                       <motion.img
                         src={selectedAccount.flag_url}
                         alt={`${selectedAccount.currency} flag`}
-                        className="w-8 h-8 object-cover rounded-full shadow-sm"
+                        className="w-6 h-6 md:w-8 md:h-8 object-cover rounded-full shadow-sm"
                         whileHover={{ scale: 1.1 }}
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <FiCreditCard className="text-gray-500" />
+                      <div className="w-6 h-6 md:w-8 md:h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        <FiCreditCard className="text-gray-500 w-3 h-3 md:w-4 md:h-4" />
                       </div>
                     )}
                     <div className="text-left">
-                      <p className="text-sm text-gray-600 font-medium">
+                      <p className="text-xs md:text-sm text-gray-600 font-medium">
                         {getCurrencyName(selectedAccount?.currency)}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -641,7 +649,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     animate={{ rotate: accountDropdownOpen ? 180 : 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <FiChevronDown className="text-gray-400 group-hover:text-gray-600" />
+                    <FiChevronDown className="text-gray-400 group-hover:text-gray-600 w-4 h-4 md:w-5 md:h-5" />
                   </motion.div>
                 </div>
               </motion.button>
@@ -656,14 +664,14 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     style={{
-                      maxHeight: "320px",
+                      maxHeight: "calc(100vh - 200px)",
                       display: "flex",
                       flexDirection: "column",
                     }}
                   >
                     {/* Fixed Header */}
-                    <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 py-3">
-                      <div className="text-sm font-semibold text-gray-700">
+                    <div className="flex-shrink-0 bg-white border-b border-gray-100 px-3 md:px-4 py-2 md:py-3">
+                      <div className="text-xs md:text-sm font-semibold text-gray-700">
                         Available Accounts ({safeAccounts.length})
                       </div>
                     </div>
@@ -673,17 +681,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                       ref={scrollContainerRef}
                       className="flex-1 overflow-y-auto custom-scrollbar"
                       style={{
-                        maxHeight: "250px",
+                        maxHeight: "calc(100vh - 250px)",
                       }}
                     >
-                      <div className="p-2">
+                      <div className="p-1 md:p-2">
                         {safeAccounts.map((account, index) => (
                           <motion.button
                             key={`${
                               account.account_id || account.currency
                             }-${index}`}
                             onClick={() => handleAccountChange(account)}
-                            className={`w-full p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${
+                            className={`w-full p-2 md:p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${
                               selectedAccount?.currency === account.currency
                                 ? "bg-blue-50 border-blue-200"
                                 : ""
@@ -696,32 +704,32 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 md:gap-3">
                               {account.flag_url && (
                                 <img
                                   src={account.flag_url}
                                   alt={`${account.currency} flag`}
-                                  className="w-6 h-6 object-cover rounded-full flex-shrink-0"
+                                  className="w-5 h-5 md:w-6 md:h-6 object-cover rounded-full flex-shrink-0"
                                 />
                               )}
                               <div className="text-left flex-1 min-w-0">
                                 <div className="flex justify-between items-center">
-                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                  <p className="text-xs md:text-sm font-medium text-gray-900 truncate">
                                     {getCurrencyName(account.currency)}
                                   </p>
-                                  <p className="text-sm font-semibold text-gray-700 ml-2 flex-shrink-0">
+                                  <p className="text-xs md:text-sm font-semibold text-gray-700 ml-1 md:ml-2 flex-shrink-0">
                                     {formatCurrency(
                                       account.available_balance,
                                       account.currency
                                     )}
                                   </p>
                                 </div>
-                                <div className="flex justify-between items-center mt-1">
+                                <div className="flex justify-between items-center mt-0.5 md:mt-1">
                                   <p className="text-xs text-gray-500">
                                     {account.currency}
                                   </p>
                                   <p
-                                    className="text-xs text-gray-400 truncate ml-2 max-w-[120px]"
+                                    className="text-xs text-gray-400 truncate ml-1 md:ml-2 max-w-[80px] sm:max-w-[120px]"
                                     title={getFullFormattedAmount(
                                       account.available_balance,
                                       account.currency
@@ -749,13 +757,13 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
               variants={balanceVariants}
               animate="update"
               key={displayBalance}
-              className="text-center lg:text-right min-w-0"
+              className="text-center lg:text-right min-w-0 w-full lg:w-auto mt-4 md:mt-0"
             >
-              <p className="text-sm text-gray-600 font-medium mb-1">
+              <p className="text-xs md:text-sm text-gray-600 font-medium mb-1">
                 Available Balance
               </p>
               <motion.div
-                className="text-3xl lg:text-4xl xl:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent break-all"
+                className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent break-all px-1"
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.5 }}
@@ -771,12 +779,12 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {formatCurrency(displayBalance, selectedAccount?.currency)}
               </motion.div>
               {selectedAccount && (
-                <div className="flex flex-col items-center lg:items-end mt-2">
-                  <p className="text-sm text-gray-500">
+                <div className="flex flex-col items-center lg:items-end mt-1 md:mt-2">
+                  <p className="text-xs md:text-sm text-gray-500">
                     {getCurrencyName(selectedAccount.currency)}
                   </p>
                   <p
-                    className="text-xs text-gray-400 mt-1"
+                    className="text-xs text-gray-400 mt-0.5 md:mt-1 text-center lg:text-right px-2"
                     title={getFullFormattedAmount(
                       displayBalance,
                       selectedAccount.currency
@@ -794,26 +802,26 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
 
           {/* Action Buttons */}
           <motion.div variants={itemVariants} className="w-full">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <FiTrendingUp className="w-4 h-4" />
+            <div className="bg-gray-50 rounded-lg md:rounded-xl p-3 md:p-4 border border-gray-200">
+              <h3 className="text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3 flex items-center gap-1 md:gap-2">
+                <FiTrendingUp className="w-3 h-3 md:w-4 md:h-4" />
                 Account Actions
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-2 md:gap-3">
                 {/* Account Details */}
                 <motion.button
                   onClick={handleAccountDetailsClick}
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
+                  className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors flex-shrink-0">
-                    <FiEye className="w-5 h-5 text-blue-600" />
+                  <div className="p-1.5 md:p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors flex-shrink-0">
+                    <FiEye className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
+                    <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
                       Account Details
                     </p>
                     <p className="text-xs text-gray-500 truncate">
@@ -825,16 +833,16 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {/* Bank Letter */}
                 <motion.button
                   onClick={handleBankLetter}
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
+                  className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors flex-shrink-0">
-                    <FaUniversity className="w-5 h-5 text-green-600" />
+                  <div className="p-1.5 md:p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors flex-shrink-0">
+                    <FaUniversity className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
+                    <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
                       Bank Letter
                     </p>
                     <p className="text-xs text-gray-500 truncate">
@@ -847,20 +855,20 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {customerId && Number(customerId) === 167 && (
                   <motion.button
                     onClick={handleBalanceUpdate}
-                    className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full"
+                    className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
                     disabled={balanceLoading}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors flex-shrink-0">
+                    <div className="p-1.5 md:p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors flex-shrink-0">
                       {balanceLoading ? (
-                        <RingLoader color="#EA580C" size={16} />
+                        <RingLoader color="#EA580C" size={14} className="md:w-4 md:h-4" />
                       ) : (
-                        <FiRefreshCw className="w-5 h-5 text-orange-600" />
+                        <FiRefreshCw className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
                       )}
                     </div>
                     <div className="text-left flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-700 truncate">
+                      <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
                         {balanceLoading ? "Updating..." : "Update Balance"}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
@@ -878,12 +886,12 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       {/* Transaction Details Section */}
       <motion.div
         variants={itemVariants}
-        className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
+        className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <TransactionDetails
             customerId={customerId}
             selectedCurrencyCode={selectedCurrency}
