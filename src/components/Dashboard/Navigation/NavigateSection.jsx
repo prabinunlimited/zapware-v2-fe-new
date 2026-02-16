@@ -1,4 +1,4 @@
-// src/components/NavigateSection.js - UPDATED WITH CONVERT ROUTING
+// src/components/NavigateSection.js - COMPLETE FIXED VERSION
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -11,7 +11,7 @@ import linkImg from "../../../assets/images/icon/Checkout-Img.png";
 import remitImg from "../../../assets/images/icon/Remit-Img.png";
 import addImg from "../../../assets/images/icon/AddAccount.png";
 import { MdAccountBalance } from "react-icons/md";
-import FeatureComingSoonPopup from "../../PopupModal/FeatureComingSoonPopup"; // NEW IMPORT
+import FeatureComingSoonPopup from "../../PopupModal/FeatureComingSoonPopup";
 import ZapPlaidLink from "../../ZapPlaidLink/ZapPlaidLink";
 import { Download } from "lucide-react";
 import PropTypes from "prop-types";
@@ -67,7 +67,7 @@ const useWhyDidYouUpdate = (name, props) => {
         }
       });
       if (Object.keys(changesObj).length) {
-        // Console log removed
+        // Console log removed for production
       }
     }
     previousProps.current = props;
@@ -93,7 +93,7 @@ function NavigateSectionContent({
   const manualLoading = useSelector(selectManualLoading);
   const profileLoading = useSelector(selectProfileLoading);
   const customerBankApprovedStatus = useSelector(
-    selectCustomerBankApprovedStatus
+    selectCustomerBankApprovedStatus,
   );
   const download_operation_manual = useSelector(selectDownloadOperationManual);
   const isWhiteLabelledPartner = useSelector(selectIsWhiteLabelledPartner);
@@ -110,7 +110,7 @@ function NavigateSectionContent({
   const [featurePopup, setFeaturePopup] = useState({
     isOpen: false,
     featureName: "",
-  }); // NEW STATE
+  });
 
   // Refs for performance optimization
   const hasFetchBeenCalled = useRef(false);
@@ -121,6 +121,73 @@ function NavigateSectionContent({
 
   const bearertoken = useSelector(selectAuthToken);
   const authtoken = useSelector(selectAuthToken);
+
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log("🔷 NavigateSection mounted with customerId:", customerId);
+    return () => {
+      console.log("🔶 NavigateSection unmounted");
+    };
+  }, [customerId]);
+
+  // Debug: Log allowed modules when they change
+  useEffect(() => {
+    if (allowedModules?.length > 0) {
+      console.log("📦 Allowed Modules loaded:", allowedModules);
+      console.log(
+        "✅ Transfer:",
+        allowedModules.some((m) => m.module_name === "Transfer"),
+      );
+      console.log(
+        "✅ Deposit:",
+        allowedModules.some((m) => m.module_name === "Deposit"),
+      );
+      console.log(
+        "✅ Convert:",
+        allowedModules.some((m) => m.module_name === "Convert"),
+      );
+      console.log(
+        "✅ Payout:",
+        allowedModules.some((m) => m.module_name === "Payout"),
+      );
+      console.log(
+        "✅ Remittance:",
+        allowedModules.some((m) => m.module_name === "Remittance"),
+      );
+      console.log(
+        "✅ Add More Accounts:",
+        allowedModules.some((m) => m.module_name === "Add More Accounts"),
+      );
+    }
+  }, [allowedModules]);
+
+  // Debug: Log customer profile data
+  useEffect(() => {
+    if (hasFetchedProfile) {
+      console.log("👤 Customer Profile loaded:", {
+        customerStatus,
+        customerBankApprovedStatus,
+        hasFetchedProfile,
+      });
+    }
+  }, [customerStatus, customerBankApprovedStatus, hasFetchedProfile]);
+
+  // Debug: Log fetch status
+  useEffect(() => {
+    console.log("🔄 Fetch Status:", {
+      profileLoading,
+      isFetching,
+      hasFetchedProfile,
+      hasFetchedModules,
+      localError,
+    });
+  }, [
+    profileLoading,
+    isFetching,
+    hasFetchedProfile,
+    hasFetchedModules,
+    localError,
+  ]);
 
   // Performance monitoring
   useWhyDidYouUpdate("NavigateSection", {
@@ -149,9 +216,11 @@ function NavigateSectionContent({
   // ✅ FIXED: Stable fetchData function with proper dependencies and error handling
   const fetchData = useCallback(async () => {
     if (hasFetchBeenCalled.current) {
+      console.log("⏭️ Fetch already called, skipping");
       return;
     }
 
+    console.log("🚀 Starting fetchData...");
     hasFetchBeenCalled.current = true;
     setIsFetching(true);
     setLocalError(null);
@@ -160,27 +229,35 @@ function NavigateSectionContent({
       let urlPartnerId;
       if (isWhiteLabelledPartner === "1" || isWhiteLabelledPartner === "Y") {
         urlPartnerId = whiteLabelledPartnerId;
+        console.log("🏢 Using white labelled partner ID:", urlPartnerId);
       } else {
         urlPartnerId = 9;
+        console.log("🏢 Using default partner ID: 9");
       }
 
       if (!hasFetchedProfile) {
+        console.log("📡 Fetching customer profile for ID:", customerId);
         await dispatch(fetchCustomerProfile(customerId)).unwrap();
+        console.log("✅ Customer profile fetched successfully");
       }
 
       if (!hasFetchedModules) {
+        console.log("📡 Fetching allowed modules for partner:", urlPartnerId);
         await dispatch(
           fetchAllowedModules({
             partnerId: urlPartnerId,
             bearertoken,
-          })
+          }),
         ).unwrap();
+        console.log("✅ Allowed modules fetched successfully");
       }
     } catch (error) {
+      console.error("❌ Fetch error:", error);
       setLocalError(error.message || "Failed to fetch navigation data");
       hasFetchBeenCalled.current = false;
     } finally {
       setIsFetching(false);
+      console.log("🏁 Fetch completed");
     }
   }, [
     customerId,
@@ -202,7 +279,17 @@ function NavigateSectionContent({
       !localError;
 
     if (shouldFetchData) {
+      console.log("🎯 Conditions met, calling fetchData");
       fetchData();
+    } else {
+      console.log("⏸️ Skipping fetch, conditions not met:", {
+        hasCustomerId: !!customerId,
+        hasToken: !!bearertoken,
+        needsProfile: !hasFetchedProfile,
+        needsModules: !hasFetchedModules,
+        isFetching,
+        hasError: !!localError,
+      });
     }
   }, [
     customerId,
@@ -230,11 +317,12 @@ function NavigateSectionContent({
     try {
       dispatch(setPopupData({ show: true, message, onConfirm }));
     } catch (error) {
+      console.error("❌ Failed to display popup:", error);
       setLocalError("Failed to display popup");
     }
   };
 
-  // NEW: Open feature coming soon popup
+  // Open feature coming soon popup
   const openFeaturePopup = (featureName) => {
     setFeaturePopup({
       isOpen: true,
@@ -242,7 +330,7 @@ function NavigateSectionContent({
     });
   };
 
-  // NEW: Close feature popup
+  // Close feature popup
   const closeFeaturePopup = () => {
     setFeaturePopup({
       isOpen: false,
@@ -251,134 +339,285 @@ function NavigateSectionContent({
   };
 
   const handleTransferClick = () => {
+    console.log("💰 Transfer button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot perform this transaction."
+          "Your account is deactivated. You cannot perform this transaction.",
         );
         return;
       }
-      if (customerBankApprovedStatus === "0") {
+
+      // ✅ Check for both "0" and "undefined" and also check for "Y"
+      if (
+        !customerBankApprovedStatus ||
+        customerBankApprovedStatus === "0" ||
+        customerBankApprovedStatus === "N"
+      ) {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
+
+      console.log(`➡️ Navigating to /transfer/${customerId}`);
       navigate(`/transfer/${customerId}`);
     } catch (error) {
+      console.error("❌ Transfer navigation error:", error);
       setLocalError("Failed to navigate to transfer");
     }
   };
 
   const handleDepositClick = () => {
+    console.log("💰 Deposit button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup("Your account is deactivated. You cannot deposit money.");
         return;
       }
       if (customerBankApprovedStatus === "0") {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
+      if (customerBankApprovedStatus === null) {
+        showPopup(
+          "Your bank account status is still loading. Please try again in a moment.",
+        );
+        return;
+      }
+      console.log(`➡️ Navigating to /deposit/${customerId}`);
       navigate(`/deposit/${customerId}`);
     } catch (error) {
+      console.error("❌ Deposit navigation error:", error);
       setLocalError("Failed to navigate to deposit");
     }
   };
 
-  // UPDATED: Handle Convert click - route to convert page
   const handleConversionClick = () => {
+    console.log("💰 Convert button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot perform currency conversion."
+          "Your account is deactivated. You cannot perform currency conversion.",
         );
         return;
       }
       if (customerBankApprovedStatus === "0") {
         showPopup(
-          "Your Bank account is not approved. You cannot perform this transaction."
+          "Your Bank account is not approved. You cannot perform this transaction.",
         );
         return;
       }
-      // Route to convert page
+      if (customerBankApprovedStatus === null) {
+        showPopup(
+          "Your bank account status is still loading. Please try again in a moment.",
+        );
+        return;
+      }
+      console.log(`➡️ Navigating to /convert/${customerId}`);
       navigate(`/convert/${customerId}`);
     } catch (error) {
+      console.error("❌ Convert navigation error:", error);
       setLocalError("Failed to navigate to conversion");
     }
   };
 
   const handlePayoutClick = () => {
-    if (customerStatus === "Deactivated") {
-      showPopup("Your account is deactivated. You cannot request a payout.");
-      return;
+    console.log("💰 Payout button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
+    try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
+      if (customerStatus === "Deactivated") {
+        showPopup("Your account is deactivated. You cannot request a payout.");
+        return;
+      }
+      if (customerBankApprovedStatus === "0") {
+        showPopup(
+          "Your Bank account is not approved. You cannot perform this transaction.",
+        );
+        return;
+      }
+      if (customerBankApprovedStatus === null) {
+        showPopup(
+          "Your bank account status is still loading. Please try again in a moment.",
+        );
+        return;
+      }
+      console.log(`➡️ Navigating to /payout/${customerId}`);
+      navigate(`/payout/${customerId}`);
+    } catch (error) {
+      console.error("❌ Payout navigation error:", error);
+      setLocalError("Failed to navigate to payout");
     }
-    if (customerBankApprovedStatus === "0") {
-      showPopup(
-        "Your Bank account is not approved. You cannot perform this transaction."
-      );
-      return;
-    }
-    navigate(`/payout/${customerId}`);
   };
 
-  // UPDATED: Handle Remit click - route to remittance page
   const handleRemitClick = () => {
+    console.log("💰 Remittance button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup("Your account is deactivated. You cannot remit money.");
         return;
       }
+      if (customerBankApprovedStatus === "0") {
+        showPopup(
+          "Your Bank account is not approved. You cannot perform this transaction.",
+        );
+        return;
+      }
+      if (customerBankApprovedStatus === null) {
+        showPopup(
+          "Your bank account status is still loading. Please try again in a moment.",
+        );
+        return;
+      }
+      console.log(`➡️ Navigating to /remittance/${customerId}`);
       navigate(`/remittance/${customerId}`);
     } catch (error) {
+      console.error("❌ Remittance navigation error:", error);
       setLocalError("Failed to navigate to remittance");
     }
   };
 
   const handleRemitClickNew = () => {
+    console.log("💰 Remittance Only button clicked", {
+      customerId,
+      customerStatus,
+      customerBankApprovedStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup("Your account is deactivated. You cannot remit money.");
         return;
       }
+      if (customerBankApprovedStatus === "0") {
+        showPopup(
+          "Your Bank account is not approved. You cannot perform this transaction.",
+        );
+        return;
+      }
+      if (customerBankApprovedStatus === null) {
+        showPopup(
+          "Your bank account status is still loading. Please try again in a moment.",
+        );
+        return;
+      }
+      console.log(`➡️ Navigating to /remittanceonly/${customerId}`);
       navigate(`/remittanceonly/${customerId}`);
     } catch (error) {
+      console.error("❌ Remittance only navigation error:", error);
       setLocalError("Failed to navigate to remittance");
     }
   };
 
   const handleLinkBankClick = () => {
+    console.log("💰 Link Bank button clicked", {
+      customerId,
+      customerStatus,
+    });
+
     try {
+      if (!customerId) {
+        console.error("❌ No customerId available");
+        setLocalError("Customer ID not available");
+        return;
+      }
+
       if (customerStatus === "Deactivated") {
         showPopup(
-          "Your account is deactivated. You cannot link a bank account."
+          "Your account is deactivated. You cannot link a bank account.",
         );
         return;
       }
+      console.log(`➡️ Navigating to /linkbank/${customerId}`);
       navigate(`/linkbank/${customerId}`);
     } catch (error) {
+      console.error("❌ Link bank navigation error:", error);
       setLocalError("Failed to navigate to link bank");
     }
   };
 
   const handleUserManualClick = async () => {
+    console.log("📚 User Manual button clicked");
+
     try {
       const result = await dispatch(
         downloadUserManual({
           partnerId:
             whiteLabelledPartnerId === undefined ? 0 : whiteLabelledPartnerId,
           placement: "Home Screen",
-        })
+        }),
       ).unwrap();
 
       if (result.status === "success" && result.data?.file_path) {
+        console.log("📄 Opening manual at:", result.data.file_path);
         window.open(result.data.file_path, "_blank");
       } else {
         showPopup("Manual not found. Please try again later.");
       }
     } catch (error) {
+      console.error("❌ User manual download error:", error);
       showPopup("Unable to download the user manual. Please try again later.");
     }
   };
@@ -398,6 +637,7 @@ function NavigateSectionContent({
   };
 
   const handleRetry = () => {
+    console.log("🔄 Retrying fetch...");
     setLocalError(null);
     hasFetchBeenCalled.current = false;
     fetchData();
@@ -438,11 +678,30 @@ function NavigateSectionContent({
     );
   }
 
-  // Render loading states
-  if (profileLoading || isFetching) {
+  // Show loading skeleton while fetching data
+  if (
+    profileLoading ||
+    isFetching ||
+    !hasFetchedModules ||
+    !hasFetchedProfile
+  ) {
     return (
-      <div className="w-full px-2 sm:px-4 flex justify-center items-center min-h-[200px]">
-        <RingLoader color="#36d7b7" size={40} />
+      <div className="w-full px-2 sm:px-4">
+        <div className="flex flex-col gap-3 sm:gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="w-full animate-pulse">
+              <div className="rounded-2xl border border-stroke h-14 sm:h-16 bg-gray-100 py-3 sm:py-4 px-4 sm:px-6">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <div className="w-6 h-6 bg-gray-300 rounded"></div>
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
+                    <div className="h-3 bg-gray-300 rounded w-32"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -455,13 +714,17 @@ function NavigateSectionContent({
       >
         <div className="w-full flex flex-col gap-3 sm:gap-4">
           {/* Transfer Money */}
-          {allowedModules.some((module) => module.module_name === "Transfer") &&
-            (hostName === "localhost" ||
-            hostName === "ourzap.unlimitedremit.com" ||
-            hostName === "sandbox-ourzap.unlimitedremit.com" ? (
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Transfer",
+            ) && (
               <div
                 onClick={handleTransferClick}
-                className="w-full cursor-pointer"
+                className="w-full cursor-pointer group"
               >
                 <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                   <div className="flex items-center space-x-3 sm:space-x-4">
@@ -482,191 +745,202 @@ function NavigateSectionContent({
                       </p>
                     </div>
                   </div>
-                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
               </div>
-            ) : (
+            )}
+
+          {/* Deposit */}
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Deposit",
+            ) && (
               <div
-                onClick={() => navigate(`/transfer/${customerId}`)}
-                className="w-full cursor-pointer"
+                onClick={handleDepositClick}
+                className="w-full cursor-pointer group"
               >
                 <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                   <div className="flex items-center space-x-3 sm:space-x-4">
                     <img
                       src={depositImg}
-                      alt="Internal Transfer Icon"
+                      alt="Deposit Icon"
                       className="w-5 h-5 sm:w-6 sm:h-6"
                     />
                     <div className="min-w-0">
                       <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                        Internal Transfer
+                        Deposit
                       </h2>
                       <p
                         className="text-xs text-gray-500 truncate"
                         {...textColorProps}
                       >
-                        Transfer Money
+                        Deposit Money
                       </p>
                     </div>
                   </div>
-                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
               </div>
-            ))}
+            )}
 
-          {/* Deposit */}
-          {allowedModules.some(
-            (module) => module.module_name === "Deposit"
-          ) && (
-            <div onClick={handleDepositClick} className="w-full cursor-pointer">
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={depositImg}
-                    alt="Deposit Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Deposit
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Deposit Money
-                    </p>
+          {/* Convert */}
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Convert",
+            ) && (
+              <div
+                onClick={handleConversionClick}
+                className="w-full cursor-pointer group"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={convertImg}
+                      alt="Convert Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Convert
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Global currency conversion
+                      </p>
+                    </div>
                   </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
-            </div>
-          )}
-
-          {/* Convert - UPDATED: Remove Coming Soon indicators */}
-          {(allowedModules.some((module) => module.module_name === "Convert") ||
-            hostName === "ourzap.unlimitedremit.com") && (
-            <div
-              onClick={handleConversionClick}
-              className="w-full cursor-pointer"
-            >
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={convertImg}
-                    alt="Convert Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Convert
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Global currency conversion
-                    </p>
-                  </div>
-                </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-              </div>
-            </div>
-          )}
+            )}
 
           {/* Payout */}
-          {allowedModules.some((module) => module.module_name === "Payout") && (
-            <div onClick={handlePayoutClick} className="w-full cursor-pointer">
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={remitImg}
-                    alt="Payout Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Payout
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Send money WorldWide
-                    </p>
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Payout",
+            ) && (
+              <div
+                onClick={handlePayoutClick}
+                className="w-full cursor-pointer group"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={payoutImg}
+                      alt="Payout Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Payout
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Send money WorldWide
+                      </p>
+                    </div>
                   </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Remittance - UPDATED: Remove Coming Soon indicators */}
-          {allowedModules.some(
-            (module) => module.module_name === "Remittance"
-          ) && (
-            <div onClick={handleRemitClick} className="w-full cursor-pointer">
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={remitImg}
-                    alt="Remittance Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Remittance
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Send money globally
-                    </p>
+          {/* Remittance */}
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Remittance",
+            ) && (
+              <div
+                onClick={handleRemitClick}
+                className="w-full cursor-pointer group"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={remitImg}
+                      alt="Remittance Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Remittance
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Send money globally
+                      </p>
+                    </div>
                   </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
-            </div>
-          )}
+            )}
+
           {/* Add More Accounts */}
-          {allowedModules.some(
-            (module) => module.module_name === "Add More Accounts"
-          ) && (
-            <div
-              onClick={() => navigate(`/addaccount/${customerId}`)}
-              className="w-full cursor-pointer"
-            >
-              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img
-                    src={addImg}
-                    alt="Add Account Icon"
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      Add More Accounts
-                    </h2>
-                    <p
-                      className="text-xs text-gray-500 truncate"
-                      {...textColorProps}
-                    >
-                      Enhance accessibility
-                    </p>
+          {!profileLoading &&
+            !isFetching &&
+            hasFetchedModules &&
+            hasFetchedProfile &&
+            allowedModules?.length > 0 &&
+            allowedModules.some(
+              (module) => module.module_name === "Add More Accounts",
+            ) && (
+              <div
+                onClick={() => navigate(`/addaccount/${customerId}`)}
+                className="w-full cursor-pointer group"
+              >
+                <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <img
+                      src={addImg}
+                      alt="Add Account Icon"
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                        Add More Accounts
+                      </h2>
+                      <p
+                        className="text-xs text-gray-500 truncate"
+                        {...textColorProps}
+                      >
+                        Enhance accessibility
+                      </p>
+                    </div>
                   </div>
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
-                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
               </div>
-            </div>
-          )}
+            )}
 
           {/* Link Bank */}
           {isRemittanceOnlyCustomer === "Y" &&
             selectedCurrencyCode === "USD" && (
               <div
                 onClick={handleLinkBankClick}
-                className="w-full cursor-pointer"
+                className="w-full cursor-pointer group"
               >
                 <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                   <div className="flex items-center space-x-3 sm:space-x-4">
@@ -683,7 +957,7 @@ function NavigateSectionContent({
                       </p>
                     </div>
                   </div>
-                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                  <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0 group-hover:text-gray-600 transition-colors" />
                 </div>
               </div>
             )}
@@ -693,7 +967,7 @@ function NavigateSectionContent({
             <div className="w-full flex justify-center mt-2">
               <div
                 onClick={handleUserManualClick}
-                className="w-full sm:w-3/4 cursor-pointer"
+                className="w-full sm:w-3/4 cursor-pointer group"
               >
                 <div className="rounded-2xl border flex justify-center items-center border-stroke h-14 sm:h-16 text-white bg-gray-800 py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-700 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
                   {manualLoading ? (
@@ -718,21 +992,9 @@ function NavigateSectionContent({
             </div>
           )}
         </div>
-
-        {/* Navigation Popup */}
-        {/* {popupData.show && (
-          <NavigationPopup
-            message={popupData.message}
-            onClose={() => dispatch(setPopupData({ show: false, message: "", onConfirm: null }))}
-            onConfirm={() => {
-              dispatch(setPopupData({ show: false, message: "", onConfirm: null }));
-              if (popupData.onConfirm) popupData.onConfirm();
-            }}
-          />
-        )} */}
       </div>
 
-      {/* Feature Coming Soon Popup - Now only used for other features, not Convert */}
+      {/* Feature Coming Soon Popup */}
       <FeatureComingSoonPopup
         isOpen={featurePopup.isOpen}
         onClose={closeFeaturePopup}

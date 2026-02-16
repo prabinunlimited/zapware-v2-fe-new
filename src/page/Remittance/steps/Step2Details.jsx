@@ -179,7 +179,7 @@ const Step2Details = ({
       </div>
 
       {/* Selected Beneficiary Summary - READ ONLY */}
-      {selectedBeneficiary && (
+      {/* {selectedBeneficiary && (
         <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <FaUser className="text-emerald-600" />
@@ -245,7 +245,7 @@ const Step2Details = ({
             )}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Compliance Note */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">

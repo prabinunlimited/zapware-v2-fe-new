@@ -1,5 +1,12 @@
-// src/components/Header/Header.js - COMPLETE WITH FIXES AND ORIGINAL FUNCTIONALITIES
-import React, { useEffect, useRef, useCallback, useMemo, memo } from "react";
+// src/components/Header/Header.js - WITH LOGOUT LOADER FEATURE
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  memo,
+  useState,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
@@ -63,10 +70,10 @@ const PartnerDebug = () => {
       partnerName: localStorage.getItem("whitelabelled_customer_partnername"),
       partnerLogo: localStorage.getItem("partner_logo"),
       partnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "null"
+        localStorage.getItem("partnerConfig") || "null",
       ),
       partnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "null"
+        localStorage.getItem("partnerDetails") || "null",
       ),
       whitelabelledCustomer: localStorage.getItem("whitelabelled_customer"),
       isWhiteLabelledPartner: localStorage.getItem("iswhitelabelledpartner"),
@@ -111,6 +118,9 @@ const Header = ({ customerId }) => {
   const hoverTimerRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
 
+  // NEW STATE: Logout loader state
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   // Use the partner config hook - ALL original properties
   const {
     headerColor,
@@ -146,7 +156,7 @@ const Header = ({ customerId }) => {
   const staffId = useSelector(selectStaffId);
   const isRemittanceOnlyCustomer = useSelector(selectIsRemittanceOnlyCustomer);
   const isWhitelabelledCustomerPartnerId = useSelector(
-    selectIsWhitelabelledCustomerPartnerId
+    selectIsWhitelabelledCustomerPartnerId,
   );
   const fetchStatus = useSelector(selectFetchStatus);
 
@@ -182,14 +192,14 @@ const Header = ({ customerId }) => {
       isWhitelabelledCustomerPartnerId,
       isRemittanceOnlyCustomer,
       localStoragePartnerName: localStorage.getItem(
-        "whitelabelled_customer_partnername"
+        "whitelabelled_customer_partnername",
       ),
       localStoragePartnerLogo: localStorage.getItem("partner_logo"),
       localStoragePartnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "{}"
+        localStorage.getItem("partnerConfig") || "{}",
       ),
       localStoragePartnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "{}"
+        localStorage.getItem("partnerDetails") || "{}",
       ),
     });
   }, [
@@ -205,6 +215,12 @@ const Header = ({ customerId }) => {
 
   // Handle logout
   const handleLogout = useCallback(async () => {
+    // Set loading state
+    setIsLoggingOut(true);
+
+    // Close dropdown if open
+    dispatch(closeDropdown());
+
     // Clear timers
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -234,7 +250,7 @@ const Header = ({ customerId }) => {
             headers: {
               Authorization: `Bearer ${tokenToUse}`,
             },
-          }
+          },
         );
         console.log("✅ Logout API response:", response.data);
       } else {
@@ -301,7 +317,9 @@ const Header = ({ customerId }) => {
   // ✅ FIXED: Aggressive Profile fetch with duplicate handling - WITH BENEFICIARY CHECK
   useEffect(() => {
     // ✅ CRITICAL FIX: Check for beneficiary login BEFORE any fetch logic
-    const beneficiaryLogin = localStorage.getItem("beneficaryLogin") || localStorage.getItem("beneficiaryLogin");
+    const beneficiaryLogin =
+      localStorage.getItem("beneficaryLogin") ||
+      localStorage.getItem("beneficiaryLogin");
     if (beneficiaryLogin === "Y") {
       console.log("🛑 Header: Skipping profile fetch for beneficiary");
       return;
@@ -446,7 +464,7 @@ const Header = ({ customerId }) => {
 
       return () => {
         events.forEach((event) =>
-          window.removeEventListener(event, resetTimer)
+          window.removeEventListener(event, resetTimer),
         );
         if (timerRef.current) {
           clearTimeout(timerRef.current);
@@ -497,7 +515,7 @@ const Header = ({ customerId }) => {
     // ✅ Handle beneficiary case FIRST
     if (isBeneficiaryUser) {
       console.log(
-        "ℹ️ Header: User is beneficiary - showing simplified profile"
+        "ℹ️ Header: User is beneficiary - showing simplified profile",
       );
       // Get beneficiary name from localStorage
       const beneficiaryName =
@@ -543,18 +561,18 @@ const Header = ({ customerId }) => {
       profileData.first_name !== "null"
         ? profileData.first_name
         : localStorage.getItem("firstName") &&
-          localStorage.getItem("firstName") !== "User" &&
-          localStorage.getItem("firstName") !== "undefined" &&
-          localStorage.getItem("firstName") !== "null"
-        ? localStorage.getItem("firstName")
-        : "User";
+            localStorage.getItem("firstName") !== "User" &&
+            localStorage.getItem("firstName") !== "undefined" &&
+            localStorage.getItem("firstName") !== "null"
+          ? localStorage.getItem("firstName")
+          : "User";
 
     const userRole =
       isStaffLogin === "1"
         ? staffRole
         : isOwnerLogin === "1"
-        ? ownerRoleName
-        : "Customer";
+          ? ownerRoleName
+          : "Customer";
 
     // ✅ KEEP ALL YOUR ORIGINAL ANIMATIONS AND UI for regular customers
     return (
@@ -976,72 +994,172 @@ const Header = ({ customerId }) => {
   }, [hasFxData, partnerFxCurrencies]);
 
   return (
-    <header className={headerClassNames} style={headerStyle}>
-      <PartnerDebug />
-      <div className="max-w-[2000px] mx-auto px-6 py-3 flex justify-between items-center w-full">
-        <div className="flex items-center space-x-5">
-          {isRemittanceOnlyCustomer === "Y" ? (
-            <Link
-              to={`/homeremit/${customerId}`}
-              className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
-            >
-              {LogoContent}
-            </Link>
-          ) : (
-            <Link
-              to={`/home/${customerId}`}
-              className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
-            >
-              {LogoContent}
-            </Link>
-          )}
-        </div>
+    <>
+      {/* Logout Loader Overlay */}
+      <AnimatePresence>
+        {isLoggingOut && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
+          >
+            {/* Blur Background */}
+            <motion.div
+              initial={{ backdropFilter: "blur(0px)" }}
+              animate={{ backdropFilter: "blur(8px)" }}
+              exit={{ backdropFilter: "blur(0px)" }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/30"
+            />
 
-        {/* FX Rates with original animation */}
-        {shouldShowFxRates && (
-          <div className="hidden md:block w-full md:w-2/4 my-2 md:my-0">
-            <div className="overflow-hidden px-6">
-              <div className="overflow-hidden">
+            {/* Loader Container */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.3, type: "spring" }}
+              className="relative bg-white/95 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl shadow-black/30 p-10 flex flex-col items-center justify-center"
+            >
+              {/* RingLoader with animation */}
+              <RingLoader
+                size={80}
+                color="#3B82F6"
+                loading={isLoggingOut}
+                speedMultiplier={1.2}
+              />
+
+              {/* Text below loader */}
+              <motion.div
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+                className="mt-6 text-center"
+              >
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                  Logging Out
+                </h3>
+                <p className="text-gray-600">Securely signing you out...</p>
+              </motion.div>
+
+              {/* Progress dots animation */}
+              <motion.div
+                className="flex space-x-2 mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
                 <motion.div
-                  className="whitespace-nowrap text-white/90 font-medium text-lg animate-marquee"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  {partnerFxCurrencies.map((fx, index) => (
-                    <span key={index} className="mx-8">
-                      {fx.source_currency} → {fx.destination_currency}:{" "}
-                      {fx.rate ?? "N/A"}
-                    </span>
-                  ))}
-                </motion.div>
+                  className="w-2 h-2 bg-blue-500 rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: 0,
+                  }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-500 rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: 0.2,
+                  }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-500 rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: 0.4,
+                  }}
+                />
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Original Header Content */}
+      <header className={headerClassNames} style={headerStyle}>
+        <PartnerDebug />
+        <div className="max-w-[2000px] mx-auto px-6 py-3 flex justify-between items-center w-full">
+          <div className="flex items-center space-x-5">
+            {isRemittanceOnlyCustomer === "Y" ? (
+              <Link
+                to={`/homeremit/${customerId}`}
+                className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
+              >
+                {LogoContent}
+              </Link>
+            ) : (
+              <Link
+                to={`/home/${customerId}`}
+                className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
+              >
+                {LogoContent}
+              </Link>
+            )}
+          </div>
+
+          {/* FX Rates with original animation */}
+          {shouldShowFxRates && (
+            <div className="hidden md:block w-full md:w-2/4 my-2 md:my-0">
+              <div className="overflow-hidden px-6">
+                <div className="overflow-hidden">
+                  <motion.div
+                    className="whitespace-nowrap text-white/90 font-medium text-lg animate-marquee"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    {partnerFxCurrencies.map((fx, index) => (
+                      <span key={index} className="mx-8">
+                        {fx.source_currency} → {fx.destination_currency}:{" "}
+                        {fx.rate ?? "N/A"}
+                      </span>
+                    ))}
+                  </motion.div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Desktop: Profile on right - Original positioning */}
-        <div className="hidden md:flex justify-end md:w-1/4 items-center">
-          {ProfileSection}
+          {/* Desktop: Profile on right - Original positioning */}
+          <div className="hidden md:flex justify-end md:w-1/4 items-center">
+            {ProfileSection}
+          </div>
+
+          {/* Mobile: Profile menu - Original positioning */}
+          <div className="md:hidden">{ProfileSection}</div>
         </div>
 
-        {/* Mobile: Profile menu - Original positioning */}
-        <div className="md:hidden">{ProfileSection}</div>
-      </div>
-
-      {/* Enhanced Keyframe style for marquee - Original animation */}
-      <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
-        }
-        .animate-marquee {
-          display: inline-block;
-          animation: marquee 35s linear infinite;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-      `}</style>
-    </header>
+        {/* Enhanced Keyframe style for marquee - Original animation */}
+        <style>{`
+          @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+          }
+          .animate-marquee {
+            display: inline-block;
+            animation: marquee 35s linear infinite;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          }
+        `}</style>
+      </header>
+    </>
   );
 };
 

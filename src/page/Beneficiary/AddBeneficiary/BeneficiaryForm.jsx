@@ -187,11 +187,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Create state from beneficiarySlice
   const beneficiariesCreateLoading = useSelector(
-    selectBeneficiariesCreateLoading
+    selectBeneficiariesCreateLoading,
   );
   const beneficiariesCreateError = useSelector(selectBeneficiariesCreateError);
   const beneficiariesCreateSuccess = useSelector(
-    selectBeneficiariesCreateSuccess
+    selectBeneficiariesCreateSuccess,
   );
 
   // Countries from Redux
@@ -217,7 +217,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [currency, setCurrency] = useState(
     mode === "edit" && initialData?.banks?.[0]?.currency_code
       ? initialData.banks[0].currency_code
-      : "USD"
+      : "USD",
   );
   const [paymentMethod, setPaymentMethod] = useState("ACH");
   const [loading, setLoading] = useState(false);
@@ -288,6 +288,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     "PKR",
     "USD",
   ];
+
+  // Currency options for react-select
+  const currencyOptions = useMemo(
+    () =>
+      localCurrencies.map((cur) => ({
+        value: cur,
+        label: cur,
+      })),
+    [],
+  );
 
   // State to handle multiple bank accounts
   const [bankAccounts, setBankAccounts] = useState(() => {
@@ -374,8 +384,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       backgroundColor: state.isSelected
         ? "#3b82f6"
         : state.isFocused
-        ? "#eff6ff"
-        : "white",
+          ? "#eff6ff"
+          : "white",
       color: state.isSelected ? "white" : "#1f2937",
       padding: "12px 16px",
       fontSize: "0.875rem",
@@ -445,7 +455,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             setBeneficiariesLoaded(true);
             console.log(
               "✅ Beneficiaries loaded, count:",
-              beneficiaries.length
+              beneficiaries.length,
             );
           }
         } catch (error) {
@@ -476,7 +486,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ) {
       console.log(
         "📝 Populating form with beneficiary data:",
-        beneficiaryDetails
+        beneficiaryDetails,
       );
 
       formik.setValues({
@@ -528,7 +538,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             otherProvider: bank.other_provider || "",
             accountType: bank.account_type || "",
             sortCode: bank.sort_code || "",
-          }))
+          })),
         );
       }
     }
@@ -543,14 +553,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
         dispatch(
-          fetchBanksByCurrency({ currency: currency, bankType: "int-banks" })
+          fetchBanksByCurrency({ currency: currency, bankType: "int-banks" }),
         );
       } else {
         dispatch(
           fetchBanksByCurrency({
             currency: currency,
             bankType: "currency-payout-banks",
-          })
+          }),
         );
       }
 
@@ -573,7 +583,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       if (beneficiariesCreateError && mounted) {
         console.log(
           "❌ DEBUG - Create error detected in useEffect:",
-          beneficiariesCreateError
+          beneficiariesCreateError,
         );
         toast.error(beneficiariesCreateError);
         dispatch(clearBeneficiariesCreateState());
@@ -615,9 +625,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   }, [formik.values.country_id, dispatch, step]);
 
   // Get cities for selected country
-  const getCitiesForCountry = () => {
+  const getCitiesForCountry = useCallback(() => {
     return cities[formik.values.country_id] || [];
-  };
+  }, [cities, formik.values.country_id]);
 
   const isFormValid = useCallback(() => {
     if (formik.values.beneftype === "") return false;
@@ -649,8 +659,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return true;
   }, [formik.values, currency]);
 
-  const handleCurrencyChange = async (e) => {
-    const newCurrency = e.target.value;
+  const handleCurrencyChange = (selectedOption) => {
+    const newCurrency = selectedOption?.value;
 
     console.log("=== CURRENCY CHANGE START ===");
     console.log("New currency selected:", newCurrency);
@@ -668,14 +678,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
-        fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
+        fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" }),
       );
     } else {
       dispatch(
         fetchBanksByCurrency({
           currency: newCurrency,
           bankType: "currency-payout-banks",
-        })
+        }),
       );
     }
 
@@ -683,7 +693,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       prevAccounts.map((account) => ({
         ...account,
         currency: newCurrency,
-      }))
+      })),
     );
 
     console.log("=== CURRENCY CHANGE END ===");
@@ -697,7 +707,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     if (!nationalityName) return "";
 
     const found = nationalitiesList.find(
-      (nat) => nat.name.toLowerCase() === nationalityName.toLowerCase()
+      (nat) => nat.name.toLowerCase() === nationalityName.toLowerCase(),
     );
 
     return found ? found.id.toString() : "";
@@ -734,13 +744,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         ) {
           nationalityId = mapNationalityToId(
             beneficiaryData.nationality,
-            nationalities
+            nationalities,
           );
           console.log(
             "🌍 Mapped nationality:",
             beneficiaryData.nationality,
             "→",
-            nationalityId
+            nationalityId,
           );
         }
 
@@ -762,7 +772,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             "👥 Mapped relationship:",
             beneficiaryData.relationtobenef,
             "→",
-            relationshipValue
+            relationshipValue,
           );
         }
 
@@ -827,7 +837,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               otherProvider: bank.other_provider || "",
               accountType: bank.account_type || "",
               sortCode: bank.sort_code || "",
-            }))
+            })),
           );
         }
 
@@ -840,7 +850,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         isMounted.current
       ) {
         toast.info(
-          "No existing beneficiary found with this phone number. You can create a new one."
+          "No existing beneficiary found with this phone number. You can create a new one.",
         );
         // Set phone in formik for new beneficiary
         formik.setFieldValue("phone_number", phoneInput);
@@ -899,7 +909,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
           countryPhoneCode: countryCodeInput,
-        })
+        }),
       );
     } catch (error) {
       console.error("Phone search error:", error);
@@ -945,7 +955,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       // If there are no beneficiaries in the system, skip search entirely
       if (beneficiaries.length === 0) {
         console.log(
-          "No beneficiaries in system, skipping search and creating new beneficiary"
+          "No beneficiaries in system, skipping search and creating new beneficiary",
         );
 
         // Store phone in formik for new beneficiary
@@ -963,7 +973,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         // Show informative toast
         toast.info(
-          "No existing beneficiaries found. You can create a new beneficiary."
+          "No existing beneficiaries found. You can create a new beneficiary.",
         );
         return true;
       }
@@ -1084,7 +1094,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     console.log("🚀 SUBMITTING WITH:");
     console.log(
       "country_phone_code from formik:",
-      formik.values.country_phone_code
+      formik.values.country_phone_code,
     );
     console.log("country_id:", formik.values.country_id);
 
@@ -1098,7 +1108,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     console.log("🔴 beneficiary_id_type:", formik.values.beneficiary_id_type);
     console.log(
       "🔴 beneficiary_id_number:",
-      formik.values.beneficiary_id_number
+      formik.values.beneficiary_id_number,
     );
 
     if (isRailsMissing) {
@@ -1174,7 +1184,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             bankAccounts,
             currency,
             country_code: cleanedCountryCode,
-          })
+          }),
         ).unwrap();
 
         console.log("✅ DEBUG - Dispatch completed successfully!");
@@ -1204,7 +1214,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           console.log("❌ DEBUG - Success flag is false or missing");
           console.log(
             "❌ Full result object:",
-            JSON.stringify(result, null, 2)
+            JSON.stringify(result, null, 2),
           );
         }
 
@@ -1223,7 +1233,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               ...beneficiaryData,
               country_phone_code: cleanedCountryCode,
             },
-          })
+          }),
         ).unwrap();
 
         console.log("✅ Update successful, result:", result);
@@ -1325,6 +1335,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return banks[currency] || [];
   }, [banks, currency]);
 
+  // Get banks options for react-select
+  const bankOptions = useMemo(() => {
+    const banksList = getBanksForCurrency;
+    return banksList.map((bank) => ({
+      value: bank.id || bank.bank_code,
+      label: bank.name || bank.bank_name,
+      bankCode: bank.bank_code,
+    }));
+  }, [getBanksForCurrency]);
+
   // Get ID types for current currency
   const getIdTypesForCurrency = useMemo(() => {
     if (Object.keys(idTypes).length === 0) {
@@ -1351,88 +1371,89 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return [];
   }, [idTypes, currency]);
 
+  // Get ID type options for react-select
+  const idTypeOptions = useMemo(() => {
+    const types = getIdTypesForCurrency;
+    return types.map((idType) => ({
+      value: idType.name || idType.id || idType,
+      label: idType.name || idType.id || idType,
+    }));
+  }, [getIdTypesForCurrency]);
+
   // Get bank branches for selected bank
   const getBankBranches = useMemo(() => {
     const currentBankCode = bankAccounts[0]?.bankCode;
     return currentBankCode ? bankBranches[currentBankCode] || [] : [];
   }, [bankBranches, bankAccounts]);
 
-  // Phone code selector
-  const renderPhoneCodeSelector = () => (
-    <div className="w-full md:w-1/3">
-      <Select
-        className="text-sm"
-        classNamePrefix="select"
-        options={phoneCodeOptions}
-        placeholder="Code..."
-        isSearchable
-        onChange={(selectedOption) => {
-          setCountryCodeInput(selectedOption?.value || "+1");
-          // Also update formik
-          formik.setFieldValue(
-            "country_phone_code",
-            selectedOption?.value || "+1"
-          );
-        }}
-        value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code // Use formik value
-        )}
-        formatOptionLabel={({ country, label }) => (
-          <div className="flex items-center">
-            {country?.flag_url && (
-              <img
-                src={country.flag_url}
-                alt="Flag"
-                className="w-6 h-4 mr-2 rounded-sm"
-              />
-            )}
-            <span>{label}</span>
-          </div>
-        )}
-        styles={customStyles}
-      />
-    </div>
+  // Get branch options for react-select
+  const branchOptions = useMemo(() => {
+    const branches = getBankBranches;
+    return branches.map((branch) => ({
+      value: branch.branch_code,
+      label: `${branch.bank_branch_name} - ${branch.branch_code}`,
+    }));
+  }, [getBankBranches]);
+
+  // Nationality options for react-select
+  const nationalityOptions = useMemo(
+    () =>
+      nationalities.map((nationality) => ({
+        value: nationality.id.toString(),
+        label: nationality.name,
+      })),
+    [nationalities],
   );
 
-  // Country dropdown
-  const renderCountryDropdown = () => (
-    <select
-      className="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400"
-      onChange={(e) => {
-        const selectedCountryId = e.target.value;
-        const selectedCountry = countries.find(
-          (country) => country.id === parseInt(selectedCountryId)
-        );
+  // Relationship options (already defined)
+  // City options for react-select
+  const cityOptions = useMemo(() => {
+    const citiesList = getCitiesForCountry();
+    return citiesList.map((city) => ({
+      value: city.city_name,
+      label: city.city_name,
+    }));
+  }, [getCitiesForCountry]);
 
-        formik.setFieldValue("country_id", selectedCountryId);
+  // Rails options based on currency
+  const getRailsOptions = useCallback((accountCurrency) => {
+    const options = [{ value: "Swift", label: "Swift" }];
 
-        if (selectedCountry) {
-          // Get phone code from selected country - ensure it has + sign
-          let countryPhoneCode = selectedCountry.phone_code || "+1";
+    if (accountCurrency === "GBP") {
+      options.unshift({ value: "Local", label: "FPS" });
+    } else if (accountCurrency === "EUR") {
+      options.unshift({ value: "Local", label: "SEPA" });
+    } else if (accountCurrency === "USD") {
+      options.unshift({ value: "Local", label: "ACH" });
+    } else {
+      options.unshift({ value: "Local", label: "Bank" });
+    }
 
-          // If it doesn't start with +, add it
-          if (!countryPhoneCode.startsWith("+")) {
-            countryPhoneCode = `+${countryPhoneCode}`;
-          }
+    options.push({ value: "Mobile", label: "Mobile" });
+    return options;
+  }, []);
 
-          // Update formik with the correct phone code
-          formik.setFieldValue("country_phone_code", countryPhoneCode);
+  // Payment method options for USD
+  const paymentMethodOptions = [
+    { value: "ACH", label: "ACH" },
+    { value: "Domestic Wire", label: "Domestic Wire" },
+  ];
 
-          // Also update the phoneInput country code for search
-          setCountryCodeInput(countryPhoneCode);
-        }
-      }}
-      value={formik.values.country_id}
-      name="country_id"
-    >
-      <option value="">Select Country</option>
-      {countriesOptions.map((country) => (
-        <option key={country.value} value={country.id}>
-          {country.label} ({country.country_code})
-        </option>
-      ))}
-    </select>
-  );
+  // Account type options for ACH
+  const accountTypeOptions = [
+    { value: "Business Savings", label: "Business Savings" },
+    { value: "Business Checkings", label: "Business Checkings" },
+    { value: "Personal Checkings", label: "Personal Checkings" },
+    { value: "Personal Savings", label: "Personal Savings" },
+  ];
+
+  // Wallet provider options
+  const walletProviderOptions = [
+    { value: "M-Pesa", label: "M-Pesa (Kenya)" },
+    { value: "EasyPaisa", label: "EasyPaisa (Pakistan)" },
+    { value: "bKash", label: "bKash (Bangladesh)" },
+    { value: "Other", label: "Other" },
+  ];
 
   // Field label with optional indicator
   const FieldLabel = ({ children, required = false, info = null }) => (
@@ -1456,13 +1477,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   );
 
   // Render bank account fields
-  // Render bank account fields
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
     const currentBanks = getBanksForCurrency;
     const currentIdTypes = getIdTypesForCurrency;
-    const currentBankBranches = getBankBranches;
 
     return (
       <div
@@ -1516,30 +1535,31 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <span className="ml-1 text-xs text-gray-500">(Pre-filled)</span>
               )}
             </FieldLabel>
-            <select
-              className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                usingExistingBeneficiary ? "bg-gray-100 cursor-not-allowed" : ""
-              }`}
-              value={account.rails}
-              onChange={(e) =>
-                handleBankAccountChange(index, "rails", e.target.value)
+            <Select
+              className="text-sm"
+              classNamePrefix="select"
+              options={getRailsOptions(accountCurrency)}
+              placeholder="Select Rails..."
+              isSearchable
+              isDisabled={usingExistingBeneficiary}
+              onChange={(selectedOption) =>
+                handleBankAccountChange(index, "rails", selectedOption?.value)
               }
-              required
-              disabled={usingExistingBeneficiary}
-            >
-              <option value="">Select Rails</option>
-              <option value="Local">
-                {accountCurrency === "GBP"
-                  ? "FPS"
-                  : accountCurrency === "EUR"
-                  ? "SEPA"
-                  : accountCurrency === "USD"
-                  ? "ACH"
-                  : "Bank"}
-              </option>
-              <option value="Swift">Swift</option>
-              <option value="Mobile">Mobile</option>
-            </select>
+              value={getRailsOptions(accountCurrency).find(
+                (option) => option.value === account.rails,
+              )}
+              styles={{
+                ...customStyles,
+                control: (provided, state) => ({
+                  ...customStyles.control(provided, state),
+                  backgroundColor: usingExistingBeneficiary
+                    ? "#f3f4f6"
+                    : "white",
+                  cursor: usingExistingBeneficiary ? "not-allowed" : "default",
+                  opacity: usingExistingBeneficiary ? 0.7 : 1,
+                }),
+              }}
+            />
             {account.rails && (
               <div className="flex items-center mt-2 text-green-600 text-sm">
                 <FaCheckCircle className="mr-1" size={12} />
@@ -1559,27 +1579,38 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </span>
                 )}
               </FieldLabel>
-              <select
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                value={accountCurrency}
-                onChange={(e) => {
-                  handleCurrencyChange(e);
-                  handleBankAccountChange(index, "currency", e.target.value);
+              <Select
+                className="text-sm"
+                classNamePrefix="select"
+                options={currencyOptions}
+                placeholder="Select Currency..."
+                isSearchable
+                isDisabled={usingExistingBeneficiary}
+                onChange={(selectedOption) => {
+                  handleCurrencyChange(selectedOption);
+                  handleBankAccountChange(
+                    index,
+                    "currency",
+                    selectedOption?.value,
+                  );
                 }}
-                required
-                disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Currency</option>
-                {localCurrencies.map((cur, i) => (
-                  <option key={i} value={cur}>
-                    {cur}
-                  </option>
-                ))}
-              </select>
+                value={currencyOptions.find(
+                  (option) => option.value === accountCurrency,
+                )}
+                styles={{
+                  ...customStyles,
+                  control: (provided, state) => ({
+                    ...customStyles.control(provided, state),
+                    backgroundColor: usingExistingBeneficiary
+                      ? "#f3f4f6"
+                      : "white",
+                    cursor: usingExistingBeneficiary
+                      ? "not-allowed"
+                      : "default",
+                    opacity: usingExistingBeneficiary ? 0.7 : 1,
+                  }),
+                }}
+              />
             </div>
           )}
         </div>
@@ -1598,25 +1629,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </span>
                 )}
               </FieldLabel>
-              <select
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                value={formik.values.beneficiary_id_type}
-                onChange={formik.handleChange}
-                name="beneficiary_id_type"
-                required
-                disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select ID Type</option>
-                {currentIdTypes.map((idType) => (
-                  <option key={idType.name} value={idType.name}>
-                    {idType.name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                className="text-sm"
+                classNamePrefix="select"
+                options={idTypeOptions}
+                placeholder="Select ID Type..."
+                isSearchable
+                isDisabled={usingExistingBeneficiary}
+                onChange={(selectedOption) =>
+                  formik.setFieldValue(
+                    "beneficiary_id_type",
+                    selectedOption?.value,
+                  )
+                }
+                value={idTypeOptions.find(
+                  (option) =>
+                    option.value === formik.values.beneficiary_id_type,
+                )}
+                styles={{
+                  ...customStyles,
+                  control: (provided, state) => ({
+                    ...customStyles.control(provided, state),
+                    backgroundColor: usingExistingBeneficiary
+                      ? "#f3f4f6"
+                      : "white",
+                    cursor: usingExistingBeneficiary
+                      ? "not-allowed"
+                      : "default",
+                    opacity: usingExistingBeneficiary ? 0.7 : 1,
+                  }),
+                }}
+              />
             </div>
 
             <div className="mb-4">
@@ -1729,7 +1772,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   handleBankAccountChange(
                     index,
                     "intermediarySwift",
-                    e.target.value
+                    e.target.value,
                   )
                 }
                 disabled={usingExistingBeneficiary}
@@ -1754,27 +1797,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </span>
                     )}
                   </FieldLabel>
-                  <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                      usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                    }`}
-                    value={account.paymentMethod}
-                    onChange={(e) =>
+                  <Select
+                    className="text-sm"
+                    classNamePrefix="select"
+                    options={paymentMethodOptions}
+                    placeholder="Select Payment Method..."
+                    isSearchable
+                    isDisabled={usingExistingBeneficiary}
+                    onChange={(selectedOption) =>
                       handleBankAccountChange(
                         index,
                         "paymentMethod",
-                        e.target.value
+                        selectedOption?.value,
                       )
                     }
-                    required
-                    disabled={usingExistingBeneficiary}
-                  >
-                    <option value="">Select Payment Method</option>
-                    <option value="ACH">ACH</option>
-                    <option value="Domestic Wire">Domestic Wire</option>
-                  </select>
+                    value={paymentMethodOptions.find(
+                      (option) => option.value === account.paymentMethod,
+                    )}
+                    styles={{
+                      ...customStyles,
+                      control: (provided, state) => ({
+                        ...customStyles.control(provided, state),
+                        backgroundColor: usingExistingBeneficiary
+                          ? "#f3f4f6"
+                          : "white",
+                        cursor: usingExistingBeneficiary
+                          ? "not-allowed"
+                          : "default",
+                        opacity: usingExistingBeneficiary ? 0.7 : 1,
+                      }),
+                    }}
+                  />
                 </div>
 
                 <div className="mb-4">
@@ -1799,7 +1852,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "routingNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1830,7 +1883,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1849,33 +1902,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </span>
                       )}
                     </FieldLabel>
-                    <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                        usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                      }`}
-                      value={account.accountType}
-                      onChange={(e) =>
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={accountTypeOptions}
+                      placeholder="Select Account Type..."
+                      isSearchable
+                      isDisabled={usingExistingBeneficiary}
+                      onChange={(selectedOption) =>
                         handleBankAccountChange(
                           index,
                           "accountType",
-                          e.target.value
+                          selectedOption?.value,
                         )
                       }
-                      required
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Account Type</option>
-                      <option value="Business Savings">Business Savings</option>
-                      <option value="Business Checkings">
-                        Business Checkings
-                      </option>
-                      <option value="Personal Checkings">
-                        Personal Checkings
-                      </option>
-                      <option value="Personal Savings">Personal Savings</option>
-                    </select>
+                      value={accountTypeOptions.find(
+                        (option) => option.value === account.accountType,
+                      )}
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...customStyles.control(provided, state),
+                          backgroundColor: usingExistingBeneficiary
+                            ? "#f3f4f6"
+                            : "white",
+                          cursor: usingExistingBeneficiary
+                            ? "not-allowed"
+                            : "default",
+                          opacity: usingExistingBeneficiary ? 0.7 : 1,
+                        }),
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -1933,7 +1990,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2076,45 +2133,49 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </span>
                     )}
                   </FieldLabel>
-                  <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                      usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                    }`}
-                    value={account.bankCode}
-                    onChange={(e) => {
+                  <Select
+                    className="text-sm"
+                    classNamePrefix="select"
+                    options={bankOptions}
+                    placeholder="Select Bank..."
+                    isSearchable
+                    isDisabled={usingExistingBeneficiary}
+                    onChange={(selectedOption) => {
                       handleBankAccountChange(
                         index,
                         "bankCode",
-                        e.target.value
+                        selectedOption?.value,
                       );
                       const selectedBank = currentBanks.find(
                         (bank) =>
-                          bank.id === e.target.value ||
-                          bank.bank_code === e.target.value
+                          bank.id === selectedOption?.value ||
+                          bank.bank_code === selectedOption?.value,
                       );
                       if (selectedBank) {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.name || selectedBank.bank_name
+                          selectedBank.name || selectedBank.bank_name,
                         );
                       }
                     }}
-                    required
-                    disabled={usingExistingBeneficiary}
-                  >
-                    <option value="">Select Bank</option>
-                    {currentBanks.map((bank) => (
-                      <option
-                        key={bank.id || bank.bank_code}
-                        value={bank.id || bank.bank_code}
-                      >
-                        {bank.name || bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
+                    value={bankOptions.find(
+                      (option) => option.value === account.bankCode,
+                    )}
+                    styles={{
+                      ...customStyles,
+                      control: (provided, state) => ({
+                        ...customStyles.control(provided, state),
+                        backgroundColor: usingExistingBeneficiary
+                          ? "#f3f4f6"
+                          : "white",
+                        cursor: usingExistingBeneficiary
+                          ? "not-allowed"
+                          : "default",
+                        opacity: usingExistingBeneficiary ? 0.7 : 1,
+                      }),
+                    }}
+                  />
                 </div>
 
                 <div className="mb-4">
@@ -2139,7 +2200,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2171,7 +2232,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "accountName",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       disabled={usingExistingBeneficiary}
@@ -2197,14 +2258,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </span>
                     )}
                   </FieldLabel>
-                  <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                      usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                    }`}
-                    value={account.bankCode}
-                    onChange={(e) => {
+                  <Select
+                    className="text-sm"
+                    classNamePrefix="select"
+                    options={bankOptions}
+                    placeholder="Select Bank..."
+                    isSearchable
+                    isDisabled={usingExistingBeneficiary}
+                    onChange={(selectedOption) => {
                       if (
                         accountCurrency === "BDT" ||
                         accountCurrency === "LKR" ||
@@ -2213,36 +2274,43 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBdtBankAccountChange(
                           index,
                           "bankCode",
-                          e.target.value
+                          selectedOption?.value,
                         );
                       } else {
                         handlePkrBankAccountChange(
                           index,
                           "bankCode",
-                          e.target.value
+                          selectedOption?.value,
                         );
                       }
                       const selectedBank = currentBanks.find(
-                        (bank) => bank.bank_code === e.target.value
+                        (bank) => bank.bank_code === selectedOption?.value,
                       );
                       if (selectedBank) {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.bank_name
+                          selectedBank.bank_name,
                         );
                       }
                     }}
-                    required
-                    disabled={usingExistingBeneficiary}
-                  >
-                    <option value="">Select Bank</option>
-                    {currentBanks.map((bank) => (
-                      <option key={bank.bank_code} value={bank.bank_code}>
-                        {bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
+                    value={bankOptions.find(
+                      (option) => option.value === account.bankCode,
+                    )}
+                    styles={{
+                      ...customStyles,
+                      control: (provided, state) => ({
+                        ...customStyles.control(provided, state),
+                        backgroundColor: usingExistingBeneficiary
+                          ? "#f3f4f6"
+                          : "white",
+                        cursor: usingExistingBeneficiary
+                          ? "not-allowed"
+                          : "default",
+                        opacity: usingExistingBeneficiary ? 0.7 : 1,
+                      }),
+                    }}
+                  />
                 </div>
 
                 <div className="mb-4">
@@ -2267,7 +2335,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2288,32 +2356,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {accountCurrency === "BDT" ||
                   accountCurrency === "LKR" ||
                   accountCurrency === "AUD" ? (
-                    <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                        usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                      }`}
-                      value={account.branchCode}
-                      onChange={(e) =>
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={branchOptions}
+                      placeholder="Select Branch..."
+                      isSearchable
+                      isDisabled={usingExistingBeneficiary}
+                      onChange={(selectedOption) =>
                         handleBankAccountChange(
                           index,
                           "branchCode",
-                          e.target.value
+                          selectedOption?.value,
                         )
                       }
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Branch</option>
-                      {currentBankBranches.map((branch) => (
-                        <option
-                          key={branch.branch_code}
-                          value={branch.branch_code}
-                        >
-                          {branch.bank_branch_name} - {branch.branch_code}
-                        </option>
-                      ))}
-                    </select>
+                      value={branchOptions.find(
+                        (option) => option.value === account.branchCode,
+                      )}
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...customStyles.control(provided, state),
+                          backgroundColor: usingExistingBeneficiary
+                            ? "#f3f4f6"
+                            : "white",
+                          cursor: usingExistingBeneficiary
+                            ? "not-allowed"
+                            : "default",
+                          opacity: usingExistingBeneficiary ? 0.7 : 1,
+                        }),
+                      }}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -2328,7 +2401,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "branchCode",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       disabled={usingExistingBeneficiary}
@@ -2359,7 +2432,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankState",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     disabled={usingExistingBeneficiary}
@@ -2424,7 +2497,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2476,29 +2549,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </span>
                 )}
               </FieldLabel>
-              <select
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                value={account.walletProvider}
-                onChange={(e) =>
+              <Select
+                className="text-sm"
+                classNamePrefix="select"
+                options={walletProviderOptions}
+                placeholder="Select Provider..."
+                isSearchable
+                isDisabled={usingExistingBeneficiary}
+                onChange={(selectedOption) =>
                   handleBankAccountChange(
                     index,
                     "walletProvider",
-                    e.target.value
+                    selectedOption?.value,
                   )
                 }
-                required
-                disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Provider</option>
-                <option value="M-Pesa">M-Pesa (Kenya)</option>
-                <option value="EasyPaisa">EasyPaisa (Pakistan)</option>
-                <option value="bKash">bKash (Bangladesh)</option>
-                <option value="Other">Other</option>
-              </select>
+                value={walletProviderOptions.find(
+                  (option) => option.value === account.walletProvider,
+                )}
+                styles={{
+                  ...customStyles,
+                  control: (provided, state) => ({
+                    ...customStyles.control(provided, state),
+                    backgroundColor: usingExistingBeneficiary
+                      ? "#f3f4f6"
+                      : "white",
+                    cursor: usingExistingBeneficiary
+                      ? "not-allowed"
+                      : "default",
+                    opacity: usingExistingBeneficiary ? 0.7 : 1,
+                  }),
+                }}
+              />
             </div>
 
             <div className="mb-4">
@@ -2551,7 +2632,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     handleBankAccountChange(
                       index,
                       "otherProvider",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   required
@@ -2610,7 +2691,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   setSelectedCountryCode(selectedOption?.value || "+1");
                 }}
                 value={phoneCodeOptions.find(
-                  (option) => option.value === countryCodeInput
+                  (option) => option.value === countryCodeInput,
                 )}
                 formatOptionLabel={({ country, label }) => (
                   <div className="flex items-center">
@@ -2655,8 +2736,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   phoneSearchLoading
                     ? "bg-gray-300 cursor-not-allowed"
                     : !phoneInput.trim()
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-blue-500 hover:bg-blue-600 text-white"
                 }`}
               >
                 {phoneSearchLoading ? (
@@ -2728,7 +2809,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         {phoneSearch.data.country_id
                           ? countries.find(
                               (c) =>
-                                c.id === parseInt(phoneSearch.data.country_id)
+                                c.id === parseInt(phoneSearch.data.country_id),
                             )?.name || "N/A"
                           : "N/A"}
                       </p>
@@ -2900,8 +2981,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       step === stepItem.number
                         ? "bg-blue-500"
                         : step > stepItem.number
-                        ? "bg-blue-400"
-                        : "bg-blue-300"
+                          ? "bg-blue-400"
+                          : "bg-blue-300"
                     } text-white font-bold text-lg shadow-lg`}
                   >
                     {step === stepItem.number ? (
@@ -2939,10 +3020,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   step === 0 && mode === "create"
                     ? "bg-blue-600 text-white"
                     : step >= 1
-                    ? step === 1
-                      ? "bg-blue-600 text-white"
+                      ? step === 1
+                        ? "bg-blue-600 text-white"
+                        : "bg-blue-100 text-blue-600"
                       : "bg-blue-100 text-blue-600"
-                    : "bg-blue-100 text-blue-600"
                 }`}
               >
                 {step}
@@ -2961,7 +3042,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           {/* STEP 0: Phone Search (only for create mode) */}
           {mode === "create" && step === 0 && renderPhoneSearchStep()}
 
-          {/* STEP 1: Beneficiary Details */}
           {/* STEP 1: Beneficiary Details */}
           {step === 1 && (
             <form
@@ -3084,28 +3164,31 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <FieldLabel info="Select the currency for transfers">
                     Currency
                   </FieldLabel>
-                  <div className="relative">
-                    <select
-                      className={`w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
-                        usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                      }`}
-                      value={currency}
-                      onChange={handleCurrencyChange}
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Currency</option>
-                      {localCurrencies.map((cur, i) => (
-                        <option key={i} value={cur}>
-                          {cur}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <FaChevronRight className="text-gray-400 rotate-90" />
-                    </div>
-                  </div>
+                  <Select
+                    className="text-sm"
+                    classNamePrefix="select"
+                    options={currencyOptions}
+                    placeholder="Select Currency..."
+                    isSearchable
+                    isDisabled={usingExistingBeneficiary}
+                    onChange={handleCurrencyChange}
+                    value={currencyOptions.find(
+                      (option) => option.value === currency,
+                    )}
+                    styles={{
+                      ...customStyles,
+                      control: (provided, state) => ({
+                        ...customStyles.control(provided, state),
+                        backgroundColor: usingExistingBeneficiary
+                          ? "#f3f4f6"
+                          : "white",
+                        cursor: usingExistingBeneficiary
+                          ? "not-allowed"
+                          : "default",
+                        opacity: usingExistingBeneficiary ? 0.7 : 1,
+                      }),
+                    }}
+                  />
                 </div>
 
                 {/* ALWAYS SHOW THESE FIELDS */}
@@ -3197,13 +3280,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             if (!usingExistingBeneficiary) {
                               formik.setFieldValue(
                                 "country_phone_code",
-                                selectedOption?.value || "+1"
+                                selectedOption?.value || "+1",
                               );
                             }
                           }}
                           value={phoneCodeOptions.find(
                             (option) =>
-                              option.value === formik.values.country_phone_code
+                              option.value === formik.values.country_phone_code,
                           )}
                           formatOptionLabel={({ country, label }) => (
                             <div className="flex items-center">
@@ -3268,29 +3351,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </span>
                       )}
                     </FieldLabel>
-                    <div className="relative">
-                      <select
-                        className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
-                          usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
-                            : "bg-white"
-                        }`}
-                        onChange={formik.handleChange}
-                        value={formik.values.nationality_id}
-                        name="nationality_id"
-                        disabled={usingExistingBeneficiary}
-                      >
-                        <option value="">Select Nationality</option>
-                        {nationalities.map((nationality) => (
-                          <option key={nationality.id} value={nationality.id}>
-                            {nationality.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                        <FaChevronRight className="text-gray-400 rotate-90" />
-                      </div>
-                    </div>
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={nationalityOptions}
+                      placeholder="Select Nationality..."
+                      isSearchable
+                      isDisabled={usingExistingBeneficiary}
+                      onChange={(selectedOption) =>
+                        formik.setFieldValue(
+                          "nationality_id",
+                          selectedOption?.value,
+                        )
+                      }
+                      value={nationalityOptions.find(
+                        (option) =>
+                          option.value === formik.values.nationality_id,
+                      )}
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...customStyles.control(provided, state),
+                          backgroundColor: usingExistingBeneficiary
+                            ? "#f3f4f6"
+                            : "white",
+                          cursor: usingExistingBeneficiary
+                            ? "not-allowed"
+                            : "default",
+                          opacity: usingExistingBeneficiary ? 0.7 : 1,
+                        }),
+                      }}
+                    />
                   </div>
 
                   {/* Country */}
@@ -3303,41 +3394,88 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </span>
                       )}
                     </FieldLabel>
-                    <select
-                      className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                        usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : "bg-white"
-                      }`}
-                      onChange={(e) => {
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={countriesOptions}
+                      placeholder="Select Country..."
+                      isSearchable
+                      isDisabled={usingExistingBeneficiary}
+                      onChange={(selectedOption) => {
                         if (!usingExistingBeneficiary) {
-                          const selectedCountryId = e.target.value;
+                          const selectedCountryId =
+                            selectedOption?.value?.toString();
                           const selectedCountry = countries.find(
                             (country) =>
-                              country.id === parseInt(selectedCountryId)
+                              country.id === parseInt(selectedCountryId),
                           );
 
                           formik.setFieldValue("country_id", selectedCountryId);
 
                           if (selectedCountry) {
+                            let countryPhoneCode =
+                              selectedCountry.phone_code || "+1";
+                            if (!countryPhoneCode.startsWith("+")) {
+                              countryPhoneCode = `+${countryPhoneCode}`;
+                            }
                             formik.setFieldValue(
                               "country_phone_code",
-                              selectedCountry.phone_code || "+1"
+                              countryPhoneCode,
                             );
+                            setCountryCodeInput(countryPhoneCode);
                           }
                         }
                       }}
-                      value={formik.values.country_id}
-                      name="country_id"
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Country</option>
-                      {countriesOptions.map((country) => (
-                        <option key={country.value} value={country.id}>
-                          {country.label} ({country.country_code})
-                        </option>
-                      ))}
-                    </select>
+                      value={countriesOptions.find(
+                        (option) =>
+                          option.value?.toString() ===
+                          formik.values.country_id?.toString(),
+                      )}
+                      formatOptionLabel={(option) => (
+                        <div className="flex items-center">
+                          {option.flag_url ? (
+                            <img
+                              src={option.flag_url}
+                              alt={`${option.label} flag`}
+                              className="w-6 h-4 mr-2 rounded-sm object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = "none";
+                                // Fallback to country code if flag fails to load
+                                const fallback = document.createElement("span");
+                                fallback.className =
+                                  "w-6 h-4 mr-2 flex items-center justify-center bg-gray-100 rounded-sm text-xs font-medium";
+                                fallback.textContent =
+                                  option.country_code || "";
+                                e.target.parentNode.insertBefore(
+                                  fallback,
+                                  e.target,
+                                );
+                                e.target.remove();
+                              }}
+                            />
+                          ) : (
+                            <span className="w-6 h-4 mr-2 flex items-center justify-center bg-gray-100 rounded-sm text-xs font-medium">
+                              {option.country_code || ""}
+                            </span>
+                          )}
+                          <span>{option.label}</span>
+                        </div>
+                      )}
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...customStyles.control(provided, state),
+                          backgroundColor: usingExistingBeneficiary
+                            ? "#f3f4f6"
+                            : "white",
+                          cursor: usingExistingBeneficiary
+                            ? "not-allowed"
+                            : "default",
+                          opacity: usingExistingBeneficiary ? 0.7 : 1,
+                        }),
+                      }}
+                    />
                   </div>
 
                   {/* City */}
@@ -3352,31 +3490,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           </span>
                         )}
                       </FieldLabel>
-                      <div className="relative">
-                        <select
-                          id="city"
-                          name="city"
-                          value={formik.values.city}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
-                            usingExistingBeneficiary
-                              ? "bg-gray-100 cursor-not-allowed"
-                              : "bg-white"
-                          }`}
-                          disabled={usingExistingBeneficiary}
-                        >
-                          <option value="">Select City</option>
-                          {getCitiesForCountry().map((city) => (
-                            <option key={city.id} value={city.city_name}>
-                              {city.city_name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <FaChevronRight className="text-gray-400 rotate-90" />
-                        </div>
-                      </div>
+                      <Select
+                        className="text-sm"
+                        classNamePrefix="select"
+                        options={cityOptions}
+                        placeholder="Select City..."
+                        isSearchable
+                        isDisabled={usingExistingBeneficiary}
+                        onChange={(selectedOption) =>
+                          formik.setFieldValue("city", selectedOption?.value)
+                        }
+                        value={cityOptions.find(
+                          (option) => option.value === formik.values.city,
+                        )}
+                        styles={{
+                          ...customStyles,
+                          control: (provided, state) => ({
+                            ...customStyles.control(provided, state),
+                            backgroundColor: usingExistingBeneficiary
+                              ? "#f3f4f6"
+                              : "white",
+                            cursor: usingExistingBeneficiary
+                              ? "not-allowed"
+                              : "default",
+                            opacity: usingExistingBeneficiary ? 0.7 : 1,
+                          }),
+                        }}
+                      />
                     </div>
                   ) : (
                     <div>
@@ -3500,34 +3640,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           </span>
                         )}
                       </FieldLabel>
-                      <div className="relative">
-                        <select
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
-                            usingExistingBeneficiary
-                              ? "bg-gray-100 cursor-not-allowed"
-                              : "bg-white"
-                          }`}
-                          value={formik.values.beneficiary_id_type}
-                          onChange={formik.handleChange}
-                          name="beneficiary_id_type"
-                          disabled={usingExistingBeneficiary}
-                        >
-                          <option value="">Select ID Type</option>
-                          {getIdTypesForCurrency.map((idType) => {
-                            const value = idType.name || idType.id || idType;
-                            const label = idType.name || idType.id || idType;
-
-                            return (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <FaChevronRight className="text-gray-400 rotate-90" />
-                        </div>
-                      </div>
+                      <Select
+                        className="text-sm"
+                        classNamePrefix="select"
+                        options={idTypeOptions}
+                        placeholder="Select ID Type..."
+                        isSearchable
+                        isDisabled={usingExistingBeneficiary}
+                        onChange={(selectedOption) =>
+                          formik.setFieldValue(
+                            "beneficiary_id_type",
+                            selectedOption?.value,
+                          )
+                        }
+                        value={idTypeOptions.find(
+                          (option) =>
+                            option.value === formik.values.beneficiary_id_type,
+                        )}
+                        styles={{
+                          ...customStyles,
+                          control: (provided, state) => ({
+                            ...customStyles.control(provided, state),
+                            backgroundColor: usingExistingBeneficiary
+                              ? "#f3f4f6"
+                              : "white",
+                            cursor: usingExistingBeneficiary
+                              ? "not-allowed"
+                              : "default",
+                            opacity: usingExistingBeneficiary ? 0.7 : 1,
+                          }),
+                        }}
+                      />
                     </div>
                   )}
 
@@ -3572,38 +3715,42 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           </span>
                         )}
                       </FieldLabel>
-                      <div className="relative">
-                        <select
-                          id="relationtobenef"
-                          name="relationtobenef"
-                          value={formik.values.relationtobenef}
-                          onChange={(e) => {
-                            if (!usingExistingBeneficiary) {
-                              formik.handleChange(e);
-                              setShowOtherRelationship(
-                                e.target.value === "other"
-                              );
-                            }
-                          }}
-                          onBlur={formik.handleBlur}
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
-                            usingExistingBeneficiary
-                              ? "bg-gray-100 cursor-not-allowed"
-                              : "bg-white"
-                          }`}
-                          disabled={usingExistingBeneficiary}
-                        >
-                          <option value="">-- Select Relationship --</option>
-                          {relationshipOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <FaChevronRight className="text-gray-400 rotate-90" />
-                        </div>
-                      </div>
+                      <Select
+                        className="text-sm"
+                        classNamePrefix="select"
+                        options={relationshipOptions}
+                        placeholder="-- Select Relationship --"
+                        isSearchable
+                        isDisabled={usingExistingBeneficiary}
+                        onChange={(selectedOption) => {
+                          if (!usingExistingBeneficiary) {
+                            formik.setFieldValue(
+                              "relationtobenef",
+                              selectedOption?.value,
+                            );
+                            setShowOtherRelationship(
+                              selectedOption?.value === "other",
+                            );
+                          }
+                        }}
+                        value={relationshipOptions.find(
+                          (option) =>
+                            option.value === formik.values.relationtobenef,
+                        )}
+                        styles={{
+                          ...customStyles,
+                          control: (provided, state) => ({
+                            ...customStyles.control(provided, state),
+                            backgroundColor: usingExistingBeneficiary
+                              ? "#f3f4f6"
+                              : "white",
+                            cursor: usingExistingBeneficiary
+                              ? "not-allowed"
+                              : "default",
+                            opacity: usingExistingBeneficiary ? 0.7 : 1,
+                          }),
+                        }}
+                      />
 
                       {/* Show input field when "Other" is selected */}
                       {showOtherRelationship && (
@@ -3690,7 +3837,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <form onSubmit={handleSubmit} className="space-y-8">
                 {bankAccounts.map((account, index) =>
-                  renderBankAccountFields(index)
+                  renderBankAccountFields(index),
                 )}
 
                 {/* Add Bank Account Button */}

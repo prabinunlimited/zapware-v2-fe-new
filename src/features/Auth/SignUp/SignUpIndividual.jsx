@@ -272,17 +272,17 @@ const createValidationSchema = () => {
 
     country: Yup.mixed().required("Country is required"),
 
-    zip_code: Yup.string()
-      .required("ZIP/Postal code is required")
-      .min(3, "ZIP code must be at least 3 characters"),
+    // REMOVED character count validation
+    zip_code: Yup.string().required("ZIP/Postal code is required"),
 
+    // REMOVED character count validation
     state: Yup.string().required("State/Province is required"),
 
+    // REMOVED character count validation
     city: Yup.string().required("City is required"),
 
-    street_address_1: Yup.string()
-      .required("Street address is required")
-      .min(5, "Address must be at least 5 characters"),
+    // REMOVED character count validation
+    street_address_1: Yup.string().required("Street address is required"),
 
     mobile_number: Yup.string()
       .required("Phone number is required")
@@ -1975,7 +1975,7 @@ function SignUpIndividualContent() {
                 </div>
               </section>
 
-              {/* Contact Information Section */}
+              {/* Contact Information Section - REORDERED ADDRESS FIELDS */}
               <section className={`${activeSection !== 1 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
@@ -1987,28 +1987,31 @@ function SignUpIndividualContent() {
                 {renderSectionErrors(1)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Country Dropdown */}
+                  {/* Street Address 1 - FIRST as per requirements */}
                   <div>
                     <label
-                      htmlFor="country"
+                      htmlFor="street_address_1"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
-                      Country *
+                      Street Address *
                     </label>
-                    <Select
-                      id="country"
-                      name="country"
-                      options={countryOptions}
-                      onChange={handleCountrySelect}
+                    <input
+                      id="street_address_1"
+                      name="street_address_1"
+                      type="text"
+                      placeholder="123 Main St"
+                      onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
-                      className="basic-single"
-                      classNamePrefix="select"
-                      styles={customStyles}
-                      placeholder="Select Country"
-                      value={selectedCountry}
-                      isLoading={loadingCountries}
+                      value={formik.values.street_address_1}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        formik.touched.street_address_1 &&
+                        formik.errors.street_address_1
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
                     />
-                    {formik.touched.country && formik.errors.country ? (
+                    {formik.touched.street_address_1 &&
+                    formik.errors.street_address_1 ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2021,12 +2024,140 @@ function SignUpIndividualContent() {
                             clipRule="evenodd"
                           />
                         </svg>
-                        {formik.errors.country}
+                        {formik.errors.street_address_1}
                       </p>
                     ) : null}
                   </div>
 
-                  {/* ZIP Code - Auto-fills State and City */}
+                  {/* Street Address 2 (Optional) - SECOND as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="street_address_2"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Street Address 2/Suite Address (Optional)
+                    </label>
+                    <input
+                      id="street_address_2"
+                      name="street_address_2"
+                      type="text"
+                      placeholder="Apt, suite, unit, etc."
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      value={formik.values.street_address_2}
+                      className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                    />
+                  </div>
+
+                  {/* City - THIRD as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="city"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      City *
+                      {formik.values.city && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="city"
+                        name="city"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.city}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.city && formik.errors.city
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.city && formik.errors.city ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.city}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* State - FOURTH as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="state"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      State/Province *
+                      {formik.values.state && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="state"
+                        name="state"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.state}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.state && formik.errors.state
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.state && formik.errors.state ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.state}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* ZIP Code - FIFTH as per requirements */}
                   <div>
                     <label
                       htmlFor="zip_code"
@@ -2118,139 +2249,28 @@ function SignUpIndividualContent() {
                     )}
                   </div>
 
-                  {/* State Field - Auto-filled by ZIP code API */}
+                  {/* Country Dropdown - SIXTH as per requirements */}
                   <div>
                     <label
-                      htmlFor="state"
+                      htmlFor="country"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
-                      State/Province *
-                      {formik.values.state && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
+                      Country *
                     </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="state"
-                        name="state"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.state}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.state && formik.errors.state
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false}
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.state && formik.errors.state ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.state}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* City Field - Auto-filled by ZIP code API */}
-                  <div>
-                    <label
-                      htmlFor="city"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      City *
-                      {formik.values.city && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="city"
-                        name="city"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.city}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.city && formik.errors.city
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false}
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.city && formik.errors.city ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.city}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* Street Address 1 */}
-                  <div>
-                    <label
-                      htmlFor="street_address_1"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      Street Address *
-                    </label>
-                    <input
-                      id="street_address_1"
-                      name="street_address_1"
-                      type="text"
-                      placeholder="123 Main St"
-                      onChange={formik.handleChange}
+                    <Select
+                      id="country"
+                      name="country"
+                      options={countryOptions}
+                      onChange={handleCountrySelect}
                       onBlur={formik.handleBlur}
-                      value={formik.values.street_address_1}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        formik.touched.street_address_1 &&
-                        formik.errors.street_address_1
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
+                      className="basic-single"
+                      classNamePrefix="select"
+                      styles={customStyles}
+                      placeholder="Select Country"
+                      value={selectedCountry}
+                      isLoading={loadingCountries}
                     />
-                    {formik.touched.street_address_1 &&
-                    formik.errors.street_address_1 ? (
+                    {formik.touched.country && formik.errors.country ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2263,29 +2283,9 @@ function SignUpIndividualContent() {
                             clipRule="evenodd"
                           />
                         </svg>
-                        {formik.errors.street_address_1}
+                        {formik.errors.country}
                       </p>
                     ) : null}
-                  </div>
-
-                  {/* Street Address 2 (Optional) */}
-                  <div>
-                    <label
-                      htmlFor="street_address_2"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      Street Address 2/Suite Address (Optional)
-                    </label>
-                    <input
-                      id="street_address_2"
-                      name="street_address_2"
-                      type="text"
-                      placeholder="Apt, suite, unit, etc."
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      value={formik.values.street_address_2}
-                      className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
-                    />
                   </div>
 
                   {/* Phone Number */}
@@ -2658,33 +2658,82 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* Issuing Country */}
+                  {/* Issuing Country - Using react-select */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Issuing Country *
                     </label>
-                    <select
+                    <Select
+                      id="idIssuedCountryCode"
                       name="idIssuedCountryCode"
-                      value={formik.values.idIssuedCountryCode}
-                      onChange={formik.handleChange}
+                      options={countries.map((country) => ({
+                        value: country.country_code,
+                        label: country.name,
+                      }))}
+                      onChange={(selectedOption) => {
+                        formik.setFieldValue(
+                          "idIssuedCountryCode",
+                          selectedOption?.value || "",
+                        );
+                      }}
                       onBlur={formik.handleBlur}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !formik.values.idIssuedCountryCode &&
-                        formik.touched.idIssuedCountryCode
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                    >
-                      <option value="">Select Issuing Country</option>
-                      {countries.map((country) => (
-                        <option key={country.id} value={country.country_code}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
+                      value={
+                        countries
+                          .map((country) => ({
+                            value: country.country_code,
+                            label: country.name,
+                          }))
+                          .find(
+                            (option) =>
+                              option.value ===
+                              formik.values.idIssuedCountryCode,
+                          ) || null
+                      }
+                      className="basic-single"
+                      classNamePrefix="select"
+                      placeholder="Select Issuing Country"
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...provided,
+                          minHeight: "52px",
+                          borderRadius: "12px",
+                          borderColor:
+                            formik.touched.idIssuedCountryCode &&
+                            formik.errors.idIssuedCountryCode
+                              ? "#f87171"
+                              : "#e5e7eb",
+                          boxShadow: state.isFocused
+                            ? formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                              ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
+                              : "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                            : "none",
+                          "&:hover": {
+                            borderColor:
+                              formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                                ? "#ef4444"
+                                : "#3b82f6",
+                          },
+                        }),
+                      }}
+                    />
                     {formik.touched.idIssuedCountryCode &&
                       formik.errors.idIssuedCountryCode && (
-                        <p className="text-red-500 text-xs mt-2">
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                           {formik.errors.idIssuedCountryCode}
                         </p>
                       )}
@@ -3104,11 +3153,11 @@ function SignUpIndividualContent() {
                   </div>
                 )}
 
-                <div className="flex justify-between">
+                <div className="flex flex-col md:flex-row justify-between gap-4 md:gap-0">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(4)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 md:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group order-2 md:order-1 w-full md:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -3126,12 +3175,13 @@ function SignUpIndividualContent() {
                     </svg>
                     Previous
                   </button>
-                  <div className="flex gap-4">
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 order-1 md:order-2 w-full md:w-auto">
                     <button
                       type="button"
                       onClick={handleCancel}
                       disabled={isSubmitting}
-                      className="px-6 py-3.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isCancelling ? (
                         <>
@@ -3162,6 +3212,7 @@ function SignUpIndividualContent() {
                         </>
                       )}
                     </button>
+
                     <button
                       type="submit"
                       disabled={
@@ -3170,7 +3221,7 @@ function SignUpIndividualContent() {
                         (termsConditions.length > 0 &&
                           acceptedTerms.length === 0)
                       }
-                      className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isSubmitting ? (
                         <>

@@ -71,7 +71,7 @@ const LoadingProvider = ({ children }) => {
       stopLoading,
       isLoading,
     }),
-    [startLoading, stopLoading, isLoading]
+    [startLoading, stopLoading, isLoading],
   );
 
   return (
@@ -124,13 +124,13 @@ const HomepageContent = React.memo(() => {
 
   // Header state selectors
   const { profileData, profileLoading, profileError } = useSelector(
-    (state) => state.header
+    (state) => state.header,
   );
   const hasFetchedProfile = useSelector(
-    (state) => state.header.fetchStatus?.profile === "succeeded"
+    (state) => state.header.fetchStatus?.profile === "succeeded",
   );
   const partnerFxCurrencies = useSelector(
-    (state) => state.header.partnerFxCurrencies
+    (state) => state.header.partnerFxCurrencies,
   );
   const hasFxData = useSelector((state) => state.header.hasFxData);
 
@@ -162,7 +162,7 @@ const HomepageContent = React.memo(() => {
       return [];
     }
     return [...new Set(safeAccounts.map((account) => account.currency))].filter(
-      Boolean
+      Boolean,
     );
   }, [accounts]);
 
@@ -195,7 +195,7 @@ const HomepageContent = React.memo(() => {
       if (!hasFetchedAccount && !accountLoading) {
         console.log(
           "📊 Homepage: Fetching account details for customer",
-          customerId
+          customerId,
         );
 
         // Make sure we have required data
@@ -230,7 +230,7 @@ const HomepageContent = React.memo(() => {
         dispatch(fetchUserProfile({ customerId, bearertoken }));
       } else {
         console.log(
-          "👤 Homepage: Profile already fetched, loading, or has data"
+          "👤 Homepage: Profile already fetched, loading, or has data",
         );
       }
     };
@@ -531,7 +531,7 @@ const HomepageContent = React.memo(() => {
                         url: `https://zapware.unlimitedremit.com/api/active-account-details/${customerId}`,
                         params: {},
                         data: {},
-                      })
+                      }),
                     )
                       ? "🔄"
                       : "✅"}
@@ -546,7 +546,7 @@ const HomepageContent = React.memo(() => {
                         url: `https://zapware.unlimitedremit.com/api/customers/${customerId}/profile`,
                         params: {},
                         data: {},
-                      })
+                      }),
                     )
                       ? "🔄"
                       : "✅"}
@@ -561,7 +561,7 @@ const HomepageContent = React.memo(() => {
                         url: `https://zapware.unlimitedremit.com/api/partner-fxcurrencies`,
                         params: {},
                         data: { partner_id: "9" },
-                      })
+                      }),
                     )
                       ? "🔄"
                       : "✅"}

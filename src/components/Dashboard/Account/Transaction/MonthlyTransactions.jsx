@@ -1,15 +1,15 @@
 // MonthlyTransactions.jsx (Enhanced UI/UX Version)
 import { useState, useEffect } from "react";
-import { 
-  FaFilePdf, 
-  FaArrowLeft, 
-  FaFilter, 
-  FaSync, 
+import {
+  FaFilePdf,
+  FaArrowLeft,
+  FaFilter,
+  FaSync,
   FaCalendarAlt,
   FaMoneyBillWave,
   FaDownload,
   FaSearch,
-  FaInfoCircle
+  FaInfoCircle,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -54,12 +54,15 @@ const MonthlyTransactions = () => {
   const statementsError = useSelector(selectStatementsError);
 
   // Enhanced filtered statements with search
-  const enhancedFilteredStatements = searchTerm 
-    ? filteredStatements.filter(statement => 
-        statement.currency.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        new Date(0, statement.month - 1).toLocaleString("default", { month: "long" })
-          .toLowerCase().includes(searchTerm.toLowerCase()) ||
-        statement.year.toString().includes(searchTerm)
+  const enhancedFilteredStatements = searchTerm
+    ? filteredStatements.filter(
+        (statement) =>
+          statement.currency.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          new Date(0, statement.month - 1)
+            .toLocaleString("default", { month: "long" })
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          statement.year.toString().includes(searchTerm),
       )
     : filteredStatements;
 
@@ -71,7 +74,7 @@ const MonthlyTransactions = () => {
     try {
       await Promise.all([
         dispatch(fetchStatements(customerId)),
-        dispatch(fetchCustomerBankAccounts({ customerId }))
+        dispatch(fetchCustomerBankAccounts({ customerId })),
       ]);
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -102,10 +105,10 @@ const MonthlyTransactions = () => {
   };
 
   const clearFilters = () => {
-    dispatch(setSelectedCurrency(''));
-    dispatch(setSelectedMonth(''));
-    dispatch(setSelectedYear(''));
-    setSearchTerm('');
+    dispatch(setSelectedCurrency(""));
+    dispatch(setSelectedMonth(""));
+    dispatch(setSelectedYear(""));
+    setSearchTerm("");
     toast.info("Filters cleared");
   };
 
@@ -120,36 +123,37 @@ const MonthlyTransactions = () => {
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { 
+    visible: {
       opacity: 1,
-      transition: { 
+      transition: {
         staggerChildren: 0.1,
-        delayChildren: 0.2
-      }
-    }
+        delayChildren: 0.2,
+      },
+    },
   };
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
+    visible: {
+      y: 0,
       opacity: 1,
-      transition: { type: "spring", stiffness: 100 }
-    }
+      transition: { type: "spring", stiffness: 100 },
+    },
   };
 
   const cardVariants = {
-    hover: { 
-      scale: 1.02, 
-      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-      transition: { duration: 0.2 }
+    hover: {
+      scale: 1.02,
+      boxShadow:
+        "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+      transition: { duration: 0.2 },
     },
-    tap: { scale: 0.98 }
+    tap: { scale: 0.98 },
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -166,7 +170,7 @@ const MonthlyTransactions = () => {
               View and download your monthly transaction statements
             </p>
           </div>
-          
+
           <div className="flex flex-wrap gap-3">
             <motion.button
               onClick={handleRefresh}
@@ -175,10 +179,10 @@ const MonthlyTransactions = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <FaSync className={`${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              <FaSync className={`${isRefreshing ? "animate-spin" : ""}`} />
+              {isRefreshing ? "Refreshing..." : "Refresh"}
             </motion.button>
-            
+
             <motion.button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -186,26 +190,28 @@ const MonthlyTransactions = () => {
               whileTap={{ scale: 0.95 }}
             >
               <FaFilter />
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
+              {showFilters ? "Hide Filters" : "Show Filters"}
             </motion.button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <motion.div 
+        <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
         >
-          <motion.div 
+          <motion.div
             variants={itemVariants}
             className="bg-white rounded-xl p-6 shadow-lg border border-gray-200"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Total Statements</p>
-                <p className="text-3xl font-bold text-gray-800 mt-2">{getTotalStatements()}</p>
+                <p className="text-3xl font-bold text-gray-800 mt-2">
+                  {getTotalStatements()}
+                </p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <FaFilePdf className="text-2xl text-blue-600" />
@@ -213,14 +219,16 @@ const MonthlyTransactions = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             variants={itemVariants}
             className="bg-white rounded-xl p-6 shadow-lg border border-gray-200"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Filtered Statements</p>
-                <p className="text-3xl font-bold text-gray-800 mt-2">{getFilteredCount()}</p>
+                <p className="text-3xl font-bold text-gray-800 mt-2">
+                  {getFilteredCount()}
+                </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <FaFilter className="text-2xl text-green-600" />
@@ -228,14 +236,16 @@ const MonthlyTransactions = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             variants={itemVariants}
             className="bg-white rounded-xl p-6 shadow-lg border border-gray-200"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Available Currencies</p>
-                <p className="text-3xl font-bold text-gray-800 mt-2">{customerBankAccounts.length}</p>
+                <p className="text-3xl font-bold text-gray-800 mt-2">
+                  {customerBankAccounts.length}
+                </p>
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <FaMoneyBillWave className="text-2xl text-purple-600" />
@@ -249,7 +259,7 @@ const MonthlyTransactions = () => {
           {showFilters && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-200"
             >
@@ -300,14 +310,21 @@ const MonthlyTransactions = () => {
                         <option disabled>Loading...</option>
                       ) : (
                         customerBankAccounts.map((account) => (
-                          <option key={account.currency_code} value={account.currency_code}>
+                          <option
+                            key={account.currency_code}
+                            value={account.currency_code}
+                          >
                             {account.currency_code}
                           </option>
                         ))
                       )}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <svg
+                        className="fill-current h-4 w-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                      >
                         <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                       </svg>
                     </div>
@@ -328,7 +345,9 @@ const MonthlyTransactions = () => {
                       <option value="">All Months</option>
                       {[...Array(12)].map((_, i) => (
                         <option key={i + 1} value={i + 1}>
-                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                          {new Date(0, i).toLocaleString("default", {
+                            month: "long",
+                          })}
                         </option>
                       ))}
                     </select>
@@ -343,7 +362,7 @@ const MonthlyTransactions = () => {
                       value={selectedYear}
                     >
                       <option value="">All Years</option>
-                      {[2025, 2024, 2023].map(year => (
+                      {[2025, 2024, 2023].map((year) => (
                         <option key={year} value={year}>
                           {year}
                         </option>
@@ -357,56 +376,65 @@ const MonthlyTransactions = () => {
         </AnimatePresence>
 
         {/* Content Section */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200"
+          className="bg-white rounded-xl md:rounded-2xl shadow-lg overflow-hidden border border-gray-200"
         >
           {/* Table Header */}
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Monthly Statements
-                {searchTerm && (
-                  <span className="text-sm font-normal text-gray-600 ml-2">
-                    (Search: "{searchTerm}")
-                  </span>
-                )}
-              </h3>
-              <div className="text-sm text-gray-500">
-                Showing {getFilteredCount()} of {getTotalStatements()} statements
+          <div className="px-4 sm:px-6 py-3 md:py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+              <div>
+                <h3 className="text-base md:text-lg font-semibold text-gray-800">
+                  Monthly Statements
+                  {searchTerm && (
+                    <span className="text-xs md:text-sm font-normal text-gray-600 ml-1 md:ml-2">
+                      (Search: "{searchTerm}")
+                    </span>
+                  )}
+                </h3>
+              </div>
+              <div className="text-xs md:text-sm text-gray-500">
+                Showing {getFilteredCount()} of {getTotalStatements()}{" "}
+                statements
               </div>
             </div>
           </div>
 
           {/* Loading State */}
           {statementsLoading ? (
-            <div className="py-20">
+            <div className="py-12 md:py-20">
               <div className="flex flex-col items-center justify-center">
-                <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="text-gray-600">Loading your statements...</p>
+                <div className="w-12 h-12 md:w-16 md:h-16 border-3 md:border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3 md:mb-4"></div>
+                <p className="text-gray-600 text-sm md:text-base">
+                  Loading your statements...
+                </p>
               </div>
             </div>
           ) : (
-            /* Statements Table */
+            /* Statements Table - Mobile: Cards, Desktop: Table */
             <div className="overflow-x-auto">
-              <table className="w-full">
+              {/* Desktop Table View */}
+              <table className="w-full hidden md:table">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="py-4 px-6 text-left font-semibold text-gray-700">
-                      <div className="flex items-center gap-2">
+                    <th className="py-3 md:py-4 px-4 md:px-6 text-left font-semibold text-gray-700 text-sm md:text-base">
+                      <div className="flex items-center gap-1 md:gap-2">
                         Currency
-                        <FaInfoCircle className="text-gray-400 text-sm" title="Transaction currency" />
+                        <FaInfoCircle
+                          className="text-gray-400 text-xs md:text-sm"
+                          title="Transaction currency"
+                        />
                       </div>
                     </th>
-                    <th className="py-4 px-6 text-left font-semibold text-gray-700">
+                    <th className="py-3 md:py-4 px-4 md:px-6 text-left font-semibold text-gray-700 text-sm md:text-base">
                       Month
                     </th>
-                    <th className="py-4 px-6 text-left font-semibold text-gray-700">
+                    <th className="py-3 md:py-4 px-4 md:px-6 text-left font-semibold text-gray-700 text-sm md:text-base">
                       Year
                     </th>
-                    <th className="py-4 px-6 text-left font-semibold text-gray-700">
+                    <th className="py-3 md:py-4 px-4 md:px-6 text-left font-semibold text-gray-700 text-sm md:text-base">
                       Actions
                     </th>
                   </tr>
@@ -423,71 +451,85 @@ const MonthlyTransactions = () => {
                           transition={{ delay: index * 0.05 }}
                           className="border-b border-gray-100 hover:bg-blue-50/50 transition-colors duration-150"
                         >
-                          <td className="py-5 px-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                                <span className="font-semibold text-blue-700">
+                          <td className="py-4 md:py-5 px-4 md:px-6">
+                            <div className="flex items-center gap-2 md:gap-3">
+                              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <span className="font-semibold text-blue-700 text-sm md:text-base">
                                   {statement.currency.substring(0, 2)}
                                 </span>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-800">{statement.currency}</p>
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-800 text-sm md:text-base truncate">
+                                  {statement.currency}
+                                </p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-5 px-6">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                <span className="text-sm font-semibold text-purple-700">
+                          <td className="py-4 md:py-5 px-4 md:px-6">
+                            <div className="flex items-center gap-1 md:gap-2">
+                              <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs md:text-sm font-semibold text-purple-700">
                                   {statement.month}
                                 </span>
                               </div>
-                              <span className="text-gray-700">
-                                {new Date(0, statement.month - 1).toLocaleString("default", { month: "long" })}
+                              <span className="text-gray-700 text-sm md:text-base">
+                                {new Date(
+                                  0,
+                                  statement.month - 1,
+                                ).toLocaleString("default", { month: "long" })}
                               </span>
                             </div>
                           </td>
-                          <td className="py-5 px-6">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                          <td className="py-4 md:py-5 px-4 md:px-6">
+                            <span className="inline-flex items-center px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs md:text-sm font-medium bg-green-100 text-green-800">
                               {statement.year}
                             </span>
                           </td>
-                          <td className="py-5 px-6">
+                          <td className="py-4 md:py-5 px-4 md:px-6">
                             <motion.a
                               href={statement.pdf_url}
                               download
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md"
+                              className="inline-flex items-center gap-1 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md text-sm md:text-base"
                               variants={cardVariants}
                               whileHover="hover"
                               whileTap="tap"
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              <FaDownload />
-                              Download PDF
+                              <FaDownload className="w-3 h-3 md:w-4 md:h-4" />
+                              <span className="hidden sm:inline">
+                                Download PDF
+                              </span>
+                              <span className="sm:hidden">Download</span>
                             </motion.a>
                           </td>
                         </motion.tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="4" className="py-16 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                              <FaFilePdf className="text-3xl text-gray-400" />
+                        <td colSpan="4" className="py-12 md:py-16 text-center">
+                          <div className="flex flex-col items-center justify-center px-4">
+                            <div className="w-16 h-16 md:w-24 md:h-24 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
+                              <FaFilePdf className="text-xl md:text-3xl text-gray-400" />
                             </div>
-                            <h4 className="text-lg font-semibold text-gray-700 mb-2">
+                            <h4 className="text-base md:text-lg font-semibold text-gray-700 mb-1 md:mb-2">
                               No statements found
                             </h4>
-                            <p className="text-gray-500 max-w-md">
-                              {searchTerm || selectedCurrency || selectedMonth || selectedYear 
+                            <p className="text-gray-500 max-w-md text-sm md:text-base text-center">
+                              {searchTerm ||
+                              selectedCurrency ||
+                              selectedMonth ||
+                              selectedYear
                                 ? "Try adjusting your filters or search term"
                                 : "No monthly statements available for this period"}
                             </p>
-                            {(searchTerm || selectedCurrency || selectedMonth || selectedYear) && (
+                            {(searchTerm ||
+                              selectedCurrency ||
+                              selectedMonth ||
+                              selectedYear) && (
                               <button
                                 onClick={clearFilters}
-                                className="mt-4 text-blue-600 hover:text-blue-800 font-medium"
+                                className="mt-3 md:mt-4 text-blue-600 hover:text-blue-800 font-medium text-sm md:text-base"
                               >
                                 Clear all filters
                               </button>
@@ -499,21 +541,128 @@ const MonthlyTransactions = () => {
                   </AnimatePresence>
                 </tbody>
               </table>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden">
+                <AnimatePresence>
+                  {enhancedFilteredStatements.length > 0 ? (
+                    <div className="divide-y divide-gray-100">
+                      {enhancedFilteredStatements.map((statement, index) => (
+                        <motion.div
+                          key={statement.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="p-4 hover:bg-blue-50/50 transition-colors duration-150"
+                        >
+                          <div className="flex flex-col gap-3">
+                            {/* Header Row */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="font-semibold text-blue-700 text-sm">
+                                    {statement.currency.substring(0, 2)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-800 text-sm">
+                                    {statement.currency}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {statement.year}
+                              </span>
+                            </div>
+
+                            {/* Details Row */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                  <span className="text-xs font-semibold text-purple-700">
+                                    {statement.month}
+                                  </span>
+                                </div>
+                                <span className="text-gray-700 text-sm">
+                                  {new Date(
+                                    0,
+                                    statement.month - 1,
+                                  ).toLocaleString("default", {
+                                    month: "long",
+                                  })}
+                                </span>
+                              </div>
+
+                              <motion.a
+                                href={statement.pdf_url}
+                                download
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md text-xs"
+                                variants={cardVariants}
+                                whileHover="hover"
+                                whileTap="tap"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <FaDownload className="w-3 h-3" />
+                                Download
+                              </motion.a>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center px-4">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                          <FaFilePdf className="text-xl text-gray-400" />
+                        </div>
+                        <h4 className="text-base font-semibold text-gray-700 mb-1">
+                          No statements found
+                        </h4>
+                        <p className="text-gray-500 text-sm text-center">
+                          {searchTerm ||
+                          selectedCurrency ||
+                          selectedMonth ||
+                          selectedYear
+                            ? "Try adjusting your filters or search term"
+                            : "No monthly statements available for this period"}
+                        </p>
+                        {(searchTerm ||
+                          selectedCurrency ||
+                          selectedMonth ||
+                          selectedYear) && (
+                          <button
+                            onClick={clearFilters}
+                            className="mt-3 text-blue-600 hover:text-blue-800 font-medium text-sm"
+                          >
+                            Clear all filters
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           )}
         </motion.div>
 
         {/* Footer Actions */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
           className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-200"
         >
           <div className="text-sm text-gray-500">
-            <p>Need help? Contact support if you have issues with your statements.</p>
+            <p>
+              Need help? Contact support if you have issues with your
+              statements.
+            </p>
           </div>
-          
+
           <div className="flex flex-wrap gap-3">
             <motion.button
               onClick={() => navigate(-1)}

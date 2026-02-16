@@ -4,9 +4,9 @@ import { RouterProvider } from "react-router-dom";
 import { PlaidProvider } from "./features/Auth/PlaidProvider";
 import router from "../router/router";
 import store from "./store/store";
-import { PartnerConfigProvider } from "./contexts/PartnerConfigContext";
 import GlobalErrorBoundary from "../router/GlobalErrorBoundary";
 import AppInitializer from "./services/AppInitializer";
+import PartnerFetchManager from "./contexts/PartnerFetchManager"; // ✅ ADD THIS
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
@@ -45,11 +45,11 @@ function App() {
     <GlobalErrorBoundary>
       <AppInitializer>
         <Provider store={store}>
-          <PartnerConfigProvider>
-            <PlaidProvider>
-              <AppContent />
-            </PlaidProvider>
-          </PartnerConfigProvider>
+          {/* ✅ REMOVED PartnerConfigProvider, ADDED PartnerFetchManager */}
+          <PartnerFetchManager />
+          <PlaidProvider>
+            <AppContent />
+          </PlaidProvider>
         </Provider>
       </AppInitializer>
     </GlobalErrorBoundary>
