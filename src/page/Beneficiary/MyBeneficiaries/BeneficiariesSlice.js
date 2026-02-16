@@ -484,12 +484,12 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
   },
 );
 
-// ===================== REMITTANCE-SPECIFIC ASYNC THUNKS =====================
+// ===================== REMITTANCE-SPECIFIC ASYNC THUNKS (PRESERVED) =====================
 export const fetchBeneficiaryByCode = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryByCode",
   async (beneficiaryCode, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); 
+      const bearertoken = localStorage.getItem("bearertoken");
 
       // DEBUG: Log what we're trying to fetch
       console.log("🔍 Fetching beneficiary by code:", beneficiaryCode);
@@ -562,7 +562,209 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
   },
 );
 
-// ===================== INITIAL STATE =====================
+// ===================== NEW ASYNC THUNKS TO ADD =====================
+
+/**
+ * NEW: Search beneficiaries by name, email, phone, or code
+ */
+export const searchBeneficiaries = createAsyncThunk(
+  "beneficiaries/searchBeneficiaries",
+  async ({ customerId, searchTerm }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      if (!bearertoken) {
+        throw new Error("Authentication token not found");
+      }
+
+      console.log(
+        `🔍 Searching beneficiaries with term: "${searchTerm}" for customer: ${customerId}`,
+      );
+
+      // If search term is a beneficiary code format, try code lookup first
+      if (searchTerm.match(/^[A-Z0-9]{6,}$/i)) {
+        try {
+          const codeResult = await fetchBeneficiaryByCode(searchTerm);
+          if (codeResult.data) {
+            return [codeResult.data]; // Return as array for consistency
+          }
+        } catch (e) {
+          // Code lookup failed, continue with search
+          console.log("Code lookup failed, trying search API");
+        }
+      }
+
+      // Use the search API endpoint
+      const response = await fetch(
+        `${API_URL}/beneficiaries/search/${customerId}?term=${encodeURIComponent(searchTerm)}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to search beneficiaries");
+      }
+
+      const result = await response.json();
+      console.log("✅ Search results:", result);
+
+      return result.data || [];
+    } catch (error) {
+      console.error("❌ searchBeneficiaries error:", error);
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * NEW: Verify a beneficiary (for compliance/KYC)
+ */
+export const verifyBeneficiary = createAsyncThunk(
+  "beneficiaries/verifyBeneficiary",
+  async ({ beneficiaryId, verificationData }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/verify/${beneficiaryId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearertoken}`,
+          },
+          body: JSON.stringify(verificationData || {}),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to verify beneficiary");
+      }
+
+      const result = await response.json();
+      return { beneficiaryId, ...result };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * NEW: Upload document for beneficiary
+ */
+export const uploadBeneficiaryDocument = createAsyncThunk(
+  "beneficiaries/uploadBeneficiaryDocument",
+  async ({ beneficiaryId, file, documentType }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const formData = new FormData();
+      formData.append("file", file);
+      if (documentType) {
+        formData.append("document_type", documentType);
+      }
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/upload-document/${beneficiaryId}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+          body: formData,
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to upload document");
+      }
+
+      const result = await response.json();
+      return { beneficiaryId, documentType, ...result };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * NEW: Get beneficiary statistics
+ */
+export const fetchBeneficiaryStats = createAsyncThunk(
+  "beneficiaries/fetchBeneficiaryStats",
+  async (customerId, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/stats/${customerId}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch beneficiary statistics");
+      }
+
+      const result = await response.json();
+      return result.data || {};
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * NEW: Export beneficiaries
+ */
+export const exportBeneficiaries = createAsyncThunk(
+  "beneficiaries/exportBeneficiaries",
+  async ({ customerId, format = "csv" }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/export/${customerId}?format=${format}`,
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to export beneficiaries");
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `beneficiaries.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      return { success: true, format };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+// ===================== INITIAL STATE (PRESERVED + NEW FIELDS) =====================
 const initialState = {
   // Beneficiaries list state
   beneficiaries: [],
@@ -589,6 +791,28 @@ const initialState = {
   searchQuery: "",
   filterVisibility: "all",
   currentPage: 1,
+
+  // NEW: Search results state
+  searchResults: [],
+  searchLoading: false,
+  searchError: null,
+
+  // NEW: Verification state
+  verificationStatus: {},
+  verificationLoading: false,
+
+  // NEW: Document upload state
+  documentUploadProgress: {},
+  documentUploadError: null,
+
+  // NEW: Statistics state
+  stats: {
+    total: 0,
+    verified: 0,
+    pending: 0,
+    loading: false,
+    error: null,
+  },
 
   // Delete state
   deleteState: {
@@ -640,7 +864,7 @@ const beneficiarySlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
-    // Phone search reducer
+    // Phone search reducer (PRESERVED)
     searchBeneficiaryByPhone: (state, action) => {
       const { phoneNumber, countryPhoneCode } = action.payload;
       console.log(
@@ -991,6 +1215,9 @@ const beneficiarySlice = createSlice({
       state.deleteState.error = null;
       state.codeLookupError = null;
       state.createState.error = null;
+      state.searchError = null; // NEW
+      state.documentUploadError = null; // NEW
+      state.stats.error = null; // NEW
     },
 
     // Clear success messages
@@ -1105,6 +1332,15 @@ const beneficiarySlice = createSlice({
       state.currentPage = 1;
       state.deleteState = initialState.deleteState;
       state.createState = initialState.createState;
+      // NEW: Clear new states
+      state.searchResults = [];
+      state.searchLoading = false;
+      state.searchError = null;
+      state.verificationStatus = {};
+      state.verificationLoading = false;
+      state.documentUploadProgress = {};
+      state.documentUploadError = null;
+      state.stats = initialState.stats;
     },
 
     // Update beneficiary in list
@@ -1191,6 +1427,40 @@ const beneficiarySlice = createSlice({
     clearUndoState: (state) => {
       state.deleteState.undoAvailable = false;
       state.deleteState.undoData = null;
+    },
+
+    // ===== NEW REDUCERS =====
+
+    /**
+     * NEW: Clear search results
+     */
+    clearSearchResults: (state) => {
+      state.searchResults = [];
+      state.searchError = null;
+    },
+
+    /**
+     * NEW: Update document upload progress
+     */
+    updateDocumentUploadProgress: (state, action) => {
+      const { beneficiaryId, progress } = action.payload;
+      state.documentUploadProgress[beneficiaryId] = progress;
+    },
+
+    /**
+     * NEW: Clear document upload progress
+     */
+    clearDocumentUploadProgress: (state, action) => {
+      const { beneficiaryId } = action.payload;
+      delete state.documentUploadProgress[beneficiaryId];
+    },
+
+    /**
+     * NEW: Clear verification status
+     */
+    clearVerificationStatus: (state, action) => {
+      const { beneficiaryId } = action.payload;
+      delete state.verificationStatus[beneficiaryId];
     },
   },
   extraReducers: (builder) => {
@@ -1287,6 +1557,11 @@ const beneficiarySlice = createSlice({
           state.selectedBank = null;
           state.beneficiaryBanks = [];
         }
+
+        // NEW: Update stats if available
+        if (state.stats.total > 0) {
+          state.stats.total -= 1;
+        }
       })
       .addCase(deleteBeneficiary.rejected, (state, action) => {
         const { beneficiaryId } = action.meta.arg;
@@ -1324,6 +1599,11 @@ const beneficiarySlice = createSlice({
           state.selectedBeneficiary = null;
           state.selectedBank = null;
           state.beneficiaryBanks = [];
+        }
+
+        // NEW: Update stats if available
+        if (state.stats.total > 0) {
+          state.stats.total -= 1;
         }
       })
       .addCase(deleteBeneficiaryWithUndo.rejected, (state, action) => {
@@ -1368,6 +1648,11 @@ const beneficiarySlice = createSlice({
           state.selectedBank = null;
           state.beneficiaryBanks = [];
         }
+
+        // NEW: Update stats if available
+        if (state.stats.total > 0) {
+          state.stats.total -= beneficiaryIds.length;
+        }
       })
       .addCase(bulkDeleteBeneficiaries.rejected, (state, action) => {
         state.deleteState.loadingIds = [];
@@ -1386,6 +1671,10 @@ const beneficiarySlice = createSlice({
 
         if (beneficiaryData) {
           state.beneficiaries.unshift(beneficiaryData);
+          // NEW: Update stats if available
+          if (state.stats.total !== undefined) {
+            state.stats.total += 1;
+          }
         }
 
         state.deleteState.undoAvailable = false;
@@ -1456,6 +1745,117 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaryBanks.rejected, (state) => {
         state.banksLoading = false;
         state.beneficiaryBanks = [];
+      })
+
+      // ===================== NEW THUNK REDUCERS =====================
+
+      // Search Beneficiaries
+      .addCase(searchBeneficiaries.pending, (state) => {
+        state.searchLoading = true;
+        state.searchError = null;
+      })
+      .addCase(searchBeneficiaries.fulfilled, (state, action) => {
+        state.searchLoading = false;
+        state.searchResults = action.payload;
+      })
+      .addCase(searchBeneficiaries.rejected, (state, action) => {
+        state.searchLoading = false;
+        state.searchError = action.payload;
+      })
+
+      // Verify Beneficiary
+      .addCase(verifyBeneficiary.pending, (state) => {
+        state.verificationLoading = true;
+      })
+      .addCase(verifyBeneficiary.fulfilled, (state, action) => {
+        state.verificationLoading = false;
+        const { beneficiaryId, ...verificationData } = action.payload;
+        state.verificationStatus[beneficiaryId] = {
+          verified: true,
+          timestamp: new Date().toISOString(),
+          ...verificationData,
+        };
+
+        // Update beneficiary in list if present
+        const index = state.beneficiaries.findIndex(
+          (b) => b.id === beneficiaryId,
+        );
+        if (index !== -1) {
+          state.beneficiaries[index].verification_status = 1;
+          state.beneficiaries[index].verified_at = new Date().toISOString();
+        }
+
+        // Update stats
+        if (state.stats.pending > 0) {
+          state.stats.pending -= 1;
+          state.stats.verified += 1;
+        }
+      })
+      .addCase(verifyBeneficiary.rejected, (state, action) => {
+        state.verificationLoading = false;
+        state.error = action.payload;
+      })
+
+      // Upload Beneficiary Document
+      .addCase(uploadBeneficiaryDocument.pending, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        state.documentUploadProgress[beneficiaryId] = 0;
+        state.documentUploadError = null;
+      })
+      .addCase(uploadBeneficiaryDocument.fulfilled, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        delete state.documentUploadProgress[beneficiaryId];
+
+        // Update beneficiary's documents list
+        const index = state.beneficiaries.findIndex(
+          (b) => b.id === beneficiaryId,
+        );
+        if (index !== -1) {
+          if (!state.beneficiaries[index].documents) {
+            state.beneficiaries[index].documents = [];
+          }
+          state.beneficiaries[index].documents.push({
+            ...action.payload,
+            uploaded_at: new Date().toISOString(),
+          });
+        }
+      })
+      .addCase(uploadBeneficiaryDocument.rejected, (state, action) => {
+        const { beneficiaryId } = action.meta.arg;
+        delete state.documentUploadProgress[beneficiaryId];
+        state.documentUploadError = action.payload;
+      })
+
+      // Fetch Beneficiary Stats
+      .addCase(fetchBeneficiaryStats.pending, (state) => {
+        state.stats.loading = true;
+        state.stats.error = null;
+      })
+      .addCase(fetchBeneficiaryStats.fulfilled, (state, action) => {
+        state.stats.loading = false;
+        state.stats = {
+          ...state.stats,
+          ...action.payload,
+          total: action.payload.total || state.beneficiaries.length,
+        };
+      })
+      .addCase(fetchBeneficiaryStats.rejected, (state, action) => {
+        state.stats.loading = false;
+        state.stats.error = action.payload;
+      })
+
+      // Export Beneficiaries
+      .addCase(exportBeneficiaries.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(exportBeneficiaries.fulfilled, (state) => {
+        state.loading = false;
+        state.success = true;
+      })
+      .addCase(exportBeneficiaries.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
@@ -1494,6 +1894,11 @@ export const {
   searchBeneficiaryByPhone,
   clearPhoneSearch,
   setPhoneSearchProcessed,
+  // NEW action exports
+  clearSearchResults,
+  updateDocumentUploadProgress,
+  clearDocumentUploadProgress,
+  clearVerificationStatus,
 } = beneficiarySlice.actions;
 
 // ===================== SELECTOR DEFINITIONS =====================
@@ -1585,6 +1990,40 @@ export const selectPhoneSearchData = (state) =>
   state.beneficiaries.phoneSearch.data;
 export const selectPhoneSearchProcessed = (state) =>
   state.beneficiaries.phoneSearch.processed;
+
+// ===================== NEW SELECTORS =====================
+
+// Search results selectors
+export const selectSearchResults = (state) =>
+  state.beneficiaries.searchResults || [];
+export const selectSearchLoading = (state) =>
+  state.beneficiaries.searchLoading || false;
+export const selectSearchError = (state) =>
+  state.beneficiaries.searchError || null;
+
+// Verification selectors
+export const selectVerificationStatus = (beneficiaryId) => (state) =>
+  state.beneficiaries.verificationStatus?.[beneficiaryId] || null;
+export const selectVerificationLoading = (state) =>
+  state.beneficiaries.verificationLoading || false;
+
+// Document upload selectors
+export const selectDocumentUploadProgress = (beneficiaryId) => (state) =>
+  state.beneficiaries.documentUploadProgress?.[beneficiaryId] || 0;
+export const selectDocumentUploadError = (state) =>
+  state.beneficiaries.documentUploadError || null;
+
+// Stats selectors
+export const selectBeneficiaryStats = (state) =>
+  state.beneficiaries.stats || {
+    total: 0,
+    verified: 0,
+    pending: 0,
+    loading: false,
+    error: null,
+  };
+export const selectStatsLoading = (state) =>
+  state.beneficiaries.stats?.loading || false;
 
 // ===================== UTILITY SELECTORS =====================
 

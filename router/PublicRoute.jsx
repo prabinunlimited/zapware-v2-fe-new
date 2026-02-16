@@ -1,10 +1,10 @@
 // src/router/PublicRoute.jsx
 import { useSelector, useDispatch } from "react-redux";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
-import { 
-  selectAuthToken, 
-  selectCustomerId, 
-  selectIsInitialized 
+import {
+  selectAuthToken,
+  selectCustomerId,
+  selectIsInitialized,
 } from "../src/store/selectors";
 import { clearAuthState } from "../src/features/Auth/slices/authSlice"; // Import the clear action
 
@@ -21,7 +21,8 @@ const PublicRoute = () => {
   }
 
   // FIX: Clear inconsistent auth state - customerId without token
-  const hasCustomerIdButNoToken = !token && customerId && customerId !== "undefined" && customerId !== "null";
+  const hasCustomerIdButNoToken =
+    !token && customerId && customerId !== "undefined" && customerId !== "null";
   if (hasCustomerIdButNoToken) {
     dispatch(clearAuthState());
     // Don't return here, let the component continue to render
@@ -29,27 +30,30 @@ const PublicRoute = () => {
 
   // Define routes that should remain public even when authenticated
   const alwaysPublicRoutes = [
-    '/selectaccounttype',
-    '/signupindividual', 
-    '/signupinstitution',
-    '/opencurrencyaccount',
-    '/phoneverification',
-    '/otpverification',
-    '/forgotpassword'
+    "/selectaccounttype",
+    "/signupindividual",
+    "/signupinstitution",
+    "/opencurrencyaccount",
+    "/phoneverification",
+    "/otpverification",
+    "/forgotpassword",
   ];
 
-  const isAlwaysPublic = alwaysPublicRoutes.some(route => location.pathname.includes(route));
+  const isAlwaysPublic = alwaysPublicRoutes.some((route) =>
+    location.pathname.includes(route),
+  );
 
   // If current route is always public, allow access regardless of auth status
   if (isAlwaysPublic) {
     return <Outlet />;
   }
 
-  const shouldRedirect = token && customerId && customerId !== "undefined" && customerId !== "null";
+  const shouldRedirect =
+    token && customerId && customerId !== "undefined" && customerId !== "null";
 
   // If authenticated and has valid customerId, redirect to homepage
   if (shouldRedirect) {
-    return <Navigate to={`/home/${customerId}`} replace />;
+    return <Navigate to={`home/${customerId}`} replace />;
   }
 
   return <Outlet />;
