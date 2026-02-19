@@ -70,6 +70,9 @@ import locationReducer from "../features/Auth/slices/locationSlice";
 import remittanceReducer from "../page/Remittance/slices/remittanceSlice";
 import remittanceStaticDataReducer from "../page/Remittance/slices/staticDataSlice";
 
+// ===================== REQUEST REMIT SLICES ===========================
+import requestRemitReducer from "../page/RequestRemit/CustomerSide/RequestRemitSlice";
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -374,6 +377,9 @@ export const store = configureStore({
     // ===================== REMITTANCE REDUCERS (NEW) =====================
     remittance: remittanceReducer,
     remittanceStatic: remittanceStaticDataReducer,
+
+    // ===================== REQUEST REMIT REDUCERS =====================
+    requestRemit: requestRemitReducer,
   },
 
   middleware: (getDefaultMiddleware) =>
@@ -398,7 +404,7 @@ const initializeAuthState = () => {
           customerId,
           isAuthenticated: true,
           isInitialized: true,
-        })
+        }),
       );
     } else {
       store.dispatch(setInitialized(true));
@@ -523,7 +529,7 @@ const persistCriticalStates = (state) => {
       if (state.auth.bankApproveStatus) {
         localStorage.setItem(
           "bank_approve_status",
-          state.auth.bankApproveStatus
+          state.auth.bankApproveStatus,
         );
       }
 

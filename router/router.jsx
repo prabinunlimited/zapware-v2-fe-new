@@ -12,6 +12,7 @@ import Login from "../src/features/Auth/Login/Login";
 // ✅ IMPORTANT: Import route guards statically
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import RequestRemit from "../src/page/RequestRemit/CustomerSide/RequestRemit";
 
 // ✅ CRITICAL: Lazy load ALL heavy components
 const SignUpIndividual = lazy(
@@ -279,6 +280,10 @@ const router = createBrowserRouter([
       {
         path: "recurring-remit/:uuidToUse/:recurringRemittanceId",
         element: withSuspense(RecurringRemitDetail),
+      },
+      {
+        path: "request-remit/:customerId",
+        element: withSuspense(RequestRemit),
       },
 
       // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES (lazy loaded)

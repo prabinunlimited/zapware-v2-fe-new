@@ -350,6 +350,20 @@ function NavigateSectionContent({
     }
   };
 
+  const handleRequestRemitClick = () => {
+    try {
+      if (customerStatus === "Deactivated") {
+        showPopup(
+          "Your account is deactivated. You cannot request remittance.",
+        );
+        return;
+      }
+      navigate(`/request-remit/${customerId}`);
+    } catch (error) {
+      setLocalError("Failed to navigate to request remittance");
+    }
+  };
+
   const handleRemitClickNew = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -711,6 +725,38 @@ function NavigateSectionContent({
               </div>
             </div>
           )}
+
+          {allowedModules.some(
+            (module) => module.module_name === "Request Remit",
+          ) && (
+            <div
+              onClick={handleRequestRemitClick}
+              className="w-full cursor-pointer"
+            >
+              <div className="rounded-2xl border flex justify-between items-center border-stroke h-14 sm:h-16 bg-white py-3 sm:py-4 px-4 sm:px-6 shadow-default dark:border-stroke dark:bg-boxdark hover:bg-gray-50 hover:shadow-lg transform transition duration-300 ease-in-out hover:scale-[1.02]">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img
+                    src={remitImg}
+                    alt="Remittance Icon"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                      Request Remit
+                    </h2>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      {...textColorProps}
+                    >
+                      Request Remittance from contacts
+                    </p>
+                  </div>
+                </div>
+                <IoIosArrowForward className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+              </div>
+            </div>
+          )}
+
           {/* Add More Accounts */}
           {allowedModules.some(
             (module) => module.module_name === "Add More Accounts",

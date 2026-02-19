@@ -892,6 +892,7 @@ const Login = () => {
           const responseData = extractResponseData(processedData);
 
           console.log("✅ Customer UUID:", responseData.customerUuid);
+          console.log("Beneficiary Uuid:", responseData.beneficaryUuid);
 
           if (responseData.is_owner_login === "1") {
             dispatch(
@@ -941,6 +942,7 @@ const Login = () => {
             responseData.isRemittanceOnlyCustomer || "N",
           );
           localStorage.setItem("customerUuid", responseData.customerUuid);
+          localStorage.setItem("beneficiaryUuid", responseData.beneficaryUuid);
 
           if (
             responseData.beneficaryLogin === "Y" &&
@@ -955,6 +957,10 @@ const Login = () => {
               responseData.beneficaryId.toString(),
             );
             localStorage.setItem("customerUuid", responseData.customerUuid);
+            localStorage.setItem(
+              "beneficiaryUuid",
+              responseData.beneficaryUuid,
+            );
           }
 
           dispatch(
@@ -1495,6 +1501,7 @@ const Login = () => {
         );
         console.log("✅ Customer ID:", customerId);
         console.log("✅ Customer UUID:", responseData.customerUuid);
+        console.log("✅ Beneficiary UUID:", responseData.beneficaryUuid);
         console.log(
           "✅ Is Remittance Only Customer:",
           isRemittanceOnlyCustomer,
@@ -1502,6 +1509,10 @@ const Login = () => {
         console.log("✅ Is Beneficiary:", responseData.beneficaryLogin === "Y");
 
         localStorage.setItem("customerUuid", responseData.customerUuid || "");
+        localStorage.setItem(
+          "beneficiaryUuid",
+          responseData.beneficaryUuid || "",
+        );
 
         // ✅ Store beneficiary data if present
         if (responseData.beneficaryLogin === "Y" && responseData.beneficaryId) {
