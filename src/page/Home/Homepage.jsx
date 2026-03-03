@@ -13,7 +13,6 @@ import { toast } from "react-toastify";
 import { RingLoader } from "react-spinners";
 
 // Import real components
-import NavigateSection from "../../components/Dashboard/Navigation/NavigateSection";
 import AccountSummary from "../../components/Dashboard/Account/AccountSummary/AccountSummary";
 
 // Import real actions and selectors
@@ -359,40 +358,6 @@ const HomepageContent = React.memo(() => {
     // This would dispatch setSelectedCurrency action
   }, []);
 
-  // Role check - determine if navigation should be shown - memoized
-  const shouldShowNavigation = useMemo(() => {
-    const isStaffLogin = localStorage.getItem("is_staff_login");
-    const isOwnerLogin = localStorage.getItem("is_owner_login");
-    const isStaff = isStaffLogin === "1";
-    const isOwner = isOwnerLogin === "1";
-    const isRegularCustomer = !isStaff && !isOwner;
-
-    if (isRegularCustomer) {
-      return true;
-    }
-
-    if (isStaff) {
-      const staffRole = localStorage.getItem("staff_role") || "";
-      return staffRole === "Administrator" || staffRole.includes("Admin");
-    }
-
-    if (isOwner) {
-      const ownerRoleName = localStorage.getItem("owner_role_name");
-      if (
-        !ownerRoleName ||
-        ownerRoleName === "null" ||
-        ownerRoleName === "undefined"
-      ) {
-        return true;
-      }
-      return (
-        ownerRoleName === "Admin (Owner)" || ownerRoleName.includes("Admin")
-      );
-    }
-
-    return false;
-  }, []);
-
   // Error boundary effect
   useEffect(() => {
     const handleError = (error) => {
@@ -582,30 +547,13 @@ const HomepageContent = React.memo(() => {
 
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
-            <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
-              {/* Navigation Section - Conditionally rendered */}
-              {shouldShowNavigation && (
-                <motion.div
-                  initial={{ x: -100, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="w-full lg:w-[28%] relative z-10"
-                >
-                  <NavigateSection
-                    textColor={textColor}
-                    selectedCurrencyCode={selectedCurrency}
-                  />
-                </motion.div>
-              )}
-
-              {/* Main Content Area */}
+            <div className="flex w-full mx-auto relative">
+              {/* Main Content Area - Always full width now */}
               <motion.div
-                initial={{ x: 100, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className={`w-full relative ${
-                  shouldShowNavigation ? "lg:w-[72%]" : "lg:w-full"
-                }`}
+                className="w-full relative"
                 style={{
                   isolation: "auto",
                   zIndex: "auto",
@@ -623,9 +571,6 @@ const HomepageContent = React.memo(() => {
           {process.env.NODE_ENV === "development" && (
             <div className="fixed bottom-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
               <div>Accounts: {safeArray(accounts).length}</div>
-              <div>
-                Navigation: {shouldShowNavigation ? "Visible" : "Hidden"}
-              </div>
               <div>Currency: {selectedCurrency}</div>
               <div>Account Fetched: {hasFetchedAccount ? "Yes" : "No"}</div>
               <div>Profile Fetched: {hasFetchedProfile ? "Yes" : "No"}</div>

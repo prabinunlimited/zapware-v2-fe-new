@@ -15,6 +15,7 @@ import {
 } from "../src/features/Auth/slices/authSlice";
 import Footer from "../src/components/Dashboard/Footer/Footer";
 import Header from "../src/components/Dashboard/Header/Header";
+import NavigateSection from "../src/components/Dashboard/Navigation/NavigateSection";
 
 const ProtectedRoute = () => {
   // ✅ ALL HOOKS AT THE TOP - BEFORE ANY CONDITIONALS
@@ -50,7 +51,7 @@ const ProtectedRoute = () => {
                 token: storedToken,
                 customerId: storedCustomerId,
                 isAuthenticated: true,
-              })
+              }),
             );
           }
         }
@@ -86,7 +87,7 @@ const ProtectedRoute = () => {
   if (location.pathname.includes("/undefined/")) {
     const correctedPath = location.pathname.replace(
       "/undefined/",
-      `/${customerId}/`
+      `/${customerId}/`,
     );
     return <Navigate to={correctedPath} replace />;
   }
@@ -143,17 +144,29 @@ const ProtectedRoute = () => {
     return <Navigate to={`/home/${customerId}`} replace />;
   }
 
-  // ✅ REGULAR CUSTOMER ACCESS - Show customer layout
+  // ✅ REGULAR CUSTOMER ACCESS - Fixed header and footer with side-by-side main content
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Customer Header */}
+      {/* Header - Always full width at the top */}
       <Header customerId={routeCustomerId || customerId} />
 
-      <div className="flex-1 pt-16">
-        <Outlet />
+      {/* Main Content Area - Navigation and Outlet side by side */}
+      <div className="flex-1 flex min-h-0 pt-16">
+        {" "}
+        {/* pt-16 to account for fixed header */}
+        {/* Sidebar Navigation - Fixed width (28% on desktop) */}
+        <div className="hidden lg:block w-[28%] max-w-2xl overflow-y-auto">
+          <NavigateSection customerId={routeCustomerId || customerId} />
+        </div>
+        {/* Main Content - Takes remaining width */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-2 mt-2">
+            <Outlet /> {/* This will render Homepage.js content */}
+          </div>
+        </div>
       </div>
 
-      {/* Customer Footer */}
+      {/* Footer - Always full width at the bottom */}
       <Footer />
     </div>
   );

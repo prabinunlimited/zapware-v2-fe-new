@@ -1472,10 +1472,6 @@ const beneficiarySlice = createSlice({
         state.beneficiaries = beneficiariesData;
         state.error = null;
         state.lastUpdated = new Date().toISOString();
-
-        if (beneficiariesData.length > 0 && !state.selectedBeneficiary) {
-          state.selectedBeneficiary = beneficiariesData[0];
-        }
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
         state.loading = false; // CRITICAL: Ensure loading is set to false even on error
@@ -1677,9 +1673,6 @@ const beneficiarySlice = createSlice({
         if (action.payload.data) {
           state.selectedBeneficiary = action.payload.data;
           state.beneficiaryBanks = action.payload.data.benef_banks || [];
-          if (state.beneficiaryBanks.length > 0 && !state.selectedBank) {
-            state.selectedBank = state.beneficiaryBanks[0];
-          }
           state.codeLookupError = null;
         }
       })
@@ -1695,9 +1688,6 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaryBanks.fulfilled, (state, action) => {
         state.banksLoading = false;
         state.beneficiaryBanks = action.payload;
-        if (action.payload.length > 0 && !state.selectedBank) {
-          state.selectedBank = action.payload[0];
-        }
       })
       .addCase(fetchBeneficiaryBanks.rejected, (state) => {
         state.banksLoading = false;

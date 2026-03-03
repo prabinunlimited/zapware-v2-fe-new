@@ -1,5 +1,11 @@
-// BeneficiaryHomepage.js - FINAL OPTIMIZED VERSION
-import React, { useCallback, useMemo } from "react";
+// BeneficiaryHomepage.js - COMPLETE OPTIMIZED VERSION
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+} from "react";
 import { useSelector, useDispatch, shallowEqual } from "react-redux";
 
 // Components
@@ -54,14 +60,102 @@ import {
   // Async Thunks
   submitRemittanceRequest,
   fetchBeneficiaryHomepageData,
+  fetchBeneficiaryData,
 } from "./beneficiaryHomepageSlice";
 
 // Utils
 import { beneficiaryApi } from "../Homepage/beneficiaryApi";
+import { centralizedApi } from "../../../services/api";
 
 function BeneficiaryHomepage() {
   const { urlBeneficiaryId, handleRefreshData } = useBeneficiaryHomepage();
   const dispatch = useDispatch();
+
+  // Refs for preventing duplicate calls
+  const initialFetchDone = useRef(false);
+  const dataFetchTimeout = useRef(null);
+  const refreshTimeout = useRef(null);
+  const isMounted = useRef(true);
+
+  // Recurring payment state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [frequency, setFrequency] = useState("");
+  const [recurringCustomDays, setRecurringCustomDays] = useState("");
+  const [sourceCurrency, setSourceCurrency] = useState("USD"); // New state for source currency
+
+  // Source currency options
+  const sourceCurrencyOptions = [
+    { value: "USD", label: "USD - US Dollar" },
+    { value: "GBP", label: "GBP - British Pound" },
+  ];
+
+  // Set mounted ref
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (dataFetchTimeout.current) {
+        clearTimeout(dataFetchTimeout.current);
+      }
+      if (refreshTimeout.current) {
+        clearTimeout(refreshTimeout.current);
+      }
+    };
+  }, []);
+
+  // Initial data fetch with debounce and duplicate prevention
+  useEffect(() => {
+    if (urlBeneficiaryId && !initialFetchDone.current && isMounted.current) {
+      // Clear any pending timeout
+      if (dataFetchTimeout.current) {
+        clearTimeout(dataFetchTimeout.current);
+      }
+
+      // Debounce the initial fetch to prevent double-fetch in StrictMode
+      dataFetchTimeout.current = setTimeout(() => {
+        if (isMounted.current) {
+          console.log(
+            "🚀 Performing initial data fetch for:",
+            urlBeneficiaryId,
+          );
+          initialFetchDone.current = true;
+
+          // First fetch beneficiary data
+          dispatch(fetchBeneficiaryData(urlBeneficiaryId))
+            .unwrap()
+            .then(() => {
+              // Then fetch all related data ONLY if the first fetch succeeded
+              if (isMounted.current) {
+                dispatch(fetchBeneficiaryHomepageData(urlBeneficiaryId));
+              }
+            })
+            .catch((error) => {
+              // --- FIX: Check if the error is just a throttle notification ---
+              if (error?.throttled) {
+                console.log(
+                  "⏳ Fetch was throttled, but proceeding with homepage data load.",
+                );
+                // If it's just throttled, we still want to try loading the homepage data.
+                if (isMounted.current) {
+                  dispatch(fetchBeneficiaryHomepageData(urlBeneficiaryId));
+                }
+              } else {
+                // This is a real error
+                console.error("Failed to fetch beneficiary data:", error);
+                // Optionally, show a user-friendly error message here
+              }
+              // ----------------------------------------------------------------
+            });
+        }
+      }, 300); // 300ms debounce
+    }
+
+    return () => {
+      if (dataFetchTimeout.current) {
+        clearTimeout(dataFetchTimeout.current);
+      }
+    };
+  }, [urlBeneficiaryId, dispatch]);
 
   // Consolidate all Redux state with shallow equality check
   const {
@@ -116,8 +210,14 @@ function BeneficiaryHomepage() {
       userEmail: state.beneficiaryHomepage.userEmail,
       benefCode: state.beneficiaryHomepage.benefCode,
     }),
-    shallowEqual
+    shallowEqual,
   );
+
+  // Recurring frequency options
+  const recurringFrequencyOptions = [
+    { value: "monthly", label: "Monthly" },
+    { value: "specific_day", label: "Specific Day" },
+  ];
 
   // Memoize getAuthToken to prevent recreation
   const getAuthToken = useCallback(() => {
@@ -134,6 +234,44 @@ function BeneficiaryHomepage() {
     return authtoken;
   }, []);
 
+  // Recurring payment handlers
+  const handleRecurringChange = (e) => {
+    const checked = e.target.checked;
+    setIsRecurring(checked);
+    if (!checked) {
+      setFrequency("");
+      setRecurringCustomDays("");
+      setSourceCurrency("USD"); // Reset source currency when recurring is disabled
+      // Update form data if needed
+      dispatch(setFormField({ field: "recurring_frequency", value: "" }));
+      dispatch(setFormField({ field: "custom_days", value: "" }));
+      dispatch(setFormField({ field: "source_currency", value: "" }));
+    }
+  };
+
+  const handleFrequencyChange = (selectedValue) => {
+    setFrequency(selectedValue);
+    dispatch(
+      setFormField({ field: "recurring_frequency", value: selectedValue }),
+    );
+    if (selectedValue !== "specific_day") {
+      setRecurringCustomDays("");
+      dispatch(setFormField({ field: "custom_days", value: "" }));
+    }
+  };
+
+  const handleCustomDaysChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, "");
+    setRecurringCustomDays(value);
+    dispatch(setFormField({ field: "custom_days", value: value }));
+  };
+
+  const handleSourceCurrencyChange = (e) => {
+    const value = e.target.value;
+    setSourceCurrency(value);
+    dispatch(setFormField({ field: "source_currency", value: value }));
+  };
+
   // Handler functions with useCallback to prevent recreation
   const handleChange = useCallback(
     (e) => {
@@ -144,7 +282,7 @@ function BeneficiaryHomepage() {
         dispatch(setErrors({ ...errors, [name]: "" }));
       }
     },
-    [dispatch, errors]
+    [dispatch, errors],
   );
 
   const handleEmailFormChange = useCallback(
@@ -152,14 +290,14 @@ function BeneficiaryHomepage() {
       const { name, value } = e.target;
       dispatch(setEmailFormField({ field: name, value }));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleSenderSelection = useCallback(
     (senderId) => {
       dispatch(toggleSenderSelection(senderId));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleSelectAllSenders = useCallback(() => {
@@ -185,9 +323,15 @@ function BeneficiaryHomepage() {
       newErrors.beneficiary_bank_id = "Bank account selection is required";
     }
 
+    // Validate source currency if recurring is enabled
+    if (isRecurring && !sourceCurrency) {
+      newErrors.source_currency =
+        "Source currency is required for recurring payments";
+    }
+
     dispatch(setErrors(newErrors));
     return Object.keys(newErrors).length === 0;
-  }, [formData, dispatch]);
+  }, [formData, dispatch, isRecurring, sourceCurrency]);
 
   const handleSubmit = useCallback(
     async (e) => {
@@ -198,42 +342,94 @@ function BeneficiaryHomepage() {
       }
 
       try {
+        // Prepare the submission data according to the API requirements
+        const submissionData = {
+          senders: selectedSenders, // Array of sender IDs
+          beneficiary_id: formData.beneficiary_id,
+          beneficiary_bank_id: formData.beneficiary_bank_id,
+          amount: formData.amount,
+          currency: formData.currency,
+          purpose: "remittance",
+          is_recurring: isRecurring ? "Y" : "N",
+          recurring_frequency: isRecurring ? frequency : "",
+          custom_days:
+            isRecurring && frequency === "specific_day"
+              ? recurringCustomDays
+              : "",
+          // CRITICAL: Add source_currency for recurring payments
+          source_currency: isRecurring ? sourceCurrency : "",
+          // Note: author_type, author_source, author_id are added in the thunk
+        };
+
+        // Log to verify source_currency is included
+        console.log("📤 Submitting recurring remittance request:", {
+          ...submissionData,
+          is_recurring: submissionData.is_recurring,
+          source_currency: submissionData.source_currency,
+        });
+
+        // If recurring is enabled but source_currency is empty, throw error
+        if (isRecurring && !submissionData.source_currency) {
+          throw new Error("Source currency is required for recurring payments");
+        }
+
         const result = await dispatch(
-          submitRemittanceRequest(formData)
+          submitRemittanceRequest(submissionData),
         ).unwrap();
 
-        if (result.success) {
+        if (result.success && isMounted.current) {
           dispatch(
             setEmailFormField({
               field: "to",
               value: userEmail || "",
-            })
+            }),
           );
         }
       } catch (error) {
         console.error("Form submission error:", error);
+        // Error is already handled in the slice and stored in state.message
       }
     },
-    [dispatch, formData, validateForm, userEmail]
+    [
+      dispatch,
+      formData,
+      validateForm,
+      userEmail,
+      isRecurring,
+      frequency,
+      recurringCustomDays,
+      sourceCurrency,
+      selectedSenders,
+    ],
   );
 
   const handleSendAnother = useCallback(() => {
     dispatch(resetForm());
+    setIsRecurring(false);
+    setFrequency("");
+    setRecurringCustomDays("");
+    setSourceCurrency("USD");
   }, [dispatch]);
 
   const copyToClipboard = useCallback(
     async (text) => {
       try {
         await navigator.clipboard.writeText(text);
-        dispatch(setCopySuccess(true));
-        dispatch(
-          setMessage({
-            type: "success",
-            text: "Copied to clipboard!",
-          })
-        );
+        if (isMounted.current) {
+          dispatch(setCopySuccess(true));
+          dispatch(
+            setMessage({
+              type: "success",
+              text: "Copied to clipboard!",
+            }),
+          );
 
-        setTimeout(() => dispatch(setCopySuccess(false)), 3000);
+          setTimeout(() => {
+            if (isMounted.current) {
+              dispatch(setCopySuccess(false));
+            }
+          }, 3000);
+        }
       } catch (err) {
         // Fallback for older browsers
         const textArea = document.createElement("textarea");
@@ -242,17 +438,23 @@ function BeneficiaryHomepage() {
         textArea.select();
         document.execCommand("copy");
         document.body.removeChild(textArea);
-        dispatch(setCopySuccess(true));
-        dispatch(
-          setMessage({
-            type: "success",
-            text: "Copied to clipboard!",
-          })
-        );
-        setTimeout(() => dispatch(setCopySuccess(false)), 3000);
+        if (isMounted.current) {
+          dispatch(setCopySuccess(true));
+          dispatch(
+            setMessage({
+              type: "success",
+              text: "Copied to clipboard!",
+            }),
+          );
+          setTimeout(() => {
+            if (isMounted.current) {
+              dispatch(setCopySuccess(false));
+            }
+          }, 3000);
+        }
       }
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleCopyLink = useCallback(() => {
@@ -267,7 +469,7 @@ function BeneficiaryHomepage() {
         setMessage({
           type: "error",
           text: "Please enter recipient email address",
-        })
+        }),
       );
       return;
     }
@@ -279,17 +481,50 @@ function BeneficiaryHomepage() {
     const mailtoLink = `mailto:${to}?subject=${subject}&body=${body}`;
     window.location.href = mailtoLink;
 
-    dispatch(
-      setMessage({
-        type: "success",
-        text: "Email client opened with pre-filled message!",
-      })
-    );
+    if (isMounted.current) {
+      dispatch(
+        setMessage({
+          type: "success",
+          text: "Email client opened with pre-filled message!",
+        }),
+      );
 
-    setTimeout(() => {
-      dispatch(toggleSharePopup(false));
-    }, 2000);
+      setTimeout(() => {
+        if (isMounted.current) {
+          dispatch(toggleSharePopup(false));
+        }
+      }, 2000);
+    }
   }, [dispatch, emailForm]);
+
+  // Optimized refresh handler with debouncing
+  const handleOptimizedRefresh = useCallback(() => {
+    if (refreshTimeout.current) {
+      clearTimeout(refreshTimeout.current);
+    }
+
+    refreshTimeout.current = setTimeout(() => {
+      if (urlBeneficiaryId && isMounted.current) {
+        console.log("🔄 Manual refresh triggered for:", urlBeneficiaryId);
+
+        // Clear cache for this beneficiary
+        beneficiaryApi.clearCache(urlBeneficiaryId);
+        centralizedApi.clearCache(urlBeneficiaryId);
+
+        // Refresh data with cache busting
+        dispatch(fetchBeneficiaryData(urlBeneficiaryId))
+          .unwrap()
+          .then(() => {
+            if (isMounted.current) {
+              dispatch(fetchBeneficiaryHomepageData(urlBeneficiaryId));
+            }
+          })
+          .catch((error) => {
+            console.error("Refresh failed:", error);
+          });
+      }
+    }, 500); // 500ms debounce
+  }, [urlBeneficiaryId, dispatch]);
 
   // Memoize helper functions
   const getCurrencyDisplayText = useCallback((currency) => {
@@ -306,7 +541,7 @@ function BeneficiaryHomepage() {
 
     if (typeof currency === "object") {
       const stringProps = Object.values(currency).filter(
-        (val) => typeof val === "string"
+        (val) => typeof val === "string",
       );
       return stringProps[0] || "Unknown Currency";
     }
@@ -323,7 +558,7 @@ function BeneficiaryHomepage() {
 
     if (typeof currency === "object") {
       const stringProps = Object.values(currency).filter(
-        (val) => typeof val === "string"
+        (val) => typeof val === "string",
       );
       return stringProps[0] || "";
     }
@@ -494,17 +729,6 @@ function BeneficiaryHomepage() {
   // Calculate loading state
   const showLoadingOverlay = !hasFetchedBeneficiary || isLoading;
 
-  // Optimized refresh handler
-  const handleOptimizedRefresh = useCallback(() => {
-    if (urlBeneficiaryId) {
-      // Clear cache for this beneficiary
-      beneficiaryApi.clearCache(urlBeneficiaryId);
-
-      // Refresh data
-      dispatch(fetchBeneficiaryHomepageData(urlBeneficiaryId));
-    }
-  }, [urlBeneficiaryId, dispatch]);
-
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Global Loading Overlay - Only show when data is not loaded */}
@@ -562,14 +786,12 @@ function BeneficiaryHomepage() {
 
           {/* Desktop Header */}
           <div className="hidden lg:block w-full bg-red/80 backdrop-blur-sm border-b border-gray-200/60">
-            <div className="hidden lg:block w-full bg-red/80 backdrop-blur-sm border-b border-gray-200/60">
-              <div className="px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
-                <div className="flex flex-col items-center text-center">
-                  <h1 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">
-                    {localStorage.getItem("beneficiary_portal_title") ||
-                      "Global Remittance Portal"}
-                  </h1>
-                </div>
+            <div className="px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
+              <div className="flex flex-col items-center text-center">
+                <h1 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">
+                  {localStorage.getItem("beneficiary_portal_title") ||
+                    "Global Remittance Portal"}
+                </h1>
               </div>
             </div>
           </div>
@@ -624,7 +846,12 @@ function BeneficiaryHomepage() {
                     </div>
                     <button
                       onClick={handleOptimizedRefresh}
-                      className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-xl text-gray-700 font-medium transition-all duration-200 hover:shadow-lg hover:scale-105 group"
+                      disabled={statusLoading || transactionsLoading}
+                      className={`flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-xl text-gray-700 font-medium transition-all duration-200 hover:shadow-lg hover:scale-105 group ${
+                        statusLoading || transactionsLoading
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
                     >
                       <svg
                         className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${
@@ -836,7 +1063,7 @@ function BeneficiaryHomepage() {
                                 {Math.round(
                                   (stats.completedTransactions /
                                     stats.totalRequests) *
-                                    100
+                                    100,
                                 )}
                                 %
                               </span>
@@ -848,7 +1075,7 @@ function BeneficiaryHomepage() {
                                   width: `${Math.round(
                                     (stats.completedTransactions /
                                       stats.totalRequests) *
-                                      100
+                                      100,
                                   )}%`,
                                 }}
                               ></div>
@@ -976,7 +1203,12 @@ function BeneficiaryHomepage() {
                       {/* Refresh Button */}
                       <button
                         onClick={handleOptimizedRefresh}
-                        className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-xl text-gray-700 font-medium transition-all duration-200 hover:shadow-md group"
+                        disabled={transactionsLoading}
+                        className={`flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-xl text-gray-700 font-medium transition-all duration-200 hover:shadow-md group ${
+                          transactionsLoading
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
                       >
                         <svg
                           className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${
@@ -1049,7 +1281,7 @@ function BeneficiaryHomepage() {
                               {Math.round(
                                 (transactionStats.totalTransactions /
                                   (transactionStats.totalTransactions || 1)) *
-                                  100
+                                  100,
                               )}
                               %
                             </span>
@@ -1061,7 +1293,7 @@ function BeneficiaryHomepage() {
                                 width: `${Math.round(
                                   (transactionStats.totalTransactions /
                                     (transactionStats.totalTransactions || 1)) *
-                                    100
+                                    100,
                                 )}%`,
                               }}
                             ></div>
@@ -1121,7 +1353,7 @@ function BeneficiaryHomepage() {
                                   acc[status] = (acc[status] || 0) + 1;
                                   return acc;
                                 },
-                                {}
+                                {},
                               );
 
                               const processingCount =
@@ -1443,7 +1675,7 @@ function BeneficiaryHomepage() {
                                   <input
                                     type="checkbox"
                                     checked={selectedSenders.includes(
-                                      sender.id
+                                      sender.id,
                                     )}
                                     onChange={() =>
                                       handleSenderSelection(sender.id)
@@ -1616,18 +1848,150 @@ function BeneficiaryHomepage() {
                           </div>
                         )}
 
+                        {/* Recurring Payment Options */}
+                        {hasFetchedBeneficiary && (
+                          <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-200/60">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isRecurring}
+                                onChange={handleRecurringChange}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-medium text-gray-700">
+                                Set up as recurring payment
+                              </span>
+                            </label>
+
+                            {isRecurring && (
+                              <div className="mt-3 space-y-3">
+                                {/* Source Currency Field */}
+                                <div>
+                                  <label className="block mb-1.5 text-xs font-medium text-gray-600">
+                                    Source Currency{" "}
+                                    <span className="text-red-500">*</span>
+                                  </label>
+                                  <select
+                                    value={sourceCurrency}
+                                    onChange={handleSourceCurrencyChange}
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required={isRecurring}
+                                  >
+                                    <option value="">
+                                      Select source currency
+                                    </option>
+                                    {sourceCurrencyOptions.map((option) => (
+                                      <option
+                                        key={option.value}
+                                        value={option.value}
+                                      >
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {errors.source_currency && (
+                                    <p className="mt-1 text-xs text-red-600">
+                                      {errors.source_currency}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <label className="block mb-1.5 text-xs font-medium text-gray-600">
+                                    Frequency
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setFrequency("monthly");
+                                        // Don't dispatch here, just update local state
+                                      }}
+                                      className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                                        frequency === "monthly"
+                                          ? "bg-blue-600 text-white border-blue-600"
+                                          : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                                      }`}
+                                    >
+                                      Monthly
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setFrequency("specific_day");
+                                        // Don't dispatch here, just update local state
+                                      }}
+                                      className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                                        frequency === "specific_day"
+                                          ? "bg-blue-600 text-white border-blue-600"
+                                          : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                                      }`}
+                                    >
+                                      Specific Day
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {frequency === "specific_day" && (
+                                  <div>
+                                    <label className="block mb-1.5 text-xs font-medium text-gray-600">
+                                      Days Between Payments
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={recurringCustomDays}
+                                      onChange={(e) => {
+                                        const value = e.target.value.replace(
+                                          /[^0-9]/g,
+                                          "",
+                                        );
+                                        setRecurringCustomDays(value);
+                                      }}
+                                      placeholder="e.g., 30"
+                                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Enter number of days between payments
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="text-xs text-gray-500 flex items-start">
+                                  <svg
+                                    className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                  <span>
+                                    Payments will be automatically processed on
+                                    schedule
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {hasFetchedBeneficiary && (
                           <button
                             type="submit"
                             disabled={
                               isSubmitting ||
                               !formData.beneficiary_bank_id ||
-                              !getAuthToken()
+                              !getAuthToken() ||
+                              (isRecurring && !sourceCurrency) // Disable if recurring is enabled but no source currency selected
                             }
                             className={`w-full py-3 lg:py-4 px-4 lg:px-6 rounded-lg lg:rounded-xl font-semibold text-white focus:outline-none focus:ring-4 transition-all duration-200 ${
                               isSubmitting ||
                               !formData.beneficiary_bank_id ||
-                              !getAuthToken()
+                              !getAuthToken() ||
+                              (isRecurring && !sourceCurrency)
                                 ? "bg-gray-400 cursor-not-allowed"
                                 : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:ring-blue-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                             }`}
@@ -1859,7 +2223,10 @@ function BeneficiaryHomepage() {
                         </div>
                         <button
                           onClick={handleOptimizedRefresh}
-                          className="flex items-center text-xs lg:text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
+                          disabled={statusLoading}
+                          className={`flex items-center text-xs lg:text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 ${
+                            statusLoading ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
                         >
                           <svg
                             className="w-3 h-3 lg:w-4 lg:h-4 mr-1"
@@ -1922,7 +2289,7 @@ function BeneficiaryHomepage() {
                                   <p className="text-xs text-gray-500 mt-1 lg:mt-2 font-medium">
                                     {request.created_at
                                       ? new Date(
-                                          request.created_at
+                                          request.created_at,
                                         ).toLocaleDateString("en-US", {
                                           month: "short",
                                           day: "numeric",
@@ -1976,7 +2343,12 @@ function BeneficiaryHomepage() {
                         </div>
                         <button
                           onClick={handleOptimizedRefresh}
-                          className="flex items-center text-xs lg:text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
+                          disabled={transactionsLoading}
+                          className={`flex items-center text-xs lg:text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 ${
+                            transactionsLoading
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          }`}
                         >
                           <svg
                             className="w-3 h-3 lg:w-4 lg:h-4 mr-1"
@@ -2004,61 +2376,35 @@ function BeneficiaryHomepage() {
                           </div>
                         ) : transactions.length > 0 ? (
                           <div className="space-y-3 lg:space-y-4">
-                            {transactions.map((transaction) => (
+                            {transactions.slice(0, 5).map((transaction) => (
                               <div
                                 key={transaction.id}
                                 className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 lg:p-4 border border-gray-200/60 rounded-lg lg:rounded-xl bg-white/50 backdrop-blur-sm hover:shadow-md transition-all duration-200"
                               >
                                 <div className="flex items-center space-x-3 lg:space-x-4 mb-2 sm:mb-0">
-                                  <div
-                                    className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center ${
-                                      transaction.direction === "Inbound"
-                                        ? "bg-gradient-to-br from-green-100 to-green-200"
-                                        : "bg-gradient-to-br from-blue-100 to-blue-200"
-                                    }`}
-                                  >
+                                  <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-lg flex items-center justify-center">
                                     <svg
-                                      className={`w-4 h-4 lg:w-5 lg:h-5 ${
-                                        transaction.direction === "Inbound"
-                                          ? "text-green-600"
-                                          : "text-blue-600"
-                                      }`}
+                                      className="w-4 h-4 lg:w-5 lg:h-5 text-purple-600"
                                       fill="none"
                                       stroke="currentColor"
                                       viewBox="0 0 24 24"
                                     >
-                                      {transaction.direction === "Inbound" ? (
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                        />
-                                      ) : (
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                                        />
-                                      )}
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                                      />
                                     </svg>
                                   </div>
                                   <div>
                                     <p className="font-semibold text-gray-900 text-sm lg:text-base">
-                                      {transaction.id}
+                                      {transaction.reference || transaction.id}
                                     </p>
                                     <p className="text-xs lg:text-sm text-gray-600">
                                       {transaction.amount}{" "}
                                       {transaction.currency}
                                     </p>
-                                    {transaction.fee_amount &&
-                                      parseFloat(transaction.fee_amount) >
-                                        0 && (
-                                        <p className="text-xs text-gray-500">
-                                          Fee: {transaction.fee_amount}
-                                        </p>
-                                      )}
                                   </div>
                                 </div>
                                 <div className="sm:text-right">
@@ -2066,7 +2412,7 @@ function BeneficiaryHomepage() {
                                   <p className="text-xs text-gray-500 mt-1 lg:mt-2 font-medium">
                                     {transaction.created_at
                                       ? new Date(
-                                          transaction.created_at
+                                          transaction.created_at,
                                         ).toLocaleDateString("en-US", {
                                           month: "short",
                                           day: "numeric",
@@ -2074,11 +2420,6 @@ function BeneficiaryHomepage() {
                                         })
                                       : "N/A"}
                                   </p>
-                                  {transaction.direction && (
-                                    <p className="text-xs text-gray-500 mt-1 font-medium">
-                                      {transaction.direction}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                             ))}
@@ -2103,9 +2444,31 @@ function BeneficiaryHomepage() {
                             <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-2">
                               No transactions yet
                             </h3>
-                            <p className="text-gray-600 text-sm lg:text-base">
-                              Completed transactions will appear here.
+                            <p className="text-gray-600 mb-4 text-sm lg:text-base">
+                              Your completed transactions will appear here.
                             </p>
+                          </div>
+                        )}
+
+                        {/* View All Link */}
+                        {transactions.length > 5 && (
+                          <div className="mt-4 text-center">
+                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors duration-200">
+                              View All Transactions
+                              <svg
+                                className="w-4 h-4 inline-block ml-1"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 5l7 7-7 7"
+                                />
+                              </svg>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2118,16 +2481,19 @@ function BeneficiaryHomepage() {
         </div>
       )}
 
-      {/* Share Popup */}
-      <SharePopup
-        isOpen={showSharePopup}
-        onClose={() => dispatch(toggleSharePopup(false))}
-        requestRemitLink={requestRemitLink}
-        emailForm={emailForm}
-        onEmailFormChange={handleEmailFormChange}
-        onEmailSend={sendEmailDirectly}
-        onCopyLink={handleCopyLink}
-      />
+      {/* Share Popup Modal */}
+      {showSharePopup && (
+        <SharePopup
+          isOpen={showSharePopup}
+          onClose={() => dispatch(toggleSharePopup(false))}
+          emailForm={emailForm}
+          onEmailFormChange={handleEmailFormChange}
+          onSendEmail={sendEmailDirectly}
+          requestLink={requestRemitLink}
+          onCopyLink={handleCopyLink}
+          copySuccess={copySuccess}
+        />
+      )}
     </div>
   );
 }

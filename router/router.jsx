@@ -12,6 +12,7 @@ import Login from "../src/features/Auth/Login/Login";
 // ✅ IMPORTANT: Import route guards statically
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import RequestRemit from "../src/page/RequestRemit/CustomerSide/RequestRemit";
 
 // ✅ CRITICAL: Lazy load ALL heavy components
 const SignUpIndividual = lazy(
@@ -108,6 +109,12 @@ const BeneficiaryTransactions = lazy(
 );
 const BeneficiarySenders = lazy(
   () => import("../src/page/RequestRemit/Senders/BeneficiarySenders"),
+);
+const RecurringRemit = lazy(
+  () => import("../src/page/Remittance/RecurringRemit/RecurringRemit"),
+);
+const RecurringRemitDetail = lazy(
+  () => import("../src/page/Remittance/RecurringRemit/RecurringRemitDetail"),
 );
 
 // ✅ Shared Loading Component
@@ -265,6 +272,18 @@ const router = createBrowserRouter([
       {
         path: "/bankletter/:accountId",
         element: withSuspense(BankLetter),
+      },
+      {
+        path: "recurring-remit/:customerId",
+        element: withSuspense(RecurringRemit),
+      },
+      {
+        path: "recurring-remit/:uuidToUse/:recurringRemittanceId",
+        element: withSuspense(RecurringRemitDetail),
+      },
+      {
+        path: "request-remit/:customerId",
+        element: withSuspense(RequestRemit),
       },
 
       // ✅ CUSTOMER BENEFICIARY MANAGEMENT ROUTES (lazy loaded)
