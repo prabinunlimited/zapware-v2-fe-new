@@ -287,13 +287,13 @@ const BaseBeneficiaryForm = ({
 
   // ========== LOCAL STATE ==========
   const [step, setStep] = useState(
-    mode === "create" && showPhoneSearch ? 0 : 1
+    mode === "create" && showPhoneSearch ? 0 : 1,
   );
   const [isLoadingLocal, setIsLoadingLocal] = useState(false);
   const [currency, setCurrency] = useState(
     mode === "edit" && initialData?.banks?.[0]?.currency_code
       ? initialData.banks[0].currency_code
-      : "USD"
+      : "USD",
   );
   const [paymentMethod, setPaymentMethod] = useState("ACH");
   const [showOtherRelationship, setShowOtherRelationship] = useState(false);
@@ -310,7 +310,7 @@ const BaseBeneficiaryForm = ({
   const [usingExistingBeneficiary, setUsingExistingBeneficiary] =
     useState(initialUsingExisting);
   const [foundBeneficiary, setFoundBeneficiary] = useState(
-    initialFoundBeneficiary
+    initialFoundBeneficiary,
   );
 
   // Steps configuration
@@ -486,8 +486,8 @@ const BaseBeneficiaryForm = ({
       backgroundColor: state.isSelected
         ? "#3b82f6"
         : state.isFocused
-        ? "#eff6ff"
-        : "white",
+          ? "#eff6ff"
+          : "white",
       color: state.isSelected ? "white" : "#1f2937",
       padding: "12px 16px",
       fontSize: "0.875rem",
@@ -605,6 +605,12 @@ const BaseBeneficiaryForm = ({
     navigate(isPublic ? "/dashboard" : "/beneficiaries");
   }, [navigate, isPublic]);
 
+  useEffect(() => {
+    if (formik.values.country_phone_code) {
+      setCountryCodeInput(formik.values.country_phone_code);
+    }
+  }, [formik.values.country_phone_code]);
+
   // Handle phone search results
   useEffect(() => {
     if (
@@ -624,7 +630,8 @@ const BaseBeneficiaryForm = ({
       ) {
         const found = nationalities.find(
           (nat) =>
-            nat.name.toLowerCase() === beneficiaryData.nationality.toLowerCase()
+            nat.name.toLowerCase() ===
+            beneficiaryData.nationality.toLowerCase(),
         );
         nationalityId = found ? found.id.toString() : "";
       }
@@ -702,7 +709,7 @@ const BaseBeneficiaryForm = ({
             otherProvider: bank.other_provider || "",
             accountType: bank.account_type || "",
             sortCode: bank.sort_code || "",
-          }))
+          })),
         );
       }
 
@@ -715,7 +722,7 @@ const BaseBeneficiaryForm = ({
       isMounted.current
     ) {
       toast.info(
-        "No existing beneficiary found with this phone number. You can create a new one."
+        "No existing beneficiary found with this phone number. You can create a new one.",
       );
       formik.setFieldValue("phone_number", phoneInput);
       formik.setFieldValue("country_phone_code", countryCodeInput);
@@ -877,7 +884,7 @@ const BaseBeneficiaryForm = ({
       prevAccounts.map((account) => ({
         ...account,
         currency: newCurrency,
-      }))
+      })),
     );
   };
 
@@ -893,6 +900,9 @@ const BaseBeneficiaryForm = ({
       toast.error("Please enter a valid phone number");
       return;
     }
+
+    // 👇 ADD THIS LINE - ensure formik has the current country code
+    formik.setFieldValue("country_phone_code", countryCodeInput);
 
     onPhoneSearch?.({
       phoneNumber: phoneInput,
@@ -939,7 +949,7 @@ const BaseBeneficiaryForm = ({
         setShowSearchResults(false);
         setStep(1);
         toast.info(
-          "No existing beneficiaries found. You can create a new beneficiary."
+          "No existing beneficiaries found. You can create a new beneficiary.",
         );
         return true;
       }
@@ -1124,7 +1134,7 @@ const BaseBeneficiaryForm = ({
     if (isPublic) {
       if (!emailVerified || !phoneVerified) {
         toast.error(
-          "Please verify your email and phone number before submitting"
+          "Please verify your email and phone number before submitting",
         );
         return;
       }
@@ -1151,7 +1161,7 @@ const BaseBeneficiaryForm = ({
 
     try {
       const cleanedCountryCode = formik.values.country_phone_code.startsWith(
-        "+"
+        "+",
       )
         ? formik.values.country_phone_code.substring(1)
         : formik.values.country_phone_code;
@@ -1239,7 +1249,7 @@ const BaseBeneficiaryForm = ({
         toast.success(
           mode === "create"
             ? "Beneficiary created successfully!"
-            : "Beneficiary updated successfully!"
+            : "Beneficiary updated successfully!",
         );
         if (mode === "create") {
           formik.resetForm();
@@ -1307,14 +1317,13 @@ const BaseBeneficiaryForm = ({
         placeholder="Code..."
         isSearchable
         onChange={(selectedOption) => {
-          setCountryCodeInput(selectedOption?.value || "+1");
-          formik.setFieldValue(
-            "country_phone_code",
-            selectedOption?.value || "+1"
-          );
+          const newCode = selectedOption?.value || "+1";
+          setCountryCodeInput(newCode);
+          // 👇 UPDATE THIS LINE (it's already there but ensure it's using newCode)
+          formik.setFieldValue("country_phone_code", newCode);
         }}
         value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code
+          (option) => option.value === formik.values.country_phone_code,
         )}
         formatOptionLabel={({ country, label }) => (
           <div className="flex items-center">
@@ -1341,7 +1350,7 @@ const BaseBeneficiaryForm = ({
       onChange={(e) => {
         const selectedCountryId = e.target.value;
         const selectedCountry = countries.find(
-          (country) => country.id === parseInt(selectedCountryId)
+          (country) => country.id === parseInt(selectedCountryId),
         );
 
         formik.setFieldValue("country_id", selectedCountryId);
@@ -1361,7 +1370,9 @@ const BaseBeneficiaryForm = ({
     >
       <option value="">Select Country</option>
       {countriesOptions.map((country) => (
-        <option key={country.value} value={country.id}>
+        <option key={country.value} value={country.value}>
+          {" "}
+          {/* ← FIXED */}
           {country.label} ({country.country_code})
         </option>
       ))}
@@ -1557,8 +1568,8 @@ const BaseBeneficiaryForm = ({
               emailVerified
                 ? "bg-green-500 text-white cursor-default"
                 : !formik.values.email || usingExistingBeneficiary
-                ? "bg-gray-300 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
             }`}
           >
             {resendEmailLoading ? ( // Show loader here
@@ -1605,7 +1616,7 @@ const BaseBeneficiaryForm = ({
               if (!usingExistingBeneficiary) {
                 formik.setFieldValue(
                   "country_phone_code",
-                  selectedOption?.value || ""
+                  selectedOption?.value || "",
                 );
                 // Reset verification if country code changes
                 if (isPublic && phoneVerified && setPhoneVerified) {
@@ -1614,7 +1625,7 @@ const BaseBeneficiaryForm = ({
               }
             }}
             value={phoneCodeOptions.find(
-              (option) => option.value === formik.values.country_phone_code
+              (option) => option.value === formik.values.country_phone_code,
             )}
             formatOptionLabel={({ country, label }) => (
               <div className="flex items-center">
@@ -1678,7 +1689,7 @@ const BaseBeneficiaryForm = ({
                 }
                 onSendPhoneOTP?.(
                   formik.values.country_phone_code,
-                  formik.values.phone_number
+                  formik.values.phone_number,
                 );
               }}
               disabled={
@@ -1692,10 +1703,10 @@ const BaseBeneficiaryForm = ({
                 phoneVerified
                   ? "bg-green-500 text-white cursor-default"
                   : !formik.values.phone_number ||
-                    !formik.values.country_phone_code ||
-                    usingExistingBeneficiary
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                      !formik.values.country_phone_code ||
+                      usingExistingBeneficiary
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
               }`}
             >
               {resendPhoneLoading ? ( // Show loader here
@@ -2023,10 +2034,13 @@ const BaseBeneficiaryForm = ({
                   placeholder="Code..."
                   isSearchable
                   onChange={(selectedOption) => {
-                    setCountryCodeInput(selectedOption?.value || "+1");
+                    const newCode = selectedOption?.value || "+1";
+                    setCountryCodeInput(newCode);
+                    // 👇 ADD THIS LINE
+                    formik.setFieldValue("country_phone_code", newCode);
                   }}
                   value={phoneCodeOptions.find(
-                    (option) => option.value === countryCodeInput
+                    (option) => option.value === countryCodeInput,
                   )}
                   formatOptionLabel={({ country, label }) => (
                     <div className="flex items-center">
@@ -2069,8 +2083,8 @@ const BaseBeneficiaryForm = ({
                     phoneSearchLoading
                       ? "bg-gray-300 cursor-not-allowed"
                       : !phoneInput.trim()
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-blue-500 hover:bg-blue-600 text-white"
+                        ? "bg-gray-300 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
                   }`}
                 >
                   {phoneSearchLoading ? (
@@ -2130,7 +2144,8 @@ const BaseBeneficiaryForm = ({
                           {phoneSearch.data.country_id
                             ? countries.find(
                                 (c) =>
-                                  c.id === parseInt(phoneSearch.data.country_id)
+                                  c.id ===
+                                  parseInt(phoneSearch.data.country_id),
                               )?.name || "N/A"
                             : "N/A"}
                         </p>
@@ -2307,10 +2322,10 @@ const BaseBeneficiaryForm = ({
                 {accountCurrency === "GBP"
                   ? "FPS"
                   : accountCurrency === "EUR"
-                  ? "SEPA"
-                  : accountCurrency === "USD"
-                  ? "ACH"
-                  : "Bank"}
+                    ? "SEPA"
+                    : accountCurrency === "USD"
+                      ? "ACH"
+                      : "Bank"}
               </option>
               <option value="Swift">Swift</option>
               <option value="Mobile">Mobile</option>
@@ -2474,7 +2489,7 @@ const BaseBeneficiaryForm = ({
                           bank.bank_code === selectedValue ||
                           bank.code === selectedValue ||
                           bank.id === selectedValue ||
-                          bank.name === selectedValue
+                          bank.name === selectedValue,
                       );
 
                       if (selectedBank) {
@@ -2482,14 +2497,14 @@ const BaseBeneficiaryForm = ({
                         handleBankAccountChange(
                           index,
                           "bankCode",
-                          selectedValue
+                          selectedValue,
                         );
                         handleBankAccountChange(
                           index,
                           "bankName",
                           selectedBank.bank_name ||
                             selectedBank.name ||
-                            selectedValue
+                            selectedValue,
                         );
 
                         // Trigger branch fetch for BDT banks
@@ -2501,7 +2516,7 @@ const BaseBeneficiaryForm = ({
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedValue
+                          selectedValue,
                         );
                       }
                     }}
@@ -2533,7 +2548,7 @@ const BaseBeneficiaryForm = ({
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="Enter bank name"
@@ -2645,7 +2660,7 @@ const BaseBeneficiaryForm = ({
                     handleBankAccountChange(
                       index,
                       "intermediarySwift",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   placeholder="Enter intermediary bank SWIFT"
@@ -2698,7 +2713,7 @@ const BaseBeneficiaryForm = ({
                   handleBankAccountChange(
                     index,
                     "routingNumber",
-                    e.target.value
+                    e.target.value,
                   )
                 }
                 placeholder="Enter routing number"
@@ -2779,7 +2794,7 @@ const BaseBeneficiaryForm = ({
                     handleBankAccountChange(
                       index,
                       "mobileNumber",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   placeholder="Enter mobile number"
@@ -2806,7 +2821,7 @@ const BaseBeneficiaryForm = ({
                     handleBankAccountChange(
                       index,
                       "walletProvider",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   required
@@ -2841,7 +2856,7 @@ const BaseBeneficiaryForm = ({
                       handleBankAccountChange(
                         index,
                         "otherProvider",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="Enter provider name"
@@ -3127,12 +3142,12 @@ const BaseBeneficiaryForm = ({
                   onChange={(selectedOption) => {
                     formik.setFieldValue(
                       "relationtobenef",
-                      selectedOption?.value || ""
+                      selectedOption?.value || "",
                     );
                     setShowOtherRelationship(selectedOption?.value === "other");
                   }}
                   value={relationshipOptions.find(
-                    (option) => option.value === formik.values.relationtobenef
+                    (option) => option.value === formik.values.relationtobenef,
                   )}
                   styles={{
                     ...customStyles,
@@ -3392,8 +3407,8 @@ const BaseBeneficiaryForm = ({
                         isActive
                           ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white scale-110 border-transparent shadow-lg"
                           : isCompleted
-                          ? "bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent shadow-md"
-                          : "bg-white text-gray-400 border-gray-300"
+                            ? "bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent shadow-md"
+                            : "bg-white text-gray-400 border-gray-300"
                       }`}
                     >
                       {/* Icon or Check */}
@@ -3424,8 +3439,8 @@ const BaseBeneficiaryForm = ({
                         isActive
                           ? "text-gray-900"
                           : isCompleted
-                          ? "text-green-600"
-                          : "text-gray-500"
+                            ? "text-green-600"
+                            : "text-gray-500"
                       }`}
                     >
                       {stepItem.title}
@@ -3435,8 +3450,8 @@ const BaseBeneficiaryForm = ({
                         isActive
                           ? "text-gray-700"
                           : isCompleted
-                          ? "text-green-500"
-                          : "text-gray-400"
+                            ? "text-green-500"
+                            : "text-gray-400"
                       }`}
                     >
                       {stepItem.description}

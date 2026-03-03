@@ -714,6 +714,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   useEffect(() => {
+    if (formik.values.country_phone_code) {
+      setCountryCodeInput(formik.values.country_phone_code);
+      setSelectedCountryCode(formik.values.country_phone_code);
+    }
+  }, [formik.values.country_phone_code]);
+
+  useEffect(() => {
     // Only run if we have searched results AND we haven't already processed this data
     if (
       phoneSearch.searched &&
@@ -878,6 +885,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       return;
     }
 
+    // Use the current formik values for country code if available
+    const searchCountryCode =
+      formik.values.country_phone_code || countryCodeInput;
+
     // Validate phone number (basic validation)
     const phoneRegex = /^[+]?[0-9\s\-\(\)\.]+$/;
     if (!phoneRegex.test(phoneInput)) {
@@ -891,7 +902,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       // Set phone in formik for new beneficiary
       formik.setFieldValue("phone_number", phoneInput);
-      formik.setFieldValue("country_phone_code", countryCodeInput);
+      formik.setFieldValue("country_phone_code", searchCountryCode);
+      setCountryCodeInput(searchCountryCode);
+      setSelectedCountryCode(searchCountryCode);
 
       // Update search state
       dispatch(clearPhoneSearch());
@@ -899,7 +912,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       setUsingExistingBeneficiary(false);
       setShowSearchResults(true);
 
-      // Show toast and let user continue
       toast.info("No existing beneficiaries found. You can create a new one.");
       return;
     }
@@ -908,7 +920,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       dispatch(
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
-          countryPhoneCode: countryCodeInput,
+          countryPhoneCode: searchCountryCode,
         }),
       );
     } catch (error) {
@@ -952,6 +964,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         return false;
       }
 
+      // Use the current country code (from formik if available, otherwise from state)
+      const currentCountryCode =
+        formik.values.country_phone_code || countryCodeInput;
+
       // If there are no beneficiaries in the system, skip search entirely
       if (beneficiaries.length === 0) {
         console.log(
@@ -960,7 +976,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         // Store phone in formik for new beneficiary
         formik.setFieldValue("phone_number", phoneInput);
-        formik.setFieldValue("country_phone_code", countryCodeInput);
+        formik.setFieldValue("country_phone_code", currentCountryCode);
+        setCountryCodeInput(currentCountryCode);
+        setSelectedCountryCode(currentCountryCode);
 
         // Clear any previous search state
         dispatch(clearPhoneSearch());
@@ -998,7 +1016,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       if (phoneSearch.searched && !phoneSearch.exists) {
         console.log("No existing beneficiary found, creating new one");
         formik.setFieldValue("phone_number", phoneInput);
-        formik.setFieldValue("country_phone_code", countryCodeInput);
+        formik.setFieldValue("country_phone_code", currentCountryCode);
+        setCountryCodeInput(currentCountryCode);
+        setSelectedCountryCode(currentCountryCode);
         setFoundBeneficiary(null);
         setUsingExistingBeneficiary(false);
         setStep(1);
@@ -1008,51 +1028,57 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       // Default fallback - just move to step 1
       console.log("Default case, moving to step 1");
       formik.setFieldValue("phone_number", phoneInput);
-      formik.setFieldValue("country_phone_code", countryCodeInput);
+      formik.setFieldValue("country_phone_code", currentCountryCode);
+      setCountryCodeInput(currentCountryCode);
+      setSelectedCountryCode(currentCountryCode);
       setStep(1);
       return true;
     }
 
     // For steps 1 and 2, use existing validation
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      const countryInput = formik.values.country_id;
-      if (countryInput === "" || countryInput === " ") {
-        toast.error(`Country Required for Currency: ${currency}`);
-        return false;
-      }
-      const streetInput = formik.values.street;
-      if (streetInput === "" || streetInput === " ") {
-        toast.error(`Street Required for Currency: ${currency}`);
-        return false;
-      }
-      const idTypeInput = formik.values.beneficiary_id_type;
-      if (idTypeInput === "" || idTypeInput === " ") {
-        toast.error(`ID Type Required for Currency: ${currency}`);
-        return false;
-      }
 
-      const idNumber = formik.values.beneficiary_id_number;
-      if (idNumber === "" || idNumber === " ") {
-        toast.error(`ID Number Required for Currency: ${currency}`);
-        return false;
-      }
-
-      if (currency === "INR") {
-        const cityInput = formik.values.city;
-        if (cityInput === "" || cityInput === " ") {
-          toast.error(`City Required for Currency: ${currency}`);
+    // Currency-specific validations for Step 1
+    if (step === 1) {
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        const countryInput = formik.values.country_id;
+        if (countryInput === "" || countryInput === " ") {
+          toast.error(`Country Required for Currency: ${currency}`);
           return false;
         }
+        const streetInput = formik.values.street;
+        if (streetInput === "" || streetInput === " ") {
+          toast.error(`Street Required for Currency: ${currency}`);
+          return false;
+        }
+        const idTypeInput = formik.values.beneficiary_id_type;
+        if (idTypeInput === "" || idTypeInput === " ") {
+          toast.error(`ID Type Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const idNumber = formik.values.beneficiary_id_number;
+        if (idNumber === "" || idNumber === " ") {
+          toast.error(`ID Number Required for Currency: ${currency}`);
+          return false;
+        }
+
+        if (currency === "INR") {
+          const cityInput = formik.values.city;
+          if (cityInput === "" || cityInput === " ") {
+            toast.error(`City Required for Currency: ${currency}`);
+            return false;
+          }
+        }
+      }
+
+      // General form validation for Step 1
+      if (!isFormValid()) {
+        toast.error("Please fill all required fields before proceeding");
+        return false;
       }
     }
 
-    // General form validation
-    if (!isFormValid()) {
-      toast.error("Please fill all required fields before proceeding");
-      return false;
-    }
-
+    // Move to next step
     setStep(step + 1);
     return true;
   };
@@ -2686,9 +2712,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 placeholder="Code..."
                 isSearchable
                 onChange={(selectedOption) => {
-                  setCountryCodeInput(selectedOption?.value || "+1");
-                  // Also store the country code in a state variable to include in the payload
-                  setSelectedCountryCode(selectedOption?.value || "+1");
+                  const newCode = selectedOption?.value || "+1";
+                  setCountryCodeInput(newCode);
+                  setSelectedCountryCode(newCode);
+                  // Also update formik if we're in create mode
+                  if (mode === "create") {
+                    formik.setFieldValue("country_phone_code", newCode);
+                  }
                 }}
                 value={phoneCodeOptions.find(
                   (option) => option.value === countryCodeInput,
@@ -3278,10 +3308,28 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           isSearchable
                           onChange={(selectedOption) => {
                             if (!usingExistingBeneficiary) {
-                              formik.setFieldValue(
-                                "country_phone_code",
-                                selectedOption?.value || "+1",
+                              const selectedCountryId = selectedOption?.value; // This is now the ID
+                              const selectedCountry = countries.find(
+                                (country) => country.id === selectedCountryId,
                               );
+
+                              formik.setFieldValue(
+                                "country_id",
+                                selectedCountryId.toString(),
+                              );
+
+                              if (selectedCountry) {
+                                let countryPhoneCode =
+                                  selectedCountry.phone_code || "+1";
+                                if (!countryPhoneCode.startsWith("+")) {
+                                  countryPhoneCode = `+${countryPhoneCode}`;
+                                }
+                                formik.setFieldValue(
+                                  "country_phone_code",
+                                  countryPhoneCode,
+                                );
+                                setCountryCodeInput(countryPhoneCode);
+                              }
                             }
                           }}
                           value={phoneCodeOptions.find(
