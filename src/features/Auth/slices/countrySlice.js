@@ -2653,7 +2653,7 @@ export const selectCountriesOptions = createSelector(
     }
 
     const options = countries.map((country) => ({
-      value: country.phone_code, // ✅ Change this to phone_code instead of id
+      value: country.id, // ← Use ID as value (unique)
       label: country.name,
       phoneCode: country.phone_code || country.phoneCode,
       country_code: country.country_code,
