@@ -32,6 +32,7 @@ const Step2Details = ({
   manualAccountError,
   manualDetailsLoading,
   beneficiaryLoading,
+  onRecurringDataChange,
 }) => {
   // Custom styles for select components
   const selectStyles = {

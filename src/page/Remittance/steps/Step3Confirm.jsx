@@ -86,6 +86,7 @@ const Step3Confirm = ({
 
   const shouldShowFrequencyDropdown = isRecurring && shouldShowRecurring();
   const shouldShowCustomDaysInput = frequency === "specific_day";
+  console.log("onRecurringDataChange data check",onRecurringDataChange);
 
   useEffect(() => {
     if (onRecurringDataChange) {

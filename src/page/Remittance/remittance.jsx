@@ -109,6 +109,7 @@ const Remittance = () => {
     error,
     transactionResult,
     manualAccountDetails,
+    onRecurringDataChange,
   } = useSelector((state) => state.remittance);
 
   const {
@@ -1321,6 +1322,8 @@ const Remittance = () => {
   );
 
   const handleSubmitTransaction = useCallback(() => {
+    console.log("formData all values",formData);
+    console.log("onRecurringDataChange values",onRecurringDataChange);
     const transactionData = {
       from_currency: formData.sendCurrency?.value,
       to_currency: formData.receiveCurrency?.value,
@@ -1574,6 +1577,7 @@ const Remittance = () => {
     formData,
     exchangeRateData,
     manualAccountDetails,
+    onRecurringDataChange,
     manualAccountError,
     selectedBeneficiary,
     selectedBank,
@@ -2017,6 +2021,7 @@ const Remittance = () => {
           <BankTransfer
             formData={formData}
             selectedBeneficiary={selectedBeneficiary}
+            onRecurringDataChange={onRecurringDataChange}
             selectedBank={selectedBank}
             beneficiaryBanks={beneficiaryBanks}
             beneficiaryLoading={beneficiaryLoading}
@@ -2969,6 +2974,7 @@ const Remittance = () => {
             totalToPay={totalToPay}
             paymentMethodComponent={getPaymentMethodComponent()}
             manualAccountDetails={manualAccountDetails}
+             onRecurringDataChange={onRecurringDataChange}
             manualAccountError={manualAccountError}
             manualDetailsLoading={manualDetailsLoading}
             beneficiaryLoading={beneficiaryLoading}
@@ -2984,6 +2990,7 @@ const Remittance = () => {
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
             manualAccountDetails={manualAccountDetails}
+            onRecurringDataChange={onRecurringDataChange}
             exchangeRateData={exchangeRateData}
             onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
             onSubmit={handleSubmitTransaction}
@@ -3003,6 +3010,7 @@ const Remittance = () => {
             formData={formData}
             selectedBeneficiary={selectedBeneficiary}
             manualAccountDetails={manualAccountDetails}
+            onRecurringDataChange={onRecurringDataChange}
             exchangeRateData={exchangeRateData}
             onReset={handleReset}
             onDownloadReceipt={handleDownloadReceipt}

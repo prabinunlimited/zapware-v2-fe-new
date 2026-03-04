@@ -485,7 +485,7 @@ export const submitTransaction = createAsyncThunk(
       });
 
       const endpoint = `${API_URL}/transactions/remittance-transaction`;
-
+      console.log(" transactionData remittance", transactionData);
       const formData = new FormData();
 
       const mappedData = {
@@ -543,7 +543,7 @@ export const submitTransaction = createAsyncThunk(
           formDataState.payout_method,
 
         rails: transactionData.rails || "Local",
-        sender_account_name: transactionData.sender_account_name,
+        sender_account_name: transactionData.sender_account_name ?? transactionData.sila_account_name,
         sender_bank_id: transactionData.sender_bank_id,
 
         ...(transactionData.isRecurring
@@ -635,7 +635,7 @@ export const submitTransaction = createAsyncThunk(
 
       console.log(`📞 Calling API: ${endpoint}`);
       console.log(`🔗 Endpoint: ${endpoint}`);
-
+      console.log("FormData all Payload",formData);
       const response = await axios.post(endpoint, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
