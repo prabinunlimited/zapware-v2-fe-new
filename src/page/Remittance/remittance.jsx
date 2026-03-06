@@ -109,7 +109,6 @@ const Remittance = () => {
     error,
     transactionResult,
     manualAccountDetails,
-    onRecurringDataChange,
   } = useSelector((state) => state.remittance);
 
   const {
@@ -146,6 +145,12 @@ const Remittance = () => {
   const [showRecipientDetails, setShowRecipientDetails] = useState(true);
   const [showOpenBanking, setShowOpenBanking] = useState(false);
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
+
+  const [recurringData, setRecurringData] = useState({
+    isRecurring: "0",
+    frequency: "",
+    recurring_custom_days: "",
+  });
 
   // Refs for preventing duplicate API calls
   const isManualUpdate = useRef(false);
@@ -1322,71 +1327,172 @@ const Remittance = () => {
   );
 
   const handleSubmitTransaction = useCallback(() => {
-    console.log("formData all values",formData);
-    console.log("onRecurringDataChange values",onRecurringDataChange);
+    console.log("📝 formData all values", formData);
+    console.log("📝 recurringData from state:", recurringData); // Now this will have values
+
+    // Log recurring data specifically for debugging
+    console.log("🔄 Recurring Data from state:", {
+      isRecurring: recurringData.isRecurring,
+      frequency: recurringData.frequency,
+      recurring_custom_days: recurringData.recurring_custom_days,
+      isRecurringActive: recurringData.isRecurring === "1",
+    });
+
     const transactionData = {
+      // Currency Information
       from_currency: formData.sendCurrency?.value,
       to_currency: formData.receiveCurrency?.value,
 
-      ...(selectedSilaBankAccount && formData.paymentMethod === "bank"
+      // Sila Bank Account Information (for USD transfers)
+      ...(selectedSilaBankAccount &&
+      formData.paymentMethod === "bank" &&
+      formData.sendCurrency?.value === "USD"
         ? {
             sila_account_id: selectedSilaBankAccount.id,
             sila_payment_instrument_id:
               selectedSilaBankAccount.payment_instrument_id,
             sila_account_name: selectedSilaBankAccount.account_name,
             sila_routing_number: selectedSilaBankAccount.routing_number,
+            sila_account_number_hash: selectedSilaBankAccount.accountNumberHash,
+            sila_account_type: selectedSilaBankAccount.account_type,
           }
         : {}),
 
-      send_amount: parseFloat(formData.sendAmount),
-      receive_amount: parseFloat(formData.receiveAmount),
+      // Amount Information
+      send_amount: parseFloat(formData.sendAmount) || 0,
+      receive_amount: parseFloat(formData.receiveAmount) || 0,
       exchange_rate: exchangeRateData?.fxRate || formData.exchangeRate || 0,
 
+      // Customer Information
       customer_id: parseInt(customerId),
 
+      // Payment Information
       payment_method: formData.paymentMethod,
-      conversion_id: exchangeRateData?.conversion_id,
+      conversion_id: exchangeRateData?.conversion_id || formData.conversionId,
 
+      // Beneficiary Information
       beneficiary: selectedBeneficiary?.id?.toString(),
       beneficiary_bank_id: selectedBank?.id,
-
       beneficiary_name: selectedBeneficiary?.name,
       beneficiary_bank_name: selectedBank?.bank_name,
       beneficiary_account_number:
         selectedBank?.account_number || selectedBank?.bank_acc_no,
 
+      // If beneficiary has additional details
+      ...(selectedBeneficiary?.email && {
+        beneficiary_email: selectedBeneficiary.email,
+      }),
+      ...(selectedBeneficiary?.phone_number && {
+        beneficiary_phone: selectedBeneficiary.phone_number,
+      }),
+      ...(selectedBeneficiary?.country && {
+        beneficiary_country: selectedBeneficiary.country,
+      }),
+
+      // Remittance Flag
       is_remit: "Y",
 
+      // Purpose and Source Information
       purpose: formData.purpose?.value || formData.purpose,
-      income_source: formData.incomeSource?.value || formData.incomeSource,
+      income_source: formData.income_source?.value || formData.income_source,
       occupation: formData.occupation || "",
       relation: formData.relation?.value || formData.relation || "",
       payout_method: formData.payout_method?.value || formData.paymentMethod,
 
+      // Document and Terms
       document: formData.document,
       agree_to_terms: formData.agreeToTerms ? "1" : "0",
 
+      // Rails Information
       rails: "Local",
+
+      // Sender Information
+      sender_account_name:
+        selectedSilaBankAccount?.account_name || formData.sender_account_name,
+      sender_bank_id: selectedSilaBankAccount?.id || formData.sender_bank_id,
+
+      // Fee and Total
+      transaction_fee: formData.fee || 0,
+
+      // ✅ RECURRING PAYMENT DATA - Using state value
+      ...(recurringData && recurringData.isRecurring === "1"
+        ? {
+            isRecurring: recurringData.isRecurring,
+            frequency: recurringData.frequency || "",
+            recurring_custom_days: recurringData.recurring_custom_days || "",
+
+            // Additional recurring flags that might be needed by the API
+            is_recurring: "Y",
+            recurring_type:
+              recurringData.frequency === "specific_day"
+                ? "custom"
+                : recurringData.frequency,
+            recurring_status: "active",
+
+            // If it's a custom recurring payment, include the day count
+            ...(recurringData.frequency === "specific_day" &&
+              recurringData.recurring_custom_days && {
+                recurring_days_interval: parseInt(
+                  recurringData.recurring_custom_days,
+                ),
+                recurring_start_date: new Date().toISOString().split("T")[0], // Today's date as start
+              }),
+          }
+        : {
+            // If not recurring, explicitly set to "0" to avoid any confusion
+            isRecurring: "0",
+            is_recurring: "N",
+          }),
+
+      // Additional metadata for debugging
+      transaction_source: "web_app",
+      platform: "web",
+      timestamp: new Date().toISOString(),
     };
 
+    // Clean up the data - remove undefined or null values
     const cleanData = {};
     Object.keys(transactionData).forEach((key) => {
-      if (transactionData[key] !== null && transactionData[key] !== undefined) {
-        cleanData[key] = transactionData[key];
+      const value = transactionData[key];
+      if (value !== null && value !== undefined && value !== "") {
+        // For objects, stringify them
+        if (typeof value === "object" && !(value instanceof File)) {
+          try {
+            cleanData[key] = JSON.stringify(value);
+          } catch (e) {
+            console.warn(`Could not stringify ${key}:`, e);
+          }
+        } else {
+          cleanData[key] = value;
+        }
       }
     });
 
-    console.log("📤 Sending transaction data:", cleanData);
+    // Log the final clean data for debugging
+    console.log("📤 Final Transaction Data being sent:", {
+      ...cleanData,
+      // Mask sensitive information in logs
+      document: cleanData.document ? "[File Present]" : undefined,
+      beneficiary_account_number: cleanData.beneficiary_account_number
+        ? "****" + cleanData.beneficiary_account_number.slice(-4)
+        : undefined,
+    });
 
+    // Validate required fields
     const required = [
       "from_currency",
       "to_currency",
       "beneficiary",
       "beneficiary_bank_id",
+      "send_amount",
+      "receive_amount",
+      "customer_id",
     ];
+
     const missing = required.filter((field) => !cleanData[field]);
 
     if (missing.length > 0) {
+      console.error("❌ Missing required fields:", missing);
       toast.error(`Missing required fields: ${missing.join(", ")}`, {
         position: "top-center",
         autoClose: 5000,
@@ -1394,23 +1500,74 @@ const Remittance = () => {
       return;
     }
 
-    dispatch(submitTransaction(cleanData));
+    // Check if recurring data is properly included when it should be
+    if (recurringData?.isRecurring === "1") {
+      console.log("✅ Recurring payment data included in payload:", {
+        isRecurring: cleanData.isRecurring,
+        frequency: cleanData.frequency,
+        recurring_custom_days: cleanData.recurring_custom_days,
+        is_recurring: cleanData.is_recurring,
+        recurring_type: cleanData.recurring_type,
+      });
+
+      // Validate recurring fields
+      if (!cleanData.frequency) {
+        toast.error("Please select a frequency for recurring payment", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+
+      if (
+        cleanData.frequency === "specific_day" &&
+        !cleanData.recurring_custom_days
+      ) {
+        toast.error("Please enter number of days for recurring payment", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+    }
+
+    // Dispatch the transaction
+    dispatch(submitTransaction(cleanData))
+      .unwrap()
+      .then((result) => {
+        console.log("✅ Transaction submitted successfully:", result);
+        toast.success("Transaction submitted successfully!", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+
+        // If it's a recurring payment, show a special success message
+        if (recurringData?.isRecurring === "1") {
+          toast.info(
+            `Recurring payment set up successfully. Frequency: ${recurringData.frequency}`,
+            {
+              position: "top-right",
+              autoClose: 5000,
+            },
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("❌ Transaction submission failed:", error);
+        toast.error(error?.message || "Transaction failed. Please try again.", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+      });
   }, [
     customerId,
     formData,
     exchangeRateData,
     selectedBeneficiary,
     selectedBank,
-    dispatch,
     selectedSilaBankAccount,
-    formData.paymentMethod,
-    formData.purpose,
-    formData.incomeSource,
-    formData.occupation,
-    formData.relation,
-    formData.payout_method,
-    formData.document,
-    formData.agreeToTerms,
+    recurringData, // ✅ Use recurringData instead of onRecurringDataChange
+    dispatch,
   ]);
 
   const handleNextStep = useCallback(() => {
@@ -1577,7 +1734,6 @@ const Remittance = () => {
     formData,
     exchangeRateData,
     manualAccountDetails,
-    onRecurringDataChange,
     manualAccountError,
     selectedBeneficiary,
     selectedBank,
@@ -1803,6 +1959,11 @@ const Remittance = () => {
     exchangeRateData,
   ]);
 
+  const handleRecurringDataChange = useCallback((data) => {
+    console.log("Parent Recieived Recurring Data:", data);
+    setRecurringData(data);
+  }, []);
+
   const selectStyles = useMemo(
     () => ({
       control: (base, state) => ({
@@ -2021,7 +2182,7 @@ const Remittance = () => {
           <BankTransfer
             formData={formData}
             selectedBeneficiary={selectedBeneficiary}
-            onRecurringDataChange={onRecurringDataChange}
+            onRecurringDataChange={handleRecurringDataChange}
             selectedBank={selectedBank}
             beneficiaryBanks={beneficiaryBanks}
             beneficiaryLoading={beneficiaryLoading}
@@ -2974,7 +3135,7 @@ const Remittance = () => {
             totalToPay={totalToPay}
             paymentMethodComponent={getPaymentMethodComponent()}
             manualAccountDetails={manualAccountDetails}
-             onRecurringDataChange={onRecurringDataChange}
+            onRecurringDataChange={handleRecurringDataChange}
             manualAccountError={manualAccountError}
             manualDetailsLoading={manualDetailsLoading}
             beneficiaryLoading={beneficiaryLoading}
@@ -2990,7 +3151,7 @@ const Remittance = () => {
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
             manualAccountDetails={manualAccountDetails}
-            onRecurringDataChange={onRecurringDataChange}
+            onRecurringDataChange={handleRecurringDataChange} // ✅ Use the handler, not the Redux value
             exchangeRateData={exchangeRateData}
             onAgreeToTerms={(value) => handleFieldChange("agreeToTerms", value)}
             onSubmit={handleSubmitTransaction}
@@ -3010,7 +3171,7 @@ const Remittance = () => {
             formData={formData}
             selectedBeneficiary={selectedBeneficiary}
             manualAccountDetails={manualAccountDetails}
-            onRecurringDataChange={onRecurringDataChange}
+            onRecurringDataChange={handleRecurringDataChange} // ✅ Pass it here too
             exchangeRateData={exchangeRateData}
             onReset={handleReset}
             onDownloadReceipt={handleDownloadReceipt}

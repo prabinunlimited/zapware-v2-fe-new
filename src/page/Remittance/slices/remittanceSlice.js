@@ -483,7 +483,7 @@ export const submitTransaction = createAsyncThunk(
         localStorageValue: isRemittanceOnlyCustomer,
         isRemittanceOnly: isRemittanceOnly,
       });
-
+      console.log("isRecurring Check", isRecurring);
       const endpoint = `${API_URL}/transactions/remittance-transaction`;
       console.log(" transactionData remittance", transactionData);
       const formData = new FormData();
@@ -543,14 +543,19 @@ export const submitTransaction = createAsyncThunk(
           formDataState.payout_method,
 
         rails: transactionData.rails || "Local",
-        sender_account_name: transactionData.sender_account_name ?? transactionData.sila_account_name,
+        sender_account_name:
+          transactionData.sender_account_name ??
+          transactionData.sila_account_name,
         sender_bank_id: transactionData.sender_bank_id,
 
-        ...(transactionData.isRecurring
+        ...(transactionData.isRecurring ||
+        transactionData.frequency ||
+        transactionData.recurring_custom_days
           ? {
-              isRecurring: transactionData.isRecurring,
-              frequency: transactionData.frequency,
-              recurring_custom_days: transactionData.recurring_custom_days,
+              isRecurring: transactionData.isRecurring || "0",
+              frequency: transactionData.frequency || "",
+              recurring_custom_days:
+                transactionData.recurring_custom_days || "",
             }
           : {}),
 
@@ -635,7 +640,7 @@ export const submitTransaction = createAsyncThunk(
 
       console.log(`📞 Calling API: ${endpoint}`);
       console.log(`🔗 Endpoint: ${endpoint}`);
-      console.log("FormData all Payload",formData);
+      console.log("FormData all Payload", formData);
       const response = await axios.post(endpoint, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
