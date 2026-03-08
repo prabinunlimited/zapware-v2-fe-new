@@ -16,6 +16,8 @@ import {
 import Footer from "../src/components/Dashboard/Footer/Footer";
 import Header from "../src/components/Dashboard/Header/Header";
 import NavigateSection from "../src/components/Dashboard/Navigation/NavigateSection";
+import { motion, AnimatePresence } from "framer-motion";
+import { FiMenu, FiX } from "react-icons/fi"; // Better icons from react-icons
 
 const ProtectedRoute = () => {
   // ✅ ALL HOOKS AT THE TOP - BEFORE ANY CONDITIONALS
@@ -28,6 +30,9 @@ const ProtectedRoute = () => {
   const [isChecking, setIsChecking] = useState(true);
   const routeParams = useParams();
   const routeCustomerId = routeParams.customerId;
+
+  // NEW: State for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -64,6 +69,24 @@ const ProtectedRoute = () => {
 
     initializeAuth();
   }, [dispatch, token, customerId]);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isMobileMenuOpen]);
 
   // ✅ Show loading while initializing - AFTER ALL HOOKS
   if (!isInitialized || isChecking) {
@@ -111,12 +134,6 @@ const ProtectedRoute = () => {
 
   // ✅ SPECIAL HANDLING FOR BENEFICIARIES
   if (isBeneficiaryUser && beneficiaryId) {
-    console.log("🔍 BENEFICIARY DETECTED IN PROTECTED ROUTE:", {
-      beneficiaryId,
-      currentPath: location.pathname,
-      isBeneficiaryPortalRoute,
-    });
-
     // If beneficiary is trying to access beneficiary portal routes through ProtectedRoute
     // (shouldn't happen with new router structure, but just in case)
     if (isBeneficiaryPortalRoute) {
@@ -126,14 +143,11 @@ const ProtectedRoute = () => {
     }
 
     // If beneficiary tries to access any CUSTOMER route, redirect to beneficiary portal
-    console.log("🔄 Redirecting beneficiary to their portal");
     return <Navigate to={`/beneficiary/homepage/${beneficiaryId}`} replace />;
   }
 
   // ✅ Check if NON-beneficiary is trying to access beneficiary portal
   if (isBeneficiaryPortalRoute && !isBeneficiaryUser) {
-    console.log("❌ Non-beneficiary trying to access beneficiary portal");
-
     // Clear any stray beneficiary data
     localStorage.removeItem("beneficaryLogin");
     localStorage.removeItem("beneficaryId");
@@ -150,17 +164,61 @@ const ProtectedRoute = () => {
       {/* Header - Always full width at the top */}
       <Header customerId={routeCustomerId || customerId} />
 
+      {/* Mobile Menu Button - Positioned below header */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="fixed top-20 left-4 z-40 lg:hidden bg-white/90 backdrop-blur-sm p-3 rounded-full shadow-lg hover:bg-white transition-all duration-200 border border-gray-200"
+        aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+      >
+        {isMobileMenuOpen ? (
+          <FiX className="w-5 h-5 text-gray-700" />
+        ) : (
+          <FiMenu className="w-5 h-5 text-gray-700" />
+        )}
+      </button>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop with blur effect */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden"
+              style={{ top: "64px" }} // Start below header (adjust based on your header height)
+              transition={{ duration: 0.2 }}
+            />
+
+            {/* Slide-out Navigation - Below header */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "tween", duration: 0.3 }}
+              className="fixed left-0 h-[calc(100%-64px)] w-72 bg-white/95 backdrop-blur-md z-40 lg:hidden overflow-y-auto shadow-2xl"
+              style={{ top: "64px" }} // Start below header
+            >
+              <div className="px-4 py-6">
+                <NavigateSection customerId={routeCustomerId || customerId} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content Area - Navigation and Outlet side by side */}
       <div className="flex-1 flex min-h-0 pt-16">
-        {" "}
-        {/* pt-16 to account for fixed header */}
-        {/* Sidebar Navigation - Fixed width (28% on desktop) */}
-        <div className="hidden lg:block w-[28%] max-w-2xl overflow-y-auto">
+        {/* Sidebar Navigation - Only visible on large screens */}
+        <div className="hidden lg:block w-[28%] max-w-2xl overflow-y-auto border-r border-gray-200 bg-white">
           <NavigateSection customerId={routeCustomerId || customerId} />
         </div>
+
         {/* Main Content - Takes remaining width */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-2 mt-2">
+        <div className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="p-4 md:p-6">
             <Outlet /> {/* This will render Homepage.js content */}
           </div>
         </div>
