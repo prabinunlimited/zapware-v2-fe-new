@@ -449,8 +449,65 @@ export const fetchPayoutCurrencies = createAsyncThunk(
   "remittance/fetchPayoutCurrencies",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_URL}/payout-currencies`);
-      return response.data?.data || [];
+      const isWhiteLabelledPartnerCustomer = localStorage.getItem(
+        "iswhitelabelledpartner",
+      );
+      console.log(
+        "isWhiteLabelledPartnerCustomer",
+        isWhiteLabelledPartnerCustomer,
+      );
+
+      let response;
+
+      if (isWhiteLabelledPartnerCustomer === "Y") {
+        const whiteLabellePartnerId = localStorage.getItem(
+          "whitelabelledpartnerid",
+        )
+          ? localStorage.getItem("whitelabelledpartnerid")
+          : "0";
+
+        if (whiteLabellePartnerId !== "0") {
+          response = await axios.get(
+            `${API_URL}/partner-payout-currencies/${whiteLabellePartnerId}`,
+          );
+        } else {
+          response = await axios.get(`${API_URL}/payout-currencies`);
+        }
+      } else {
+        response = await axios.get(`${API_URL}/payout-currencies`);
+      }
+
+      // Get the currencies data
+      const currencies = response.data?.data || [];
+
+      console.log("💰 Payout currencies received:", currencies);
+
+      // Find the currency with default_remittance = "Y"
+      const defaultCurrency = currencies.find(
+        (currency) => currency.default_remittance === "Y",
+      );
+
+      console.log("🎯 Default currency found:", defaultCurrency);
+
+      // Return both the currencies list and the default currency info
+      return {
+        currencies: currencies.map((currency) => ({
+          value: currency.currency_code,
+          label: currency.currency_code,
+          symbol: currency.icon || currency.currency_code,
+          payout_currency_id: currency.payout_currency_id,
+          default_remittance: currency.default_remittance,
+        })),
+        defaultCurrency: defaultCurrency
+          ? {
+              value: defaultCurrency.currency_code,
+              label: defaultCurrency.currency_code,
+              symbol: defaultCurrency.icon || defaultCurrency.currency_code,
+              payout_currency_id: defaultCurrency.payout_currency_id,
+              default_remittance: defaultCurrency.default_remittance,
+            }
+          : null,
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
     }
@@ -461,9 +518,6 @@ export const submitTransaction = createAsyncThunk(
   "remittance/submitTransaction",
   async (transactionData, { getState, rejectWithValue }) => {
     try {
-      console.log("🚀 Starting transaction submission...");
-      console.log("📦 Transaction data received:", transactionData);
-
       if (transactionData.isRecurring === "1") {
         console.log("🔄 Processing Recurring Payment:", {
           frequency: transactionData.Frequency,
@@ -483,9 +537,9 @@ export const submitTransaction = createAsyncThunk(
         localStorageValue: isRemittanceOnlyCustomer,
         isRemittanceOnly: isRemittanceOnly,
       });
-      console.log("isRecurring Check", isRecurring);
+
       const endpoint = `${API_URL}/transactions/remittance-transaction`;
-      console.log(" transactionData remittance", transactionData);
+
       const formData = new FormData();
 
       const mappedData = {
@@ -577,8 +631,6 @@ export const submitTransaction = createAsyncThunk(
           parseFloat(transactionData.transaction_fee || formDataState.fee || 0)
         ).toString(),
       };
-
-      console.log("📋 Mapped data for API submission:", mappedData);
 
       Object.keys(mappedData).forEach((key) => {
         const value = mappedData[key];
@@ -990,23 +1042,25 @@ const remittanceSlice = createSlice({
       })
 
       .addCase(fetchPayoutCurrencies.fulfilled, (state, action) => {
-        state.currencies.receiveOptions = action.payload.map((currency) => ({
-          value: currency.currency_code,
-          label: currency.currency_code,
-          symbol: currency.icon || currency.currency_code,
-        }));
+        // Set the receive options from the currencies list
+        state.currencies.receiveOptions = action.payload.currencies;
 
-        if (!state.formData.receiveCurrency) {
-          const kesCurrency = action.payload.find(
-            (c) => c.currency_code === "KES",
+        // ONLY set the default currency if it exists AND no receive currency is selected yet
+        // NO FALLBACK to KES or any other currency
+        if (action.payload.defaultCurrency && !state.formData.receiveCurrency) {
+          console.log(
+            "🎯 Setting default receive currency:",
+            action.payload.defaultCurrency,
           );
-          if (kesCurrency) {
-            state.formData.receiveCurrency = {
-              value: "KES",
-              label: "KES",
-              symbol: kesCurrency.icon || "KES",
-            };
-          }
+          state.formData.receiveCurrency = action.payload.defaultCurrency;
+        }
+
+        // If no default currency exists, we leave receiveCurrency as null/undefined
+        // The user will have to manually select a currency
+        if (!action.payload.defaultCurrency) {
+          console.log(
+            "ℹ️ No default currency found. User will need to select a currency manually.",
+          );
         }
       })
 

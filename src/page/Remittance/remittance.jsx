@@ -325,7 +325,6 @@ const Remittance = () => {
       !silaAccountsLoading &&
       !hasFetchedSilaAccounts.current
     ) {
-      console.log("🔄 Remittance: Fetching Sila bank accounts...");
 
       hasFetchedSilaAccounts.current = true;
 
@@ -383,13 +382,11 @@ const Remittance = () => {
       }
 
       if (isRequestInProgress.current) {
-        console.log("⏳ Request already in progress, skipping duplicate");
         return;
       }
 
       const now = Date.now();
       if (now - lastApiCallTime.current < 1500) {
-        console.log("⏱️ Rate limiting: Too soon since last call");
         return;
       }
 
@@ -404,7 +401,6 @@ const Remittance = () => {
 
       const cachedData = exchangeRateCache.current[cacheKey];
       if (cachedData && now - cachedData.timestamp < 45000) {
-        console.log("💾 Using cached exchange rate");
         if (isMounted) {
           setExchangeRateData(cachedData.data);
           setExchangeRateLoading(false);
@@ -570,7 +566,7 @@ const Remittance = () => {
   useEffect(() => {
     // Check if all initial APIs have loaded (success or failure)
     if (!initialLoading && !loading) {
-      console.log("✅ All initial APIs loaded, checking for exchange rate...");
+      
 
       // Check if we have currencies selected but no exchange rate data
       if (
@@ -581,7 +577,7 @@ const Remittance = () => {
         !isRequestInProgress.current &&
         !isTyping.current
       ) {
-        console.log("🔄 Auto-triggering exchange rate fetch...");
+       
 
         // Small delay to ensure UI is ready
         const timer = setTimeout(() => {
@@ -592,7 +588,7 @@ const Remittance = () => {
 
           if (exchangeRateCache.current[cacheKey]) {
             delete exchangeRateCache.current[cacheKey];
-            console.log("🗑️ Cleared cached exchange rate for fresh fetch");
+            
           }
 
           // Trigger manual fetch
@@ -621,7 +617,7 @@ const Remittance = () => {
       !isManualUpdate.current &&
       !isTyping.current
     ) {
-      console.log("🔄 Auto-calculating receive amount based on exchange rate");
+      
 
       const sendNum = parseFloat(formData.sendAmount);
       if (!isNaN(sendNum) && sendNum >= 5) {
@@ -632,7 +628,7 @@ const Remittance = () => {
 
         const currentReceive = parseFloat(formData.receiveAmount || 0);
         if (Math.abs(calculatedReceiveAmount - currentReceive) > 0.01) {
-          console.log("💰 Setting receive amount:", calculatedReceiveAmount);
+          
           dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
         }
       }
@@ -804,10 +800,6 @@ const Remittance = () => {
   ]);
 
   useEffect(() => {
-    console.log(
-      "🔄 Remittance - Current paymentMethod:",
-      formData.paymentMethod,
-    );
     console.log("🔄 Remittance - Full formData:", formData);
   }, [formData.paymentMethod, formData]);
 
@@ -880,11 +872,6 @@ const Remittance = () => {
         if (formData.sendAmount && parseFloat(formData.sendAmount) >= 5) {
           const sendNum = parseFloat(formData.sendAmount);
           const calculatedReceiveAmount = roundToDecimals(sendNum * fxRate, 2);
-
-          console.log(
-            "📊 Auto-calculated receive amount:",
-            calculatedReceiveAmount,
-          );
           dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
         }
 
@@ -941,7 +928,6 @@ const Remittance = () => {
 
       // Allow complete deletion - set empty string immediately
       if (value === "") {
-        console.log("✅ Setting empty string");
         dispatch(setSendAmount(""));
         activeInput.current = "send";
 
@@ -970,7 +956,6 @@ const Remittance = () => {
 
       // Prevent updating with invalid value (like just a dot)
       if (formattedValue === "." || formattedValue === "") {
-        console.log("⚠️ Invalid value, not updating");
         return;
       }
 
@@ -984,7 +969,6 @@ const Remittance = () => {
         );
         dispatch(setSendAmount(formattedValue));
       } else {
-        console.log("⏭️ Same value, skipping update");
         return;
       }
 
@@ -1006,7 +990,6 @@ const Remittance = () => {
             sendNum * exchangeRateData.fxRate,
             2,
           );
-          console.log("💰 Calculated receive amount:", calculatedReceive);
           dispatch(setReceiveAmount(calculatedReceive.toString()));
         }
       }, 600);
@@ -1275,7 +1258,6 @@ const Remittance = () => {
   }, [step, formData.paymentMethod, formData.sendCurrency]);
 
   const handleInitiateOpenBanking = useCallback(() => {
-    console.log("🚀 User clicked Open Banking button!");
     if (!formData.agreeToTerms) {
       toast.error("Please agree to terms first!");
       return;
@@ -1294,7 +1276,6 @@ const Remittance = () => {
     }
     setOpenBankingProcessing(true);
     setShowOpenBanking(true);
-    console.log("✅ Everything is ready for Open Banking!");
   }, [
     formData.agreeToTerms,
     selectedBeneficiary,
@@ -1313,7 +1294,6 @@ const Remittance = () => {
 
   const handleOpenBankingSuccess = useCallback(
     (result) => {
-      console.log("🎉 Open Banking payment worked!", result);
       setShowOpenBanking(false);
       setOpenBankingProcessing(false);
       toast.success("Open Banking payment started successfully!", {
@@ -1327,8 +1307,6 @@ const Remittance = () => {
   );
 
   const handleSubmitTransaction = useCallback(() => {
-    console.log("📝 formData all values", formData);
-    console.log("📝 recurringData from state:", recurringData); // Now this will have values
 
     // Log recurring data specifically for debugging
     console.log("🔄 Recurring Data from state:", {
@@ -1535,7 +1513,6 @@ const Remittance = () => {
     dispatch(submitTransaction(cleanData))
       .unwrap()
       .then((result) => {
-        console.log("✅ Transaction submitted successfully:", result);
         toast.success("Transaction submitted successfully!", {
           position: "top-right",
           autoClose: 3000,
@@ -1783,7 +1760,6 @@ const Remittance = () => {
     }
 
     try {
-      console.log("Downloading receipt", transactionResult);
 
       // Create PDF document
       const doc = new jsPDF();
@@ -1960,7 +1936,6 @@ const Remittance = () => {
   ]);
 
   const handleRecurringDataChange = useCallback((data) => {
-    console.log("Parent Recieived Recurring Data:", data);
     setRecurringData(data);
   }, []);
 
@@ -3444,7 +3419,6 @@ const Remittance = () => {
             setOpenBankingProcessing(false);
           }}
           onSuccess={(result) => {
-            console.log("Open Banking remittance success:", result);
             if (result.success) {
               toast.success(
                 "Remittance initiated successfully via Open Banking!",
