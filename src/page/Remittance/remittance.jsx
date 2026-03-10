@@ -1372,7 +1372,7 @@ const Remittance = () => {
 
       // Purpose and Source Information
       purpose: formData.purpose?.value || formData.purpose,
-      income_source: formData.income_source?.value || formData.income_source,
+      income_source: formData.incomeSource?.value || formData.incomeSource,
       occupation: formData.occupation || "",
       relation: formData.relation?.value || formData.relation || "",
       payout_method: formData.payout_method?.value || formData.paymentMethod,
