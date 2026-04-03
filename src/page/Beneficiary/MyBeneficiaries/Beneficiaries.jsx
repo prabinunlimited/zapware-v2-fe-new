@@ -70,11 +70,6 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Redux selectors
   const beneficiaries = useSelector(selectBeneficiaries);
-  console.log(
-    "🔍 Full Redux state:",
-    useSelector((state) => state),
-  );
-
   const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
   const loading = useSelector(selectBeneficiariesLoading);
   const error = useSelector(selectBeneficiariesError);
@@ -99,6 +94,9 @@ const Beneficiaries = ({ mode = "list" }) => {
   // Search timeout ref
   const searchTimeoutRef = useRef(null);
 
+  // Ref to track current searching state (avoids stale closures)
+  const isSearchingRef = useRef(false);
+
   // Combined cleanup function for component unmount
   useEffect(() => {
     return () => {
@@ -111,8 +109,13 @@ const Beneficiaries = ({ mode = "list" }) => {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
+
       // Always reset searching state on unmount
       setIsSearching(false);
+      isSearchingRef.current = false; // ADD THIS LINE
+
+      // Reset search query in Redux
+      dispatch(setSearchQuery(""));
     };
   }, [dispatch]);
 
@@ -121,37 +124,38 @@ const Beneficiaries = ({ mode = "list" }) => {
     if (customerId && isMounted.current && !hasFetchedOnce) {
       console.log(
         "🔍 Beneficiaries Component mounted with customerId:",
-        customerId,
+        customerId
       );
 
       const loadBeneficiaries = async () => {
         try {
+          setIsLoading(true); // Show loading during initial fetch
           const result = await dispatch(
-            fetchBeneficiaries(customerId),
+            fetchBeneficiaries(customerId)
           ).unwrap();
-          console.log("📥 Fetched beneficiaries count:", result?.length || 0);
+          console.log("📥 Fetched beneficiaries:", result);
+
+          // Handle the case where API returns { data: null }
+          if (!result || result === null) {
+            console.log("📭 No beneficiaries found, initializing empty array");
+            // Ensure Redux state has empty array, not null
+            // You might need to adjust your Redux slice to handle this
+          }
+
           setHasFetchedOnce(true);
         } catch (error) {
           console.error("❌ Error loading beneficiaries:", error);
           if (isMounted.current) {
             toast.error("Failed to load beneficiaries");
           }
+        } finally {
+          setIsLoading(false);
         }
       };
 
       loadBeneficiaries();
     }
   }, [dispatch, customerId, hasFetchedOnce]);
-
-  useEffect(() => {
-    console.log("🔄 Beneficiaries state changed:", {
-      loading,
-      error,
-      beneficiariesCount: beneficiaries?.length || 0,
-      beneficiaries: beneficiaries?.slice(0, 3), // Show first 3 for debugging
-      filteredCount: filteredBeneficiaries?.length || 0,
-    });
-  }, [beneficiaries, loading, error, filteredBeneficiaries]);
 
   // Sync search input with Redux search query
   useEffect(() => {
@@ -173,39 +177,105 @@ const Beneficiaries = ({ mode = "list" }) => {
     }
   }, [success, error, dispatch]);
 
-  // Handle search input changes with debounce - FIXED
+  useEffect(() => {
+    isSearchingRef.current = isSearching;
+  }, [isSearching]);
+
+  useEffect(() => {
+    console.log(
+      "📊 Beneficiaries updated:",
+      beneficiaries?.length,
+      "Searching:",
+      isSearching
+    );
+
+    if (beneficiaries && beneficiaries.length === 0 && isSearching) {
+      console.log("⚠️ No beneficiaries but searching - forcing reset");
+      setIsSearching(false);
+      isSearchingRef.current = false;
+
+      // Clear any pending timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+
+      // Also clear search query if it exists
+      if (searchQuery) {
+        dispatch(setSearchQuery(""));
+      }
+    }
+  }, [beneficiaries, isSearching, searchQuery, dispatch]);
+
+  useEffect(() => {
+    if (isSearching) {
+      const safetyTimer = setTimeout(() => {
+        console.log("⏰ Safety timer triggered - resetting isSearching");
+        setIsSearching(false);
+        isSearchingRef.current = false;
+      }, 2000); // Reset after 2 seconds max
+
+      return () => {
+        clearTimeout(safetyTimer);
+      };
+    }
+  }, [isSearching]);
+
+  // Handle search input changes with debounce - FIXED VERSION
   const handleSearchChange = useCallback(
     (e) => {
       const value = e.target.value;
+      console.log("🔍 handleSearchChange called:", value);
       setSearchInput(value);
 
       // Clear previous timeout
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
       }
 
-      // Show searching indicator only when there's text
-      if (value.trim()) {
-        setIsSearching(true);
-      } else {
+      // If empty, clear search query and reset searching state
+      if (!value.trim()) {
         setIsSearching(false);
+        isSearchingRef.current = false;
+        dispatch(setSearchQuery(""));
+        return;
       }
+
+      // Set searching state
+      setIsSearching(true);
+      isSearchingRef.current = true;
 
       // Debounce the search dispatch
       searchTimeoutRef.current = setTimeout(() => {
+        console.log("⏰ Dispatching search query:", value);
         dispatch(setSearchQuery(value));
-        // Always reset searching after dispatch
-        setIsSearching(false);
-      }, 300); // 300ms debounce
+
+        // DON'T set isSearching to false here - let the useEffect handle it
+        // based on whether results are found
+        searchTimeoutRef.current = null;
+      }, 300);
     },
-    [dispatch],
+    [dispatch]
   );
+
+  // Remove or modify the problematic useEffect that resets isSearching:
+  useEffect(() => {
+    if (filteredBeneficiaries.length > 0 && isSearching) {
+      // We have results, can stop searching
+      setIsSearching(false);
+      isSearchingRef.current = false;
+    }
+    // Don't automatically reset when there are no beneficiaries
+    // Let the search timeout handle completion
+  }, [filteredBeneficiaries, isSearching]);
 
   // Handle clear search
   const handleClearSearch = useCallback(() => {
     setSearchInput("");
     dispatch(setSearchQuery(""));
     setIsSearching(false);
+    isSearchingRef.current = false; // Add this line
 
     // Clear any pending timeout
     if (searchTimeoutRef.current) {
@@ -254,7 +324,7 @@ const Beneficiaries = ({ mode = "list" }) => {
           deleteBeneficiary({
             customerId,
             beneficiaryId: beneficiaryToDelete.id,
-          }),
+          })
         ).unwrap();
 
         toast.success("Beneficiary deleted successfully!");
@@ -284,7 +354,7 @@ const Beneficiaries = ({ mode = "list" }) => {
           toggleBeneficiaryVisibility({
             customerId,
             beneficiaryId,
-          }),
+          })
         ).unwrap();
 
         // Refresh the list
@@ -336,12 +406,12 @@ const Beneficiaries = ({ mode = "list" }) => {
             deleteBeneficiary({
               customerId,
               beneficiaryId,
-            }),
+            })
           ).unwrap();
         }
 
         toast.success(
-          `${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`,
+          `${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`
         );
 
         // Clear selection and refresh list
@@ -386,7 +456,7 @@ const Beneficiaries = ({ mode = "list" }) => {
   if (showInitialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center">
+        <div className="text-center">
           <RingLoader size={60} color="#3B82F6" />
           <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
         </div>
@@ -528,6 +598,12 @@ const Beneficiaries = ({ mode = "list" }) => {
                   placeholder="Search beneficiaries by name, phone, or email..."
                   className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading && !hasFetchedOnce}
+                  onKeyDown={(e) => {
+                    // Clear search on Escape key
+                    if (e.key === "Escape") {
+                      handleClearSearch();
+                    }
+                  }}
                 />
                 {searchInput && !isSearching && (
                   <button
@@ -538,6 +614,12 @@ const Beneficiaries = ({ mode = "list" }) => {
                   >
                     <FaTimes />
                   </button>
+                )}
+                {/* Show searching text when searching */}
+                {isSearching && (
+                  <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
+                    <span className="text-xs text-gray-500">Searching...</span>
+                  </div>
                 )}
               </div>
 
@@ -613,20 +695,20 @@ const Beneficiaries = ({ mode = "list" }) => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Show loading indicator only when searching within existing data */}
           {loading && !hasFetchedOnce ? (
-            <div className="p-8 sm:p-12 text-center">
+            <div className="p-12 text-center">
               <div className="flex flex-col items-center">
                 <RingLoader size={40} color="#3B82F6" />
                 <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
               </div>
             </div>
           ) : filteredBeneficiaries.length === 0 ? (
-            <div className="p-8 sm:p-12 text-center">
+            <div className="p-12 text-center">
               <div className="flex flex-col items-center">
-                <FaUser className="text-gray-300 text-4xl sm:text-6xl mb-4" />
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-700 mb-2">
+                <FaUser className="text-gray-300 text-6xl mb-4" />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
                   {searchQuery ? "No Results Found" : "No Beneficiaries Found"}
                 </h3>
-                <p className="text-gray-500 mb-6 text-sm sm:text-base">
+                <p className="text-gray-500 mb-6">
                   {searchQuery
                     ? `No beneficiaries found matching "${searchQuery}"`
                     : "You haven't added any beneficiaries yet."}
@@ -634,7 +716,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                 {!searchQuery && (
                   <button
                     onClick={handleAddBeneficiary}
-                    className="px-4 py-3 sm:px-6 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl"
                   >
                     <FaPlus className="inline mr-2" />
                     Add Your First Beneficiary
@@ -644,8 +726,7 @@ const Beneficiaries = ({ mode = "list" }) => {
             </div>
           ) : (
             <>
-              {/* Desktop Table (hidden on mobile) */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
@@ -699,7 +780,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                           <input
                             type="checkbox"
                             checked={selectedBeneficiaries.includes(
-                              beneficiary.id,
+                              beneficiary.id
                             )}
                             onChange={() =>
                               handleBeneficiarySelect(beneficiary.id)
@@ -809,155 +890,21 @@ const Beneficiaries = ({ mode = "list" }) => {
                 </table>
               </div>
 
-              {/* Mobile Cards (visible on mobile) */}
-              <div className="md:hidden">
-                {filteredBeneficiaries.map((beneficiary) => (
-                  <div
-                    key={beneficiary.id}
-                    className="border-b border-gray-200 p-4 hover:bg-gray-50 transition-colors duration-150"
-                  >
-                    {/* Card Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedBeneficiaries.includes(
-                            beneficiary.id,
-                          )}
-                          onChange={() =>
-                            handleBeneficiarySelect(beneficiary.id)
-                          }
-                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-1"
-                        />
-                        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-lg">
-                          {beneficiary.name?.charAt(0) || "?"}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {beneficiary.name || "N/A"}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {beneficiary.relationtobenef || "N/A"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleViewBankDetails(beneficiary)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                          title="View Bank Details"
-                        >
-                          <FaUniversity size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleEditBeneficiary(beneficiary)}
-                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
-                          title="Edit"
-                        >
-                          <FaEdit size={16} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Card Body - Details */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Contact
-                        </div>
-                        <div className="font-medium text-gray-900 truncate">
-                          {beneficiary.phone_number || "N/A"}
-                        </div>
-                        <div className="text-sm text-gray-600 truncate">
-                          {beneficiary.email || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Country
-                        </div>
-                        <div className="font-medium text-gray-900">
-                          {beneficiary.country_id || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Currency
-                        </div>
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {beneficiary.currency || "N/A"}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Status</div>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() =>
-                              handleToggleVisibility(beneficiary.id)
-                            }
-                            className={`p-1 rounded-full ${
-                              beneficiary.status === 1 ||
-                              beneficiary.active_status === 1
-                                ? "text-green-600 hover:bg-green-50"
-                                : "text-gray-400 hover:bg-gray-100"
-                            }`}
-                          >
-                            {beneficiary.status === 1 ||
-                            beneficiary.active_status === 1 ? (
-                              <FaEye size={14} />
-                            ) : (
-                              <FaEyeSlash size={14} />
-                            )}
-                          </button>
-                          <span
-                            className={`ml-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                              beneficiary.status === 1 ||
-                              beneficiary.active_status === 1
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {beneficiary.status === 1 ||
-                            beneficiary.active_status === 1
-                              ? "Visible"
-                              : "Hidden"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Card Footer */}
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                      <div className="text-sm text-gray-500">
-                        Added: {formatDate(beneficiary.created_at)}
-                      </div>
-                      <button
-                        onClick={() => handleDeleteClick(beneficiary)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                        title="Delete"
-                      >
-                        <FaTrash size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               {/* Pagination or footer */}
-              <div className="px-4 py-4 sm:px-6 sm:py-4 bg-gray-50 border-t border-gray-200">
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <div className="flex flex-col md:flex-row justify-between items-center">
-                  <div className="text-sm text-gray-500 mb-4 md:mb-0 text-center md:text-left">
+                  <div className="text-sm text-gray-500 mb-4 md:mb-0">
                     Showing {filteredBeneficiaries.length} of{" "}
                     {beneficiariesCount} beneficiaries
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Previous
                     </button>
-                    <span className="px-3 py-2 text-sm text-gray-700">
+                    <span className="px-4 py-2 text-sm text-gray-700">
                       Page 1 of 1
                     </span>
-                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       Next
                     </button>
                   </div>
