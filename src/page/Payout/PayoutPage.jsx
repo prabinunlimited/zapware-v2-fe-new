@@ -558,7 +558,7 @@ const PayoutPage = () => {
   // Helper functions
   const getAvailableTransactionTypes = (currency, providerId) => {
     if (currency === "KES") {
-      if (providerId === 33) return ["mobile"];
+      if (providerId === 33) return ["mobile","bank"];
       if (providerId === 41) return ["bank"];
     }
 
