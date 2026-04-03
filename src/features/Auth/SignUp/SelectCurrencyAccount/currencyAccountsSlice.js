@@ -26,90 +26,33 @@ const filterAccountsByCurrency = (accounts, currencyFilter) => {
   });
 };
 
-// Helper function to check if USD Named Account is selected
-const checkIfUSDNamedAccountSelected = (state) => {
-  if (!state.selectedAccounts || state.selectedAccounts.length === 0) {
-    return false;
-  }
-
-  // Check each selected account
-  for (const selectedAccountId of state.selectedAccounts) {
-    // Try to find the account by different possible ID properties
-    let account = state.namedAccounts.find((acc) => {
-      // Check multiple possible ID properties
-      const possibleIds = [
-        acc.service_provide_id_type,
-        acc.service_provide_id,
-        acc.id,
-        acc.account_id,
-      ];
-
-      const found = possibleIds.some(
-        (id) => id && id.toString() === selectedAccountId.toString()
-      );
-      return found;
-    });
-
-    // If not found in namedAccounts, try accountOptions
-    if (!account) {
-      account = state.accountOptions.find((acc) => {
-        const possibleIds = [
-          acc.service_provide_id_type,
-          acc.service_provide_id,
-          acc.id,
-          acc.account_id,
-        ];
-
-        const found = possibleIds.some(
-          (id) => id && id.toString() === selectedAccountId.toString()
-        );
-        return found;
-      });
-    }
-
-    if (account) {
-      // Check if it's a named account - check multiple possible properties
-      const isNamed =
-        account.accountType === "named" ||
-        account.account_type === "named" ||
-        account.type === "named";
-
-      // Check if it's USD - check multiple possible properties
-      const isUSD =
-        account.currency === "USD" || account.account_currency === "USD";
-
-      // Return true for ALL USD named accounts
-      if (isNamed && isUSD) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
-
 // Async thunks
 export const fetchAccountOptions = createAsyncThunk(
   "currencyAccounts/fetchAccountOptions",
-  async ({ accountType, API_URL }, { rejectWithValue }) => {
+  async ({ accountType, countryId, API_URL }, { rejectWithValue }) => {
     try {
-      // ✅ USE api.js INSTEAD OF FETCH - MUCH SIMPLER!
+      // Get onboarding description
       const accountOptionsResponse = await api.get(
         "/get-onboarding-description"
       );
 
-      const accountTypeEndpoint =
-        accountType === "individual" ? "Individuals" : "Institutions";
-      const termsResponse = await api.get(
-        "/get-bank-ac-type/" + accountTypeEndpoint
-      );
+      let endpoint;
+      if (accountType === "partner") {
+        endpoint = "/get-bank-ac-type/Individuals"; // Fallback or adjust as needed
+      } else {
+        endpoint = `/get-bank-ac-type-and-country/${accountType}/${countryId}`;
+      }
+
+      const termsResponse = await api.get(endpoint);
 
       return {
         accountOptionsData: accountOptionsResponse.data,
         termsData: termsResponse.data,
         accountType,
+        countryId,
       };
     } catch (error) {
+      console.error("API Error:", error.response?.data || error.message);
       return rejectWithValue(error.message);
     }
   }
@@ -208,7 +151,7 @@ const currencyAccountsSlice = createSlice({
     activeTab: "all",
     remittanceOnlyAccepted: false,
     termsModalOpen: false,
-    isNamedAccount: false,
+    // ⚠️ REMOVED: isNamedAccount: false,
     agentCode: "",
     agentError: null,
     isReferralValidating: false,
@@ -219,15 +162,13 @@ const currencyAccountsSlice = createSlice({
     clearAllSelections: (state) => {
       state.selectedAccounts = [];
       state.remittanceOnlyAccepted = false;
-      state.isNamedAccount = false;
     },
     clearSelectedAccounts: (state) => {
       state.selectedAccounts = [];
-      state.isNamedAccount = false;
     },
     setSelectedAccounts: (state, action) => {
       state.selectedAccounts = action.payload;
-      state.isNamedAccount = checkIfUSDNamedAccountSelected(state);
+      // ⚠️ REMOVED: No need to set isNamedAccount here
     },
     setReferralCode: (state, action) => {
       state.referralCode = action.payload;
@@ -309,8 +250,7 @@ const currencyAccountsSlice = createSlice({
       } else {
         state.selectedAccounts.push(accountId);
       }
-      // Update isNamedAccount when account selection changes
-      state.isNamedAccount = checkIfUSDNamedAccountSelected(state);
+      // ⚠️ REMOVED: No need to update isNamedAccount here
     },
     clearError: (state) => {
       state.apiError = null;
@@ -337,7 +277,7 @@ const currencyAccountsSlice = createSlice({
         activeTab: "all",
         remittanceOnlyAccepted: false,
         termsModalOpen: false,
-        isNamedAccount: false,
+        // ⚠️ REMOVED: isNamedAccount: false,
         agentCode: "",
         agentError: null,
         isReferralValidating: false,
@@ -345,9 +285,7 @@ const currencyAccountsSlice = createSlice({
         validationMessage: "",
       };
     },
-    setIsNamedAccount: (state, action) => {
-      state.isNamedAccount = action.payload;
-    },
+    // ⚠️ REMOVED: setIsNamedAccount reducer
     setAgentCode: (state, action) => {
       state.agentCode = action.payload;
       // Basic validation - check if more than 10 characters
@@ -429,8 +367,8 @@ const currencyAccountsSlice = createSlice({
           state.activeTab
         );
 
-        // Reset isNamedAccount when new accounts are loaded
-        state.isNamedAccount = false;
+        // ⚠️ REMOVED: No need to reset isNamedAccount
+        // state.isNamedAccount = false;
 
         // Set terms text
         if (termsData.termsText) {
@@ -504,7 +442,7 @@ export const {
   toggleAccountSelection,
   clearError,
   resetState,
-  setIsNamedAccount,
+  // ⚠️ REMOVED: setIsNamedAccount,
   clearSelectedAccounts,
   clearAllSelections,
   setAgentCode,

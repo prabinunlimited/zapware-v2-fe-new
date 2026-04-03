@@ -1173,16 +1173,23 @@ const beneficiarySlice = createSlice({
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
         state.loading = false;
-        const beneficiariesData = Array.isArray(action.payload)
-          ? action.payload
-          : action.payload.data || [];
-        state.beneficiaries = beneficiariesData;
+
+        // Handle various response formats
+        let beneficiariesData = [];
+
+        if (Array.isArray(action.payload)) {
+          beneficiariesData = action.payload;
+        } else if (action.payload && Array.isArray(action.payload.data)) {
+          beneficiariesData = action.payload.data;
+        } else if (action.payload && action.payload.data === null) {
+          beneficiariesData = []; // Explicitly handle null data
+        }
+
+        state.beneficiaries = beneficiariesData || []; // Ensure it's always an array
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
-        if (beneficiariesData.length > 0 && !state.selectedBeneficiary) {
-          state.selectedBeneficiary = beneficiariesData[0];
-        }
+        console.log(`📥 Loaded ${beneficiariesData.length} beneficiaries`);
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
         state.loading = false;

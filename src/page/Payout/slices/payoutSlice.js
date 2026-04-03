@@ -30,11 +30,18 @@ const executeWithRetry = async (
       // Clear previous cache for retry attempts
       if (attempt > 0) {
         apiCoordinator.clearSignature(signature);
-        await delay(RETRY_DELAY * attempt); // Exponential backoff
+        await delay(RETRY_DELAY * attempt);
       }
 
+      // Check if already fetching - return cached if available
       if (apiCoordinator.isFetching(signature)) {
-        throw new Error("Request already in progress");
+        // Wait a bit and check if completed
+        await delay(100);
+        if (apiCoordinator.hasRecentData(signature)) {
+          return apiCoordinator.getRecentData(signature);
+        }
+        // If still fetching after wait, proceed with new request
+        apiCoordinator.clearSignature(signature);
       }
 
       apiCoordinator.setFetching(signature);
@@ -43,26 +50,48 @@ const executeWithRetry = async (
       return result;
     } catch (error) {
       lastError = error;
+      
+      // Clear the fetching state immediately on error
+      apiCoordinator.clearSignature(signature);
 
-      // Don't retry for certain error types
+      // Don't retry for these error types
       if (
         error.response?.status === 400 ||
         error.response?.status === 401 ||
-        error.response?.status === 403
+        error.response?.status === 403 ||
+        error.response?.status === 404 ||
+        error.response?.status === 422
       ) {
+        console.log(`Not retrying due to client error: ${error.response?.status}`);
         break;
       }
 
       // Don't retry if max attempts reached
       if (attempt === maxRetries) {
+        console.log(`Max retries (${maxRetries}) reached for ${signature}`);
         break;
       }
 
-      apiCoordinator.setFailed(signature);
+      // Don't retry if it's a cancellation error
+      if (axios.isCancel(error)) {
+        console.log("Request was cancelled, not retrying");
+        break;
+      }
+
+      // Don't retry network errors that aren't recoverable
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        console.log("Request timeout, not retrying");
+        break;
+      }
+
+      console.log(`Retry attempt ${attempt + 1}/${maxRetries + 1} for ${signature}`);
+      // Continue to next retry attempt
+      continue;
     }
   }
 
-  apiCoordinator.setFailed(signature);
+  // Final cleanup
+  apiCoordinator.clearSignature(signature);
   throw lastError;
 };
 

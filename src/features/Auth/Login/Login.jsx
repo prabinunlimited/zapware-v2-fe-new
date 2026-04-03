@@ -794,6 +794,9 @@ const Login = () => {
   };
 
   const handleGenerateOTP = async () => {
+    console.log("Phone code value:", values.phone_code);
+    console.log("Raw phone code from form:", values.phone_code);
+    console.log("Includes +?", values.phone_code?.includes("+"));
     if (isGeneratingOtp) {
       return;
     }
@@ -1536,13 +1539,82 @@ const Login = () => {
             className="mt-4 flex justify-center"
           >
             <motion.button
-              whileHover={{ scale: 1.05 }}
+              whileHover={{
+                scale: 1.05,
+                boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.5)",
+              }}
               whileTap={{ scale: 0.95 }}
               onClick={handleNavigation}
-              className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition shadow-sm bg-white"
+              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 transition-all bg-white overflow-hidden group"
             >
-              <UserPlus className="w-5 h-5" />
-              <span className="text-sm font-medium">Sign Up</span>
+              {/* Animated background gradient */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100"
+                initial={{ x: "-100%" }}
+                whileHover={{
+                  x: "100%",
+                  transition: { duration: 0.8, ease: "easeInOut" },
+                }}
+              />
+
+              {/* Sparkle/particle effect container */}
+              <div className="absolute inset-0 overflow-hidden">
+                {[...Array(3)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-1 h-1 bg-blue-400 rounded-full"
+                    initial={{
+                      x: "-20px",
+                      y: Math.random() * 40,
+                      opacity: 0,
+                      scale: 0,
+                    }}
+                    whileHover={{
+                      x: "calc(100% + 20px)",
+                      opacity: [0, 1, 0],
+                      scale: [0, 1, 0],
+                      transition: {
+                        duration: 0.6,
+                        delay: i * 0.1,
+                        times: [0, 0.5, 1],
+                      },
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Pulsing ring effect */}
+              <motion.div
+                className="absolute inset-0 rounded-xl border-2 border-transparent"
+                whileHover={{
+                  borderColor: "rgba(59, 130, 246, 0.3)",
+                  scale: 1.02,
+                  transition: {
+                    duration: 0.3,
+                    repeat: Infinity,
+                    repeatType: "reverse",
+                    repeatDelay: 0.5,
+                  },
+                }}
+              />
+
+              {/* Button content */}
+              <div className="relative z-10 flex items-center justify-center space-x-2">
+                <motion.div
+                  whileHover={{ rotate: 360 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <UserPlus className="w-5 h-5" />
+                </motion.div>
+                <span className="text-sm font-medium">Sign Up</span>
+                <motion.div
+                  initial={{ x: -5, opacity: 0 }}
+                  whileHover={{ x: 0, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </motion.div>
+              </div>
             </motion.button>
           </motion.div>
 

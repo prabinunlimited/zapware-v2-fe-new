@@ -44,25 +44,89 @@ export const selectIsAgentValidating = (state) =>
 export const selectValidationMessage = (state) =>
   state.currencyAccounts.validationMessage;
 
+// ========== UPDATED SELECTOR ==========
+// Selector to check if user has selected USD Named Accounts
 export const selectIsNamedAccount = createSelector(
   [selectSelectedAccounts, selectAccountOptions],
   (selectedAccounts, accountOptions) => {
-    if (!selectedAccounts || selectedAccounts.length === 0) {
+    if (!selectedAccounts || selectedAccounts.length === 0 || !accountOptions) {
       return false;
     }
 
-    // Convert selected accounts to strings for easier checking
-    const selectedAccountStrings = selectedAccounts.map((account) =>
-      typeof account === "string" ? account : account.id || account.toString()
-    );
-
-    // Check if any selected account contains "named"
-    const hasNamedAccount = selectedAccountStrings.some((accountStr) => {
-      const isNamed = accountStr.includes("named");
-      return isNamed;
+    console.log("🔍 Checking for USD Named Accounts:", {
+      selectedAccounts,
+      accountOptionsLength: accountOptions.length,
     });
 
-    return hasNamedAccount;
+    // Check if any selected account is BOTH "named" AND currency is "USD"
+    const hasUSDNamedAccount = selectedAccounts.some((accountId) => {
+      try {
+        // Convert to string for safe operations
+        const accountIdStr = accountId.toString();
+        
+        // Check if it's a named account
+        const isNamed = accountIdStr.includes("named");
+        if (!isNamed) {
+          console.log("❌ Not a named account:", accountIdStr);
+          return false;
+        }
+
+        // Extract the service_provide_id from the account string
+        // Format is usually "123-named" or "456-pooled"
+        const parts = accountIdStr.split("-");
+        const serviceProvideId = parseInt(parts[0]);
+        
+        if (isNaN(serviceProvideId)) {
+          console.log("❌ Could not parse service_provide_id from:", accountIdStr);
+          return false;
+        }
+
+        // Find the account in accountOptions
+        const account = accountOptions.find(
+          (opt) => opt.service_provide_id === serviceProvideId
+        );
+
+        if (!account) {
+          console.log("❌ Account not found in options:", serviceProvideId);
+          return false;
+        }
+        
+        // Check if currency is USD
+        const isUSD = account.currency === "USD";
+        
+        if (isUSD) {
+          console.log("✅ Found USD Named Account:", {
+            id: account.service_provide_id,
+            name: account.account_name,
+            currency: account.currency,
+            type: account.account_type || account.accountType,
+          });
+        } else {
+          console.log("❌ Not USD currency:", account.currency);
+        }
+        
+        return isUSD;
+      } catch (error) {
+        console.error("❌ Error checking account:", accountId, error);
+        return false;
+      }
+    });
+
+    console.log("🏢 Final Result - Has USD Named Accounts:", hasUSDNamedAccount);
+    return hasUSDNamedAccount;
+  }
+);
+
+// ========== ADD THIS NEW SELECTOR ==========
+// Selector to check if user has ANY Named Accounts (any currency)
+export const selectHasAnyNamedAccounts = createSelector(
+  [selectSelectedAccounts],
+  (selectedAccounts) => {
+    if (!selectedAccounts || selectedAccounts.length === 0) return false;
+    
+    return selectedAccounts.some(accountId => 
+      accountId.toString().includes("named")
+    );
   }
 );
 

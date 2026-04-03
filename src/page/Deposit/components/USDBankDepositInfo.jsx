@@ -65,9 +65,7 @@ const USDBankDepositInfo = ({
         isLinkedOnSila: account.isLinkedOnSila,
         isPlaid: account.isPlaid,
         balance: account.balance || Math.random() * 10000,
-        last_used:
-          account.last_used ||
-          new Date(Date.now() - Math.random() * 86400000 * 30),
+        last_used: account.last_used || new Date(Date.now() - Math.floor(Math.random() * 86400000 * 30)),
         originalIndex: account.originalIndex || Math.random(), // Add stable identifier
         ...account,
       }))

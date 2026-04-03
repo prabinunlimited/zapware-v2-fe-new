@@ -1,4 +1,4 @@
-// CurrencySelectAccount.jsx (Redux Version)
+// CurrencySelectAccount.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -30,6 +30,7 @@ import {
   faFilter,
   faCircleInfo,
   faUserTie,
+  faFlag,
 } from "@fortawesome/free-solid-svg-icons";
 import { RingLoader } from "react-spinners";
 import PropTypes from "prop-types";
@@ -92,7 +93,24 @@ const CurrencySelectAccount = () => {
   const location = useLocation();
   const dispatch = useDispatch();
 
-  const { accountType } = location.state || {};
+  // Receive data from SelectCountry component
+  const { accountType, selectedCountry } = location.state || {};
+
+  // Local component state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [expandedSections, setExpandedSections] = useState({
+    named: true,
+    pooled: true,
+  });
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoType, setInfoType] = useState("");
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const API_URL = `${API_BASE_URL}`;
+  const currentStep = useCurrentStep();
 
   // Select state from Redux store
   const accountOptions = useSelector(selectAccountOptions);
@@ -122,25 +140,7 @@ const CurrencySelectAccount = () => {
   const referralSuccessMessage = useSelector(selectReferralSuccessMessage);
   const agentSuccessMessage = useSelector(selectAgentSuccessMessage);
 
-  // Local component state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMessage, setModalMessage] = useState("");
-  const [expandedSections, setExpandedSections] = useState({
-    named: true,
-    pooled: true,
-  });
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [infoType, setInfoType] = useState("");
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
-  const API_URL = `${API_BASE_URL}`;
-  // 🎉 NO MORE bearertoken variable needed!
-  const currentStep = useCurrentStep();
-
-  // Handle missing accountType on component mount
+  // Handle missing accountType or selectedCountry on component mount
   useEffect(() => {
     if (!accountType) {
       setModalMessage(
@@ -148,25 +148,39 @@ const CurrencySelectAccount = () => {
       );
       setIsModalOpen(true);
       setIsInitialLoading(false);
+    } else if (!selectedCountry) {
+      setModalMessage(
+        "Country is not selected. Please go back and select a country."
+      );
+      setIsModalOpen(true);
+      setIsInitialLoading(false);
     }
-  }, [accountType]);
+  }, [accountType, selectedCountry]);
 
-  // ✅ SIMPLIFIED: Fetch data when accountType is available
+  // ✅ UPDATED: Fetch data when accountType and country_id are available
   useEffect(() => {
-    if (accountType && accountOptions.length === 0) {
-      dispatch(fetchAccountOptions({ accountType, API_URL }))
+    if (accountType && selectedCountry && accountOptions.length === 0) {
+      dispatch(
+        fetchAccountOptions({
+          accountType,
+          countryId: selectedCountry.country_id,
+          API_URL,
+        })
+      )
         .unwrap()
         .then(() => {
           setIsInitialLoading(false);
         })
         .catch((error) => {
           setIsInitialLoading(false);
+          setModalMessage(`Failed to load account options: ${error}`);
+          setIsModalOpen(true);
         });
-    } else {
+    } else if (accountOptions.length > 0) {
       // Data already exists, just stop loading
       setIsInitialLoading(false);
     }
-  }, [accountType, API_URL, dispatch, accountOptions.length]); // ✅ Simplified dependencies
+  }, [accountType, selectedCountry, API_URL, dispatch, accountOptions.length]);
 
   // Handle API errors
   useEffect(() => {
@@ -176,12 +190,11 @@ const CurrencySelectAccount = () => {
     }
   }, [apiError]);
 
-  // Handle agent code input
+  // Rest of the component remains the same...
   const handleAgent = (event) => {
     const value = event.target.value;
     dispatch(setAgentCode(value));
 
-    // Basic validation - check if more than 10 characters
     if (value.length > 10) {
       dispatch(setAgentError("The provided Agent Code is invalid"));
     } else {
@@ -189,40 +202,39 @@ const CurrencySelectAccount = () => {
     }
   };
 
-  // Handle account selection
   const handleAccountSelect = (accountId) => {
     if (remittanceOnlyAccepted) {
-      // Auto-switch to currency accounts mode
       dispatch(setRemittanceOnlyAccepted(false));
     }
     dispatch(toggleAccountSelection(accountId));
   };
 
-  // Handle remittance only selection
   const handleRemittanceOnlySelect = (checked) => {
     if (checked && selectedAccounts.length > 0) {
-      // Auto-clear currency selections and switch to remittance mode
       dispatch(setSelectedAccounts([]));
     }
     dispatch(setRemittanceOnlyAccepted(checked));
   };
 
-  // Handle direct service type selection
   const handleServiceTypeSelect = (type) => {
     if (type === "currency") {
       dispatch(setRemittanceOnlyAccepted(false));
-      // Keep existing currency selections if any
     } else if (type === "remittance") {
       dispatch(setRemittanceOnlyAccepted(true));
-      dispatch(setSelectedAccounts([])); // Clear any currency selections
+      dispatch(setSelectedAccounts([]));
     }
   };
 
-  // ✅ SIMPLIFIED: Remove bearertoken from retry
   const handleRetry = () => {
     dispatch(clearError());
-    if (accountType) {
-      dispatch(fetchAccountOptions({ accountType, API_URL }));
+    if (accountType && selectedCountry) {
+      dispatch(
+        fetchAccountOptions({
+          accountType,
+          countryId: selectedCountry.country_id,
+          API_URL,
+        })
+      );
     }
   };
 
@@ -244,7 +256,7 @@ const CurrencySelectAccount = () => {
   };
 
   const handleSubmit = async () => {
-    if (isRedirecting) return; // Prevent multiple clicks
+    if (isRedirecting) return;
 
     if (selectedAccounts.length === 0 && !remittanceOnlyAccepted) {
       setModalMessage(
@@ -262,7 +274,6 @@ const CurrencySelectAccount = () => {
 
     let validationSuccessful = true;
 
-    // Validate referral code using Redux thunk
     if (referralCode && !referralError) {
       const result = await dispatch(validateReferralCode(referralCode));
       if (validateReferralCode.rejected.match(result)) {
@@ -270,7 +281,6 @@ const CurrencySelectAccount = () => {
       }
     }
 
-    // Validate agent code using Redux thunk
     if (agentCode && !agentError && validationSuccessful) {
       const result = await dispatch(validateAgentCode(agentCode));
       if (validateAgentCode.rejected.match(result)) {
@@ -279,13 +289,11 @@ const CurrencySelectAccount = () => {
     }
 
     if (!validationSuccessful) {
-      return; // Errors are already shown inline
+      return;
     }
 
-    // Set redirecting state
     setIsRedirecting(true);
 
-    // If codes were validated, wait 2 seconds, otherwise proceed immediately
     const delay = referralCode || agentCode ? 2000 : 0;
 
     setTimeout(() => {
@@ -295,12 +303,16 @@ const CurrencySelectAccount = () => {
         referral_code: referralCode,
         agent_code: agentCode,
         is_remit: remittanceOnlyAccepted ? 1 : 0,
+        accountType: accountType,
+        selectedCountry: selectedCountry, // Pass country data to next step
       };
 
       if (accountType === "individual") {
         navigate("/signupindividual", { state: stateData });
       } else if (accountType === "institution") {
         navigate("/signupinstitution", { state: stateData });
+      } else if (accountType === "partner") {
+        navigate("/opencurrencyaccount", { state: stateData });
       }
     }, delay);
   };
@@ -362,7 +374,7 @@ const CurrencySelectAccount = () => {
     { id: "GBP", name: "British Pound" },
   ];
 
-  if (isInitialLoading && !accountType) {
+  if (isInitialLoading && (!accountType || !selectedCountry)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="text-center">
@@ -436,6 +448,22 @@ const CurrencySelectAccount = () => {
                   {getAccountTypeTitle()}
                 </h1>
               </div>
+
+              {/* Country Badge */}
+              {selectedCountry && (
+                <div className="flex items-center justify-center mb-2">
+                  <div className="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 flex items-center">
+                    <FontAwesomeIcon icon={faFlag} className="mr-2" />
+                    <span className="font-medium">
+                      {selectedCountry.label}
+                      <span className="ml-2 text-sm opacity-90">
+                        ({selectedCountry.country_code})
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <p className="text-center text-blue-100 text-sm opacity-90">
                 {ucaDescription}
               </p>

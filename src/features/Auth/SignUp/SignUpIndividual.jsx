@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef  } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -8,7 +8,7 @@ import {
   faEyeSlash,
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -21,12 +21,17 @@ import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
+import {
+  selectIsNamedAccount,
+  selectSelectedAccounts,
+  selectAccountOptions,
+} from "../SignUp/SelectCurrencyAccount/currencyAccountsSelectors";
 
 import {
   fetchCountries,
   setSelectedCountry,
   clearZipLookupData,
-  fetchLocationByZip, 
+  fetchLocationByZip,
   selectCountries,
   selectSelectedCountry,
   selectLocationLoading,
@@ -86,7 +91,7 @@ class ErrorBoundary extends React.Component {
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+          <div className="max-w-4xl w-full bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <svg
                 className="w-8 h-8 text-red-600"
@@ -139,40 +144,51 @@ function SignUpIndividualContent() {
   const [activeSection, setActiveSection] = useState(0);
   const [progress, setProgress] = useState(0);
 
-  // New state variables for additional features
-  const [selectedIdDocumentType, setSelectedIdDocumentType] = useState("");
-  const [idDocumentTypeOther, setIdDocumentTypeOther] = useState("");
-  const [idDocumentNumber, setIdDocumentNumber] = useState("");
-  const [idIssuedCountryCode, setIdIssuedCountryCode] = useState("US");
-  const [idIssuedDate, setIdIssuedDate] = useState("");
-  const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
   const [showSSN, setShowSSN] = useState(false);
 
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
 
+  // Currency account selectors
+  const isNamedAccount = useSelector(selectIsNamedAccount);
+  const selectedAccounts = useSelector(selectSelectedAccounts);
+  const accountOptions = useSelector(selectAccountOptions);
+
+  // Signup slice selectors (for backward compatibility)
+  const showSSNField = useSelector(selectShowSSNField);
+  const hasNamedAccounts = useSelector(selectHasNamedAccounts);
+  const isUSDSelected = useSelector(selectIsUSDSelected);
+  const ssnError = useSelector(selectSSNError);
+  const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
+
   useEffect(() => {
-    console.log("🔍 Token check on mount:", {
-      bearertoken: localStorage.getItem("bearertoken"),
-      tokenServiceToken: tokenService.getToken(),
-      authtoken: localStorage.getItem("authtoken"),
-      timestamp: new Date().toISOString(),
+    console.log("🔍 Selector Debug:", {
+      isNamedAccount,
+      hasNamedAccounts,
+      isUSDSelected,
+      showSSNField,
+      selectedAccounts,
+      accountOptionsLength: accountOptions?.length || 0,
     });
-  }, []);
+  }, [
+    isNamedAccount,
+    hasNamedAccounts,
+    isUSDSelected,
+    showSSNField,
+    selectedAccounts,
+    accountOptions,
+  ]);
 
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const countryCodeRef = useRef('');
+  const countryCodeRef = useRef("");
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
   const selectedCountry = useSelector(selectSelectedCountry);
-  const {
-    countries: loadingCountries,
-  
-  } = useSelector(selectLocationLoading);
+  const { countries: loadingCountries } = useSelector(selectLocationLoading);
 
   // Other Redux selectors
   const termsConditions = useSelector(selectTermsConditions) || [];
@@ -182,12 +198,6 @@ function SignUpIndividualContent() {
   const acceptedTerms = useSelector(selectAcceptedTerms) || [];
   const nationalities = useSelector(selectNationalities) || [];
   const idDocumentTypes = useSelector(selectIdDocumentTypes) || [];
-
-  const showSSNField = useSelector(selectShowSSNField);
-  const hasNamedAccounts = useSelector(selectHasNamedAccounts);
-  const isUSDSelected = useSelector(selectIsUSDSelected);
-  const ssnError = useSelector(selectSSNError);
-  const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
 
   const isLoadingNationalities = useSelector(selectNationalitiesLoading);
   const isLoadingDocumentTypes = useSelector(selectIdDocumentTypesLoading);
@@ -206,7 +216,7 @@ function SignUpIndividualContent() {
     is_remit: isRemit = false,
     ssn_required = "N",
     show_remittance_only_on_registration = false,
-    accountOptions = [],
+    accountOptions: locationAccountOptions = [],
   } = location.state || {};
 
   const formSections = [
@@ -259,20 +269,8 @@ function SignUpIndividualContent() {
       "ssn-conditional",
       "SSN must be in format XXX-XX-XXXX",
       function (value) {
-        const { showSSNField, hasNamedAccounts } = this.parent;
-
-        if (!showSSNField || !hasNamedAccounts) {
-          return true;
-        }
-
-        if (!value) {
-          return this.createError({
-            message: "SSN is required for named accounts",
-          });
-        }
-
-        const cleanSSN = value.replace(/-/g, "");
-        return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
+        // Let onSubmit handle the validation
+        return true;
       }
     ),
     mobilenumber_countrycode: Yup.string().required("Country code is required"),
@@ -304,19 +302,18 @@ function SignUpIndividualContent() {
       gender: "",
       dob: "",
       ssn: "",
-      house_number: "",
       idDocumentType: "",
       idDocumentNumber: "",
       idIssuedDate: "",
       idIssuedCountryCode: "US",
       idDocumentTypeOther: "",
-      ssnIssuedState: "NY",
       accept_sms: 0,
       accept_privacy_policy: 0,
       accept_disclosure: 0,
       accept_fees: 0,
       showSSNField: showSSNField,
-      hasNamedAccounts: hasNamedAccounts,
+      isNamedAccount: isNamedAccount,
+      selectedAccounts: selectedAccounts,
     },
     validationSchema: validationSchema,
     validateOnBlur: true,
@@ -328,6 +325,7 @@ function SignUpIndividualContent() {
 
         dispatch(setMetadataField({ field: "ssnError", value: "" }));
 
+        // Check terms and conditions
         if (
           termsFetched &&
           termsConditions.length > 0 &&
@@ -340,7 +338,8 @@ function SignUpIndividualContent() {
           return;
         }
 
-        if (!selectedIdDocumentType) {
+        // FIXED: Check Formik values instead of non-existent local state
+        if (!values.idDocumentType || values.idDocumentType.trim() === "") {
           setErrorMessage("Please select an ID document type");
           setIsModalOpen(true);
           setIsSubmitting(false);
@@ -348,7 +347,7 @@ function SignUpIndividualContent() {
           return;
         }
 
-        if (!idDocumentNumber) {
+        if (!values.idDocumentNumber || values.idDocumentNumber.trim() === "") {
           setErrorMessage("Please enter ID document number");
           setIsModalOpen(true);
           setIsSubmitting(false);
@@ -356,7 +355,7 @@ function SignUpIndividualContent() {
           return;
         }
 
-        if (!idIssuedDate) {
+        if (!values.idIssuedDate || values.idIssuedDate.trim() === "") {
           setErrorMessage("Please select ID expiry date");
           setIsModalOpen(true);
           setIsSubmitting(false);
@@ -364,7 +363,10 @@ function SignUpIndividualContent() {
           return;
         }
 
-        if (!idIssuedCountryCode) {
+        if (
+          !values.idIssuedCountryCode ||
+          values.idIssuedCountryCode.trim() === ""
+        ) {
           setErrorMessage("Please select issuing country");
           setIsModalOpen(true);
           setIsSubmitting(false);
@@ -372,22 +374,65 @@ function SignUpIndividualContent() {
           return;
         }
 
+        // Conditional validation for "other" document type
         if (
-          showSSNField &&
-          hasNamedAccounts &&
-          values.ssn &&
-          values.ssn.trim() !== ""
+          values.idDocumentType === "other" &&
+          (!values.idDocumentTypeOther ||
+            values.idDocumentTypeOther.trim() === "")
         ) {
-          dispatch(
-            setMetadataField({ field: "showSSNConfirmation", value: true })
-          );
+          setErrorMessage("Please specify document type for 'Other'");
+          setIsModalOpen(true);
           setIsSubmitting(false);
           setShowFullScreenLoader(false);
           return;
         }
 
+        // ✅ FIXED: Check ssn_required flag instead of country-based logic
+        if (ssn_required === "Y") {
+          const cleanSSN = values.ssn?.replace(/-/g, "") || "";
+
+          if (!values.ssn || values.ssn.trim() === "") {
+            setErrorMessage("SSN is required for registration");
+            setIsModalOpen(true);
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
+
+          if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
+            setErrorMessage("SSN must be 9 digits in format XXX-XX-XXXX");
+            setIsModalOpen(true);
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
+
+          // Show confirmation popup
+          if (values.ssn && values.ssn.trim() !== "") {
+            dispatch(
+              setMetadataField({ field: "showSSNConfirmation", value: true })
+            );
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
+        }
+
+        // Debug: log what's being validated
+        console.log("✅ Form validation passed. Submitting values:", {
+          idDocumentType: values.idDocumentType,
+          idDocumentNumber: values.idDocumentNumber,
+          idIssuedDate: values.idIssuedDate,
+          idIssuedCountryCode: values.idIssuedCountryCode,
+          idDocumentTypeOther: values.idDocumentTypeOther,
+          ssn_required: ssn_required, // Log the flag
+          hasSSN: !!values.ssn,
+          ssnLength: values.ssn?.replace(/-/g, "").length || 0,
+        });
+
         await handleFormSubmission(values);
       } catch (error) {
+        console.error("❌ Form validation error:", error);
         setErrorMessage("An error occurred during form validation");
         setIsModalOpen(true);
         setIsSubmitting(false);
@@ -396,10 +441,12 @@ function SignUpIndividualContent() {
     },
   });
 
-  // Handle form submission
   const handleFormSubmission = async (values) => {
     try {
       setShowFullScreenLoader(true);
+
+      // Log Formik values for debugging
+      console.log("📝 Formik values before transformation:", values);
 
       const updatedValues = {
         ...values,
@@ -408,21 +455,77 @@ function SignUpIndividualContent() {
         terms_and_conditions: termsFetched ? acceptedTerms : [],
         hostname: window.location.hostname,
         remit_customer: isRemit,
-        bank_account_options: bank_accounts,
-        isPartnerPackageModule: isPartnerPackageModule,
+        bank_account_options: service_provide_ids,
+        isPartnerPackageModule: "N",
         package_currencies: package_currencies,
         whitelabelledpartnerid: whitelabelledpartnerid,
         kycVerify: kyc_verify,
-        documentType: selectedIdDocumentType,
-        idDocumentTypeOther: idDocumentTypeOther,
-        ssnIssuedState: ssnIssuedState,
-        issuingCountryCode: idIssuedCountryCode,
-        documentNumber: idDocumentNumber,
-        idIssuedDate: idIssuedDate,
+
+        // FIXED: Map Formik fields to correct backend field names
+        verificationtypes: values.idDocumentType, // ← documentType → verificationtypes
+        identityNumber: values.idDocumentNumber, // ← documentNumber → identityNumber
+        expiryDate: values.idIssuedDate, // ← idIssuedDate → expiryDate
+        identityCountry: values.idIssuedCountryCode, // ← issuingCountryCode → identityCountry
+        idDocumentTypeOther: values.idDocumentTypeOther,
+
+        // Map other Formik fields to expected backend names
+        is_named_account: isNamedAccount,
+        has_usd_named_account: isNamedAccount,
+        selected_accounts: selectedAccounts,
+        service_provide_ids: service_provide_ids,
+
+        // Ensure acceptance fields are properly set (0 or 1)
+        accept_sms: values.accept_sms || 0,
+        accept_privacy_policy: values.accept_privacy_policy || 0,
+        accept_disclosure: values.accept_disclosure || 0,
+        accept_fees: values.accept_fees || 0,
       };
 
+      // Remove empty strings for optional fields that should be omitted
+      const cleanedValues = { ...updatedValues };
+      const fieldsToClean = [
+        "agent_code",
+        "referral_code",
+        "middle_name",
+        "street_address_2",
+        "idDocumentTypeOther",
+      ];
+
+      fieldsToClean.forEach((field) => {
+        if (
+          cleanedValues[field] === "" ||
+          cleanedValues[field] === null ||
+          cleanedValues[field] === undefined
+        ) {
+          delete cleanedValues[field];
+        }
+      });
+
+      // Remove frontend-only fields that should not go to backend
+      const frontendOnlyFields = [
+        "confirmPassword",
+        "showSSNField",
+        "isNamedAccount",
+        "idDocumentType", // Remove original field
+        "idDocumentNumber", // Remove original field
+        "idIssuedDate", // Remove original field
+        "idIssuedCountryCode", // Remove original field
+      ];
+
+      frontendOnlyFields.forEach((field) => {
+        if (cleanedValues[field] !== undefined) {
+          delete cleanedValues[field];
+        }
+      });
+
+      console.log("📤 Final payload being sent:", {
+        ...cleanedValues,
+        password: "***HIDDEN***", // Don't log password
+        confirmPassword: "***HIDDEN***", // Don't log confirm password
+      });
+
       const resultAction = await dispatch(
-        submitIndividualSignup(updatedValues)
+        submitIndividualSignup(cleanedValues)
       );
 
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
@@ -436,7 +539,7 @@ function SignUpIndividualContent() {
 
           navigate("/phoneverification", {
             state: {
-              mobileNumber: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
+              mobileNumber: `${cleanedValues.mobilenumber_countrycode} ${cleanedValues.mobile_number}`,
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
             },
@@ -466,6 +569,7 @@ function SignUpIndividualContent() {
         }
       }
     } catch (error) {
+      console.error("❌ Submission error:", error);
       setErrorMessage(
         error.message ||
           "An error occurred during submission. Please try again."
@@ -488,21 +592,57 @@ function SignUpIndividualContent() {
   };
 
   // Initialize data
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     setIsClient(true);
+
+    // Skip if already initialized
+    if (initializedRef.current) {
+      console.log("🔄 Already initialized, skipping");
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     const initializeData = async () => {
       try {
-        setIsLoading(true);
-        setInitializationError(null);
+        if (isMounted) {
+          setIsLoading(true);
+          setInitializationError(null);
+        }
 
         console.log("🔍 [initializeData] Starting initialization", {
           hasLocationState: !!location.state,
           service_provide_ids: service_provide_ids,
-          accountOptions: accountOptions,
+          accountOptions: locationAccountOptions,
+          isNamedAccount,
         });
 
+        // Sync USD named account status to signupSlice for backward compatibility
+        dispatch(
+          setMetadataField({
+            field: "showSSNField",
+            value: ssn_required === "Y" || isNamedAccount,
+          })
+        );
+
+        dispatch(
+          setMetadataField({
+            field: "hasNamedAccounts",
+            value: isNamedAccount || false,
+          })
+        );
+
+        dispatch(
+          setMetadataField({
+            field: "isUSDSelected",
+            value: isNamedAccount || false,
+          })
+        );
+
+        // Get partner token if needed
         try {
           console.log("🔄 Attempting to get partner token...");
           const { getBearerToken } = await import(
@@ -514,45 +654,7 @@ function SignUpIndividualContent() {
           console.error("❌ Failed to get partner token:", tokenError.message);
         }
 
-        let hasNamed = false;
-        let hasUSD = false;
-
-        try {
-          hasNamed =
-            service_provide_ids?.some((idWithType) => {
-              const parts = idWithType.split("-");
-              return parts.length > 1 && parts[1] === "named";
-            }) || false;
-
-          hasUSD =
-            service_provide_ids?.some((idWithType) => {
-              const id = parseInt(idWithType.split("-")[0]);
-              const account = accountOptions?.find(
-                (opt) => opt.service_provide_id === id
-              );
-              return account && account.currency === "USD";
-            }) || false;
-        } catch (error) {
-          console.error("❌ Error determining account types:", error);
-        }
-
-        console.log("🔍 Account type analysis:", {
-          hasNamed,
-          hasUSD,
-          ssn_required,
-        });
-
-        dispatch(
-          setMetadataField({ field: "hasNamedAccounts", value: hasNamed })
-        );
-        dispatch(setMetadataField({ field: "isUSDSelected", value: hasUSD }));
-        dispatch(
-          setMetadataField({
-            field: "showSSNField",
-            value: ssn_required === "Y" || hasNamed,
-          })
-        );
-
+        // Check what data we need to fetch
         const apiPromises = [];
 
         if (countries.length === 0) {
@@ -618,6 +720,7 @@ function SignUpIndividualContent() {
           console.log("✅ Terms already fetched");
         }
 
+        // Execute API calls if needed
         if (apiPromises.length > 0) {
           console.log("🚀 Executing", apiPromises.length, "API calls...");
           const timeoutPromise = new Promise((resolve) =>
@@ -641,7 +744,9 @@ function SignUpIndividualContent() {
           console.log("✅ No API calls needed - all data already loaded");
         }
 
+        // Mark as initialized and finish loading
         if (isMounted) {
+          initializedRef.current = true;
           setIsLoading(false);
           console.log("✅ Initialization complete");
         }
@@ -654,21 +759,18 @@ function SignUpIndividualContent() {
       }
     };
 
-    initializeData();
+    // Run initialization if we have location state
+    if (location.state) {
+      initializeData();
+    } else {
+      setIsLoading(false);
+    }
 
+    // Cleanup function
     return () => {
       isMounted = false;
     };
-  }, [
-    dispatch,
-    service_provide_ids,
-    countries.length,
-    termsFetched,
-    ssn_required,
-    accountOptions,
-    nationalities.length,
-    idDocumentTypes.length,
-  ]);
+  }, []);
 
   // Handle errors
   useEffect(() => {
@@ -694,8 +796,8 @@ function SignUpIndividualContent() {
 
   // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
-    const countryId = selectedOption?.value || '';
-    const countryCode = selectedOption?.country_code || '';
+    const countryId = selectedOption?.value || "";
+    const countryCode = selectedOption?.country_code || "";
 
     // Update Redux state
     dispatch(setSelectedCountry(selectedOption));
@@ -705,14 +807,14 @@ function SignUpIndividualContent() {
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
     formik.setFieldValue("zip_code", "");
-    
+
     // Store country code for ZIP lookup
     countryCodeRef.current = countryCode;
-    
+
     // Clear ZIP lookup data
     dispatch(clearZipLookupData());
 
-    // Auto-set SSN field for US residents
+    // Auto-set SSN field for US residents (same logic as Institution component)
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
@@ -721,68 +823,72 @@ function SignUpIndividualContent() {
   const handleZipCodeChange = (e) => {
     const zipCode = e.target.value;
     formik.handleChange(e);
-    
+
     const countryCode = selectedCountry?.country_code || countryCodeRef.current;
-    
+
     // Clear previous timer
     if (zipDebounceTimer) {
       clearTimeout(zipDebounceTimer);
     }
-    
+
     // Set new timer for debounced lookup
     const timer = setTimeout(() => {
       if (zipCode && countryCode && zipCode.length >= 3) {
         handleZipCodeLookup(zipCode, countryCode);
       }
     }, 1000);
-    
+
     setZipDebounceTimer(timer);
   };
 
-  const handleZipCodeLookup = useCallback(async (zipCode, countryCode) => {
-    if (!zipCode || !countryCode || zipCode.length < 3) {
-      return;
-    }
-
-    try {
-      setIsZipLoading(true);
-      
-      // Use Redux action to fetch location by ZIP
-      const resultAction = await dispatch(
-        fetchLocationByZip({ countryCode, zipCode })
-      );
-      
-      if (fetchLocationByZip.fulfilled.match(resultAction)) {
-        const data = resultAction.payload;
-        console.log("✅ ZIP lookup success:", data);
-        
-        if (data.success) {
-          // Update form values from API response
-          if (data.state) {
-            formik.setFieldValue('state', data.state);
-          }
-          
-          if (data.city) {
-            formik.setFieldValue('city', data.city);
-          }
-          
-          // Show success message
-          const locationMsg = data.city && data.state 
-            ? `${data.city}, ${data.state}`
-            : data.city || data.state || 'location';
-          toast.success(`Auto-filled ${locationMsg} from ZIP code`);
-        }
-      } else if (fetchLocationByZip.rejected.match(resultAction)) {
-        console.log("❌ ZIP lookup failed:", resultAction.payload);
-        // Don't show error - just let user enter manually
+  const handleZipCodeLookup = useCallback(
+    async (zipCode, countryCode) => {
+      if (!zipCode || !countryCode || zipCode.length < 3) {
+        return;
       }
-    } catch (error) {
-      console.error('ZIP code lookup error:', error);
-      // Don't show error - just let user enter manually
-    } finally {
-      setIsZipLoading(false);
-    }
-  }, [dispatch, formik]);
+
+      try {
+        setIsZipLoading(true);
+
+        // Use Redux action to fetch location by ZIP
+        const resultAction = await dispatch(
+          fetchLocationByZip({ countryCode, zipCode })
+        );
+
+        if (fetchLocationByZip.fulfilled.match(resultAction)) {
+          const data = resultAction.payload;
+          console.log("✅ ZIP lookup success:", data);
+
+          if (data.success) {
+            // Update form values from API response
+            if (data.state) {
+              formik.setFieldValue("state", data.state);
+            }
+
+            if (data.city) {
+              formik.setFieldValue("city", data.city);
+            }
+
+            // Show success message
+            const locationMsg =
+              data.city && data.state
+                ? `${data.city}, ${data.state}`
+                : data.city || data.state || "location";
+            toast.success(`Auto-filled ${locationMsg} from ZIP code`);
+          }
+        } else if (fetchLocationByZip.rejected.match(resultAction)) {
+          console.log("❌ ZIP lookup failed:", resultAction.payload);
+          // Don't show error - just let user enter manually
+        }
+      } catch (error) {
+        console.error("ZIP code lookup error:", error);
+        // Don't show error - just let user enter manually
+      } finally {
+        setIsZipLoading(false);
+      }
+    },
+    [dispatch, formik]
+  );
 
   const handleCountryCodeSelect = (selectedOption) => {
     formik.setFieldValue(
@@ -913,7 +1019,7 @@ function SignUpIndividualContent() {
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
 
-  // FIXED PROGRESS CALCULATION - Using let instead of const for mutable variables
+  // Progress calculation
   useEffect(() => {
     const calculateProgress = () => {
       const fieldChecks = [
@@ -991,25 +1097,32 @@ function SignUpIndividualContent() {
           filled:
             formik.values.country && formik.values.country.toString().trim(),
         },
+        // Formik values for ID fields
         {
           name: "idDocumentType",
-          value: selectedIdDocumentType,
-          filled: selectedIdDocumentType && selectedIdDocumentType.trim(),
+          value: formik.values.idDocumentType,
+          filled:
+            formik.values.idDocumentType && formik.values.idDocumentType.trim(),
         },
         {
           name: "idDocumentNumber",
-          value: idDocumentNumber,
-          filled: idDocumentNumber && idDocumentNumber.trim(),
+          value: formik.values.idDocumentNumber,
+          filled:
+            formik.values.idDocumentNumber &&
+            formik.values.idDocumentNumber.trim(),
         },
         {
           name: "idIssuedDate",
-          value: idIssuedDate,
-          filled: idIssuedDate && idIssuedDate.trim(),
+          value: formik.values.idIssuedDate,
+          filled:
+            formik.values.idIssuedDate && formik.values.idIssuedDate.trim(),
         },
         {
           name: "idIssuedCountryCode",
-          value: idIssuedCountryCode,
-          filled: idIssuedCountryCode && idIssuedCountryCode.trim(),
+          value: formik.values.idIssuedCountryCode,
+          filled:
+            formik.values.idIssuedCountryCode &&
+            formik.values.idIssuedCountryCode.trim(),
         },
         {
           name: "password",
@@ -1025,7 +1138,19 @@ function SignUpIndividualContent() {
         },
       ];
 
-      if (showSSNField && hasNamedAccounts) {
+      // Add idDocumentTypeOther if needed
+      if (formik.values.idDocumentType === "other") {
+        fieldChecks.push({
+          name: "idDocumentTypeOther",
+          value: formik.values.idDocumentTypeOther,
+          filled:
+            formik.values.idDocumentTypeOther &&
+            formik.values.idDocumentTypeOther.trim(),
+        });
+      }
+
+      // Use ssn_required flag for SSN field requirement
+      if (ssn_required === "Y") {
         fieldChecks.push({
           name: "ssn",
           value: formik.values.ssn,
@@ -1033,22 +1158,38 @@ function SignUpIndividualContent() {
         });
       }
 
+      // Count filled fields
       let filledFields = fieldChecks.filter((field) => field.filled).length;
       const totalFields = fieldChecks.length;
 
+      // Add terms and conditions to progress if applicable
       let termsField = 0;
       if (termsConditions.length > 0) {
-        termsField = 1;
+        termsField = 1; // Terms section exists
         if (acceptedTerms.length > 0) {
-          filledFields += 1;
+          filledFields += 1; // Terms are accepted
         }
       }
 
+      // Calculate percentage
       const totalWithTerms = totalFields + termsField;
       const percentage =
         totalWithTerms > 0
           ? Math.round((filledFields / totalWithTerms) * 100)
           : 0;
+
+      // Optional: Debug log to see progress calculation
+      console.log("📊 Progress Calculation:", {
+        filledFields,
+        totalFields,
+        termsField,
+        totalWithTerms,
+        percentage,
+        ssnRequired: ssn_required,
+        ssnFilled: formik.values.ssn && formik.values.ssn.trim(),
+        hasTerms: termsConditions.length > 0,
+        termsAccepted: acceptedTerms.length > 0,
+      });
 
       return percentage;
     };
@@ -1057,29 +1198,9 @@ function SignUpIndividualContent() {
   }, [
     formik.values,
     acceptedTerms,
-    showSSNField,
-    hasNamedAccounts,
-    selectedIdDocumentType,
-    idDocumentNumber,
-    idIssuedDate,
-    idIssuedCountryCode,
+    ssn_required, // Use ssn_required flag
     termsConditions.length,
-    formik.values.first_name,
-    formik.values.last_name,
-    formik.values.email,
-    formik.values.dob,
-    formik.values.nationality,
-    formik.values.gender,
-    formik.values.mobilenumber_countrycode,
-    formik.values.mobile_number,
-    formik.values.street_address_1,
-    formik.values.city,
-    formik.values.state,
-    formik.values.zip_code,
-    formik.values.country,
-    formik.values.password,
-    formik.values.confirmPassword,
-    formik.values.ssn,
+    // Removed: showSSNField, isNamedAccount (no longer needed)
   ]);
 
   // Options for selects with safe defaults
@@ -1207,7 +1328,7 @@ function SignUpIndividualContent() {
 
   return (
     <RegistrationLayout>
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30">
+      <div className="min-h-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30">
         {showFullScreenLoader && (
           <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
             <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
@@ -1283,7 +1404,7 @@ function SignUpIndividualContent() {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex overflow-x-auto mb-8 pb-1">
+            <div className="flex overflow-x-auto mb-4 pb-1">
               {formSections.map((section, idx) => (
                 <button
                   key={idx}
@@ -1308,12 +1429,12 @@ function SignUpIndividualContent() {
             {/* Form */}
             <form
               onSubmit={formik.handleSubmit}
-              className="space-y-8"
+              className="space-y-6"
               noValidate
             >
               {/* Personal Information Section */}
               <section className={`${activeSection !== 0 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     1
                   </span>
@@ -1568,7 +1689,7 @@ function SignUpIndividualContent() {
               </section>
               {/* // Contact Information Section - ZIP CODE BASED ONLY (Nodropdowns) */}
               <section className={`${activeSection !== 1 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     2
                   </span>
@@ -1739,7 +1860,7 @@ function SignUpIndividualContent() {
                             : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                         placeholder="Will auto-fill from ZIP code"
-                        readOnly={false} // Allow manual editing if needed
+                        readOnly={false}
                       />
                       {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -1793,7 +1914,7 @@ function SignUpIndividualContent() {
                             : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                         placeholder="Will auto-fill from ZIP code"
-                        readOnly={false} // Allow manual editing if needed
+                        readOnly={false}
                       />
                       {zipLookup.loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -2015,7 +2136,7 @@ function SignUpIndividualContent() {
               </section>
               {/* Identity Verification Section */}
               <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     3
                   </span>
@@ -2023,22 +2144,16 @@ function SignUpIndividualContent() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* SSN Field */}
-                  {showSSNField && (
+                  {ssn_required === "Y" && ( // ← Use ssn_required flag instead of showSSNField
                     <div className="md:col-span-2">
                       <label
                         htmlFor="ssn"
                         className="block text-sm font-medium text-gray-700 mb-2.5"
                       >
-                        Social Security Number (SSN){" "}
-                        {hasNamedAccounts && (
-                          <span className="text-red-500">*</span>
-                        )}
-                        {!hasNamedAccounts && (
-                          <span className="text-gray-500 text-xs ml-2">
-                            (optional for pooled accounts)
-                          </span>
-                        )}
+                        Social Security Number (SSN) *
+                        <span className="text-gray-500 text-xs ml-2">
+                          (Required for registration)
+                        </span>
                       </label>
 
                       <div className="relative">
@@ -2090,11 +2205,16 @@ function SignUpIndividualContent() {
                           {formik.errors.ssn || ssnError}
                         </p>
                       ) : null}
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        Social Security Number is required for account
+                        verification.
+                      </p>
                     </div>
                   )}
 
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Document Type *
                     </label>
 
@@ -2107,16 +2227,16 @@ function SignUpIndividualContent() {
                       </div>
                     ) : (
                       <select
-                        name="idDocumentType"
+                        name="idDocumentType" // This name must match Formik field
+                        value={formik.values.idDocumentType}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          !selectedIdDocumentType
+                          !formik.values.idDocumentType &&
+                          formik.touched.idDocumentType
                             ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                             : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
-                        value={selectedIdDocumentType}
-                        onChange={(e) =>
-                          setSelectedIdDocumentType(e.target.value)
-                        }
                       >
                         <option value="">-- Select ID Document Type --</option>
                         {idDocumentTypes.map((docType) => (
@@ -2130,33 +2250,47 @@ function SignUpIndividualContent() {
                   </div>
 
                   {/* Other Document Type Input */}
-                  {selectedIdDocumentType === "other" && (
+                  {formik.values.idDocumentType === "other" && (
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                      <label
+                        htmlFor="idDocumentTypeOther"
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                      >
                         ID Document Type (Other) *
                       </label>
                       <input
                         type="text"
-                        value={idDocumentTypeOther}
-                        onChange={(e) => setIdDocumentTypeOther(e.target.value)}
+                        id="idDocumentTypeOther"
+                        name="idDocumentTypeOther"
+                        value={formik.values.idDocumentTypeOther}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
                         className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
                         placeholder="Specify document type"
                       />
+                      {formik.touched.idDocumentTypeOther &&
+                        formik.errors.idDocumentTypeOther && (
+                          <p className="text-red-500 text-xs mt-2">
+                            {formik.errors.idDocumentTypeOther}
+                          </p>
+                        )}
                     </div>
                   )}
 
                   {/* Document Number */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Document Number *
                     </label>
                     <input
                       type="text"
                       name="idDocumentNumber"
-                      value={idDocumentNumber}
-                      onChange={(e) => setIdDocumentNumber(e.target.value)}
+                      value={formik.values.idDocumentNumber}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idDocumentNumber
+                        !formik.values.idDocumentNumber &&
+                        formik.touched.idDocumentNumber
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
@@ -2166,43 +2300,60 @@ function SignUpIndividualContent() {
 
                   {/* Issuing Country */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Issuing Country *
                     </label>
                     <select
+                      name="idIssuedCountryCode"
+                      value={formik.values.idIssuedCountryCode}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idIssuedCountryCode
+                        !formik.values.idIssuedCountryCode &&
+                        formik.touched.idIssuedCountryCode
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
-                      value={idIssuedCountryCode}
-                      onChange={(e) => setIdIssuedCountryCode(e.target.value)}
                     >
-                      <option value="">Select Country</option>
+                      <option value="">Select Issuing Country</option>
                       {countries.map((country) => (
                         <option key={country.id} value={country.country_code}>
                           {country.name}
                         </option>
                       ))}
                     </select>
+                    {formik.touched.idIssuedCountryCode &&
+                      formik.errors.idIssuedCountryCode && (
+                        <p className="text-red-500 text-xs mt-2">
+                          {formik.errors.idIssuedCountryCode}
+                        </p>
+                      )}
                   </div>
 
                   {/* Issue Date */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Expiry Date *
                     </label>
                     <input
                       type="date"
                       name="idIssuedDate"
-                      value={idIssuedDate}
-                      onChange={(e) => setIdIssuedDate(e.target.value)}
+                      value={formik.values.idIssuedDate}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idIssuedDate
+                        !formik.values.idIssuedDate &&
+                        formik.touched.idIssuedDate
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
                     />
+                    {formik.touched.idIssuedDate &&
+                      formik.errors.idIssuedDate && (
+                        <p className="text-red-500 text-xs mt-2">
+                          {formik.errors.idIssuedDate}
+                        </p>
+                      )}
                   </div>
                 </div>
 
@@ -2253,7 +2404,7 @@ function SignUpIndividualContent() {
               </section>
               {/* Security Section */}
               <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     4
                   </span>
@@ -2470,7 +2621,7 @@ function SignUpIndividualContent() {
               </section>
               {/* Terms & Conditions Section */}
               <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     5
                   </span>

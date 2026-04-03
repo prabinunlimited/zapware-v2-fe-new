@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -11,7 +17,7 @@ import {
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
 
@@ -36,6 +42,7 @@ import {
   selectIsNamedAccount,
   selectSelectedAccounts,
   selectAccountOptions,
+  selectHasAnyNamedAccounts,
 } from "../SignUp/SelectCurrencyAccount/currencyAccountsSelectors";
 
 import {
@@ -226,7 +233,7 @@ const Institution = () => {
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
   const zipLookup = useSelector(selectZipLookup);
-  const locationLoading = useSelector(selectLocationLoading); 
+  const locationLoading = useSelector(selectLocationLoading);
 
   const isNamedAccount = useSelector(selectIsNamedAccount);
   const selectedAccounts = useSelector(selectSelectedAccounts);
@@ -236,13 +243,11 @@ const Institution = () => {
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
 
-   // ADD THESE STATE VARIABLES:
+  // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
   const [zipApiError, setZipApiError] = useState(null);
-  const countryCodeRef = useRef('');
-
-  
+  const countryCodeRef = useRef("");
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
@@ -489,13 +494,33 @@ const Institution = () => {
 
   const locationStateData = location.state || {};
 
+  const {
+    service_provide_ids = [],
+    referral_code = "",
+    agent_code = "",
+    package_currencies = [],
+    kyc_verify = [],
+    document_upload = null,
+    owner_add = "Y",
+    ssn_required = "N",
+    ein_required = "N",
+  } = locationStateData;
+
   const processLocationState = useCallback(
     (data) => {
       if (data && Object.keys(data).length > 0) {
         dispatch(setLocationStateData(data));
 
         if (data.service_provide_ids) {
-          // Process service provider IDs silently
+          // You might want to dispatch an action to store these in Redux
+          // or simply keep them in local state
+          console.log("📦 Service Provider IDs:", data.service_provide_ids);
+
+          // Optionally, set them in local state or context
+          setLocalFormData((prev) => ({
+            ...prev,
+            service_provide_ids: data.service_provide_ids,
+          }));
         }
 
         if (data.package_currencies) {
@@ -549,6 +574,76 @@ const Institution = () => {
   }, [locationStateData, processLocationState]);
 
   useEffect(() => {
+    if (
+      locationStateData?.service_provide_ids &&
+      locationStateData?.accountOptions
+    ) {
+      const serviceProviderIds = locationStateData.service_provide_ids;
+      const accountOptions = locationStateData.accountOptions;
+
+      let hasNamed = false;
+      let hasUSD = false;
+      let hasUSDNamed = false;
+
+      try {
+        hasNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            return parts.length > 1 && parts[1] === "named";
+          }) || false;
+
+        hasUSD =
+          serviceProviderIds.some((idWithType) => {
+            const id = parseInt(idWithType.split("-")[0]);
+            const account = accountOptions.find(
+              (opt) => opt.service_provide_id === id
+            );
+            return account && account.currency === "USD";
+          }) || false;
+
+        hasUSDNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            if (parts.length > 1 && parts[1] === "named") {
+              const id = parseInt(parts[0]);
+              const account = accountOptions.find(
+                (opt) => opt.service_provide_id === id
+              );
+              return account && account.currency === "USD";
+            }
+            return false;
+          }) || false;
+      } catch (error) {
+        console.error("❌ Error determining institution account types:", error);
+      }
+
+      console.log("🏢 Institution Account Analysis:", {
+        hasNamed,
+        hasUSD,
+        hasUSDNamed,
+        serviceProviderIds,
+        accountOptions,
+      });
+
+      // Store in Redux
+      dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
+      dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
+      dispatch(
+        setFormField({
+          field: "isNamedAccount", // ADD THIS NEW FIELD
+          value: hasUSDNamed,
+        })
+      );
+      dispatch(
+        setFormField({
+          field: "service_provide_ids",
+          value: serviceProviderIds,
+        })
+      );
+    }
+  }, [locationStateData, dispatch]);
+
+  useEffect(() => {
     if (!initialLoadRef.current) {
       initialLoadRef.current = true;
       dispatch(fetchCountries());
@@ -578,6 +673,7 @@ const Institution = () => {
   const validateEIN = useCallback(
     (ein) => {
       if (isNamedAccount && (!ein || ein.trim() === "")) {
+        // Change from isNamedAccount
         return "EIN is required for USD Named Accounts";
       }
       if (ein && ein.trim() !== "") {
@@ -588,12 +684,13 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount] // Update dependency
   );
 
   const validateSSN = useCallback(
     (ssn, isUSSelected) => {
       if (isNamedAccount && isUSSelected) {
+        // Change from isNamedAccount
         if (!ssn || ssn.trim() === "") {
           return "SSN is required for USD Named Accounts for US residents";
         }
@@ -604,17 +701,21 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount] // Update dependency
   );
 
   const validateBusinessAliasField = useCallback(
     (businessAlias) => {
-      if (isNamedAccount && (!businessAlias || businessAlias.trim() === "")) {
+      if (
+        isNamedAccount &&
+        (!businessAlias || businessAlias.trim() === "")
+      ) {
+        // Change from isNamedAccount
         return "Business alias is required for USD Named Accounts";
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount] // Update dependency
   );
 
   const formatTaxId = useCallback((value, type) => {
@@ -1139,8 +1240,6 @@ const Institution = () => {
     setPendingNextStep(false);
   }, []);
 
-
-
   const handleSubmit = useCallback(
     async (values, { setSubmitting, setErrors }) => {
       try {
@@ -1148,6 +1247,8 @@ const Institution = () => {
         setShowFullScreenLoader(true);
 
         const finalFormData = { ...getInitialFormData(), ...values };
+
+        const serviceProviderIds = locationStateData.service_provide_ids || [];
 
         const userImagesArray = [];
 
@@ -1243,6 +1344,8 @@ const Institution = () => {
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
+          service_providers: serviceProviderIds,
+          bank_account_options: serviceProviderIds,
 
           user_images: userImagesArray,
 
@@ -1291,7 +1394,7 @@ const Institution = () => {
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
-          isPartnerPackageModule: institutionState.partnerPackageModule,
+          isPartnerPackageModule: "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
           kycVerify: kycVerify,
@@ -1321,6 +1424,7 @@ const Institution = () => {
             };
           }),
 
+          bank_account_options: service_provide_ids,
           is_named_account: isNamedAccount,
           has_usd_named_account: isNamedAccount,
           customer_type: "institution",
@@ -1422,6 +1526,7 @@ const Institution = () => {
       showBusinessWebsiteField,
       institutionState,
       countryOptions,
+      locationStateData,
     ]
   );
 
@@ -1533,7 +1638,7 @@ const Institution = () => {
       formatTaxId,
       handleControllerZipLookup,
       isZipLoading,
-      activeField, 
+      activeField,
     }) => {
       const dispatch = useDispatch();
       const syncControllerFromPrimary = useCallback(() => {
@@ -1904,20 +2009,24 @@ const Institution = () => {
                 onChange={(e) => {
                   const zipCode = e.target.value;
                   enhancedHandleChange("controller_zip_code", setFieldValue)(e);
-                  
+
                   // Clear previous timer
                   if (zipDebounceTimer) {
                     clearTimeout(zipDebounceTimer);
                   }
-                  
+
                   // Set debounced lookup
                   const timer = setTimeout(() => {
                     const countryId = values.controller_country;
-                    if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                    if (
+                      zipCode &&
+                      countryId &&
+                      zipCode.replace(/\s+/g, "").length >= 3
+                    ) {
                       handleControllerZipLookup(zipCode, countryId);
                     }
                   }, 1000);
-                  
+
                   setZipDebounceTimer(timer);
                 }}
                 onBlur={handleBlur}
@@ -2001,7 +2110,7 @@ const Institution = () => {
               />
 
               {/* Row 9: Gender */}
-          
+
               <SelectField
                 id="controller_gender"
                 label="Gender"
@@ -2197,95 +2306,124 @@ const Institution = () => {
             setFormValues(values);
           }, [values]);
 
-           // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
-          const handleBusinessZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) {
-              console.log('❌ Country code not found for ID:', countryId);
-              return;
-            }
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                // Auto-fill city and state for business address
-                if (result.city) {
-                  setFieldValue('registered_address_street_city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('registered_address_street_state', result.state);
-                }
+          // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
+          const handleBusinessZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) {
+                console.log("❌ Country code not found for ID:", countryId);
+                return;
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-              setZipApiError(error.message || 'Unable to fetch location data');
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]); // Now setFieldValue is in scope!
 
-          const handleResponsiblePersonZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('state', result.state);
-                }
-              }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+              setIsZipLoading(true);
+              setZipApiError(null);
 
-          const handleControllerZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('controller_city', result.city);
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  // Auto-fill city and state for business address
+                  if (result.city) {
+                    setFieldValue(
+                      "registered_address_street_city",
+                      result.city
+                    );
+                  }
+                  if (result.state) {
+                    setFieldValue(
+                      "registered_address_street_state",
+                      result.state
+                    );
+                  }
                 }
-                if (result.state) {
-                  setFieldValue('controller_state', result.state);
-                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+                setZipApiError(
+                  error.message || "Unable to fetch location data"
+                );
+              } finally {
+                setIsZipLoading(false);
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+            },
+            [dispatch, countryOptions, setFieldValue]
+          ); // Now setFieldValue is in scope!
+
+          const handleResponsiblePersonZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("city", result.city);
+                  }
+                  if (result.state) {
+                    setFieldValue("state", result.state);
+                  }
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue]
+          );
+
+          const handleControllerZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  })
+                ).unwrap();
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("controller_city", result.city);
+                  }
+                  if (result.state) {
+                    setFieldValue("controller_state", result.state);
+                  }
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error.message);
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue]
+          );
 
           React.useEffect(() => {
             setFormValues(values);
@@ -2624,7 +2762,7 @@ const Institution = () => {
 
                       {/* ZIP/Postal Code and Registered Address Country on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <SelectField
+                        <SelectField
                           id="registered_address_street_country"
                           label="Country"
                           options={countryOptions}
@@ -2645,7 +2783,7 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                       <FormField
+                        <FormField
                           id="registered_address_street_zip"
                           label="ZIP/Postal Code"
                           name="registered_address_street_zip"
@@ -2656,41 +2794,48 @@ const Institution = () => {
                               "registered_address_street_zip",
                               setFieldValue
                             )(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
-                              const countryId = values.registered_address_street_country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                              const countryId =
+                                values.registered_address_street_country;
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
                                 handleBusinessZipLookup(zipCode, countryId);
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_address_street_zip")}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_zip")
+                          }
                           touched={touched.registered_address_street_zip}
                           error={errors.registered_address_street_zip}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        {isZipLoading && activeField === "registered_address_street_zip" && (
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <RingLoader size={16} color="#3b82f6" />
-                          </div>
-                        )}
-                       
+                        {isZipLoading &&
+                          activeField === "registered_address_street_zip" && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <RingLoader size={16} color="#3b82f6" />
+                            </div>
+                          )}
                       </div>
 
                       {/* City and State/Province on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <FormField
+                        <FormField
                           id="registered_address_street_state"
                           label="State/Province"
                           name="registered_address_street_state"
@@ -2728,7 +2873,6 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       
                       </div>
 
                       {/* Street Address and Street Address 2 on same row */}
@@ -3239,20 +3383,27 @@ const Institution = () => {
                           onChange={(e) => {
                             const zipCode = e.target.value;
                             enhancedHandleChange("zip_code", setFieldValue)(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
                               const countryId = values.country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
-                                handleResponsiblePersonZipLookup(zipCode, countryId);
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
+                                handleResponsiblePersonZipLookup(
+                                  zipCode,
+                                  countryId
+                                );
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
@@ -3299,12 +3450,11 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                     
                       </div>
 
                       {/* Street Address 2 and ZIP/Postal Code on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                         <FormField
+                        <FormField
                           id="street_address_1"
                           label="Street Address 1"
                           name="street_address_1"
@@ -3337,9 +3487,7 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       
                       </div>
-
                     </div>
 
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">
@@ -3473,7 +3621,7 @@ const Institution = () => {
                       passwordValidationRules={passwordValidationRules}
                       formatTaxId={formatTaxId}
                       handleControllerZipLookup={handleControllerZipLookup}
-                      isZipLoading={isZipLoading} 
+                      isZipLoading={isZipLoading}
                       activeField={activeField}
                     />
                   </motion.div>
@@ -3709,7 +3857,6 @@ const Institution = () => {
                   onConfirm={handleSSNConfirm}
                 />
               )}
-              
             </Form>
           );
         }}
