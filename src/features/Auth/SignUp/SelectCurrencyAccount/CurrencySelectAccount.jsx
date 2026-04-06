@@ -267,11 +267,11 @@ const OpenCurrencyAccount = () => {
       return;
     }
 
-    if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
-      setModalMessage("Please confirm that you agree on the Charges and Fees.");
-      setIsModalOpen(true);
-      return;
-    }
+    // if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
+    //   setModalMessage("Please confirm that you agree on the Charges and Fees.");
+    //   setIsModalOpen(true);
+    //   return;
+    // }
 
     if (referralCode) {
       try {
@@ -1446,7 +1446,8 @@ const OpenCurrencyAccount = () => {
 
             {!isPartnerId8 &&
               ((isPartner === "Y" && showRemitOnly === "Y") ||
-                isPartner === "0") && (
+                isPartner === "0") &&
+              remittanceOnlyAccepted && ( // Only show when remittance only is selected
                 <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div>
                     <input

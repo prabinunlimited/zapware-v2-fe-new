@@ -24,7 +24,7 @@ const RecurringRemitDetail = () => {
 
   const API_URL =
     import.meta.env.VITE_API_URL ||
-    "https://sandbox-zapware.unlimitedremit.com";
+    "https://zapware.unlimitedremit.com";
 
   console.log("🎯 RecurringRemit Detail Page loaded!");
   console.log("📌 Customer ID:", customerId);

@@ -869,17 +869,14 @@ export const requestPasscodeLogin = async ({
   password,
   customer_type,
 }) => {
-  // ✅ ADD DEBUG HERE FIRST
-  console.trace("request-passcode-login called from authService.js");
-  console.log("Token at time of call:", localStorage.getItem("bearertoken"));
-  console.log("Call parameters:", {
+  console.log("🔍 requestPasscodeLogin called with:", {
     email,
     hasPassword: !!password,
     customer_type,
   });
 
   // Get the bearer token
-  const token =
+  let token =
     localStorage.getItem("bearertoken") || localStorage.getItem("authtoken");
 
   if (!token) {
@@ -895,8 +892,8 @@ export const requestPasscodeLogin = async ({
       console.log("🔄 Attempting to get fresh bearer token...");
       const freshToken = await getBearerToken();
       if (freshToken) {
-        console.log("✅ Fresh token obtained");
         token = freshToken;
+        console.log("✅ Fresh token obtained");
       }
     } catch (tokenError) {
       console.error("❌ Failed to get fresh token:", tokenError);
@@ -910,8 +907,13 @@ export const requestPasscodeLogin = async ({
     hostname: window.location.hostname,
   };
 
+  // ✅ CRITICAL FIX: Add customer_type to payload
   if (customer_type) {
     payload.customer_type = customer_type;
+    console.log(
+      "✅ Adding customer_type to request-passcode-login payload:",
+      customer_type,
+    );
   }
 
   console.log("🔄 Making request-passcode-login API call with:", {
@@ -922,7 +924,7 @@ export const requestPasscodeLogin = async ({
 
   return api.post("/request-passcode-login", payload, {
     headers: {
-      Authorization: `Bearer ${token}`, // ✅ ADD THIS LINE - CRITICAL FIX
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -931,6 +933,7 @@ export const requestPasscodeLogin = async ({
 export const sendOtpLogin = async ({
   phone_code,
   mobile_number,
+  password, // ✅ Add password parameter
   customer_type,
 }) => {
   const payload = {
@@ -939,9 +942,26 @@ export const sendOtpLogin = async ({
     hostname: window.location.hostname,
   };
 
+  // ✅ Add password if provided
+  if (password) {
+    payload.password = password;
+  }
+
+  // ✅ Add customer_type if provided
   if (customer_type) {
     payload.customer_type = customer_type;
+    console.log(
+      "✅ Adding customer_type to sendOtpLogin payload:",
+      customer_type,
+    );
   }
+
+  console.log("🔍 sendOtpLogin payload:", {
+    mobile_number: payload.mobile_number,
+    hasPassword: !!payload.password,
+    hasCustomerType: !!payload.customer_type,
+    customerType: payload.customer_type || "not provided",
+  });
 
   return api.post("/send-otp-login", payload);
 };

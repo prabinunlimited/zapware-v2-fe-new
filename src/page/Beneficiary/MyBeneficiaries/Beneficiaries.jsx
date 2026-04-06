@@ -1,35 +1,59 @@
+// Beneficiaries.jsx - UPDATED WITH CACHE-AWARE FETCHING
+
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { RingLoader } from "react-spinners";
-import BankDetailsPopup from "../../../components/PopupModal/BankDetailsPopup";
 import DeleteConfirmationModal from "./DeleteConfirmationModal";
 import PropTypes from "prop-types";
 
-// Import from MyBeneficiaries/BeneficiariesSlice
+// Import from BeneficiariesSlice with caching
 import {
-  selectBeneficiaries,
-  selectFilteredBeneficiaries,
-  selectBeneficiariesLoading,
-  selectBeneficiariesError,
-  selectBeneficiariesSuccess,
-  selectSearchQuery,
-  selectFilterVisibility,
-  selectVisibleBeneficiaries,
-  selectBeneficiariesCount,
-  setSearchQuery,
-  setFilterVisibility,
-  clearError,
-  clearSuccess,
+  // Async Thunks
+  createAndAddBeneficiary,
   fetchBeneficiaries,
   deleteBeneficiary,
   toggleBeneficiaryVisibility,
+
+  // Actions
+  clearError,
+  clearSuccess,
+  clearCreateState,
+  setSearchQuery,
+  setFilterVisibility,
+  invalidateBeneficiariesCache,
+  clearCache,
+
+  // Core Selectors
+  selectBeneficiaries,
+  selectBeneficiariesLoading,
+  selectBeneficiariesError,
+  selectBeneficiariesSuccess,
+  selectHasFetched,
+  selectLastFetched,
+
+  // Create State Selectors (individual selectors only - selectCreateState does NOT exist)
+  selectCreateLoading,
+  selectCreateError,
+  selectCreateSuccess,
+  selectLastCreatedId,
+
+  // Search/Filter Selectors
+  selectSearchQuery,
+  selectFilterVisibility,
+  selectFilteredBeneficiaries,
+
+  // Utility Selectors
+  selectVisibleBeneficiaries,
+  selectBeneficiariesCount,
 } from "../MyBeneficiaries/BeneficiariesSlice";
 
 // Import ModalSlice actions
 import { showDeleteModal, showBulkDeleteModal } from "./ModalSlice";
+
+import BeneficiaryDetailsPopup from "../../../components/PopupModal/BeneficiaryDetailsPopup";
 
 // Import FontAwesome icons
 import {
@@ -43,14 +67,24 @@ import {
   FaPlus,
   FaMoneyBillWave,
   FaUser,
-  FaUniversity,
   FaInfoCircle,
   FaCheckCircle,
   FaExclamationTriangle,
   FaArrowLeft,
-  FaChevronRight,
-  FaChevronLeft,
   FaPhone,
+  FaEnvelope,
+  FaUserCircle,
+  FaCalendarAlt,
+  FaMapMarkerAlt,
+  FaIdCard,
+  FaGlobe,
+  FaWhatsapp,
+  FaTelegram,
+  FaCopy,
+  FaChevronLeft,
+  FaChevronRight,
+  FaDatabase,
+  FaSync,
 } from "react-icons/fa";
 
 const Beneficiaries = ({ mode = "list" }) => {
@@ -61,6 +95,7 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Add useRef to track mounted state
   const isMounted = useRef(true);
+  const isInitialMount = useRef(true);
 
   // Get customerId from params or location state
   const customerId =
@@ -70,11 +105,6 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Redux selectors
   const beneficiaries = useSelector(selectBeneficiaries);
-  console.log(
-    "🔍 Full Redux state:",
-    useSelector((state) => state),
-  );
-
   const filteredBeneficiaries = useSelector(selectFilteredBeneficiaries);
   const loading = useSelector(selectBeneficiariesLoading);
   const error = useSelector(selectBeneficiariesError);
@@ -83,81 +113,133 @@ const Beneficiaries = ({ mode = "list" }) => {
   const filterVisibility = useSelector(selectFilterVisibility);
   const visibleBeneficiaries = useSelector(selectVisibleBeneficiaries);
   const beneficiariesCount = useSelector(selectBeneficiariesCount);
+  const hasFetched = useSelector(selectHasFetched);
+  const lastFetched = useSelector(selectLastFetched);
+  const createLoading = useSelector(selectCreateLoading);
+  const createError = useSelector(selectCreateError);
+  const createSuccess = useSelector(selectCreateSuccess);
+  const lastCreatedId = useSelector(selectLastCreatedId);
 
   // Local states
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
-  const [showBankDetails, setShowBankDetails] = useState(false);
   const [showDeleteModalLocal, setShowDeleteModalLocal] = useState(false);
   const [beneficiaryToDelete, setBeneficiaryToDelete] = useState(null);
   const [searchInput, setSearchInput] = useState("");
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
-  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showDetailsPopup, setShowDetailsPopup] = useState(false);
+  const [selectedBeneficiaryDetails, setSelectedBeneficiaryDetails] =
+    useState(null);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Search timeout ref
   const searchTimeoutRef = useRef(null);
+
+  // Format last fetched time
+  const getLastFetchedDisplay = useCallback(() => {
+    if (!lastFetched) return "Never";
+    const diff = Date.now() - new Date(lastFetched).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  }, [lastFetched]);
 
   // Combined cleanup function for component unmount
   useEffect(() => {
     return () => {
       isMounted.current = false;
-      dispatch(clearError());
-      dispatch(clearSuccess());
 
       // Clear any pending timeouts
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
-      // Always reset searching state on unmount
       setIsSearching(false);
+
+      // Don't clear error/success on unmount to maintain state across navigations
+      // dispatch(clearError());
+      // dispatch(clearSuccess());
     };
   }, [dispatch]);
 
-  // Fetch beneficiaries on component mount
+  // Fetch beneficiaries on component mount with cache awareness
   useEffect(() => {
-    if (customerId && isMounted.current && !hasFetchedOnce) {
-      console.log(
-        "🔍 Beneficiaries Component mounted with customerId:",
-        customerId,
-      );
+    if (!customerId || !isMounted.current) return;
 
-      const loadBeneficiaries = async () => {
-        try {
-          const result = await dispatch(
-            fetchBeneficiaries(customerId),
-          ).unwrap();
-          console.log("📥 Fetched beneficiaries count:", result?.length || 0);
-          setHasFetchedOnce(true);
-        } catch (error) {
-          console.error("❌ Error loading beneficiaries:", error);
-          if (isMounted.current) {
-            toast.error("Failed to load beneficiaries");
-          }
+    const loadBeneficiaries = async () => {
+      try {
+        // Check if we have valid cached data
+        const hasValidCache =
+          hasFetched &&
+          lastFetched &&
+          Date.now() - new Date(lastFetched).getTime() < 5 * 60 * 1000;
+
+        if (hasValidCache && beneficiaries.length > 0) {
+          console.log("📦 Using cached beneficiaries data");
+          return;
         }
-      };
 
-      loadBeneficiaries();
-    }
-  }, [dispatch, customerId, hasFetchedOnce]);
+        console.log("🌐 Fetching beneficiaries from API");
+        await dispatch(
+          fetchBeneficiaries({ customerId, forceRefresh: false }),
+        ).unwrap();
+      } catch (error) {
+        if (isMounted.current) {
+          toast.error("Failed to load beneficiaries");
+        }
+      }
+    };
 
+    loadBeneficiaries();
+  }, [dispatch, customerId, hasFetched, lastFetched, beneficiaries.length]);
+
+  // Handle create success from navigation
   useEffect(() => {
-    console.log("🔄 Beneficiaries state changed:", {
-      loading,
-      error,
-      beneficiariesCount: beneficiaries?.length || 0,
-      beneficiaries: beneficiaries?.slice(0, 3), // Show first 3 for debugging
-      filteredCount: filteredBeneficiaries?.length || 0,
-    });
-  }, [beneficiaries, loading, error, filteredBeneficiaries]);
+    if (createSuccess && lastCreatedId && isMounted.current) {
+      toast.success("Beneficiary created successfully!");
+      dispatch(fetchBeneficiaries({ customerId, forceRefresh: true }));
+      dispatch(clearCreateState());
+    }
+  }, [createSuccess, lastCreatedId, customerId, dispatch]);
+
+  // Handle manual refresh
+  const handleRefresh = useCallback(async () => {
+    if (!customerId) return;
+
+    setIsRefreshing(true);
+    try {
+      await dispatch(
+        fetchBeneficiaries({ customerId, forceRefresh: true }),
+      ).unwrap();
+      toast.success("Beneficiaries refreshed successfully!");
+    } catch (error) {
+      toast.error("Failed to refresh beneficiaries");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [dispatch, customerId]);
+
+  // Handle clear cache
+  const handleClearCache = useCallback(() => {
+    dispatch(clearCache());
+    toast.info("Cache cleared. Data will be reloaded on next visit.");
+  }, [dispatch]);
 
   // Sync search input with Redux search query
   useEffect(() => {
     setSearchInput(searchQuery || "");
-    // Reset searching state when search query changes
     setIsSearching(false);
+  }, [searchQuery]);
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
   }, [searchQuery]);
 
   // Handle success and error messages
@@ -173,30 +255,53 @@ const Beneficiaries = ({ mode = "list" }) => {
     }
   }, [success, error, dispatch]);
 
-  // Handle search input changes with debounce - FIXED
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredBeneficiaries.slice(
+    indexOfFirstItem,
+    indexOfLastItem,
+  );
+  const totalPages = Math.ceil(filteredBeneficiaries.length / itemsPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    document.getElementById("beneficiaries-list")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const handleViewDetails = (beneficiary) => {
+    setSelectedBeneficiaryDetails(beneficiary);
+    setShowDetailsPopup(true);
+  };
+
+  const handleCloseDetailsPopup = () => {
+    setShowDetailsPopup(false);
+    setSelectedBeneficiaryDetails(null);
+  };
+
+  // Handle search input changes with debounce
   const handleSearchChange = useCallback(
     (e) => {
       const value = e.target.value;
       setSearchInput(value);
 
-      // Clear previous timeout
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
 
-      // Show searching indicator only when there's text
       if (value.trim()) {
         setIsSearching(true);
       } else {
         setIsSearching(false);
       }
 
-      // Debounce the search dispatch
       searchTimeoutRef.current = setTimeout(() => {
         dispatch(setSearchQuery(value));
-        // Always reset searching after dispatch
         setIsSearching(false);
-      }, 300); // 300ms debounce
+      }, 300);
     },
     [dispatch],
   );
@@ -207,7 +312,6 @@ const Beneficiaries = ({ mode = "list" }) => {
     dispatch(setSearchQuery(""));
     setIsSearching(false);
 
-    // Clear any pending timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
       searchTimeoutRef.current = null;
@@ -216,7 +320,15 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Toggle filter visibility
   const handleToggleFilter = () => {
-    dispatch(setFilterVisibility(!filterVisibility));
+    if (window.innerWidth < 768) {
+      setIsMobileFilterOpen(!isMobileFilterOpen);
+    } else {
+      dispatch(setFilterVisibility(!filterVisibility));
+    }
+  };
+
+  const handleCloseMobileFilter = () => {
+    setIsMobileFilterOpen(false);
   };
 
   // Navigate to add beneficiary page
@@ -231,17 +343,10 @@ const Beneficiaries = ({ mode = "list" }) => {
     });
   };
 
-  // Show bank details popup
-  const handleViewBankDetails = (beneficiary) => {
-    setSelectedBeneficiary(beneficiary);
-    setShowBankDetails(true);
-  };
-
   // Handle delete confirmation
   const handleDeleteClick = (beneficiary) => {
     setBeneficiaryToDelete(beneficiary);
     setShowDeleteModalLocal(true);
-    // Also dispatch to Redux modal state if needed
     dispatch(showDeleteModal(beneficiary));
   };
 
@@ -258,8 +363,8 @@ const Beneficiaries = ({ mode = "list" }) => {
         ).unwrap();
 
         toast.success("Beneficiary deleted successfully!");
-        // Refresh the list
-        dispatch(fetchBeneficiaries(customerId));
+        // Refresh with cache invalidation
+        await dispatch(fetchBeneficiaries({ customerId, forceRefresh: true }));
       } catch (error) {
         toast.error(error.message || "Failed to delete beneficiary");
       } finally {
@@ -276,25 +381,6 @@ const Beneficiaries = ({ mode = "list" }) => {
     setBeneficiaryToDelete(null);
   };
 
-  // Toggle beneficiary visibility
-  const handleToggleVisibility = async (beneficiaryId) => {
-    if (customerId) {
-      try {
-        await dispatch(
-          toggleBeneficiaryVisibility({
-            customerId,
-            beneficiaryId,
-          }),
-        ).unwrap();
-
-        // Refresh the list
-        dispatch(fetchBeneficiaries(customerId));
-      } catch (error) {
-        toast.error(error.message || "Failed to toggle visibility");
-      }
-    }
-  };
-
   // Handle beneficiary selection for bulk actions
   const handleBeneficiarySelect = (beneficiaryId) => {
     setSelectedBeneficiaries((prev) => {
@@ -306,12 +392,21 @@ const Beneficiaries = ({ mode = "list" }) => {
     });
   };
 
-  // Handle select all
+  // Handle select all for current page
   const handleSelectAll = () => {
-    if (selectedBeneficiaries.length === filteredBeneficiaries.length) {
-      setSelectedBeneficiaries([]);
+    const currentPageIds = currentItems.map((b) => b.id);
+    const allSelected = currentPageIds.every((id) =>
+      selectedBeneficiaries.includes(id),
+    );
+
+    if (allSelected) {
+      setSelectedBeneficiaries((prev) =>
+        prev.filter((id) => !currentPageIds.includes(id)),
+      );
     } else {
-      setSelectedBeneficiaries(filteredBeneficiaries.map((b) => b.id));
+      setSelectedBeneficiaries((prev) => [
+        ...new Set([...prev, ...currentPageIds]),
+      ]);
     }
   };
 
@@ -330,7 +425,6 @@ const Beneficiaries = ({ mode = "list" }) => {
     if (selectedBeneficiaries.length > 0 && customerId) {
       setIsLoading(true);
       try {
-        // Delete each selected beneficiary
         for (const beneficiaryId of selectedBeneficiaries) {
           await dispatch(
             deleteBeneficiary({
@@ -344,9 +438,9 @@ const Beneficiaries = ({ mode = "list" }) => {
           `${selectedBeneficiaries.length} beneficiary(ies) deleted successfully!`,
         );
 
-        // Clear selection and refresh list
         setSelectedBeneficiaries([]);
-        dispatch(fetchBeneficiaries(customerId));
+        // Refresh with cache invalidation
+        await dispatch(fetchBeneficiaries({ customerId, forceRefresh: true }));
       } catch (error) {
         toast.error(error.message || "Failed to delete beneficiaries");
       } finally {
@@ -356,18 +450,12 @@ const Beneficiaries = ({ mode = "list" }) => {
     }
   };
 
-  // Close bank details popup
-  const handleCloseBankDetails = () => {
-    setShowBankDetails(false);
-    setSelectedBeneficiary(null);
-  };
-
   // Navigate back
   const handleGoBack = () => {
     navigate(-1);
   };
 
-  // Format date
+  // Format date helper
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -380,15 +468,17 @@ const Beneficiaries = ({ mode = "list" }) => {
 
   // Determine if we should show initial loading
   const showInitialLoading =
-    loading && !hasFetchedOnce && beneficiaries.length === 0;
+    loading && !hasFetched && beneficiaries.length === 0;
 
   // Loading overlay for initial load
   if (showInitialLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="flex flex-col items-center p-6">
           <RingLoader size={60} color="#3B82F6" />
-          <p className="mt-4 text-gray-600">Loading beneficiaries...</p>
+          <p className="mt-4 text-gray-600 font-medium">
+            Loading beneficiaries...
+          </p>
         </div>
       </div>
     );
@@ -397,18 +487,18 @@ const Beneficiaries = ({ mode = "list" }) => {
   // Check if customerId exists
   if (!customerId) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center p-6 bg-white rounded-2xl shadow-xl max-w-md w-full">
           <FaExclamationTriangle className="text-red-500 text-5xl mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
             Customer ID Missing
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-6 text-sm sm:text-base">
             Please navigate to this page through the proper route.
           </p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg"
           >
             Go to Dashboard
           </button>
@@ -418,158 +508,176 @@ const Beneficiaries = ({ mode = "list" }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-4 sm:py-6 md:py-8 px-3 sm:px-4 md:px-6 lg:px-8">
       {/* Loading overlay for actions */}
       {isLoading && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-50 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
-            <RingLoader size={60} color="#3B82F6" />
-            <p className="mt-6 text-gray-700 font-medium">Processing...</p>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center mx-4">
+            <RingLoader size={50} color="#3B82F6" />
+            <p className="mt-4 text-gray-700 font-medium">Processing...</p>
           </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto" id="beneficiaries-list">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-              <div>
-                <h1 className="text-2xl font-bold text-white flex items-center">
-                  <FaMoneyBillWave className="mr-3" size={28} />
-                  My Beneficiaries
-                </h1>
-                <p className="text-blue-100 mt-1">
-                  Manage your beneficiaries for sending money
-                </p>
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl overflow-hidden mb-4 sm:mb-6 md:mb-8">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 md:px-8 py-4 sm:py-5 md:py-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <div className="p-2 sm:p-3 bg-white/20 rounded-xl mr-3 sm:mr-4">
+                    <FaMoneyBillWave className="text-white text-xl sm:text-2xl" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
+                      My Beneficiaries
+                    </h1>
+                    <p className="text-blue-100 text-xs sm:text-sm mt-1">
+                      Manage your beneficiaries for sending money
+                    </p>
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={handleGoBack}
-                className="flex items-center text-white hover:text-blue-100 transition-colors duration-200 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg mt-4 md:mt-0"
-              >
-                <FaArrowLeft className="mr-2" />
-                Back
-              </button>
+              <div className="flex gap-2">
+                {/* Cache Status Indicator */}
+                <div className="hidden md:flex items-center bg-blue-500/20 rounded-lg px-3 py-2 text-white text-xs">
+                  <FaDatabase className="mr-1" size={12} />
+                  <span>Cache: {getLastFetchedDisplay()}</span>
+                </div>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="flex items-center text-white hover:text-blue-100 transition-colors duration-200 bg-blue-500 hover:bg-blue-600 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base disabled:opacity-50"
+                >
+                  <FaSync
+                    className={`mr-2 text-sm sm:text-base ${isRefreshing ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+
+                <button
+                  onClick={handleGoBack}
+                  className="flex items-center text-white hover:text-blue-100 transition-colors duration-200 bg-blue-500 hover:bg-blue-600 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base w-full sm:w-auto justify-center"
+                >
+                  <FaArrowLeft className="mr-2 text-sm sm:text-base" />
+                  Back
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Stats and Actions */}
-          <div className="p-6 bg-white">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+          <div className="p-4 sm:p-6 bg-white">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
+              <div className="bg-blue-50 p-3 sm:p-4 rounded-xl border border-blue-200">
                 <div className="flex items-center">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 mr-3">
-                    <FaUser size={20} />
+                  <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-600 mr-2 sm:mr-3">
+                    <FaUser size={16} className="sm:text-xl" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Beneficiaries</p>
-                    <p className="text-2xl font-bold text-gray-800">
+                    <p className="text-xs sm:text-sm text-gray-600">Total</p>
+                    <p className="text-lg sm:text-2xl font-bold text-gray-800">
                       {beneficiariesCount}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+              <div className="bg-green-50 p-3 sm:p-4 rounded-xl border border-green-200">
                 <div className="flex items-center">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600 mr-3">
-                    <FaEye size={20} />
+                  <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-green-100 text-green-600 mr-2 sm:mr-3">
+                    <FaCheckCircle size={16} className="sm:text-xl" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Visible</p>
-                    <p className="text-2xl font-bold text-gray-800">
+                    <p className="text-xs sm:text-sm text-gray-600">Active</p>
+                    <p className="text-lg sm:text-2xl font-bold text-gray-800">
                       {visibleBeneficiaries.length}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+              <div className="bg-purple-50 p-3 sm:p-4 rounded-xl border border-purple-200">
                 <div className="flex items-center">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 text-yellow-600 mr-3">
-                    <FaEyeSlash size={20} />
+                  <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100 text-purple-600 mr-2 sm:mr-3">
+                    <FaDatabase size={16} className="sm:text-xl" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Hidden</p>
-                    <p className="text-2xl font-bold text-gray-800">
-                      {beneficiariesCount - visibleBeneficiaries.length}
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      Cache Status
+                    </p>
+                    <p className="text-sm font-semibold text-gray-800">
+                      {hasFetched ? "Cached" : "Not Cached"}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
+              <div className="col-span-2 lg:col-span-1">
                 <button
                   onClick={handleAddBeneficiary}
-                  className="w-full h-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white transition-all duration-300 shadow-lg hover:shadow-xl"
+                  className="w-full h-full flex items-center justify-center p-3 sm:p-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white transition-all duration-300 shadow-md hover:shadow-lg text-sm sm:text-base"
                 >
-                  <FaPlus className="mr-2" size={20} />
-                  <span className="font-semibold">Add New Beneficiary</span>
+                  <FaPlus className="mr-2 sm:text-xl" size={16} />
+                  <span className="font-semibold whitespace-nowrap">
+                    Add New Beneficiary
+                  </span>
                 </button>
               </div>
             </div>
 
-            {/* Search and Filter Bar - FIXED */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="flex-1 relative">
-                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <div className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
                   {isSearching ? (
-                    <div className="w-4 h-4 flex items-center justify-center">
-                      <RingLoader size={14} color="#3B82F6" />
-                    </div>
+                    <RingLoader size={16} color="#3B82F6" />
                   ) : (
-                    <FaSearch />
+                    <FaSearch size={14} className="sm:text-base" />
                   )}
                 </div>
                 <input
                   type="text"
                   value={searchInput}
                   onChange={handleSearchChange}
-                  placeholder="Search beneficiaries by name, phone, or email..."
-                  className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loading && !hasFetchedOnce}
+                  placeholder="Search by name, phone, or email..."
+                  className="w-full pl-9 sm:pl-12 pr-9 sm:pr-12 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading && !hasFetched}
                 />
                 {searchInput && !isSearching && (
                   <button
                     onClick={handleClearSearch}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     type="button"
-                    disabled={loading}
                   >
-                    <FaTimes />
+                    <FaTimes size={14} className="sm:text-base" />
                   </button>
                 )}
               </div>
 
-              <button
-                onClick={handleToggleFilter}
-                disabled={loading && !hasFetchedOnce}
-                className={`px-6 py-3 rounded-xl flex items-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  filterVisibility
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                <FaFilter className="mr-2" />
-                Filter
-              </button>
-
-              {selectedBeneficiaries.length > 0 && (
-                <button
-                  onClick={handleBulkDeleteClick}
-                  disabled={isLoading}
-                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-300 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FaTrash className="mr-2" />
-                  Delete Selected ({selectedBeneficiaries.length})
-                </button>
-              )}
+              <div className="flex gap-3">
+                {selectedBeneficiaries.length > 0 && (
+                  <button
+                    onClick={handleBulkDeleteClick}
+                    disabled={isLoading}
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-300 flex items-center justify-center text-sm sm:text-base disabled:opacity-50"
+                  >
+                    <FaTrash className="mr-2 text-sm sm:text-base" />
+                    <span className="hidden xs:inline">Delete </span>(
+                    {selectedBeneficiaries.length})
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Filter Panel */}
-            {filterVisibility && (
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Desktop Filter Panel */}
+            {filterVisibility && !isMobileFilterOpen && (
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-4 sm:mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Status
@@ -582,26 +690,65 @@ const Beneficiaries = ({ mode = "list" }) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Currency
+                      Beneficiary Type
                     </label>
                     <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">All Currencies</option>
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="NPR">NPR</option>
+                      <option value="">All Types</option>
+                      <option value="individual">Individual</option>
+                      <option value="institution">Institution</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date Added
-                    </label>
-                    <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">All Time</option>
-                      <option value="today">Today</option>
-                      <option value="week">This Week</option>
-                      <option value="month">This Month</option>
-                    </select>
+                  <div className="flex items-end">
+                    <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile Filter Drawer */}
+            {isMobileFilterOpen && (
+              <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-end justify-center">
+                <div className="bg-white rounded-t-2xl w-full max-w-md animate-slide-up">
+                  <div className="flex justify-between items-center p-4 border-b">
+                    <h3 className="text-lg font-semibold">
+                      Filter Beneficiaries
+                    </h3>
+                    <button
+                      onClick={handleCloseMobileFilter}
+                      className="p-2 hover:bg-gray-100 rounded-lg"
+                    >
+                      <FaTimes />
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Status
+                      </label>
+                      <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Beneficiary Type
+                      </label>
+                      <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Types</option>
+                        <option value="individual">Individual</option>
+                        <option value="institution">Institution</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleCloseMobileFilter}
+                      className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium"
+                    >
+                      Apply Filters
+                    </button>
                   </div>
                 </div>
               </div>
@@ -609,10 +756,9 @@ const Beneficiaries = ({ mode = "list" }) => {
           </div>
         </div>
 
-        {/* Beneficiaries Table */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Show loading indicator only when searching within existing data */}
-          {loading && !hasFetchedOnce ? (
+        {/* Beneficiaries List */}
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl overflow-hidden">
+          {loading && !hasFetched ? (
             <div className="p-8 sm:p-12 text-center">
               <div className="flex flex-col items-center">
                 <RingLoader size={40} color="#3B82F6" />
@@ -622,11 +768,13 @@ const Beneficiaries = ({ mode = "list" }) => {
           ) : filteredBeneficiaries.length === 0 ? (
             <div className="p-8 sm:p-12 text-center">
               <div className="flex flex-col items-center">
-                <FaUser className="text-gray-300 text-4xl sm:text-6xl mb-4" />
+                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <FaUser className="text-gray-300 text-4xl sm:text-5xl" />
+                </div>
                 <h3 className="text-lg sm:text-xl font-semibold text-gray-700 mb-2">
                   {searchQuery ? "No Results Found" : "No Beneficiaries Found"}
                 </h3>
-                <p className="text-gray-500 mb-6 text-sm sm:text-base">
+                <p className="text-gray-500 mb-6 text-sm sm:text-base text-center max-w-md">
                   {searchQuery
                     ? `No beneficiaries found matching "${searchQuery}"`
                     : "You haven't added any beneficiaries yet."}
@@ -634,7 +782,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                 {!searchQuery && (
                   <button
                     onClick={handleAddBeneficiary}
-                    className="px-4 py-3 sm:px-6 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
+                    className="px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg text-sm sm:text-base"
                   >
                     <FaPlus className="inline mr-2" />
                     Add Your First Beneficiary
@@ -644,7 +792,7 @@ const Beneficiaries = ({ mode = "list" }) => {
             </div>
           ) : (
             <>
-              {/* Desktop Table (hidden on mobile) */}
+              {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
@@ -654,9 +802,10 @@ const Beneficiaries = ({ mode = "list" }) => {
                           <input
                             type="checkbox"
                             checked={
-                              selectedBeneficiaries.length ===
-                                filteredBeneficiaries.length &&
-                              filteredBeneficiaries.length > 0
+                              currentItems.length > 0 &&
+                              currentItems.every((b) =>
+                                selectedBeneficiaries.includes(b.id),
+                              )
                             }
                             onChange={handleSelectAll}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
@@ -667,22 +816,13 @@ const Beneficiaries = ({ mode = "list" }) => {
                         </div>
                       </th>
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                        Name
+                        Beneficiary
                       </th>
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                         Contact
                       </th>
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                        Country
-                      </th>
-                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                        Currency
-                      </th>
-                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                        Status
-                      </th>
-                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                        Date Added
+                        Added On
                       </th>
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                         Actions
@@ -690,10 +830,10 @@ const Beneficiaries = ({ mode = "list" }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredBeneficiaries.map((beneficiary) => (
+                    {currentItems.map((beneficiary) => (
                       <tr
                         key={beneficiary.id}
-                        className="hover:bg-gray-50 transition-colors duration-150"
+                        className="hover:bg-gray-50 transition-colors duration-150 group"
                       >
                         <td className="py-4 px-6">
                           <input
@@ -709,83 +849,46 @@ const Beneficiaries = ({ mode = "list" }) => {
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
+                            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
                               {beneficiary.name?.charAt(0) || "?"}
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900">
                                 {beneficiary.name || "N/A"}
                               </div>
-                              <div className="text-sm text-gray-500">
-                                {beneficiary.relationtobenef || "N/A"}
+                              <div className="text-xs text-gray-500 capitalize">
+                                {beneficiary.relationtobenef || "No relation"}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <div className="text-sm text-gray-900">
+                          <div className="text-sm text-gray-900 flex items-center">
+                            <FaPhone className="mr-2 text-gray-400 text-xs" />
                             {beneficiary.phone_number || "N/A"}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <FaEnvelope className="mr-2 text-gray-400 text-xs" />
                             {beneficiary.email || "N/A"}
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <div className="text-sm text-gray-900">
-                            {beneficiary.country_id || "N/A"}
+                          <div className="text-sm text-gray-900 flex items-center">
+                            <FaCalendarAlt className="mr-2 text-gray-400 text-xs" />
+                            {formatDate(beneficiary.created_at)}
                           </div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {beneficiary.currency || "N/A"}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="flex items-center">
-                            <button
-                              onClick={() =>
-                                handleToggleVisibility(beneficiary.id)
-                              }
-                              className={`p-2 rounded-full ${
-                                beneficiary.status === 1 ||
-                                beneficiary.active_status === 1
-                                  ? "text-green-600 hover:bg-green-50"
-                                  : "text-gray-400 hover:bg-gray-100"
-                              }`}
-                            >
-                              {beneficiary.status === 1 ||
-                              beneficiary.active_status === 1 ? (
-                                <FaEye size={16} />
-                              ) : (
-                                <FaEyeSlash size={16} />
-                              )}
-                            </button>
-                            <span
-                              className={`ml-2 px-3 py-1 text-xs font-semibold rounded-full ${
-                                beneficiary.status === 1 ||
-                                beneficiary.active_status === 1
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              {beneficiary.status === 1 ||
-                              beneficiary.active_status === 1
-                                ? "Visible"
-                                : "Hidden"}
-                            </span>
+                          <div className="text-xs text-gray-500 capitalize mt-1">
+                            {beneficiary.beneftype || "Individual"}
                           </div>
-                        </td>
-                        <td className="py-4 px-6 text-sm text-gray-500">
-                          {formatDate(beneficiary.created_at)}
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center space-x-2">
                             <button
-                              onClick={() => handleViewBankDetails(beneficiary)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                              title="View Bank Details"
+                              onClick={() => handleViewDetails(beneficiary)}
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                              title="View Full Details"
                             >
-                              <FaUniversity size={16} />
+                              <FaInfoCircle size={16} />
                             </button>
                             <button
                               onClick={() => handleEditBeneficiary(beneficiary)}
@@ -809,16 +912,15 @@ const Beneficiaries = ({ mode = "list" }) => {
                 </table>
               </div>
 
-              {/* Mobile Cards (visible on mobile) */}
+              {/* Mobile Cards */}
               <div className="md:hidden">
-                {filteredBeneficiaries.map((beneficiary) => (
+                {currentItems.map((beneficiary) => (
                   <div
                     key={beneficiary.id}
                     className="border-b border-gray-200 p-4 hover:bg-gray-50 transition-colors duration-150"
                   >
-                    {/* Card Header */}
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 flex-1">
                         <input
                           type="checkbox"
                           checked={selectedBeneficiaries.includes(
@@ -829,108 +931,74 @@ const Beneficiaries = ({ mode = "list" }) => {
                           }
                           className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-1"
                         />
-                        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-lg">
+                        <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                           {beneficiary.name?.charAt(0) || "?"}
                         </div>
-                        <div>
-                          <div className="font-medium text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 truncate">
                             {beneficiary.name || "N/A"}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            {beneficiary.relationtobenef || "N/A"}
+                          <div className="text-xs text-gray-500 capitalize">
+                            {beneficiary.relationtobenef || "No relation"}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleViewBankDetails(beneficiary)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                          title="View Bank Details"
-                        >
-                          <FaUniversity size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleEditBeneficiary(beneficiary)}
-                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
-                          title="Edit"
-                        >
-                          <FaEdit size={16} />
-                        </button>
-                      </div>
                     </div>
 
-                    {/* Card Body - Details */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Contact
-                        </div>
-                        <div className="font-medium text-gray-900 truncate">
+                    <div className="mb-3 ml-8 space-y-2">
+                      <div className="flex items-center text-sm">
+                        <FaPhone
+                          className="text-gray-400 mr-2 flex-shrink-0"
+                          size={12}
+                        />
+                        <span className="text-gray-600 break-all">
                           {beneficiary.phone_number || "N/A"}
-                        </div>
-                        <div className="text-sm text-gray-600 truncate">
-                          {beneficiary.email || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Country
-                        </div>
-                        <div className="font-medium text-gray-900">
-                          {beneficiary.country_id || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Currency
-                        </div>
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {beneficiary.currency || "N/A"}
                         </span>
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Status</div>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() =>
-                              handleToggleVisibility(beneficiary.id)
-                            }
-                            className={`p-1 rounded-full ${
-                              beneficiary.status === 1 ||
-                              beneficiary.active_status === 1
-                                ? "text-green-600 hover:bg-green-50"
-                                : "text-gray-400 hover:bg-gray-100"
-                            }`}
-                          >
-                            {beneficiary.status === 1 ||
-                            beneficiary.active_status === 1 ? (
-                              <FaEye size={14} />
-                            ) : (
-                              <FaEyeSlash size={14} />
-                            )}
-                          </button>
-                          <span
-                            className={`ml-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                              beneficiary.status === 1 ||
-                              beneficiary.active_status === 1
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {beneficiary.status === 1 ||
-                            beneficiary.active_status === 1
-                              ? "Visible"
-                              : "Hidden"}
-                          </span>
-                        </div>
+                      <div className="flex items-center text-sm">
+                        <FaEnvelope
+                          className="text-gray-400 mr-2 flex-shrink-0"
+                          size={12}
+                        />
+                        <span className="text-gray-600 break-all">
+                          {beneficiary.email || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <FaCalendarAlt
+                          className="text-gray-400 mr-2 flex-shrink-0"
+                          size={12}
+                        />
+                        <span className="text-gray-600">
+                          Added: {formatDate(beneficiary.created_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <FaUserCircle
+                          className="text-gray-400 mr-2 flex-shrink-0"
+                          size={12}
+                        />
+                        <span className="text-gray-600 capitalize">
+                          Type: {beneficiary.beneftype || "Individual"}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Card Footer */}
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                      <div className="text-sm text-gray-500">
-                        Added: {formatDate(beneficiary.created_at)}
-                      </div>
+                    <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100 ml-8">
+                      <button
+                        onClick={() => handleViewDetails(beneficiary)}
+                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                        title="View Full Details"
+                      >
+                        <FaInfoCircle size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleEditBeneficiary(beneficiary)}
+                        className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                        title="Edit"
+                      >
+                        <FaEdit size={16} />
+                      </button>
                       <button
                         onClick={() => handleDeleteClick(beneficiary)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
@@ -943,40 +1011,73 @@ const Beneficiaries = ({ mode = "list" }) => {
                 ))}
               </div>
 
-              {/* Pagination or footer */}
-              <div className="px-4 py-4 sm:px-6 sm:py-4 bg-gray-50 border-t border-gray-200">
-                <div className="flex flex-col md:flex-row justify-between items-center">
-                  <div className="text-sm text-gray-500 mb-4 md:mb-0 text-center md:text-left">
-                    Showing {filteredBeneficiaries.length} of{" "}
-                    {beneficiariesCount} beneficiaries
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                      Previous
-                    </button>
-                    <span className="px-3 py-2 text-sm text-gray-700">
-                      Page 1 of 1
-                    </span>
-                    <button className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                      Next
-                    </button>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-4 py-4 sm:px-6 bg-gray-50 border-t border-gray-200">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
+                      Showing {indexOfFirstItem + 1} to{" "}
+                      {Math.min(indexOfLastItem, filteredBeneficiaries.length)}{" "}
+                      of {filteredBeneficiaries.length} beneficiaries
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <FaChevronLeft size={12} />
+                      </button>
+                      {[...Array(Math.min(5, totalPages))].map((_, idx) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = idx + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = idx + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + idx;
+                        } else {
+                          pageNum = currentPage - 2 + idx;
+                        }
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                              currentPage === pageNum
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <FaChevronRight size={12} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Bank Details Popup */}
-      {showBankDetails && selectedBeneficiary && (
-        <BankDetailsPopup
-          beneficiary={selectedBeneficiary}
-          onClose={handleCloseBankDetails}
+      {/* Modals and Popups */}
+      {showDetailsPopup && selectedBeneficiaryDetails && (
+        <BeneficiaryDetailsPopup
+          beneficiary={selectedBeneficiaryDetails}
+          onClose={handleCloseDetailsPopup}
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       {showDeleteModalLocal && beneficiaryToDelete && (
         <DeleteConfirmationModal
           isOpen={showDeleteModalLocal}
@@ -988,17 +1089,19 @@ const Beneficiaries = ({ mode = "list" }) => {
 
       {/* Bulk Delete Confirmation Modal */}
       {showBulkDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <div className="flex items-center text-red-600 mb-4">
               <FaExclamationTriangle className="mr-3" size={24} />
-              <h3 className="text-xl font-bold">Confirm Bulk Delete</h3>
+              <h3 className="text-lg sm:text-xl font-bold">
+                Confirm Bulk Delete
+              </h3>
             </div>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-6 text-sm sm:text-base">
               Are you sure you want to delete {selectedBeneficiaries.length}{" "}
               selected beneficiary(ies)? This action cannot be undone.
             </p>
-            <div className="flex justify-end space-x-4">
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
               <button
                 onClick={() => setShowBulkDelete(false)}
                 className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
@@ -1018,7 +1121,7 @@ const Beneficiaries = ({ mode = "list" }) => {
 
       <ToastContainer
         position="bottom-right"
-        autoClose={3000}
+        autoClose={1000}
         hideProgressBar={false}
         newestOnTop
         closeOnClick

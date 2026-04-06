@@ -1,4 +1,4 @@
-// src/components/Header/Header.js - WITH LOGOUT LOADER FEATURE
+// src/components/Dashboard/Header/Header.jsx - WITH CENTERED TICKER LAYOUT
 import React, {
   useEffect,
   useRef,
@@ -13,12 +13,10 @@ import { useNavigate, Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import {
   FaUserCircle,
-  FaUsers,
   FaSignOutAlt,
   FaIdCard,
   FaUserTie,
   FaChevronRight,
-  FaStar,
   FaHome,
   FaBuilding,
   FaMoneyCheckAlt,
@@ -36,53 +34,22 @@ import {
   selectPartnerFxCurrencies,
   selectHasFxData,
   selectHeaderLoading,
-  selectHeaderError,
   selectIsDropdownOpen,
   selectIsStaffLogin,
   selectStaffRole,
   selectIsOwnerLogin,
-  selectOwnerId,
   selectOwnerRoleName,
-  selectStaffId,
   selectIsRemittanceOnlyCustomer,
-  selectIsWhitelabelledCustomerPartnerId,
-  selectFetchStatus,
   selectProfileData,
   selectProfileLoading,
-  selectProfileError,
   selectIsBeneficiaryUser,
 } from "../Header/headerSlice";
-
-// Import logoutUser
-import { logoutUser } from "../../../features/Auth/slices/authSlice";
 
 // Partner config hook
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
 // Import centralizedApi
 import { centralizedApi } from "../../../services/api";
-
-// Debug component for partner data
-const PartnerDebug = () => {
-  useEffect(() => {
-    console.log("🔍 HEADER DEBUG - LocalStorage State:", {
-      partnerId: localStorage.getItem("whitelabelledpartnerid"),
-      partnerName: localStorage.getItem("whitelabelled_customer_partnername"),
-      partnerLogo: localStorage.getItem("partner_logo"),
-      partnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "null",
-      ),
-      partnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "null",
-      ),
-      whitelabelledCustomer: localStorage.getItem("whitelabelled_customer"),
-      isWhiteLabelledPartner: localStorage.getItem("iswhitelabelledpartner"),
-      hasPartnerId: !!localStorage.getItem("whitelabelledpartnerid"),
-    });
-  }, []);
-
-  return null;
-};
 
 const selectAuthToken = (state) => {
   const bearertoken = localStorage.getItem("bearertoken");
@@ -110,6 +77,54 @@ const selectAuthToken = (state) => {
   return isValidReduxToken ? token : null;
 };
 
+// Add ticker animation styles - PURE CSS NO FRAMER MOTION INTERFERENCE
+const tickerStyles = `
+  @keyframes ticker-smooth {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  
+  .ticker-wrapper {
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+  }
+  
+  .ticker-track {
+    display: flex;
+    width: fit-content;
+    animation: ticker-smooth var(--duration, 30s) linear infinite !important;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+  }
+  
+  /* Prevent Framer Motion from interfering with ticker */
+  .ticker-track,
+  .ticker-track * {
+    transform: translateZ(0) !important;
+  }
+  
+  /* Override any inline transforms */
+  .ticker-track[style*="transform"]:not([style*="animation"]) {
+    transform: none !important;
+  }
+  
+  .ticker-track.paused {
+    animation-play-state: paused !important;
+  }
+  
+  .ticker-item {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    white-space: nowrap;
+  }
+`;
+
 const Header = ({ customerId }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -117,62 +132,42 @@ const Header = ({ customerId }) => {
   const timerRef = useRef(null);
   const hoverTimerRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
-
-  // NEW STATE: Logout loader state
+  const tickerTrackRef = useRef(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [animationDuration, setAnimationDuration] = useState(30);
+  const [isDropdownOpen, setIsDropdownOpenLocal] = useState(false);
 
-  // Use the partner config hook - ALL original properties
+  // Partner config hook
   const {
     headerColor,
     logoUrl,
-    logoAltText,
     partnerName,
-    hasLogo,
     loading: partnerConfigLoading,
-    error: partnerConfigError,
-    refresh: refreshPartnerConfig,
-    config: partnerConfig,
   } = usePartnerConfig();
 
-  // Use individual selectors to prevent unnecessary re-renders
+  // Redux selectors
   const partnerFxCurrencies = useSelector(selectPartnerFxCurrencies);
   const hasFxData = useSelector(selectHasFxData);
   const headerLoading = useSelector(selectHeaderLoading);
-  const headerError = useSelector(selectHeaderError);
-  const isDropdownOpen = useSelector(selectIsDropdownOpen);
   const authtoken = useSelector(selectAuthToken);
 
-  // Profile selectors
   const profileData = useSelector(selectProfileData);
   const profileLoading = useSelector(selectProfileLoading);
-  const profileError = useSelector(selectProfileError);
   const isBeneficiaryUser = useSelector(selectIsBeneficiaryUser);
 
   const isStaffLogin = useSelector(selectIsStaffLogin);
   const staffRole = useSelector(selectStaffRole);
   const isOwnerLogin = useSelector(selectIsOwnerLogin);
-  const ownerId = useSelector(selectOwnerId);
   const ownerRoleName = useSelector(selectOwnerRoleName);
-  const staffId = useSelector(selectStaffId);
   const isRemittanceOnlyCustomer = useSelector(selectIsRemittanceOnlyCustomer);
-  const isWhitelabelledCustomerPartnerId = useSelector(
-    selectIsWhitelabelledCustomerPartnerId,
-  );
-  const fetchStatus = useSelector(selectFetchStatus);
-
-  // Get from localStorage
-  const isWhitelabelledCustomer =
-    localStorage.getItem("whitelabelled_customer") || "N";
-  const firstName = localStorage.getItem("firstName") || "User";
-  const lastName = localStorage.getItem("lastName") || "";
 
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // NEW: API coordination refs
+  // Profile fetch signature ref
   const profileFetchSignature = useRef(null);
 
   useEffect(() => {
-    // Create a config object that matches what DataManager expects
     profileFetchSignature.current = {
       method: "GET",
       url: `/customers/${customerId}/profile`,
@@ -181,147 +176,27 @@ const Header = ({ customerId }) => {
     };
   }, [customerId]);
 
-  // ==================== DEBUG LOGGING ====================
+  // Calculate animation duration based on content width
   useEffect(() => {
-    console.log("🔍 Header Partner Config Debug:", {
-      hasLogo,
-      logoUrl,
-      logoAltText,
-      partnerName,
-      partnerConfigLoading,
-      isWhitelabelledCustomerPartnerId,
-      isRemittanceOnlyCustomer,
-      localStoragePartnerName: localStorage.getItem(
-        "whitelabelled_customer_partnername",
-      ),
-      localStoragePartnerLogo: localStorage.getItem("partner_logo"),
-      localStoragePartnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "{}",
-      ),
-      localStoragePartnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "{}",
-      ),
-    });
-  }, [
-    hasLogo,
-    logoUrl,
-    logoAltText,
-    partnerName,
-    partnerConfigLoading,
-    isWhitelabelledCustomerPartnerId,
-    isRemittanceOnlyCustomer,
-  ]);
-  // ==================== END DEBUG ====================
+    if (tickerTrackRef.current && partnerFxCurrencies.length > 0) {
+      const contentWidth = tickerTrackRef.current.scrollWidth;
+      const containerWidth =
+        tickerTrackRef.current.parentElement?.clientWidth || 800;
 
-  // Handle logout
-  const handleLogout = useCallback(async () => {
-    // Set loading state
-    setIsLoggingOut(true);
+      const speed = 50;
+      const totalWidth = contentWidth / 2;
+      const duration = Math.max(15, Math.min(60, totalWidth / speed));
 
-    // Close dropdown if open
-    dispatch(closeDropdown());
-
-    // Clear timers
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+      setAnimationDuration(duration);
     }
+  }, [partnerFxCurrencies]);
 
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = null;
-    }
-
-    // Clear API cache on logout using centralizedApi
-    centralizedApi.clearAllCache();
-
-    // Get the token for the API call
-    const tokenToUse =
-      authtoken ||
-      localStorage.getItem("authtoken") ||
-      localStorage.getItem("bearertoken");
-
-    try {
-      if (tokenToUse) {
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/logout`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${tokenToUse}`,
-            },
-          },
-        );
-        console.log("✅ Logout API response:", response.data);
-      } else {
-        console.log("ℹ️ No token available, local logout only");
-      }
-
-      // ⭐⭐ CLEAR EVERYTHING FROM LOCALSTORAGE ⭐⭐
-      localStorage.clear();
-      sessionStorage.clear();
-
-      console.log("🗑️ ALL localStorage and sessionStorage cleared");
-
-      // Clear Redux state
-      dispatch({ type: "auth/clearAuthState" });
-
-      // Navigate to login
-      navigate("/", { replace: true });
-
-      // Force reload to clear any cached state
-      window.location.reload();
-    } catch (error) {
-      console.error("❌ Logout error:", error);
-
-      // ⭐⭐ EVEN IF API FAILS, CLEAR EVERYTHING LOCALLY ⭐⭐
-      localStorage.clear();
-      sessionStorage.clear();
-
-      // Clear Redux state
-      dispatch({ type: "auth/clearAuthState" });
-
-      console.log("🔄 Manual fallback: All storage cleared");
-
-      navigate("/", { replace: true });
-      window.location.reload();
-    }
-  }, [authtoken, dispatch, navigate]);
-
-  // Listen for header color changes
+  // Profile fetch logic
   useEffect(() => {
-    const handleStorageChange = () => {
-      dispatch(updateLocalStorageState());
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [dispatch]);
-
-  // Close dropdown when clicking outside or mouse leaves
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        dispatch(closeDropdown());
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [dispatch]);
-
-  // ✅ FIXED: Aggressive Profile fetch with duplicate handling - WITH BENEFICIARY CHECK
-  useEffect(() => {
-    // ✅ CRITICAL FIX: Check for beneficiary login BEFORE any fetch logic
     const beneficiaryLogin =
       localStorage.getItem("beneficaryLogin") ||
       localStorage.getItem("beneficiaryLogin");
     if (beneficiaryLogin === "Y") {
-      console.log("🛑 Header: Skipping profile fetch for beneficiary");
       return;
     }
 
@@ -330,16 +205,6 @@ const Header = ({ customerId }) => {
     }
 
     fetchTimeoutRef.current = setTimeout(() => {
-      console.log("🔍 Header Profile Fetch Check:", {
-        bearertoken: !!bearertoken,
-        customerId,
-        fetchStatus: fetchStatus.profile,
-        profileLoading,
-        reduxFirstName: profileData?.first_name,
-        storageFirstName: localStorage.getItem("firstName"),
-      });
-
-      // ✅ Check if we have VALID data (not "User" or bad values)
       const hasValidReduxData =
         profileData?.first_name &&
         profileData.first_name !== "User" &&
@@ -352,45 +217,15 @@ const Header = ({ customerId }) => {
         localStorage.getItem("firstName") !== "undefined" &&
         localStorage.getItem("firstName") !== "null";
 
-      // ✅ Check centralizedApi coordination state
-      const cacheKey = profileFetchSignature.current
-        ? centralizedApi.dataManager.getCacheKey(profileFetchSignature.current)
-        : null;
-
-      const isGloballyFetching = cacheKey
-        ? !!centralizedApi.dataManager.getPendingRequest(cacheKey)
-        : false;
-
-      const hasGlobalData = cacheKey
-        ? centralizedApi.dataManager.get(cacheKey)
-        : false;
-
-      // ✅ SIMPLIFIED: Fetch if we don't have valid data AND not already fetching globally
       const shouldFetchProfile =
         bearertoken &&
         customerId &&
         !hasValidReduxData &&
         !hasValidStorageData &&
-        !isGloballyFetching &&
         !profileLoading;
 
       if (shouldFetchProfile) {
-        console.log("👤 Header: Fetching profile - no valid data found");
-
-        // Reset fetch status to idle to allow the fetch
-        if (fetchStatus.profile !== "idle") {
-          console.log("🔄 Resetting fetch status to idle");
-        }
-
         dispatch(fetchUserProfile({ customerId, bearertoken }));
-      } else {
-        console.log("🔍 Header: Profile fetch not needed", {
-          hasValidReduxData,
-          hasValidStorageData,
-          isGloballyFetching,
-          profileLoading,
-          fetchStatus: fetchStatus.profile,
-        });
       }
     }, 300);
 
@@ -399,81 +234,124 @@ const Header = ({ customerId }) => {
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [
-    dispatch,
-    bearertoken,
-    customerId,
-    fetchStatus.profile,
-    profileLoading,
-    profileData,
-  ]);
+  }, [dispatch, bearertoken, customerId, profileLoading, profileData]);
+
+  // FX Rates fetch logic
+  useEffect(() => {
+    if (isBeneficiaryUser || !bearertoken) return;
+
+    const shouldFetchFx = !hasFxData && !headerLoading;
+    if (shouldFetchFx) {
+      dispatch(fetchPartnerFxCurrencies({ bearertoken, forceRefresh: false }));
+    }
+  }, [dispatch, bearertoken, hasFxData, headerLoading, isBeneficiaryUser]);
+
+  // Handle logout
+  const handleLogout = useCallback(async () => {
+    setIsLoggingOut(true);
+    setIsDropdownOpenLocal(false);
+    dispatch(closeDropdown());
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+
+    centralizedApi.clearAllCache();
+
+    const tokenToUse =
+      authtoken ||
+      localStorage.getItem("authtoken") ||
+      localStorage.getItem("bearertoken");
+
+    try {
+      if (tokenToUse) {
+        await axios.post(
+          `${import.meta.env.VITE_API_URL}/logout`,
+          {},
+          { headers: { Authorization: `Bearer ${tokenToUse}` } },
+        );
+      }
+
+      localStorage.clear();
+      sessionStorage.clear();
+      dispatch({ type: "auth/clearAuthState" });
+      navigate("/", { replace: true });
+      window.location.reload();
+    } catch (error) {
+      localStorage.clear();
+      sessionStorage.clear();
+      dispatch({ type: "auth/clearAuthState" });
+      navigate("/", { replace: true });
+      window.location.reload();
+    }
+  }, [authtoken, dispatch, navigate]);
 
   // Navigation handlers
-  const handleBeneficiariesClick = useCallback(() => {
-    navigate(`/beneficiaries/${customerId}`);
-    dispatch(closeDropdown());
-  }, [customerId, navigate, dispatch]);
-
   const handleProfileClick = useCallback(() => {
     navigate(`/profile/${customerId}`);
+    setIsDropdownOpenLocal(false);
     dispatch(closeDropdown());
   }, [customerId, navigate, dispatch]);
 
   const handleTeamClick = useCallback(() => {
     navigate(`/team/${customerId}`);
+    setIsDropdownOpenLocal(false);
     dispatch(closeDropdown());
   }, [customerId, navigate, dispatch]);
 
-  const handleChangePasswordStaff = useCallback(() => {
-    navigate(`/changepasswordstaff/${staffId}`);
-    dispatch(closeDropdown());
-  }, [staffId, navigate, dispatch]);
-
-  // Hover handlers
+  // Dropdown handlers
   const handleMouseEnter = useCallback(() => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setIsDropdownOpenLocal(true);
     dispatch(openDropdown());
   }, [dispatch]);
 
   const handleMouseLeave = useCallback(() => {
     hoverTimerRef.current = setTimeout(() => {
+      setIsDropdownOpenLocal(false);
       dispatch(closeDropdown());
     }, 300);
   }, [dispatch]);
 
   // Auto-logout timer
   const resetTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    timerRef.current = setTimeout(() => {
-      handleLogout();
-    }, 36000000);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => handleLogout(), 36000000);
   }, [handleLogout]);
 
   useEffect(() => {
     if (authtoken) {
       const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
       events.forEach((event) => window.addEventListener(event, resetTimer));
-
       resetTimer();
-
       return () => {
         events.forEach((event) =>
           window.removeEventListener(event, resetTimer),
         );
-        if (timerRef.current) {
-          clearTimeout(timerRef.current);
-        }
+        if (timerRef.current) clearTimeout(timerRef.current);
       };
     }
   }, [resetTimer, authtoken]);
 
-  // Enhanced dropdown items
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpenLocal(false);
+        dispatch(closeDropdown());
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dispatch]);
+
+  // Storage listener
+  useEffect(() => {
+    const handleStorageChange = () => dispatch(updateLocalStorageState());
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [dispatch]);
+
+  // Dropdown items
   const dropdownItems = [
     {
       id: 1,
@@ -483,19 +361,7 @@ const Header = ({ customerId }) => {
       bgColor: "bg-blue-500/10",
       borderColor: "border-blue-200",
       onClick: handleProfileClick,
-      delay: 0.1,
       description: "Manage your personal information",
-    },
-    {
-      id: 2,
-      label: "My Beneficiaries",
-      icon: FaUsers,
-      color: "text-green-600",
-      bgColor: "bg-green-500/10",
-      borderColor: "border-green-200",
-      onClick: handleBeneficiariesClick,
-      delay: 0.2,
-      description: "View and manage beneficiaries",
     },
     {
       id: 3,
@@ -505,67 +371,57 @@ const Header = ({ customerId }) => {
       bgColor: "bg-purple-500/10",
       borderColor: "border-purple-200",
       onClick: handleTeamClick,
-      delay: 0.3,
       description: "Manage team access and permissions",
     },
   ];
 
-  // ✅ FIXED: Memoized profile section with ALL original animations and features
+  // Create duplicated array for smooth infinite scroll with unique keys
+  const duplicatedFxRates = useMemo(() => {
+    if (!partnerFxCurrencies.length) return [];
+    return [...partnerFxCurrencies, ...partnerFxCurrencies].map((fx, idx) => ({
+      ...fx,
+      uniqueKey: `${fx.source_currency}-${fx.destination_currency}-${idx}-${Date.now()}`,
+      displayRate: fx.rate
+        ? typeof fx.rate === "number"
+          ? fx.rate.toFixed(4)
+          : fx.rate
+        : "N/A",
+    }));
+  }, [partnerFxCurrencies]);
+
+  // Profile Section Component - WITH MOTION FOR HOVER EFFECTS
   const ProfileSection = useMemo(() => {
-    // ✅ Handle beneficiary case FIRST
     if (isBeneficiaryUser) {
-      console.log(
-        "ℹ️ Header: User is beneficiary - showing simplified profile",
-      );
-      // Get beneficiary name from localStorage
       const beneficiaryName =
         localStorage.getItem("beneficiary_firstName") || "Beneficiary";
-      const beneficiaryRole = "Beneficiary";
-
       return (
         <div className="relative">
           <div className="flex items-center cursor-default bg-white/10 rounded-2xl px-4 py-3">
             <FaUserCircle className="w-10 h-10 text-white" />
             <div className="ml-3 flex flex-col">
-              <span className="font-semibold text-white text-sm leading-tight">
+              <span className="font-semibold text-white text-sm">
                 {beneficiaryName}
               </span>
-              <span className="text-xs text-white/80 leading-tight">
-                {beneficiaryRole}
-              </span>
+              <span className="text-xs text-white/80">Beneficiary</span>
             </div>
           </div>
         </div>
       );
     }
 
-    // Original loading state for regular customers
     if (profileLoading && !profileData) {
       return (
         <div className="flex items-center">
-          <RingLoader size={30} color={"#ffffff"} loading={true} />
-          <span className="ml-2 text-white text-sm">Loading Profile...</span>
+          <RingLoader size={30} color="#ffffff" loading={true} />
+          <span className="ml-2 text-white text-sm">Loading...</span>
         </div>
       );
     }
 
-    if (profileError) {
-      console.error("🔍 Profile error in ProfileSection:", profileError);
-    }
-
-    // ✅ Safe access to profileData (for regular customers)
     const displayName =
-      profileData?.first_name &&
-      profileData.first_name !== "User" &&
-      profileData.first_name !== "undefined" &&
-      profileData.first_name !== "null"
+      profileData?.first_name && profileData.first_name !== "User"
         ? profileData.first_name
-        : localStorage.getItem("firstName") &&
-            localStorage.getItem("firstName") !== "User" &&
-            localStorage.getItem("firstName") !== "undefined" &&
-            localStorage.getItem("firstName") !== "null"
-          ? localStorage.getItem("firstName")
-          : "User";
+        : localStorage.getItem("firstName") || "User";
 
     const userRole =
       isStaffLogin === "1"
@@ -574,7 +430,6 @@ const Header = ({ customerId }) => {
           ? ownerRoleName
           : "Customer";
 
-    // ✅ KEEP ALL YOUR ORIGINAL ANIMATIONS AND UI for regular customers
     return (
       <div
         className="relative"
@@ -582,201 +437,113 @@ const Header = ({ customerId }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* KEEP ALL YOUR ORIGINAL ANIMATED UI HERE */}
+        {/* Profile Button with Motion */}
         <motion.div
           whileHover={{ scale: 1.05 }}
-          className="flex items-center cursor-pointer bg-white/10 hover:bg-white/20 rounded-2xl px-4 py-3 transition-all duration-300 backdrop-blur-sm border border-white/20"
+          transition={{ type: "spring", stiffness: 400, duration: 0.2 }}
+          className="flex items-center cursor-pointer bg-white/10 hover:bg-white/20 rounded-2xl px-4 py-3 backdrop-blur-sm border border-white/20"
         >
-          <motion.div
-            whileHover={{ rotate: 5 }}
-            transition={{ type: "spring", stiffness: 300 }}
-            className="relative"
-          >
+          <div className="relative">
             <FaUserCircle className="w-10 h-10 text-white" />
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"
-            />
-          </motion.div>
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse" />
+          </div>
           <div className="ml-3 flex flex-col">
-            <span className="font-semibold text-white text-sm leading-tight">
+            <span className="font-semibold text-white text-sm">
               {displayName}
             </span>
-            <span className="text-xs text-white/80 leading-tight">
-              {userRole}
-            </span>
+            <span className="text-xs text-white/80">{userRole}</span>
           </div>
           <motion.div
-            animate={{ rotate: isDropdownOpen ? 180 : 0 }}
-            transition={{ duration: 0.3 }}
+            animate={{ rotate: isDropdownOpen ? 90 : 0 }}
+            transition={{ duration: 0.2 }}
             className="ml-3"
           >
             <FaChevronRight className="w-3 h-3 text-white/70" />
           </motion.div>
         </motion.div>
 
+        {/* Dropdown Menu with AnimatePresence */}
         <AnimatePresence>
           {isDropdownOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              transition={{
-                duration: 0.2,
-                type: "spring",
-                stiffness: 500,
-                damping: 30,
-              }}
-              className="absolute right-0 mt-2 w-96 bg-white/95 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
-              }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="absolute right-0 mt-2 w-96 bg-white rounded-3xl shadow-2xl z-[9999] overflow-visible"
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             >
-              <motion.div
-                className="p-8 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
+              <div className="p-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-t-3xl">
                 <div className="flex items-center space-x-5">
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    className="relative"
-                  >
-                    <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shadow-lg backdrop-blur-sm">
-                      <FaUserCircle className="w-10 h-10 text-white" />
-                    </div>
-                    <motion.div
-                      animate={{ scale: [1, 1.3, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white shadow-lg"
-                    />
-                  </motion.div>
-                  <div className="flex-1 min-w-0">
-                    <motion.p
-                      className="text-xl font-bold text-white truncate"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      {displayName}
-                    </motion.p>
-                    <motion.p
-                      className="text-blue-100 mt-1 text-sm"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      ID: {customerId}
-                    </motion.p>
-                    <motion.div
-                      className="flex items-center mt-3"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <div className="px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
-                        {userRole}
-                      </div>
-                      <div className="ml-2 px-2 py-1 bg-green-500/20 text-green-100 text-xs rounded-full">
-                        Active
-                      </div>
-                    </motion.div>
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                    <FaUserCircle className="w-10 h-10 text-white" />
                   </div>
-                </div>
-              </motion.div>
-
-              <div className="p-6">
-                <div className="space-y-3">
-                  {dropdownItems.map((item, index) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: item.delay,
-                        type: "spring",
-                        stiffness: 500,
-                      }}
-                      whileHover={{
-                        scale: 1.02,
-                        x: 5,
-                      }}
-                    >
-                      <button
-                        onClick={item.onClick}
-                        className="flex items-start w-full text-left p-5 rounded-2xl transition-all duration-300 group border border-gray-100 hover:border-gray-200 hover:shadow-lg bg-white/50 hover:bg-white"
-                      >
-                        <div
-                          className={`p-4 rounded-xl ${item.bgColor} border ${item.borderColor} group-hover:scale-110 transition-all duration-300 shadow-sm`}
-                        >
-                          <item.icon className={`w-6 h-6 ${item.color}`} />
-                        </div>
-                        <div className="ml-5 flex-1 min-w-0">
-                          <div className="flex items-center">
-                            <span
-                              className={`font-semibold text-gray-900 group-hover:text-gray-800 transition-colors duration-200`}
-                            >
-                              {item.label}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                            {item.description}
-                          </p>
-                        </div>
-                        <FaChevronRight
-                          className={`w-4 h-4 text-gray-400 group-hover:text-gray-600 mt-1 group-hover:translate-x-1 transition-all duration-200`}
-                        />
-                      </button>
-                    </motion.div>
-                  ))}
+                  <div>
+                    <p className="text-xl font-bold text-white">
+                      {displayName}
+                    </p>
+                    <p className="text-blue-100 text-sm">ID: {customerId}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
+                        {userRole}
+                      </span>
+                      <span className="px-2 py-1 bg-green-500/20 text-green-100 text-xs rounded-full">
+                        Active
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <motion.div
-                className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
-              >
+              <div className="p-6 space-y-3">
+                {dropdownItems.map((item, index) => (
+                  <motion.button
+                    key={item.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ scale: 1.02, x: 5 }}
+                    onClick={item.onClick}
+                    className="flex items-center w-full text-left p-4 rounded-2xl hover:bg-gray-50 transition-all border border-gray-100 group"
+                  >
+                    <div
+                      className={`p-3 rounded-xl ${item.bgColor} group-hover:scale-110 transition-transform duration-200`}
+                    >
+                      <item.icon className={`w-5 h-5 ${item.color}`} />
+                    </div>
+                    <div className="ml-4 flex-1">
+                      <span className="font-semibold text-gray-800">
+                        {item.label}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {item.description}
+                      </p>
+                    </div>
+                    <FaChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform duration-200" />
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="p-5 border-t rounded-b-3xl">
                 <motion.button
                   onClick={handleLogout}
                   whileHover={{ scale: 1.02 }}
-                  className="flex items-center w-full p-5 rounded-2xl bg-white border border-red-200 hover:border-red-300 hover:shadow-lg transition-all duration-300 group"
+                  transition={{ type: "spring", stiffness: 400 }}
+                  className="flex items-center w-full p-4 rounded-2xl bg-red-50 border border-red-200 hover:bg-red-100 transition-all group"
                 >
-                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-200 group-hover:bg-red-500/20 transition-colors duration-200">
-                    <FaSignOutAlt className="w-6 h-6 text-red-500" />
+                  <div className="p-3 rounded-xl bg-red-100 group-hover:scale-110 transition-transform duration-200">
+                    <FaSignOutAlt className="w-5 h-5 text-red-500" />
                   </div>
-                  <div className="ml-5 flex-1 text-left">
-                    <span className="font-semibold text-red-600 group-hover:text-red-700 transition-colors duration-200">
-                      Logout
-                    </span>
-                    <p className="text-sm text-red-500/80 mt-2">
+                  <div className="ml-4 text-left">
+                    <span className="font-semibold text-red-600">Logout</span>
+                    <p className="text-xs text-red-500/80">
                       Sign out from your account
                     </p>
                   </div>
-                  <FaChevronRight className="w-4 h-4 text-red-400 group-hover:text-red-500 mt-1 group-hover:translate-x-1 transition-all duration-200" />
+                  <FaChevronRight className="ml-auto w-4 h-4 text-red-400 group-hover:translate-x-1 transition-transform duration-200" />
                 </motion.button>
-              </motion.div>
-
-              <motion.div
-                className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <FaStar className="w-4 h-4 text-yellow-500 mr-2" />
-                    <span>Secure Portal • v2.1.0</span>
-                  </div>
-                  <div className="text-xs text-gray-400">Last login: Today</div>
-                </div>
-              </motion.div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -785,379 +552,203 @@ const Header = ({ customerId }) => {
   }, [
     isBeneficiaryUser,
     profileLoading,
-    profileError,
     profileData,
     isDropdownOpen,
-    isOwnerLogin,
     isStaffLogin,
     staffRole,
+    isOwnerLogin,
     ownerRoleName,
     customerId,
     handleProfileClick,
-    handleBeneficiariesClick,
     handleTeamClick,
-    handleChangePasswordStaff,
     handleLogout,
     handleMouseEnter,
     handleMouseLeave,
-    dispatch,
   ]);
 
-  useEffect(() => {
-    // Try to load logo from localStorage immediately
-    const cachedLogo = localStorage.getItem("partner_logo");
-    const cachedPartnerName = localStorage.getItem("partner_name");
-
-    if (cachedLogo) {
-      console.log("📦 Pre-loaded logo from localStorage:", cachedLogo);
-    }
-  }, []);
-
-  // ============ FIXED LOGO CONTENT ============
+  // Logo Content - with simple CSS hover (no motion to avoid conflicts)
   const LogoContent = useMemo(() => {
-    // IMMEDIATE CHECK: Always show cached logo first
     const cachedLogoUrl = localStorage.getItem("partner_logo");
     const cachedPartnerName =
       localStorage.getItem("whitelabelled_customer_partnername") ||
       "Partner Portal";
 
-    console.log("🎯 LogoContent Debug:", {
-      cachedLogoUrl,
-      cachedPartnerName,
-      partnerConfigLoading,
-      logoUrl,
-      partnerName,
-      hasLogo,
-    });
-
-    // 1. Show cached logo if available (immediate display)
     if (
       cachedLogoUrl &&
       cachedLogoUrl !== "null" &&
       cachedLogoUrl !== "undefined"
     ) {
       return (
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          className="flex items-center justify-center"
-        >
+        <div className="transition-transform duration-300 hover:scale-105">
           <img
             src={cachedLogoUrl}
             alt={cachedPartnerName}
-            className="h-20 w-auto object-contain max-w-[300px] max-h-[100px]"
-            onLoad={() => console.log("✅ Cached logo loaded")}
-            onError={(e) => {
-              console.error("❌ Cached logo failed, clearing...");
-              localStorage.removeItem("partner_logo");
-              e.target.style.display = "none";
-            }}
+            className="h-12 w-auto object-contain"
           />
-        </motion.div>
+        </div>
       );
     }
 
-    // 2. Show partner name if we have one (even without logo)
-    if (cachedPartnerName && cachedPartnerName !== "Partner Portal") {
-      console.log("📝 Showing partner name as text:", cachedPartnerName);
-      return (
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          className="flex items-center justify-center"
-        >
-          <FaBuilding className="h-10 w-10 text-white mr-3" />
-          <span className="text-white font-semibold text-lg">
-            {cachedPartnerName}
-          </span>
-        </motion.div>
-      );
-    }
-
-    // 3. Show API logo if available (from Redux)
     if (logoUrl && logoUrl !== "null" && logoUrl !== "undefined") {
       return (
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          className="flex items-center justify-center"
-        >
+        <div className="transition-transform duration-300 hover:scale-105">
           <img
             src={logoUrl}
-            alt={partnerName || "Partner Logo"}
-            className="h-20 w-auto object-contain max-w-[300px] max-h-[100px]"
-            onLoad={() => {
-              console.log("✅ API logo loaded, caching...");
-              localStorage.setItem("partner_logo", logoUrl);
-            }}
-            onError={(e) => {
-              console.error("❌ API logo failed");
-              e.target.style.display = "none";
-            }}
+            alt={partnerName || "Logo"}
+            className="h-12 w-auto object-contain"
           />
-        </motion.div>
+        </div>
       );
     }
 
-    // 4. REMOVED LOADING SPINNER - Show fallback immediately
-    console.log("⚠️ No logo available, showing fallback");
-
-    // Choose appropriate icon
     let IconComponent = FaBuilding;
-    let titleText = "Partner Portal";
+    let titleText = "Portal";
 
     if (isRemittanceOnlyCustomer === "Y") {
       IconComponent = FaMoneyCheckAlt;
-      titleText = "Remittance Portal";
+      titleText = "Remittance";
     } else if (localStorage.getItem("whitelabelledpartnerid")) {
-      IconComponent = FaBuilding;
-      titleText = "Partner Portal";
+      titleText = cachedPartnerName;
     } else {
       IconComponent = FaHome;
       titleText = "Dashboard";
     }
 
     return (
-      <motion.div
-        whileHover={{ scale: 1.05 }}
-        className="flex items-center justify-center"
-      >
-        <IconComponent className="h-10 w-10 text-white mr-3" />
+      <div className="flex items-center transition-transform duration-300 hover:scale-105">
+        <IconComponent className="h-8 w-8 text-white mr-2" />
         <span className="text-white font-semibold text-lg">{titleText}</span>
-      </motion.div>
+      </div>
     );
-  }, [
-    // Minimal dependencies - only what's actually needed
-    logoUrl,
-    partnerName,
-    isRemittanceOnlyCustomer,
-    // REMOVED: partnerConfigLoading (causes unnecessary re-renders)
-  ]);
+  }, [logoUrl, partnerName, isRemittanceOnlyCustomer]);
 
-  // UPDATED: Get appropriate text for the logo area
-  const logoText = useMemo(() => {
-    if (isRemittanceOnlyCustomer === "Y") {
-      return "Remittance Portal";
-    }
-    if (isWhitelabelledCustomerPartnerId) {
-      // Use partner name from hook (which comes from partner details API)
-      return partnerName || "Partner Portal";
-    }
-    return "Dashboard";
-  }, [isRemittanceOnlyCustomer, isWhitelabelledCustomerPartnerId, partnerName]);
-
-  // UPDATED: Handle header color class application with better fallback
+  // Header styles
   const headerClassNames = useMemo(() => {
-    const baseClasses = "w-full shadow-xl";
-
-    // If we have a header color from partner config
-    if (headerColor) {
-      // Check if it's a hex color or Tailwind class
-      if (headerColor.startsWith("#")) {
-        return baseClasses; // Use inline style for hex colors
-      }
-      // It's a Tailwind class
-      return `${baseClasses} ${headerColor}`;
-    }
-
-    // Default gradient
+    const baseClasses = "w-full shadow-xl sticky top-0 z-50";
+    if (headerColor && headerColor.startsWith("#")) return baseClasses;
+    if (headerColor) return `${baseClasses} ${headerColor}`;
     return `${baseClasses} bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700`;
   }, [headerColor]);
 
-  // UPDATED: Inline style for hex colors with better gradient
   const headerStyle = useMemo(() => {
     if (headerColor?.startsWith("#")) {
-      // Create a gradient from the header color
-      const baseColor = headerColor;
-      const darkerColor = headerColor + "CC"; // 80% opacity
-      const darkestColor = headerColor + "99"; // 60% opacity
-
       return {
-        background: `linear-gradient(135deg, ${baseColor} 0%, ${darkerColor} 50%, ${darkestColor} 100%)`,
+        background: `linear-gradient(135deg, ${headerColor} 0%, ${headerColor}CC 50%, ${headerColor}99 100%)`,
       };
     }
     return {};
   }, [headerColor]);
 
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current) {
-        clearTimeout(hoverTimerRef.current);
-      }
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Check if we should show FX rates
-  const shouldShowFxRates = useMemo(() => {
-    return hasFxData && partnerFxCurrencies.length > 0;
-  }, [hasFxData, partnerFxCurrencies]);
+  const shouldShowFxRates = hasFxData && partnerFxCurrencies.length > 0;
 
   return (
     <>
-      {/* Logout Loader Overlay */}
+      {/* Inject ticker styles */}
+      <style>{tickerStyles}</style>
+
+      {/* Logout Overlay with AnimatePresence */}
       <AnimatePresence>
         {isLoggingOut && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
           >
-            {/* Blur Background */}
-            <motion.div
-              initial={{ backdropFilter: "blur(0px)" }}
-              animate={{ backdropFilter: "blur(8px)" }}
-              exit={{ backdropFilter: "blur(0px)" }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 bg-black/30"
-            />
-
-            {/* Loader Container */}
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ duration: 0.3, type: "spring" }}
-              className="relative bg-white/95 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl shadow-black/30 p-10 flex flex-col items-center justify-center"
+              className="bg-white rounded-3xl p-10 flex flex-col items-center shadow-2xl"
             >
-              {/* RingLoader with animation */}
-              <RingLoader
-                size={80}
-                color="#3B82F6"
-                loading={isLoggingOut}
-                speedMultiplier={1.2}
-              />
-
-              {/* Text below loader */}
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2, duration: 0.3 }}
-                className="mt-6 text-center"
-              >
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                  Logging Out
-                </h3>
-                <p className="text-gray-600">Securely signing you out...</p>
-              </motion.div>
-
-              {/* Progress dots animation */}
-              <motion.div
-                className="flex space-x-2 mt-4"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-              >
-                <motion.div
-                  className="w-2 h-2 bg-blue-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: 0,
-                  }}
-                />
-                <motion.div
-                  className="w-2 h-2 bg-blue-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: 0.2,
-                  }}
-                />
-                <motion.div
-                  className="w-2 h-2 bg-blue-500 rounded-full"
-                  animate={{
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: 0.4,
-                  }}
-                />
-              </motion.div>
+              <RingLoader size={60} color="#3B82F6" />
+              <h3 className="text-xl font-bold text-gray-800 mt-4">
+                Logging Out
+              </h3>
+              <p className="text-gray-500 text-sm">Please wait...</p>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Original Header Content */}
+      {/* Header - Static header element */}
       <header className={headerClassNames} style={headerStyle}>
-        <PartnerDebug />
-        <div className="max-w-[2000px] mx-auto px-6 py-3 flex justify-between items-center w-full">
-          <div className="flex items-center space-x-5">
-            {isRemittanceOnlyCustomer === "Y" ? (
+        <div className="w-full px-4 md:px-6 py-3 overflow-visible">
+          <div className="flex items-center justify-between gap-4 md:gap-8 w-full overflow-visible">
+            {/* Logo - Left with specific width */}
+            <div className="flex-shrink-0" style={{ minWidth: "120px" }}>
               <Link
-                to={`/homeremit/${customerId}`}
-                className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
+                to={
+                  isRemittanceOnlyCustomer === "Y"
+                    ? `/homeremit/${customerId}`
+                    : `/home/${customerId}`
+                }
               >
                 {LogoContent}
               </Link>
-            ) : (
-              <Link
-                to={`/home/${customerId}`}
-                className="flex items-center space-x-5 text-white hover:text-gray-200 transition-all duration-300 group"
-              >
-                {LogoContent}
-              </Link>
-            )}
-          </div>
+            </div>
 
-          {/* FX Rates with original animation */}
-          {shouldShowFxRates && (
-            <div className="hidden md:block w-full md:w-2/4 my-2 md:my-0">
-              <div className="overflow-hidden px-6">
-                <div className="overflow-hidden">
-                  <motion.div
-                    className="whitespace-nowrap text-white/90 font-medium text-lg animate-marquee"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
+            {/* FX Ticker - Center - expands to fill space */}
+            <div className="flex-1 flex justify-center min-w-0">
+              {shouldShowFxRates && (
+                <div className="w-full max-w-3xl ticker-wrapper">
+                  <div
+                    ref={tickerTrackRef}
+                    className={`ticker-track ${isPaused ? "paused" : ""}`}
+                    style={{ "--duration": `${animationDuration}s` }}
+                    onMouseEnter={() => setIsPaused(true)}
+                    onMouseLeave={() => setIsPaused(false)}
                   >
-                    {partnerFxCurrencies.map((fx, index) => (
-                      <span key={index} className="mx-8">
-                        {fx.source_currency} → {fx.destination_currency}:{" "}
-                        {fx.rate ?? "N/A"}
+                    {duplicatedFxRates.map((fx) => (
+                      <span
+                        key={fx.uniqueKey}
+                        className="ticker-item inline-flex items-center gap-2 mx-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-white/90 font-medium hover:bg-white/20 hover:scale-105 transition-all duration-200 cursor-default shadow-sm"
+                        title={`1 ${fx.source_currency} = ${fx.displayRate} ${fx.destination_currency}`}
+                      >
+                        <span className="font-bold text-white">
+                          {fx.source_currency}
+                        </span>
+                        <svg
+                          className="w-3 h-3 text-white/40"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 7l5 5m0 0l-5 5m5-5H6"
+                          />
+                        </svg>
+                        <span className="font-bold text-white">
+                          {fx.destination_currency}
+                        </span>
+                        <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-mono font-semibold">
+                          {fx.displayRate}
+                        </span>
                       </span>
                     ))}
-                  </motion.div>
+                  </div>
                 </div>
+              )}
+
+              {/* Show empty centered div when no FX rates to maintain layout */}
+              {!shouldShowFxRates && <div className="w-full max-w-3xl"></div>}
+            </div>
+
+            {/* Profile - Right with specific width */}
+            <div className="flex-shrink-0" style={{ minWidth: "120px" }}>
+              <div className="flex justify-end">
+                <div className="hidden md:block">{ProfileSection}</div>
+                <div className="md:hidden">{ProfileSection}</div>
               </div>
             </div>
-          )}
-
-          {/* Desktop: Profile on right - Original positioning */}
-          <div className="hidden md:flex justify-end md:w-1/4 items-center">
-            {ProfileSection}
           </div>
-
-          {/* Mobile: Profile menu - Original positioning */}
-          <div className="md:hidden">{ProfileSection}</div>
         </div>
 
-        {/* Enhanced Keyframe style for marquee - Original animation */}
-        <style>{`
-          @keyframes marquee {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-          }
-          .animate-marquee {
-            display: inline-block;
-            animation: marquee 35s linear infinite;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          }
-        `}</style>
+        {/* Static Border Line */}
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-white/50 to-transparent" />
       </header>
     </>
   );

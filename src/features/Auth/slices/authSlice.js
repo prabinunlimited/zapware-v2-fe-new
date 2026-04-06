@@ -371,7 +371,7 @@ const initialState = {
   // User Preferences
   rememberMe: false,
   customerType: "",
-  inputType: "email",
+  inputType: "mobile",
   showCustomerType: "N",
 
   // Owner/Staff Management
@@ -438,6 +438,29 @@ const initialState = {
     timestamp: null,
     partnerTokensPreserved: false,
   },
+
+  // ✅ MULTIPLE ACCOUNTS MANAGEMENT
+  multipleAccounts: {
+    detected: false,
+    accounts: [], // Array of account objects
+    selectedAccountType: null,
+    email: null,
+    isResolving: false,
+    resolutionAttempts: 0,
+    resolutionTimestamp: null,
+  },
+
+  // ✅ SMART CACHING
+  accountSelectionCache: {
+    lastEmail: null,
+    lastSelectedType: null,
+    timestamp: null,
+    successfulLogins: {}, // Track successful logins per email+type
+  },
+
+  // ✅ ACCOUNT SWITCHING
+  accountSwitchInProgress: false,
+  pendingAccountSwitch: null,
 };
 
 // ===================== AUTH SLICE =====================
@@ -523,6 +546,87 @@ const authSlice = createSlice({
 
       setLocalStorageItem("authtoken", token);
       setLocalStorageItem("authcustomer_id", customerId);
+    },
+
+    // ===================== MULTIPLE ACCOUNTS REDUCERS =====================
+    setMultipleAccountsDetected: (state, action) => {
+      const { accounts, email, message } = action.payload;
+      state.multipleAccounts.detected = true;
+      state.multipleAccounts.accounts = accounts;
+      state.multipleAccounts.email = email;
+      state.multipleAccounts.selectedAccountType = null;
+      state.multipleAccounts.isResolving = false;
+      state.multipleAccounts.resolutionAttempts += 1;
+      state.multipleAccounts.resolutionTimestamp = Date.now();
+
+      // Show customer type selector
+      state.showCustomerType = "Y";
+    },
+
+    setSelectedAccountType: (state, action) => {
+      const { accountType, accountData } = action.payload;
+      state.multipleAccounts.selectedAccountType = accountType;
+
+      // Cache the selection for this email
+      if (state.multipleAccounts.email) {
+        state.accountSelectionCache.lastEmail = state.multipleAccounts.email;
+        state.accountSelectionCache.lastSelectedType = accountType;
+        state.accountSelectionCache.timestamp = Date.now();
+
+        // Store in localStorage for persistence
+        const cacheData = {
+          email: state.multipleAccounts.email,
+          selectedType: accountType,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(
+          "last_account_selection",
+          JSON.stringify(cacheData),
+        );
+      }
+    },
+
+    setMultipleAccountsResolving: (state, action) => {
+      state.multipleAccounts.isResolving = action.payload;
+    },
+
+    clearMultipleAccounts: (state) => {
+      state.multipleAccounts = {
+        detected: false,
+        accounts: [],
+        selectedAccountType: null,
+        email: null,
+        isResolving: false,
+        resolutionAttempts: 0,
+        resolutionTimestamp: null,
+      };
+      state.showCustomerType = false;
+    },
+
+    // ✅ SMART CACHE REDUCERS
+    cacheAccountSelection: (state, action) => {
+      const { email, accountType, customerId } = action.payload;
+      const cacheKey = `${email}_${accountType}`;
+      state.accountSelectionCache.successfulLogins[cacheKey] = {
+        timestamp: Date.now(),
+        customerId: customerId,
+      };
+    },
+
+    // ✅ ACCOUNT SWITCHING
+    startAccountSwitch: (state, action) => {
+      state.accountSwitchInProgress = true;
+      state.pendingAccountSwitch = action.payload;
+    },
+
+    completeAccountSwitch: (state) => {
+      state.accountSwitchInProgress = false;
+      state.pendingAccountSwitch = null;
+    },
+
+    cancelAccountSwitch: (state) => {
+      state.accountSwitchInProgress = false;
+      state.pendingAccountSwitch = null;
     },
 
     // ===================== OPTIMIZED STATE SYNC =====================
@@ -1274,7 +1378,7 @@ const authSlice = createSlice({
           );
         }
       })
-      
+
       .addCase("auth/login/rejected", (state, action) => {
         state.isLoading = false;
         state.error = action.payload?.message || "Login failed";
@@ -1602,6 +1706,14 @@ export const {
   setLogoutLoading,
   setLogoutError,
   clearLogoutState,
+  setMultipleAccountsDetected,
+  setSelectedAccountType,
+  setMultipleAccountsResolving,
+  clearMultipleAccounts,
+  cacheAccountSelection,
+  startAccountSwitch,
+  completeAccountSwitch,
+  cancelAccountSwitch,
 } = authSlice.actions;
 
 export default authSlice.reducer;

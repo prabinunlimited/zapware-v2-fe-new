@@ -247,23 +247,6 @@ const DetailedAccountCard = ({
 
           {/* Action Buttons */}
           <div className="flex flex-col items-end space-y-3 ml-6">
-            {/* <div className="text-right">
-              <p className="text-sm text-gray-500">Linked Status</p>
-              <div className="flex items-center justify-end mt-1">
-                {account.isLinkedOnSila === 1 ? (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <FaLink className="mr-1.5" size={10} />
-                    SILA Linked
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    <FaUnlink className="mr-1.5" size={10} />
-                    Not on SILA
-                  </span>
-                )}
-              </div>
-            </div> */}
-
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -325,30 +308,6 @@ const DetailedAccountCard = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Customer Information */}
-                {/* <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 flex items-center">
-                    <FaUser className="mr-2 text-green-500" />
-                    Customer Information
-                  </h4>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-gray-500">Customer Name</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {account.firstName && account.lastName
-                          ? `${account.firstName} ${account.lastName}`
-                          : "N/A"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Customer ID</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {account.customer_id || "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                </div> */}
 
                 {/* Technical Details */}
                 <div className="space-y-4">
@@ -460,48 +419,6 @@ const DetailedAccountCard = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Account Status */}
-                {/* <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 flex items-center">
-                    <FaCheckCircle className="mr-2 text-amber-500" />
-                    Account Status
-                  </h4>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-gray-500">Plaid Integration</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {account.isPlaid === 1 ? (
-                          <span className="inline-flex items-center text-green-600">
-                            <FaCheckCircle className="mr-1.5" />
-                            Enabled
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center text-gray-600">
-                            <FaTimesCircle className="mr-1.5" />
-                            Not Enabled
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">SILA Linked</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {account.isLinkedOnSila === 1 ? (
-                          <span className="inline-flex items-center text-green-600">
-                            <FaLink className="mr-1.5" />
-                            Linked
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center text-gray-600">
-                            <FaUnlink className="mr-1.5" />
-                            Not Linked
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div> */}
               </div>
             </div>
           </motion.div>
@@ -569,95 +486,6 @@ const DetailedAccountCard = ({
   );
 };
 
-// Empty State Component
-const EmptyState = ({
-  onAction,
-  disabled,
-  showCardPaymentMessage,
-  onReturnToCard,
-}) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="text-center py-16 px-4"
-  >
-    <div className="max-w-2xl mx-auto">
-      <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-8">
-        <FaBuilding className="text-gray-400 text-5xl" />
-      </div>
-
-      <h3 className="text-3xl font-bold text-gray-900 mb-4">
-        {showCardPaymentMessage
-          ? "Link Your Bank to Get Started"
-          : "No Bank Accounts Linked"}
-      </h3>
-
-      <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">
-        {showCardPaymentMessage
-          ? "Link a bank account to enable instant deposits, withdrawals, and card payments with enterprise-grade security."
-          : "Connect your bank account to access all financial features including instant transfers, bill payments, and investment options."}
-      </p>
-
-      <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 border border-gray-200 mb-8">
-        <h4 className="font-semibold text-gray-900 mb-6 text-lg flex items-center justify-center">
-          <FaLock className="mr-3 text-green-500" />
-          Enterprise Security Features
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center p-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <FaShieldAlt className="text-blue-600 text-xl" />
-            </div>
-            <p className="font-medium text-gray-900">256-bit Encryption</p>
-            <p className="text-sm text-gray-600 mt-1">Bank-level security</p>
-          </div>
-          <div className="text-center p-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <FaUser className="text-green-600 text-xl" />
-            </div>
-            <p className="font-medium text-gray-900">Read-Only Access</p>
-            <p className="text-sm text-gray-600 mt-1">
-              Never store credentials
-            </p>
-          </div>
-          <div className="text-center p-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <FaCheckCircle className="text-purple-600 text-xl" />
-            </div>
-            <p className="font-medium text-gray-900">FDIC Insured</p>
-            <p className="text-sm text-gray-600 mt-1">Up to $250,000</p>
-          </div>
-        </div>
-      </div>
-
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={onAction}
-        disabled={disabled}
-        className={`w-full max-w-sm py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
-          disabled
-            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-            : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/25"
-        }`}
-      >
-        <FaPlus className="inline mr-3" />
-        Link Your First Bank Account
-      </motion.button>
-
-      {showCardPaymentMessage && onReturnToCard && (
-        <button
-          onClick={onReturnToCard}
-          className="mt-8 text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center mx-auto text-lg"
-        >
-          Return to Card Payment
-          <FaArrowRight className="ml-3" />
-        </button>
-      )}
-    </div>
-  </motion.div>
-);
-
 // Pagination Component
 const Pagination = ({ currentPage, totalPages, onPageChange }) => (
   <div className="flex items-center justify-center space-x-2 mt-8">
@@ -718,17 +546,10 @@ const BankLink = () => {
   const navigate = useNavigate();
   const [expandedAccount, setExpandedAccount] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showPlaidButton, setShowPlaidButton] = useState(true);
 
   // Check if we should auto-open Plaid link (from card payment flow)
   const shouldAutoOpenPlaid = location.state?.autoOpenBankTab;
-
-  useEffect(() => {
-    if (shouldAutoOpenPlaid) {
-      setTimeout(() => {
-        dispatch(setShowPlaidLink(true));
-      }, 500);
-    }
-  }, [customerId, location.state, shouldAutoOpenPlaid, dispatch]);
 
   // Select state from Redux
   const bankAccounts = useSelector(selectBankAccounts);
@@ -749,7 +570,18 @@ const BankLink = () => {
   const hasAccounts = useSelector(selectHasAccounts);
   const currentPage = useSelector(selectCurrentPage);
 
-  // Add this useEffect to debug
+  // ========== ALL FUNCTIONS MOVED HERE (ABOVE EMPTY STATE) ==========
+
+  // Auto-open Plaid effect
+  useEffect(() => {
+    if (shouldAutoOpenPlaid) {
+      setTimeout(() => {
+        dispatch(setShowPlaidLink(true));
+      }, 500);
+    }
+  }, [customerId, location.state, shouldAutoOpenPlaid, dispatch]);
+
+  // Debug effect
   useEffect(() => {
     console.log("🔍 Debug - SuccessModal conditions:", {
       showSuccessModal,
@@ -760,7 +592,7 @@ const BankLink = () => {
     });
   }, [showSuccessModal, apiResponse]);
 
-  // Also add debug to the render
+  // Debug render log
   console.log("🔄 Rendering BankLink - Modal should show?", {
     showSuccessModal,
     apiResponse,
@@ -774,7 +606,7 @@ const BankLink = () => {
     }
   }, [customerId, dispatch]);
 
-  // Event handlers
+  // Event handlers - ALL DEFINED BEFORE EMPTY STATE
   const handleRefresh = useCallback(() => {
     if (customerId && !isRefreshing) {
       dispatch(fetchBankAccounts(customerId));
@@ -788,7 +620,7 @@ const BankLink = () => {
         setShowDeleteConfirm(null);
       }
     },
-    [customerId, dispatch]
+    [customerId, dispatch],
   );
 
   const handleBankLinkSuccessCallback = useCallback(
@@ -798,7 +630,7 @@ const BankLink = () => {
       if (customerId) {
         // Set the API response in Redux
         dispatch({
-          type: "bankLink/setApiResponse", // Use the actual action type
+          type: "bankLink/setApiResponse",
           payload: response,
         });
 
@@ -814,7 +646,7 @@ const BankLink = () => {
         }
       }
     },
-    [customerId, dispatch]
+    [customerId, dispatch],
   );
 
   const handleCloseSuccessModal = useCallback(() => {
@@ -824,7 +656,7 @@ const BankLink = () => {
       // If we came from card payment, offer to return
       if (location.state?.returnToCard) {
         const returnToCard = window.confirm(
-          "Bank account linked successfully! Would you like to return to card payment?"
+          "Bank account linked successfully! Would you like to return to card payment?",
         );
         if (returnToCard) {
           navigate("/deposit", { state: { openCardPayment: true } });
@@ -837,7 +669,7 @@ const BankLink = () => {
     (pageNumber) => {
       dispatch(setCurrentPage(pageNumber));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleDismissError = useCallback(() => {
@@ -848,7 +680,26 @@ const BankLink = () => {
     navigate("/deposit", { state: { openCardPayment: true } });
   }, [navigate]);
 
-  // NEW: Handler for when user clicks Continue on success modal
+  const handleLinkNewAccount = useCallback(() => {
+    // Smooth scroll to top of the page
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    // Hide the parent button
+    setShowPlaidButton(false);
+    // Show the Plaid modal
+    dispatch(setShowPlaidLink(true));
+  }, [dispatch]);
+
+  const handleClosePlaidModal = useCallback(() => {
+    // Hide the Plaid modal
+    dispatch(setShowPlaidLink(false));
+    // Show the parent button again after closing
+    setShowPlaidButton(true);
+  }, [dispatch]);
+
   const handleContinueSuccessModal = useCallback(() => {
     if (customerId) {
       // Use the new thunk to refresh accounts
@@ -883,7 +734,7 @@ const BankLink = () => {
         .length,
       plaidLinked: bankAccounts.filter((acc) => acc.isPlaid === 1).length,
       active: bankAccounts.filter(
-        (acc) => acc.is_frozen === 0 && acc.is_deleted === 0
+        (acc) => acc.is_frozen === 0 && acc.is_deleted === 0,
       ).length,
       frozen: bankAccounts.filter((acc) => acc.is_frozen === 1).length,
       webDebitVerified: bankAccounts.filter((acc) => acc.web_debit_verified)
@@ -892,6 +743,96 @@ const BankLink = () => {
     return stats;
   }, [bankAccounts]);
 
+  // ========== EMPTY STATE COMPONENT (NOW HAS ACCESS TO ALL FUNCTIONS) ==========
+  const EmptyState = ({
+    onAction,
+    disabled,
+    showCardPaymentMessage,
+    onReturnToCard,
+  }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="text-center py-16 px-4"
+    >
+      <div className="max-w-2xl mx-auto">
+        <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-8">
+          <FaBuilding className="text-gray-400 text-5xl" />
+        </div>
+
+        <h3 className="text-3xl font-bold text-gray-900 mb-4">
+          {showCardPaymentMessage
+            ? "Link Your Bank to Get Started"
+            : "No Bank Accounts Linked"}
+        </h3>
+
+        <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">
+          {showCardPaymentMessage
+            ? "Link a bank account to enable instant deposits, withdrawals, and card payments with enterprise-grade security."
+            : "Connect your bank account to access all financial features including instant transfers, bill payments, and investment options."}
+        </p>
+
+        <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 border border-gray-200 mb-8">
+          <h4 className="font-semibold text-gray-900 mb-6 text-lg flex items-center justify-center">
+            <FaLock className="mr-3 text-green-500" />
+            Enterprise Security Features
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <FaShieldAlt className="text-blue-600 text-xl" />
+              </div>
+              <p className="font-medium text-gray-900">256-bit Encryption</p>
+              <p className="text-sm text-gray-600 mt-1">Bank-level security</p>
+            </div>
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <FaUser className="text-green-600 text-xl" />
+              </div>
+              <p className="font-medium text-gray-900">Read-Only Access</p>
+              <p className="text-sm text-gray-600 mt-1">
+                Never store credentials
+              </p>
+            </div>
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <FaCheckCircle className="text-purple-600 text-xl" />
+              </div>
+              <p className="font-medium text-gray-900">FDIC Insured</p>
+              <p className="text-sm text-gray-600 mt-1">Up to $250,000</p>
+            </div>
+          </div>
+        </div>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onAction}
+          disabled={disabled}
+          className={`w-full max-w-sm py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
+            disabled
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/25"
+          }`}
+        >
+          <FaPlus className="inline mr-3" />
+          Link Your First Bank Account
+        </motion.button>
+
+        {showCardPaymentMessage && onReturnToCard && (
+          <button
+            onClick={onReturnToCard}
+            className="mt-8 text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center mx-auto text-lg"
+          >
+            Return to Card Payment
+            <FaArrowRight className="ml-3" />
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  // ========== MAIN RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-25 to-gray-50">
       {/* Main Container */}
@@ -947,118 +888,25 @@ const BankLink = () => {
                 />
               </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => dispatch(setShowPlaidLink(true))}
-                disabled={linkButtonDisabled}
-                className={`inline-flex items-center px-6 py-3.5 rounded-xl font-semibold shadow-sm transition-all duration-200 ${
-                  linkButtonDisabled
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-md hover:shadow-blue-500/25"
-                }`}
-              >
-                <FaPlus className="mr-2.5" />
-                Link New Account
-              </motion.button>
+              {showPlaidButton && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleLinkNewAccount}
+                  disabled={linkButtonDisabled}
+                  className={`inline-flex items-center px-6 py-3.5 rounded-xl font-semibold shadow-sm transition-all duration-200 ${
+                    linkButtonDisabled
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-md hover:shadow-blue-500/25"
+                  }`}
+                >
+                  <FaPlus className="mr-2.5" />
+                  Link New Account
+                </motion.button>
+              )}
             </div>
           </div>
         </motion.header>
-
-        {/* Account Statistics Dashboard */}
-        {/* {hasAccounts && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Accounts</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {accountStats.total}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaBuilding className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">SILA Linked</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {accountStats.linkedToSila}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <FaLink className="text-green-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Plaid Linked</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {accountStats.plaidLinked}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-orange-50 rounded-lg">
-                    <FaShieldAlt className="text-orange-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Active</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {accountStats.active}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaCheckCircle className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">Frozen</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {accountStats.frozen}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <FaSnowflake className="text-red-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Web Debit Verified</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {accountStats.webDebitVerified}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <FaCreditCard className="text-purple-600" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )} */}
 
         <main className="pb-12">
           {/* Enhanced Card Payment Banner */}
@@ -1089,14 +937,12 @@ const BankLink = () => {
             </motion.div>
           )}
 
-          {/* Enhanced Plaid Link Modal - ADDED BACK */}
+          {/* Enhanced Plaid Link Modal */}
           {showPlaidLink && (
             <ZapPlaidLink
               onSuccess={handleBankLinkSuccessCallback}
-              onClose={() => {
-                // Only close the Plaid modal, don't fetch accounts yet
-                dispatch(setShowPlaidLink(false));
-              }}
+              onClose={handleClosePlaidModal}
+              showButton={!showPlaidButton}
             />
           )}
 
@@ -1218,10 +1064,6 @@ const BankLink = () => {
                         methods
                       </p>
                     </div>
-                    {/* <div className="flex items-center text-sm text-gray-500 bg-gray-50 px-4 py-2.5 rounded-xl">
-                      <FaLock className="mr-2.5 text-gray-400" />
-                      <span>All connections are 256-bit encrypted</span>
-                    </div> */}
                   </div>
 
                   {/* Enhanced Accounts List */}
@@ -1272,16 +1114,14 @@ const BankLink = () => {
                   )}
                 </motion.div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <EmptyState
-                    onAction={() => dispatch(setShowPlaidLink(true))}
-                    disabled={loading || isAddingAccount}
-                    showCardPaymentMessage={showCardPaymentMessage}
-                    onReturnToCard={
-                      showCardPaymentMessage ? handleReturnToCardPayment : null
-                    }
-                  />
-                </motion.div>
+                <EmptyState
+                  onAction={handleLinkNewAccount}
+                  disabled={loading || isAddingAccount}
+                  showCardPaymentMessage={showCardPaymentMessage}
+                  onReturnToCard={
+                    showCardPaymentMessage ? handleReturnToCardPayment : null
+                  }
+                />
               )}
             </>
           )}

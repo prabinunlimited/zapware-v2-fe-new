@@ -352,95 +352,63 @@ export const fetchBankAccounts = createAsyncThunk(
         isRemittanceOnlyCustomer,
       );
 
-      if (isRemittanceOnlyCustomer === "Y") {
-        console.log(
-          "🚨 CUSTOMER IS REMITTANCE-ONLY - Using remit-from-currencies API",
-        );
+      // REMOVED: The remit-from-currencies API call
+      // All customers now use the standard bank-account-details API
 
-        const response = await axios.get(`${API_URL}/remit-from-currencies`, {
+      console.log("✅ Using bank-account-details API for all customers");
+
+      const response = await axios.get(
+        `${API_URL}/bank-account-details/${customerId}`,
+        {
           headers: { Authorization: `Bearer ${token}` },
-        });
+        },
+      );
 
-        console.log("📦 Remittance-only API Response:", response.data);
+      console.log("📦 Bank accounts API Response:", response.data);
 
-        const currencies = response.data?.data || response.data || [];
+      const accounts = response.data?.account_details || [];
 
-        return currencies.map((currency, index) => ({
-          id: currency.id || `remit-${index}-${currency.currency_code}`,
-          currency_code: currency.currency_code,
-          currency_name: currency.currency_name || currency.currency_code,
-          icon: currency.icon || "💱",
-          bank_name: currency.bank_name || "Remittance Service",
-          account_number: "N/A",
-          account_name: "Remittance Account",
-          is_remittance_only: true,
-          ...currency,
-        }));
-      } else {
-        console.log(
-          "✅ Customer is NOT remittance-only - Using bank-account-details API",
-        );
-
-        const response = await axios.get(
-          `${API_URL}/bank-account-details/${customerId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        console.log("📦 Regular API Response:", response.data);
-
-        const accounts = response.data?.account_details || [];
-
-        return accounts.map((account) => ({
-          ...account,
-          is_remittance_only: false,
-        }));
-      }
+      return accounts.map((account) => ({
+        ...account,
+        is_remittance_only: false,
+      }));
     } catch (error) {
       console.error("❌ Error fetching bank accounts:", error);
 
-      const isRemittanceOnlyCustomer = localStorage.getItem(
-        "isRemittanceOnlyCustomer",
-      );
-
-      if (isRemittanceOnlyCustomer === "Y") {
-        console.warn("Using fallback remittance currencies");
-        return [
-          {
-            id: "remit-usd",
-            currency_code: "USD",
-            currency_name: "US Dollar",
-            icon: "💵",
-            bank_name: "Remittance Service",
-            account_number: "N/A",
-            account_name: "Remittance Account",
-            is_remittance_only: true,
-          },
-          {
-            id: "remit-gbp",
-            currency_code: "GBP",
-            currency_name: "British Pound",
-            icon: "💷",
-            bank_name: "Remittance Service",
-            account_number: "N/A",
-            account_name: "Remittance Account",
-            is_remittance_only: true,
-          },
-          {
-            id: "remit-eur",
-            currency_code: "EUR",
-            currency_name: "Euro",
-            icon: "💶",
-            bank_name: "Remittance Service",
-            account_number: "N/A",
-            account_name: "Remittance Account",
-            is_remittance_only: true,
-          },
-        ];
-      }
-
-      return [];
+      // Fallback for when API fails
+      console.warn("Using fallback bank accounts");
+      return [
+        {
+          id: "fallback-usd",
+          currency_code: "USD",
+          currency_name: "US Dollar",
+          icon: "💵",
+          bank_name: "Chase Bank",
+          account_number: "518366536",
+          account_name: "Unlimited Cloud LLC",
+          is_remittance_only: false,
+        },
+        {
+          id: "fallback-gbp",
+          currency_code: "GBP",
+          currency_name: "British Pound",
+          icon: "💷",
+          bank_name: "Barclays Bank",
+          account_number: "GBP-ACCT-001",
+          account_name: "Unlimited Cloud LLC",
+          is_remittance_only: false,
+        },
+        {
+          id: "fallback-eur",
+          currency_code: "EUR",
+          currency_name: "Euro",
+          icon: "💶",
+          bank_name: "Deutsche Bank",
+          account_number: "EUR-ACCT-001",
+          account_name: "Unlimited Cloud LLC",
+          is_remittance_only: false,
+        },
+      ];
     }
   },
 );
@@ -452,21 +420,15 @@ export const fetchPayoutCurrencies = createAsyncThunk(
       const isWhiteLabelledPartnerCustomer = localStorage.getItem(
         "iswhitelabelledpartner",
       );
-      console.log(
-        "isWhiteLabelledPartnerCustomer",
-        isWhiteLabelledPartnerCustomer,
-      );
 
       let response;
 
       if (isWhiteLabelledPartnerCustomer === "Y") {
         const whiteLabellePartnerId = localStorage.getItem(
           "whitelabelledpartnerid",
-        )
-          ? localStorage.getItem("whitelabelledpartnerid")
-          : "0";
+        );
 
-        if (whiteLabellePartnerId !== "0") {
+        if (whiteLabellePartnerId && whiteLabellePartnerId !== "0") {
           response = await axios.get(
             `${API_URL}/partner-payout-currencies/${whiteLabellePartnerId}`,
           );
@@ -477,37 +439,8 @@ export const fetchPayoutCurrencies = createAsyncThunk(
         response = await axios.get(`${API_URL}/payout-currencies`);
       }
 
-      // Get the currencies data
-      const currencies = response.data?.data || [];
-
-      console.log("💰 Payout currencies received:", currencies);
-
-      // Find the currency with default_remittance = "Y"
-      const defaultCurrency = currencies.find(
-        (currency) => currency.default_remittance === "Y",
-      );
-
-      console.log("🎯 Default currency found:", defaultCurrency);
-
-      // Return both the currencies list and the default currency info
-      return {
-        currencies: currencies.map((currency) => ({
-          value: currency.currency_code,
-          label: currency.currency_code,
-          symbol: currency.icon || currency.currency_code,
-          payout_currency_id: currency.payout_currency_id,
-          default_remittance: currency.default_remittance,
-        })),
-        defaultCurrency: defaultCurrency
-          ? {
-              value: defaultCurrency.currency_code,
-              label: defaultCurrency.currency_code,
-              symbol: defaultCurrency.icon || defaultCurrency.currency_code,
-              payout_currency_id: defaultCurrency.payout_currency_id,
-              default_remittance: defaultCurrency.default_remittance,
-            }
-          : null,
-      };
+      // Return the exact API response data
+      return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
     }
@@ -604,12 +537,11 @@ export const submitTransaction = createAsyncThunk(
 
         ...(transactionData.isRecurring ||
         transactionData.frequency ||
-        transactionData.recurring_custom_days
+        transactionData.custom_days // ✅ Change from recurring_custom_days
           ? {
               isRecurring: transactionData.isRecurring || "0",
               frequency: transactionData.frequency || "",
-              recurring_custom_days:
-                transactionData.recurring_custom_days || "",
+              custom_days: transactionData.custom_days || "", // ✅ Match the field name
             }
           : {}),
 
@@ -814,6 +746,7 @@ const initialState = {
   error: null,
   transactionResult: null,
   exchangeRateCache: {},
+  exchangeRateData: null,
 };
 
 const remittanceSlice = createSlice({
@@ -931,6 +864,12 @@ const remittanceSlice = createSlice({
         customerType === "remittance" ? "Y" : "N",
       );
     },
+    setExchangeRateData: (state, action) => {
+      state.exchangeRateData = action.payload;
+    },
+    clearExchangeRateData: (state) => {
+      state.exchangeRateData = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -943,6 +882,17 @@ const remittanceSlice = createSlice({
         state.formData.exchangeRate = parseFloat(action.payload.fxRate);
         state.formData.fee = parseFloat(action.payload.fee) || 0;
         state.formData.conversionId = action.payload.conversion_id;
+
+        // ✅ Store the complete exchange rate data
+        state.exchangeRateData = {
+          fxRate: parseFloat(action.payload.fxRate),
+          fee: parseFloat(action.payload.fee) || 0,
+          conversion_id: action.payload.conversion_id,
+          fromCurrency: action.meta.arg.fromCurrency,
+          toCurrency: action.meta.arg.toCurrency,
+          originalAmount: action.meta.arg.amount,
+          ...action.payload,
+        };
 
         const cacheKey = `${state.formData.sendCurrency?.value}-${state.formData.receiveCurrency?.value}`;
         state.exchangeRateCache[cacheKey] = {
@@ -963,10 +913,8 @@ const remittanceSlice = createSlice({
         state.bankAccounts = action.payload;
         state.currencies.loading = false;
 
-        const hasRemittanceAccounts = action.payload.some(
-          (acc) => acc.is_remittance_only,
-        );
-        state.customerType.isRemittanceOnly = hasRemittanceAccounts;
+        // All accounts are now regular accounts (no remittance-only accounts)
+        state.customerType.isRemittanceOnly = false;
 
         if (action.payload.length > 0 && !state.formData.sendCurrency) {
           const defaultCurrency =
@@ -976,7 +924,7 @@ const remittanceSlice = createSlice({
             value: defaultCurrency.currency_code,
             label: defaultCurrency.currency_code,
             bank_id: defaultCurrency.id,
-            is_remittance_only: defaultCurrency.is_remittance_only,
+            is_remittance_only: false,
           };
         }
       })
@@ -1042,25 +990,21 @@ const remittanceSlice = createSlice({
       })
 
       .addCase(fetchPayoutCurrencies.fulfilled, (state, action) => {
-        // Set the receive options from the currencies list
-        state.currencies.receiveOptions = action.payload.currencies;
+        // Store the exact API response data
+        const apiData = action.payload;
+        const currencies = apiData?.data || [];
 
-        // ONLY set the default currency if it exists AND no receive currency is selected yet
-        // NO FALLBACK to KES or any other currency
-        if (action.payload.defaultCurrency && !state.formData.receiveCurrency) {
-          console.log(
-            "🎯 Setting default receive currency:",
-            action.payload.defaultCurrency,
-          );
-          state.formData.receiveCurrency = action.payload.defaultCurrency;
-        }
+        // Store the raw currencies data
+        state.currencies.receiveOptions = currencies;
 
-        // If no default currency exists, we leave receiveCurrency as null/undefined
-        // The user will have to manually select a currency
-        if (!action.payload.defaultCurrency) {
-          console.log(
-            "ℹ️ No default currency found. User will need to select a currency manually.",
-          );
+        // Find default currency (where default_remittance is "Y")
+        const defaultCurrency = currencies.find(
+          (currency) => currency.default_remittance === "Y",
+        );
+
+        // Set default currency if exists and no currency is selected
+        if (defaultCurrency && !state.formData.receiveCurrency) {
+          state.formData.receiveCurrency = defaultCurrency;
         }
       })
 
@@ -1108,6 +1052,8 @@ export const {
   handleBeneficiarySelect,
   handleBankSelect,
   forceSetCustomerType,
+  setExchangeRateData, // ✅ Add this
+  clearExchangeRateData,
 } = remittanceSlice.actions;
 
 export const selectFormData = (state) => state.remittance.formData;

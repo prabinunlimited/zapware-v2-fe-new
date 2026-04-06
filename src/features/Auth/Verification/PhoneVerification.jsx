@@ -509,7 +509,7 @@ function PhoneVerification() {
       transition={{ duration: 0.5 }}
       className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-4 sm:p-6"
     >
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer position="top-right" autoClose={1000} />
 
       <div className="w-full flex flex-col items-center justify-between max-w-md sm:max-w-xl lg:max-w-2xl bg-white rounded-xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 border border-gray-100">
         {/* Header */}
