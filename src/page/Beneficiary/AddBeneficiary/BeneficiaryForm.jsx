@@ -278,6 +278,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     "AED",
     "AUD",
     "BDT",
+    "CAD",
     "DKK",
     "EUR",
     "GBP",
@@ -1590,90 +1591,101 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         {/* SWIFT TRANSFERS */}
         {account.rails === "Swift" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="mb-4">
-              <FieldLabel required info="International Bank Account Number">
-                IBAN Number
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter IBAN number"
-                value={account.iban}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "iban", e.target.value)
-                }
-                required
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+          <div>
+            {["USD", "EUR", "GBP", "CAD"].includes(accountCurrency) ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* IBAN */}
+                <div className="mb-4">
+                  <FieldLabel required info="International Bank Account Number">
+                    IBAN Number
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter IBAN number"
+                    value={account.iban}
+                    onChange={(e) =>
+                      handleBankAccountChange(index, "iban", e.target.value)
+                    }
+                    required
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
 
-            <div className="mb-4">
-              <FieldLabel required info="Bank Identifier Code">
-                SWIFT Code
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter SWIFT code"
-                value={account.swift}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "swift", e.target.value)
-                }
-                required
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+                {/* SWIFT */}
+                <div className="mb-4">
+                  <FieldLabel required info="Bank Identifier Code">
+                    SWIFT Code
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter SWIFT code"
+                    value={account.swift}
+                    onChange={(e) =>
+                      handleBankAccountChange(index, "swift", e.target.value)
+                    }
+                    required
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
 
-            <div className="mb-4 md:col-span-2">
-              <FieldLabel info="Only if your bank requires an intermediary">
-                Intermediary Bank SWIFT (Optional)
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter intermediary bank SWIFT"
-                value={account.intermediarySwift}
-                onChange={(e) =>
-                  handleBankAccountChange(
-                    index,
-                    "intermediarySwift",
-                    e.target.value
-                  )
-                }
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+                {/* Intermediary SWIFT */}
+                <div className="mb-4 md:col-span-2">
+                  <FieldLabel info="Only if your bank requires an intermediary">
+                    Intermediary Bank SWIFT (Optional)
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter intermediary bank SWIFT"
+                    value={account.intermediarySwift}
+                    onChange={(e) =>
+                      handleBankAccountChange(
+                        index,
+                        "intermediarySwift",
+                        e.target.value
+                      )
+                    }
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="text-red-600 font-bold text-sm">
+                Currently, Swift is not available for the selected currency.
+              </div>
+            )}
           </div>
         )}
 
