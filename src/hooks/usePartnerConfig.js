@@ -1,328 +1,294 @@
-import { useSelector, useDispatch } from 'react-redux';
-import { useEffect, useRef } from 'react';
-import { 
-  fetchPartnerBasicSetup, 
-  fetchPartnerDetails,
-  selectPartnerBasicConfig, 
-  selectPartnerBasicConfigLoading, 
-  selectPartnerBasicConfigError,
+// src/hooks/usePartnerConfig.js - SINGLE SOURCE OF TRUTH
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import {
+  selectPartnerBasicConfig,
+  selectPartnerBasicConfigLoading,
   selectPartnerDetails,
   selectPartnerDetailsLoading,
-  selectPartnerDetailsError,
   selectHeaderColor,
   selectTextColor,
   selectDownloadManualEnabled,
   selectWhiteLabelledPartnerId,
   selectPartnerLogo,
   selectPartnerName,
-  selectHasPartnerLogo,
-  setBasicConfig,
-  setBasicConfigError,
-  setPartnerDetails,
-  setPartnerDetailsError
-} from '../features/Auth/slices/partnerSlice';
+  selectIsWhiteLabelledPartner,
+  selectPartnerUUID,
+  selectIsPartnerPackageModule,
+  selectShowRemittanceOnlyOnRegistration,
+  selectBeneficiaryPortalTitle,
+  syncWithLocalStorage,
+  fetchPartnerBasicSetup,
+  fetchPartnerDetails,
+} from "../features/Auth/slices/partnerSlice";
 
-// Global flags to prevent multiple fetches across components
-let isFetchingBasicConfig = false;
-let isFetchingPartnerDetails = false;
-
-// Helper function to get auth token
-const getAuthToken = () => {
-  // Check localStorage for tokens
-  const bearertoken = localStorage.getItem("bearertoken");
-  const authtoken = localStorage.getItem("authtoken");
-  
-  const isValidToken = (token) => 
-    token &&
-    token !== "undefined" &&
-    token !== "null" &&
-    token !== "false" &&
-    typeof token === "string" &&
-    token.length > 10;
-
-  if (isValidToken(bearertoken)) return bearertoken;
-  if (isValidToken(authtoken)) return authtoken;
-  
-  return null;
-};
-
-// Helper to get partner ID from localStorage
-const getPartnerId = () => {
-  let partnerId = localStorage.getItem("whitelabelledpartnerid");
-  
-  if (!partnerId || partnerId === "0") {
-    partnerId = localStorage.getItem("whitelabelled_customer_partnerid");
-    console.log("Falling back to whitelabelled_customer_partnerid:", partnerId);
-
-    if (partnerId && partnerId !== "0") {
-      localStorage.setItem("whitelabelledpartnerid", partnerId);
-    }
-  }
-
-  return partnerId;
-};
-
-// Helper to check cache validity
-const isCacheValid = (cacheTimestampKey, maxAge = 300000) => {
-  const timestamp = localStorage.getItem(cacheTimestampKey);
-  return timestamp && (Date.now() - parseInt(timestamp) < maxAge);
-};
+// Import default logo
+import DefaultLogo from "../assets/images/Logo/unlimited remit logo.png";
 
 export const usePartnerConfig = () => {
   const dispatch = useDispatch();
-  const basicConfigAttempted = useRef(false);
-  const partnerDetailsAttempted = useRef(false);
-  
-  // Get token and partner ID
-  const authtoken = getAuthToken();
-  const partnerId = getPartnerId();
-  
+  const hasInitialized = useRef(false);
+
   // Redux selectors
   const config = useSelector(selectPartnerBasicConfig);
-  const loading = useSelector(selectPartnerBasicConfigLoading);
-  const error = useSelector(selectPartnerBasicConfigError);
-  
+  const configLoading = useSelector(selectPartnerBasicConfigLoading);
   const partnerDetails = useSelector(selectPartnerDetails);
   const partnerDetailsLoading = useSelector(selectPartnerDetailsLoading);
-  const partnerDetailsError = useSelector(selectPartnerDetailsError);
-  
   const headerColor = useSelector(selectHeaderColor);
   const textColor = useSelector(selectTextColor);
   const downloadManualEnabled = useSelector(selectDownloadManualEnabled);
   const reduxPartnerId = useSelector(selectWhiteLabelledPartnerId);
-  const logoUrl = useSelector(selectPartnerLogo);
-  const partnerName = useSelector(selectPartnerName);
-  const hasLogo = useSelector(selectHasPartnerLogo);
+  const reduxLogoUrl = useSelector(selectPartnerLogo);
+  const reduxPartnerName = useSelector(selectPartnerName);
+  const isWhiteLabelledPartner = useSelector(selectIsWhiteLabelledPartner);
+  const partnerUUID = useSelector(selectPartnerUUID);
+  const isPartnerPackageModule = useSelector(selectIsPartnerPackageModule);
+  const showRemittanceOnlyOnRegistration = useSelector(
+    selectShowRemittanceOnlyOnRegistration,
+  );
+  const beneficiaryPortalTitle = useSelector(selectBeneficiaryPortalTitle);
 
-  // Fetch basic partner config (colors, settings)
+  // Local state for immediate UI feedback
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  // SINGLE initialization effect - runs ONCE
   useEffect(() => {
-    // Don't fetch if already attempted in this session
-    if (basicConfigAttempted.current) return;
-    
-    // ========== 1. CHECK LOCALSTORAGE CACHE FIRST ==========
-    const cachedConfig = localStorage.getItem("partnerConfig");
-    const isCacheValidBasic = isCacheValid("partnerConfigTimestamp", 300000); // 5 minutes
-    
-    if (cachedConfig && isCacheValidBasic && !config) {
-      try {
-        const parsedConfig = JSON.parse(cachedConfig);
-        console.log("📦 Using cached partner config from localStorage");
-        dispatch(setBasicConfig(parsedConfig));
-      } catch (e) {
-        console.error("Failed to parse cached partner config:", e);
-      }
-    }
-    
-    // ========== 2. CHECK IF WE SHOULD FETCH BASIC CONFIG ==========
-    const shouldFetchBasicConfig = 
-      partnerId && 
-      partnerId !== "0" && 
-      !config && 
-      !loading && 
-      !isFetchingBasicConfig &&
-      authtoken;
-    
-    if (shouldFetchBasicConfig) {
-      basicConfigAttempted.current = true;
-      isFetchingBasicConfig = true;
-      
-      console.log("🔄 Fetching partner basic config with:", {
-        partnerId,
-        hasToken: !!authtoken,
-        hasConfig: !!config,
-        isFetchingBasicConfig
-      });
-      
-      // Set a timeout to reset the global flag if fetch takes too long
-      const timeoutId = setTimeout(() => {
-        if (isFetchingBasicConfig) {
-          console.warn("Partner basic config fetch taking too long, resetting global flag");
-          isFetchingBasicConfig = false;
-        }
-      }, 10000);
-      
-      dispatch(fetchPartnerBasicSetup())
-        .unwrap()
-        .then(() => {
-          console.log("✅ Partner basic config fetched successfully");
-        })
-        .catch((err) => {
-          console.error("❌ Partner basic config fetch failed:", err);
-          
-          // Fallback to localStorage if available
-          if (cachedConfig) {
-            try {
-              const parsedConfig = JSON.parse(cachedConfig);
-              console.log("🔄 Falling back to cached basic config due to fetch error");
-              dispatch(setBasicConfig(parsedConfig));
-              dispatch(setBasicConfigError(null)); // Clear error since we have cache
-            } catch (e) {
-              console.error("Failed to parse cached basic config:", e);
-            }
-          }
-        })
-        .finally(() => {
-          isFetchingBasicConfig = false;
-          clearTimeout(timeoutId);
-        });
-    } else {
-      console.log("🔍 Partner basic config fetch not needed:", {
-        partnerId,
-        hasConfig: !!config,
-        loading,
-        isFetchingBasicConfig,
-        hasToken: !!authtoken
-      });
-    }
-  }, [config, loading, dispatch, partnerId, authtoken]);
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
 
-  // Fetch partner details (logo, name, etc.)
-  useEffect(() => {
-    // Don't fetch if already attempted in this session
-    if (partnerDetailsAttempted.current) return;
-    
-    // ========== 1. CHECK LOCALSTORAGE CACHE FIRST ==========
-    const cachedDetails = localStorage.getItem("partnerDetails");
-    const isCacheValidDetails = isCacheValid("partnerDetailsTimestamp", 300000); // 5 minutes
-    
-    if (cachedDetails && isCacheValidDetails && !partnerDetails) {
+    const initializePartnerData = async () => {
       try {
-        const parsedDetails = JSON.parse(cachedDetails);
-        console.log("📦 Using cached partner details from localStorage");
-        dispatch(setPartnerDetails(parsedDetails));
-      } catch (e) {
-        console.error("Failed to parse cached partner details:", e);
-      }
-    }
-    
-    // ========== 2. CHECK IF WE SHOULD FETCH PARTNER DETAILS ==========
-    const shouldFetchPartnerDetails = 
-      partnerId && 
-      partnerId !== "0" && 
-      !partnerDetails && 
-      !partnerDetailsLoading && 
-      !isFetchingPartnerDetails &&
-      authtoken;
-    
-    if (shouldFetchPartnerDetails) {
-      partnerDetailsAttempted.current = true;
-      isFetchingPartnerDetails = true;
-      
-      console.log("🔄 Fetching partner details with:", {
-        partnerId,
-        hasToken: !!authtoken,
-        hasDetails: !!partnerDetails,
-        isFetchingPartnerDetails
-      });
-      
-      // Set a timeout to reset the global flag if fetch takes too long
-      const timeoutId = setTimeout(() => {
-        if (isFetchingPartnerDetails) {
-          console.warn("Partner details fetch taking too long, resetting global flag");
-          isFetchingPartnerDetails = false;
-        }
-      }, 10000);
-      
-      dispatch(fetchPartnerDetails())
-        .unwrap()
-        .then(() => {
-          console.log("✅ Partner details fetched successfully");
-        })
-        .catch((err) => {
-          console.error("❌ Partner details fetch failed:", err);
-          
-          // Fallback to localStorage if available
-          if (cachedDetails) {
-            try {
-              const parsedDetails = JSON.parse(cachedDetails);
-              console.log("🔄 Falling back to cached partner details due to fetch error");
-              dispatch(setPartnerDetails(parsedDetails));
-              dispatch(setPartnerDetailsError(null)); // Clear error since we have cache
-            } catch (e) {
-              console.error("Failed to parse cached partner details:", e);
-            }
-          }
-        })
-        .finally(() => {
-          isFetchingPartnerDetails = false;
-          clearTimeout(timeoutId);
-        });
-    } else {
-      console.log("🔍 Partner details fetch not needed:", {
-        partnerId,
-        hasDetails: !!partnerDetails,
-        partnerDetailsLoading,
-        isFetchingPartnerDetails,
-        hasToken: !!authtoken
-      });
-    }
-  }, [partnerDetails, partnerDetailsLoading, dispatch, partnerId, authtoken]);
+        console.log("🚀 usePartnerConfig: Initializing...");
 
-  // Manual refresh functions
-  const refreshBasicConfig = () => {
-    if (partnerId && partnerId !== "0" && authtoken) {
-      console.log("🔃 Manually refreshing partner basic config");
-      basicConfigAttempted.current = false;
-      isFetchingBasicConfig = false;
+        // Step 1: Sync Redux with localStorage (authService already populated this)
+        dispatch(syncWithLocalStorage());
+
+        // Step 2: Check if we already have partner data
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+        const hasLogo = !!localStorage.getItem("partner_logo");
+        const hasPartnerName = !!localStorage.getItem("partner_name");
+
+        console.log("🔍 usePartnerConfig: Initial state:", {
+          partnerId,
+          hasLogo,
+          hasPartnerName,
+          configExists: !!config,
+          detailsExist: !!partnerDetails,
+        });
+
+        // Step 3: Only fetch if we're missing critical data
+        if (partnerId && partnerId !== "0") {
+          const promises = [];
+
+          // Only fetch basic setup if we don't have it
+          if (!config) {
+            promises.push(dispatch(fetchPartnerBasicSetup()).unwrap());
+          }
+
+          // Only fetch partner details if we don't have logo
+          if (!hasLogo) {
+            promises.push(dispatch(fetchPartnerDetails()).unwrap());
+          }
+
+          if (promises.length > 0) {
+            console.log(
+              `🔄 usePartnerConfig: Fetching ${promises.length} missing data types`,
+            );
+            await Promise.allSettled(promises);
+          }
+        }
+
+        setHasLoaded(true);
+        console.log("✅ usePartnerConfig: Initialization complete");
+      } catch (err) {
+        console.error("❌ usePartnerConfig: Initialization error:", err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializePartnerData();
+  }, [dispatch, config, partnerDetails]);
+
+  // Determine actual loading state
+  const actualLoading = useCallback(() => {
+    // If we have the data, don't show loading even if Redux says it's loading
+    if (hasLoaded) return false;
+
+    // Otherwise, use Redux loading states
+    return configLoading || partnerDetailsLoading || isLoading;
+  }, [configLoading, partnerDetailsLoading, isLoading, hasLoaded]);
+
+  // Get final logo URL with fallbacks
+  const getFinalLogoUrl = useCallback(() => {
+    // Priority order:
+    // 1. Redux logo (from partner details)
+    // 2. localStorage (set by authService)
+    // 3. Default logo
+
+    if (
+      reduxLogoUrl &&
+      reduxLogoUrl !== "null" &&
+      reduxLogoUrl !== "undefined"
+    ) {
+      return reduxLogoUrl;
+    }
+
+    const storedLogo = localStorage.getItem("partner_logo");
+    if (storedLogo && storedLogo !== "null" && storedLogo !== "undefined") {
+      return storedLogo;
+    }
+
+    return DefaultLogo;
+  }, [reduxLogoUrl]);
+
+  // Get final partner name with fallbacks
+  const getFinalPartnerName = useCallback(() => {
+    // Priority order:
+    // 1. Redux partner name
+    // 2. localStorage (set by authService)
+    // 3. Default
+
+    if (
+      reduxPartnerName &&
+      reduxPartnerName !== "Partner Portal" &&
+      reduxPartnerName !== "null" &&
+      reduxPartnerName !== "undefined"
+    ) {
+      return reduxPartnerName;
+    }
+
+    const storedName = localStorage.getItem("partner_name");
+    if (
+      storedName &&
+      storedName !== "Partner Portal" &&
+      storedName !== "null" &&
+      storedName !== "undefined"
+    ) {
+      return storedName;
+    }
+
+    const oldStoredName = localStorage.getItem(
+      "whitelabelled_customer_partnername",
+    );
+    if (
+      oldStoredName &&
+      oldStoredName !== "Partner Portal" &&
+      oldStoredName !== "null" &&
+      oldStoredName !== "undefined"
+    ) {
+      return oldStoredName;
+    }
+
+    return "Partner Portal";
+  }, [reduxPartnerName]);
+
+  // Refresh functions
+  const refreshBasicConfig = useCallback(() => {
+    const partnerId = localStorage.getItem("whitelabelledpartnerid");
+    if (partnerId && partnerId !== "0") {
+      console.log("🔄 Manually refreshing partner basic config");
       dispatch(fetchPartnerBasicSetup());
-    } else {
-      console.warn("Cannot refresh partner basic config - missing partnerId or auth token");
     }
-  };
+  }, [dispatch]);
 
-  const refreshPartnerDetails = () => {
-    if (partnerId && partnerId !== "0" && authtoken) {
-      console.log("🔃 Manually refreshing partner details");
-      partnerDetailsAttempted.current = false;
-      isFetchingPartnerDetails = false;
+  const refreshPartnerDetails = useCallback(() => {
+    const partnerId = localStorage.getItem("whitelabelledpartnerid");
+    if (partnerId && partnerId !== "0") {
+      console.log("🔄 Manually refreshing partner details");
       dispatch(fetchPartnerDetails());
-    } else {
-      console.warn("Cannot refresh partner details - missing partnerId or auth token");
     }
-  };
+  }, [dispatch]);
 
-  const refreshAll = () => {
+  const refreshAll = useCallback(() => {
+    console.log("🔄 Manually refreshing all partner data");
     refreshBasicConfig();
     refreshPartnerDetails();
-  };
+  }, [refreshBasicConfig, refreshPartnerDetails]);
+
+  const syncWithAuthService = useCallback(() => {
+    console.log("🔄 Syncing with authService data");
+    dispatch(syncWithLocalStorage());
+  }, [dispatch]);
+
+  // Get partner ID
+  const getPartnerId = useCallback(() => {
+    return (
+      reduxPartnerId || localStorage.getItem("whitelabelledpartnerid") || "0"
+    );
+  }, [reduxPartnerId]);
+
+  // Get is white labelled
+  const getIsWhiteLabelled = useCallback(() => {
+    return (
+      isWhiteLabelledPartner === "Y" ||
+      isWhiteLabelledPartner === "1" ||
+      localStorage.getItem("is_white_labelled_partner") === "1" ||
+      localStorage.getItem("iswhitelabelledpartner") === "Y"
+    );
+  }, [isWhiteLabelledPartner]);
 
   return {
-    // Basic config
+    // Config
     config,
-    loading: loading || partnerDetailsLoading,
-    error: error || partnerDetailsError,
+    loading: actualLoading(),
+    error: error || null,
+
+    // UI properties
     headerColor,
     textColor,
     downloadManualEnabled,
-    
-    // Partner details
-    logoUrl,
-    logoAltText: partnerName,
-    partnerName,
-    partnerId: partnerId || reduxPartnerId,
-    hasLogo,
-    
-    // Refresh functions
+
+    // Partner identity
+    logoUrl: getFinalLogoUrl(),
+    logoAltText: getFinalPartnerName(),
+    partnerName: getFinalPartnerName(),
+    partnerId: getPartnerId(),
+    hasLogo: !!getFinalLogoUrl() && getFinalLogoUrl() !== DefaultLogo,
+
+    // Partner flags
+    isWhiteLabelledPartner: getIsWhiteLabelled(),
+    partnerUUID: partnerUUID || localStorage.getItem("partner_uuid") || "",
+    isPartnerPackageModule:
+      isPartnerPackageModule === "Y" ||
+      localStorage.getItem("isPartnerPackageModule") === "Y",
+    showRemittanceOnlyOnRegistration:
+      showRemittanceOnlyOnRegistration === "Y" ||
+      localStorage.getItem("showRemittanceOnlyOnRegistration") === "Y",
+    beneficiaryPortalTitle:
+      beneficiaryPortalTitle ||
+      localStorage.getItem("beneficiary_portal_title") ||
+      "Beneficiary Portal",
+
+    // Actions
     refresh: refreshAll,
     refreshBasicConfig,
     refreshPartnerDetails,
-    
-    // Status flags
+    syncWithAuthService,
+
+    // Status
     isConfigured: !!config,
-    hasValidConfig: !!(config && (config.header_color || config.text_color)),
+    hasValidConfig: !!(config?.header_color || config?.text_color),
     hasPartnerDetails: !!partnerDetails,
-    
-    // Debug info
+    hasLoaded,
+
+    // Debug
     debugInfo: {
-      partnerId,
-      hasBasicConfig: !!config,
-      hasPartnerDetails: !!partnerDetails,
-      hasLogo,
-      logoUrl,
-      partnerName,
-      basicConfigLoading: loading,
-      detailsLoading: partnerDetailsLoading
-    }
+      partnerId: getPartnerId(),
+      partnerName: getFinalPartnerName(),
+      hasLogo: !!getFinalLogoUrl(),
+      logoUrl: getFinalLogoUrl(),
+      hasConfig: !!config,
+      hasDetails: !!partnerDetails,
+      isWhiteLabelled: getIsWhiteLabelled(),
+      configLoading,
+      partnerDetailsLoading,
+      hasLoaded,
+      error,
+    },
   };
 };
 

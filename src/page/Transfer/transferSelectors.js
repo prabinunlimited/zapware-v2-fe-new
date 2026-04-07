@@ -1,8 +1,12 @@
-// src/features/Transfer/transferSelectors.js - COMPLETE
+// src/features/Transfer/transferSelectors.js - COMPLETE WITH ALL SELECTORS
 export const selectTransferState = (state) => state.transfer || {};
 
+// Data Selectors
 export const selectCustomerBankAccounts = (state) =>
   selectTransferState(state).customerBankAccounts || [];
+
+export const selectReceiverDetails = (state) =>
+  selectTransferState(state).receiverDetails;
 
 export const selectTransferLoading = (state) =>
   selectTransferState(state).transferLoading || false;
@@ -16,9 +20,7 @@ export const selectTransferSuccess = (state) =>
 export const selectSearchLoading = (state) =>
   selectTransferState(state).searchLoading || false;
 
-export const selectReceiverDetails = (state) =>
-  selectTransferState(state).receiverDetails;
-
+// UI Selectors
 export const selectSelectedCurrency = (state) =>
   selectTransferState(state).selectedCurrency || "";
 
@@ -34,7 +36,17 @@ export const selectSearchQuery = (state) =>
 export const selectHasUserInteracted = (state) =>
   selectTransferState(state).hasUserInteracted || false;
 
-// Derived selectors
+export const selectShowConfirmationModal = (state) =>
+  selectTransferState(state).showConfirmationModal || false;
+
+// Cache Selectors
+export const selectHasFetchedAccounts = (state) =>
+  selectTransferState(state).hasFetchedAccounts || false;
+
+export const selectLastUpdated = (state) =>
+  selectTransferState(state).lastUpdated;
+
+// Derived Selectors
 export const selectCurrencyOptions = (state) => {
   const accounts = selectCustomerBankAccounts(state);
   return accounts.map((account) => ({
@@ -44,19 +56,17 @@ export const selectCurrencyOptions = (state) => {
   }));
 };
 
-// Helper selector to get bank_id for selected currency
 export const selectSelectedBankId = (state) => {
   const selectedCurrency = selectSelectedCurrency(state);
   const accounts = selectCustomerBankAccounts(state);
 
   const selectedAccount = accounts.find(
-    (account) => account.currency_code === selectedCurrency
+    (account) => account.currency_code === selectedCurrency,
   );
 
   return selectedAccount?.id || null;
 };
 
-// Helper selector to get selected account details
 export const selectSelectedAccount = (state) => {
   const selectedCurrency = selectSelectedCurrency(state);
   const accounts = selectCustomerBankAccounts(state);
@@ -71,33 +81,23 @@ export const selectSelectedAccount = (state) => {
 export const selectFormErrors = (state) => {
   const errors = {};
 
-  // Get all relevant state
   const selectedCurrency = selectSelectedCurrency(state);
   const transferAmount = selectTransferAmount(state);
   const selectedCountryCode = selectSelectedCountryCode(state);
   const searchQuery = selectSearchQuery(state);
   const hasUserInteracted = selectHasUserInteracted(state);
 
-  // Only validate after user interaction
   if (!hasUserInteracted) {
     return {};
   }
 
-  // SMART VALIDATION RULES:
-
-  // 1. Currency Validation
-  // Only show currency error if:
-  // - User has entered an amount OR started receiver search
-  // - But hasn't selected a currency
+  // Currency Validation
   const hasAmountOrSearchIntent = transferAmount || searchQuery;
   if (!selectedCurrency && hasAmountOrSearchIntent) {
     errors.currency = "Please select a currency to continue";
   }
 
-  // 2. Amount Validation
-  // Only show amount error if:
-  // - User has selected a currency (showing they intend to transfer)
-  // - But amount is invalid
+  // Amount Validation
   if (selectedCurrency) {
     if (!transferAmount) {
       errors.amount = "Please enter an amount";
@@ -111,9 +111,7 @@ export const selectFormErrors = (state) => {
     }
   }
 
-  // 3. Mobile Validation
-  // Only show mobile errors if:
-  // - User has started entering phone number OR selected country code
+  // Mobile Validation
   const hasMobileIntent = searchQuery || selectedCountryCode;
   if (hasMobileIntent) {
     if (!selectedCountryCode) {
@@ -157,6 +155,30 @@ export const selectIsTransferReady = (state) => {
   return isFormReady && receiverDetails;
 };
 
+// Helper selector to get formatted transfer data for API
+export const selectTransferData = (state) => {
+  const selectedCurrency = selectSelectedCurrency(state);
+  const transferAmount = selectTransferAmount(state);
+  const receiverDetails = selectReceiverDetails(state);
+  const selectedAccount = selectSelectedAccount(state);
+
+  if (
+    !selectedCurrency ||
+    !transferAmount ||
+    !receiverDetails ||
+    !selectedAccount
+  ) {
+    return null;
+  }
+
+  return {
+    currency: selectedCurrency,
+    amount: parseFloat(transferAmount),
+    bank_id: selectedAccount.id,
+    receiver_customer_id: receiverDetails.id,
+  };
+};
+
 // Helper selector to get accounts count
 export const selectAccountsCount = (state) => {
   const accounts = selectCustomerBankAccounts(state);
@@ -183,17 +205,7 @@ export const selectAvailableCurrencies = (state) => {
   return Array.from(currencies).sort();
 };
 
-// Helper selector to get service providers for selected currency
-export const selectServiceProvidersForCurrency = (state) => {
-  const selectedCurrency = selectSelectedCurrency(state);
-  const accounts = selectCustomerBankAccounts(state);
-
-  return accounts
-    .filter((account) => account.currency_code === selectedCurrency)
-    .map((account) => account.serviceprovidername);
-};
-
-// Helper selector to validate if transfer amount is valid for selected account
+// Helper selector to validate if transfer amount is valid
 export const selectIsAmountValidForTransfer = (state) => {
   const transferAmount = selectTransferAmount(state);
   const amount = parseFloat(transferAmount);
@@ -202,8 +214,6 @@ export const selectIsAmountValidForTransfer = (state) => {
     return false;
   }
 
-  // Add any additional validation rules here if needed
-  // For example, minimum transfer amount
   if (amount < 1) {
     return false;
   }
@@ -224,31 +234,6 @@ export const selectAreRequiredFieldsFilled = (state) => {
     !!selectedCountryCode &&
     !!searchQuery
   );
-};
-
-// Helper selector to get formatted transfer data for API
-export const selectTransferData = (state) => {
-  const selectedCurrency = selectSelectedCurrency(state);
-  const transferAmount = selectTransferAmount(state);
-  const receiverDetails = selectReceiverDetails(state);
-  const selectedAccount = selectSelectedAccount(state);
-
-  if (
-    !selectedCurrency ||
-    !transferAmount ||
-    !receiverDetails ||
-    !selectedAccount
-  ) {
-    return null;
-  }
-
-  return {
-    currency: selectedCurrency,
-    amount: parseFloat(transferAmount),
-    bank_id: selectedAccount.id,
-    customer_id: "", // This should come from params in component
-    receiver_customer_id: receiverDetails.id,
-  };
 };
 
 // Helper selector to check if form has any validation errors

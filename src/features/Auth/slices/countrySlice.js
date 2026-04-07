@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 import {
   createAsyncThunk,
@@ -2360,7 +2360,7 @@ export const getCountryByCode = (code) => {
 
 export const getCountryByName = (name) => {
   return countries.find(
-    (country) => country.name.toLowerCase() === name.toLowerCase()
+    (country) => country.name.toLowerCase() === name.toLowerCase(),
   );
 };
 
@@ -2390,7 +2390,7 @@ export const fetchCountries = createAsyncThunk(
       console.error("💥 Error loading countries:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // Fetch location by ZIP code using Zippopotam API
@@ -2399,91 +2399,94 @@ export const fetchLocationByZip = createAsyncThunk(
   async ({ countryCode, zipCode }, { rejectWithValue }) => {
     try {
       // Clean and validate inputs
-      const cleanCountryCode = countryCode?.toUpperCase()?.trim() || '';
-      const cleanZipCode = zipCode?.trim()?.replace(/\s+/g, '') || '';
-      
+      const cleanCountryCode = countryCode?.toUpperCase()?.trim() || "";
+      const cleanZipCode = zipCode?.trim()?.replace(/\s+/g, "") || "";
+
       if (!cleanCountryCode || !cleanZipCode) {
         return rejectWithValue("Country code and ZIP code are required");
       }
-      
+
       // Try Zippopotam API first
       let response;
       try {
         response = await axios.get(
           `https://api.zippopotam.us/${cleanCountryCode}/${cleanZipCode}`,
-          { timeout: 3000 }
+          { timeout: 3000 },
         );
       } catch (zippoError) {
-        console.log('❌ Zippopotam API failed, trying fallback...');
-        
-        if (cleanCountryCode === 'GB') {
+        console.log("❌ Zippopotam API failed, trying fallback...");
+
+        if (cleanCountryCode === "GB") {
           try {
             const ukResponse = await axios.get(
               `https://api.postcodes.io/postcodes/${cleanZipCode}`,
-              { timeout: 3000 }
+              { timeout: 3000 },
             );
-            
+
             const ukData = ukResponse.data;
             if (ukData.result) {
               return {
-                state: ukData.result.region || '',
-                city: ukData.result.admin_district || ukData.result.admin_ward || '',
-                stateAbbr: '',
-                country: 'United Kingdom',
-                countryAbbr: 'GB',
+                state: ukData.result.region || "",
+                city:
+                  ukData.result.admin_district ||
+                  ukData.result.admin_ward ||
+                  "",
+                stateAbbr: "",
+                country: "United Kingdom",
+                countryAbbr: "GB",
                 postCode: ukData.result.postcode || cleanZipCode,
                 places: [],
                 zipCode: cleanZipCode,
                 originalZipCode: zipCode,
                 success: true,
-                source: 'postcodes.io',
-                rawData: ukData
+                source: "postcodes.io",
+                rawData: ukData,
               };
             }
           } catch (ukError) {
-            console.log('❌ UK postcodes.io also failed');
+            console.log("❌ UK postcodes.io also failed");
           }
         }
-        
+
         // If all APIs fail, check if it's a valid format but no data
         throw zippoError;
       }
 
       // Zippopotam succeeded
       const data = response.data;
-      
+
       const place = data.places?.[0];
-      const state = place?.state || '';
-      const city = place?.["place name"] || '';
-      const stateAbbr = place?.["state abbreviation"] || '';
-      
+      const state = place?.state || "";
+      const city = place?.["place name"] || "";
+      const stateAbbr = place?.["state abbreviation"] || "";
+
       return {
         state,
         city,
         stateAbbr,
-        country: data.country || '',
-        countryAbbr: data["country abbreviation"] || '',
+        country: data.country || "",
+        countryAbbr: data["country abbreviation"] || "",
         postCode: data["post code"] || cleanZipCode,
         places: data.places || [],
         zipCode: cleanZipCode,
         originalZipCode: zipCode,
         success: true,
-        source: 'zippopotam.us',
-        rawData: data
+        source: "zippopotam.us",
+        rawData: data,
       };
-      
     } catch (error) {
-      console.error('❌ All location APIs failed:', error.message);
-      
+      console.error("❌ All location APIs failed:", error.message);
+
       return rejectWithValue({
         message: "Invalid postal code format or no data available",
         zipCode,
         countryCode,
         error: error.message,
-        suggestion: "Please check the postal code format or enter location manually"
+        suggestion:
+          "Please check the postal code format or enter location manually",
       });
     }
-  }
+  },
 );
 
 // Async thunk for fetching a single country
@@ -2500,7 +2503,7 @@ export const fetchCountry = createAsyncThunk(
       console.error("Failed to fetch country:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // Initialize with the static countries data
@@ -2511,7 +2514,7 @@ const initialState = {
   zipLookup: {
     loading: false,
     data: null,
-    error: null
+    error: null,
   },
   error: null,
   lastUpdated: null,
@@ -2545,7 +2548,7 @@ const countriesSlice = createSlice({
     },
     removeCountry: (state, action) => {
       state.countries = state.countries.filter(
-        (country) => country.id !== action.payload
+        (country) => country.id !== action.payload,
       );
     },
     refreshCountries: (state) => {
@@ -2557,7 +2560,7 @@ const countriesSlice = createSlice({
       state.zipLookup = {
         loading: false,
         data: null,
-        error: null
+        error: null,
       };
     },
   },
@@ -2630,7 +2633,8 @@ export const selectCountriesError = (state) => state.countries.error;
 export const selectCountriesLastUpdated = (state) =>
   state.countries.lastUpdated;
 export const selectZipLookup = (state) => state.countries.zipLookup;
-export const selectLocationLoading = (state) => state.countries.zipLookup.loading;
+export const selectLocationLoading = (state) =>
+  state.countries.zipLookup.loading;
 
 // Additional useful selectors
 export const selectCountryById = (state, countryId) =>
@@ -2649,17 +2653,17 @@ export const selectCountriesOptions = createSelector(
     }
 
     const options = countries.map((country) => ({
-      value: country.id, // Consider changing this to country.id if you want to store IDs
+      value: country.id, // ← Use ID as value (unique)
       label: country.name,
       phoneCode: country.phone_code || country.phoneCode,
       country_code: country.country_code,
       id: country.id,
-      flag: country.flag_url, // ✅ ADD THIS LINE - include the flag URL
-      flag_url: country.flag_url, // ✅ ADD THIS LINE TOO for consistency
+      flag: country.flag_url,
+      flag_url: country.flag_url,
     }));
 
     return options;
-  }
+  },
 );
 
 // Safe version of the selector with error handling
@@ -2703,7 +2707,7 @@ export const selectPhoneCodeOptions = createSelector(
       countryId: country.id, // ✅ Direct access to country ID
       countryName: country.name,
     }));
-  }
+  },
 );
 
 export const selectCountryByCode = (state, phoneCode) =>
@@ -2723,7 +2727,7 @@ export const selectCountriesSorted = (state, sortBy = "name") =>
 // Selector for countries that have phone codes
 export const selectCountriesWithPhoneCodes = createSelector(
   [selectCountries],
-  (countries) => countries.filter((country) => country.phone_code)
+  (countries) => countries.filter((country) => country.phone_code),
 );
 
 // Selector for popular countries (customizable)
@@ -2742,9 +2746,9 @@ export const selectPopularCountries = createSelector(
       "JP",
     ];
     return countries.filter((country) =>
-      popularCountryCodes.includes(country.country_code)
+      popularCountryCodes.includes(country.country_code),
     );
-  }
+  },
 );
 
 // Selector to find country by name or code
@@ -2757,7 +2761,7 @@ export const selectCountryBySearchTerm = (state, searchTerm) => {
       (country.name && country.name.toLowerCase().includes(term)) ||
       (country.country_code &&
         country.country_code.toLowerCase().includes(term)) ||
-      (country.phone_code && country.phone_code.includes(term))
+      (country.phone_code && country.phone_code.includes(term)),
   );
 };
 

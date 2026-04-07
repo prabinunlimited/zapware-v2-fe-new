@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiInfo, FiPlusCircle } from "react-icons/fi";
 import { FaCheck, FaUniversity, FaTimes, FaExchangeAlt } from "react-icons/fa";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import axios from "axios";
 
@@ -413,7 +413,7 @@ const PayoutPage = () => {
         ) {
           // Call createpayments API after successful verification
           const res = await axios.post(
-            "https://sandbox-zapware.unlimitedremit.com/api/b4b/createpayments",
+            "https://zapware.unlimitedremit.com/api/b4b/createpayments",
             payload
           );
 

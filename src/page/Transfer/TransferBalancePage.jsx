@@ -1,19 +1,26 @@
-// src/features/Transfer/TransferBalancePage.jsx - COMPLETE WITH UPDATES
-import React, { useEffect, useState } from "react";
+// src/features/Transfer/TransferBalancePage.jsx - REFACTORED WITH RTK PATTERN
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
+import { RingLoader } from "react-spinners";
 import "react-toastify/dist/ReactToastify.css";
 
-// Transfer Redux
-import { fetchCustomerBankAccounts } from "./transferThunks";
+// Transfer Actions & Selectors
 import {
-  clearTransferState,
+  fetchCustomerBankAccounts,
+  executeTransfer,
+  clearAllTransferCaches,
+} from "./transferThunks";
+import {
   setSelectedCurrency,
   setTransferAmount,
   setSelectedCountryCode,
   setSearchQuery,
+  clearTransferState,
+  openConfirmationModal,
+  closeConfirmationModal,
 } from "./transferSlice";
 import {
   selectCustomerBankAccounts,
@@ -25,7 +32,9 @@ import {
   selectTransferAmount,
   selectSelectedCountryCode,
   selectSearchQuery,
-  selectIsFormReadyForSearch, // ✅ ADD: New selector
+  selectIsFormReadyForSearch,
+  selectTransferData,
+  selectFormErrors,
 } from "./transferSelectors";
 
 // Existing Redux
@@ -38,10 +47,63 @@ import ReceiverSearchSection from "./ReceiverSearchSection";
 import TransferConfirmationModal from "./TransferConfirmationModal";
 import NavigationPopup from "../../components/PopupModal/NavigationPopup";
 
-const TransferBalancePage = () => {
+// Loading Context
+const LoadingContext = React.createContext();
+
+const useLoading = () => {
+  const context = React.useContext(LoadingContext);
+  if (!context) {
+    throw new Error("useLoading must be used within a LoadingProvider");
+  }
+  return context;
+};
+
+const LoadingProvider = ({ children }) => {
+  const [loadingCount, setLoadingCount] = useState(0);
+
+  const startLoading = useCallback(() => {
+    setLoadingCount((prev) => prev + 1);
+  }, []);
+
+  const stopLoading = useCallback(() => {
+    setLoadingCount((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const isLoading = loadingCount > 0;
+
+  const value = useMemo(
+    () => ({ startLoading, stopLoading, isLoading }),
+    [startLoading, stopLoading, isLoading],
+  );
+
+  return (
+    <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>
+  );
+};
+
+// Full Screen Loader
+const FullScreenLoader = React.memo(() => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 bg-white bg-opacity-90 z-[10000] flex flex-col items-center justify-center"
+  >
+    <RingLoader color="#3B82F6" loading={true} size={80} speedMultiplier={1} />
+    <p className="mt-4 text-gray-600 font-medium">
+      Loading transfer details...
+    </p>
+  </motion.div>
+));
+
+FullScreenLoader.displayName = "FullScreenLoader";
+
+// Main Component
+const TransferBalancePageContent = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const { startLoading, stopLoading, isLoading } = useLoading();
 
   // Redux Selectors
   const customerBankAccounts = useSelector(selectCustomerBankAccounts);
@@ -53,88 +115,157 @@ const TransferBalancePage = () => {
   const transferAmount = useSelector(selectTransferAmount);
   const selectedCountryCode = useSelector(selectSelectedCountryCode);
   const searchQuery = useSelector(selectSearchQuery);
-  const isFormReadyForSearch = useSelector(selectIsFormReadyForSearch); // ✅ ADD: Ready state
-
-  // Existing selectors
+  const isFormReady = useSelector(selectIsFormReadyForSearch);
+  const transferData = useSelector(selectTransferData);
+  const formErrors = useSelector(selectFormErrors);
   const countryOptions = useSelector(selectCountriesOptions) || [];
   const authtoken = useSelector(selectAuthToken);
 
   // Local state
-  const [showModal, setShowModal] = useState(false);
   const [popupData, setPopupData] = useState({
     show: false,
     message: "",
     onConfirm: null,
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
   // Get colors from localStorage
   const headerColor = localStorage.getItem("header_color");
   const textColor = localStorage.getItem("text_color");
 
-  // Effects
+  // ============================================
+  // FETCH ACCOUNT DATA WITH CACHING
+  // ============================================
   useEffect(() => {
-    if (customerId && authtoken) {
-      dispatch(fetchCustomerBankAccounts(customerId));
-    }
+    const loadAccounts = async () => {
+      if (!customerId || !authtoken) return;
+
+      startLoading();
+      try {
+        const result = await dispatch(fetchCustomerBankAccounts(customerId));
+        if (result?.success && result.fromCache) {
+          console.log("✅ Accounts loaded from cache");
+        } else if (result?.success) {
+          console.log("✅ Accounts freshly loaded");
+        } else if (result?.error) {
+          console.error("❌ Failed to load accounts:", result.error);
+          showPopup(result.error, () => {});
+        }
+      } catch (error) {
+        console.error("❌ Unexpected error loading accounts:", error);
+        showPopup(
+          "Failed to load account details. Please try again.",
+          () => {},
+        );
+      } finally {
+        stopLoading();
+      }
+    };
+
+    loadAccounts();
 
     return () => {
       dispatch(clearTransferState());
     };
-  }, [customerId, authtoken, dispatch]);
+  }, [customerId, authtoken, dispatch, startLoading, stopLoading]);
 
+  // ============================================
+  // HANDLE TRANSFER SUCCESS/ERROR
+  // ============================================
   useEffect(() => {
     if (transferError) {
       showPopup(transferError, () => {});
-      setIsSubmitting(false);
     }
   }, [transferError]);
 
   useEffect(() => {
     if (transferSuccess) {
       toast.success("🎉 Transfer completed successfully!");
-      setTimeout(() => navigate(-1), 1500);
+      setTimeout(() => {
+        dispatch(clearAllTransferCaches());
+        navigate(-1);
+      }, 1500);
     }
-  }, [transferSuccess, navigate]);
+  }, [transferSuccess, navigate, dispatch]);
 
-  // Handlers
+  // ============================================
+  // HANDLERS
+  // ============================================
   const showPopup = (message, onConfirm) => {
     setPopupData({ show: true, message, onConfirm });
   };
 
-  const handleCurrencyChange = (currency) => {
-    dispatch(setSelectedCurrency(currency));
-  };
+  const handleCurrencyChange = useCallback(
+    (currency) => {
+      dispatch(setSelectedCurrency(currency));
+    },
+    [dispatch],
+  );
 
-  const handleAmountChange = (amount) => {
-    // Allow only numbers and decimal points
-    const sanitizedAmount = amount.replace(/[^0-9.]/g, "");
-    dispatch(setTransferAmount(sanitizedAmount));
-  };
+  const handleAmountChange = useCallback(
+    (amount) => {
+      const sanitizedAmount = amount.replace(/[^0-9.]/g, "");
+      dispatch(setTransferAmount(sanitizedAmount));
+    },
+    [dispatch],
+  );
 
-  const handleCountryCodeChange = (countryCode) => {
-    dispatch(setSelectedCountryCode(countryCode));
-  };
+  const handleCountryCodeChange = useCallback(
+    (countryCode) => {
+      dispatch(setSelectedCountryCode(countryCode));
+    },
+    [dispatch],
+  );
 
-  const handleMobileChange = (mobile) => {
-    // Allow only numbers
-    const sanitizedMobile = mobile.replace(/[^0-9]/g, "");
-    dispatch(setSearchQuery(sanitizedMobile));
-  };
+  const handleMobileChange = useCallback(
+    (mobile) => {
+      const sanitizedMobile = mobile.replace(/[^0-9]/g, "");
+      dispatch(setSearchQuery(sanitizedMobile));
+    },
+    [dispatch],
+  );
 
-  const handleReceiverFound = () => {
-    setShowModal(true);
-  };
+  const handleReceiverFound = useCallback(() => {
+    setShowConfirmationModal(true);
+  }, []);
 
-  const closeModal = () => {
-    setShowModal(false);
-  };
+  const handleConfirmTransfer = useCallback(async () => {
+    if (!transferData || !customerId) return;
 
-  const handleBackToDashboard = () => {
+    const transferPayload = {
+      ...transferData,
+      customer_id: customerId,
+    };
+
+    startLoading();
+    try {
+      const result = await dispatch(executeTransfer(transferPayload));
+      if (!result?.success) {
+        showPopup(
+          result?.error || "Transfer failed. Please try again.",
+          () => {},
+        );
+      }
+    } catch (error) {
+      console.error("Transfer execution error:", error);
+      showPopup("An unexpected error occurred. Please try again.", () => {});
+    } finally {
+      stopLoading();
+      setShowConfirmationModal(false);
+    }
+  }, [transferData, customerId, dispatch, startLoading, stopLoading]);
+
+  const handleBackToDashboard = useCallback(() => {
     navigate(-1);
-  };
+  }, [navigate]);
 
-  // Style helpers
+  const closeModal = useCallback(() => {
+    setShowConfirmationModal(false);
+  }, []);
+
+  // ============================================
+  // STYLE HELPERS
+  // ============================================
   const textColorProps = getTextColorStyle(textColor);
   const headerColorProps = getHeaderColorStyle(headerColor);
 
@@ -156,8 +287,10 @@ const TransferBalancePage = () => {
     return { className: "bg-gradient-to-r from-blue-600 to-blue-700" };
   }
 
-  // Loading state
-  if (transferLoading && !customerBankAccounts.length) {
+  // ============================================
+  // LOADING STATE
+  // ============================================
+  if (isLoading && !customerBankAccounts.length) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
         <motion.div
@@ -190,8 +323,13 @@ const TransferBalancePage = () => {
     );
   }
 
+  // ============================================
+  // MAIN RENDER
+  // ============================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
+      <AnimatePresence>{isLoading && <FullScreenLoader />}</AnimatePresence>
+
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -205,7 +343,6 @@ const TransferBalancePage = () => {
         theme="light"
       />
 
-      {/* ✅ INCREASED WIDTH: Changed from max-w-2xl to max-w-4xl */}
       <div className="container mx-auto px-4 max-w-4xl">
         {/* Header Section */}
         <motion.div
@@ -307,7 +444,6 @@ const TransferBalancePage = () => {
                 </h3>
               </div>
 
-              {/* ✅ PASS READY STATE TO COMPONENT */}
               <ReceiverSearchSection
                 searchQuery={searchQuery}
                 selectedCountryCode={selectedCountryCode}
@@ -317,7 +453,7 @@ const TransferBalancePage = () => {
                 onReceiverFound={handleReceiverFound}
                 headerColorProps={headerColorProps}
                 textColorProps={textColorProps}
-                isFormReady={isFormReadyForSearch}
+                isFormReady={isFormReady}
               />
             </section>
           </div>
@@ -444,13 +580,14 @@ const TransferBalancePage = () => {
 
       {/* Modals */}
       <AnimatePresence>
-        {showModal && receiverDetails && (
+        {showConfirmationModal && receiverDetails && (
           <TransferConfirmationModal
             receiverDetails={receiverDetails}
             selectedCurrency={selectedCurrency}
             transferAmount={transferAmount}
             transferLoading={transferLoading}
             onClose={closeModal}
+            onConfirm={handleConfirmTransfer}
             headerColorProps={headerColorProps}
             textColorProps={textColorProps}
           />
@@ -473,4 +610,13 @@ const TransferBalancePage = () => {
   );
 };
 
-export default TransferBalancePage;
+// Main Component with Loading Provider
+function TransferBalancePage() {
+  return (
+    <LoadingProvider>
+      <TransferBalancePageContent />
+    </LoadingProvider>
+  );
+}
+
+export default React.memo(TransferBalancePage);

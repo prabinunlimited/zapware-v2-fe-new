@@ -40,7 +40,7 @@ export default function CardPayment() {
       customUrl: "267ad19785000936-UnlimitedRemit",
       sdkVersion: "5.62.0",
       apiUrl: "https://zapware.unlimitedremit.com/api",
-      origin: "https://ourzap.unlimitedremit.com", // 👈 YOUR DOMAIN
+      origin: "https://ourzap-v2.unlimitedremit.com", // 👈 YOUR DOMAIN
       merchantAccount: "UnlimitedRemitECOM", // Your merchant account
     };
   };
@@ -194,7 +194,7 @@ export default function CardPayment() {
         // Try to replace the wrong domain with our domain
         fixedSessionData = session.sessionData.replace(
           /your-company\.com/g, 
-          "ourzap.unlimitedremit.com"
+          "ourzap-v2.unlimitedremit.com"
         );
         console.log("✅ Attempted to fix sessionData domain");
       }
@@ -833,7 +833,7 @@ export default function CardPayment() {
             </li>
             <li className="flex items-start">
               <span className="text-blue-500 mr-2">🌐</span>
-              <span><strong>Domain:</strong> ourzap.unlimitedremit.com</span>
+              <span><strong>Domain:</strong> ourzap-v2.unlimitedremit.com</span>
             </li>
           </ul>
         </div>
@@ -845,7 +845,7 @@ export default function CardPayment() {
             <span className="font-semibold text-gray-700">Adyen</span>
             <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-medium">LIVE</span>
           </p>
-          <p className="text-gray-400">ourzap.unlimitedremit.com</p>
+          <p className="text-gray-400">ourzap-v2.unlimitedremit.com</p>
         </div>
       </div>
     </div>
