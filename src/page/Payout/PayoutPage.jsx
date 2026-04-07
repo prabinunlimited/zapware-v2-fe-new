@@ -257,11 +257,22 @@ const PayoutPage = () => {
     dispatch(setFormValue({ name: "customer_id", value: customerId }));
   }, [customerId, dispatch]);
 
+  const hasFetchedInitialData = useRef(false);
+
   // Fetch initial data
   useEffect(() => {
     const authtoken = localStorage.getItem("authtoken");
-    if (customerId && authtoken) {
+
+    // Prevent re-fetching on every render
+    if (
+      customerId &&
+      authtoken &&
+      !hasFetchedInitialData.current &&
+      !dataLoaded
+    ) {
       console.log("🔄 Fetching initial data for customer:", customerId);
+      hasFetchedInitialData.current = true;
+
       dispatch(fetchCustomerBankAccounts(customerId))
         .unwrap()
         .then((result) => {
@@ -271,12 +282,14 @@ const PayoutPage = () => {
         .catch((error) => {
           console.error("❌ Failed to load customer bank accounts:", error);
           setDataLoaded(true);
+          // Consider showing error to user
+          toast.error("Failed to load bank accounts. Please refresh.");
         });
 
       dispatch(fetchCountries());
       dispatch(fetchDestinationCurrencies());
     }
-  }, [customerId, dispatch]);
+  }, [customerId, dispatch, dataLoaded]);
 
   // Update step based on form progress
   useEffect(() => {
@@ -291,6 +304,12 @@ const PayoutPage = () => {
   const handleChange = async (e) => {
     const { name, value } = e.target;
     dispatch(setFormValue({ name, value }));
+
+    // Skip if loading states are already active
+    if (loading || benefLoading) {
+      console.log("Skipping API call - another request in progress");
+      return;
+    }
 
     // Handle dependent data fetching
     if (name === "benef_account" && value) {
