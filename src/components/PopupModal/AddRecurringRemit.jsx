@@ -1,5 +1,5 @@
 // src/components/PopupModal/AddRecurringRemitPopup.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -7,20 +7,24 @@ import {
   Loader,
   AlertCircle,
   Search,
-  CheckCircle,
   Calendar,
   Repeat,
   ChevronDown,
-  Building,
   User,
   DollarSign,
-  Globe,
-  Briefcase,
   FileText,
-  Shield,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Briefcase,
+  Landmark,
+  Globe,
+  ShieldCheck,
+  Wallet,
   Info,
 } from "lucide-react";
 
+// --- API Thunks & Redux Imports ---
 import {
   fetchBankAccounts,
   fetchPayoutCurrencies,
@@ -31,8 +35,6 @@ import {
   fetchOccupations,
   fetchAllStaticData,
 } from "../../page/Remittance/slices/staticDataSlice";
-
-// Import beneficiary thunks and selectors
 import {
   fetchBeneficiaries,
   fetchBeneficiaryBanks,
@@ -40,20 +42,99 @@ import {
   selectBanksLoading,
 } from "../../page/Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
+// --- Fallback Data for Static Data (Purposes, Income Sources, etc.) ---
+const fallbackPurposes = [
+  {
+    id: 1,
+    value: "family_support",
+    label: "Family Support",
+    name: "Family Support",
+  },
+  {
+    id: 2,
+    value: "education",
+    label: "Education Fees",
+    name: "Education Fees",
+  },
+  {
+    id: 3,
+    value: "medical",
+    label: "Medical Expenses",
+    name: "Medical Expenses",
+  },
+  {
+    id: 4,
+    value: "business",
+    label: "Business Investment",
+    name: "Business Investment",
+  },
+  { id: 5, value: "savings", label: "Savings", name: "Savings" },
+  { id: 6, value: "gift", label: "Gift", name: "Gift" },
+  { id: 7, value: "travel", label: "Travel", name: "Travel" },
+  { id: 8, value: "other", label: "Other", name: "Other" },
+];
+
+const fallbackIncomeSources = [
+  { id: 1, value: "salary", label: "Salary", name: "Salary" },
+  {
+    id: 2,
+    value: "business",
+    label: "Business Income",
+    name: "Business Income",
+  },
+  {
+    id: 3,
+    value: "investment",
+    label: "Investment Income",
+    name: "Investment Income",
+  },
+  { id: 4, value: "rental", label: "Rental Income", name: "Rental Income" },
+  { id: 5, value: "pension", label: "Pension", name: "Pension" },
+  { id: 6, value: "gift", label: "Gift", name: "Gift" },
+  { id: 7, value: "other", label: "Other", name: "Other" },
+];
+
+const fallbackOccupations = [
+  { id: 1, value: "employed", label: "Employed", name: "Employed" },
+  {
+    id: 2,
+    value: "self_employed",
+    label: "Self Employed",
+    name: "Self Employed",
+  },
+  {
+    id: 3,
+    value: "business_owner",
+    label: "Business Owner",
+    name: "Business Owner",
+  },
+  { id: 4, value: "student", label: "Student", name: "Student" },
+  { id: 5, value: "retired", label: "Retired", name: "Retired" },
+  { id: 6, value: "homemaker", label: "Homemaker", name: "Homemaker" },
+  { id: 7, value: "unemployed", label: "Unemployed", name: "Unemployed" },
+  { id: 8, value: "other", label: "Other", name: "Other" },
+];
+
 const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
   const dispatch = useDispatch();
+
+  // =========================================================================
+  // COMPONENT STATE
+  // =========================================================================
+  const [activeStep, setActiveStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
   const [bankError, setBankError] = useState("");
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState("");
-  const [recurringCustomDays, setRecurringCustomDays] = useState("");
+  const [selectedDate, setSelectedDate] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
     customer_id: "",
-    recurring_frequency: "",
+    recurring_frequency: "monthly",
     source_amount: "",
     source_currency: "",
     destination_currency: "",
@@ -69,130 +150,82 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
     author_id: "",
   });
 
-  // Local state for UI only
+  // Local Search/Dropdown States
   const [beneficiarySearchTerm, setBeneficiarySearchTerm] = useState("");
   const [bankSearchTerm, setBankSearchTerm] = useState("");
   const [showBeneficiaryDropdown, setShowBeneficiaryDropdown] = useState(false);
   const [showBankDropdown, setShowBankDropdown] = useState(false);
 
-  // ===================== SELECTORS FROM STORE =====================
-
-  // Get beneficiaries from Redux store
-  const beneficiariesFromStore = useSelector((state) => {
-    const beneficiaries = state.beneficiaries?.beneficiaries || [];
-    return beneficiaries;
-  });
-
-  // Get loading state for beneficiaries
+  // =========================================================================
+  // SELECTORS
+  // =========================================================================
+  const beneficiariesFromStore = useSelector(
+    (state) => state.beneficiaries?.beneficiaries || [],
+  );
   const beneficiariesLoading = useSelector(
     (state) => state.beneficiaries?.loading || false,
   );
-
-  // Get hasFetched flag to know if beneficiaries have been loaded
   const beneficiariesHasFetched = useSelector(
     (state) => state.beneficiaries?.hasFetched || false,
   );
-
-  // Get beneficiary banks from Redux store using selector
   const beneficiaryBanksFromStore = useSelector(selectBeneficiaryBanks);
   const banksLoading = useSelector(selectBanksLoading);
-
-  // Get bank accounts from remittance slice
-  const sourceCurrencies = useSelector((state) => {
-    return state.remittance?.bankAccounts || [];
-  });
-
-  // Get payout currencies from remittance slice
-  const destinationCurrencies = useSelector((state) => {
-    return state.remittance?.payoutCurrencies || [];
-  });
-
-  // Get purposes from remittanceStatic slice
-  const purposes = useSelector((state) => {
-    return state.remittanceStatic?.purposes || [];
-  });
-
-  // Get income sources from remittanceStatic slice
-  const incomeSources = useSelector((state) => {
-    return state.remittanceStatic?.incomeSources || [];
-  });
-
-  // Get occupations from remittanceStatic slice
-  const occupations = useSelector((state) => {
-    return state.remittanceStatic?.occupations || [];
-  });
-
-  // Loading states from store
-  const remittanceLoading = useSelector(
-    (state) => state.remittance?.currencies?.loading,
+  const sourceCurrencies = useSelector(
+    (state) => state.remittance?.bankAccounts || [],
   );
-  const staticLoading = useSelector((state) => state.remittanceStatic?.loading);
+  const destinationCurrencies = useSelector(
+    (state) => state.remittance?.currencies?.receiveOptions || [],
+  );
+  const purposes = useSelector(
+    (state) => state.remittanceStatic?.purposes || [],
+  );
+  const incomeSources = useSelector(
+    (state) => state.remittanceStatic?.incomeSources || [],
+  );
+  const occupations = useSelector(
+    (state) => state.remittanceStatic?.occupations || [],
+  );
 
-  // ===================== FALLBACK DATA =====================
-
-  // Fallback currencies if API fails
-  const fallbackCurrencies = [
-    { code: "USD", name: "US Dollar", symbol: "$", flag: "🇺🇸" },
-    { code: "EUR", name: "Euro", symbol: "€", flag: "🇪🇺" },
-    { code: "GBP", name: "British Pound", symbol: "£", flag: "🇬🇧" },
-    { code: "KES", name: "Kenyan Shilling", symbol: "KSh", flag: "🇰🇪" },
-    { code: "NGN", name: "Nigerian Naira", symbol: "₦", flag: "🇳🇬" },
-    { code: "ZAR", name: "South African Rand", symbol: "R", flag: "🇿🇦" },
-    { code: "AED", name: "UAE Dirham", symbol: "د.إ", flag: "🇦🇪" },
-    { code: "INR", name: "Indian Rupee", symbol: "₹", flag: "🇮🇳" },
-    { code: "CAD", name: "Canadian Dollar", symbol: "C$", flag: "🇨🇦" },
-    { code: "AUD", name: "Australian Dollar", symbol: "A$", flag: "🇦🇺" },
-  ];
-
-  // Fallback purposes
-  const fallbackPurposes = [
-    { value: "family_support", label: "Family Support" },
-    { value: "education", label: "Education Fees" },
-    { value: "medical", label: "Medical Expenses" },
-    { value: "business", label: "Business Investment" },
-    { value: "savings", label: "Savings" },
-    { value: "gift", label: "Gift" },
-    { value: "travel", label: "Travel" },
-    { value: "other", label: "Other" },
-  ];
-
-  // Fallback income sources
-  const fallbackIncomeSources = [
-    { value: "salary", label: "Salary" },
-    { value: "business", label: "Business Income" },
-    { value: "investment", label: "Investment Income" },
-    { value: "rental", label: "Rental Income" },
-    { value: "pension", label: "Pension" },
-    { value: "gift", label: "Gift" },
-    { value: "other", label: "Other" },
-  ];
-
-  // Frequency options
-  const frequencyOptions = [
-    { value: "daily", label: "Daily" },
-    { value: "weekly", label: "Weekly" },
-    { value: "biweekly", label: "Bi-Weekly" },
-    { value: "monthly", label: "Monthly" },
-    { value: "quarterly", label: "Quarterly" },
-    { value: "yearly", label: "Yearly" },
-  ];
-
-  const recurringFrequencyOptions = [
-    { value: "monthly", label: "Monthly" },
-    { value: "specific_day", label: "Specific Day" },
-  ];
-
-  // ===================== API URLs =====================
   const API_URL = import.meta.env.VITE_API_URL;
   const bearerToken = localStorage.getItem("bearertoken");
   const customerUuid = localStorage.getItem("customerUuid");
   const authCustomerId = localStorage.getItem("authcustomer_id");
+  const currentCustomerId = localStorage.getItem("currentCustomerId");
 
-  // Use the correct customer ID (from props, UUID, or auth ID)
-  const effectiveCustomerId =
-    customerId || customerUuid || authCustomerId || "158";
+  // Effective ID Logic
+  const getEffectiveCustomerId = () => {
+    // Priority: prop > customerUuid > authcustomer_id > currentCustomerId
+    const id =
+      customerId || customerUuid || authCustomerId || currentCustomerId;
 
-  // Set author_id and customer_id from localStorage when component mounts
+    if (!id || id === "null" || id === "undefined") {
+      console.error("No valid customer ID found");
+      return null;
+    }
+
+    // ✅ Log which ID is being used
+    console.log(
+      "Using customer ID in AddModal:",
+      id,
+      "(from:",
+      customerId
+        ? "prop"
+        : customerUuid
+          ? "customerUuid"
+          : authCustomerId
+            ? "authcustomer_id"
+            : "currentCustomerId",
+      ")",
+    );
+
+    return id;
+  };
+
+  const effectiveCustomerId = getEffectiveCustomerId();
+
+  // =========================================================================
+  // DATA FETCHING & EFFECTS
+  // =========================================================================
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
@@ -201,30 +234,29 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
     }));
   }, [customerId, customerUuid, effectiveCustomerId]);
 
-  // Fetch all required data from Redux when modal opens
   useEffect(() => {
     const fetchAllData = async () => {
       if (!isOpen || dataFetchAttempted) return;
-
       setDataFetchAttempted(true);
+      setLoading(true);
 
       try {
-        // Fetch beneficiaries if not already in store
+        // Fetch beneficiaries
         if (!beneficiariesHasFetched || beneficiariesFromStore.length === 0) {
           await dispatch(fetchBeneficiaries(effectiveCustomerId));
         }
 
-        // Fetch bank accounts if empty
+        // Fetch source currencies (bank accounts)
         if (sourceCurrencies.length === 0) {
           await dispatch(fetchBankAccounts(effectiveCustomerId));
         }
 
-        // Fetch payout currencies if empty
+        // Fetch destination currencies (payout currencies)
         if (destinationCurrencies.length === 0) {
           await dispatch(fetchPayoutCurrencies());
         }
 
-        // Fetch all static data if any is missing
+        // Fetch static data
         if (
           purposes.length === 0 ||
           incomeSources.length === 0 ||
@@ -234,12 +266,13 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         }
       } catch (err) {
         console.error("Error fetching data:", err);
+        setError("Failed to load required data. Please try again.");
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (isOpen) {
-      fetchAllData();
-    }
+    if (isOpen) fetchAllData();
   }, [
     isOpen,
     dispatch,
@@ -254,128 +287,100 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
     dataFetchAttempted,
   ]);
 
-  // Fetch beneficiary banks from Redux when beneficiary is selected
+  // Fetch beneficiary banks when beneficiary is selected
   useEffect(() => {
-    if (formData.beneficiaryNumericId) {
+    if (formData.beneficiaryNumericId && formData.destination_currency) {
+      // ✅ Pass just the beneficiary ID, not an object
       dispatch(fetchBeneficiaryBanks(formData.beneficiaryNumericId));
       setBankError("");
     }
     setFormData((prev) => ({ ...prev, beneficiaryBankId: "" }));
-  }, [formData.beneficiaryNumericId, dispatch]);
+  }, [formData.beneficiaryNumericId, formData.destination_currency, dispatch]);
 
-  // Update bankError based on banks data
+  // Check for bank errors
   useEffect(() => {
-    if (!formData.beneficiaryNumericId) {
-      setBankError("");
-    } else if (!banksLoading && beneficiaryBanksFromStore.length === 0) {
+    if (
+      formData.beneficiaryNumericId &&
+      !banksLoading &&
+      beneficiaryBanksFromStore.length === 0
+    ) {
       setBankError("No bank accounts found for this beneficiary");
-    } else if (!banksLoading && beneficiaryBanksFromStore.length > 0) {
+    } else {
       setBankError("");
     }
   }, [beneficiaryBanksFromStore, banksLoading, formData.beneficiaryNumericId]);
 
+  // Set default destination currency when available
+  useEffect(() => {
+    if (destinationCurrencies.length > 0 && !formData.destination_currency) {
+      const defaultCurrency = destinationCurrencies.find(
+        (currency) => currency.default_remittance === "Y",
+      );
+      if (defaultCurrency) {
+        setFormData((prev) => ({
+          ...prev,
+          destination_currency: defaultCurrency.currency_code,
+        }));
+      }
+    }
+  }, [destinationCurrencies, formData.destination_currency]);
+
+  // =========================================================================
+  // EVENT HANDLERS
+  // =========================================================================
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleBeneficiarySelect = (beneficiary) => {
-    const beneficiaryUuid = beneficiary.benef_uuid;
-    const beneficiaryNumericId = beneficiary.id;
-
     setFormData((prev) => ({
       ...prev,
-      beneficiaryId: beneficiaryUuid,
-      beneficiaryNumericId: beneficiaryNumericId,
+      beneficiaryId: beneficiary.benef_uuid,
+      beneficiaryNumericId: beneficiary.id,
     }));
     setShowBeneficiaryDropdown(false);
     setBeneficiarySearchTerm("");
-    setBankError("");
-  };
-
-  const handleRecurringChange = (e) => {
-    const checked = e.target.checked;
-    setIsRecurring(checked);
-    if (!checked) {
-      setFrequency("");
-      setRecurringCustomDays("");
-      setFormData((prev) => ({
-        ...prev,
-        recurring_frequency: "",
-        custom_days: "",
-      }));
-    }
-  };
-
-  const handleFrequencyChange = (selectedValue) => {
-    setFrequency(selectedValue);
-    setFormData((prev) => ({
-      ...prev,
-      recurring_frequency: selectedValue,
-    }));
-    if (selectedValue !== "specific_day") {
-      setRecurringCustomDays("");
-      setFormData((prev) => ({
-        ...prev,
-        custom_days: "",
-      }));
-    }
-  };
-
-  const handleCustomDaysChange = (e) => {
-    const value = e.target.value.replace(/[^0-9]/g, "");
-    setRecurringCustomDays(value);
-    setFormData((prev) => ({
-      ...prev,
-      custom_days: value,
-    }));
   };
 
   const handleBankSelect = (bank) => {
-    const bankId = bank.benef_banks_uuid || bank.id;
     setFormData((prev) => ({
       ...prev,
-      beneficiaryBankId: bankId,
+      beneficiaryBankId: bank.benef_banks_uuid || bank.id,
     }));
     setShowBankDropdown(false);
     setBankSearchTerm("");
   };
 
-  const validateForm = () => {
-    if (!formData.source_amount) return "Source amount is required";
-    if (!formData.source_currency) return "Source currency is required";
-    if (!formData.destination_currency)
-      return "Destination currency is required";
-    if (!formData.beneficiaryNumericId) return "Beneficiary is required";
-    if (beneficiaryBanks.length > 0 && !formData.beneficiaryBankId)
-      return "Beneficiary bank is required";
-    if (!formData.occupation) return "Occupation is required";
-    if (!formData.income_source) return "Income source is required";
-    if (!formData.purpose) return "Purpose is required";
-    return null;
+  const validateCurrentStep = () => {
+    if (activeStep === 1) {
+      return (
+        formData.source_amount &&
+        formData.source_amount > 0 &&
+        formData.source_currency &&
+        formData.destination_currency
+      );
+    }
+    if (activeStep === 2) {
+      return (
+        formData.beneficiaryNumericId &&
+        (beneficiaryBanksFromStore.length === 0 || formData.beneficiaryBankId)
+      );
+    }
+    if (activeStep === 3) {
+      return formData.occupation && formData.income_source && formData.purpose;
+    }
+    return false;
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+    if (e) e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
-
-      if (!customerUuid) {
-        throw new Error("Customer ID not found");
-      }
-
       const payload = {
-        customer_id: customerUuid,
+        customer_id: customerUuid || effectiveCustomerId,
         source_amount: formData.source_amount,
         source_currency: formData.source_currency,
         destination_currency: formData.destination_currency,
@@ -384,14 +389,14 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         occupation: formData.occupation,
         income_source: formData.income_source,
         purpose: formData.purpose,
-        recurring_frequency: isRecurring ? formData.recurring_frequency : "",
+        recurring_frequency: formData.recurring_frequency,
         custom_days:
-          isRecurring && formData.recurring_frequency === "specific_day"
+          formData.recurring_frequency === "specific_day"
             ? formData.custom_days
             : "",
         author_source: "zap",
         author_type: "customer",
-        author_id: customerUuid,
+        author_id: customerUuid || "",
       };
 
       const response = await fetch(
@@ -411,8 +416,8 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
 
       if (responseData.status === "success") {
         onSave(responseData.data);
-        onClose();
         resetForm();
+        onClose();
       } else {
         if (responseData.message && typeof responseData.message === "object") {
           const errorMessages = Object.entries(responseData.message)
@@ -428,9 +433,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         }
       }
     } catch (err) {
-      setError(
-        err.message || "An error occurred while adding recurring remittance",
-      );
+      setError(err.message || "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -438,8 +441,8 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
 
   const resetForm = () => {
     setFormData({
-      customer_id: customerUuid || "",
-      recurring_frequency: "",
+      customer_id: effectiveCustomerId,
+      recurring_frequency: "monthly",
       source_amount: "",
       source_currency: "",
       destination_currency: "",
@@ -454,644 +457,747 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
       author_type: "customer",
       author_id: customerUuid || "",
     });
-    setIsRecurring(false);
-    setFrequency("");
-    setRecurringCustomDays("");
+    setSelectedDate(null);
+    setActiveStep(1);
     setBankError("");
-    setDataFetchAttempted(false);
   };
 
-  // Use beneficiaries from store directly
-  const beneficiaries = beneficiariesFromStore;
-  const beneficiaryBanks = beneficiaryBanksFromStore;
+  // =========================================================================
+  // SEARCH & FILTER LOGIC
+  // =========================================================================
+  const filteredBeneficiaries = useMemo(() => {
+    return beneficiariesFromStore.filter(
+      (b) =>
+        (b.benef_name || "")
+          .toLowerCase()
+          .includes(beneficiarySearchTerm.toLowerCase()) ||
+        (b.benef_email || "")
+          .toLowerCase()
+          .includes(beneficiarySearchTerm.toLowerCase()),
+    );
+  }, [beneficiariesFromStore, beneficiarySearchTerm]);
 
-  // Filter beneficiaries based on search
-  const filteredBeneficiaries = beneficiaries.filter(
-    (beneficiary) =>
-      (beneficiary.benef_name || beneficiary.name || "")
-        ?.toLowerCase()
-        .includes(beneficiarySearchTerm.toLowerCase()) ||
-      (beneficiary.benef_email || beneficiary.email || "")
-        ?.toLowerCase()
-        .includes(beneficiarySearchTerm.toLowerCase()) ||
-      (beneficiary.benef_phone || beneficiary.phone_number || "")?.includes(
-        beneficiarySearchTerm,
+  const filteredBanks = useMemo(() => {
+    return beneficiaryBanksFromStore.filter(
+      (b) =>
+        (b.bank_name || "")
+          .toLowerCase()
+          .includes(bankSearchTerm.toLowerCase()) ||
+        (b.bank_acc_no || "").includes(bankSearchTerm),
+    );
+  }, [beneficiaryBanksFromStore, bankSearchTerm]);
+
+  const selectedBeneficiary = useMemo(
+    () =>
+      beneficiariesFromStore.find(
+        (b) => b.id === formData.beneficiaryNumericId,
       ),
+    [beneficiariesFromStore, formData.beneficiaryNumericId],
   );
 
-  // Filter banks based on search
-  const filteredBanks = beneficiaryBanks.filter(
-    (bank) =>
-      (bank.bank_name || "")
-        ?.toLowerCase()
-        .includes(bankSearchTerm.toLowerCase()) ||
-      (bank.account_number || bank.bank_acc_no || "")?.includes(
-        bankSearchTerm,
-      ) ||
-      (bank.account_holder_name || "")
-        ?.toLowerCase()
-        .includes(bankSearchTerm.toLowerCase()),
+  const selectedBank = useMemo(
+    () =>
+      beneficiaryBanksFromStore.find(
+        (b) => (b.benef_banks_uuid || b.id) === formData.beneficiaryBankId,
+      ),
+    [beneficiaryBanksFromStore, formData.beneficiaryBankId],
   );
 
-  const selectedBeneficiary = beneficiaries.find(
-    (b) => b.id === formData.beneficiaryNumericId,
-  );
-
-  const selectedBank = beneficiaryBanks.find(
-    (b) => (b.benef_banks_uuid || b.id) === formData.beneficiaryBankId,
-  );
-
-  if (!isOpen) return null;
-
-  const isLoading =
-    remittanceLoading || staticLoading || beneficiariesLoading || banksLoading;
-
-  // Use display currencies with fallbacks
-  const displaySourceCurrencies =
-    sourceCurrencies.length > 0 ? sourceCurrencies : fallbackCurrencies;
-  const displayDestinationCurrencies =
-    destinationCurrencies.length > 0
-      ? destinationCurrencies
-      : fallbackCurrencies;
+  // Prepare display data
+  const displaySourceCurrencies = sourceCurrencies;
+  const displayDestCurrencies = destinationCurrencies;
   const displayPurposes = purposes.length > 0 ? purposes : fallbackPurposes;
   const displayIncomeSources =
     incomeSources.length > 0 ? incomeSources : fallbackIncomeSources;
-  const displayOccupations = occupations.length > 0 ? occupations : [];
+  const displayOccupations =
+    occupations.length > 0 ? occupations : fallbackOccupations;
 
+  if (!isOpen) return null;
+
+  // =========================================================================
+  // RENDER UI
+  // =========================================================================
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-6">
-            {/* Backdrop - no blur, just dark overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black bg-opacity-50"
-              onClick={onClose}
-            />
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-hidden">
+        {/* Backdrop */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+          onClick={onClose}
+        />
 
-            {/* Modal - fixed width, no blur, clean background */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.2 }}
-              className="relative w-full max-w-3xl bg-white rounded-xl shadow-2xl overflow-hidden z-10"
-            >
-              {/* Header with gradient */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-white/20 rounded-lg">
-                      <Repeat className="w-5 h-5 text-white" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-white">
-                      Add Recurring Remittance
-                    </h3>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-white" />
-                  </button>
+        {/* Modal Container */}
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0, y: 40 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 40 }}
+          className="relative w-full max-w-5xl bg-white rounded-[2.5rem] shadow-[0_32px_128px_-12px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col md:flex-row min-h-[700px] z-10"
+        >
+          {/* SIDEBAR: Live Summary Preview */}
+          <div className="w-full md:w-80 bg-slate-900 p-8 text-white flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full -mr-32 -mt-32" />
+
+            <div className="relative z-10">
+              <div className="mb-12">
+                <div className="flex items-center gap-2 text-indigo-400 font-bold tracking-widest text-[10px] uppercase mb-2">
+                  <Repeat size={14} className="animate-spin-slow" /> Recurring
+                  Remit
                 </div>
+                <h2 className="text-3xl font-black leading-tight">
+                  Schedule your auto-pay.
+                </h2>
               </div>
 
-              {/* Error Display */}
-              {error && (
-                <div className="mx-6 mt-4">
-                  <div className="flex items-center p-3 text-red-700 bg-red-50 rounded-lg border border-red-200 text-sm">
-                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span>{error}</span>
+              {/* Step Progress Visualizer */}
+              <div className="space-y-8">
+                {[
+                  {
+                    id: 1,
+                    title: "Transfer Details",
+                    icon: <DollarSign size={16} />,
+                  },
+                  { id: 2, title: "Recipient", icon: <User size={16} /> },
+                  {
+                    id: 3,
+                    title: "Compliance",
+                    icon: <ShieldCheck size={16} />,
+                  },
+                ].map((step) => (
+                  <div key={step.id} className="flex items-center gap-4">
+                    <div
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center border-2 transition-all duration-500 ${
+                        activeStep >= step.id
+                          ? "bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/40"
+                          : "border-slate-700 text-slate-500"
+                      }`}
+                    >
+                      {activeStep > step.id ? (
+                        <CheckCircle2 size={20} />
+                      ) : (
+                        step.icon
+                      )}
+                    </div>
+                    <div>
+                      <p
+                        className={`text-[10px] font-bold uppercase tracking-widest ${activeStep >= step.id ? "text-indigo-400" : "text-slate-600"}`}
+                      >
+                        Step 0{step.id}
+                      </p>
+                      <p
+                        className={`font-bold transition-colors ${activeStep >= step.id ? "text-white" : "text-slate-500"}`}
+                      >
+                        {step.title}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            </div>
 
-              {/* Loading State */}
-              {isLoading && (
-                <div className="mx-6 mt-4">
-                  <div className="flex items-center justify-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <Loader className="w-5 h-5 mr-2 animate-spin text-blue-600" />
-                    <span className="text-blue-700 text-sm">
-                      Loading form data...
+            {/* Live Card Preview */}
+            <div className="relative z-10 p-6 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-4">
+                Transfer Preview
+              </p>
+              <div className="space-y-5">
+                <div>
+                  <span className="text-4xl font-black block tracking-tighter">
+                    {formData.source_amount
+                      ? Number(formData.source_amount).toLocaleString()
+                      : "0.00"}
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs font-bold text-indigo-400">
+                      {formData.source_currency || "CUR"}
+                    </span>
+                    <ArrowRight size={10} className="text-slate-600" />
+                    <span className="text-xs font-bold text-slate-400">
+                      {formData.destination_currency || "CUR"}
                     </span>
                   </div>
                 </div>
+                <div className="flex items-center gap-3 pt-4 border-t border-white/5">
+                  <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400">
+                    <User size={14} />
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">
+                      To Recipient
+                    </p>
+                    <p className="text-xs font-bold truncate">
+                      {selectedBeneficiary?.benef_name || "---"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* MAIN CONTENT AREA */}
+          <div className="flex-1 bg-white p-8 md:p-12 overflow-y-auto max-h-[85vh] flex flex-col">
+            <header className="flex justify-between items-start mb-10">
+              <div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+                  {activeStep === 1 && "Payment Details"}
+                  {activeStep === 2 && "Who are you sending to?"}
+                  {activeStep === 3 && "Security & Compliance"}
+                </h3>
+                <p className="text-slate-500 font-medium mt-1">
+                  Please fill in all required fields marked with *
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-slate-100 rounded-full transition-all"
+              >
+                <X size={24} className="text-slate-400" />
+              </button>
+            </header>
+
+            {/* Loading State */}
+            {loading && destinationCurrencies.length === 0 && (
+              <div className="flex items-center justify-center py-20">
+                <Loader className="w-8 h-8 animate-spin text-indigo-600" />
+                <span className="ml-3 text-slate-600 font-medium">
+                  Loading required data...
+                </span>
+              </div>
+            )}
+
+            {/* Error Message Display */}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="mb-6 overflow-hidden"
+                >
+                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl flex items-start gap-3 text-sm font-bold">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                </motion.div>
               )}
+            </AnimatePresence>
 
-              <form onSubmit={handleSubmit} className="p-6">
-                <div className="space-y-5">
-                  {/* Transfer Details */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                      <DollarSign className="w-4 h-4 mr-1 text-blue-600" />
-                      Transfer Details
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Frequency */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Frequency <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="recurring_frequency"
-                          value={formData.recurring_frequency}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select frequency</option>
-                          {frequencyOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Amount */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Amount <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          name="source_amount"
-                          value={formData.source_amount}
-                          onChange={handleInputChange}
-                          placeholder="0.00"
-                          min="0"
-                          step="0.01"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          required
-                        />
-                      </div>
-
-                      {/* Source Currency */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Source Currency{" "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="source_currency"
-                          value={formData.source_currency}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select currency</option>
-                          {displaySourceCurrencies.map((currency) => (
-                            <option
-                              key={
-                                currency.id ||
-                                currency.currency_code ||
-                                currency.code
-                              }
-                              value={currency.currency_code || currency.code}
-                            >
-                              {currency.currency_code || currency.code} -{" "}
-                              {currency.currency_name || currency.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Destination Currency */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Destination Currency{" "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="destination_currency"
-                          value={formData.destination_currency}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select currency</option>
-                          {displayDestinationCurrencies.map((currency) => (
-                            <option
-                              key={
-                                currency.code ||
-                                currency.id ||
-                                currency.currency_code
-                              }
-                              value={currency.code || currency.currency_code}
-                            >
-                              {currency.code || currency.currency_code} -{" "}
-                              {currency.name || currency.currency_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Beneficiary Details */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                      <User className="w-4 h-4 mr-1 text-green-600" />
-                      Beneficiary Details
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Beneficiary Selection */}
-                      <div className="relative">
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Beneficiary <span className="text-red-500">*</span>
-                        </label>
-
-                        <div
-                          onClick={() =>
-                            !beneficiariesLoading &&
-                            setShowBeneficiaryDropdown(!showBeneficiaryDropdown)
-                          }
-                          className={`w-full px-3 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white ${
-                            beneficiariesLoading
-                              ? "bg-gray-50"
-                              : "hover:border-blue-500"
-                          }`}
-                        >
-                          {beneficiariesLoading ? (
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Loader className="w-3 h-3 mr-2 animate-spin" />
-                              Loading...
-                            </div>
-                          ) : selectedBeneficiary ? (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="font-medium text-gray-900">
-                                {selectedBeneficiary.benef_name ||
-                                  selectedBeneficiary.name}
-                              </span>
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between text-sm text-gray-500">
-                              <span>Select a beneficiary</span>
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            </div>
-                          )}
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  {/* STEP 1: TRANSFER DETAILS */}
+                  {activeStep === 1 && (
+                    <div className="space-y-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Transfer Amount *
+                          </label>
+                          <div className="relative group">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
+                            <input
+                              type="number"
+                              name="source_amount"
+                              placeholder="0.00"
+                              value={formData.source_amount}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-4 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-[1.5rem] outline-none transition-all font-black text-xl"
+                            />
+                          </div>
                         </div>
 
-                        {/* Dropdown */}
-                        {showBeneficiaryDropdown && !beneficiariesLoading && (
-                          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                            <div className="p-2 border-b">
-                              <div className="relative">
-                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
-                                <input
-                                  type="text"
-                                  placeholder="Search..."
-                                  value={beneficiarySearchTerm}
-                                  onChange={(e) =>
-                                    setBeneficiarySearchTerm(e.target.value)
-                                  }
-                                  className="w-full pl-7 pr-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </div>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto">
-                              {filteredBeneficiaries.length === 0 ? (
-                                <div className="p-3 text-center text-sm text-gray-500">
-                                  No beneficiaries found
-                                </div>
-                              ) : (
-                                filteredBeneficiaries.map((beneficiary) => (
-                                  <div
-                                    key={
-                                      beneficiary.benef_uuid || beneficiary.id
-                                    }
-                                    onClick={() =>
-                                      handleBeneficiarySelect(beneficiary)
-                                    }
-                                    className={`p-2 cursor-pointer hover:bg-gray-50 text-sm ${
-                                      formData.beneficiaryId ===
-                                      (beneficiary.benef_uuid || beneficiary.id)
-                                        ? "bg-blue-50"
-                                        : ""
-                                    }`}
-                                  >
-                                    <div className="font-medium text-gray-900">
-                                      {beneficiary.benef_name ||
-                                        beneficiary.name}
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                      {beneficiary.benef_email ||
-                                        beneficiary.email}
-                                    </div>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Bank Selection */}
-                      {formData.beneficiaryNumericId && (
-                        <div className="relative">
-                          <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                            Bank Account <span className="text-red-500">*</span>
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Frequency *
                           </label>
-
-                          <div
-                            onClick={() =>
-                              !banksLoading &&
-                              beneficiaryBanks.length > 0 &&
-                              setShowBankDropdown(!showBankDropdown)
-                            }
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white ${
-                              banksLoading
-                                ? "bg-gray-50"
-                                : "hover:border-blue-500"
-                            } ${beneficiaryBanks.length === 0 ? "cursor-not-allowed bg-gray-50" : ""}`}
-                          >
-                            {banksLoading ? (
-                              <div className="flex items-center text-sm text-gray-500">
-                                <Loader className="w-3 h-3 mr-2 animate-spin" />
-                                Loading...
-                              </div>
-                            ) : selectedBank ? (
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="font-medium text-gray-900">
-                                  {selectedBank.bank_name}
-                                </span>
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between text-sm text-gray-500">
-                                <span>
-                                  {bankError || "Select bank account"}
-                                </span>
-                                {beneficiaryBanks.length > 0 && (
-                                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Bank Dropdown */}
-                          {showBankDropdown &&
-                            !banksLoading &&
-                            beneficiaryBanks.length > 0 && (
-                              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <div className="p-2 border-b">
-                                  <div className="relative">
-                                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
-                                    <input
-                                      type="text"
-                                      placeholder="Search banks..."
-                                      value={bankSearchTerm}
-                                      onChange={(e) =>
-                                        setBankSearchTerm(e.target.value)
-                                      }
-                                      className="w-full pl-7 pr-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="max-h-48 overflow-y-auto">
-                                  {filteredBanks.length === 0 ? (
-                                    <div className="p-3 text-center text-sm text-gray-500">
-                                      No banks found
-                                    </div>
-                                  ) : (
-                                    filteredBanks.map((bank) => (
-                                      <div
-                                        key={bank.benef_banks_uuid || bank.id}
-                                        onClick={() => handleBankSelect(bank)}
-                                        className={`p-2 cursor-pointer hover:bg-gray-50 text-sm ${
-                                          formData.beneficiaryBankId ===
-                                          bank.benef_banks_uuid
-                                            ? "bg-blue-50"
-                                            : ""
-                                        }`}
-                                      >
-                                        <div className="font-medium text-gray-900">
-                                          {bank.bank_name}
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                          {bank.bank_acc_no || "N/A"}
-                                        </div>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                          {beneficiaryBanks.length === 0 &&
-                            !banksLoading &&
-                            bankError && (
-                              <p className="mt-1 text-xs text-amber-600">
-                                {bankError}
-                              </p>
-                            )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Additional Info */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                      <FileText className="w-4 h-4 mr-1 text-purple-600" />
-                      Additional Information
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Occupation */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Occupation <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="occupation"
-                          value={formData.occupation}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select</option>
-                          {displayOccupations.map((occ) => (
-                            <option
-                              key={occ.value || occ.id}
-                              value={occ.value || occ.id}
-                            >
-                              {occ.label || occ.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Income Source */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Income Source <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="income_source"
-                          value={formData.income_source}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select</option>
-                          {displayIncomeSources.map((source) => (
-                            <option
-                              key={source.value || source.id}
-                              value={source.value || source.id}
-                            >
-                              {source.label || source.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Purpose */}
-                      <div>
-                        <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                          Purpose <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="purpose"
-                          value={formData.purpose}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                          required
-                        >
-                          <option value="">Select</option>
-                          {displayPurposes.map((purpose) => (
-                            <option
-                              key={purpose.value || purpose.id}
-                              value={purpose.value || purpose.id}
-                            >
-                              {purpose.label || purpose.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recurring Options */}
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isRecurring}
-                        onChange={handleRecurringChange}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Set up as recurring payment
-                      </span>
-                    </label>
-
-                    {isRecurring && (
-                      <div className="mt-3 space-y-3">
-                        <div>
-                          <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                            Frequency
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {recurringFrequencyOptions.map((option) => (
+                          <div className="flex bg-slate-100 p-1.5 rounded-[1.5rem]">
+                            {["monthly", "specific_day"].map((freq) => (
                               <button
-                                key={option.value}
+                                key={freq}
                                 type="button"
                                 onClick={() =>
-                                  handleFrequencyChange(option.value)
+                                  setFormData((p) => ({
+                                    ...p,
+                                    recurring_frequency: freq,
+                                  }))
                                 }
-                                className={`px-3 py-1.5 text-sm rounded-lg border ${
-                                  frequency === option.value
-                                    ? "bg-blue-600 text-white border-blue-600"
-                                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                                className={`flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs transition-all ${
+                                  formData.recurring_frequency === freq
+                                    ? "bg-white shadow-lg text-indigo-600"
+                                    : "text-slate-500 hover:text-slate-700"
                                 }`}
                               >
-                                {option.label}
+                                {freq === "monthly"
+                                  ? "Every Month"
+                                  : "Custom Day"}
                               </button>
                             ))}
                           </div>
                         </div>
+                      </div>
 
-                        {frequency === "specific_day" && (
-                          <div>
-                            <label className="block mb-1.5 text-xs font-medium text-gray-600">
-                              Days Between Payments
-                            </label>
-                            <input
-                              type="text"
-                              value={recurringCustomDays}
-                              onChange={handleCustomDaysChange}
-                              placeholder="e.g., 30"
-                              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      {formData.recurring_frequency === "specific_day" && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          className="p-8 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 flex flex-col items-center"
+                        >
+                          <div className="flex items-center gap-2 mb-6">
+                            <Calendar size={18} className="text-indigo-600" />
+                            <p className="text-xs font-black text-indigo-900 uppercase tracking-widest">
+                              Select recurring day of month
+                            </p>
+                          </div>
+                          <DatePicker
+                            selected={selectedDate}
+                            onChange={(date) => {
+                              setSelectedDate(date);
+                              if (date)
+                                setFormData((p) => ({
+                                  ...p,
+                                  custom_days: date.getDate().toString(),
+                                }));
+                            }}
+                            inline
+                          />
+                        </motion.div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Source Currency *
+                          </label>
+                          <div className="relative">
+                            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                              name="source_currency"
+                              value={formData.source_currency}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-10 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-[1.5rem] outline-none font-bold appearance-none cursor-pointer"
+                            >
+                              <option value="">Select Account</option>
+                              {displaySourceCurrencies.map((account) => (
+                                <option
+                                  key={account.id}
+                                  value={account.currency_code}
+                                >
+                                  {account.currency_code} -{" "}
+                                  {account.bank_name || account.currency_name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={18}
                             />
                           </div>
-                        )}
+                        </div>
 
-                        <div className="text-xs text-gray-500 flex items-start">
-                          <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
-                          <span>
-                            Payments will be automatically processed on schedule
-                          </span>
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Payout Currency *
+                          </label>
+                          <div className="relative">
+                            <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                              name="destination_currency"
+                              value={formData.destination_currency}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-10 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-[1.5rem] outline-none font-bold appearance-none cursor-pointer"
+                            >
+                              <option value="">Select Currency</option>
+                              {displayDestCurrencies.map((currency) => (
+                                <option
+                                  key={currency.payout_currency_id}
+                                  value={currency.currency_code}
+                                >
+                                  {currency.currency_code} {currency.icon}
+                                  {currency.default_remittance === "Y" &&
+                                    " (Default)"}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={18}
+                            />
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  {/* Hidden fields */}
-                  <input
-                    type="hidden"
-                    name="author_source"
-                    value={formData.author_source}
-                  />
-                  <input
-                    type="hidden"
-                    name="author_type"
-                    value={formData.author_type}
-                  />
-                  <input
-                    type="hidden"
-                    name="author_id"
-                    value={formData.author_id}
-                  />
-                </div>
+                  {/* STEP 2: RECIPIENT */}
+                  {activeStep === 2 && (
+                    <div className="space-y-8">
+                      <div className="relative">
+                        <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1 mb-3 block">
+                          Search Beneficiary *
+                        </label>
+                        <div
+                          onClick={() =>
+                            setShowBeneficiaryDropdown(!showBeneficiaryDropdown)
+                          }
+                          className={`p-6 bg-white rounded-[1.5rem] border-2 transition-all cursor-pointer flex justify-between items-center ${
+                            formData.beneficiaryNumericId
+                              ? "border-indigo-500 bg-indigo-50/20"
+                              : "border-slate-100 hover:border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                              {selectedBeneficiary ? (
+                                <CheckCircle2 size={24} />
+                              ) : (
+                                <Search size={24} />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-black text-slate-900 text-lg leading-tight">
+                                {selectedBeneficiary
+                                  ? selectedBeneficiary.benef_name ||
+                                    selectedBeneficiary.name
+                                  : "Find a saved recipient"}
+                              </p>
+                              <p className="text-xs text-slate-500 font-medium">
+                                Select from your contact list
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronDown
+                            className={`transition-transform duration-300 text-slate-400 ${showBeneficiaryDropdown ? "rotate-180" : ""}`}
+                          />
+                        </div>
 
-                {/* Form Actions */}
-                <div className="flex justify-end space-x-2 mt-5 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                    disabled={loading || isLoading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader className="w-3 h-3 mr-2 animate-spin" />
-                        Adding...
-                      </>
-                    ) : (
-                      "Add Recurring Remittance"
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+                        {/* Beneficiary Custom Search Dropdown */}
+                        <AnimatePresence>
+                          {showBeneficiaryDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 10 }}
+                              className="absolute z-30 w-full mt-3 bg-white rounded-[2rem] shadow-[0_24px_48px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden"
+                            >
+                              <div className="p-5 border-b bg-slate-50/50 flex items-center gap-3">
+                                <Search size={16} className="text-slate-400" />
+                                <input
+                                  autoFocus
+                                  className="w-full bg-transparent outline-none font-bold text-slate-700"
+                                  placeholder="Type a name or email..."
+                                  value={beneficiarySearchTerm}
+                                  onChange={(e) =>
+                                    setBeneficiarySearchTerm(e.target.value)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                              <div className="max-h-64 overflow-y-auto">
+                                {beneficiariesLoading ? (
+                                  <div className="p-8 text-center text-slate-400 flex flex-col items-center gap-2">
+                                    <Loader
+                                      size={20}
+                                      className="animate-spin text-indigo-500"
+                                    />
+                                    <p className="text-xs font-bold uppercase tracking-widest">
+                                      Scanning list...
+                                    </p>
+                                  </div>
+                                ) : filteredBeneficiaries.length === 0 ? (
+                                  <div className="p-8 text-center text-slate-400 font-bold">
+                                    No recipients found.
+                                  </div>
+                                ) : (
+                                  filteredBeneficiaries.map((b) => (
+                                    <div
+                                      key={b.id}
+                                      className="p-5 hover:bg-indigo-50/50 cursor-pointer flex items-center gap-4 border-b border-slate-50 last:border-0 transition-colors"
+                                      onClick={() => handleBeneficiarySelect(b)}
+                                    >
+                                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-black text-indigo-600">
+                                        {(b.benef_name || b.name || "U").charAt(
+                                          0,
+                                        )}
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-slate-800 block">
+                                          {b.benef_name || b.name}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                          {b.benef_email ||
+                                            b.email ||
+                                            "No email"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {formData.beneficiaryNumericId && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="space-y-5"
+                        >
+                          <div className="flex justify-between items-center px-1">
+                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest">
+                              Select Account *
+                            </label>
+                            {banksLoading && (
+                              <Loader
+                                size={14}
+                                className="animate-spin text-indigo-500"
+                              />
+                            )}
+                          </div>
+
+                          {bankError && (
+                            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center gap-3 text-amber-800 text-xs font-bold">
+                              <Info size={16} /> {bankError}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 gap-3">
+                            {beneficiaryBanksFromStore.map((bank) => (
+                              <div
+                                key={bank.id}
+                                onClick={() => handleBankSelect(bank)}
+                                className={`p-6 rounded-[1.5rem] border-2 transition-all cursor-pointer flex items-center justify-between ${
+                                  formData.beneficiaryBankId ===
+                                  (bank.benef_banks_uuid || bank.id)
+                                    ? "border-indigo-500 bg-indigo-50/50 shadow-sm"
+                                    : "border-slate-100 hover:border-slate-200"
+                                }`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div
+                                    className={`p-3.5 rounded-2xl transition-colors ${formData.beneficiaryBankId === (bank.benef_banks_uuid || bank.id) ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-400"}`}
+                                  >
+                                    <Landmark size={22} />
+                                  </div>
+                                  <div>
+                                    <p className="font-black text-slate-900 leading-tight">
+                                      {bank.bank_name}
+                                    </p>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5 tracking-tighter">
+                                      Acc: ••••{" "}
+                                      {bank.bank_acc_no?.slice(-4) || "N/A"}
+                                    </p>
+                                  </div>
+                                </div>
+                                {formData.beneficiaryBankId ===
+                                  (bank.benef_banks_uuid || bank.id) && (
+                                  <motion.div
+                                    layoutId="bankCheck"
+                                    className="text-indigo-600"
+                                  >
+                                    <CheckCircle2 size={24} />
+                                  </motion.div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* STEP 3: COMPLIANCE */}
+                  {activeStep === 3 && (
+                    <div className="space-y-8">
+                      <div className="p-5 bg-indigo-900 text-white rounded-[2rem] flex gap-4 items-start relative overflow-hidden shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full" />
+                        <ShieldCheck
+                          size={24}
+                          className="shrink-0 text-indigo-400 mt-1"
+                        />
+                        <div>
+                          <p className="text-sm font-bold leading-relaxed italic">
+                            "For your security and international anti-money
+                            laundering compliance, please confirm your current
+                            professional details for this recurring mandate."
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-8">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Your Occupation *
+                          </label>
+                          <div className="relative group">
+                            <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                              name="occupation"
+                              value={formData.occupation}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-10 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-[1.5rem] outline-none font-bold appearance-none cursor-pointer"
+                            >
+                              <option value="">Choose Occupation</option>
+                              {displayOccupations.map((occ) => (
+                                <option
+                                  key={occ.id}
+                                  value={occ.value || occ.id}
+                                >
+                                  {occ.label || occ.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={18}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Source of Funds *
+                          </label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                              name="income_source"
+                              value={formData.income_source}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-10 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-[1.5rem] outline-none font-bold appearance-none cursor-pointer"
+                            >
+                              <option value="">Select Income Source</option>
+                              {displayIncomeSources.map((source) => (
+                                <option
+                                  key={source.id}
+                                  value={source.value || source.id}
+                                >
+                                  {source.label || source.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={18}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Purpose of Remittance *
+                          </label>
+                          <div className="relative">
+                            <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                              name="purpose"
+                              value={formData.purpose}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full pl-12 pr-10 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-[1.5rem] outline-none font-bold appearance-none cursor-pointer"
+                            >
+                              <option value="">Select Transfer Purpose</option>
+                              {displayPurposes.map((purpose) => (
+                                <option
+                                  key={purpose.id}
+                                  value={purpose.value || purpose.id}
+                                >
+                                  {purpose.label || purpose.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                              size={18}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Hidden Inputs */}
+                      <input type="hidden" name="author_source" value="zap" />
+                      <input
+                        type="hidden"
+                        name="author_type"
+                        value="customer"
+                      />
+                      <input
+                        type="hidden"
+                        name="author_id"
+                        value={customerUuid || ""}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* ACTION FOOTER */}
+              <div className="mt-auto pt-10 border-t border-slate-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={
+                    activeStep === 1
+                      ? onClose
+                      : () => setActiveStep((p) => p - 1)
+                  }
+                  className="px-8 py-4 font-bold text-slate-400 hover:text-slate-800 transition-all flex items-center gap-2 group"
+                >
+                  {activeStep > 1 && (
+                    <ArrowLeft
+                      size={18}
+                      className="group-hover:-translate-x-1 transition-transform"
+                    />
+                  )}
+                  {activeStep === 1 ? "Discard" : "Go Back"}
+                </button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={!validateCurrentStep() || loading}
+                  onClick={
+                    activeStep === 3
+                      ? handleSubmit
+                      : () => setActiveStep((p) => p + 1)
+                  }
+                  className={`px-10 py-4 rounded-[1.5rem] font-black text-lg flex items-center gap-3 transition-all ${
+                    validateCurrentStep() && !loading
+                      ? "bg-indigo-600 text-white shadow-xl shadow-indigo-200"
+                      : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                  }`}
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {activeStep === 3 ? "Activate Recurring Pay" : "Continue"}
+                      <ArrowRight size={20} />
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </form>
           </div>
-        </div>
-      )}
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

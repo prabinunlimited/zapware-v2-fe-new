@@ -14,6 +14,256 @@ const api = axios.create({
   timeout: 80000,
 });
 
+// ===================== ERROR HANDLER WITH POPUP =====================
+class GlobalErrorHandler {
+  constructor() {
+    this.isErrorHandled = false;
+    this.errorListeners = [];
+    this.pendingRequests = new Set();
+  }
+
+  // Add a request to pending set
+  addPendingRequest(requestId) {
+    this.pendingRequests.add(requestId);
+  }
+
+  // Remove request from pending set
+  removePendingRequest(requestId) {
+    this.pendingRequests.delete(requestId);
+  }
+
+  // Cancel all pending requests
+  cancelAllPendingRequests() {
+    console.log(
+      `🚫 Cancelling ${this.pendingRequests.size} pending requests...`,
+    );
+    this.pendingRequests.forEach((requestId) => {
+      // You can implement actual cancellation logic here if needed
+      console.log(`Cancelling request: ${requestId}`);
+    });
+    this.pendingRequests.clear();
+  }
+
+  // Handle API failure
+  handleApiFailure(error, config) {
+    // Prevent multiple popups for the same error chain
+    if (this.isErrorHandled) {
+      console.log("⚠️ Error already being handled, skipping duplicate");
+      return;
+    }
+
+    this.isErrorHandled = true;
+
+    // Cancel all other pending requests
+    this.cancelAllPendingRequests();
+
+    // Extract error message from response
+    let errorMessage = "An unexpected error occurred";
+    let errorDetails = null;
+
+    if (error.response) {
+      // Server responded with error status
+      errorMessage =
+        error.response.data?.message ||
+        error.response.data?.error ||
+        error.response.statusText ||
+        `Request failed with status ${error.response.status}`;
+      errorDetails = error.response.data;
+    } else if (error.request) {
+      // Request was made but no response received
+      errorMessage = "Network error - No response from server";
+    } else {
+      // Something else happened
+      errorMessage = error.message || "Request failed";
+    }
+
+    // Show popup/notification
+    this.showErrorPopup(errorMessage, errorDetails, error, config);
+
+    // Trigger all registered listeners
+    this.errorListeners.forEach((listener) => {
+      try {
+        listener({
+          message: errorMessage,
+          details: errorDetails,
+          error,
+          config,
+        });
+      } catch (err) {
+        console.error("Error in listener:", err);
+      }
+    });
+  }
+
+  // Show error popup
+  showErrorPopup(message, details, error, config) {
+    // Create popup container if it doesn't exist
+    let popupContainer = document.getElementById("api-error-popup");
+    if (!popupContainer) {
+      popupContainer = document.createElement("div");
+      popupContainer.id = "api-error-popup";
+      popupContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `;
+      document.body.appendChild(popupContainer);
+    }
+
+    // Create popup content
+    const popupHTML = `
+      <div style="
+        background: white;
+        border-radius: 12px;
+        max-width: 500px;
+        width: 90%;
+        padding: 24px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        animation: slideIn 0.3s ease-out;
+      ">
+        <div style="display: flex; align-items: center; margin-bottom: 16px;">
+          <div style="
+            background: #fee2e2;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+          ">
+            <svg style="width: 24px; height: 24px; color: #dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 style="font-size: 20px; font-weight: 600; color: #1f2937; margin: 0;">Request Failed</h3>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <p style="color: #4b5563; margin-bottom: 12px; line-height: 1.5;">
+            ${message}
+          </p>
+          ${
+            details
+              ? `
+            <details style="margin-top: 12px;">
+              <summary style="color: #6b7280; cursor: pointer; font-size: 14px;">Show details</summary>
+              <pre style="
+                background: #f3f4f6;
+                padding: 12px;
+                border-radius: 6px;
+                margin-top: 8px;
+                font-size: 12px;
+                overflow-x: auto;
+                color: #374151;
+              ">${JSON.stringify(details, null, 2)}</pre>
+            </details>
+          `
+              : ""
+          }
+          ${
+            config
+              ? `
+            <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
+              <strong>Endpoint:</strong> ${config.method?.toUpperCase()} ${config.url}
+            </div>
+          `
+              : ""
+          }
+        </div>
+        
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button onclick="this.closest('#api-error-popup').remove()" style="
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 6px;
+            color: #374151;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+          " onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+            Dismiss
+          </button>
+          <button onclick="window.location.reload()" style="
+            padding: 8px 16px;
+            background: #dc2626;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+          " onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
+            Retry
+          </button>
+        </div>
+      </div>
+      <style>
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      </style>
+    `;
+
+    popupContainer.innerHTML = popupHTML;
+
+    // Close popup when clicking outside
+    popupContainer.addEventListener("click", (e) => {
+      if (e.target === popupContainer) {
+        popupContainer.remove();
+      }
+    });
+
+    // Add to console for debugging
+    console.error("🚨 API Error:", {
+      message,
+      details,
+      endpoint: config?.url,
+      method: config?.method,
+      status: error?.response?.status,
+    });
+  }
+
+  // Reset error handler state
+  reset() {
+    this.isErrorHandled = false;
+  }
+
+  // Add listener for error events
+  addErrorListener(listener) {
+    this.errorListeners.push(listener);
+  }
+
+  // Remove error listener
+  removeErrorListener(listener) {
+    const index = this.errorListeners.indexOf(listener);
+    if (index > -1) {
+      this.errorListeners.splice(index, 1);
+    }
+  }
+}
+
+// Initialize global error handler
+const globalErrorHandler = new GlobalErrorHandler();
+
 // ===================== CENTRALIZED DATA STORE =====================
 class DataManager {
   constructor() {
@@ -21,13 +271,18 @@ class DataManager {
     this.pendingRequests = new Map(); // Request deduplication
     this.staleTimes = new Map(); // Cache TTL per endpoint
     this.retryCounts = new Map(); // Retry tracking
+    this.requestCounter = 0; // For generating unique request IDs
 
     // Configure stale times (in milliseconds)
     this.staleTimes.set("/partner-basic-setup/", 5 * 60 * 1000); // 5 minutes
     this.staleTimes.set("/partners/get-partner-detail/", 10 * 60 * 1000); // 10 minutes
-    // REMOVE THIS LINE: this.staleTimes.set("/countries", 30 * 60 * 1000); // 30 minutes
     this.staleTimes.set("/gif-images", 15 * 60 * 1000); // 15 minutes
     this.staleTimes.set("/logout", 1 * 60 * 1000); // 1 minute
+  }
+
+  // Generate unique request ID
+  generateRequestId() {
+    return `req_${++this.requestCounter}_${Date.now()}`;
   }
 
   // Generate cache key from config
@@ -74,17 +329,22 @@ class DataManager {
   }
 
   // Register a pending request
-  registerRequest(cacheKey, promise) {
-    this.pendingRequests.set(cacheKey, promise);
+  registerRequest(cacheKey, promise, requestId) {
+    this.pendingRequests.set(cacheKey, { promise, requestId });
+    globalErrorHandler.addPendingRequest(requestId);
+
     promise.finally(() => {
       this.pendingRequests.delete(cacheKey);
+      globalErrorHandler.removePendingRequest(requestId);
     });
+
     return promise;
   }
 
   // Get pending request
   getPendingRequest(cacheKey) {
-    return this.pendingRequests.get(cacheKey);
+    const pending = this.pendingRequests.get(cacheKey);
+    return pending ? pending.promise : null;
   }
 
   // Clear cache for specific endpoint
@@ -121,6 +381,19 @@ const dataManager = new DataManager();
 // ===================== ENHANCED REQUEST INTERCEPTOR =====================
 api.interceptors.request.use(
   async (config) => {
+    // Generate unique request ID for this request
+    config.requestId = dataManager.generateRequestId();
+
+    // Check if error handler is in failed state
+    if (globalErrorHandler.isErrorHandled) {
+      console.log(`🚫 Request cancelled due to previous error: ${config.url}`);
+      return Promise.reject({
+        __isCancelled: true,
+        message: "Request cancelled due to previous API failure",
+        config,
+      });
+    }
+
     const cacheKey = dataManager.getCacheKey(config);
     const endpoint = config.url;
 
@@ -160,7 +433,6 @@ api.interceptors.request.use(
       "/reset-password",
       "/register",
       "/verify-email",
-      // REMOVE THIS: "/countries",  // <-- REMOVED
       "/partners/get-partner-detail/",
       "/partner-basic-setup/",
       "/gif-images",
@@ -189,7 +461,7 @@ api.interceptors.request.use(
   (error) => {
     console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
-  }
+  },
 );
 
 // ===================== ENHANCED RESPONSE INTERCEPTOR =====================
@@ -210,6 +482,12 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // Handle cancelled requests
+    if (error.__isCancelled) {
+      console.log(`🚫 Request was cancelled: ${error.config?.url}`);
+      return Promise.reject(error);
+    }
+
     // Handle cached responses
     if (error.__isCachedResponse) {
       console.log(`💾 Returning cached data: ${error.config.url}`);
@@ -248,6 +526,9 @@ api.interceptors.response.use(
       } else {
         error.message = "Network error. Please check your internet connection.";
       }
+
+      // Handle network errors with popup
+      globalErrorHandler.handleApiFailure(error, originalRequest);
       return Promise.reject(error);
     }
 
@@ -257,7 +538,7 @@ api.interceptors.response.use(
 
       // ✅ Check for request-passcode-login FIRST
       const isRequestPasscodeLogin = originalRequest.url.includes(
-        "/request-passcode-login"
+        "/request-passcode-login",
       );
       const isLoginEndpoint = originalRequest.url.includes("/login");
 
@@ -275,13 +556,15 @@ api.interceptors.response.use(
           error.response.data?.message || "Invalid email or password";
         console.log(
           "🔍 request-passcode-login 401 - User credentials issue:",
-          errorMessage
+          errorMessage,
         );
 
         // Create a clean error object
         const credentialsError = new Error(errorMessage);
         credentialsError.response = error.response;
         credentialsError.config = originalRequest;
+
+        // Don't trigger global error handler for login failures
         return Promise.reject(credentialsError);
       }
 
@@ -313,9 +596,13 @@ api.interceptors.response.use(
           localStorage.removeItem("authtoken");
           localStorage.removeItem("authcustomer_id");
           dataManager.clearAll();
+
+          // Trigger error handler for token refresh failure
+          globalErrorHandler.handleApiFailure(refreshError, originalRequest);
+
           window.location.href = "/";
           return Promise.reject(
-            new Error("Session expired. Please login again.")
+            new Error("Session expired. Please login again."),
           );
         }
       }
@@ -336,8 +623,19 @@ api.interceptors.response.use(
       error.message = "Server error. Please try again later.";
     }
 
+    // Handle all other errors with popup
+    // Skip showing popup for specific endpoints if needed
+    const skipErrorEndpoints = ["/login", "/request-passcode-login"];
+    const shouldSkipPopup = skipErrorEndpoints.some((ep) =>
+      originalRequest?.url?.includes(ep),
+    );
+
+    if (!shouldSkipPopup) {
+      globalErrorHandler.handleApiFailure(error, originalRequest);
+    }
+
     return Promise.reject(error);
-  }
+  },
 );
 
 // ===================== CENTRALIZED API SERVICE =====================
@@ -345,6 +643,12 @@ class CentralizedApiService {
   constructor() {
     this.api = api;
     this.dataManager = dataManager;
+    this.errorHandler = globalErrorHandler;
+  }
+
+  // Reset error handler state
+  resetErrorState() {
+    this.errorHandler.reset();
   }
 
   // ========== PARTNER DATA ==========
@@ -362,24 +666,25 @@ class CentralizedApiService {
     const pending = dataManager.getPendingRequest(cacheKey);
     if (pending) {
       console.log(
-        `🔄 Reusing pending partner hostname request for: ${hostname}`
+        `🔄 Reusing pending partner hostname request for: ${hostname}`,
       );
       return pending;
     }
 
     // Make new request
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch partner by hostname ${hostname}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   async getPartnerBasicSetup(partnerId, forceRefresh = false) {
@@ -397,24 +702,22 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch partner setup for ID ${partnerId}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   // ========== COMMON DATA ==========
-
-  // ⚠️ REMOVED THE getCountries METHOD ENTIRELY ⚠️
-  // No more countries API calls from here!
 
   async getGifImages(forceRefresh = false) {
     const endpoint = `/gif-images`;
@@ -431,6 +734,7 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
@@ -439,7 +743,7 @@ class CentralizedApiService {
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   async getLogoutTime(forceRefresh = false) {
@@ -457,6 +761,7 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
@@ -465,7 +770,7 @@ class CentralizedApiService {
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   // ========== AUTH OPERATIONS ==========
@@ -478,7 +783,7 @@ class CentralizedApiService {
 
     console.log(
       "✅ Token from tokenService:",
-      token ? token.substring(0, 20) + "..." : "No token"
+      token ? token.substring(0, 20) + "..." : "No token",
     );
 
     console.log("🔍 Token validation check:", {
@@ -504,7 +809,7 @@ class CentralizedApiService {
           token = freshToken;
           console.log(
             "✅ Fresh token obtained:",
-            token.substring(0, 20) + "..."
+            token.substring(0, 20) + "...",
           );
           tokenService.setToken(token);
         } else {
@@ -545,6 +850,7 @@ class CentralizedApiService {
 
   async logout() {
     dataManager.clearAll();
+    globalErrorHandler.reset(); // Reset error state on logout
     return this.api.post("/logout");
   }
 
@@ -576,23 +882,24 @@ class CentralizedApiService {
     const pending = dataManager.getPendingRequest(cacheKey);
     if (pending) {
       console.log(
-        `🔄 Reusing pending account details for customer: ${customerId}`
+        `🔄 Reusing pending account details for customer: ${customerId}`,
       );
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch account details for customer ${customerId}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   async getCustomerProfile(customerId, forceRefresh = false) {
@@ -610,18 +917,19 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch customer profile for ID ${customerId}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   async getPartnerFxCurrencies(partnerId, forceRefresh = false) {
@@ -641,18 +949,19 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint, { params: { partner_id: partnerId } })
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch FX currencies for partner ${partnerId}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   clearPartnerSpecificCache(partnerId) {
@@ -709,24 +1018,25 @@ class CentralizedApiService {
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch modules for partner ${partnerId}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 
   async getCurrencyTransactionDetails(
     customerId,
     currency,
-    forceRefresh = false
+    forceRefresh = false,
   ) {
     const endpoint = `/transactions/currency-transaction-details/${customerId}/${currency}`;
     const cacheKey = `GET:${endpoint}::`;
@@ -739,23 +1049,24 @@ class CentralizedApiService {
     const pending = dataManager.getPendingRequest(cacheKey);
     if (pending) {
       console.log(
-        `🔄 Reusing pending transaction details for customer ${customerId}, currency ${currency}`
+        `🔄 Reusing pending transaction details for customer ${customerId}, currency ${currency}`,
       );
       return pending;
     }
 
+    const requestId = dataManager.generateRequestId();
     const requestPromise = this.api
       .get(endpoint)
       .then((response) => response.data)
       .catch((error) => {
         console.error(
           `❌ Failed to fetch transaction details for customer ${customerId}, currency ${currency}:`,
-          error
+          error,
         );
         throw error;
       });
 
-    return dataManager.registerRequest(cacheKey, requestPromise);
+    return dataManager.registerRequest(cacheKey, requestPromise, requestId);
   }
 }
 
@@ -860,6 +1171,21 @@ export const apiCoordinator = {
 
   setFailed: (signature) => {
     // Handled automatically by DataManager
+  },
+
+  // Reset error state
+  resetErrorState: () => {
+    centralizedApi.resetErrorState();
+  },
+
+  // Add error listener
+  onApiError: (listener) => {
+    globalErrorHandler.addErrorListener(listener);
+  },
+
+  // Remove error listener
+  offApiError: (listener) => {
+    globalErrorHandler.removeErrorListener(listener);
   },
 };
 

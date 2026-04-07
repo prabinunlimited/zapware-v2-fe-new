@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FaUniversity,
   FaFileUpload,
@@ -15,11 +15,11 @@ import {
   FaBuilding,
   FaCreditCard,
   FaCheckCircle,
+  FaTimesCircle,
+  FaLink,
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import Select from "react-select";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
 
 // Import Redux actions
@@ -36,20 +36,24 @@ import {
   fetchBeneficiaries,
   selectBeneficiaryBanks,
   selectBanksLoading,
+  selectHasFetched,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 // Import deposit slice actions and selectors
-import { 
-  checkSilaBankAccounts,
-  selectSilaBankAccounts,
+import {
+  fetchUSDBankAccounts,
+  selectUSDBankAccounts,
   selectHasSilaAccounts,
-  selectSilaAccountsLoading,
-  selectSilaAccountsError,
-  setSelectedBankAccount
-} from "../../Deposit/slices/depositSlice";
+  selectUSDAccountsLoading,
+  selectUSDAccountsError,
+  setUSDBankAccounts,
+} from "../../Deposit/slices/bankAccountSlice";
 
 import PaymentInitiation from "../../Deposit/components/PaymentInitiation/PaymentInitiation";
-import { setShowPaymentInitiation } from "../../Deposit/slices/depositSlice";
+import {
+  setShowPaymentInitiation,
+  setSelectedBankAccount,
+} from "../../Deposit/slices/depositSlice";
 
 const BankTransfer = ({
   formData = {},
@@ -77,21 +81,26 @@ const BankTransfer = ({
   silaAccountsError = null,
   selectedBankAccount = null,
   onBankAccountSelect,
+  customerId,
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { customerId: paramCustomerId } = useParams();
 
-  // Get Sila bank accounts from Redux store
-  const reduxSilaBankAccounts = useSelector(selectSilaBankAccounts);
+  const reduxSilaBankAccounts = useSelector(selectUSDBankAccounts);
   const reduxHasSilaAccounts = useSelector(selectHasSilaAccounts);
-  const reduxSilaAccountsLoading = useSelector(selectSilaAccountsLoading);
-  const reduxSilaAccountsError = useSelector(selectSilaAccountsError);
-  
+  const reduxSilaAccountsLoading = useSelector(selectUSDAccountsLoading);
+  const reduxSilaAccountsError = useSelector(selectUSDAccountsError);
+  const hasFetched = useSelector(selectHasFetched);
+
   // Use props if provided, otherwise use Redux store
-  const displayedSilaAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
+  const displayedSilaAccounts =
+    silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
   const displayedHasSilaAccounts = hasSilaAccounts || reduxHasSilaAccounts;
-  const displayedSilaAccountsLoading = silaAccountsLoading || reduxSilaAccountsLoading;
-  const displayedSilaAccountsError = silaAccountsError || reduxSilaAccountsError;
+  const displayedSilaAccountsLoading =
+    silaAccountsLoading || reduxSilaAccountsLoading;
+  const displayedSilaAccountsError =
+    silaAccountsError || reduxSilaAccountsError;
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
   const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
@@ -126,67 +135,16 @@ const BankTransfer = ({
     const customerId =
       paramCustomerId || localStorage.getItem("customerId") || "1720";
 
-    if (
-      customerId &&
-      (!allBeneficiaries || allBeneficiaries.length === 0) &&
-      !beneficiariesLoading
-    ) {
+    if (customerId && !hasFetched && !beneficiariesLoading) {
       console.log(
         "🔄 BankTransfer: Fetching beneficiaries for customer:",
-        customerId
+        customerId,
       );
       dispatch(fetchBeneficiaries(customerId));
     }
-  }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
-
-  // FETCH SILA BANK ACCOUNTS ON MOUNT
-  useEffect(() => {
-    const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
-    
-    if (customerId && !displayedSilaAccountsLoading) {
-      console.log("🔄 BankTransfer: Fetching Sila bank accounts for customer:", customerId);
-      dispatch(checkSilaBankAccounts(customerId))
-        .unwrap()
-        .then(result => {
-          console.log("✅ Sila bank accounts loaded:", result);
-        })
-        .catch(error => {
-          console.error("❌ Failed to load Sila bank accounts:", error);
-        });
-    }
-  }, [dispatch, paramCustomerId]);
+  }, [dispatch, paramCustomerId, hasFetched, beneficiariesLoading]);
 
   const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
-
-  // Transform Sila bank accounts for dropdown
-  const silaAccountOptions = useMemo(() => {
-    return (displayedSilaAccounts || []).map(account => {
-      const accountName = account.account_name || account.accountName || 'Unknown Account';
-      const accountNumber = account.accountNumberHash || account.account_number || '****';
-      const provider = account.provider || account.bank || 'Unknown Bank';
-      const accountType = account.account_type || account.accountType || 'Checking';
-      
-      return {
-        ...account,
-        value: account.id || account.account_id,
-        label: `${accountName} - ${provider}`,
-        fullLabel: `${accountName} - ${provider}`,
-        description: `${accountType} • ${accountNumber}`,
-        isDefault: account.is_default || false,
-        isVerified: account.web_debit_verified || false,
-        displayText: `${accountName} (${provider} - ${accountType})`,
-      };
-    });
-  }, [displayedSilaBankAccounts]);
-
-  // Auto-select first Sila account if available and none selected
-  useEffect(() => {
-    if (silaAccountOptions.length > 0 && !selectedBankAccount && onBankAccountSelect) {
-      const firstAccount = silaAccountOptions[0];
-      console.log("🔄 Auto-selecting first Sila account:", firstAccount);
-      onBankAccountSelect(firstAccount);
-    }
-  }, [silaAccountOptions, selectedBankAccount, onBankAccountSelect]);
 
   // Local state
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
@@ -196,41 +154,19 @@ const BankTransfer = ({
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
   const [showBankAccountInfo, setShowBankAccountInfo] = useState(false);
 
-  // Debug logging
-  useEffect(() => {
-    console.log("BankTransfer Props Debug:", {
-      hasOnFieldChange: !!onFieldChange,
-      purposeOptionsCount: purposeOptions?.length || 0,
-      incomeSourceOptionsCount: incomeSourceOptions?.length || 0,
-      paymentOptionsCount: paymentOptions?.length || 0,
-      relationOptionsCount: relationOptions?.length || 0,
-      formDataPurpose: formData?.purpose,
-      formDataIncomeSource: formData?.incomeSource,
-      formDataPayoutMethod: formData?.payout_method,
-      silaAccountsCount: displayedSilaBankAccounts?.length || 0,
-      hasSilaAccounts: displayedHasSilaAccounts,
-      selectedBankAccount: selectedBankAccount,
-    });
-  }, [
-    onFieldChange,
-    purposeOptions,
-    incomeSourceOptions,
-    paymentOptions,
-    relationOptions,
-    formData,
-    displayedSilaBankAccounts,
-    displayedHasSilaAccounts,
-    selectedBankAccount,
-  ]);
+  const [foundBeneficiaryByCode, setFoundBeneficiaryByCode] = useState(null);
+  const [showFoundBeneficiary, setShowFoundBeneficiary] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [noSenderBank, setNoSenderBank] = useState("");
 
   // Default payout options - fallback if paymentOptions is empty
   const defaultPayoutOptions = useMemo(
     () => [
-      { value: "bank_deposit", label: "Bank Deposit" },
-      { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
-      { value: "fcy_deposit", label: "FCY Deposit" },
+      { value: "bank", label: "Bank Transfer" },
+      { value: "manual", label: "Cash Deposit" },
+      { value: "card", label: "Card Payment" },
     ],
-    []
+    [],
   );
 
   // Use provided paymentOptions or fallback to defaults
@@ -240,52 +176,95 @@ const BankTransfer = ({
       : defaultPayoutOptions;
   }, [paymentOptions, defaultPayoutOptions]);
 
-  // Custom select styles
+  // Add this useEffect to sync payment method with payout method
+  useEffect(() => {
+    if (formData?.paymentMethod && onFieldChange) {
+      const matchedOption = payoutMethodOptions.find(
+        (opt) => opt.value === formData.paymentMethod,
+      );
+
+      if (
+        matchedOption &&
+        (!formData.payout_method ||
+          formData.payout_method.value !== matchedOption.value)
+      ) {
+        console.log("🔄 Setting payout method to:", matchedOption);
+        onFieldChange("payout_method", matchedOption);
+      }
+    }
+  }, [
+    formData?.paymentMethod,
+    onFieldChange,
+    payoutMethodOptions,
+    formData?.payout_method,
+  ]);
+
+  // Custom select styles - responsive
   const selectStyles = useMemo(
     () => ({
       control: (base) => ({
         ...base,
-        minHeight: "56px",
+        minHeight: "48px",
         borderRadius: "0.5rem",
         borderColor: "#e5e7eb",
         boxShadow: "none",
         "&:hover": { borderColor: "#9ca3af" },
-        fontSize: "0.95rem",
+        fontSize: "0.875rem",
+        "@media (min-width: 640px)": {
+          minHeight: "56px",
+          fontSize: "0.95rem",
+        },
       }),
       option: (base, { isSelected, isFocused }) => ({
         ...base,
         backgroundColor: isSelected
           ? "#eff6ff"
           : isFocused
-          ? "#f8fafc"
-          : "white",
+            ? "#f8fafc"
+            : "white",
         color: isSelected ? "#1e40af" : "#374151",
         fontWeight: isSelected ? "600" : "500",
-        padding: "12px 16px",
+        padding: "10px 12px",
+        fontSize: "0.875rem",
         "&:hover": {
           backgroundColor: "#f8fafc",
+        },
+        "@media (min-width: 640px)": {
+          padding: "12px 16px",
+          fontSize: "0.95rem",
         },
       }),
       menu: (base) => ({
         ...base,
         borderRadius: "0.5rem",
-        fontSize: "0.95rem",
+        fontSize: "0.875rem",
         border: "1px solid #e5e7eb",
         boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
         zIndex: 9999,
+        "@media (min-width: 640px)": {
+          fontSize: "0.95rem",
+        },
       }),
       placeholder: (base) => ({
         ...base,
         color: "#9ca3af",
         fontWeight: "500",
+        fontSize: "0.875rem",
+        "@media (min-width: 640px)": {
+          fontSize: "0.95rem",
+        },
       }),
       singleValue: (base) => ({
         ...base,
         color: "#1f2937",
         fontWeight: "600",
+        fontSize: "0.875rem",
+        "@media (min-width: 640px)": {
+          fontSize: "0.95rem",
+        },
       }),
     }),
-    []
+    [],
   );
 
   // Fetch occupations on component mount
@@ -303,13 +282,12 @@ const BankTransfer = ({
             (occupation) => ({
               value: occupation?.name,
               label: occupation?.name,
-            })
+            }),
           );
           setOccupations(transformedOccupations);
         }
       } catch (error) {
         console.error("Error fetching occupations:", error);
-        // Set default occupations
         setOccupations([
           { value: "Business", label: "Business" },
           { value: "Employee", label: "Employee" },
@@ -327,13 +305,18 @@ const BankTransfer = ({
 
   // Auto-select first beneficiary if none selected
   useEffect(() => {
-    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
+    if (
+      beneficiaries.length > 0 &&
+      !selectedBeneficiary &&
+      !showCodeInput &&
+      !showFoundBeneficiary
+    ) {
       const firstBeneficiary = beneficiaries[0];
       if (firstBeneficiary && onBeneficiarySelect) {
         handleBeneficiarySelect(firstBeneficiary);
       }
     }
-  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
+  }, [beneficiaries, selectedBeneficiary, showCodeInput, showFoundBeneficiary]);
 
   // Auto-select first bank when banks are loaded
   useEffect(() => {
@@ -371,113 +354,100 @@ const BankTransfer = ({
     setShowCodeInput(false);
     if (onBeneficiarySelect) onBeneficiarySelect(selectedOption);
 
-    // Clear any existing selected bank
     if (onBankSelect) onBankSelect(null);
 
-    // Fetch beneficiary banks
     try {
       console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
       const result = await dispatch(
-        fetchBeneficiaryBanks(selectedOption.id)
+        fetchBeneficiaryBanks(selectedOption.id),
       ).unwrap();
 
       console.log("📋 Banks fetched successfully:", result);
 
-      // Find matching options from beneficiary data
       if (onFieldChange) {
-        // Purpose
         if (selectedOption?.transfer_purpose) {
           const matchedPurpose = purposeOptions.find(
-            (opt) => opt.value === selectedOption.transfer_purpose
+            (opt) => opt.value === selectedOption.transfer_purpose,
           );
           if (matchedPurpose) {
             onFieldChange("purpose", matchedPurpose);
           }
         }
 
-        // Income Source
         if (selectedOption?.income_source) {
           const matchedIncomeSource = incomeSourceOptions.find(
-            (opt) => opt.value === selectedOption.income_source
+            (opt) => opt.value === selectedOption.income_source,
           );
           if (matchedIncomeSource) {
             onFieldChange("incomeSource", matchedIncomeSource);
           }
         }
 
-        // Relation
         if (selectedOption?.relationtobenef) {
           const matchedRelation = relationOptions.find(
-            (opt) => opt.value === selectedOption.relationtobenef
+            (opt) => opt.value === selectedOption.relationtobenef,
           );
           if (matchedRelation) {
             onFieldChange("relation", matchedRelation);
           }
         }
 
-        // Payout Method
         const payoutMethodValue =
           selectedOption?.payout_method || selectedOption?.payment_method;
         if (payoutMethodValue) {
           const matchedPayoutMethod = payoutMethodOptions.find(
-            (opt) => opt.value === payoutMethodValue
+            (opt) => opt.value === payoutMethodValue,
           );
           if (matchedPayoutMethod) {
             onFieldChange("payout_method", matchedPayoutMethod);
           }
         }
 
-        // Occupation
         if (selectedOption?.occupation) {
           onFieldChange("occupation", selectedOption.occupation);
         }
       }
 
-      // Auto-select first bank if available
       if (result?.length > 0) {
         setTimeout(() => {
           const firstBank = beneficiaryBanks?.[0];
           if (firstBank && onBankSelect) {
             onBankSelect(firstBank);
-            toast.success("Beneficiary details loaded successfully!");
           }
         }, 100);
-      } else {
-        toast.warning("No bank accounts found for this beneficiary");
       }
     } catch (error) {
       console.error("Error fetching beneficiary banks:", error);
-      toast.error("Failed to load beneficiary bank details");
     }
   };
 
   // Handle bank account selection
   const handleBankAccountSelect = (selectedOption) => {
     console.log("BankTransfer: Sila bank account selected:", selectedOption);
-    
+
     if (onBankAccountSelect) {
       onBankAccountSelect(selectedOption);
     }
-    
-    // Also update Redux store if needed
+
     if (selectedOption) {
       dispatch(setSelectedBankAccount(selectedOption));
     }
-    
-    toast.success(`Selected ${selectedOption?.account_name || 'bank account'}`);
   };
 
   // Handle beneficiary code lookup
   const handleBeneficiaryCodeLookupInternal = async () => {
     if (!beneficiaryCode.trim()) {
-      toast.error("Please enter a beneficiary code");
       return;
     }
 
     try {
       setIsLoadingCode(true);
+      setSearchError("");
+      setFoundBeneficiaryByCode(null);
+      setShowFoundBeneficiary(false);
+
       const result = await dispatch(
-        fetchBeneficiaryByCode(beneficiaryCode)
+        fetchBeneficiaryByCode(beneficiaryCode),
       ).unwrap();
 
       if (result?.data) {
@@ -497,69 +467,86 @@ const BankTransfer = ({
           income_source: beneficiaryData?.income_source,
           payout_method:
             beneficiaryData?.payout_method || beneficiaryData?.payment_method,
+          phone_number: beneficiaryData?.phone_number,
+          email: beneficiaryData?.email,
+          benef_banks: beneficiaryData?.benef_banks,
           ...beneficiaryData,
         };
 
+        setFoundBeneficiaryByCode(transformedBeneficiary);
+        setShowFoundBeneficiary(true);
         await handleBeneficiarySelect(transformedBeneficiary);
-        toast.success("Beneficiary details loaded successfully!");
       }
     } catch (error) {
       console.error("Error fetching beneficiary by code:", error);
       if (error.response?.status === 404) {
-        toast.error("No beneficiary found with this code");
+        setSearchError("No beneficiary found with this code");
       } else {
-        toast.error("Failed to fetch beneficiary details");
+        setSearchError(
+          "Failed to fetch beneficiary details. Please try again.",
+        );
       }
+      setFoundBeneficiaryByCode(null);
+      setShowFoundBeneficiary(false);
     } finally {
       setIsLoadingCode(false);
     }
   };
 
-  // Handle beneficiary code input change
+  const clearFoundBeneficiary = () => {
+    setFoundBeneficiaryByCode(null);
+    setShowFoundBeneficiary(false);
+    setBeneficiaryCode("");
+    setSearchError("");
+    if (onBeneficiarySelect) onBeneficiarySelect(null);
+    if (onBankSelect) onBankSelect(null);
+  };
+
+  const useFoundBeneficiary = () => {
+    if (foundBeneficiaryByCode && onBeneficiarySelect) {
+      handleBeneficiarySelect(foundBeneficiaryByCode);
+      setShowFoundBeneficiary(false);
+    }
+  };
+
   const handleBeneficiaryCodeInputChange = (e) => {
     const value = e.target.value;
     setBeneficiaryCode(value);
     setShowCodeInput(value.trim().length > 0);
 
-    // If clearing the code input, enable dropdown
     if (!value.trim() && selectedBeneficiary) {
       handleBeneficiarySelect(selectedBeneficiary);
     }
   };
 
-  // Handle file upload
   const handleFileUploadInternal = (e) => {
     const file = e.target.files?.[0];
     if (file && onFileUpload) {
       onFileUpload(file);
-      toast.success("Document uploaded successfully");
     }
   };
 
-  // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
     if (onFieldChange) {
       onFieldChange("occupation", selectedOption?.value || "");
     }
   };
 
-  // Find current occupation value for dropdown
   const currentOccupationValue = useMemo(() => {
     if (!formData?.occupation) return null;
     return occupations.find((opt) => opt.value === formData.occupation) || null;
   }, [formData?.occupation, occupations]);
 
-  // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    toast.info("Redirecting to add new beneficiary...");
-    // You can implement navigation to beneficiary creation page
+    const customerId =
+      paramCustomerId || localStorage.getItem("authcustomer_id");
+    navigate(`/addbeneficiary/${customerId}`);
   };
 
-  // Bank Detail Item component (for consistency with ManualDeposit)
   const BankDetailItem = ({ icon, label, value }) => (
     <div className="flex items-start gap-2">
-      <div className="text-gray-500 mt-0.5 text-sm">{icon}</div>
-      <div className="flex-1">
+      <div className="text-gray-500 mt-0.5 text-sm flex-shrink-0">{icon}</div>
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 mb-1">
           <p className="text-xs text-gray-500 font-medium">{label}</p>
         </div>
@@ -572,66 +559,81 @@ const BankTransfer = ({
     </div>
   );
 
-  // Bank Account Info Modal
   const renderBankAccountInfo = () => {
     if (!selectedBankAccount) return null;
 
     return (
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex justify-between items-center mb-3">
-          <h4 className="text-md font-semibold text-blue-800">Selected Bank Account Details</h4>
+      <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
+          <h4 className="text-sm sm:text-md font-semibold text-blue-800">
+            Selected Bank Account Details
+          </h4>
           <button
             type="button"
             onClick={() => setShowBankAccountInfo(!showBankAccountInfo)}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm self-start sm:self-auto"
           >
             {showBankAccountInfo ? "Hide Details" : "Show Details"}
           </button>
         </div>
-        
+
         {showBankAccountInfo && (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-gray-500">Account Name</p>
-                <p className="text-sm font-medium">{selectedBankAccount.account_name}</p>
+                <p className="text-sm font-medium break-words">
+                  {selectedBankAccount.account_name}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Provider</p>
-                <p className="text-sm font-medium">{selectedBankAccount.provider || 'N/A'}</p>
+                <p className="text-sm font-medium break-words">
+                  {selectedBankAccount.provider || "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Account Type</p>
-                <p className="text-sm font-medium">{selectedBankAccount.account_type || 'N/A'}</p>
+                <p className="text-sm font-medium">
+                  {selectedBankAccount.account_type || "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Account Number</p>
-                <p className="text-sm font-medium">{selectedBankAccount.accountNumberHash || '****'}</p>
+                <p className="text-sm font-medium font-mono">
+                  {selectedBankAccount.accountNumberHash || "****"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Routing Number</p>
-                <p className="text-sm font-medium">{selectedBankAccount.routing_number || 'N/A'}</p>
+                <p className="text-sm font-medium font-mono">
+                  {selectedBankAccount.routing_number || "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Status</p>
                 <p className="text-sm font-medium">
                   {selectedBankAccount.web_debit_verified ? (
                     <span className="flex items-center text-green-600">
-                      <FaCheckCircle className="mr-1" /> Verified
+                      <FaCheckCircle className="mr-1 flex-shrink-0" /> Verified
                     </span>
                   ) : (
-                    <span className="text-yellow-600">Pending Verification</span>
+                    <span className="text-yellow-600">
+                      Pending Verification
+                    </span>
                   )}
                 </p>
               </div>
             </div>
-            
+
             <div className="pt-3 border-t border-blue-200">
               <p className="text-xs text-gray-500 mb-1">Additional Info</p>
               <p className="text-xs text-gray-700">
-                This account will be used as the source for your bank transfer. 
-                {selectedBankAccount.fednow_credit_enabled && " Supports FedNow transfers."}
-                {selectedBankAccount.rtp_credit_enabled && " Supports RTP transfers."}
+                This account will be used as the source for your bank transfer.
+                {selectedBankAccount.fednow_credit_enabled &&
+                  " Supports FedNow transfers."}
+                {selectedBankAccount.rtp_credit_enabled &&
+                  " Supports RTP transfers."}
               </p>
             </div>
           </div>
@@ -640,47 +642,170 @@ const BankTransfer = ({
     );
   };
 
+  const silaAccountOptions = useMemo(() => {
+    return (displayedSilaAccounts || []).map((account) => {
+      const accountName =
+        account.account_name || account.accountName || "Unknown Account";
+      const accountNumber =
+        account.accountNumberHash || account.account_number || "****";
+      const provider = account.provider || account.bank || "Unknown Bank";
+      const accountType =
+        account.account_type || account.accountType || "Checking";
+
+      return {
+        ...account,
+        value: account.id || account.account_id,
+        label: `${accountName} - ${provider}`,
+        fullLabel: `${accountName} - ${provider}`,
+        description: `${accountType} • ${accountNumber}`,
+        isDefault: account.is_default || false,
+        isVerified: account.web_debit_verified || false,
+        displayText: `${accountName} (${provider} - ${accountType})`,
+      };
+    });
+  }, [displayedSilaAccounts]);
+
+  useEffect(() => {
+    if (
+      silaAccountOptions.length > 0 &&
+      !selectedBankAccount &&
+      onBankAccountSelect
+    ) {
+      const firstAccount = silaAccountOptions[0];
+      console.log("🔄 Auto-selecting first Sila account:", firstAccount);
+      onBankAccountSelect(firstAccount);
+    }
+  }, [silaAccountOptions, selectedBankAccount, onBankAccountSelect]);
+
+  useEffect(() => {
+    const customerId = paramCustomerId || localStorage.getItem("customerId");
+
+    if (customerId && !displayedSilaAccountsLoading) {
+      console.log(
+        "🔄 BankTransfer: Fetching Sila bank accounts via /sila/sila-bank-details",
+      );
+      dispatch(fetchUSDBankAccounts())
+        .unwrap()
+        .then((result) => {
+          console.log("✅ Sila bank accounts loaded:", result);
+        })
+        .catch((error) => {
+          console.error("❌ Failed to load Sila bank accounts:", error);
+        });
+    }
+  }, [dispatch, paramCustomerId]);
+
+  useEffect(() => {
+    const customerId = paramCustomerId || localStorage.getItem("customerId");
+
+    if (customerId && !displayedSilaAccountsLoading) {
+      console.log(
+        "BankTransfer: Fetching SILA Bank Accounts via /sila/sila-bank-details",
+      );
+      dispatch(fetchUSDBankAccounts())
+        .unwrap()
+        .then((result) => {
+          console.log("Sila bank accounts loaded:", result);
+          if (!result || result.length === 0) {
+            setNoSenderBank(true);
+          } else {
+            setNoSenderBank(false);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load Sila Bank Accounts:", error);
+          setNoSenderBank(true);
+        });
+    }
+  }, [dispatch, paramCustomerId]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Main container */}
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+      <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">
           Bank Transfer Details
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-4 sm:space-y-4">
           {/* Select Your Bank Account (Sila Accounts) */}
-          {displayedHasSilaAccounts && selectedCurrency === "USD" && (
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
+          {selectedCurrency === "USD" && formData?.paymentMethod === "bank" && (
+            <div className="mb-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Select Your Bank Account *
+                  Your Bank Account <span className="text-red-500">*</span>
                 </label>
                 {displayedSilaAccountsLoading ? (
                   <div className="flex items-center">
-                    <RingLoader size={20} color="#3b82f6" />
-                    <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
+                    <RingLoader size={18} color="#3b82f6" />
+                    <span className="ml-2 text-xs text-gray-500">
+                      Loading accounts...
+                    </span>
                   </div>
                 ) : (
-                  <span className="text-xs text-gray-500">
-                    {silaAccountOptions.length} account(s) available
-                  </span>
+                  <button
+                    onClick={() => navigate(`/linkbank/${customerId}`)}
+                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors duration-200"
+                  >
+                    Add or Remove Accounts
+                  </button>
                 )}
               </div>
-              
+
               {displayedSilaAccountsError ? (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-600">{displayedSilaAccountsError}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
-                      dispatch(checkSilaBankAccounts(customerId));
-                    }}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Retry
-                  </button>
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <FaExclamationTriangle className="text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800">
+                        Unable to Load Bank Accounts
+                      </p>
+                      <p className="text-sm text-red-700 mt-1">
+                        {typeof displayedSilaAccountsError === "string"
+                          ? displayedSilaAccountsError
+                          : "Failed to load your bank accounts. Please try again."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customerId =
+                            paramCustomerId ||
+                            localStorage.getItem("customerId") ||
+                            "1720";
+                          dispatch(fetchUSDBankAccounts());
+                        }}
+                        className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : silaAccountOptions.length === 0 &&
+                !displayedSilaAccountsLoading ? (
+                <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <FaExclamationTriangle className="text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800">
+                        No Bank Account Linked
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        No bank account have been linked yet. Please link your
+                        bank account to send USD.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(`/linkbank/${customerId}`);
+                        }}
+                        className="mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium inline-flex items-center gap-2"
+                      >
+                        <FaLink className="w-4 h-4" />
+                        Link Bank Account
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -691,143 +816,300 @@ const BankTransfer = ({
                     isLoading={displayedSilaAccountsLoading}
                     classNamePrefix="select"
                     styles={selectStyles}
-                    placeholder={
-                      displayedSilaAccountsLoading
-                        ? "Loading your bank accounts..."
-                        : silaAccountOptions.length === 0
-                        ? "No bank accounts found. Please link a bank account."
-                        : "Select your bank account..."
-                    }
+                    placeholder="Select your bank account..."
                     isSearchable
                     getOptionLabel={(option) => (
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <div className="font-medium">{option.account_name}</div>
+                          <div className="font-medium text-sm sm:text-base">
+                            {option.account_name}
+                          </div>
                           <div className="text-xs text-gray-500">
                             {option.provider} • {option.account_type}
                             {option.web_debit_verified && (
-                              <span className="ml-2 text-green-600">
+                              <span className="ml-2 text-green-600 inline-flex items-center">
                                 <FaCheckCircle className="inline mr-1" />
                                 Verified
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-gray-400 mt-1 sm:mt-0 font-mono">
                           {option.accountNumberHash}
                         </div>
                       </div>
                     )}
                     getOptionValue={(option) => option.value}
                   />
-                  
+
                   {selectedBankAccount && renderBankAccountInfo()}
-                  
-                  {silaAccountOptions.length === 0 && !displayedSilaAccountsLoading && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-start">
-                        <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2" />
-                        <div>
-                          <p className="text-sm text-yellow-800">
-                            No bank accounts found. Please link a bank account to proceed.
-                          </p>
-                          <button
-                            type="button"
-                            className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                            onClick={() => {
-                              // You can add navigation to bank linking page here
-                              toast.info("Redirecting to bank linking...");
-                            }}
-                          >
-                            Link a Bank Account
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
           )}
 
-          {/* Beneficiary Selection */}
+          {/* Beneficiary Selection - Responsive */}
           <div>
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-2">
               <label className="block text-sm font-medium text-gray-700">
                 Select Beneficiary
               </label>
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 self-start sm:self-auto"
               >
-                <FaPlus className="w-3 h-3" />
+                <FaPlus className="w-3 h-3 flex-shrink-0" />
                 Add New Beneficiary
               </button>
             </div>
-            <Select
-              options={beneficiaries}
-              value={selectedBeneficiary || null}
-              onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading}
-              isDisabled={beneficiariesLoading || showCodeInput}
-              classNamePrefix="select"
-              styles={selectStyles}
-              placeholder={
-                beneficiariesLoading
-                  ? "Loading beneficiaries..."
-                  : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
-              }
-              isSearchable
-              getOptionLabel={(option) =>
-                option?.formattedName ||
-                `${option?.name || "Unknown"} (${
-                  option?.phone_number || option?.benef_uuid || "No Contact"
-                })`
-              }
-              getOptionValue={(option) => option?.id}
-            />
-          </div>
 
-          {/* OR Separator */}
-          <div className="flex items-center my-4">
-            <div className="flex-1 border-t border-gray-300"></div>
-            <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
-            <div className="flex-1 border-t border-gray-300"></div>
-          </div>
+            {beneficiariesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <RingLoader size={20} color="#3b82f6" />
+                <span className="ml-2 text-sm text-gray-600">
+                  Loading beneficiaries...
+                </span>
+              </div>
+            ) : hasFetched && beneficiaries.length === 0 ? (
+              <div className="space-y-4">
+                {showFoundBeneficiary && foundBeneficiaryByCode ? (
+                  <div className="bg-white p-4 sm:p-5 rounded-lg border border-green-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="bg-green-100 p-2 rounded-full flex-shrink-0">
+                          <FaCheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-base sm:text-lg font-semibold text-gray-900">
+                            Beneficiary Found!
+                          </h4>
+                          <p className="text-xs sm:text-sm text-gray-500 break-all">
+                            Code:{" "}
+                            <span className="font-mono">{beneficiaryCode}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearFoundBeneficiary}
+                        className="text-gray-400 hover:text-gray-600 transition-colors self-end sm:self-start"
+                      >
+                        <FaTimesCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </button>
+                    </div>
 
-          {/* Enter Beneficiary Code Field */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter Beneficiary Code
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={beneficiaryCode}
-                onChange={handleBeneficiaryCodeInputChange}
-                placeholder="Enter beneficiary code"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoadingCode}
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4 mb-4">
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">Full Name</p>
+                        <p className="text-sm font-medium text-gray-900 break-words">
+                          {foundBeneficiaryByCode?.name || "N/A"}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">
+                          Bank Account
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 font-mono break-all">
+                          {foundBeneficiaryByCode?.benef_banks?.[0]
+                            ?.bank_acc_no ||
+                            foundBeneficiaryByCode?.bank_acc_no ||
+                            "N/A"}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">
+                          Phone Number
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 break-words">
+                          {foundBeneficiaryByCode?.phone_number ||
+                            foundBeneficiaryByCode?.full_phone_number ||
+                            "N/A"}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">
+                          Email Address
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 break-words">
+                          {foundBeneficiaryByCode?.email || "N/A"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {foundBeneficiaryByCode?.benef_banks?.[0] && (
+                      <div className="mb-4 p-3 sm:p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaBuilding className="text-blue-600 flex-shrink-0" />
+                          <span className="text-sm font-medium text-blue-800">
+                            Bank Details
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-xs text-gray-500">Bank Name</p>
+                            <p className="text-sm font-medium text-gray-900 break-words">
+                              {foundBeneficiaryByCode.benef_banks[0]
+                                .bank_name ||
+                                foundBeneficiaryByCode.benef_banks[0]
+                                  .bank_branch_name ||
+                                "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">IFSC Code</p>
+                            <p className="text-sm font-medium text-gray-900 font-mono break-all">
+                              {foundBeneficiaryByCode.benef_banks[0].ifsc ||
+                                "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">
+                              Payment Method
+                            </p>
+                            <p className="text-sm font-medium text-gray-900 break-words">
+                              {foundBeneficiaryByCode.benef_banks[0]
+                                .payment_method || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Currency</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {foundBeneficiaryByCode.benef_banks[0]
+                                .currency_code || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Rails</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {foundBeneficiaryByCode.benef_banks[0].rails ||
+                                "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button
+                        type="button"
+                        onClick={useFoundBeneficiary}
+                        className="w-full sm:flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 font-medium text-sm sm:text-base"
+                      >
+                        <FaCheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Use This Beneficiary</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearFoundBeneficiary}
+                        className="w-full sm:flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 font-medium text-sm sm:text-base"
+                      >
+                        <FaTimesCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Clear Search</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 sm:py-8 px-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="bg-gray-100 w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                      <FaUser className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                      No Beneficiaries Found
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6 max-w-md mx-auto px-2">
+                      You haven't added any beneficiaries yet. Add a new
+                      beneficiary or search using an existing beneficiary code.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4 sm:mb-6 px-4">
+                      <button
+                        type="button"
+                        onClick={handleAddNewBeneficiary}
+                        className="w-full sm:w-auto px-5 sm:px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm"
+                      >
+                        <FaPlus className="w-4 h-4 flex-shrink-0" />
+                        <span>Add New Beneficiary</span>
+                      </button>
+                    </div>
+
+                    <div className="max-w-md mx-auto pt-4 border-t border-gray-200 px-4">
+                      <p className="text-sm font-medium text-gray-700 mb-3">
+                        Or search by beneficiary code:
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={beneficiaryCode}
+                          onChange={handleBeneficiaryCodeInputChange}
+                          placeholder="Enter beneficiary code"
+                          className="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          disabled={isLoadingCode}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleBeneficiaryCodeLookupInternal}
+                          disabled={isLoadingCode || !beneficiaryCode.trim()}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm"
+                        >
+                          {isLoadingCode ? (
+                            <>
+                              <RingLoader size={16} color="#ffffff" />
+                              <span>Searching...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FaSearch className="w-4 h-4 flex-shrink-0" />
+                              <span>Search</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {searchError && (
+                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-xs sm:text-sm text-red-600 flex items-center gap-2">
+                            <FaExclamationTriangle className="w-4 h-4 flex-shrink-0" />
+                            <span className="text-left">{searchError}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Select
+                options={beneficiaries}
+                value={selectedBeneficiary || null}
+                onChange={handleBeneficiarySelect}
+                isLoading={beneficiariesLoading}
+                isDisabled={
+                  beneficiariesLoading || showCodeInput || showFoundBeneficiary
+                }
+                classNamePrefix="select"
+                styles={selectStyles}
+                placeholder={
+                  showFoundBeneficiary
+                    ? "Disabled - Beneficiary found via code"
+                    : beneficiariesLoading
+                      ? "Loading beneficiaries..."
+                      : showCodeInput
+                        ? "Disabled - Using beneficiary code"
+                        : "Select beneficiary..."
+                }
+                isSearchable
+                getOptionLabel={(option) =>
+                  option?.formattedName ||
+                  `${option?.name || "Unknown"} (${
+                    option?.phone_number || option?.benef_uuid || "No Contact"
+                  })`
+                }
+                getOptionValue={(option) => option?.id}
               />
-              <button
-                type="button"
-                onClick={handleBeneficiaryCodeLookupInternal}
-                disabled={isLoadingCode || !beneficiaryCode.trim()}
-                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center"
-              >
-                <FaSearch className="mr-2" />
-                {isLoadingCode ? "Loading..." : "Search"}
-              </button>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Enter the beneficiary code to load their details automatically
-            </p>
+            )}
           </div>
 
-          {/* Payout Method */}
+          {/* Payout Method - Responsive */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Payout Method
@@ -851,7 +1133,7 @@ const BankTransfer = ({
             )}
           </div>
 
-          {/* Purpose of Transfer */}
+          {/* Purpose of Transfer - Responsive */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Purpose of Transfer *
@@ -875,7 +1157,7 @@ const BankTransfer = ({
             )}
           </div>
 
-          {/* Source of Income */}
+          {/* Source of Income - Responsive */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Source of Income *
@@ -899,12 +1181,12 @@ const BankTransfer = ({
             )}
           </div>
 
-          {/* Occupation Field */}
+          {/* Occupation Field - Responsive */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Occupation
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Select
                 options={occupations}
                 value={currentOccupationValue}
@@ -917,7 +1199,7 @@ const BankTransfer = ({
                     ? "Loading occupations..."
                     : "Select occupation..."
                 }
-                className="flex-1"
+                className="w-full sm:flex-1"
                 isSearchable
                 isClearable
               />
@@ -926,12 +1208,12 @@ const BankTransfer = ({
                 value={formData?.occupation || ""}
                 onChange={(e) => onFieldChange("occupation", e.target.value)}
                 placeholder="Or enter custom occupation"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full sm:flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
 
-          {/* Beneficiary Bank */}
+          {/* Beneficiary Bank - Responsive */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Beneficiary Bank
@@ -953,10 +1235,10 @@ const BankTransfer = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : !beneficiaryBanks || beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : !beneficiaryBanks || beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option?.bank_name || "Unknown Bank";
@@ -983,12 +1265,13 @@ const BankTransfer = ({
               !banksLoading &&
               beneficiaryBanks &&
               beneficiaryBanks.length > 0 && (
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-xs sm:text-sm text-gray-500">
                   {beneficiaryBanks.length} bank account(s) available
                 </p>
               )}
           </div>
 
+          {/* Open Banking Section - Responsive */}
           {(selectedCurrency === "EUR" ||
             selectedCurrency === "GBP" ||
             selectedCurrency === "DKK") &&
@@ -997,19 +1280,18 @@ const BankTransfer = ({
           formData?.amount &&
           parseFloat(formData.amount) > 0 ? (
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
                 <div>
-                  <h4 className="text-lg font-medium text-gray-900">
+                  <h4 className="text-base sm:text-lg font-medium text-gray-900">
                     Open Banking
                   </h4>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Initiate secure bank transfer via Open Banking
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    // Validate required fields
                     const errors = {};
 
                     if (!formData?.amount || parseFloat(formData.amount) <= 0) {
@@ -1029,9 +1311,8 @@ const BankTransfer = ({
                     }
 
                     if (Object.keys(errors).length > 0) {
-                      // Show validation errors
                       Object.values(errors).forEach((error) =>
-                        toast.error(error)
+                        console.error(error),
                       );
                       return;
                     }
@@ -1043,30 +1324,41 @@ const BankTransfer = ({
                       bank: selectedBank.bank_name,
                     });
 
-                    // Dispatch to show PaymentInitiation modal
                     dispatch(setShowPaymentInitiation(true));
                   }}
-                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all"
+                  className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
-                  <FaUniversity className="mr-2" />
+                  <FaUniversity className="mr-2 flex-shrink-0" />
                   Initiate Open Banking
                 </button>
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start">
-                  <FaInfoCircle className="text-green-600 mt-0.5 mr-3" />
+                  <FaInfoCircle className="text-green-600 mt-0.5 mr-2 sm:mr-3 flex-shrink-0" />
                   <div>
-                    <p className="text-sm text-green-800">
+                    <p className="text-xs sm:text-sm text-green-800">
                       <strong>Open Banking</strong> allows you to securely
                       connect your bank account and initiate transfers
                       instantly. No manual bank details required.
                     </p>
                     <ul className="mt-2 text-xs text-green-700 space-y-1">
-                      <li>• Instant bank account verification</li>
-                      <li>• Secure connection via Plaid</li>
-                      <li>• Real-time transfer initiation</li>
-                      <li>• No need to enter bank details manually</li>
+                      <li className="flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>
+                        <span>Instant bank account verification</span>
+                      </li>
+                      <li className="flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>
+                        <span>Secure connection via Plaid</span>
+                      </li>
+                      <li className="flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>
+                        <span>Real-time transfer initiation</span>
+                      </li>
+                      <li className="flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>
+                        <span>No need to enter bank details manually</span>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -1074,67 +1366,17 @@ const BankTransfer = ({
             </div>
           ) : null}
 
-          {/* Compliance Note */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm text-gray-700">
+          {/* Compliance Note - Responsive */}
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
+            <p className="text-xs sm:text-sm text-gray-700">
               <span className="font-semibold">Note:</span> For compliance
               purposes, we require information about the purpose of your
               transfer and source of funds. All information is kept confidential
               and secure.
             </p>
           </div>
-
-          {/* Document Upload Section - Only show if onFileUpload prop is provided */}
-          {onFileUpload && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Upload Supporting Document (Optional)
-              </label>
-              <div className="flex items-center">
-                <label className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                  <div className="flex flex-col items-center justify-center">
-                    <FaUpload className="w-8 h-8 mb-2 text-gray-500" />
-                    <p className="text-sm text-gray-500">
-                      {formData?.document
-                        ? formData.document.name || "Document uploaded"
-                        : "Click to upload document (PDF, JPG, PNG)"}
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    id="bank-transfer-document"
-                    className="hidden"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileUploadInternal}
-                  />
-                </label>
-              </div>
-              {filePreview && (
-                <div className="mt-2">
-                  <img
-                    src={filePreview}
-                    alt="Document preview"
-                    className="h-full object-contain border rounded"
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Success/Error Messages */}
-      <ToastContainer
-        position="bottom-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
     </div>
   );
 };

@@ -19,8 +19,6 @@ import {
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import Select from "react-select";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
 
 // Import Redux actions
@@ -116,9 +114,9 @@ const ManualDeposit = ({
   // Default payout options - fallback if paymentOptions is empty
   const defaultPayoutOptions = useMemo(
     () => [
-      { value: "bank_deposit", label: "Bank Deposit" },
-      { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
-      { value: "fcy_deposit", label: "FCY Deposit" },
+      { value: "bank", label: "Bank Transfer" },
+      { value: "manual", label: "Cash Deposit" },
+      { value: "card", label: "Card Payment" },
     ],
     [],
   );
@@ -129,6 +127,29 @@ const ManualDeposit = ({
       ? paymentOptions
       : defaultPayoutOptions;
   }, [paymentOptions, defaultPayoutOptions]);
+
+  // Add this useEffect to sync payment method with payout method
+  useEffect(() => {
+    if (formData?.paymentMethod && onFieldChange) {
+      const matchedOption = payoutMethodOptions.find(
+        (opt) => opt.value === formData.paymentMethod,
+      );
+
+      if (
+        matchedOption &&
+        (!formData.payout_method ||
+          formData.payout_method.value !== matchedOption.value)
+      ) {
+        console.log("🔄 Setting payout method to:", matchedOption);
+        onFieldChange("payout_method", matchedOption);
+      }
+    }
+  }, [
+    formData?.paymentMethod,
+    onFieldChange,
+    payoutMethodOptions,
+    formData?.payout_method,
+  ]);
 
   // Custom select styles - responsive
   const selectStyles = useMemo(
@@ -219,7 +240,6 @@ const ManualDeposit = ({
         }
       } catch (error) {
         console.error("Error fetching occupations:", error);
-        // Set default occupations
         setOccupations([
           { value: "Business", label: "Business" },
           { value: "Employee", label: "Employee" },
@@ -307,19 +327,16 @@ const ManualDeposit = ({
       }
 
       setShowCodeInput(false);
-      // Only hide found card if not called from code search
       if (!skipStateUpdate) {
         setShowFoundBeneficiary(false);
       }
 
       if (onBeneficiarySelect) onBeneficiarySelect(selectedOption);
 
-      // Clear any existing selected bank
       if (onBankSelect) onBankSelect(null);
       setLocalBeneficiaryBanks([]);
       setIsLoadingLocalBanks(true);
 
-      // Fetch beneficiary banks
       try {
         console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
         const result = await dispatch(
@@ -328,16 +345,13 @@ const ManualDeposit = ({
 
         console.log("📋 Banks fetched successfully:", result);
 
-        // Store banks locally
         if (result && Array.isArray(result)) {
           setLocalBeneficiaryBanks(result);
         } else if (result?.data && Array.isArray(result.data)) {
           setLocalBeneficiaryBanks(result.data);
         }
 
-        // Find matching options from beneficiary data
         if (onFieldChange) {
-          // Purpose
           if (selectedOption?.transfer_purpose) {
             const matchedPurpose = purposeOptions.find(
               (opt) => opt.value === selectedOption.transfer_purpose,
@@ -347,7 +361,6 @@ const ManualDeposit = ({
             }
           }
 
-          // Income Source
           if (selectedOption?.income_source) {
             const matchedIncomeSource = incomeSourceOptions.find(
               (opt) => opt.value === selectedOption.income_source,
@@ -357,7 +370,6 @@ const ManualDeposit = ({
             }
           }
 
-          // Relation
           if (selectedOption?.relationtobenef) {
             const matchedRelation = relationOptions.find(
               (opt) => opt.value === selectedOption.relationtobenef,
@@ -367,7 +379,6 @@ const ManualDeposit = ({
             }
           }
 
-          // Payout Method
           const payoutMethodValue =
             selectedOption?.payout_method || selectedOption?.payment_method;
           if (payoutMethodValue) {
@@ -379,29 +390,21 @@ const ManualDeposit = ({
             }
           }
 
-          // Occupation
           if (selectedOption?.occupation) {
             onFieldChange("occupation", selectedOption.occupation);
           }
         }
 
-        // Auto-select first bank if available
         if (result?.length > 0) {
           setTimeout(() => {
             const firstBank = result[0];
             if (firstBank && onBankSelect) {
               onBankSelect(firstBank);
-              if (!skipStateUpdate) {
-                toast.success("Beneficiary details loaded successfully!");
-              }
             }
           }, 100);
-        } else {
-          toast.warning("No bank accounts found for this beneficiary");
         }
       } catch (error) {
         console.error("Error fetching beneficiary banks:", error);
-        toast.error("Failed to load beneficiary bank details");
         setLocalBeneficiaryBanks([]);
       } finally {
         setIsLoadingLocalBanks(false);
@@ -419,10 +422,9 @@ const ManualDeposit = ({
     ],
   );
 
-  // Handle beneficiary code lookup - FIXED to keep showFoundBeneficiary true
+  // Handle beneficiary code lookup
   const handleBeneficiaryCodeLookupInternal = async () => {
     if (!beneficiaryCode.trim()) {
-      toast.error("Please enter a beneficiary code");
       return;
     }
 
@@ -459,26 +461,18 @@ const ManualDeposit = ({
           ...beneficiaryData,
         };
 
-        // Set the found beneficiary and show the details card FIRST
         setFoundBeneficiaryByCode(transformedBeneficiary);
         setShowFoundBeneficiary(true);
-
-        // Load banks but DON'T auto-select or hide the found card
-        // Pass true to skip state update
         await handleBeneficiarySelect(transformedBeneficiary, true);
-
-        toast.success("Beneficiary details loaded successfully!");
       }
     } catch (error) {
       console.error("Error fetching beneficiary by code:", error);
       if (error.response?.status === 404) {
         setSearchError("No beneficiary found with this code");
-        toast.error("No beneficiary found with this code");
       } else {
         setSearchError(
           "Failed to fetch beneficiary details. Please try again.",
         );
-        toast.error("Failed to fetch beneficiary details");
       }
       setFoundBeneficiaryByCode(null);
       setShowFoundBeneficiary(false);
@@ -498,12 +492,11 @@ const ManualDeposit = ({
     if (onBankSelect) onBankSelect(null);
   };
 
-  // Use found beneficiary - FIXED to pass false for skipStateUpdate
+  // Use found beneficiary
   const useFoundBeneficiary = () => {
     if (foundBeneficiaryByCode && onBeneficiarySelect) {
       handleBeneficiarySelect(foundBeneficiaryByCode, false);
       setShowFoundBeneficiary(false);
-      toast.success("Beneficiary selected successfully!");
     }
   };
 
@@ -523,7 +516,6 @@ const ManualDeposit = ({
     const file = e.target.files?.[0];
     if (file && onFileUpload) {
       onFileUpload(file);
-      toast.success("Document uploaded successfully");
     }
   };
 
@@ -564,9 +556,8 @@ const ManualDeposit = ({
     </div>
   );
 
-  // Render beneficiary found card - FIXED to properly display bank details from the API response
+  // Render beneficiary found card
   const renderBeneficiaryFoundCard = () => {
-    // Get the first bank from benef_banks array
     const firstBank = foundBeneficiaryByCode?.benef_banks?.[0];
 
     return (
@@ -594,7 +585,6 @@ const ManualDeposit = ({
           </button>
         </div>
 
-        {/* Beneficiary Details Grid - Mobile: 1 column, Tablet: 2 columns */}
         <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4 mb-4">
           <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
             <p className="text-xs text-gray-500 mb-1">Full Name</p>
@@ -627,7 +617,6 @@ const ManualDeposit = ({
           </div>
         </div>
 
-        {/* Bank Additional Details - Responsive */}
         {firstBank && (
           <div className="mb-4 p-3 sm:p-3 bg-blue-50 rounded-lg border border-blue-100">
             <div className="flex items-center gap-2 mb-2">
@@ -677,7 +666,6 @@ const ManualDeposit = ({
           </div>
         )}
 
-        {/* Action Buttons - Stack on mobile, side by side on tablet/desktop */}
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             type="button"
@@ -733,7 +721,6 @@ const ManualDeposit = ({
                 </span>
               </div>
             ) : hasFetched && beneficiaries.length === 0 ? (
-              /* CASE 1: NO BENEFICIARIES - Show empty state with integrated search */
               <div className="space-y-4">
                 {showFoundBeneficiary && foundBeneficiaryByCode ? (
                   renderBeneficiaryFoundCard()
@@ -761,7 +748,6 @@ const ManualDeposit = ({
                       </button>
                     </div>
 
-                    {/* Search Section in Empty State */}
                     <div className="max-w-md mx-auto pt-4 border-t border-gray-200 px-4">
                       <p className="text-sm font-medium text-gray-700 mb-3">
                         Or search by beneficiary code:
@@ -807,7 +793,6 @@ const ManualDeposit = ({
                 )}
               </div>
             ) : (
-              /* CASE 2: HAS BENEFICIARIES - Show dropdown selector */
               <Select
                 options={beneficiaries}
                 value={selectedBeneficiary || null}
@@ -839,7 +824,7 @@ const ManualDeposit = ({
             )}
           </div>
 
-          {/* OR SEPARATOR - Only show when beneficiaries exist AND not showing found beneficiary card */}
+          {/* OR SEPARATOR */}
           {beneficiaries.length > 0 && !showFoundBeneficiary && (
             <div className="flex items-center my-4">
               <div className="flex-1 border-t border-gray-300"></div>
@@ -848,7 +833,7 @@ const ManualDeposit = ({
             </div>
           )}
 
-          {/* ENTER BENEFICIARY CODE FIELD - Only show when beneficiaries exist AND not showing found beneficiary card */}
+          {/* ENTER BENEFICIARY CODE FIELD */}
           {beneficiaries.length > 0 && !showFoundBeneficiary && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -895,11 +880,6 @@ const ManualDeposit = ({
               )}
             </div>
           )}
-
-          {/* BENEFICIARY FOUND CARD - Show when search is successful */}
-          {/* {showFoundBeneficiary && foundBeneficiaryByCode && (
-            <div className="mt-4">{renderBeneficiaryFoundCard()}</div>
-          )} */}
 
           {/* Payout Method - Responsive */}
           <div>
@@ -1192,24 +1172,6 @@ const ManualDeposit = ({
           </div>
         </div>
       </div>
-
-      {/* Success/Error Messages - Responsive */}
-      <ToastContainer
-        position="bottom-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        limit={3}
-        className="text-sm sm:text-base"
-        toastClassName="p-3 sm:p-4"
-        bodyClassName="text-xs sm:text-sm"
-        closeButton={false}
-      />
     </div>
   );
 };

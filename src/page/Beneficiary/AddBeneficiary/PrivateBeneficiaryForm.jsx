@@ -64,6 +64,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const dispatch = useDispatch();
   const params = useParams();
   const isMounted = useRef(true);
+  const isProcessingPhoneSearch = useRef(false);
 
   // Get IDs from params
   let customerId, beneficiaryId;
@@ -102,6 +103,8 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const phoneCodeOptions = useSelector(selectPhoneCodeOptions);
 
   // ========== EFFECTS ==========
+
+  // Cleanup effect
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -111,18 +114,36 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
     };
   }, [dispatch]);
 
+  // ✅ Fetch beneficiaries when component mounts (for search functionality)
   useEffect(() => {
     if (mode === "create" && customerId && isMounted.current) {
+      console.log("🔄 Fetching beneficiaries for search on page load...");
       dispatch(fetchBeneficiaries(customerId));
     }
   }, [dispatch, customerId, mode]);
 
+  // Fetch beneficiary data for edit mode
   useEffect(() => {
     if (mode === "edit" && beneficiaryId && !initialData && isMounted.current) {
+      console.log("🔍 Fetching beneficiary data for edit:", beneficiaryId);
       dispatch(fetchBeneficiaryById(beneficiaryId));
     }
   }, [mode, beneficiaryId, initialData, dispatch]);
 
+  // Handle phone search processed flag to prevent infinite loop
+  useEffect(() => {
+    if (!isProcessingPhoneSearch.current && phoneSearch.processed) {
+      isProcessingPhoneSearch.current = true;
+
+      setTimeout(() => {
+        if (isMounted.current) {
+          isProcessingPhoneSearch.current = false;
+        }
+      }, 500);
+    }
+  }, [phoneSearch.processed]);
+
+  // Error handling effects
   useEffect(() => {
     if (createError && isMounted.current) {
       toast.error(createError);
@@ -137,6 +158,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   }, [updateError, dispatch]);
 
+  // Success handling effects
   useEffect(() => {
     if (createSuccess && isMounted.current) {
       toast.success("Beneficiary created successfully!");
@@ -152,6 +174,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
   }, [updateSuccess, navigate]);
 
   // ========== HANDLERS ==========
+
   const handleSubmit = async (formData) => {
     try {
       if (mode === "create") {
@@ -162,7 +185,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
             bankAccounts: formData.bankAccounts,
             currency: formData.currency,
             country_code: formData.countryCode,
-          })
+          }),
         ).unwrap();
       } else if (mode === "edit") {
         await dispatch(
@@ -170,7 +193,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
             customerId,
             beneficiaryId,
             beneficiaryData: formData.beneficiaryData,
-          })
+          }),
         ).unwrap();
       }
     } catch (error) {
@@ -178,13 +201,22 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
-  const handlePhoneSearch = ({ phoneNumber, countryPhoneCode }) => {
-    dispatch(
-      searchBeneficiaryByPhone({
-        phoneNumber,
-        countryPhoneCode,
-      })
-    );
+  // Handle phone search with processed flag tracking
+  const handlePhoneSearch = ({ phoneNumber, countryPhoneCode, processed }) => {
+    // If this is a processed flag update, just return
+    if (processed !== undefined) {
+      return;
+    }
+
+    // Only dispatch a new search if we have phone number
+    if (phoneNumber) {
+      dispatch(
+        searchBeneficiaryByPhone({
+          phoneNumber,
+          countryPhoneCode,
+        }),
+      );
+    }
   };
 
   const handleCancel = () => {
@@ -192,6 +224,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   // ========== DROPDOWN FETCH FUNCTIONS ==========
+
   const handleFetchNationalities = () => {
     dispatch(fetchNationalities());
   };
@@ -201,27 +234,49 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   const handleFetchBanks = ({ currency, bankType }) => {
+    if (!currency || currency === "") {
+      console.warn("⚠️ Cannot fetch banks: currency is invalid");
+      return;
+    }
     dispatch(fetchBanksByCurrency({ currency, bankType }));
   };
 
-  const handleFetchIdTypes = (currency) => {
-    dispatch(fetchIdTypesByCurrency(currency));
+  const handleFetchIdTypes = (currency, beneficiaryType = "individual") => {
+    if (currency && currency !== "") {
+      console.log(`🔍 Fetching ID types for: ${currency} - ${beneficiaryType}`);
+      dispatch(fetchIdTypesByCurrency({ currency, beneficiaryType }));
+    } else {
+      console.warn(
+        "⚠️ Cannot fetch ID types: currency is undefined or empty",
+        currency,
+      );
+    }
   };
 
   const handleFetchCities = (countryId) => {
+    if (!countryId || countryId === "") {
+      console.warn("⚠️ Cannot fetch cities: countryId is invalid");
+      return;
+    }
     dispatch(fetchCitiesByCountry(countryId));
   };
 
   const handleFetchBankBranches = (bankCode) => {
+    if (!bankCode || bankCode === "") {
+      console.warn("⚠️ Cannot fetch bank branches: bankCode is invalid");
+      return;
+    }
     dispatch(fetchBankBranches(bankCode));
   };
 
   // ========== RENDER ==========
+
+  // Customer ID validation for create mode
   if (!customerId && mode === "create") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-lg shadow-xl bg-red-600 text-white text-center">
-          <h2 className="text-xl font-extrabold mb-4 tracking-wide">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+        <div className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-2xl shadow-2xl bg-gradient-to-r from-red-600 to-red-700 text-white text-center">
+          <h2 className="text-2xl font-extrabold mb-4 tracking-wide">
             Action Required!
           </h2>
           <p className="text-sm md:text-base mb-6">
@@ -230,7 +285,7 @@ const PrivateBeneficiaryForm = ({ mode = "create", initialData = null }) => {
           </p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="px-4 py-2 bg-white text-red-600 rounded-md font-medium hover:bg-gray-100 transition-colors"
+            className="px-6 py-2 bg-white text-red-600 rounded-xl font-medium hover:bg-gray-100 transition-all duration-300 transform hover:scale-105"
           >
             Go to Dashboard
           </button>

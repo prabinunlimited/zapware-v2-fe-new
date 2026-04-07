@@ -1,3 +1,4 @@
+// src/components/Dashboard/Account/Transaction/TransactionDetails.jsx - USING EXISTING useTransactionData HOOK
 import React, {
   useEffect,
   useMemo,
@@ -28,16 +29,20 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-// ✅ USE THE NEW HOOK
+// ✅ USE THE EXISTING TRANSACTION HOOK
 import { useTransactionData } from "../../../../hooks/transactionHooks";
 
 const TransactionDetails = React.memo(
   ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
     const navigate = useNavigate();
 
-    // ✅ USE TRANSACTION HOOK
+    // ✅ USE TRANSACTION HOOK (working as before)
     const { transactions, loading, error, fetchTransactions, forceRefresh } =
       useTransactionData();
+
+    // Track if initial load has been done
+    const initialLoadDoneRef = useRef(false);
+    const lastCurrencyRef = useRef(selectedCurrencyCode);
 
     // Local state
     const [currentPage, setCurrentPage] = useState(1);
@@ -58,6 +63,72 @@ const TransactionDetails = React.memo(
 
     // Detect mobile screen
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    // ✅ OPTIMIZED: Fetch transactions with caching awareness
+    useEffect(() => {
+      // Early returns for invalid state
+      if (
+        !customerId ||
+        !selectedCurrencyCode ||
+        selectedCurrencyCode === "all"
+      ) {
+        console.log(
+          "⏳ TransactionDetails: Missing required params, skipping fetch",
+          {
+            customerId,
+            selectedCurrencyCode,
+          },
+        );
+        return;
+      }
+
+      // Skip if we already loaded data for this currency
+      if (
+        initialLoadDoneRef.current &&
+        lastCurrencyRef.current === selectedCurrencyCode &&
+        transactions.length > 0
+      ) {
+        console.log(
+          "📊 TransactionDetails: Using cached transaction data for",
+          selectedCurrencyCode,
+        );
+        return;
+      }
+
+      // Skip if already loading
+      if (loading) {
+        console.log("⏳ TransactionDetails: Already loading transactions");
+        return;
+      }
+
+      // Fetch transactions
+      if (!loading && transactions.length === 0) {
+        console.log(
+          "🚀 TransactionDetails: Fetching transactions for",
+          selectedCurrencyCode,
+        );
+
+        fetchTransactions(customerId, selectedCurrencyCode);
+        initialLoadDoneRef.current = true;
+        lastCurrencyRef.current = selectedCurrencyCode;
+      }
+    }, [
+      customerId,
+      selectedCurrencyCode,
+      loading,
+      transactions.length,
+      fetchTransactions,
+    ]);
+
+    // ✅ Reset pagination and cache tracking when currency changes
+    useEffect(() => {
+      if (lastCurrencyRef.current !== selectedCurrencyCode) {
+        console.log("🔄 TransactionDetails: Currency changed, resetting state");
+        setCurrentPage(1);
+        setTransactionCompletionNotified(false);
+        initialLoadDoneRef.current = false;
+      }
+    }, [selectedCurrencyCode]);
 
     // Handle click outside
     useEffect(() => {
@@ -113,7 +184,7 @@ const TransactionDetails = React.memo(
           (Array.isArray(transactions) ? transactions.length : 0) /
             itemsPerPage,
         ),
-      [transactions.length, itemsPerPage],
+      [transactions, itemsPerPage],
     );
 
     // Safe transactions array
@@ -122,32 +193,14 @@ const TransactionDetails = React.memo(
       [transactions],
     );
 
-    // Fetch transactions
-    useEffect(() => {
-      if (
-        !customerId ||
-        !selectedCurrencyCode ||
-        selectedCurrencyCode === "all"
-      ) {
-        return;
-      }
-
-      fetchTransactions(customerId, selectedCurrencyCode);
-    }, [customerId, selectedCurrencyCode, fetchTransactions]);
-
-    // Reset pagination when currency changes
-    useEffect(() => {
-      setCurrentPage(1);
-      setTransactionCompletionNotified(false);
-    }, [selectedCurrencyCode]);
-
-    // Handle transaction completion
+    // Handle transaction completion notification
     useEffect(() => {
       if (
         onTransactionComplete &&
         transactions.length > 0 &&
         !loading &&
-        !transactionCompletionNotified
+        !transactionCompletionNotified &&
+        initialLoadDoneRef.current
       ) {
         setTransactionCompletionNotified(true);
         onTransactionComplete(false);
@@ -247,6 +300,30 @@ const TransactionDetails = React.memo(
       },
       [selectedCurrencyCode],
     );
+
+    // ✅ Enhanced refresh function with cache clearing
+    const handleManualRefresh = useCallback(() => {
+      if (
+        !customerId ||
+        !selectedCurrencyCode ||
+        selectedCurrencyCode === "all"
+      ) {
+        console.warn("TransactionDetails: Cannot refresh - missing params");
+        return;
+      }
+
+      console.log(
+        "🔄 TransactionDetails: Manual refresh triggered for",
+        selectedCurrencyCode,
+      );
+
+      // Reset tracking refs
+      initialLoadDoneRef.current = false;
+      setTransactionCompletionNotified(false);
+
+      // Force refresh using the hook's forceRefresh function
+      forceRefresh(customerId, selectedCurrencyCode);
+    }, [customerId, selectedCurrencyCode, forceRefresh]);
 
     const exportSingleTransactionPDF = useCallback(
       async (transaction) => {
@@ -869,12 +946,6 @@ const TransactionDetails = React.memo(
       setCurrentPage(pageNumber);
     }, []);
 
-    const handleManualRefresh = useCallback(() => {
-      if (!customerId || !selectedCurrencyCode) return;
-      setTransactionCompletionNotified(false);
-      forceRefresh(customerId, selectedCurrencyCode);
-    }, [customerId, selectedCurrencyCode, forceRefresh]);
-
     const pageNumbers = useMemo(() => {
       const pages = [];
       const maxVisiblePages = isMobile ? 3 : 5;
@@ -1168,7 +1239,8 @@ const TransactionDetails = React.memo(
       };
     }, []);
 
-    if (loading) {
+    // ✅ Enhanced loading state with cache awareness
+    if (loading && safeTransactions.length === 0) {
       return (
         <div className="flex justify-center items-center h-32">
           <div className="w-full h-32 flex flex-col items-center justify-center">
@@ -1179,14 +1251,14 @@ const TransactionDetails = React.memo(
       );
     }
 
-    if (error) {
+    if (error && safeTransactions.length === 0) {
       return (
         <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
           <div className="text-red-600 font-medium mb-2">
             Error loading transactions
           </div>
           <div className="text-red-500 text-sm mb-4">
-            {error.message || "Please try again later"}
+            {error?.message || "Please try again later"}
           </div>
           <button
             onClick={handleManualRefresh}
@@ -1215,6 +1287,10 @@ const TransactionDetails = React.memo(
               <p className="text-xs md:text-sm text-gray-500 mt-1">
                 View and manage your transaction records
               </p>
+              {/* Cache indicator */}
+              {initialLoadDoneRef.current && safeTransactions.length > 0 && (
+                <p className="text-xs text-green-600 mt-1">✓ Data loaded</p>
+              )}
             </div>
 
             {/* Mobile menu button */}

@@ -1,8 +1,24 @@
+// RecurringRemitEdit.jsx - UPDATED WITH CURRENCY FETCHING
+
 import React, { useState, useEffect, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 
-// --- SUB-COMPONENTS MOVED OUTSIDE TO FIX TYPING BUG ---
+// Import from BeneficiariesSlice
+import {
+  fetchBeneficiaries,
+  selectBeneficiaries,
+  selectBeneficiariesLoading,
+  selectHasFetched,
+} from "../../page/Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
+// Import from RemittanceSlice for currencies
+import {
+  fetchBankAccounts,
+  fetchPayoutCurrencies,
+} from "../../page/Remittance/slices/remittanceSlice";
+
+// --- SUB-COMPONENTS ---
 const ReadOnlyField = ({
   label,
   value,
@@ -155,7 +171,6 @@ const ErrorOverlay = ({ show, error, onClose, onCancel }) => {
 };
 
 // --- MAIN COMPONENT ---
-
 const RecurringRemitEdit = ({
   isOpen,
   onClose,
@@ -163,10 +178,25 @@ const RecurringRemitEdit = ({
   recurringRemittanceId,
   customerId,
 }) => {
+  const dispatch = useDispatch();
+
+  // Redux selectors for beneficiaries
+  const beneficiariesFromStore = useSelector(selectBeneficiaries);
+  const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
+  const beneficiariesHasFetched = useSelector(selectHasFetched);
+
+  // Redux selectors for currencies
+  const sourceCurrencies = useSelector(
+    (state) => state.remittance?.bankAccounts || [],
+  );
+  const destinationCurrencies = useSelector(
+    (state) => state.remittance?.currencies?.receiveOptions || [],
+  );
+
   const [formData, setFormData] = useState({
     source_amount: "",
-    source_currency: "USD",
-    destination_currency: "INR",
+    source_currency: "",
+    destination_currency: "",
     recurring_frequency: "specific_day",
     custom_days: "5",
     author_type: "customer",
@@ -190,16 +220,120 @@ const RecurringRemitEdit = ({
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [showErrorOverlay, setShowErrorOverlay] = useState(false);
   const [formTouched, setFormTouched] = useState(false);
+  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  // Get customer ID from multiple sources
+  const getEffectiveCustomerId = useCallback(() => {
+    // ✅ Priority: prop > customerUuid > authcustomer_id > currentCustomerId
+    const id =
+      customerId ||
+      localStorage.getItem("customerUuid") ||
+      localStorage.getItem("authcustomer_id") ||
+      localStorage.getItem("currentCustomerId");
+
+    if (!id || id === "undefined" || id === "null" || id.trim() === "") {
+      console.warn("No valid customer ID found in RecurringRemitEdit");
+      return null;
+    }
+
+    console.log("Using customer ID in EditModal:", id);
+    return id;
+  }, [customerId]);
+
+  const effectiveCustomerId = getEffectiveCustomerId();
+
+  // Fetch all required data when modal opens
+  useEffect(() => {
+    const fetchAllData = async () => {
+      if (!isOpen || dataFetchAttempted) return;
+      setDataFetchAttempted(true);
+
+      try {
+        // Fetch beneficiaries if needed
+        if (!beneficiariesHasFetched || beneficiariesFromStore.length === 0) {
+          await dispatch(fetchBeneficiaries(effectiveCustomerId));
+        }
+
+        // Fetch source currencies (bank accounts) if needed
+        if (sourceCurrencies.length === 0) {
+          await dispatch(fetchBankAccounts(effectiveCustomerId));
+        }
+
+        // Fetch destination currencies (payout currencies) if needed
+        if (destinationCurrencies.length === 0) {
+          await dispatch(fetchPayoutCurrencies());
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setApiError("Failed to load required data. Please try again.");
+      }
+    };
+
+    if (isOpen && effectiveCustomerId) {
+      fetchAllData();
+    }
+  }, [
+    isOpen,
+    dispatch,
+    effectiveCustomerId,
+    beneficiariesHasFetched,
+    beneficiariesFromStore.length,
+    sourceCurrencies.length,
+    destinationCurrencies.length,
+    dataFetchAttempted,
+  ]);
+
+  // Find beneficiary name from Redux store
+  const findBeneficiaryName = useCallback(
+    (beneficiaryName, accountNumber) => {
+      if (!beneficiariesFromStore.length) return;
+
+      const foundBeneficiary = beneficiariesFromStore.find(
+        (b) =>
+          b.benef_bank_account_number === accountNumber ||
+          b.benef_name === beneficiaryName ||
+          b.name === beneficiaryName,
+      );
+
+      if (foundBeneficiary) {
+        setFormData((prev) => ({
+          ...prev,
+          beneficiary_name:
+            foundBeneficiary.benef_name || foundBeneficiary.name,
+          beneficiary_bank_account_number:
+            foundBeneficiary.benef_bank_account_number || accountNumber,
+        }));
+      }
+    },
+    [beneficiariesFromStore],
+  );
+
+  // Fetch recurring remittance details
   const fetchDetails = useCallback(async () => {
-    if (!isOpen || !recurringRemittanceId) return;
+    if (
+      !isOpen ||
+      !recurringRemittanceId ||
+      recurringRemittanceId === "undefined"
+    ) {
+      console.warn("Cannot fetch details: No valid recurring remittance ID");
+      return;
+    }
+
     setIsFetching(true);
     setApiError("");
     try {
       const authToken =
         localStorage.getItem("bearertoken") ||
         localStorage.getItem("authtoken");
-      const url = `https://sandbox-zapware.unlimitedremit.com/api/recurring-remittance/detail/${recurringRemittanceId}`;
+      if (!authToken) {
+        throw new Error("No authentication token found");
+      }
+
+      const url = `${API_URL}/recurring-remittance/detail/${recurringRemittanceId}`;
+      console.log("Fetching recurring remittance details:", url);
+
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${authToken}` },
         timeout: 10000,
@@ -207,14 +341,14 @@ const RecurringRemitEdit = ({
 
       if (response.data.status === "success" && response.data.data?.[0]) {
         const item = response.data.data[0];
-        setFormData({
-          ...formData,
+        setFormData((prev) => ({
+          ...prev,
           source_amount: item.source_amount || "",
-          source_currency: item.source_currency || "USD",
-          destination_currency: item.destination_currency || "INR",
+          source_currency: item.source_currency || "",
+          destination_currency: item.destination_currency || "",
           recurring_frequency: item.frequency || "specific_day",
           custom_days: item.custom_days?.toString() || "5",
-          author_id: localStorage.getItem("customerUuid") || "",
+          author_id: effectiveCustomerId || "",
           amount: item.amount || "",
           activeStatus: item.activeStatus || "Y",
           nextDate: item.nextDate || "",
@@ -224,14 +358,28 @@ const RecurringRemitEdit = ({
           beneficiary_bank_account_number:
             item.beneficiary_bank_account_number || "",
           notes: item.notes || "",
-        });
+        }));
+
+        findBeneficiaryName(
+          item.beneficiary_name,
+          item.beneficiary_bank_account_number,
+        );
+      } else {
+        throw new Error(response.data.message || "Failed to fetch details");
       }
     } catch (error) {
-      setApiError("Failed to fetch details.");
+      console.error("Fetch error:", error);
+      setApiError(error.message || "Failed to fetch details.");
     } finally {
       setIsFetching(false);
     }
-  }, [isOpen, recurringRemittanceId]);
+  }, [
+    isOpen,
+    recurringRemittanceId,
+    API_URL,
+    effectiveCustomerId,
+    findBeneficiaryName,
+  ]);
 
   useEffect(() => {
     fetchDetails();
@@ -262,6 +410,7 @@ const RecurringRemitEdit = ({
       onClose();
       return;
     }
+
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -269,10 +418,15 @@ const RecurringRemitEdit = ({
     }
 
     setIsLoading(true);
+    setApiError("");
     try {
       const authToken =
         localStorage.getItem("bearertoken") ||
         localStorage.getItem("authtoken");
+      if (!authToken) {
+        throw new Error("No authentication token found");
+      }
+
       const payload = {
         recurring_remittance_id: recurringRemittanceId,
         source_amount: formData.source_amount,
@@ -281,12 +435,14 @@ const RecurringRemitEdit = ({
         recurring_frequency: formData.recurring_frequency,
         custom_days: formData.custom_days,
         author_type: "customer",
-        author_id: formData.author_id,
+        author_id: effectiveCustomerId,
         author_source: "zap",
       };
 
+      console.log("Submitting update:", payload);
+
       const res = await axios.post(
-        "https://sandbox-zapware.unlimitedremit.com/api/recurring-remittance/update-detail",
+        `${API_URL}/recurring-remittance/update-detail`,
         payload,
         {
           headers: { Authorization: `Bearer ${authToken}` },
@@ -299,11 +455,13 @@ const RecurringRemitEdit = ({
         setShowSuccessOverlay(true);
         if (onSave) onSave(payload);
       } else {
-        setApiError(res.data.message || "Update failed");
-        setShowErrorOverlay(true);
+        throw new Error(res.data.message || "Update failed");
       }
     } catch (err) {
-      setApiError(err.message);
+      console.error("Submit error:", err);
+      setApiError(
+        err.response?.data?.message || err.message || "An error occurred",
+      );
       setShowErrorOverlay(true);
     } finally {
       setIsLoading(false);
@@ -324,6 +482,43 @@ const RecurringRemitEdit = ({
   };
 
   if (!isOpen) return null;
+
+  if (!recurringRemittanceId || recurringRemittanceId === "undefined") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative w-full max-w-md rounded-xl bg-white p-8 shadow-2xl text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
+            <svg
+              className="h-12 w-12 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <h3 className="mb-3 text-xl font-bold text-gray-900">
+            Invalid Remittance ID
+          </h3>
+          <p className="mb-6 text-gray-600">
+            Cannot load recurring remittance details. Please try again.
+          </p>
+          <button
+            onClick={onClose}
+            className="rounded-xl bg-blue-600 px-8 py-3 text-white font-medium hover:bg-blue-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -408,39 +603,56 @@ const RecurringRemitEdit = ({
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-4">
-                    <EditableField
-                      label="Source Currency"
-                      name="source_currency"
-                      errors={errors}
-                    >
+                    {/* Source Currency - Dynamic from API */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source Currency *
+                      </label>
                       <select
                         name="source_currency"
                         value={formData.source_currency}
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-3 py-2.5"
+                        className="w-full rounded-lg border px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isLoading || isFetching}
                       >
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="INR">INR - Indian Rupee</option>
+                        <option value="">Select Currency</option>
+                        {sourceCurrencies.map((account) => (
+                          <option
+                            key={account.id}
+                            value={account.currency_code}
+                          >
+                            {account.currency_code} -{" "}
+                            {account.bank_name || account.currency_name}
+                          </option>
+                        ))}
                       </select>
-                    </EditableField>
-                    <EditableField
-                      label="Destination Currency"
-                      name="destination_currency"
-                      errors={errors}
-                    >
+                    </div>
+
+                    {/* Destination Currency - Dynamic from API */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Destination Currency *
+                      </label>
                       <select
                         name="destination_currency"
                         value={formData.destination_currency}
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-3 py-2.5"
+                        className="w-full rounded-lg border px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isLoading || isFetching}
                       >
-                        <option value="INR">INR - Indian Rupee</option>
-                        <option value="NPR">NPR - Nepalese Rupee</option>
-                        <option value="USD">USD - US Dollar</option>
+                        <option value="">Select Currency</option>
+                        {destinationCurrencies.map((currency) => (
+                          <option
+                            key={currency.payout_currency_id}
+                            value={currency.currency_code}
+                          >
+                            {currency.currency_code} {currency.icon}
+                            {currency.default_remittance === "Y" &&
+                              " (Default)"}
+                          </option>
+                        ))}
                       </select>
-                    </EditableField>
+                    </div>
                   </div>
                 </div>
 
@@ -520,7 +732,10 @@ const RecurringRemitEdit = ({
                   </h3>
                   <div className="grid grid-cols-3 gap-5">
                     <ReadOnlyField label="Type" value={formData.author_type} />
-                    <ReadOnlyField label="ID" value={formData.author_id} />
+                    <ReadOnlyField
+                      label="ID"
+                      value={effectiveCustomerId || "N/A"}
+                    />
                     <ReadOnlyField
                       label="Source"
                       value={formData.author_source}

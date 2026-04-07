@@ -1,12 +1,11 @@
-// src/components/Dashboard/Header/headerSlice.js - COMPLETE WITH FIXES
+// src/components/Dashboard/Header/headerSlice.js - WITH CACHING
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Helper function to check if user is beneficiary - FIXED TYPO
+// Helper function to check if user is beneficiary
 const shouldSkipForBeneficiary = (functionName) => {
-  // ✅ FIX: Check for both spellings (with and without typo)
   const beneficiaryLogin =
     localStorage.getItem("beneficaryLogin") ||
     localStorage.getItem("beneficiaryLogin");
@@ -19,67 +18,15 @@ const shouldSkipForBeneficiary = (functionName) => {
   return false;
 };
 
-// Helper function to get API signature for coordination
-const getProfileSignature = (customerId) => {
-  return `GET-${API_URL}/customers/${customerId}/profile-{}`;
-};
-
-const getFxSignature = () => {
-  const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
-  const partnerId =
-    isWhiteLabelled === "1"
-      ? localStorage.getItem("whitelabelledpartnerid") || "9"
-      : "9";
-  return `POST-${API_URL}/partner-fxcurrencies-{"partner_id":"${partnerId}"}`;
-};
-
-const getChargesSignature = (customerId) => {
-  return `GET-${API_URL}/get-charges/${customerId}-{}`;
-};
-
-// FX currencies thunk with coordination
-export const fetchPartnerFxCurrencies = createAsyncThunk(
-  "header/fetchPartnerFxCurrencies",
-  async (bearertoken, { rejectWithValue }) => {
-    const signature = getFxSignature();
-
-    try {
-      if (!bearertoken) {
-        throw new Error("Bearer token missing");
-      }
-
-      const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
-      const partnerId =
-        isWhiteLabelled === "1"
-          ? localStorage.getItem("whitelabelledpartnerid") || "9"
-          : "9";
-
-      const response = await api.post(
-        `/partner-fxcurrencies?partner_id=${partnerId}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${bearertoken}`,
-          },
-          timeout: 10000,
-        },
-      );
-
-      const rates = response.data.rates || [];
-      return rates;
-    } catch (error) {
-      console.error("❌ fetchPartnerFxCurrencies error:", error);
-      return rejectWithValue(error.response?.data || error.message);
-    }
-  },
-);
-
-// Profile fetching thunk with coordination
+// ===== PROFILE THUNK WITH CACHING =====
 export const fetchUserProfile = createAsyncThunk(
   "header/fetchUserProfile",
-  async ({ customerId, bearertoken }, { rejectWithValue }) => {
+  async (
+    { customerId, bearertoken, forceRefresh = false },
+    { rejectWithValue, getState },
+  ) => {
     try {
-      // ✅ CRITICAL FIX: Check if user is a beneficiary - FIXED TYPO
+      // Check for beneficiary
       const beneficiaryLogin =
         localStorage.getItem("beneficaryLogin") ||
         localStorage.getItem("beneficiaryLogin");
@@ -87,9 +34,6 @@ export const fetchUserProfile = createAsyncThunk(
 
       if (isBeneficiary) {
         console.log("🛑 SKIPPING: fetchUserProfile - User is a beneficiary");
-        console.log(
-          "📍 Beneficiary data is fetched via beneficiaries/fetch-merchant-benef endpoint",
-        );
         return {
           _beneficiarySkipped: true,
           message: "Profile fetch skipped for beneficiary user",
@@ -100,9 +44,29 @@ export const fetchUserProfile = createAsyncThunk(
         throw new Error("Missing token or customer ID");
       }
 
+      // Check cache if not forcing refresh
+      const state = getState();
+      const hasCachedData =
+        state.header.profileDataLoaded && state.header.profileData;
+      const lastFetched = state.header.profileLastFetched;
+      const cacheAge = lastFetched
+        ? Date.now() - new Date(lastFetched).getTime()
+        : Infinity;
+      const isCacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache
+
+      if (!forceRefresh && hasCachedData && isCacheValid) {
+        console.log(
+          "📦 USING CACHED profile data (age:",
+          Math.round(cacheAge / 1000),
+          "seconds)",
+        );
+        return state.header.profileData;
+      }
+
       console.log(
-        "🔍 fetchUserProfile: Fetching customer profile for ID:",
+        "🔄 FETCHING: Customer profile for ID:",
         customerId,
+        forceRefresh ? "(force refresh)" : "",
       );
 
       const response = await api.get(`/customers/${customerId}/profile`, {
@@ -115,10 +79,9 @@ export const fetchUserProfile = createAsyncThunk(
       if (response.data.status === "success") {
         const profile = response.data.profile;
 
-        console.log("✅ Customer profile fetched successfully:", {
+        console.log("✅ Profile fetched successfully:", {
           firstName: profile.first_name,
           lastName: profile.last_name,
-          email: profile.email,
         });
 
         // Store in localStorage for persistence
@@ -131,18 +94,12 @@ export const fetchUserProfile = createAsyncThunk(
 
         return profile;
       } else {
-        console.error(
-          "❌ Profile API returned non-success status:",
-          response.data,
-        );
         throw new Error("Failed to fetch profile - non-success status");
       }
     } catch (error) {
       console.error("❌ fetchUserProfile error:", error);
 
-      // Check if it's a 404 (customer not found) - might be a beneficiary
       if (error.response?.status === 404) {
-        // ✅ FIX: Check for both spellings
         const isBeneficiary =
           localStorage.getItem("beneficaryLogin") === "Y" ||
           localStorage.getItem("beneficiaryLogin") === "Y";
@@ -160,14 +117,82 @@ export const fetchUserProfile = createAsyncThunk(
   },
 );
 
-// Charges data thunk with coordination
+// ===== FX CURRENCIES THUNK WITH CACHING =====
+export const fetchPartnerFxCurrencies = createAsyncThunk(
+  "header/fetchPartnerFxCurrencies",
+  async (
+    { bearertoken, forceRefresh = false },
+    { rejectWithValue, getState },
+  ) => {
+    try {
+      if (!bearertoken) {
+        throw new Error("Bearer token missing");
+      }
+
+      // Check cache if not forcing refresh
+      const state = getState();
+      const hasCachedData = state.header.fxDataLoaded;
+      const lastFetched = state.header.fxLastFetched;
+      const cacheAge = lastFetched
+        ? Date.now() - new Date(lastFetched).getTime()
+        : Infinity;
+      const isCacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache
+
+      if (!forceRefresh && hasCachedData && isCacheValid) {
+        console.log(
+          "📦 USING CACHED FX data (age:",
+          Math.round(cacheAge / 1000),
+          "seconds)",
+        );
+        return state.header.partnerFxCurrencies;
+      }
+
+      const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+      const partnerId =
+        isWhiteLabelled === "1"
+          ? localStorage.getItem("whitelabelledpartnerid") || "9"
+          : "9";
+
+      console.log(
+        "🔄 FETCHING: FX currencies for partner:",
+        partnerId,
+        forceRefresh ? "(force refresh)" : "",
+      );
+
+      const response = await api.post(
+        `/partner-fxcurrencies?partner_id=${partnerId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+          timeout: 10000,
+        },
+      );
+
+      const rates = response.data.rates || [];
+      console.log(
+        "✅ FX currencies fetched successfully, count:",
+        rates.length,
+      );
+      return rates;
+    } catch (error) {
+      console.error("❌ fetchPartnerFxCurrencies error:", error);
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  },
+);
+
+// ===== CHARGES THUNK WITH CACHING =====
 export const fetchChargesData = createAsyncThunk(
   "header/fetchChargesData",
-  async ({ customerId, authtoken }, { rejectWithValue }) => {
-    // ✅ SKIP for beneficiaries
+  async (
+    { customerId, authtoken, forceRefresh = false },
+    { rejectWithValue, getState },
+  ) => {
     if (shouldSkipForBeneficiary("fetchChargesData")) {
       console.log("📍 Charges data not needed for beneficiaries");
-      return []; // Return empty array for beneficiaries
+      return [];
     }
 
     try {
@@ -175,9 +200,28 @@ export const fetchChargesData = createAsyncThunk(
         throw new Error("Missing authentication token or customer ID");
       }
 
+      // Check cache if not forcing refresh
+      const state = getState();
+      const hasCachedData = state.header.chargesDataLoaded;
+      const lastFetched = state.header.chargesLastFetched;
+      const cacheAge = lastFetched
+        ? Date.now() - new Date(lastFetched).getTime()
+        : Infinity;
+      const isCacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache
+
+      if (!forceRefresh && hasCachedData && isCacheValid) {
+        console.log(
+          "📦 USING CACHED charges data (age:",
+          Math.round(cacheAge / 1000),
+          "seconds)",
+        );
+        return state.header.chargesData;
+      }
+
       console.log(
-        "🔍 fetchChargesData: Fetching charges for customer:",
+        "🔄 FETCHING: Charges for customer:",
         customerId,
+        forceRefresh ? "(force refresh)" : "",
       );
 
       const response = await api.get(`/get-charges/${customerId}`, {
@@ -193,106 +237,55 @@ export const fetchChargesData = createAsyncThunk(
         response.data.data ||
         [];
 
-      if (chargesData.length > 0) {
-        console.log(
-          "✅ Charges data fetched successfully, count:",
-          chargesData.length,
-        );
-        return chargesData;
-      } else {
-        console.warn("⚠️ No charges data available for customer:", customerId);
-        return [];
-      }
+      console.log(
+        "✅ Charges fetched successfully, count:",
+        chargesData.length,
+      );
+      return chargesData;
     } catch (error) {
       console.error("❌ fetchChargesData error:", error);
-
-      let errorMessage = "Failed to fetch charges data";
-
-      if (error.response) {
-        errorMessage =
-          error.response.data?.message ||
-          `Server error: ${error.response.status}`;
-      } else if (error.request) {
-        errorMessage = "Network error: Unable to connect to server";
-      } else {
-        errorMessage = error.message || "Unknown error occurred";
-      }
-
-      console.error("❌ Charges fetch failed:", errorMessage);
-      return rejectWithValue(errorMessage);
-    }
-  },
-);
-
-// New thunk: Check if user is beneficiary before fetching
-export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
-  "header/fetchCustomerDataWithBeneficiaryCheck",
-  async (
-    { customerId, bearertoken, authtoken },
-    { dispatch, rejectWithValue },
-  ) => {
-    try {
-      // ✅ FIX: Check for both spellings
-      const beneficiaryLogin =
-        localStorage.getItem("beneficaryLogin") ||
-        localStorage.getItem("beneficiaryLogin");
-      const isBeneficiary = beneficiaryLogin === "Y";
-
-      if (isBeneficiary) {
-        console.log("🛑 User is beneficiary - skipping customer data fetch");
-        return {
-          isBeneficiary: true,
-          message: "Using beneficiary-specific APIs instead",
-        };
-      }
-
-      // Only fetch customer data if not a beneficiary
-      console.log("👤 User is regular customer - fetching customer data");
-
-      // Fetch profile data
-      const profileResult = await dispatch(
-        fetchUserProfile({ customerId, bearertoken }),
-      );
-
-      // Fetch FX data
-      const fxResult = await dispatch(fetchPartnerFxCurrencies(bearertoken));
-
-      // Fetch charges data
-      const chargesResult = await dispatch(
-        fetchChargesData({ customerId, authtoken }),
-      );
-
-      return {
-        isBeneficiary: false,
-        profile: profileResult.payload,
-        fx: fxResult.payload,
-        charges: chargesResult.payload,
-      };
-    } catch (error) {
-      console.error("❌ fetchCustomerDataWithBeneficiaryCheck error:", error);
       return rejectWithValue(error.message);
     }
   },
 );
 
+// ===== INITIAL STATE WITH CACHE FLAGS =====
 const initialState = {
+  // Data states
   partnerFxCurrencies: [],
   hasFxData: false,
+  fxDataLoaded: false,
+  fxLastFetched: null,
+
   profileData: null,
-  profileLoading: false,
-  profileError: null,
+  profileDataLoaded: false,
+  profileLastFetched: null,
+
   chargesData: [],
-  chargesLoading: false,
-  chargesError: null,
+  chargesDataLoaded: false,
   chargesLastFetched: null,
+
+  // Loading states
   loading: false,
+  profileLoading: false,
+  chargesLoading: false,
+
+  // Error states
   error: null,
+  profileError: null,
+  chargesError: null,
+
+  // UI states
   isDropdownOpen: false,
+
+  // Fetch status tracking
   fetchStatus: {
     fx: "idle",
     profile: "idle",
     charges: "idle",
   },
+
+  // Local storage synced states
   headerColor: localStorage.getItem("header_color") || "bg-sky-800",
   isWhitelabelledCustomer:
     localStorage.getItem("whitelabelled_customer") || "N",
@@ -309,7 +302,6 @@ const initialState = {
   logoutTime: localStorage.getItem("logoutTime")
     ? parseInt(localStorage.getItem("logoutTime"), 10)
     : 180000,
-  // ✅ FIX: Check for both spellings in initialState
   isBeneficiaryUser:
     localStorage.getItem("beneficaryLogin") === "Y" ||
     localStorage.getItem("beneficiaryLogin") === "Y",
@@ -319,12 +311,6 @@ const headerSlice = createSlice({
   name: "header",
   initialState,
   reducers: {
-    setLoading: (state, action) => {
-      state.loading = action.payload;
-    },
-    setError: (state, action) => {
-      state.error = action.payload;
-    },
     openDropdown: (state) => {
       state.isDropdownOpen = true;
     },
@@ -350,87 +336,125 @@ const headerSlice = createSlice({
       );
       state.isWhitelabelledCustomerPartnerId =
         localStorage.getItem("whitelabelledpartnerid") || null;
-      // ✅ FIX: Check for both spellings in updateLocalStorageState
       state.isBeneficiaryUser =
         localStorage.getItem("beneficaryLogin") === "Y" ||
         localStorage.getItem("beneficiaryLogin") === "Y";
     },
+
+    // Cache management actions
+    clearProfileCache: (state) => {
+      state.profileDataLoaded = false;
+      state.profileData = null;
+      state.profileLastFetched = null;
+      state.fetchStatus.profile = "idle";
+    },
+    clearFxCache: (state) => {
+      state.fxDataLoaded = false;
+      state.partnerFxCurrencies = [];
+      state.hasFxData = false;
+      state.fxLastFetched = null;
+      state.fetchStatus.fx = "idle";
+    },
+    clearChargesCache: (state) => {
+      state.chargesDataLoaded = false;
+      state.chargesData = [];
+      state.chargesLastFetched = null;
+      state.fetchStatus.charges = "idle";
+    },
+    clearChargesData: (state) => {
+    state.chargesDataLoaded = false;
+    state.chargesData = [];
+    state.chargesLastFetched = null;
+    state.chargesLoading = false;
+    state.chargesError = null;
+    state.fetchStatus.charges = "idle";
+  },
+    clearAllCache: (state) => {
+      state.profileDataLoaded = false;
+      state.profileData = null;
+      state.profileLastFetched = null;
+      state.fxDataLoaded = false;
+      state.partnerFxCurrencies = [];
+      state.hasFxData = false;
+      state.fxLastFetched = null;
+      state.chargesDataLoaded = false;
+      state.chargesData = [];
+      state.chargesLastFetched = null;
+      state.fetchStatus = {
+        fx: "idle",
+        profile: "idle",
+        charges: "idle",
+      };
+    },
+
+    // Force refresh actions
+    forceRefreshProfile: (state) => {
+      state.profileDataLoaded = false;
+      state.fetchStatus.profile = "idle";
+    },
+    forceRefreshFx: (state) => {
+      state.fxDataLoaded = false;
+      state.fetchStatus.fx = "idle";
+    },
+    forceRefreshCharges: (state) => {
+      state.chargesDataLoaded = false;
+      state.fetchStatus.charges = "idle";
+    },
+
+    // Reset actions
+    resetHeaderState: () => initialState,
     clearAuthData: (state) => {
       state.authtoken = null;
       state.error = null;
       state.loading = false;
       state.isDropdownOpen = false;
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
-    },
-    clearProfileData: (state) => {
-      state.profileData = null;
-      state.profileLoading = false;
-      state.profileError = null;
-      state.fetchStatus.profile = "idle";
-    },
-    clearChargesData: (state) => {
-      state.chargesData = [];
-      state.chargesLoading = false;
-      state.chargesError = null;
-      state.chargesLastFetched = null;
-      state.fetchStatus.charges = "idle";
-    },
-    setChargesLoading: (state, action) => {
-      state.chargesLoading = action.payload;
-    },
-    resetChargesError: (state) => {
-      state.chargesError = null;
-    },
-    resetFetchStatus: (state) => {
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
-    },
-    resetHeaderState: () => initialState,
-    clearApiCache: (state) => {
-      // Cache clearing handled by api service
-    },
-    forceRefreshProfile: (state) => {
-      state.fetchStatus.profile = "idle";
-      state.profileData = null;
-    },
-    forceRefreshFx: (state) => {
-      state.fetchStatus.fx = "idle";
-      state.partnerFxCurrencies = [];
-      state.hasFxData = false;
-    },
-    forceRefreshCharges: (state) => {
-      state.fetchStatus.charges = "idle";
-      state.chargesData = [];
     },
     setBeneficiaryUser: (state, action) => {
       state.isBeneficiaryUser = action.payload;
-      // Set both spellings for compatibility
       localStorage.setItem("beneficaryLogin", action.payload ? "Y" : "N");
       localStorage.setItem("beneficiaryLogin", action.payload ? "Y" : "N");
-    },
-    // New action for debugging
-    logHeaderState: (state) => {
-      console.log("🔍 Header Slice State:", {
-        isBeneficiaryUser: state.isBeneficiaryUser,
-        hasFxData: state.hasFxData,
-        fxCurrenciesCount: state.partnerFxCurrencies.length,
-        profileData: state.profileData ? "Loaded" : "Not loaded",
-        isWhitelabelledCustomerPartnerId:
-          state.isWhitelabelledCustomerPartnerId,
-        isRemittanceOnlyCustomer: state.isRemittanceOnlyCustomer,
-        fetchStatus: state.fetchStatus,
-      });
     },
   },
   extraReducers: (builder) => {
     builder
+      // ===== PROFILE REDUCERS =====
+      .addCase(fetchUserProfile.pending, (state) => {
+        state.profileLoading = true;
+        state.fetchStatus.profile = "loading";
+        state.profileError = null;
+      })
+      .addCase(fetchUserProfile.fulfilled, (state, action) => {
+        state.profileLoading = false;
+
+        if (action.payload && !action.payload._beneficiarySkipped) {
+          state.profileData = action.payload;
+          state.profileDataLoaded = true;
+          state.profileLastFetched = new Date().toISOString();
+          console.log("✅ Profile cached at:", state.profileLastFetched);
+        }
+
+        state.fetchStatus.profile = "succeeded";
+        state.profileError = null;
+      })
+      .addCase(fetchUserProfile.rejected, (state, action) => {
+        state.profileLoading = false;
+
+        const isBeneficiary = state.isBeneficiaryUser;
+        const is404Error = action.payload?.includes("404");
+
+        if (isBeneficiary && is404Error) {
+          console.log("ℹ️ Profile 404 for beneficiary - expected");
+          state.profileError = null;
+          state.fetchStatus.profile = "skipped";
+          return;
+        }
+
+        state.profileError = action.payload;
+        state.fetchStatus.profile = "failed";
+        state.profileDataLoaded = false;
+      })
+
+      // ===== FX REDUCERS =====
       .addCase(fetchPartnerFxCurrencies.pending, (state) => {
         state.loading = true;
         state.fetchStatus.fx = "loading";
@@ -440,87 +464,20 @@ const headerSlice = createSlice({
         state.loading = false;
         state.partnerFxCurrencies = action.payload;
         state.hasFxData = action.payload.length > 0;
+        state.fxDataLoaded = true;
+        state.fxLastFetched = new Date().toISOString();
         state.fetchStatus.fx = "succeeded";
         state.error = null;
+        console.log("✅ FX cached at:", state.fxLastFetched);
       })
       .addCase(fetchPartnerFxCurrencies.rejected, (state, action) => {
         state.loading = false;
-        if (
-          action.payload !==
-          "FX fetch already in progress (global coordination)"
-        ) {
-          state.error = action.payload;
-          state.fetchStatus.fx = "failed";
-        } else {
-          state.fetchStatus.fx = "idle";
-        }
-        state.hasFxData = false;
+        state.error = action.payload;
+        state.fetchStatus.fx = "failed";
+        state.fxDataLoaded = false;
       })
-      .addCase(fetchUserProfile.pending, (state) => {
-        state.profileLoading = true;
-        state.fetchStatus.profile = "loading";
-        state.profileError = null;
-      })
-      .addCase(fetchUserProfile.fulfilled, (state, action) => {
-        console.log(
-          "✅ REDUX: Profile fetch completed:",
-          action.payload?.first_name || action.payload?._beneficiarySkipped
-            ? "Skipped for beneficiary"
-            : "Empty",
-        );
 
-        state.profileLoading = false;
-
-        // Only set profileData if we actually got real profile data (not skipped for beneficiary)
-        if (action.payload && !action.payload._beneficiarySkipped) {
-          state.profileData = action.payload;
-          console.log("✅ Profile data stored in Redux");
-        } else {
-          console.log(
-            "ℹ️ Profile fetch skipped or returned empty for beneficiary",
-          );
-          // Keep existing profileData or null, don't overwrite
-        }
-
-        state.fetchStatus.profile = "succeeded";
-        state.profileError = null;
-        state.isWhitelabelledCustomer =
-          localStorage.getItem("whitelabelled_customer") || "N";
-      })
-      .addCase(fetchUserProfile.rejected, (state, action) => {
-        state.profileLoading = false;
-
-        // Special handling for beneficiary 404 errors
-        // ✅ FIX: Check for both spellings
-        const isBeneficiary =
-          state.isBeneficiaryUser ||
-          localStorage.getItem("beneficaryLogin") === "Y" ||
-          localStorage.getItem("beneficiaryLogin") === "Y";
-        const is404Error =
-          action.payload?.message?.includes("404") ||
-          action.payload?.message?.includes("Customer not found");
-
-        if (isBeneficiary && is404Error) {
-          console.log("ℹ️ Profile 404 error for beneficiary - expected");
-          state.profileError = null;
-          state.fetchStatus.profile = "skipped";
-          return;
-        }
-
-        if (
-          action.payload !==
-          "Profile fetch already in progress (global coordination)"
-        ) {
-          state.profileError = action.payload;
-          state.fetchStatus.profile = "failed";
-          console.error(
-            "❌ Profile fetch rejected in reducer:",
-            action.payload,
-          );
-        } else {
-          state.fetchStatus.profile = "idle";
-        }
-      })
+      // ===== CHARGES REDUCERS =====
       .addCase(fetchChargesData.pending, (state) => {
         state.chargesLoading = true;
         state.chargesError = null;
@@ -529,56 +486,23 @@ const headerSlice = createSlice({
       .addCase(fetchChargesData.fulfilled, (state, action) => {
         state.chargesLoading = false;
         state.chargesData = action.payload;
-        state.chargesError = null;
+        state.chargesDataLoaded = true;
         state.chargesLastFetched = new Date().toISOString();
+        state.chargesError = null;
         state.fetchStatus.charges = "succeeded";
+        console.log("✅ Charges cached at:", state.chargesLastFetched);
       })
       .addCase(fetchChargesData.rejected, (state, action) => {
         state.chargesLoading = false;
-        if (
-          action.payload !==
-          "Charges fetch already in progress (global coordination)"
-        ) {
-          state.chargesError = action.payload;
-          state.fetchStatus.charges = "failed";
-          console.error("❌ Charges fetch failed:", action.payload);
-        } else {
-          state.fetchStatus.charges = "idle";
-        }
+        state.chargesError = action.payload;
+        state.fetchStatus.charges = "failed";
+        state.chargesDataLoaded = false;
         state.chargesData = [];
-      })
-      .addCase(fetchCustomerDataWithBeneficiaryCheck.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(
-        fetchCustomerDataWithBeneficiaryCheck.fulfilled,
-        (state, action) => {
-          state.loading = false;
-          state.isBeneficiaryUser = action.payload.isBeneficiary;
-          state.error = null;
-
-          if (!action.payload.isBeneficiary) {
-            console.log("✅ Customer data fetched successfully");
-          } else {
-            console.log("✅ Skipped customer data fetch for beneficiary");
-          }
-        },
-      )
-      .addCase(
-        fetchCustomerDataWithBeneficiaryCheck.rejected,
-        (state, action) => {
-          state.loading = false;
-          state.error = action.payload;
-          console.error(
-            "❌ fetchCustomerDataWithBeneficiaryCheck error:",
-            action.payload,
-          );
-        },
-      );
+      });
   },
 });
 
+// ===== SELECTORS =====
 export const selectHeader = (state) => state.header;
 export const selectHeaderLoading = (state) => state.header.loading;
 export const selectHeaderError = (state) => state.header.error;
@@ -588,16 +512,22 @@ export const selectFetchStatus = (state) => state.header.fetchStatus;
 export const selectPartnerFxCurrencies = (state) =>
   state.header.partnerFxCurrencies;
 export const selectHasFxData = (state) => state.header.hasFxData;
+export const selectFxDataLoaded = (state) => state.header.fxDataLoaded;
+export const selectFxLastFetched = (state) => state.header.fxLastFetched;
 export const selectProfileData = (state) => state.header.profileData;
 export const selectProfileLoading = (state) => state.header.profileLoading;
 export const selectProfileError = (state) => state.header.profileError;
+export const selectProfileDataLoaded = (state) =>
+  state.header.profileDataLoaded;
+export const selectProfileLastFetched = (state) =>
+  state.header.profileLastFetched;
 export const selectChargesData = (state) => state.header.chargesData;
 export const selectChargesLoading = (state) => state.header.chargesLoading;
 export const selectChargesError = (state) => state.header.chargesError;
 export const selectChargesLastFetched = (state) =>
   state.header.chargesLastFetched;
-export const selectChargesFetchStatus = (state) =>
-  state.header.fetchStatus.charges;
+export const selectChargesDataLoaded = (state) =>
+  state.header.chargesDataLoaded;
 export const selectIsStaffLogin = (state) => state.header.isStaffLogin;
 export const selectStaffRole = (state) => state.header.staffRole;
 export const selectIsOwnerLogin = (state) => state.header.isOwnerLogin;
@@ -612,25 +542,21 @@ export const selectIsBeneficiaryUser = (state) =>
   state.header.isBeneficiaryUser;
 
 export const {
-  setLoading,
-  setError,
   openDropdown,
   closeDropdown,
   setHeaderColor,
   updateLocalStorageState,
-  clearAuthData,
-  clearProfileData,
-  clearChargesData,
-  setChargesLoading,
-  resetChargesError,
-  resetFetchStatus,
-  resetHeaderState,
-  clearApiCache,
+  clearProfileCache,
+  clearFxCache,
+  clearChargesCache,
+  clearAllCache,
   forceRefreshProfile,
   forceRefreshFx,
   forceRefreshCharges,
+  resetHeaderState,
+  clearAuthData,
   setBeneficiaryUser,
-  logHeaderState,
+  clearChargesData,
 } = headerSlice.actions;
 
 export default headerSlice.reducer;
