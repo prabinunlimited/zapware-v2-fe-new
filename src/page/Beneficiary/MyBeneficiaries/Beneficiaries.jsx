@@ -3979,4 +3979,4 @@ BeneficiaryForm.defaultProps = {
   initialData: null,
 };
 
-export default BeneficiaryForm;
+export default Beneficiaries;

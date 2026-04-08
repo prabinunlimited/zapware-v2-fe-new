@@ -1,13 +1,10 @@
+// features/currencyAccounts/currencyAccountsSelectors.js
 import { createSelector } from "@reduxjs/toolkit";
 
-// ========== ORIGINAL SELECTORS ==========
 export const selectAccountOptions = (state) =>
   state.currencyAccounts.accountOptions;
 export const selectNamedAccounts = (state) =>
   state.currencyAccounts.namedAccounts;
-export const selectIsPartnerFlow = (state) =>
-  state.currencyAccounts.isPartnerFlow;
-export const selectPartnerId = (state) => state.currencyAccounts.partnerId;
 export const selectPooledAccounts = (state) =>
   state.currencyAccounts.pooledAccounts;
 export const selectUcaDescription = (state) =>
@@ -35,8 +32,11 @@ export const selectRemittanceOnlyAccepted = (state) =>
   state.currencyAccounts.remittanceOnlyAccepted;
 export const selectTermsModalOpen = (state) =>
   state.currencyAccounts.termsModalOpen;
+
 export const selectAgentCode = (state) => state.currencyAccounts.agentCode;
 export const selectAgentError = (state) => state.currencyAccounts.agentError;
+
+// New selectors for validation states
 export const selectIsReferralValidating = (state) =>
   state.currencyAccounts.isReferralValidating;
 export const selectIsAgentValidating = (state) =>
@@ -44,33 +44,8 @@ export const selectIsAgentValidating = (state) =>
 export const selectValidationMessage = (state) =>
   state.currencyAccounts.validationMessage;
 
-// ========== NEW PACKAGE SELECTORS ==========
-export const selectIsPartnerPackageModule = (state) =>
-  state.currencyAccounts.isPartnerPackageModule;
-export const selectPackageOptions = (state) =>
-  state.currencyAccounts.packageOptions;
-export const selectSelectedPackageCurrencies = (state) =>
-  state.currencyAccounts.selectedPackageCurrencies;
-export const selectPackageFeesUrl = (state) =>
-  state.currencyAccounts.packageFeesUrl;
-export const selectPackageLoading = (state) =>
-  state.currencyAccounts.packageLoading;
-export const selectPackageError = (state) =>
-  state.currencyAccounts.packageError;
-export const selectIsPackageValidating = (state) =>
-  state.currencyAccounts.isPackageValidating;
-export const selectPackageValidationMessage = (state) =>
-  state.currencyAccounts.packageValidationMessage;
-export const selectPackageFlags = (state) => ({
-  ssnRequired: state.currencyAccounts.packageSsnRequired,
-  ownerAdd: state.currencyAccounts.packageOwnerAdd,
-  documentUpload: state.currencyAccounts.packageDocumentUpload,
-  kycVerify: state.currencyAccounts.packageKycVerify,
-});
-
-// ========== ORIGINAL COMPUTED SELECTORS ==========
-
-// ✅ RESTORED: Selector to check if user has selected USD Named Accounts
+// ========== UPDATED SELECTOR ==========
+// Selector to check if user has selected USD Named Accounts
 export const selectIsNamedAccount = createSelector(
   [selectSelectedAccounts, selectAccountOptions],
   (selectedAccounts, accountOptions) => {
@@ -88,7 +63,7 @@ export const selectIsNamedAccount = createSelector(
       try {
         // Convert to string for safe operations
         const accountIdStr = accountId.toString();
-
+        
         // Check if it's a named account
         const isNamed = accountIdStr.includes("named");
         if (!isNamed) {
@@ -100,12 +75,9 @@ export const selectIsNamedAccount = createSelector(
         // Format is usually "123-named" or "456-pooled"
         const parts = accountIdStr.split("-");
         const serviceProvideId = parseInt(parts[0]);
-
+        
         if (isNaN(serviceProvideId)) {
-          console.log(
-            "❌ Could not parse service_provide_id from:",
-            accountIdStr
-          );
+          console.log("❌ Could not parse service_provide_id from:", accountIdStr);
           return false;
         }
 
@@ -118,10 +90,10 @@ export const selectIsNamedAccount = createSelector(
           console.log("❌ Account not found in options:", serviceProvideId);
           return false;
         }
-
+        
         // Check if currency is USD
         const isUSD = account.currency === "USD";
-
+        
         if (isUSD) {
           console.log("✅ Found USD Named Account:", {
             id: account.service_provide_id,
@@ -132,7 +104,7 @@ export const selectIsNamedAccount = createSelector(
         } else {
           console.log("❌ Not USD currency:", account.currency);
         }
-
+        
         return isUSD;
       } catch (error) {
         console.error("❌ Error checking account:", accountId, error);
@@ -140,27 +112,24 @@ export const selectIsNamedAccount = createSelector(
       }
     });
 
-    console.log(
-      "🏢 Final Result - Has USD Named Accounts:",
-      hasUSDNamedAccount
-    );
+    console.log("🏢 Final Result - Has USD Named Accounts:", hasUSDNamedAccount);
     return hasUSDNamedAccount;
   }
 );
 
-// ✅ RESTORED: Selector to check if user has ANY Named Accounts (any currency)
+// ========== ADD THIS NEW SELECTOR ==========
+// Selector to check if user has ANY Named Accounts (any currency)
 export const selectHasAnyNamedAccounts = createSelector(
   [selectSelectedAccounts],
   (selectedAccounts) => {
     if (!selectedAccounts || selectedAccounts.length === 0) return false;
-
-    return selectedAccounts.some((accountId) =>
+    
+    return selectedAccounts.some(accountId => 
       accountId.toString().includes("named")
     );
   }
 );
 
-// ✅ RESTORED: Success message selectors
 export const selectReferralSuccessMessage = createSelector(
   [selectValidationMessage, selectReferralError, selectIsReferralValidating],
   (validationMessage, referralError, isReferralValidating) => {
@@ -179,9 +148,7 @@ export const selectAgentSuccessMessage = createSelector(
   }
 );
 
-// ========== UPDATED FOR "ONLY 1 CURRENCY ALLOWED" ==========
-
-// Selector to check if form is ready to submit (UPDATED)
+// Selector to check if form is ready to submit
 export const selectIsFormValid = createSelector(
   [
     selectSelectedAccounts,
@@ -189,84 +156,60 @@ export const selectIsFormValid = createSelector(
     selectTermsAccepted,
     selectReferralError,
     selectAgentError,
-    selectIsPartnerPackageModule,
-    selectSelectedPackageCurrencies,
-    selectPackageOptions,
   ],
   (
     selectedAccounts,
     remittanceOnlyAccepted,
     termsAccepted,
     referralError,
-    agentError,
-    isPartnerPackageModule,
-    selectedPackageCurrencies,
-    packageOptions
+    agentError
   ) => {
-    if (isPartnerPackageModule === "Y") {
-      // If remittance only is selected, only check terms and errors
-      if (remittanceOnlyAccepted) {
-        return termsAccepted && !referralError && !agentError;
-      }
+    // Check if at least one account is selected OR remittance only is chosen
+    const hasSelection = selectedAccounts.length > 0 || remittanceOnlyAccepted;
 
-      // ========== CHANGED: Allow multiple selections ==========
-      const hasPackageSelection = selectedPackageCurrencies.length >= 1;
+    // Check if terms are accepted
+    const hasAcceptedTerms = termsAccepted;
 
-      if (!hasPackageSelection) {
-        return false;
-      }
+    // Check if there are no validation errors
+    const hasNoErrors = !referralError && !agentError;
 
-      const hasAcceptedTerms = termsAccepted;
-      const hasNoErrors = !referralError && !agentError;
-
-      return hasPackageSelection && hasAcceptedTerms && hasNoErrors;
-    } else {
-      // Regular mode validation remains the same
-      const hasSelection =
-        selectedAccounts.length > 0 || remittanceOnlyAccepted;
-      const hasAcceptedTerms = termsAccepted;
-      const hasNoErrors = !referralError && !agentError;
-
-      return hasSelection && hasAcceptedTerms && hasNoErrors;
-    }
+    return hasSelection && hasAcceptedTerms && hasNoErrors;
   }
 );
 
-// Also update selectIsSubmitDisabled to be simpler
+// Selector to get the submit button disabled state
 export const selectIsSubmitDisabled = createSelector(
   [
     selectLoading,
-    selectPackageLoading,
     selectIsReferralValidating,
     selectIsAgentValidating,
-    selectIsPackageValidating,
-    selectIsFormValid, // Use the form validation result
+    selectSelectedAccounts,
+    selectRemittanceOnlyAccepted,
+    selectTermsAccepted,
   ],
   (
     loading,
-    packageLoading,
     isReferralValidating,
     isAgentValidating,
-    isPackageValidating,
-    isFormValid
+    selectedAccounts,
+    remittanceOnlyAccepted,
+    termsAccepted
   ) => {
-    // Disable if any loading/validation is in progress
-    if (
+    // Button should be disabled if:
+    // 1. Any loading/validation is in progress
+    // 2. No accounts selected AND remittance only is not chosen
+    // 3. Terms are not accepted
+    return (
       loading ||
-      packageLoading ||
       isReferralValidating ||
       isAgentValidating ||
-      isPackageValidating
-    ) {
-      return true;
-    }
-
-    // Disable if form is not valid
-    return !isFormValid;
+      (selectedAccounts.length === 0 && !remittanceOnlyAccepted) ||
+      !termsAccepted
+    );
   }
 );
 
-// Selector to get all form data for submission (UPDATED)
+// Selector to get all form data for submission
 export const selectFormData = createSelector(
   [
     selectSelectedAccounts,
@@ -274,44 +217,20 @@ export const selectFormData = createSelector(
     selectReferralCode,
     selectAgentCode,
     selectRemittanceOnlyAccepted,
-    selectIsPartnerPackageModule,
-    selectSelectedPackageCurrencies,
-    selectPackageOptions,
-    selectPackageFlags,
   ],
   (
     selectedAccounts,
     accountOptions,
     referralCode,
     agentCode,
-    remittanceOnlyAccepted,
-    isPartnerPackageModule,
-    selectedPackageCurrencies,
-    packageOptions,
-    packageFlags
+    remittanceOnlyAccepted
   ) => {
-    const baseData = {
-      service_provide_ids:
-        isPartnerPackageModule === "Y" ? [] : selectedAccounts,
+    return {
+      service_provide_ids: selectedAccounts,
       accountOptions: accountOptions,
       referral_code: referralCode,
       agent_code: agentCode,
       is_remit: remittanceOnlyAccepted ? 1 : 0,
     };
-
-    if (isPartnerPackageModule === "Y") {
-      return {
-        ...baseData,
-        is_partner_package_module: "Y",
-        package_currencies: selectedPackageCurrencies,
-        package_options: packageOptions,
-        ssn_required: packageFlags.ssnRequired || "Y",
-        owner_add: packageFlags.ownerAdd || "Y",
-        document_upload: packageFlags.documentUpload || "Y",
-        kyc_verify: packageFlags.kycVerify || "Y",
-      };
-    }
-
-    return baseData;
   }
 );
