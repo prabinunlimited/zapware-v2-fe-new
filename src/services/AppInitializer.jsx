@@ -4,7 +4,7 @@ import { RingLoader } from "react-spinners";
 import { initializeAppWithPartnerData } from "../services/authService";
 
 const AppInitializer = ({ children }) => {
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(true);
   const [initError, setInitError] = useState(null);
 
   const hasInitializedRef = useRef(false);
