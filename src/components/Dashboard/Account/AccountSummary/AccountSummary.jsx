@@ -1,63 +1,71 @@
-// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - REFACTORED WITH INTELLIGENT CACHING
+// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - FIXED VERSION
 import React, {
   useEffect,
   useRef,
   useCallback,
   useState,
   useMemo,
+  useReducer,
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FiChevronDown,
+  FiDownload,
+  FiFileText,
   FiRefreshCw,
   FiEye,
+  FiDollarSign,
   FiCreditCard,
   FiTrendingUp,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaUniversity } from "react-icons/fa";
+import {
+  FaPiggyBank,
+  FaUniversity,
+  FaMoneyBillWave,
+  FaChartLine,
+} from "react-icons/fa";
 import RingLoader from "react-spinners/RingLoader";
 
 // Components
 import Modal from "./Modal";
 import TransactionDetails from "../Transaction/TransactionDetails";
 
-// ✅ Import from refactored HomeSlice
+// Redux - Import hooks from the same file
 import {
   setSelectedAccount,
   setSelectedCurrency,
   setAccountDropdownOpen,
+  selectAccountState, // ✅ CHANGED: Use combined selector
   fetchAccountDetails,
   updateAccountBalance,
-  selectAccounts,
-  selectSelectedAccount,
-  selectSelectedCurrency,
-  selectAccountLoading,
-  selectBalanceLoading,
-  selectLastUpdated,
-  selectHasFetchedAccount,
-  selectAccountError,
-  selectAccountDropdownOpen,
-  clearAllCache,
-} from "../../../../page/Home/HomeSlice";
+  clearSuccessfulFetch,
+} from "./AccountSlice";
 
-// Import UI slice actions and selectors
+// Import UI slice actions and selectors separately
 import {
   openAccountDetailsModal,
   closeAccountDetailsModal,
   selectAccountDetailsModal,
 } from "../../../../features/Auth/slices/uiSlice";
 
-import { selectExporting } from "../../Account/Transaction/TransactionSlice";
+import {
+  exportTransactionsToExcel,
+  selectExporting,
+} from "../../Account/Transaction/TransactionSlice";
 import { usePartnerConfig } from "../../../../hooks/usePartnerConfig";
 
 import { selectAuthToken } from "../../../../store/selectors";
 
-import { useBankLetter } from "../../../../page/BankLetter/hooks/useBankLetter";
-import { centralizedApi } from "../../../../services/api";
+import {
+  extractErrorMessage,
+  SafeErrorDisplay,
+} from "../../../../utils/errorHandling";
 
-// ✅ Token sync hook - maintains consistency
+import { useBankLetter } from "../../../../page/BankLetter/hooks/useBankLetter";
+
+// ✅ FIXED: Custom hook for token synchronization
 const useTokenSync = () => {
   const authtoken = useSelector(selectAuthToken);
 
@@ -71,43 +79,72 @@ const useTokenSync = () => {
   }, [authtoken]);
 };
 
-// ✅ Helper function for error display
-const SafeErrorDisplay = ({ error, className = "" }) => {
-  const errorMessage =
-    typeof error === "string"
-      ? error
-      : error?.message || "An unknown error occurred";
+// ✅ FIXED: Custom hook for auto-fetch with debouncing
+const useAutoFetchAccounts = (customerId, authtoken) => {
+  const dispatch = useDispatch();
+  const [fetchTrigger, forceRefresh] = useReducer((x) => x + 1, 0);
+  const fetchRef = useRef({
+    hasAttempted: false,
+    lastFetchTime: 0,
+    cooldown: 5000, // 5 seconds cooldown
+  });
 
-  return (
-    <div
-      className={`bg-red-50 border border-red-200 rounded-lg p-4 ${className}`}
-    >
-      <div className="flex">
-        <div className="flex-shrink-0">
-          <svg
-            className="h-5 w-5 text-red-400"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <div className="ml-3">
-          <h3 className="text-sm font-medium text-red-800">Error</h3>
-          <div className="mt-2 text-sm text-red-700">
-            <p>{errorMessage}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const accountState = useSelector(selectAccountState);
+  const { hasFetchedAccount, accountLoading, fetchAttempted } = accountState;
+
+  const shouldFetch = useMemo(() => {
+    // Don't fetch if already loading
+    if (accountLoading) return false;
+
+    // Don't fetch if missing required data
+    if (!customerId || !authtoken) return false;
+
+    // Don't fetch if we already have data
+    if (hasFetchedAccount && !fetchTrigger) return false;
+
+    // Check cooldown
+    const now = Date.now();
+    if (now - fetchRef.current.lastFetchTime < fetchRef.current.cooldown) {
+      return false;
+    }
+
+    return true;
+  }, [
+    customerId,
+    authtoken,
+    hasFetchedAccount,
+    accountLoading,
+    fetchAttempted,
+    fetchTrigger,
+  ]);
+
+  useEffect(() => {
+    if (shouldFetch) {
+      console.log("🚀 Triggering account fetch...");
+      fetchRef.current.hasAttempted = true;
+      fetchRef.current.lastFetchTime = Date.now();
+
+      dispatch(
+        fetchAccountDetails({
+          customerId,
+          authtoken,
+          isRefresh: fetchTrigger > 0,
+        })
+      );
+    }
+  }, [shouldFetch, dispatch, customerId, authtoken, fetchTrigger]);
+
+  const refreshAccounts = useCallback(() => {
+    forceRefresh();
+    if (customerId) {
+      dispatch(clearSuccessfulFetch(customerId));
+    }
+  }, [dispatch, customerId]);
+
+  return { refreshAccounts, isFetching: accountLoading };
 };
 
-// ✅ Memoized utility functions
+// ✅ FIXED: Memoized utility functions
 const useCurrencyUtils = () => {
   const currencySymbols = useMemo(
     () => ({
@@ -124,7 +161,7 @@ const useCurrencyUtils = () => {
       CNY: "¥",
       AED: "د.إ",
     }),
-    [],
+    []
   );
 
   const currencyNames = useMemo(
@@ -142,7 +179,7 @@ const useCurrencyUtils = () => {
       CNY: "Chinese Yuan",
       AED: "UAE Dirham",
     }),
-    [],
+    []
   );
 
   const formatCurrency = useCallback(
@@ -167,7 +204,7 @@ const useCurrencyUtils = () => {
         return `${symbol}${formatted}`;
       }
     },
-    [currencySymbols],
+    [currencySymbols]
   );
 
   const getFullFormattedAmount = useCallback(
@@ -180,14 +217,14 @@ const useCurrencyUtils = () => {
         maximumFractionDigits: 2,
       }).format(numericAmount)}`;
     },
-    [currencySymbols],
+    [currencySymbols]
   );
 
   const getCurrencyName = useCallback(
     (currencyCode) => {
       return currencyNames[currencyCode] || currencyCode;
     },
-    [currencyNames],
+    [currencyNames]
   );
 
   return {
@@ -197,7 +234,7 @@ const useCurrencyUtils = () => {
   };
 };
 
-// ✅ Animation variants
+// ✅ FIXED: Animation variants (memoized outside component)
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -230,146 +267,56 @@ const balanceVariants = {
   },
 };
 
-// ✅ Main Component - REFACTORED with intelligent caching
+// ✅ FIXED: Main Component with optimized rendering
 const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { customerId } = useParams();
   const { navigateToBankLetter } = useBankLetter();
 
-  // Get customerId from localStorage
-  const customerId = localStorage.getItem("authcustomer_id");
-
-  // ✅ All hooks called unconditionally at top
+  // ✅ FIXED: All hooks called unconditionally at top
   useTokenSync();
 
   // Refs
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
   const scrollContainerRef = useRef(null);
-  const initialLoadDoneRef = useRef(false); // Track initial load
 
   // State for balance animation
   const [displayBalance, setDisplayBalance] = useState(0);
   const [previousBalance, setPreviousBalance] = useState(0);
-  const [componentError, setComponentError] = useState(null);
 
-  // ✅ Use HomeSlice selectors - leveraging cached data
-  const accounts = useSelector(selectAccounts);
-  const selectedAccount = useSelector(selectSelectedAccount);
-  const selectedCurrency = useSelector(selectSelectedCurrency);
-  const accountLoading = useSelector(selectAccountLoading);
-  const balanceLoading = useSelector(selectBalanceLoading);
-  const accountError = useSelector(selectAccountError);
-  const hasFetchedAccount = useSelector(selectHasFetchedAccount);
-  const lastUpdated = useSelector(selectLastUpdated);
-  const accountDropdownOpen = useSelector(selectAccountDropdownOpen);
+  // ✅ FIXED: Use combined selector to minimize re-renders
+  const accountState = useSelector(selectAccountState);
+  const {
+    accounts,
+    selectedAccount,
+    selectedCurrency,
+    accountLoading,
+    balanceLoading,
+    accountError,
+    hasFetchedAccount,
+    fetchAttempted,
+  } = accountState;
 
-  // ✅ Other selectors
+  // ✅ FIXED: Other selectors
   const authtoken = useSelector(selectAuthToken);
+  const exporting = useSelector(selectExporting);
   const accountDetailsModal = useSelector(selectAccountDetailsModal);
+  const accountDropdown = useSelector(
+    (state) => state.account?.accountDropdownOpen || false
+  );
 
-  // ✅ Custom hooks
+  // ✅ FIXED: Custom hooks
+  const { refreshAccounts, isFetching } = useAutoFetchAccounts(
+    customerId,
+    authtoken
+  );
   const { formatCurrency, getFullFormattedAmount, getCurrencyName } =
     useCurrencyUtils();
   const config = usePartnerConfig(authtoken);
 
-  // ✅ OPTIMIZED: Single coordinated data fetch with intelligent caching
-  useEffect(() => {
-    // Early returns to prevent unnecessary executions
-    if (!customerId || !authtoken) {
-      console.log("⏳ AccountSummary: Missing auth data, skipping fetch");
-      return;
-    }
-
-    // Prevent duplicate initial loads
-    if (initialLoadDoneRef.current) {
-      console.log(
-        "📊 AccountSummary: Initial load already done, using cached data",
-      );
-      return;
-    }
-
-    // ✅ Let HomeSlice handle account fetching with its built-in deduplication
-    if (!hasFetchedAccount && !accountLoading) {
-      console.log(
-        "🚀 AccountSummary: Fetching account details (cached or new)",
-      );
-      dispatch(fetchAccountDetails({ customerId, authtoken }))
-        .then((result) => {
-          // Check if the action was rejected
-          if (result.error) {
-            console.error(
-              "❌ AccountSummary: Account fetch failed",
-              result.error,
-            );
-            return;
-          }
-          console.log("✅ AccountSummary: Account fetch completed");
-          initialLoadDoneRef.current = true;
-        })
-        .catch((error) => {
-          console.error("❌ AccountSummary: Account fetch failed", error);
-        });
-    } else if (hasFetchedAccount) {
-      console.log("📊 AccountSummary: Using cached account data");
-      initialLoadDoneRef.current = true;
-    }
-  }, [customerId, authtoken, hasFetchedAccount, accountLoading, dispatch]);
-
-  // ✅ Debug log to verify data flow (reduced noise in production)
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔍 AccountSummary - HomeSlice State:", {
-        accountsCount: accounts?.length || 0,
-        hasFetchedAccount,
-        accountLoading,
-        selectedAccount: selectedAccount?.currency,
-        selectedCurrency,
-        customerId,
-        lastUpdated,
-        balanceLoading,
-        cached: hasFetchedAccount ? "✅ Yes" : "❌ No",
-      });
-    }
-  }, [
-    accounts,
-    hasFetchedAccount,
-    accountLoading,
-    selectedAccount,
-    selectedCurrency,
-    customerId,
-    lastUpdated,
-    balanceLoading,
-  ]);
-
-  // ✅ Save selected currency to localStorage
-  useEffect(() => {
-    if (selectedCurrency) {
-      localStorage.setItem("selectedCurrency", selectedCurrency);
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          "💾 Saved selectedCurrency to localStorage:",
-          selectedCurrency,
-        );
-      }
-    }
-  }, [selectedCurrency]);
-
-  // ✅ Error boundary effect
-  useEffect(() => {
-    const handleError = (error) => {
-      console.error("Global error caught in AccountSummary:", error);
-      setComponentError(error);
-    };
-
-    window.addEventListener("error", handleError);
-
-    return () => {
-      window.removeEventListener("error", handleError);
-    };
-  }, []);
-
-  // ✅ Memoized computed values
+  // ✅ FIXED: Memoized computed values
   const safeAccounts = useMemo(() => {
     return Array.isArray(accounts) ? accounts : [];
   }, [accounts]);
@@ -378,7 +325,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     return safeAccounts.length > 0;
   }, [safeAccounts]);
 
-  // ✅ Balance animation with cleanup
+  const headerColor = useMemo(
+    () => config?.header_color || localStorage.getItem("header_color"),
+    [config?.header_color]
+  );
+
+  const textColorFromConfig = useMemo(
+    () => config?.text_color || localStorage.getItem("text_color") || textColor,
+    [config?.text_color, textColor]
+  );
+
+  // ✅ FIXED: Balance animation with cleanup
   useEffect(() => {
     if (selectedAccount?.available_balance !== undefined) {
       const newBalance = parseFloat(selectedAccount.available_balance) || 0;
@@ -387,7 +344,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     }
   }, [selectedAccount?.available_balance]);
 
-  // ✅ Close dropdown handler with cleanup
+  // ✅ FIXED: Close dropdown handler with cleanup
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -395,49 +352,33 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
         !dropdownRef.current.contains(event.target) &&
         buttonRef.current &&
         !buttonRef.current.contains(event.target) &&
-        accountDropdownOpen
+        accountDropdown
       ) {
         dispatch(setAccountDropdownOpen(false));
       }
     };
 
-    if (accountDropdownOpen) {
+    if (accountDropdown) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [dispatch, accountDropdownOpen]);
+  }, [dispatch, accountDropdown]);
 
-  // ✅ Refresh function with intelligent cache clearing
-  const refreshAccounts = useCallback(() => {
-    if (customerId && authtoken) {
-      console.log("🔄 AccountSummary: Manual refresh triggered");
-
-      // Clear cache before refetching to ensure fresh data
-      dispatch(clearAllCache());
-      centralizedApi.clearAllCache();
-
-      // Small delay to allow state update
-      setTimeout(() => {
-        dispatch(fetchAccountDetails({ customerId, authtoken }));
-      }, 100);
-    }
-  }, [customerId, authtoken, dispatch]);
-
-  // ✅ Event handlers with proper dependencies
+  // ✅ FIXED: Event handlers with proper dependencies
   const handleTransactionComplete = useCallback(
     async (shouldRefresh = false) => {
       if (shouldRefresh) {
         refreshAccounts();
       }
     },
-    [refreshAccounts],
+    [refreshAccounts]
   );
 
   const handleDropdownToggle = useCallback(() => {
-    dispatch(setAccountDropdownOpen(!accountDropdownOpen));
-  }, [dispatch, accountDropdownOpen]);
+    dispatch(setAccountDropdownOpen(!accountDropdown));
+  }, [dispatch, accountDropdown]);
 
   const handleAccountChange = useCallback(
     (account) => {
@@ -451,7 +392,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
 
       dispatch(setAccountDropdownOpen(false));
     },
-    [dispatch, onCurrencyChange],
+    [dispatch, onCurrencyChange]
   );
 
   const handleAccountDetailsClick = useCallback(() => {
@@ -464,129 +405,60 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     dispatch(closeAccountDetailsModal());
   }, [dispatch]);
 
-  const handleBankLetter = useCallback(() => {
-    console.log("🔍 AccountSummary - handleBankLetter clicked:", {
-      timestamp: new Date().toISOString(),
-      customerId,
-      selectedAccount: selectedAccount?.currency,
-      selectedAccountNumber: selectedAccount?.account_number,
-      selectedCurrency,
-      safeAccountsCount: safeAccounts.length,
-      hasSelectedAccount: !!selectedAccount,
-    });
-
-    // Find the account that matches the currently selected currency
-    const accountToUse =
-      safeAccounts.find((account) => account.currency === selectedCurrency) ||
-      selectedAccount;
-
-    if (!accountToUse) {
-      console.error("❌ AccountSummary: No selected account for bank letter!");
-
-      if (safeAccounts.length > 0) {
-        console.log(
-          "🔄 AccountSummary: Using first available account:",
-          safeAccounts[0],
-        );
-
-        navigate(`/bankletter/${customerId}`, {
-          state: {
-            accountData: safeAccounts[0],
-            selectedCurrency: safeAccounts[0].currency,
-            source: "AccountSummary-fallback",
-          },
-        });
-        return;
-      }
-
-      alert("Please select an account first to generate a bank letter.");
-      return;
-    }
-
-    console.log("✅ AccountSummary - Using account for bank letter:", {
-      currency: accountToUse.currency,
-      accountNumber: accountToUse.account_number,
-      matchesSelectedCurrency: accountToUse.currency === selectedCurrency,
-    });
-
-    // Navigate with both account data AND selected currency
-    navigate(`/bankletter/${customerId}`, {
-      state: {
-        accountData: accountToUse,
-        selectedCurrency: selectedCurrency,
-        source: "AccountSummary-direct",
-      },
-    });
-  }, [customerId, selectedAccount, selectedCurrency, safeAccounts, navigate]);
+  const handleBankLetter = () => {
+    navigateToBankLetter(customerId);
+  };
 
   const handleBalanceUpdate = useCallback(async () => {
     if (customerId && authtoken) {
-      console.log("🔄 AccountSummary: Updating balance");
       dispatch(updateAccountBalance({ customerId, authtoken }));
     }
   }, [customerId, authtoken, dispatch]);
 
-  // ✅ Loading states - respects cached data
+  // ✅ FIXED: Loading states
   const isLoading = useMemo(() => {
-    // Show loading only if we don't have cached data and we're actively loading
-    return accountLoading && !hasFetchedAccount;
-  }, [accountLoading, hasFetchedAccount]);
+    return accountLoading && !fetchAttempted;
+  }, [accountLoading, fetchAttempted]);
 
   const shouldShowEmptyState = useMemo(() => {
-    // Show empty state only if we've fetched and there's no data
-    return hasFetchedAccount && !accountLoading && !hasAccounts;
-  }, [hasFetchedAccount, accountLoading, hasAccounts]);
+    return fetchAttempted && !accountLoading && !hasAccounts;
+  }, [fetchAttempted, accountLoading, hasAccounts]);
 
   const shouldShowErrorState = useMemo(() => {
-    // Show error only if fetch failed and we have no cached data
-    return accountError && !hasFetchedAccount && !accountLoading;
-  }, [accountError, hasFetchedAccount, accountLoading]);
+    return accountError && !hasFetchedAccount && fetchAttempted;
+  }, [accountError, hasFetchedAccount, fetchAttempted]);
 
   const shouldShowContent = useMemo(() => {
-    // Show content if we have cached data or just loaded data
     return hasFetchedAccount && hasAccounts;
   }, [hasFetchedAccount, hasAccounts]);
 
-  if (componentError) {
-    return (
-      <SafeErrorDisplay
-        error={componentError}
-        className="flex items-center justify-center min-h-screen p-4"
-      />
-    );
-  }
-
-  // ✅ Render loading state
+  // ✅ FIXED: Render loading state
   if (isLoading) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
-        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
-          <div className="flex justify-center items-center h-24 md:h-32">
-            <RingLoader color="#3B82F6" size={30} className="md:w-10 md:h-10" />
+      <div className="flex flex-col justify-center items-center w-full space-y-6">
+        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="flex justify-center items-center h-32">
+            <RingLoader color="#3B82F6" size={40} />
           </div>
-          <p className="text-gray-500 mt-3 md:mt-4 text-sm md:text-base">
-            Loading your accounts...
-          </p>
+          <p className="text-gray-500 mt-4">Loading your accounts...</p>
         </div>
       </div>
     );
   }
 
-  // ✅ Show empty state
+  // ✅ FIXED: Show empty state
   if (shouldShowEmptyState) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
-        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
-          <FiCreditCard className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
-          <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1 md:mb-2">
+      <div className="flex flex-col justify-center items-center w-full space-y-6">
+        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <FiCreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">
             No Accounts Found
           </h3>
-          <p className="text-gray-500 text-sm md:text-base">
-            You don't have any accounts yet.
-          </p>
+          <p className="text-gray-500">You don't have any accounts yet.</p>
           <button
             onClick={refreshAccounts}
-            className="mt-3 md:mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200"
+            className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
           >
             Retry
           </button>
@@ -595,20 +467,18 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     );
   }
 
-  // ✅ Show error state
+  // ✅ FIXED: Show error state
   if (shouldShowErrorState) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
-        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
-          <div className="text-red-500 text-base md:text-lg font-semibold mb-3 md:mb-4">
+      <div className="flex flex-col justify-center items-center w-full space-y-6">
+        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="text-red-500 text-lg font-semibold mb-4">
             Error Loading Accounts
           </div>
-          <p className="text-gray-700 text-sm md:text-base mb-3 md:mb-4">
-            {accountError}
-          </p>
+          <p className="text-gray-700 mb-4">{accountError}</p>
           <button
             onClick={refreshAccounts}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
           >
             Try Again
           </button>
@@ -617,85 +487,62 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     );
   }
 
-  // ✅ Don't render until we have content
+  // ✅ FIXED: Don't render until we have content
   if (!shouldShowContent) {
     return (
-      <div className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4">
-        <div className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg p-4 md:p-8 text-center">
-          <div className="flex justify-center items-center h-24 md:h-32">
-            <RingLoader color="#3B82F6" size={30} className="md:w-10 md:h-10" />
+      <div className="flex flex-col justify-center items-center w-full space-y-6">
+        <div className="w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="flex justify-center items-center h-32">
+            <RingLoader color="#3B82F6" size={40} />
           </div>
-          <p className="text-gray-500 mt-3 md:mt-4 text-sm md:text-base">
-            Preparing your accounts...
-          </p>
-          <div className="mt-3 md:mt-4 space-y-2">
-            <button
-              onClick={refreshAccounts}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm md:text-base rounded-lg transition-colors duration-200 w-full sm:w-auto"
-            >
-              Load Accounts Now
-            </button>
-            <div className="text-xs text-gray-500 text-center sm:text-left">
-              Status: {hasFetchedAccount ? "Cached" : "Not cached"} | Accounts:{" "}
-              {safeAccounts.length} | Loading: {accountLoading ? "Yes" : "No"}
-            </div>
-          </div>
+          <p className="text-gray-500 mt-4">Preparing your accounts...</p>
         </div>
       </div>
     );
   }
 
-  // ✅ Main render - uses cached data
+  // ✅ FIXED: Main render
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col justify-center items-center w-full space-y-4 md:space-y-6 px-2 sm:px-4"
+      className="flex flex-col justify-center items-center w-full space-y-6"
     >
-      {/* Last Updated Indicator */}
-      {lastUpdated && (
-        <div className="w-full text-right">
-          <span className="text-xs text-gray-400">
-            Last updated: {new Date(lastUpdated).toLocaleTimeString()}
-          </span>
-        </div>
-      )}
-
       {/* Main Account Card */}
       <motion.div
         variants={itemVariants}
-        className="w-full bg-gradient-to-br from-white to-gray-50 rounded-xl md:rounded-2xl shadow-xl border border-gray-200 overflow-y-auto"
+        className="w-full bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border border-gray-200 overflow-y-auto"
       >
-        <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+        <div className="p-6 space-y-6">
           {/* Header Section */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             {/* Account Selector */}
-            <div className="relative w-full lg:flex-1 lg:max-w-md">
+            <div className="relative flex-1 max-w-md">
               <motion.button
                 ref={buttonRef}
                 onClick={handleDropdownToggle}
-                className="w-full p-3 md:p-4 rounded-lg md:rounded-xl bg-white border border-gray-300 shadow-sm hover:shadow-md transition-all duration-300 group"
+                className="w-full p-4 rounded-xl bg-white border border-gray-300 shadow-sm hover:shadow-md transition-all duration-300 group"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 disabled={accountLoading}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 md:gap-3">
+                  <div className="flex items-center gap-3">
                     {selectedAccount?.flag_url ? (
                       <motion.img
                         src={selectedAccount.flag_url}
                         alt={`${selectedAccount.currency} flag`}
-                        className="w-6 h-6 md:w-8 md:h-8 object-cover rounded-full shadow-sm"
+                        className="w-8 h-8 object-cover rounded-full shadow-sm"
                         whileHover={{ scale: 1.1 }}
                       />
                     ) : (
-                      <div className="w-6 h-6 md:w-8 md:h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <FiCreditCard className="text-gray-500 w-3 h-3 md:w-4 md:h-4" />
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        <FiCreditCard className="text-gray-500" />
                       </div>
                     )}
                     <div className="text-left">
-                      <p className="text-xs md:text-sm text-gray-600 font-medium">
+                      <p className="text-sm text-gray-600 font-medium">
                         {getCurrencyName(selectedAccount?.currency)}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -704,16 +551,16 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     </div>
                   </div>
                   <motion.div
-                    animate={{ rotate: accountDropdownOpen ? 180 : 0 }}
+                    animate={{ rotate: accountDropdown ? 180 : 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <FiChevronDown className="text-gray-400 group-hover:text-gray-600 w-4 h-4 md:w-5 md:h-5" />
+                    <FiChevronDown className="text-gray-400 group-hover:text-gray-600" />
                   </motion.div>
                 </div>
               </motion.button>
 
               <AnimatePresence>
-                {accountDropdownOpen && hasAccounts && (
+                {accountDropdown && hasAccounts && (
                   <motion.div
                     ref={dropdownRef}
                     className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[9999] overflow-y-auto"
@@ -722,14 +569,14 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     style={{
-                      maxHeight: "calc(100vh - 200px)",
+                      maxHeight: "320px",
                       display: "flex",
                       flexDirection: "column",
                     }}
                   >
                     {/* Fixed Header */}
-                    <div className="flex-shrink-0 bg-white border-b border-gray-100 px-3 md:px-4 py-2 md:py-3">
-                      <div className="text-xs md:text-sm font-semibold text-gray-700">
+                    <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 py-3">
+                      <div className="text-sm font-semibold text-gray-700">
                         Available Accounts ({safeAccounts.length})
                       </div>
                     </div>
@@ -739,17 +586,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                       ref={scrollContainerRef}
                       className="flex-1 overflow-y-auto custom-scrollbar"
                       style={{
-                        maxHeight: "calc(100vh - 250px)",
+                        maxHeight: "250px",
                       }}
                     >
-                      <div className="p-1 md:p-2">
+                      <div className="p-2">
                         {safeAccounts.map((account, index) => (
                           <motion.button
                             key={`${
                               account.account_id || account.currency
                             }-${index}`}
                             onClick={() => handleAccountChange(account)}
-                            className={`w-full p-2 md:p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${
+                            className={`w-full p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${
                               selectedAccount?.currency === account.currency
                                 ? "bg-blue-50 border-blue-200"
                                 : ""
@@ -762,40 +609,40 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
                           >
-                            <div className="flex items-center gap-2 md:gap-3">
+                            <div className="flex items-center gap-3">
                               {account.flag_url && (
                                 <img
                                   src={account.flag_url}
                                   alt={`${account.currency} flag`}
-                                  className="w-5 h-5 md:w-6 md:h-6 object-cover rounded-full flex-shrink-0"
+                                  className="w-6 h-6 object-cover rounded-full flex-shrink-0"
                                 />
                               )}
                               <div className="text-left flex-1 min-w-0">
                                 <div className="flex justify-between items-center">
-                                  <p className="text-xs md:text-sm font-medium text-gray-900 truncate">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
                                     {getCurrencyName(account.currency)}
                                   </p>
-                                  <p className="text-xs md:text-sm font-semibold text-gray-700 ml-1 md:ml-2 flex-shrink-0">
+                                  <p className="text-sm font-semibold text-gray-700 ml-2 flex-shrink-0">
                                     {formatCurrency(
                                       account.available_balance,
-                                      account.currency,
+                                      account.currency
                                     )}
                                   </p>
                                 </div>
-                                <div className="flex justify-between items-center mt-0.5 md:mt-1">
+                                <div className="flex justify-between items-center mt-1">
                                   <p className="text-xs text-gray-500">
                                     {account.currency}
                                   </p>
                                   <p
-                                    className="text-xs text-gray-400 truncate ml-1 md:ml-2 max-w-[80px] sm:max-w-[120px]"
+                                    className="text-xs text-gray-400 truncate ml-2 max-w-[120px]"
                                     title={getFullFormattedAmount(
                                       account.available_balance,
-                                      account.currency,
+                                      account.currency
                                     )}
                                   >
                                     {getFullFormattedAmount(
                                       account.available_balance,
-                                      account.currency,
+                                      account.currency
                                     )}
                                   </p>
                                 </div>
@@ -815,13 +662,13 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
               variants={balanceVariants}
               animate="update"
               key={displayBalance}
-              className="text-center lg:text-right min-w-0 w-full lg:w-auto mt-4 md:mt-0"
+              className="text-center lg:text-right min-w-0"
             >
-              <p className="text-xs md:text-sm text-gray-600 font-medium mb-1">
+              <p className="text-sm text-gray-600 font-medium mb-1">
                 Available Balance
               </p>
               <motion.div
-                className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent break-all px-1"
+                className="text-3xl lg:text-4xl xl:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent break-all"
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.5 }}
@@ -829,7 +676,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                   selectedAccount
                     ? getFullFormattedAmount(
                         displayBalance,
-                        selectedAccount.currency,
+                        selectedAccount.currency
                       )
                     : ""
                 }
@@ -837,20 +684,20 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {formatCurrency(displayBalance, selectedAccount?.currency)}
               </motion.div>
               {selectedAccount && (
-                <div className="flex flex-col items-center lg:items-end mt-1 md:mt-2">
-                  <p className="text-xs md:text-sm text-gray-500">
+                <div className="flex flex-col items-center lg:items-end mt-2">
+                  <p className="text-sm text-gray-500">
                     {getCurrencyName(selectedAccount.currency)}
                   </p>
                   <p
-                    className="text-xs text-gray-400 mt-0.5 md:mt-1 text-center lg:text-right px-2"
+                    className="text-xs text-gray-400 mt-1"
                     title={getFullFormattedAmount(
                       displayBalance,
-                      selectedAccount.currency,
+                      selectedAccount.currency
                     )}
                   >
                     {getFullFormattedAmount(
                       displayBalance,
-                      selectedAccount.currency,
+                      selectedAccount.currency
                     )}
                   </p>
                 </div>
@@ -860,26 +707,26 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
 
           {/* Action Buttons */}
           <motion.div variants={itemVariants} className="w-full">
-            <div className="bg-gray-50 rounded-lg md:rounded-xl p-3 md:p-4 border border-gray-200">
-              <h3 className="text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3 flex items-center gap-1 md:gap-2">
-                <FiTrendingUp className="w-3 h-3 md:w-4 md:h-4" />
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <FiTrendingUp className="w-4 h-4" />
                 Account Actions
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-2 md:gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
                 {/* Account Details */}
                 <motion.button
                   onClick={handleAccountDetailsClick}
-                  className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
+                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="p-1.5 md:p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors flex-shrink-0">
-                    <FiEye className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors flex-shrink-0">
+                    <FiEye className="w-5 h-5 text-blue-600" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
+                    <p className="text-sm font-medium text-gray-700 truncate">
                       Account Details
                     </p>
                     <p className="text-xs text-gray-500 truncate">
@@ -891,16 +738,16 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {/* Bank Letter */}
                 <motion.button
                   onClick={handleBankLetter}
-                  className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
+                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full min-w-[250px] sm:min-w-[300px]"
                   disabled={!selectedAccount}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="p-1.5 md:p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors flex-shrink-0">
-                    <FaUniversity className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
+                  <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors flex-shrink-0">
+                    <FaUniversity className="w-5 h-5 text-green-600" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
+                    <p className="text-sm font-medium text-gray-700 truncate">
                       Bank Letter
                     </p>
                     <p className="text-xs text-gray-500 truncate">
@@ -913,24 +760,20 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                 {customerId && Number(customerId) === 167 && (
                   <motion.button
                     onClick={handleBalanceUpdate}
-                    className="p-3 md:p-4 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-2 md:space-x-3 w-full"
+                    className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center justify-start space-x-3 w-full"
                     disabled={balanceLoading}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="p-1.5 md:p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors flex-shrink-0">
+                    <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors flex-shrink-0">
                       {balanceLoading ? (
-                        <RingLoader
-                          color="#EA580C"
-                          size={14}
-                          className="md:w-4 md:h-4"
-                        />
+                        <RingLoader color="#EA580C" size={16} />
                       ) : (
-                        <FiRefreshCw className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
+                        <FiRefreshCw className="w-5 h-5 text-orange-600" />
                       )}
                     </div>
                     <div className="text-left flex-1 min-w-0">
-                      <p className="text-xs md:text-sm font-medium text-gray-700 truncate">
+                      <p className="text-sm font-medium text-gray-700 truncate">
                         {balanceLoading ? "Updating..." : "Update Balance"}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
@@ -948,12 +791,12 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       {/* Transaction Details Section */}
       <motion.div
         variants={itemVariants}
-        className="w-full bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
+        className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <div className="p-4 md:p-6">
+        <div className="p-6">
           <TransactionDetails
             customerId={customerId}
             selectedCurrencyCode={selectedCurrency}

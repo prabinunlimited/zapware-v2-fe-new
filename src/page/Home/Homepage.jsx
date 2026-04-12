@@ -1,40 +1,47 @@
-// src/page/Home/Homepage.jsx - UPDATED VERSION WITH REFACTORED HOMESLICE
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+// src/components/Dashboard/Home/Homepage.js
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import { RingLoader } from "react-spinners";
 
-// Import components
+// Import real components
+import NavigateSection from "../../components/Dashboard/Navigation/NavigateSection";
 import AccountSummary from "../../components/Dashboard/Account/AccountSummary/AccountSummary";
 
-// Import actions from refactored HomeSlice
+// Import real actions and selectors
+import { fetchAccountDetails } from "./HomeSlice";
 import {
-  fetchAccountDetails,
+  fetchUserProfile,
   fetchPartnerFxCurrencies,
-  clearAllCache,
-  selectAccountState,
-  selectTransactionState,
+} from "../../components/Dashboard/Header/headerSlice";
+import { selectAuthToken } from "../../store/selectors";
+
+// Import real selectors
+import {
+  selectAccounts,
+  selectSelectedCurrency,
+  selectIsLoading as selectAccountLoading,
+  selectLastUpdated,
+  selectHasFetchedAccount,
 } from "./HomeSlice";
 
-// Import header actions
-import { fetchUserProfile } from "../../components/Dashboard/Header/headerSlice";
+// Import API Coordinator
+import { apiCoordinator } from "../../services/api";
 
-// Import selectors
-import { selectAuthToken } from "../../store/selectors";
-import { selectHasFxData, selectPartnerFxCurrencies } from "./HomeSlice";
-
-// Import utilities
 import {
   extractErrorMessage,
   SafeErrorDisplay,
 } from "../../utils/errorHandling";
-import { centralizedApi } from "../../services/api";
 
-// ============================================
-// LOADING CONTEXT (Keep as is)
-// ============================================
+// ✅ LOADING CONTEXT
 const LoadingContext = React.createContext();
 
 const useLoading = () => {
@@ -64,7 +71,7 @@ const LoadingProvider = ({ children }) => {
       stopLoading,
       isLoading,
     }),
-    [startLoading, stopLoading, isLoading],
+    [startLoading, stopLoading, isLoading]
   );
 
   return (
@@ -72,9 +79,7 @@ const LoadingProvider = ({ children }) => {
   );
 };
 
-// ============================================
-// LOADER COMPONENTS
-// ============================================
+// ✅ RING LOADER COMPONENT
 const FullScreenLoader = React.memo(() => (
   <motion.div
     initial={{ opacity: 0 }}
@@ -89,137 +94,138 @@ const FullScreenLoader = React.memo(() => (
   </motion.div>
 ));
 
-FullScreenLoader.displayName = "FullScreenLoader";
-
-// ============================================
-// SAFE ARRAY UTILITIES
-// ============================================
+// ✅ SAFE ARRAY UTILITIES
 const safeArray = (data, fallback = []) => {
   if (!data) return fallback;
   if (Array.isArray(data)) return data;
   if (data.data && Array.isArray(data.data)) return data.data;
   if (typeof data === "object" && !Array.isArray(data)) {
     if (data.accounts && Array.isArray(data.accounts)) return data.accounts;
-    if (data.account_details && Array.isArray(data.account_details))
-      return data.account_details;
     if (Object.keys(data).length > 0) return Object.values(data);
   }
   return fallback;
 };
 
-// ============================================
-// MAIN HOMEPAGE CONTENT
-// ============================================
+// ✅ FIXED HOMEPAGE CONTENT WITH STRICT COORDINATION
 const HomepageContent = React.memo(() => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Get authentication data
   const customerId = localStorage.getItem("authcustomer_id");
   const bearertoken = localStorage.getItem("bearertoken");
   const authtoken = useSelector(selectAuthToken);
 
-  // ✅ Use refactored HomeSlice selectors
-  const accountState = useSelector(selectAccountState);
-  const transactionState = useSelector(selectTransactionState);
-  const hasFxData = useSelector(selectHasFxData);
-  const partnerFxCurrencies = useSelector(selectPartnerFxCurrencies);
-
-  // Destructure account state for easier access
-  const {
-    accounts,
-    selectedCurrency,
-    accountLoading,
-    lastUpdated,
-    hasFetchedAccount,
-    accountError,
-  } = accountState;
+  // Redux Selectors
+  const accounts = useSelector(selectAccounts);
+  const selectedCurrency = useSelector(selectSelectedCurrency);
+  const accountLoading = useSelector(selectAccountLoading);
+  const lastUpdated = useSelector(selectLastUpdated);
+  const hasFetchedAccount = useSelector(selectHasFetchedAccount);
 
   // Header state selectors
   const { profileData, profileLoading, profileError } = useSelector(
-    (state) => state.header,
+    (state) => state.header
   );
   const hasFetchedProfile = useSelector(
-    (state) => state.header.fetchStatus?.profile === "succeeded",
+    (state) => state.header.fetchStatus?.profile === "succeeded"
   );
+  const partnerFxCurrencies = useSelector(
+    (state) => state.header.partnerFxCurrencies
+  );
+  const hasFxData = useSelector((state) => state.header.hasFxData);
 
   // Local state
   const [textColor, setTextColor] = useState("#000000");
   const [componentError, setComponentError] = useState(null);
+  const [emergencyStop, setEmergencyStop] = useState(false);
 
-  // ✅ Remove manual coordination refs - now handled by HomeSlice caching
-  // const fetchCountRef = useRef(0);
-  // const initialFetchDoneRef = useRef(false);
-  // const apiCallsCoordinatedRef = useRef(false);
+  // Refs for tracking
+  const fetchCountRef = useRef(0);
+  const initialFetchDoneRef = useRef(false);
+  const apiCallsCoordinatedRef = useRef(false);
 
-  // ✅ Simplified loading calculation - uses HomeSlice state
+  // Use the LoadingContext
+  const { isLoading: contextLoading } = useLoading();
+
+  // ✅ FIXED: Optimized loading calculation
   const isLoading = useMemo(() => {
+    if (hasFetchedAccount) {
+      return false;
+    }
     return accountLoading && !hasFetchedAccount;
   }, [accountLoading, hasFetchedAccount]);
 
-  // Get currency options from accounts - memoized
+  // Get currency options from accounts with safety checks - memoized
   const currencyOptions = useMemo(() => {
     const safeAccounts = safeArray(accounts);
     if (safeAccounts.length === 0) {
       return [];
     }
     return [...new Set(safeAccounts.map((account) => account.currency))].filter(
-      Boolean,
+      Boolean
     );
   }, [accounts]);
 
-  // ============================================
-  // ✅ OPTIMIZED: SINGLE COORDINATED API CALL WITH CACHING - FIXED VERSION
-  // ============================================
+  // ✅ FIXED: SINGLE COORDINATED API CALL
   useEffect(() => {
-    // Early returns to prevent unnecessary executions
-    if (!customerId || !authtoken || !bearertoken) {
-      console.log("⏳ Homepage: Missing auth data, skipping fetch");
+    if (!customerId || !authtoken || !bearertoken || apiCallsCoordinatedRef.current) {
       return;
     }
 
-    console.log("🚀 Homepage: Checking data needs for customer", customerId);
+    console.log("🚀 Homepage: Starting coordinated API calls");
+    apiCallsCoordinatedRef.current = true;
+    fetchCountRef.current += 1;
 
-    // ✅ FIX: Just dispatch without trying to handle promises
-    if (!hasFetchedAccount && !accountLoading) {
-      console.log("📊 Homepage: Fetching account details (cached or new)");
+    // Generate signatures for coordination
+    const accountsSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`;
+    const profileSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
+    const fxSig = `POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`;
+
+    // Check if we need to fetch accounts
+    const shouldFetchAccounts = 
+      !hasFetchedAccount && 
+      !accountLoading && 
+      !apiCoordinator.isFetching(accountsSig) &&
+      !apiCoordinator.hasRecentData(accountsSig);
+
+    if (shouldFetchAccounts) {
+      console.log("📊 Homepage: Fetching account details");
       dispatch(fetchAccountDetails({ customerId, authtoken }));
-    } else {
-      console.log("📊 Homepage: Accounts already fetched or loading", {
-        hasFetchedAccount,
-        accountLoading,
-      });
     }
 
-    // Profile fetch
-    const hasProfileData =
-      profileData?.first_name || localStorage.getItem("firstName");
-    if (!hasFetchedProfile && !profileLoading && !hasProfileData) {
+    // Check if we need to fetch profile
+    const hasProfileData = profileData?.first_name || localStorage.getItem("firstName");
+    const shouldFetchProfile = 
+      !hasFetchedProfile && 
+      !profileLoading && 
+      !hasProfileData && 
+      !apiCoordinator.isFetching(profileSig) &&
+      !apiCoordinator.hasRecentData(profileSig);
+
+    if (shouldFetchProfile) {
       console.log("👤 Homepage: Fetching user profile");
       dispatch(fetchUserProfile({ customerId, bearertoken }));
     }
 
-    // FX fetch
-    if (!hasFxData) {
+    // Check if we need to fetch FX data
+    const shouldFetchFX = 
+      !hasFxData && 
+      !apiCoordinator.isFetching(fxSig) &&
+      !apiCoordinator.hasRecentData(fxSig);
+
+    if (shouldFetchFX) {
       console.log("💱 Homepage: Fetching FX currencies");
       dispatch(fetchPartnerFxCurrencies(bearertoken));
     }
+
   }, [
-    customerId,
-    authtoken,
-    bearertoken,
-    hasFetchedAccount,
-    accountLoading,
-    hasFetchedProfile,
-    profileLoading,
-    profileData,
-    hasFxData,
-    dispatch,
+    customerId, authtoken, bearertoken, 
+    hasFetchedAccount, accountLoading,
+    hasFetchedProfile, profileLoading,
+    hasFxData, profileData, dispatch
   ]);
 
-  // ============================================
-  // TEXT COLOR AND STYLES
-  // ============================================
+  // Setup background and text color - optimized
   useEffect(() => {
     const partnerBackgroundClasses = [
       "bg-yellow-500",
@@ -264,7 +270,7 @@ const HomepageContent = React.memo(() => {
     };
   }, [textColor]);
 
-  // Redirect if no token
+  // Redirect if no token - optimized
   useEffect(() => {
     if (!authtoken) {
       toast.info("Please log in to continue");
@@ -272,7 +278,7 @@ const HomepageContent = React.memo(() => {
     }
   }, [authtoken, navigate]);
 
-  // Set text color from localStorage
+  // Set text color from localStorage - optimized
   useEffect(() => {
     const storedTextColor = localStorage.getItem("text_color");
     if (storedTextColor && storedTextColor !== textColor) {
@@ -280,41 +286,61 @@ const HomepageContent = React.memo(() => {
     }
   }, [textColor]);
 
-  // ============================================
-  // DEBUG LOGGING (Reduced noise)
-  // ============================================
+  // Emergency stop check
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔍 Homepage State:", {
-        customerId,
-        authtoken: authtoken ? "Present" : "Missing",
-        hasFetchedAccount,
-        accountLoading,
-        accountsCount: safeArray(accounts).length,
-        hasFetchedProfile,
-        profileLoading,
-        hasFxData,
-        transactionCount: transactionState.transactions?.length || 0,
-        transactionLoading: transactionState.loading,
-      });
+    if (fetchCountRef.current > 5) {
+      setEmergencyStop(true);
+      toast.error("Too many loading attempts. Please refresh the page.");
     }
-  }, [
-    customerId,
-    authtoken,
-    hasFetchedAccount,
-    accountLoading,
-    accounts,
-    hasFetchedProfile,
-    profileLoading,
-    hasFxData,
-    transactionState.transactions,
-    transactionState.loading,
-  ]);
+  }, [fetchCountRef.current]);
 
-  // Currency change handler
+  // Reset emergency stop when auth changes
+  useEffect(() => {
+    if (authtoken && customerId) {
+      setEmergencyStop(false);
+      fetchCountRef.current = 0;
+      initialFetchDoneRef.current = false;
+      apiCallsCoordinatedRef.current = false;
+    }
+  }, [authtoken, customerId]);
+
+  // Currency change handler - memoized
   const handleCurrencyChange = useCallback((currency) => {
-    console.log("💰 Currency changed to:", currency);
-    // This can trigger transaction refresh if needed
+    // This would dispatch setSelectedCurrency action
+  }, []);
+
+  // Role check - determine if navigation should be shown - memoized
+  const shouldShowNavigation = useMemo(() => {
+    const isStaffLogin = localStorage.getItem("is_staff_login");
+    const isOwnerLogin = localStorage.getItem("is_owner_login");
+    const isStaff = isStaffLogin === "1";
+    const isOwner = isOwnerLogin === "1";
+    const isRegularCustomer = !isStaff && !isOwner;
+
+    if (isRegularCustomer) {
+      return true;
+    }
+
+    if (isStaff) {
+      const staffRole = localStorage.getItem("staff_role") || "";
+      return staffRole === "Administrator" || staffRole.includes("Admin");
+    }
+
+    if (isOwner) {
+      const ownerRoleName = localStorage.getItem("owner_role_name");
+      if (
+        !ownerRoleName ||
+        ownerRoleName === "null" ||
+        ownerRoleName === "undefined"
+      ) {
+        return true;
+      }
+      return (
+        ownerRoleName === "Admin (Owner)" || ownerRoleName.includes("Admin")
+      );
+    }
+
+    return false;
   }, []);
 
   // Error boundary effect
@@ -331,32 +357,24 @@ const HomepageContent = React.memo(() => {
     };
   }, []);
 
-  // ============================================
-  // RESET FUNCTION FOR EMERGENCY RECOVERY
-  // ============================================
+  // Reset function for emergency recovery
   const handleResetFetch = useCallback(() => {
-    console.log("🔄 Homepage: Manual reset triggered");
+    setEmergencyStop(false);
+    fetchCountRef.current = 0;
+    initialFetchDoneRef.current = false;
+    apiCallsCoordinatedRef.current = false;
 
-    // Clear HomeSlice cache using refactored action
-    dispatch(clearAllCache());
-
-    // Clear centralizedApi cache
-    centralizedApi.clearAllCache();
+    // Clear API cache
+    apiCoordinator.clear();
 
     // Small delay to allow state update
     setTimeout(() => {
       if (customerId && authtoken && bearertoken) {
-        // Re-fetch all data
-        dispatch(fetchAccountDetails({ customerId, authtoken }));
-        dispatch(fetchUserProfile({ customerId, bearertoken }));
-        dispatch(fetchPartnerFxCurrencies(bearertoken));
+        apiCallsCoordinatedRef.current = false;
       }
     }, 100);
-  }, [customerId, authtoken, bearertoken, dispatch]);
+  }, [customerId, authtoken, bearertoken]);
 
-  // ============================================
-  // ERROR AND LOADING STATES
-  // ============================================
   if (componentError) {
     return (
       <SafeErrorDisplay
@@ -366,36 +384,59 @@ const HomepageContent = React.memo(() => {
     );
   }
 
-  // Show error state if account fetch failed
-  if (accountError && !hasFetchedAccount && !accountLoading) {
+  // Show emergency recovery UI if stopped
+  if (emergencyStop) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-gray-100">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <div className="text-red-500 text-6xl mb-4">🛑</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
-            Error Loading Accounts
+            Loading Issue Detected
           </h2>
-          <p className="text-gray-600 mb-6">{accountError}</p>
-          <button
-            onClick={handleResetFetch}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            Try Again
-          </button>
+          <p className="text-gray-600 mb-6">
+            We detected too many loading attempts. This might be due to a
+            temporary connection issue.
+          </p>
+          <div className="space-y-4">
+            <button
+              onClick={handleResetFetch}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+          <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <p className="text-sm text-yellow-700">
+              <strong>Debug Info:</strong>
+              <br />
+              Account Fetched: {hasFetchedAccount ? "Yes" : "No"}
+              <br />
+              Profile Fetched: {hasFetchedProfile ? "Yes" : "No"}
+              <br />
+              FX Data: {hasFxData ? "Yes" : "No"}
+              <br />
+              Fetch Attempts: {fetchCountRef.current}
+              <br />
+              API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ============================================
-  // MAIN RENDER
-  // ============================================
   return (
     <>
       {/* Full screen loader */}
       <AnimatePresence>{isLoading && <FullScreenLoader />}</AnimatePresence>
 
-      {/* Main container */}
+      {/* Main container with proper z-index context */}
       <div className="relative z-0">
         <motion.div
           initial={{ opacity: 0 }}
@@ -420,55 +461,34 @@ const HomepageContent = React.memo(() => {
               onClick={handleResetFetch}
               className="fixed top-4 right-4 z-50 bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded opacity-70"
             >
-              Reset All Data
+              Reset APIs
             </button>
           )}
 
-          {/* Cache Debug Panel */}
-          {process.env.NODE_ENV === "development" && (
+          {/* API Coordination Debug Panel */}
+          {process.env.NODE_ENV === 'development' && (
             <div className="fixed top-4 left-4 z-50 bg-green-600 text-white p-3 rounded-lg text-xs max-w-xs">
-              <div className="font-bold mb-2">Data Cache Status</div>
+              <div className="font-bold mb-2">API Coordination</div>
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span>Accounts:</span>
-                  <span>
-                    {hasFetchedAccount
-                      ? "✅ Cached"
-                      : accountLoading
-                        ? "🔄 Loading"
-                        : "❌ Not loaded"}
-                  </span>
+                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`) ? '🔄' : '✅'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Profile:</span>
-                  <span>
-                    {hasFetchedProfile
-                      ? "✅ Cached"
-                      : profileLoading
-                        ? "🔄 Loading"
-                        : "❌ Not loaded"}
-                  </span>
+                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`) ? '🔄' : '✅'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>FX Rates:</span>
-                  <span>
-                    {hasFxData
-                      ? `✅ ${partnerFxCurrencies.length} rates`
-                      : "❌ Not loaded"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Transactions:</span>
-                  <span>
-                    {transactionState.transactions?.length > 0
-                      ? `✅ ${transactionState.transactions.length} records`
-                      : "❌ Not loaded"}
-                  </span>
+                  <span>FX:</span>
+                  <span>{apiCoordinator.isFetching(`POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`) ? '🔄' : '✅'}</span>
                 </div>
               </div>
-              <button
-                onClick={handleResetFetch}
-                className="mt-2 bg-red-500 px-2 py-1 rounded text-xs w-full hover:bg-red-600 transition-colors"
+              <button 
+                onClick={() => {
+                  apiCoordinator.clear();
+                  window.location.reload();
+                }}
+                className="mt-2 bg-red-500 px-2 py-1 rounded text-xs w-full"
               >
                 Clear Cache & Reload
               </button>
@@ -477,12 +497,34 @@ const HomepageContent = React.memo(() => {
 
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
-            <div className="flex w-full mx-auto relative">
+            <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
+              {/* Navigation Section - Conditionally rendered */}
+              {shouldShowNavigation && (
+                <motion.div
+                  initial={{ x: -100, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full lg:w-[28%] relative z-10"
+                >
+                  <NavigateSection
+                    textColor={textColor}
+                    selectedCurrencyCode={selectedCurrency}
+                  />
+                </motion.div>
+              )}
+
+              {/* Main Content Area */}
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ x: 100, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className="w-full relative"
+                className={`w-full relative ${
+                  shouldShowNavigation ? "lg:w-[72%]" : "lg:w-full"
+                }`}
+                style={{
+                  isolation: "auto",
+                  zIndex: "auto",
+                }}
               >
                 <AccountSummary
                   textColor={textColor}
@@ -492,18 +534,20 @@ const HomepageContent = React.memo(() => {
             </div>
           </div>
 
-          {/* Debug information */}
+          {/* Debug information - only in development */}
           {process.env.NODE_ENV === "development" && (
             <div className="fixed bottom-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
               <div>Accounts: {safeArray(accounts).length}</div>
-              <div>Currency: {selectedCurrency || "None"}</div>
+              <div>
+                Navigation: {shouldShowNavigation ? "Visible" : "Hidden"}
+              </div>
+              <div>Currency: {selectedCurrency}</div>
               <div>Account Fetched: {hasFetchedAccount ? "Yes" : "No"}</div>
               <div>Profile Fetched: {hasFetchedProfile ? "Yes" : "No"}</div>
               <div>FX Data: {hasFxData ? "Yes" : "No"}</div>
               <div>Loading: {isLoading ? "Yes" : "No"}</div>
-              <div>
-                Transactions: {transactionState.transactions?.length || 0}
-              </div>
+              <div>Emergency Stop: {emergencyStop ? "Yes" : "No"}</div>
+              <div>API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}</div>
             </div>
           )}
         </motion.div>
@@ -514,9 +558,7 @@ const HomepageContent = React.memo(() => {
 
 HomepageContent.displayName = "HomepageContent";
 
-// ============================================
-// MAIN HOMEPAGE COMPONENT
-// ============================================
+// Main component that wraps with LoadingProvider
 function Homepage() {
   return (
     <LoadingProvider>

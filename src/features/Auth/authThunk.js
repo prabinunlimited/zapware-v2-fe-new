@@ -1,34 +1,10 @@
-// src/thunks/authThunk.js - COMPLETE FIXED VERSION
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { getBearerToken } from "../../services/authService";
-import { centralizedApi } from "../../services/api";
+import api from "../../services/api";
+import axios from "axios";
+import { openModal } from "./slices/uiSlice";
 import { extractErrorMessage } from "../../utils/errorHandling";
 import { tokenService } from "../../services/authService";
-
-const debugLocalStorage = () => {
-  console.log("🔍 LOCALSTORAGE DEBUG:");
-  const items = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key) {
-      try {
-        const value = localStorage.getItem(key);
-        if (value && (value.startsWith("{") || value.startsWith("["))) {
-          try {
-            items[key] = JSON.parse(value);
-          } catch {
-            items[key] = value;
-          }
-        } else {
-          items[key] = value;
-        }
-      } catch (e) {
-        items[key] = "ERROR_READING";
-      }
-    }
-  }
-  console.table(items);
-};
 
 // ===================== TOKEN MANAGEMENT =====================
 let tokenRequest = null;
@@ -69,88 +45,22 @@ export const handleApiError = (error, dispatch = null) => {
   return errorMessage;
 };
 
+// ===================== CACHE MANAGEMENT =====================
+const apiCache = {
+  countries: null,
+  partnerConfig: null,
+  gifImages: null,
+  partnerDetail: null,
+};
+
 // ===================== APP INITIALIZATION =====================
 let isInitializing = false;
 
-// Helper function to clear old partner data
-const clearOldPartnerData = () => {
-  console.log("🧹 Clearing old partner data before initialization...");
-
-  // Store the current authentication tokens to preserve them
-  const authtoken = localStorage.getItem("authtoken");
-  const authcustomer_id = localStorage.getItem("authcustomer_id");
-  const bearertoken = localStorage.getItem("bearertoken");
-
-  // Clear ONLY partner-related data EXCEPT hostname_partner_name
-  const partnerKeys = [
-    "partnerDetails",
-    "partnerDetailsTimestamp",
-    "partner_logo",
-    "partnerConfig",
-    "partnerConfigTimestamp",
-    "whitelabelled_customer_partnername", // This gets overwritten by login
-    "header_color",
-    "text_color",
-    "download_operation_manual",
-    "partner_name",
-    "beneficiary_portal_title",
-  ];
-
-  partnerKeys.forEach((key) => {
-    localStorage.removeItem(key);
-  });
-
-  // Restore authentication tokens
-  if (authtoken) localStorage.setItem("authtoken", authtoken);
-  if (authcustomer_id) localStorage.setItem("authcustomer_id", authcustomer_id);
-  if (bearertoken) localStorage.setItem("bearertoken", bearertoken);
-
-  console.log("✅ Old partner data cleared, auth tokens preserved");
-};
-
-// Helper function to debug partner data
-const debugPartnerDataFlow = (stage) => {
-  const currentState = {
-    timestamp: new Date().toISOString(),
-    stage,
-    url: window.location.href,
-    partnerId: localStorage.getItem("whitelabelledpartnerid"),
-    hostnamePartnerName: localStorage.getItem("hostname_partner_name"), // NEW
-    partnerName: localStorage.getItem("whitelabelled_customer_partnername"),
-    partnerDetails: localStorage.getItem("partnerDetails"),
-    partnerLogo: localStorage.getItem("partner_logo"),
-    whiteLabelled: localStorage.getItem("whitelabelled_customer"),
-    authCustomerId: localStorage.getItem("authcustomer_id"),
-  };
-
-  console.group(`🔍 Partner Data Debug - ${stage}`);
-  console.log("Current State:", currentState);
-
-  if (currentState.partnerDetails) {
-    try {
-      const parsed = JSON.parse(currentState.partnerDetails);
-      console.log("Parsed Partner Details:", {
-        id: parsed?.profile?.id,
-        name: parsed?.profile?.name,
-        logo: parsed?.profile?.logo,
-      });
-    } catch (e) {
-      console.error("Failed to parse partnerDetails:", e);
-    }
-  }
-  console.groupEnd();
-
-  return currentState;
-};
-
-// ✅ FIXED: CRITICAL FIX - Do NOT overwrite hostname partner data with login data
 export const initializeApp = createAsyncThunk(
   "auth/initializeApp",
   async (_, { dispatch, rejectWithValue, getState }) => {
     const state = getState();
-
-    if (isInitializing) {
-      console.log("⏳ initializeApp already in progress, skipping...");
+    if (isInitializing || state.auth.isInitialized) {
       return;
     }
 
@@ -158,224 +68,123 @@ export const initializeApp = createAsyncThunk(
 
     try {
       dispatch({ type: "auth/setLoading", payload: true });
-      console.log("🚀 initializeApp starting...");
-
-      // ✅ CRITICAL FIX: Clear OLD partner data BEFORE initializing
-      clearOldPartnerData();
 
       // 1. Initialize hostname
       const hostname = window.location.hostname;
-      console.log("🌐 Hostname:", hostname);
       dispatch({ type: "hostname/setHostname", payload: hostname });
 
-      // 2. Fetch client token
+      // 2. Fetch client token - THIS WILL NOW MAKE ONLY ONE CALL
       let bearerToken;
       try {
         bearerToken = await getBearerToken();
-        console.log("✅ Bearer token obtained");
       } catch (tokenError) {
-        console.error("❌ Failed to get bearer token:", tokenError);
         throw new Error("Failed to establish secure connection");
       }
 
-      // 3. Fetch countries data (CENTRALIZED)
-      console.log("🌍 Fetching countries data...");
-      const countriesResponse = await centralizedApi.getCountries();
-      const countriesData = countriesResponse.data || countriesResponse;
-      localStorage.setItem("allcountries", JSON.stringify(countriesData));
-      console.log("✅ Countries data fetched");
+      // 3. Check cache first for countries
+      let countriesData;
+      if (apiCache.countries) {
+        countriesData = apiCache.countries;
+      } else {
+        const countriesResponse = await api.get("/countries", {
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+          },
+        });
+        countriesData = countriesResponse.data.data;
+        apiCache.countries = countriesData;
+        localStorage.setItem("allcountries", JSON.stringify(countriesData));
+      }
 
-      // 4. Fetch partner details (CENTRALIZED) - THIS IS THE SOURCE OF TRUTH
-      console.log("🏢 Fetching partner details...");
-      const partnerResponse =
-        await centralizedApi.getPartnerByHostname(hostname);
-      const partnerData = partnerResponse.data || partnerResponse;
-      console.log("✅ Partner details fetched:", {
-        name: partnerData.partner_name,
-        is_white_labelled: partnerData.is_white_labelled_partner,
-        id: partnerData.partner_id,
-      });
+      // 4. Fetch partner details with caching
+      let partnerData;
+      if (apiCache.partnerDetail) {
+        partnerData = apiCache.partnerDetail;
+      } else {
+        const partnerResponse = await api.get(
+          `/partners/get-partner-detail/${hostname}`,
+          {
+            headers: {
+              Authorization: `Bearer ${bearerToken}`,
+            },
+          }
+        );
+        partnerData = partnerResponse.data.data;
+        apiCache.partnerDetail = partnerData;
+      }
 
-      // ✅ STORE PARTNER DATA FROM HOSTNAME - DO NOT OVERWRITE THIS LATER
-      console.log("💾 Storing partner details in localStorage...");
+      // Store partner details in localStorage
       localStorage.setItem(
         "iswhitelabelledpartner",
-        partnerData.is_white_labelled_partner || "N",
+        partnerData.is_white_labelled_partner
       );
-      localStorage.setItem(
-        "whitelabelledpartnerid",
-        partnerData.partner_id?.toString() || "0", // Ensure string
-      );
+      localStorage.setItem("whitelabelledpartnerid", partnerData.partner_id);
       localStorage.setItem(
         "isPartnerPackageModule",
-        partnerData.isPartnerPackageModule || "N",
+        partnerData.isPartnerPackageModule
       );
-
-      // ✅ CRITICAL FIX: Store partner name in dedicated key that won't be overwritten
-      if (partnerData.partner_name) {
-        localStorage.setItem(
-          "hostname_partner_name", // DEDICATED KEY - WON'T BE OVERWRITTEN
-          partnerData.partner_name,
-        );
-        console.log(
-          "✅ Hostname partner name stored:",
-          partnerData.partner_name,
-        );
-      }
-
-      // ✅ Also store in standard key (but login might overwrite it)
-      if (partnerData.partner_name) {
-        localStorage.setItem(
-          "whitelabelled_customer_partnername",
-          partnerData.partner_name,
-        );
-        localStorage.setItem("partner_name", partnerData.partner_name);
-      }
-
-      // ✅ Store beneficiary portal title if available
-      if (partnerData.beneficiary_portal_title) {
-        localStorage.setItem(
-          "beneficiary_portal_title",
-          partnerData.beneficiary_portal_title,
-        );
-      }
-
-      // ✅ Store full partner data
-      const partnerDetailsData = {
-        status: "success",
-        profile: {
-          id: partnerData.partner_id,
-          partner_uuid: partnerData.partner_uuid || "",
-          name: partnerData.partner_name || "",
-          logo: partnerData.logo || "",
-        },
-      };
       localStorage.setItem(
-        "partnerDetails",
-        JSON.stringify(partnerDetailsData),
+        "showRemittanceOnlyOnRegistration",
+        partnerData.showRemittanceOnlyOnRegistration
       );
-      localStorage.setItem("partnerDetailsTimestamp", Date.now().toString());
 
-      // Debug after initial storage
-      debugPartnerDataFlow("after_hostname_fetch");
-
-      // 5. Fetch partner config (CENTRALIZED)
-      console.log("🎨 Fetching partner config...");
-      let partnerConfig;
-      try {
-        const configResponse = await centralizedApi.getPartnerBasicSetup(
-          partnerData.partner_id,
-        );
-
-        if (configResponse?.status === "success") {
-          partnerConfig = configResponse;
-          console.log("✅ Partner config fetched:", {
-            header_color: partnerConfig.header_color,
-            has_logo: !!partnerConfig.logo_url,
-          });
-
-          // ✅ Store partner config for Header - ALWAYS SET THESE
-          localStorage.setItem(
-            "header_color",
-            partnerConfig.header_color || "bg-sky-800",
-          );
-          localStorage.setItem(
-            "text_color",
-            partnerConfig.text_color || "text-white",
-          );
-
-          // Store logo URL if available
-          const logoUrl = partnerConfig.logo_url || partnerData.logo || "";
-          if (logoUrl) {
-            localStorage.setItem("partner_logo", logoUrl);
-            console.log("🖼️ Partner logo stored:", logoUrl);
-          }
-
-          // ✅ Store the full partner config as JSON
-          localStorage.setItem("partnerConfig", JSON.stringify(partnerConfig));
-          localStorage.setItem("partnerConfigTimestamp", Date.now().toString());
-
-          localStorage.setItem(
-            "download_operation_manual",
-            partnerConfig.download_operation_manual || "N",
-          );
-          console.log("📢 Dispatching storage event...");
-          window.dispatchEvent(new Event("storage"));
+      // 5. Fetch partner config if white labelled
+      if (partnerData.is_white_labelled_partner === "Y") {
+        let partnerConfig;
+        if (apiCache.partnerConfig) {
+          partnerConfig = apiCache.partnerConfig;
         } else {
-          console.warn(
-            "⚠️ Partner config API returned non-success status, using defaults",
+          const configResponse = await api.get(
+            `/partner-basic-setup/${partnerData.partner_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${bearerToken}`,
+              },
+            }
           );
-          setDefaultConfig();
-        }
-      } catch (configError) {
-        console.warn(
-          "⚠️ Failed to fetch partner config, using defaults:",
-          configError,
-        );
-        setDefaultConfig();
-      }
 
-      // Helper function to set default config
-      function setDefaultConfig() {
-        localStorage.setItem("header_color", "bg-sky-800");
-        localStorage.setItem("text_color", "text-white");
-        localStorage.setItem("download_operation_manual", "N");
-        localStorage.setItem("partnerConfig", JSON.stringify({}));
-      }
+          if (configResponse.data?.status === "success") {
+            partnerConfig = configResponse.data;
+            apiCache.partnerConfig = partnerConfig;
 
-      // ✅ For non-whitelabelled partners, ensure defaults are set
-      if (partnerData.is_white_labelled_partner !== "Y") {
-        console.log("🏢 Non-whitelabelled partner, ensuring defaults");
-        localStorage.setItem("whitelabelled_customer", "N");
-
-        // Ensure we have header_color and text_color even if not whitelabelled
-        if (!localStorage.getItem("header_color")) {
-          localStorage.setItem("header_color", "bg-sky-800");
-        }
-        if (!localStorage.getItem("text_color")) {
-          localStorage.setItem("text_color", "text-white");
-        }
-
-        // Use partner logo if available
-        const defaultLogo = partnerData.logo || "";
-        if (defaultLogo && !localStorage.getItem("partner_logo")) {
-          localStorage.setItem("partner_logo", defaultLogo);
-          console.log("🖼️ Default partner logo stored:", defaultLogo);
-        }
-
-        if (!localStorage.getItem("partnerConfig")) {
-          localStorage.setItem("partnerConfig", JSON.stringify({}));
+            localStorage.setItem("header_color", partnerConfig.header_color);
+            localStorage.setItem(
+              "download_operation_manual",
+              partnerConfig.download_operation_manual
+            );
+            window.dispatchEvent(new Event("storage"));
+          }
         }
       }
 
-      // 6. Fetch GIF images (CENTRALIZED)
-      console.log("🖼️ Fetching GIF images...");
-      const gifResponse = await centralizedApi.getGifImages();
-      const gifImagesData =
-        gifResponse.images || gifResponse.data?.images || [];
-      console.log(`✅ ${gifImagesData.length} GIF images fetched`);
+      // 6. Fetch GIF images with caching
+      let gifImagesData;
+      if (apiCache.gifImages) {
+        gifImagesData = apiCache.gifImages;
+      } else {
+        const gifResponse = await api.get("/gif-images", {
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+          },
+        });
+        gifImagesData = gifResponse.data.images || [];
+        apiCache.gifImages = gifImagesData;
+      }
 
-      // 7. Fetch logout time (CENTRALIZED)
+      // 7. Fetch logout time
       try {
-        console.log("⏰ Fetching logout time...");
-        const logoutTimeResponse = await centralizedApi.getLogoutTime();
-        const logoutData = logoutTimeResponse.data || logoutTimeResponse;
-        const dataExpiryTime = (logoutData.expiry_time || 30) * 60 * 1000;
-        localStorage.setItem("logoutTime", dataExpiryTime.toString());
-        console.log("✅ Logout time set:", dataExpiryTime, "ms");
+        const logoutTimeResponse = await api.get("/logout", {
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+          },
+        });
+        const dataExpiryTime = logoutTimeResponse.data.expiry_time * 60 * 1000;
+        localStorage.setItem("logoutTime", dataExpiryTime);
       } catch (err) {
-        console.warn("⚠️ Failed to fetch logout time, using default (30 mins)");
-        localStorage.setItem("logoutTime", (30 * 60 * 1000).toString());
+        // Silent fail for logout time
       }
 
-      // ✅ Clean up empty key if it exists
-      if (localStorage.getItem("") !== null) {
-        localStorage.removeItem("");
-        console.log("🧹 Removed empty localStorage key");
-      }
-
-      // ✅ Dispatch all data to store
-      console.log("📤 Dispatching data to Redux store...");
+      // Dispatch all data to store
       dispatch({
         type: "country/fetchCountries/fulfilled",
         payload: countriesData,
@@ -391,11 +200,8 @@ export const initializeApp = createAsyncThunk(
         payload: gifImagesData,
       });
 
-      // ✅ Mark as initialized
+      // Mark as initialized
       dispatch({ type: "auth/setInitialized", payload: true });
-
-      console.log("🎉 initializeApp completed successfully!");
-      debugPartnerDataFlow("after_initialize_complete");
 
       return {
         hostname,
@@ -406,14 +212,12 @@ export const initializeApp = createAsyncThunk(
     } catch (error) {
       isInitializing = false;
       const errorMessage = extractErrorMessage(error);
-      console.error("❌ initializeApp error:", errorMessage);
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
       isInitializing = false;
-      console.log("🏁 initializeApp finished");
     }
-  },
+  }
 );
 
 // ===================== PASSCODE OPERATIONS =====================
@@ -423,70 +227,106 @@ export const generatePasscode = createAsyncThunk(
     try {
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: true });
 
+      const token = await getBearerToken();
+
       const payload = {
         email,
         password,
         hostname: window.location.hostname,
       };
 
-      // ✅ Add customer_type if provided
       if (customer_type) {
         payload.customer_type = customer_type;
-        console.log(
-          "✅ Adding customer_type to generatePasscode payload:",
-          customer_type,
-        );
       }
 
-      console.log("🔍 Generate Passcode Request:", {
-        email: payload.email,
-        hasCustomerType: !!payload.customer_type,
-        customerType: payload.customer_type || "not provided",
+      const response = await api.post("/request-passcode-login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
 
-      const response = await centralizedApi.requestPasscodeLogin(payload);
-
       // Handle multiple accounts scenario
-      if (response.data?.data?.checkMultipleCustomer === "Y") {
+      if (
+        response.data.status === "error" &&
+        response.data.data?.checkMultipleCustomer === "Y"
+      ) {
         dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
-
         return {
           status: "multiple_accounts",
           message: response.data.message || "Please select customer type",
           requiresCustomerType: true,
+        };
+      }
+
+      if (response.data.status === "error") {
+        return rejectWithValue(
+          response.data.message || "Failed to generate passcode"
+        );
+      }
+
+      if (response.data.status === "success") {
+        dispatch({ type: "auth/setShowPasscodeInput", payload: true });
+        dispatch({ type: "auth/setPasscodeSent", payload: true });
+        dispatch({ type: "auth/setPasscode", payload: new Array(6).fill("") });
+
+        return {
+          success: true,
+          message: response.data.message,
           data: response.data.data,
         };
       }
 
-      if (response.data?.status === "success") {
-        dispatch({ type: "auth/setShowPasscodeInput", payload: true });
-        dispatch({ type: "auth/setPasscodeSent", payload: true });
+      return rejectWithValue("Unexpected response format from server");
+    } catch (error) {
+      if (error.response) {
+        const responseData = error.response.data;
 
-        return {
-          success: true,
-          message: response.data.message || "Passcode sent successfully",
-        };
+        if (
+          responseData.status === "error" &&
+          responseData.data?.checkMultipleCustomer === "Y"
+        ) {
+          dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
+          return {
+            status: "multiple_accounts",
+            message: responseData.message || "Please select customer type",
+            requiresCustomerType: true,
+          };
+        }
+
+        if (error.response.status === 422) {
+          if (responseData.data?.checkMultipleCustomer === "Y") {
+            dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
+            return {
+              status: "multiple_accounts",
+              message: responseData.message || "Please select customer type",
+              requiresCustomerType: true,
+            };
+          }
+
+          return rejectWithValue(
+            responseData.message ||
+              "Validation failed. Please check your input."
+          );
+        }
+
+        return rejectWithValue(
+          responseData.message || "Failed to generate passcode"
+        );
       }
 
-      throw new Error(response.data?.message || "Failed to generate passcode");
-    } catch (error) {
-      console.error("❌ Generate Passcode Error:", error);
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to generate passcode",
-      );
+      return rejectWithValue(error.message || "Failed to generate passcode");
     } finally {
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: false });
     }
-  },
+  }
 );
 
 export const verifyPasscode = createAsyncThunk(
   "auth/verifyPasscode",
   async (
     { email, passcode, password, sign_in_option, customer_type },
-    { dispatch, rejectWithValue },
+    { dispatch, rejectWithValue }
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingPasscode", payload: true });
@@ -504,233 +344,244 @@ export const verifyPasscode = createAsyncThunk(
         throw new Error("Passcode must be 6 digits");
       }
 
+      // Get bearer token
+      const token = await getBearerToken();
+
       const payload = {
         email: email.trim().toLowerCase(),
         passcode: formattedPasscode,
         sign_in_option: sign_in_option || "email",
+        ...(password && { password: password }),
         hostname: window.location.hostname,
       };
 
-      // ✅ Add password if it exists
-      if (password) {
-        payload.password = password;
-      }
-
-      // ✅ CRITICAL: Add customer_type to payload
       if (customer_type) {
         payload.customer_type = customer_type;
-        console.log(
-          "✅ Adding customer_type to verifyPasscode payload:",
-          customer_type,
-        );
-      } else {
-        console.log("⚠️ No customer_type provided to verifyPasscode");
       }
 
-      console.log("🔍 Final login payload:", {
-        email: payload.email,
-        passcodeLength: formattedPasscode.length,
-        hasPassword: !!payload.password,
-        hasCustomerType: !!payload.customer_type,
-        customerType: payload.customer_type || "not provided",
-        sign_in_option: payload.sign_in_option,
+      const response = await api.post("/login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
 
-      const response = await centralizedApi.login(payload);
-
-      console.log("✅ Login API response:", response);
-
-      // ✅ Handle nested response structure
       if (response.data?.status === "success" && response.data?.data) {
-        console.log("✅ Success response with nested data structure");
-
         const responseData = response.data.data;
 
-        // ✅ CRITICAL CHECK: If kyc_status is "0", user must go through Plaid verification
+        // Store temporary auth data for KYC flow
         if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log(
-            "🚨 KYC NOT VERIFIED - Redirecting to Plaid verification",
-          );
+          // Store temporary authentication data
+          const tempAuthData = {
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            email: email,
+            timestamp: Date.now(),
+            requiresKyc: true,
+          };
 
           sessionStorage.setItem(
             "temp_auth_data",
-            JSON.stringify({
-              email: email,
-              customer_id: responseData.customer_id,
-              token: responseData.token,
-              timestamp: Date.now(),
-              kyc_status: responseData.kyc_status,
-              isRemittanceOnlyCustomer:
-                responseData.isRemittanceOnlyCustomer || false,
-              customer_type: customer_type, // ✅ Store customer_type
-            }),
+            JSON.stringify(tempAuthData)
           );
+          localStorage.setItem("pending_customer_id", responseData.customer_id);
 
-          return {
-            status: "kyc_required",
-            requiresPlaidRedirect: true,
-            plaidUrl: responseData.plaid_url,
-            message:
-              "KYC verification required. Please complete bank verification to continue.",
-            data: responseData,
-            shouldNotLogin: true,
-            closePasscodePopup: true,
-          };
-        }
+          if (
+            responseData.plaid_status === "success" &&
+            responseData.plaid_url
+          ) {
+            return {
+              requiresPlaidRedirect: true,
+              plaidUrl: responseData.plaid_url,
+              customerData: responseData,
+              customer_id: responseData.customer_id,
+              kyc_status: responseData.kyc_status,
+              bank_approve_status: responseData.bank_approve_status,
+              tempToken: responseData.token,
+              message:
+                "KYC verification required - redirecting to bank verification",
+            };
+          }
 
-        // ✅ If kyc_status is NOT "0", continue with normal login
-        console.log("✅ KYC VERIFIED - Proceeding with normal login");
+          try {
+            const plaidResponse = await dispatch(
+              initiatePlaidFlow({
+                customerId: responseData.customer_id,
+                hostname: window.location.hostname,
+              })
+            ).unwrap();
 
-        // ✅ Store authentication tokens
-        if (responseData.token) {
-          localStorage.setItem("authtoken", responseData.token);
-
-          const existingBearerToken = localStorage.getItem("bearertoken");
-          if (!existingBearerToken) {
-            try {
-              const bearerToken = await getBearerToken();
-              localStorage.setItem("bearertoken", bearerToken);
-            } catch (error) {
-              console.warn("⚠️ Could not fetch bearer token");
+            if (plaidResponse.url) {
+              return {
+                requiresPlaidRedirect: true,
+                plaidUrl: plaidResponse.url,
+                customerData: responseData,
+                customer_id: responseData.customer_id,
+                kyc_status: responseData.kyc_status,
+                bank_approve_status: responseData.bank_approve_status,
+                tempToken: responseData.token,
+                message:
+                  "KYC verification required - redirecting to bank verification",
+              };
             }
+          } catch (plaidError) {
+            // Even if Plaid fails, store the temp auth data
+            return {
+              requiresKycVerification: true,
+              customer_id: responseData.customer_id,
+              kyc_status: responseData.kyc_status,
+              bank_approve_status: responseData.bank_approve_status,
+              tempToken: responseData.token,
+              message: "KYC verification required",
+            };
           }
         }
 
-        if (responseData.customer_id) {
-          localStorage.setItem(
-            "authcustomer_id",
-            responseData.customer_id.toString(),
-          );
+        // Handle owner login
+        if (responseData.is_owner_login === "1") {
+          return {
+            is_owner_login: true,
+            owner_id: responseData.owner_id,
+            owner_role_name: responseData.owner_role_name,
+            kyc_status: responseData.kyc_status,
+            bank_approve_status: responseData.bank_approve_status,
+            customer_id: responseData.customer_id,
+            token: responseData.token,
+            customerData: responseData,
+          };
         }
 
-        if (responseData.first_name) {
-          localStorage.setItem("firstName", responseData.first_name);
+        // Handle bank approval status
+        if (responseData.bank_approve_status !== "1") {
+          throw new Error("Bank account not approved. Please contact support.");
         }
 
-        if (responseData.last_name) {
-          localStorage.setItem("lastName", responseData.last_name);
-        }
-
-        if (responseData.whitelabelled_customer) {
-          localStorage.setItem(
-            "whitelabelled_customer",
-            responseData.whitelabelled_customer,
-          );
-        }
-
-        // ✅ Store customer_type if received from API
-        if (responseData.customer_type) {
-          localStorage.setItem("customer_type", responseData.customer_type);
-        } else if (customer_type) {
-          localStorage.setItem("customer_type", customer_type);
-        }
-
-        // ✅ Store remittance flag
-        if (responseData.isRemittanceOnlyCustomer) {
-          localStorage.setItem(
-            "isRemittanceOnlyCustomer",
-            responseData.isRemittanceOnlyCustomer === "Y" ? "Y" : "N",
-          );
-        }
-
-        // ✅ Return the response data for Redux state update
+        // Successful login with KYC verified
         return {
-          ...response.data,
-          data: responseData,
-          kycVerified: true,
-          customer_type: customer_type || responseData.customer_type,
+          token: responseData.token,
+          customer_id: responseData.customer_id,
+          kyc_status: responseData.kyc_status,
+          bank_approve_status: responseData.bank_approve_status,
+          isRemittanceOnlyCustomer:
+            responseData.isRemittanceOnlyCustomer || false,
+          customer_type: responseData.customer_type || "individual",
+          is_staff_login: responseData.is_staff_login || "0",
+          staff_role: responseData.staff_role || "",
+          staff_id: responseData.staff_id || "0",
+          is_owner_login: responseData.is_owner_login || "0",
+          owner_id: responseData.owner_id || "0",
+          whitelabelled_customer: responseData.whitelabelled_customer || "N",
+          whitelabelled_customer_partnerid:
+            responseData.whitelabelled_customer_partnerid || "0",
+          whitelabelled_customer_partnername:
+            responseData.whitelabelled_customer_partnername || "",
+          customerUuid: responseData.customerUuid || null,
+          message: "Login successful",
         };
       }
 
-      // Handle regular response structure
-      if (response.data?.status === "success") {
-        return response.data;
+      // Handle non-success responses
+      if (response.data?.status === "error") {
+        let errorMessage = response.data.message || "Login failed";
+
+        if (
+          errorMessage.includes("Invalid passcode") ||
+          errorMessage.includes("Invalid credentials")
+        ) {
+          errorMessage =
+            "Invalid passcode. Please check the code and try again.";
+        } else if (errorMessage.includes("expired")) {
+          errorMessage = "Passcode has expired. Please request a new one.";
+        }
+
+        throw new Error(errorMessage);
       }
 
-      throw new Error(response.data?.message || "Login failed");
+      throw new Error("Invalid server response format");
     } catch (error) {
-      console.error("❌ Passcode verification error:", error);
-      const errorMessage =
-        error.response?.data?.message || error.message || "Verification failed";
+      const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setVerifyingPasscode", payload: false });
     }
-  },
+  }
 );
 
 // ===================== OTP OPERATIONS =====================
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, password, customer_type },
-    { dispatch, rejectWithValue },
+    { phone_code, mobile_number, password, customer_type }, // ✅ password is required parameter
+    { dispatch, rejectWithValue }
   ) => {
     try {
-      const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
+      // ✅ Validate that password is provided
+      if (!password || password.trim() === "") {
+        return rejectWithValue("Password is required for OTP generation");
+      }
 
+      const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
+      const cleanPhoneCode = phone_code.replace(/\D/g, "");
+
+      const token = await getBearerToken();
+
+      // ✅ Password is ALWAYS included - NO CONDITION
       const payload = {
         country_code: phone_code,
         mobile_number: cleanPhoneNumber,
-        password: password, // ✅ Include password
+        password: password, // ✅ ALWAYS INCLUDED
         hostname: window.location.hostname,
       };
 
-      // ✅ Add customer_type if provided
       if (customer_type) {
         payload.customer_type = customer_type;
-        console.log(
-          "✅ Adding customer_type to generateOTP payload:",
-          customer_type,
-        );
       }
 
-      console.log("🔍 Generate OTP Request:", {
-        mobile_number: payload.mobile_number,
-        hasPassword: !!payload.password,
-        hasCustomerType: !!payload.customer_type,
-        customerType: payload.customer_type || "not provided",
+      const response = await api.post("/send-otp-login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
-
-      const response = await centralizedApi.sendOtpLogin(payload);
 
       // Handle multiple accounts scenario
       if (response.data?.data?.checkMultipleCustomer === "Y") {
         dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
-
         return {
           status: "multiple_accounts",
           message: response.data.message || "Please select customer type",
           requiresCustomerType: true,
-          data: response.data.data,
         };
       }
 
-      if (response.data?.status === "success") {
-        return {
-          status: "success",
-          message: response.data.message || "OTP sent successfully",
-        };
-      }
-
-      throw new Error(response.data?.message || "Failed to generate OTP");
+      return response.data;
     } catch (error) {
-      console.error("❌ Generate OTP Error:", error);
-      return rejectWithValue(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to generate OTP",
-      );
+      if (error.response) {
+        const responseData = error.response.data;
+
+        if (
+          responseData.status === "error" &&
+          responseData.data?.checkMultipleCustomer === "Y"
+        ) {
+          dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
+          return {
+            status: "multiple_accounts",
+            message: responseData.message || "Please select customer type",
+            requiresCustomerType: true,
+          };
+        }
+      }
+
+      const apiError = extractErrorMessage(error);
+      return rejectWithValue(apiError);
     }
-  },
+  }
 );
 
-// ✅ FIXED: OTP verification also preserves hostname partner data
 export const verifyOTP = createAsyncThunk(
   "auth/verifyOTP",
   async (
     { phone_code, mobile_number, otp, password, sign_in_option, customer_type },
-    { dispatch, rejectWithValue },
+    { dispatch, rejectWithValue }
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
@@ -749,77 +600,116 @@ export const verifyOTP = createAsyncThunk(
         throw new Error("OTP must be 6 digits");
       }
 
+      const token = await getBearerToken();
+
       const payload = {
         mobile_number: cleanMobileNumber,
         otp: formattedOTP,
-        password: password,
+        password,
         phone_code: phone_code,
         sign_in_option: sign_in_option || "mobile",
         hostname: window.location.hostname,
       };
 
-      // ✅ CRITICAL: Add customer_type to payload
       if (customer_type) {
         payload.customer_type = customer_type;
-        console.log(
-          "✅ Adding customer_type to verifyOTP payload:",
-          customer_type,
-        );
-      } else {
-        console.log("⚠️ No customer_type provided to verifyOTP");
       }
 
-      console.log("🔍 OTP Verification payload:", {
-        mobile_number: payload.mobile_number,
-        otpLength: formattedOTP.length,
-        hasPassword: !!payload.password,
-        hasCustomerType: !!payload.customer_type,
-        customerType: payload.customer_type || "not provided",
+      const response = await api.post("/login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      const response = await centralizedApi.login(payload);
-      console.log("✅ verifyOTP - Login API response:", response);
-
       // Handle successful response
-      if (response.data?.status === "success") {
-        const responseData = response.data.data || response.data;
+      if (response.data.status === "success") {
+        const responseData = response.data.data;
 
-        // ✅ CRITICAL CHECK: If kyc_status is "0", user must go through Plaid verification
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          console.log("🚨 OTP Login - KYC NOT VERIFIED");
-
+        // Handle Plaid redirect directly from login response
+        if (
+          response.data?.plaid_status === "success" &&
+          response.data?.plaid_url
+        ) {
           sessionStorage.setItem(
-            "temp_auth_data",
+            "pending_mobile_auth",
             JSON.stringify({
               phone_code: phone_code,
               mobile_number: cleanMobileNumber,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
-              kyc_status: responseData.kyc_status,
-              isRemittanceOnlyCustomer:
-                responseData.isRemittanceOnlyCustomer || false,
-              customer_type: customer_type, // ✅ Store customer_type
-            }),
+            })
           );
 
           return {
-            status: "kyc_required",
             requiresPlaidRedirect: true,
-            plaidUrl: responseData.plaid_url,
-            message:
-              "KYC verification required. Please complete bank verification to continue.",
-            data: responseData,
-            shouldNotLogin: true,
+            plaidUrl: response.data.plaid_url,
+            customerData: responseData,
+            message: "Redirecting to bank verification...",
           };
         }
 
-        // ✅ Store customer_type
-        if (responseData.customer_type) {
-          localStorage.setItem("customer_type", responseData.customer_type);
-        } else if (customer_type) {
-          localStorage.setItem("customer_type", customer_type);
+        // Handle KYC verification required
+        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
+          sessionStorage.setItem(
+            "pending_mobile_auth",
+            JSON.stringify({
+              phone_code: phone_code,
+              mobile_number: cleanMobileNumber,
+              customer_id: responseData.customer_id,
+              timestamp: Date.now(),
+            })
+          );
+
+          try {
+            const plaidResponse = await dispatch(
+              initiatePlaidFlow({
+                customerId: responseData.customer_id,
+                hostname: window.location.hostname,
+              })
+            ).unwrap();
+
+            if (plaidResponse.url) {
+              return {
+                requiresPlaidRedirect: true,
+                plaidUrl: plaidResponse.url,
+                customerData: responseData,
+                message: "Redirecting to bank verification...",
+              };
+            }
+          } catch (plaidError) {
+            return {
+              requiresKycVerification: true,
+              kyc_status: responseData.kyc_status,
+              bank_approve_status: responseData.bank_approve_status,
+              customerData: responseData,
+              message:
+                "Bank verification required but setup failed. Please contact support.",
+            };
+          }
         }
 
+        // Handle bank approval
+        if (responseData.bank_approve_status !== "1") {
+          return {
+            requiresBankApproval: true,
+            bank_approve_status: responseData.bank_approve_status,
+            customerData: responseData,
+            message: "Bank account approval pending. Please contact support.",
+          };
+        }
+
+        // Handle owner login
+        if (responseData.is_owner_login === "1") {
+          return {
+            is_owner_login: true,
+            owner_id: responseData.owner_id,
+            owner_role_name: responseData.owner_role_name,
+            customerData: responseData,
+            message: "Owner login successful",
+          };
+        }
+
+        // Successful login
         return {
           status: "success",
           token: responseData.token,
@@ -828,23 +718,22 @@ export const verifyOTP = createAsyncThunk(
           bank_approve_status: responseData.bank_approve_status,
           isRemittanceOnlyCustomer:
             responseData.isRemittanceOnlyCustomer || false,
-          customer_type: customer_type || responseData.customer_type,
+          customer_type: responseData.customer_type || "individual",
+          message: response.data.message || "Login successful",
           data: responseData,
         };
       } else {
-        throw new Error(response.data?.message || "OTP verification failed");
+        throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
-      console.error("❌ OTP Verification Error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "OTP verification failed";
+      const errorMessage = extractErrorMessage(error);
+
+      dispatch({ type: "auth/setError", payload: errorMessage });
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
-  },
+  }
 );
 
 // ===================== SEND OTP =====================
@@ -852,13 +741,45 @@ export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
   async (mobileNumber, { rejectWithValue, dispatch }) => {
     try {
-      const response = await centralizedApi.sendOtp(mobileNumber);
+      const token = await getBearerToken();
+
+      const response = await api.post(
+        "/send-otp",
+        {
+          mobile_number: mobileNumber,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       // Fetch OTP counter info after successful OTP send
-      if (response.data?.status === "success") {
+      if (response.data.status === "success") {
         try {
-          // Note: This endpoint might not be in centralizedApi yet
-          // You may need to add it or handle differently
+          const otpCounterResponse = await api.get("/otp-counter", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (otpCounterResponse.data?.counter) {
+            const otpInfo = otpCounterResponse.data.counter;
+
+            // Update Redux state with OTP limit info
+            dispatch({
+              type: "auth/setResendAttempts",
+              payload: otpInfo.otp_limit,
+            });
+
+            // Also set resend timer if available
+            if (otpInfo.otp_resend) {
+              dispatch({
+                type: "auth/setResendTimer",
+                payload: otpInfo.otp_resend,
+              });
+            }
+          }
         } catch (otpCounterError) {
           // Continue without OTP counter info - not critical
         }
@@ -866,7 +787,7 @@ export const sendOtp = createAsyncThunk(
 
       if (response.status === 429) {
         return rejectWithValue(
-          "Too many requests. Please wait a moment before trying again.",
+          "Too many requests. Please wait a moment before trying again."
         );
       }
 
@@ -886,7 +807,7 @@ export const sendOtp = createAsyncThunk(
       // Handle specific error cases
       if (error.response?.status === 429) {
         return rejectWithValue(
-          "Too many requests. Please wait before trying again.",
+          "Too many requests. Please wait before trying again."
         );
       }
 
@@ -896,20 +817,21 @@ export const sendOtp = createAsyncThunk(
 
       return rejectWithValue(errorMessage || "Failed to send OTP");
     }
-  },
+  }
 );
 
-// ===================== VALIDATE OTP =====================
+// ===================== VALIDATE OTP (for PhoneVerification component) =====================
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
     { country_code, mobile_number, otp },
-    { dispatch, rejectWithValue },
+    { dispatch, rejectWithValue }
   ) => {
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
+      const token = await getBearerToken();
       const currentDateTimeLocal = new Date().toLocaleString();
 
       // Use the FULL mobile number with country code
@@ -922,10 +844,15 @@ export const validateOtp = createAsyncThunk(
         currentDate: currentDateTimeLocal,
       };
 
-      const response = await centralizedApi.validateOtp(payload);
+      const response = await api.post("/validate-otp", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       // Handle successful response
-      if (response.data?.status === "success") {
+      if (response.data.status === "success") {
         const responseData = response.data;
 
         const successResponse = {
@@ -950,7 +877,7 @@ export const validateOtp = createAsyncThunk(
               mobile_number: full_mobile_number,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
-            }),
+            })
           );
 
           dispatch({ type: "auth/setOtp", payload: new Array(6).fill("") });
@@ -973,7 +900,7 @@ export const validateOtp = createAsyncThunk(
           };
         }
       } else {
-        throw new Error(response.data?.message || "OTP verification failed");
+        throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
@@ -986,10 +913,10 @@ export const validateOtp = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
-  },
+  }
 );
 
-// ===================== PLAID/KYC OPERATIONS =====================
+// ===================== PLAID/KYC OPERATIONS - FIXED =====================
 export const initiatePlaidFlow = createAsyncThunk(
   "auth/initiatePlaid",
   async (customerData, { dispatch, rejectWithValue }) => {
@@ -997,6 +924,7 @@ export const initiatePlaidFlow = createAsyncThunk(
       dispatch({ type: "auth/setLoading", payload: true });
       dispatch({ type: "auth/setPlaidLoading", payload: true });
 
+      const token = await getBearerToken();
       const customerId = customerData.customerId;
 
       // Enhanced customerId validation
@@ -1011,16 +939,17 @@ export const initiatePlaidFlow = createAsyncThunk(
         throw new Error(errorMsg);
       }
 
-      // Note: This endpoint might need to be added to centralizedApi
-      // For now, using the base api instance
-      const api = (await import("../../services/api")).default;
-
       let plaidUrl = null;
       let message = null;
 
       // STRATEGY 1: Try the main backend endpoint
       try {
-        const response = await api.get(`/kycs/${customerId}`);
+        const response = await api.get(`/kycs/${customerId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
         if (response.data.kyc_url) {
           plaidUrl = response.data.kyc_url;
           message = "Bank verification ready";
@@ -1037,10 +966,18 @@ export const initiatePlaidFlow = createAsyncThunk(
 
         // STRATEGY 2: Try alternative endpoint for KYC initiation
         try {
-          const initiateResponse = await api.post("/kyc/initiate", {
-            customer_id: customerId,
-            hostname: window.location.hostname,
-          });
+          const initiateResponse = await api.post(
+            "/kyc/initiate",
+            {
+              customer_id: customerId,
+              hostname: window.location.hostname,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
 
           if (initiateResponse.data?.kyc_url || initiateResponse.data?.url) {
             plaidUrl =
@@ -1051,7 +988,7 @@ export const initiatePlaidFlow = createAsyncThunk(
           }
         } catch (initiateError) {
           throw new Error(
-            "KYC system temporarily unavailable. Please try again later or contact support.",
+            "KYC system temporarily unavailable. Please try again later or contact support."
           );
         }
       }
@@ -1084,7 +1021,81 @@ export const initiatePlaidFlow = createAsyncThunk(
       dispatch({ type: "auth/setLoading", payload: false });
       dispatch({ type: "auth/setPlaidLoading", payload: false });
     }
-  },
+  }
+);
+
+// ===================== KYC CALLBACK PROCESSING =====================
+export const processPlaidKycCallback = createAsyncThunk(
+  "auth/processPlaidKycCallback",
+  async (callbackData, { dispatch, rejectWithValue }) => {
+    try {
+      const {
+        identity_verification_id,
+        status,
+        user_token,
+        error_code,
+        error_message,
+      } = callbackData;
+
+      const token = await getBearerToken();
+
+      const callbackEndpoints = [
+        "/process-kyc-callback",
+        "/kyc/callback",
+        "/plaid/callback",
+      ];
+
+      let response = null;
+
+      for (const endpoint of callbackEndpoints) {
+        try {
+          response = await api.post(
+            endpoint,
+            {
+              identity_verification_id,
+              status,
+              user_token,
+              error_code,
+              error_message,
+              hostname: window.location.hostname,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          break;
+        } catch (endpointError) {
+          continue;
+        }
+      }
+
+      if (!response) {
+        throw new Error("All callback endpoints failed");
+      }
+
+      if (response.data.status === "success") {
+        sessionStorage.removeItem("pending_kyc_auth");
+        sessionStorage.removeItem("pending_mobile_auth");
+
+        return {
+          kycStatus: response.data.kyc_status,
+          message: response.data.message,
+          customerId: response.data.customer_id,
+          status: "success",
+        };
+      } else {
+        throw new Error(
+          response.data.message || "Failed to process KYC verification"
+        );
+      }
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+
+      return rejectWithValue(errorMessage);
+    }
+  }
 );
 
 // ===================== MANUAL DOWNLOAD =====================
@@ -1100,14 +1111,19 @@ export const downloadManual = createAsyncThunk(
         localStorage.getItem("whitelabelledpartnerid") ||
         "0";
 
-      // Note: This endpoint might need to be added to centralizedApi
-      // For now, using the base api instance
-      const api = (await import("../../services/api")).default;
-
-      const response = await api.post("/get-manuals", {
-        partnerId: partnerId,
-        placement: "Login Page",
-      });
+      const token = await getBearerToken();
+      const response = await api.post(
+        "/get-manuals",
+        {
+          partnerId: partnerId,
+          placement: "Login Page",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.data?.status === "success") {
         throw new Error("Invalid response format");
@@ -1126,7 +1142,7 @@ export const downloadManual = createAsyncThunk(
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
     }
-  },
+  }
 );
 
 // ===================== USER LOGIN/LOGOUT =====================
@@ -1138,33 +1154,19 @@ export const loginUser = createAsyncThunk(
 
       const payload = {
         sign_in_option: loginData.sign_in_option || "email",
-        hostname: window.location.hostname,
+        password: loginData.password,
       };
 
-      // Add password if exists
-      if (loginData.password) {
-        payload.password = loginData.password;
-      }
-
-      // Handle email login
       if (loginData.sign_in_option === "email") {
-        if (loginData.email) {
-          payload.email = loginData.email;
-        }
+        payload.email = loginData.email;
         if (loginData.passcode) {
           payload.passcode = Array.isArray(loginData.passcode)
             ? loginData.passcode.join("")
             : loginData.passcode;
         }
-      }
-      // Handle mobile login
-      else {
-        if (loginData.phone_code) {
-          payload.phone_code = loginData.phone_code;
-        }
-        if (loginData.mobile_number) {
-          payload.mobile_number = loginData.mobile_number;
-        }
+      } else {
+        payload.phone_code = loginData.phone_code;
+        payload.mobile_number = loginData.mobile_number;
         if (loginData.otp) {
           payload.otp = Array.isArray(loginData.otp)
             ? loginData.otp.join("")
@@ -1172,75 +1174,164 @@ export const loginUser = createAsyncThunk(
         }
       }
 
-      // ✅ CRITICAL: Add customer_type to payload
       if (loginData.customer_type) {
         payload.customer_type = loginData.customer_type;
-        console.log(
-          "✅ Adding customer_type to loginUser payload:",
-          loginData.customer_type,
-        );
       }
 
-      console.log("🔍 loginUser payload:", {
-        sign_in_option: payload.sign_in_option,
-        hasEmail: !!payload.email,
-        hasMobile: !!payload.mobile_number,
-        hasPasscode: !!payload.passcode,
-        hasOtp: !!payload.otp,
-        hasCustomerType: !!payload.customer_type,
-        customerType: payload.customer_type || "not provided",
+      const token = await getBearerToken();
+      const response = await api.post("/login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      const response = await centralizedApi.login(payload);
+      if (response.data.status === "success") {
+        const {
+          token: userToken,
+          customer_id,
+          isRemittanceOnlyCustomer,
+          customer_type,
+          is_owner_login,
+          owner_id,
+          owner_role_name,
+          kyc_status,
+          bank_approve_status,
+          plaid_link_url,
+        } = response.data.data;
 
-      if (response.data?.status === "success") {
-        const responseData = response.data.data || response.data;
+        // Store user token as "authtoken", NOT "bearertoken"
+        localStorage.setItem("authtoken", userToken);
+        localStorage.setItem("authcustomer_id", customer_id);
 
-        // Store customer_type
-        if (responseData.customer_type) {
-          localStorage.setItem("customer_type", responseData.customer_type);
-        } else if (loginData.customer_type) {
-          localStorage.setItem("customer_type", loginData.customer_type);
+        if (is_owner_login === "1") {
+          dispatch({
+            type: "auth/setOwnerDetails",
+            payload: {
+              is_owner_login: true,
+              owner_id: owner_id,
+              owner_role_name: owner_role_name,
+            },
+          });
+          return { is_owner_login: true, owner_id };
         }
+
+        if (kyc_status === "0" || kyc_status === 0) {
+          if (!plaid_link_url) {
+            throw new Error(
+              "Bank verification required but link not available"
+            );
+          }
+          return {
+            requiresKycVerification: true,
+            plaid_link_url,
+            customer_id,
+          };
+        }
+
+        if (bank_approve_status !== "1") {
+          throw new Error("Bank account not approved. Please contact support.");
+        }
+
+        const authState = {
+          token: userToken,
+          customerId: customer_id,
+          isAuthenticated: true,
+          user: {
+            customerType: customer_type || "individual",
+            isRemittanceOnlyCustomer: isRemittanceOnlyCustomer || false,
+            [loginData.sign_in_option === "email" ? "email" : "mobile_number"]:
+              loginData.sign_in_option === "email"
+                ? loginData.email
+                : loginData.mobile_number,
+          },
+        };
+
+        dispatch({ type: "auth/setAuthState", payload: authState });
 
         return {
           ...response.data,
-          data: responseData,
-          verified: true,
-          customer_type: loginData.customer_type || responseData.customer_type,
+          data: {
+            ...response.data.data,
+            isRemittanceOnlyCustomer,
+            customer_type,
+          },
         };
       }
 
-      throw new Error(response.data?.message || "Login failed");
+      throw new Error(response.data.message || "Login failed");
     } catch (error) {
-      console.error("❌ Login error:", error);
-      const errorMessage =
-        error.response?.data?.message || error.message || "Login failed";
+      let errorMessage = extractErrorMessage(error);
+      let modalActions = [];
+      let isBlocked = false;
+
+      if (error.response) {
+        if (error.response.status === 401) {
+          if (error.response.data?.error === "invalid_credentials") {
+            errorMessage =
+              "The email/phone or password you entered is incorrect";
+          } else if (error.response.data?.error === "account_locked") {
+            errorMessage =
+              "Your account has been locked due to multiple failed attempts";
+            isBlocked = true;
+            modalActions = [
+              {
+                label: "Contact Support",
+                primary: true,
+                actionType: "NAVIGATE",
+                path: "/contact-support",
+              },
+            ];
+          }
+        } else if (error.response.status === 403) {
+          errorMessage =
+            "Your account is not verified. Please complete verification.";
+        }
+      }
+
+      dispatch({
+        type: "ui/openModal",
+        payload: {
+          title: "Login Error",
+          message: errorMessage,
+          type: "error",
+          modalProps: isBlocked ? { actions: modalActions } : undefined,
+        },
+      });
+
       return rejectWithValue(errorMessage);
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
     }
-  },
+  }
 );
 
-// export const logoutUser = createAsyncThunk(
-//   "auth/logout",
-//   async (_, { dispatch, rejectWithValue }) => {
-//     try {
-//       dispatch({ type: "auth/setLoading", payload: true });
+export const logoutUser = createAsyncThunk(
+  "auth/logout",
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      dispatch({ type: "auth/setLoading", payload: true });
 
-//       await centralizedApi.logout();
+      const token = await getBearerToken();
+      await api.post(
+        "/logout",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-//       dispatch({ type: "auth/clearAuthState" });
-//       return true;
-//     } catch (error) {
-//       const errorMessage = extractErrorMessage(error);
-//       return rejectWithValue(errorMessage);
-//     } finally {
-//       dispatch({ type: "auth/setLoading", payload: false });
-//     }
-//   },
-// );
+      dispatch({ type: "auth/clearAuthState" });
+      return true;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(errorMessage);
+    } finally {
+      dispatch({ type: "auth/setLoading", payload: false });
+    }
+  }
+);
 
 // ===================== SELECTORS =====================
 export const selectIsGeneratingPasscode = (state) =>
