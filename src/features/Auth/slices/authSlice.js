@@ -280,7 +280,7 @@ const initialState = {
   // User Preferences
   rememberMe: false,
   customerType: "",
-  inputType: "email",
+  inputType: "mobile",
   showCustomerType: "N",
 
   // Owner/Staff Management
