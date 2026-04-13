@@ -499,7 +499,7 @@ const HomepageContent = React.memo(() => {
           <div className="p-2 mt-2 relative">
             <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
               {/* Navigation Section - Conditionally rendered */}
-              {shouldShowNavigation && (
+               {/* {shouldShowNavigation && (
                 <motion.div
                   initial={{ x: -100, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
@@ -511,7 +511,7 @@ const HomepageContent = React.memo(() => {
                     selectedCurrencyCode={selectedCurrency}
                   />
                 </motion.div>
-              )}
+              )}  */}
 
               {/* Main Content Area */}
               <motion.div
