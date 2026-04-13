@@ -13,5 +13,5 @@ If you are developing a production application, we recommend using TypeScript wi
 
 ## Code Structure
 
-- **.jsx file for ui**
-- **.slices file for logic**
+- jsx file for ui
+- slices file for logic
