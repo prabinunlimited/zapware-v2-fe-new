@@ -22,7 +22,7 @@ const BYPASS_COORDINATION_ENDPOINTS = [
   "send-passcode",
   "generate-passcode",
   "request-passcode-login",
-  "payout/remit-payout",
+"payout/remit-payout",
 ];
 
 // Enhanced request signature with better context awareness
