@@ -511,13 +511,16 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, password, customer_type }, // ✅ password is required parameter
+    { phone_code, mobile_number, password, customer_type },
     { dispatch, rejectWithValue }
   ) => {
     try {
-      // ✅ Validate that password is provided
+      // Validate that password is provided
       if (!password || password.trim() === "") {
-        return rejectWithValue("Password is required for OTP generation");
+        return rejectWithValue({
+          message: "Password is required for OTP generation",
+          status: 400
+        });
       }
 
       const cleanPhoneNumber = mobile_number.replace(/\D/g, "");
@@ -525,11 +528,10 @@ export const generateOTP = createAsyncThunk(
 
       const token = await getBearerToken();
 
-      // ✅ Password is ALWAYS included - NO CONDITION
       const payload = {
         country_code: phone_code,
         mobile_number: cleanPhoneNumber,
-        password: password, // ✅ ALWAYS INCLUDED
+        password: password,
         hostname: window.location.hostname,
       };
 
@@ -555,24 +557,65 @@ export const generateOTP = createAsyncThunk(
 
       return response.data;
     } catch (error) {
-      if (error.response) {
-        const responseData = error.response.data;
-
-        if (
-          responseData.status === "error" &&
-          responseData.data?.checkMultipleCustomer === "Y"
-        ) {
-          dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
-          return {
-            status: "multiple_accounts",
-            message: responseData.message || "Please select customer type",
-            requiresCustomerType: true,
-          };
-        }
+      console.log("❌ Generate OTP Error:", error);
+      console.log("❌ Error response:", error.response);
+      console.log("❌ Error response data:", error.response?.data);
+      
+      // Handle multiple accounts scenario in error
+      if (error.response?.data?.data?.checkMultipleCustomer === "Y") {
+        dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
+        return {
+          status: "multiple_accounts",
+          message: error.response.data.message || "Please select customer type",
+          requiresCustomerType: true,
+        };
       }
-
-      const apiError = extractErrorMessage(error);
-      return rejectWithValue(apiError);
+      
+      // Extract the error message properly
+      let errorMessage = "";
+      let errorStatus = error.response?.status || 500;
+      
+      if (error.response?.data) {
+        const responseData = error.response.data;
+        if (typeof responseData === "string") {
+          errorMessage = responseData;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (responseData.detail) {
+          errorMessage = responseData.detail;
+        } else {
+          // Default messages based on status code
+          switch (errorStatus) {
+            case 401:
+              errorMessage = "Invalid email/phone or password. Please check your credentials and try again.";
+              break;
+            case 400:
+              errorMessage = "Invalid request. Please check your input.";
+              break;
+            case 404:
+              errorMessage = "Service not found. Please try again later.";
+              break;
+            case 429:
+              errorMessage = "Too many attempts. Please try again later.";
+              break;
+            default:
+              errorMessage = responseData.message || "Failed to generate OTP";
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = "Failed to generate OTP. Please try again.";
+      }
+      
+      // Return structured error object
+      return rejectWithValue({
+        message: errorMessage,
+        status: errorStatus,
+        originalError: error.response?.data
+      });
     }
   }
 );
@@ -726,10 +769,46 @@ export const verifyOTP = createAsyncThunk(
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
-      const errorMessage = extractErrorMessage(error);
+      console.log("❌ Verify OTP Error:", error);
+      console.log("❌ Error response:", error.response);
+      console.log("❌ Error response data:", error.response?.data);
+      
+      let errorMessage = "";
+      let errorStatus = error.response?.status || 500;
+      
+      if (error.response?.data) {
+        const responseData = error.response.data;
+        if (typeof responseData === "string") {
+          errorMessage = responseData;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (responseData.detail) {
+          errorMessage = responseData.detail;
+        } else {
+          switch (errorStatus) {
+            case 401:
+              errorMessage = "Invalid OTP. Please check and try again.";
+              break;
+            case 400:
+              errorMessage = "Invalid OTP format.";
+              break;
+            default:
+              errorMessage = "OTP verification failed. Please try again.";
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = "OTP verification failed. Please try again.";
+      }
 
       dispatch({ type: "auth/setError", payload: errorMessage });
-      return rejectWithValue(errorMessage);
+      return rejectWithValue({
+        message: errorMessage,
+        status: errorStatus
+      });
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
     }
@@ -916,7 +995,7 @@ export const validateOtp = createAsyncThunk(
   }
 );
 
-// ===================== PLAID/KYC OPERATIONS - FIXED =====================
+// ===================== PLAID/KYC OPERATIONS =====================
 export const initiatePlaidFlow = createAsyncThunk(
   "auth/initiatePlaid",
   async (customerData, { dispatch, rejectWithValue }) => {
@@ -1260,32 +1339,56 @@ export const loginUser = createAsyncThunk(
 
       throw new Error(response.data.message || "Login failed");
     } catch (error) {
-      let errorMessage = extractErrorMessage(error);
+      console.log("❌ Login Error:", error);
+      console.log("❌ Error response:", error.response);
+      console.log("❌ Error response data:", error.response?.data);
+      
+      let errorMessage = "";
+      let errorStatus = error.response?.status || 500;
       let modalActions = [];
       let isBlocked = false;
 
-      if (error.response) {
-        if (error.response.status === 401) {
-          if (error.response.data?.error === "invalid_credentials") {
-            errorMessage =
-              "The email/phone or password you entered is incorrect";
-          } else if (error.response.data?.error === "account_locked") {
-            errorMessage =
-              "Your account has been locked due to multiple failed attempts";
-            isBlocked = true;
-            modalActions = [
-              {
-                label: "Contact Support",
-                primary: true,
-                actionType: "NAVIGATE",
-                path: "/contact-support",
-              },
-            ];
+      if (error.response?.data) {
+        const responseData = error.response.data;
+        
+        if (typeof responseData === "string") {
+          errorMessage = responseData;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (responseData.detail) {
+          errorMessage = responseData.detail;
+        } else {
+          // Handle specific error cases
+          if (error.response.status === 401) {
+            errorMessage = "Invalid email/phone or password. Please check your credentials and try again.";
+          } else if (error.response.status === 403) {
+            errorMessage = "Your account is not verified. Please complete verification.";
+          } else if (error.response.status === 429) {
+            errorMessage = "Too many attempts. Please try again later.";
+          } else {
+            errorMessage = "Login failed. Please try again.";
           }
-        } else if (error.response.status === 403) {
-          errorMessage =
-            "Your account is not verified. Please complete verification.";
         }
+        
+        // Check for account locked status
+        if (error.response.data?.error === "account_locked") {
+          errorMessage = "Your account has been locked due to multiple failed attempts. Please contact support.";
+          isBlocked = true;
+          modalActions = [
+            {
+              label: "Contact Support",
+              primary: true,
+              actionType: "NAVIGATE",
+              path: "/contact-support",
+            },
+          ];
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = "Login failed. Please try again.";
       }
 
       dispatch({
@@ -1298,7 +1401,11 @@ export const loginUser = createAsyncThunk(
         },
       });
 
-      return rejectWithValue(errorMessage);
+      return rejectWithValue({
+        message: errorMessage,
+        status: errorStatus,
+        isBlocked: isBlocked
+      });
     } finally {
       dispatch({ type: "auth/setLoading", payload: false });
     }
