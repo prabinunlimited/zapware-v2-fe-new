@@ -120,7 +120,7 @@ function SelectCountry() {
     
     try {
       const bearertoken = localStorage.getItem("bearertoken");
-      
+      console.log("selectcountry.jsx bearertoken",bearertoken);
       const response = await fetch(`${API_URL}/customers/account-email`, {
         method: "POST",
         headers: {
@@ -175,7 +175,8 @@ function SelectCountry() {
         setShowEmailExistsPopup(false);
         setEmailSuccessMessage("Email is available for registration");
       } else {
-        setEmailError("Failed to verify email. Please try again.");
+        console.log("verify email error",error);
+        setEmailError("Failed to verify email. Please try again next time.");
         setIsEmailValid(false);
         setEmailChecked(false);
         setShowEmailExistsPopup(false);
