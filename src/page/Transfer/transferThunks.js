@@ -4,7 +4,7 @@ import {
   openConfirmationModal,
   closeConfirmationModal,
 } from "./transferSlice";
-import { centralizedApi } from "../../services/api";
+// import { centralizedApi } from "../../services/api";
 
 // Cache configuration
 let pendingAccountFetch = null;

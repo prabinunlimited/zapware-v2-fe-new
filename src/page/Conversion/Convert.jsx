@@ -720,7 +720,7 @@ const ConversionPage = () => {
             </div>
 
             {/* Available Accounts Card */}
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
+            {/* <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center">
                 <Globe className="h-5 w-5 text-blue-500 mr-2" />
                 Your Available Accounts
@@ -755,7 +755,7 @@ const ConversionPage = () => {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             {/* Conversion Tips Card */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-xl border border-blue-100 p-6">

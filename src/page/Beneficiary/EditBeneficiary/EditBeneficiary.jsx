@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RingLoader } from "react-spinners";
 import BeneficiaryForm from "../AddBeneficiary/BeneficiaryForm";
@@ -7,7 +7,6 @@ import { fetchBeneficiaryById } from "../AddBeneficiary/addBeneficiarySlice";
 
 const EditBeneficiary = () => {
   const { beneficiaryId } = useParams();
-  const location = useLocation();
   const dispatch = useDispatch();
 
   const { fetchLoading, beneficiaryDetails } = useSelector((state) => ({
@@ -15,31 +14,15 @@ const EditBeneficiary = () => {
     beneficiaryDetails: state.addBeneficiary?.beneficiaryData || null,
   }));
 
-  // Fetch beneficiary data if not already in location state
+  // Fetch beneficiary data
   useEffect(() => {
-    if (beneficiaryId && !location.state?.beneficiaryData) {
-      console.log("🔄 Fetching beneficiary from API:", beneficiaryId);
+    if (beneficiaryId) {
+      console.log("🔄 Fetching beneficiary:", beneficiaryId);
       dispatch(fetchBeneficiaryById(beneficiaryId));
     }
-  }, [beneficiaryId, dispatch, location.state]);
+  }, [beneficiaryId, dispatch]);
 
-  // Merge location state data with fetched data if needed
-  const getInitialData = () => {
-    // If we have data from location state, use that (it has country_phone_code)
-    if (location.state?.beneficiaryData) {
-      console.log(
-        "📦 Using location state beneficiary data:",
-        location.state.beneficiaryData,
-      );
-      return location.state.beneficiaryData;
-    }
-    // Otherwise use fetched data
-    return beneficiaryDetails;
-  };
-
-  const initialData = getInitialData();
-
-  if (fetchLoading && !location.state?.beneficiaryData) {
+  if (fetchLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -50,7 +33,7 @@ const EditBeneficiary = () => {
     );
   }
 
-  if (!initialData && !fetchLoading) {
+  if (!beneficiaryDetails && !fetchLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -65,7 +48,7 @@ const EditBeneficiary = () => {
     );
   }
 
-  return <BeneficiaryForm mode="edit" initialData={initialData} />;
+  return <BeneficiaryForm mode="edit" initialData={beneficiaryDetails} />;
 };
 
 export default EditBeneficiary;

@@ -1,8 +1,5 @@
-// src/store/store.js - UPDATED VERSION WITH RTK QUERY
+// src/store/store.js - UPDATED VERSION WITH REMITTANCE SLICES
 import { configureStore } from "@reduxjs/toolkit";
-
-// ===================== RTK QUERY IMPORTS =====================
-import { transactionApi } from "../services/transactionApi";
 
 // ===================== ACTION CREATOR IMPORTS =====================
 import {
@@ -37,11 +34,6 @@ import transferReducer from "../page/Transfer/transferSlice";
 import beneficiariesReducer from "../page/Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 import addBeneficiaryReducer from "../page/Beneficiary/AddBeneficiary/addBeneficiarySlice";
 import modalReducer from "../page/Beneficiary/MyBeneficiaries/ModalSlice";
-import beneficiariesHeaderReducer from "../components/RequestRemit/Header/BeneficiariesHeaderSlice";
-import beneficiariesHomepageReducer from "../page/RequestRemit/Homepage/beneficiaryHomepageSlice";
-import beneficiaryNavigationReducer from "../components/RequestRemit/Navigation/Slices/BeneficiaryNavigationSlice";
-import beneficiaryTransactionReducer from "../page/RequestRemit/Transactions/BeneficiaryTransactionSlice";
-import beneficiarySendersReducer from "../page/RequestRemit/Senders/Slice/beneficiarySendersSlice";
 
 // ===================== DEPOSIT SLICES =====================
 import depositReducer from "../page/Deposit/slices/depositSlice";
@@ -51,7 +43,7 @@ import uiDepositReducer from "../page/Deposit/slices/uiSlice";
 import bankLinkReducer from "../page/Deposit/slices/bankLinkSlice";
 
 // ===================== CONVERSION SLICES =====================
-import conversionReducer from "../page/Conversion/slice/ConversionSlice";
+import conversionReducer from "../page/Conversion/slice/ConversionSlice"
 
 // ===================== CARD PAYMENT SLICES =====================
 import cardPaymentReducer from "../page/Deposit/slices/cardPaymentSlice";
@@ -69,12 +61,9 @@ import bankLetterReducer from "../page/BankLetter/slices/bankLetterSlice";
 // ===================== LOCATION SLICE ======================
 import locationReducer from "../features/Auth/slices/locationSlice";
 
-// ===================== REMITTANCE SLICES =====================
+// ===================== REMITTANCE SLICES (NEW) =====================
 import remittanceReducer from "../page/Remittance/slices/remittanceSlice";
 import remittanceStaticDataReducer from "../page/Remittance/slices/staticDataSlice";
-
-// ===================== REQUEST REMIT SLICES =====================
-import requestRemitReducer from "../page/RequestRemit/CustomerSide/RequestRemitSlice";
 
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
@@ -177,7 +166,7 @@ const customSerializableCheck = {
     "bankLetter/generateBankLetterPDF/fulfilled",
     "bankLetter/generateBankLetterPDF/rejected",
 
-    // Remittance actions
+    // ===================== REMITTANCE ACTIONS (NEW) =====================
     "remittance/fetchExchangeRate/pending",
     "remittance/fetchExchangeRate/fulfilled",
     "remittance/fetchExchangeRate/rejected",
@@ -236,14 +225,6 @@ const customSerializableCheck = {
     "remittanceStatic/fetchPaymentMethods/pending",
     "remittanceStatic/fetchPaymentMethods/fulfilled",
     "remittanceStatic/fetchPaymentMethods/rejected",
-
-    // ===================== RTK QUERY ACTIONS =====================
-    "transactionApi/executeQuery/pending",
-    "transactionApi/executeQuery/fulfilled",
-    "transactionApi/executeQuery/rejected",
-    "transactionApi/executeMutation/pending",
-    "transactionApi/executeMutation/fulfilled",
-    "transactionApi/executeMutation/rejected",
   ],
 
   ignoredPaths: [
@@ -302,7 +283,7 @@ const customSerializableCheck = {
     "bankLetter.partnerProfileData",
     "bankLetter.accountData",
 
-    // Remittance paths
+    // ===================== REMITTANCE PATHS (NEW) =====================
     "remittance.formData.document",
     "remittance.transactionResult",
     "remittance.manualAccountDetails",
@@ -321,13 +302,6 @@ const customSerializableCheck = {
     "remittanceStatic.incomeSources",
     "remittanceStatic.occupations",
     "remittanceStatic.paymentMethods",
-
-    // ===================== RTK QUERY PATHS =====================
-    "transactionApi.queries",
-    "transactionApi.mutations",
-    "transactionApi.provided",
-    "transactionApi.subscriptions",
-    "transactionApi.config",
   ],
 };
 
@@ -370,18 +344,13 @@ export const store = configureStore({
     team: teamReducer,
     teamMember: teamMemberReducer,
 
-    // Convert
+    //Convert
     conversion: conversionReducer,
 
     // Beneficiaries
     beneficiaries: beneficiariesReducer,
     addBeneficiary: addBeneficiaryReducer,
     modal: modalReducer,
-    beneficiariesHeader: beneficiariesHeaderReducer,
-    beneficiaryNavigation: beneficiaryNavigationReducer,
-    beneficiaryHomepage: beneficiariesHomepageReducer,
-    beneficiaryTransaction: beneficiaryTransactionReducer,
-    beneficiarySenders: beneficiarySendersReducer,
 
     // Payout
     payout: payoutReducer,
@@ -392,22 +361,16 @@ export const store = configureStore({
     // Location
     location: locationReducer,
 
-    // Remittance reducers
+    // ===================== REMITTANCE REDUCERS (NEW) =====================
     remittance: remittanceReducer,
     remittanceStatic: remittanceStaticDataReducer,
-
-    // Request remit reducers
-    requestRemit: requestRemitReducer,
-
-    // ===================== RTK QUERY REDUCER =====================
-    [transactionApi.reducerPath]: transactionApi.reducer,
   },
 
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: customSerializableCheck,
       immutableCheck: { warnAfter: 100 },
-    }).concat(transactionApi.middleware), // ← ADD RTK QUERY MIDDLEWARE
+    }),
 
   devTools: process.env.NODE_ENV !== "production",
 });
@@ -425,7 +388,7 @@ const initializeAuthState = () => {
           customerId,
           isAuthenticated: true,
           isInitialized: true,
-        }),
+        })
       );
     } else {
       store.dispatch(setInitialized(true));
@@ -482,6 +445,7 @@ export const storeHealthCheck = () => {
         state.cardPayment?.sessionLoading ||
         state.cardPayment?.paymentProcessing,
     },
+    // ===================== REMITTANCE HEALTH CHECK (NEW) =====================
     remittance: {
       step: state.remittance?.step || 1,
       hasExchangeRate: !!state.remittance?.formData?.exchangeRate,
@@ -494,12 +458,6 @@ export const storeHealthCheck = () => {
     remittanceStatic: {
       purposesCount: state.remittanceStatic?.purposes?.length || 0,
       incomeSourcesCount: state.remittanceStatic?.incomeSources?.length || 0,
-    },
-    // ===================== RTK QUERY HEALTH CHECK =====================
-    transactionApi: {
-      queries: Object.keys(state.transactionApi?.queries || {}),
-      mutations: Object.keys(state.transactionApi?.mutations || {}),
-      isInitialized: !!state.transactionApi,
     },
   };
 };
@@ -529,9 +487,6 @@ export const resetStore = () => {
 
     authKeys.forEach((key) => localStorage.removeItem(key));
   }
-
-  // Also reset RTK Query cache
-  store.dispatch(transactionApi.util.resetApiState());
 };
 
 // ===================== STORE SUBSCRIPTIONS =====================
@@ -559,7 +514,7 @@ const persistCriticalStates = (state) => {
       if (state.auth.bankApproveStatus) {
         localStorage.setItem(
           "bank_approve_status",
-          state.auth.bankApproveStatus,
+          state.auth.bankApproveStatus
         );
       }
 
@@ -575,7 +530,7 @@ if (typeof window !== "undefined") {
   setTimeout(() => {
     initializeAuthState();
     if (process.env.NODE_ENV !== "production") {
-      console.log("🏪 Store Health Check:", storeHealthCheck());
+      storeHealthCheck();
     }
   }, 0);
 }
@@ -605,7 +560,7 @@ export const isPaymentCompleted = () =>
 export const isPaymentFailed = () =>
   store.getState().cardPayment.isPaymentFailed;
 
-// Remittance utilities
+// ===================== REMITTANCE UTILITIES (NEW) =====================
 export const getRemittanceState = () => store.getState().remittance;
 export const getRemittanceBeneficiaryState = () =>
   store.getState().remittanceBeneficiary;
@@ -628,22 +583,5 @@ export const getRemittanceIncomeSources = () =>
   store.getState().remittanceStatic.incomeSources;
 export const getRemittanceOccupations = () =>
   store.getState().remittanceStatic.occupations;
-
-// ===================== RTK QUERY UTILITIES =====================
-export const getTransactionApiState = () => store.getState().transactionApi;
-export const getCachedTransactions = (customerId, currencyCode) => {
-  const queryKey = `getTransactions({"customerId":"${customerId}","currencyCode":"${currencyCode}"})`;
-  return store.getState().transactionApi?.queries?.[queryKey]?.data;
-};
-export const isTransactionsCached = (customerId, currencyCode) => {
-  const queryKey = `getTransactions({"customerId":"${customerId}","currencyCode":"${currencyCode}"})`;
-  return !!store.getState().transactionApi?.queries?.[queryKey]?.data;
-};
-export const getTransactionCacheAge = (customerId, currencyCode) => {
-  const queryKey = `getTransactions({"customerId":"${customerId}","currencyCode":"${currencyCode}"})`;
-  const query = store.getState().transactionApi?.queries?.[queryKey];
-  if (!query?.startedTimeStamp) return null;
-  return Date.now() - query.startedTimeStamp;
-};
 
 export default store;
