@@ -108,6 +108,9 @@ const Login = () => {
   const [iframeLoading, setIframeLoading] = useState(true);
   const iframeRef = useRef(null);
 
+  // State for country selection
+  const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
+
   // Select state from Redux
   const auth = useSelector(selectAuth);
   const countries = useSelector(selectCountries);
@@ -152,7 +155,7 @@ const Login = () => {
   const inputType = useSelector(selectInputType);
   const hostName = window.location.hostname;
 
-  // Validation schema
+  // ✅ Validation schema - defined before formik
   const validationSchema = Yup.object({
     email: Yup.string()
       .email("Invalid email address")
@@ -172,6 +175,10 @@ const Login = () => {
     phone_code: Yup.string().when("inputType", {
       is: "mobile",
       then: (schema) => schema.required("Country code is required"),
+    }),
+    selected_country_id: Yup.string().when("inputType", {
+      is: "mobile",
+      then: (schema) => schema.required("Please select a country"),
     }),
     customerType: Yup.string().when([], {
       is: () => showCustomerType === "Y",
@@ -500,12 +507,16 @@ const Login = () => {
     setPlaidUrl("");
   };
 
+  // ✅ Memoize country options - defined after formik will be but before it's used
+  // We'll define these after formik is initialized
+
   // ✅ Formik setup with double-submission prevention
   const formik = useFormik({
     initialValues: {
       email: "",
       password: "",
       phone_code: "",
+      selected_country_id: "",
       mobile_number: "",
       inputType: "email",
       customerType: "",
@@ -677,24 +688,45 @@ const Login = () => {
     setFieldValue,
   } = formik;
 
-  // Memoize country options
+  // ✅ Memoize country options - AFTER formik is defined
   const countryOptions = useMemo(() => {
     return Array.isArray(countries)
       ? countries.map((country) => ({
-          value: country.phone_code,
+          value: country.id,
           label: `${country.name} (${country.phone_code})`,
           countryName: country.name,
+          phone_code: country.phone_code,
           flagUrl: country.flag_url,
         }))
       : [];
   }, [countries]);
 
+  // ✅ Find current country option - AFTER formik is defined
   const currentCountryOption = useMemo(() => {
-    return (
-      countryOptions.find((option) => option.value === values.phone_code) ||
-      null
+    if (!values.selected_country_id) {
+      return null;
+    }
+    
+    return countryOptions.find(
+      (option) => option.value === values.selected_country_id
+    ) || null;
+  }, [countryOptions, values.selected_country_id]);
+
+  // ✅ Country select handler - defined after setFieldValue is available
+  const handleCountrySelect = (selectedOption) => {
+    if (!selectedOption) return;
+    
+    setFieldValue("selected_country_id", selectedOption.value);
+    setFieldValue("phone_code", selectedOption.phone_code);
+    
+    dispatch(
+      setSelectedCountry({
+        country: selectedOption.countryName,
+        countryCode: selectedOption.phone_code,
+        flagUrl: selectedOption.flagUrl,
+      })
     );
-  }, [countryOptions, values.phone_code]);
+  };
 
   // Handler functions
   const handleGeneratePasscode = async (e) => {
@@ -754,7 +786,6 @@ const Login = () => {
     } catch (error) {
       console.log("🔍 Passcode Generation Error:", error);
 
-      // Handle account blocked status
       if (
         error.data?.blocked_status === 1 ||
         error.payload?.data?.blocked_status === 1
@@ -779,12 +810,10 @@ const Login = () => {
         return;
       }
 
-      // ✅ SIMPLIFIED: Just pass the error object to Modal
-      // Let the Modal component handle message extraction
       dispatch(
         openModal({
           title: "Error",
-          message: error, // Pass the entire error object
+          message: error,
           type: "error",
         })
       );
@@ -794,15 +823,11 @@ const Login = () => {
   };
 
   const handleGenerateOTP = async () => {
-    console.log("Phone code value:", values.phone_code);
-    console.log("Raw phone code from form:", values.phone_code);
-    console.log("Includes +?", values.phone_code?.includes("+"));
     if (isGeneratingOtp) {
       return;
     }
 
     try {
-      // ✅ Check that ALL required fields are filled
       if (!values.phone_code || !values.mobile_number || !values.password) {
         dispatch(
           openModal({
@@ -814,11 +839,10 @@ const Login = () => {
         return;
       }
 
-      // ✅ Password is ALWAYS included
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
-        password: values.password, // ✅ REQUIRED - NO CONDITIONAL
+        password: values.password,
         ...(showCustomerType === "Y" &&
           values.customerType && {
             customer_type: values.customerType,
@@ -977,14 +1001,11 @@ const Login = () => {
 
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
 
-      // Check for owner login FIRST with proper validation
       if (result.is_owner_login === true || result.is_owner_login === "1") {
-        // Close the passcode popup
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
-        // Handle owner redirect
         dispatch(
           setOwnerDetails({
             is_owner_login: true,
@@ -997,9 +1018,7 @@ const Login = () => {
         return;
       }
 
-      // Handle Plaid redirect
       if (result.requiresPlaidRedirect) {
-        // Close the passcode popup
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
@@ -1014,11 +1033,9 @@ const Login = () => {
         return;
       }
 
-      // Handle successful login with proper validation
       if (processedData && processedData.token && processedData.customer_id) {
         const customerId = processedData.customer_id;
 
-        // Wait a brief moment for Redux state to update
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         dispatch(
@@ -1034,7 +1051,6 @@ const Login = () => {
           })
         );
 
-        // Close passcode popup on successful login
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1144,9 +1160,7 @@ const Login = () => {
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
-      // Close OTP popup immediately when KYC verification is required
       if (result.requiresPlaidRedirect) {
-        // Close the OTP popup
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
@@ -1181,7 +1195,6 @@ const Login = () => {
           })
         );
 
-        // Close OTP popup on successful login
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
@@ -1226,7 +1239,7 @@ const Login = () => {
     navigate("/selectaccounttype");
   };
 
-  // Render the login form - ORIGINAL UI
+  // Render the login form
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
       {/* LEFT SIDE - MAIN LOGIN FORM */}
@@ -1321,73 +1334,56 @@ const Login = () => {
             ) : (
               <div className="relative mb-6">
                 <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-                  {isCountriesLoading === "Y" && (
-                    <div className="flex justify-center items-center h-full">
-                      <RingLoader size={24} color="#36d7b7" />
-                    </div>
-                  )}
-                  {isCountriesLoading === "N" && (
-                    <div className="relative w-full">
-                      <Select
-                        key={`country-select-${inputType}`}
-                        options={countryOptions}
-                        value={currentCountryOption}
-                        onChange={(option) => {
-                          dispatch(
-                            setSelectedCountry({
-                              country: option.countryName,
-                              countryCode: option.value,
-                              flagUrl: option.flagUrl,
-                            })
-                          );
-                          setFieldValue("phone_code", option.value);
-                        }}
-                        placeholder="Select country"
-                        isSearchable
-                        classNamePrefix="react-select"
-                        isLoading={isCountriesLoading === "Y"}
-                        styles={{
-                          control: (provided) => ({
-                            ...provided,
-                            minHeight: "48px",
+                  <div className="relative w-full">
+                    <Select
+                      options={countryOptions}
+                      value={currentCountryOption}
+                      onChange={handleCountrySelect}
+                      placeholder="Select country"
+                      isSearchable
+                      classNamePrefix="react-select"
+                      isLoading={countriesLoading}
+                      styles={{
+                        control: (provided) => ({
+                          ...provided,
+                          minHeight: "48px",
+                          borderColor:
+                            errors.phone_code && touched.phone_code
+                              ? "#f87171"
+                              : "#d1d5db",
+                          "&:hover": {
                             borderColor:
                               errors.phone_code && touched.phone_code
                                 ? "#f87171"
-                                : "#d1d5db",
-                            "&:hover": {
-                              borderColor:
-                                errors.phone_code && touched.phone_code
-                                  ? "#f87171"
-                                  : "#9ca3af",
-                            },
-                          }),
-                          option: (provided) => ({
-                            ...provided,
-                            padding: "10px",
-                            display: "flex",
-                            alignItems: "center",
-                          }),
-                        }}
-                        formatOptionLabel={(option) => (
-                          <div className="flex items-center">
-                            {option.flagUrl && (
-                              <img
-                                src={option.flagUrl}
-                                alt={option.label}
-                                className="w-5 h-4 object-cover mr-2"
-                              />
-                            )}
-                            <span>{option.label}</span>
-                          </div>
-                        )}
-                      />
-                      {errors.phone_code && touched.phone_code && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {errors.phone_code}
-                        </p>
+                                : "#9ca3af",
+                          },
+                        }),
+                        option: (provided) => ({
+                          ...provided,
+                          padding: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                        }),
+                      }}
+                      formatOptionLabel={(option) => (
+                        <div className="flex items-center">
+                          {option.flagUrl && (
+                            <img
+                              src={option.flagUrl}
+                              alt={option.label}
+                              className="w-5 h-4 object-cover mr-2"
+                            />
+                          )}
+                          <span>{option.label}</span>
+                        </div>
                       )}
-                    </div>
-                  )}
+                    />
+                    {errors.phone_code && touched.phone_code && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.phone_code}
+                      </p>
+                    )}
+                  </div>
 
                   <div className="w-full">
                     <input
@@ -1547,7 +1543,6 @@ const Login = () => {
               onClick={handleNavigation}
               className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 transition-all bg-white overflow-hidden group"
             >
-              {/* Animated background gradient */}
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100"
                 initial={{ x: "-100%" }}
@@ -1557,7 +1552,6 @@ const Login = () => {
                 }}
               />
 
-              {/* Sparkle/particle effect container */}
               <div className="absolute inset-0 overflow-hidden">
                 {[...Array(3)].map((_, i) => (
                   <motion.div
@@ -1583,7 +1577,6 @@ const Login = () => {
                 ))}
               </div>
 
-              {/* Pulsing ring effect */}
               <motion.div
                 className="absolute inset-0 rounded-xl border-2 border-transparent"
                 whileHover={{
@@ -1598,7 +1591,6 @@ const Login = () => {
                 }}
               />
 
-              {/* Button content */}
               <div className="relative z-10 flex items-center justify-center space-x-2">
                 <motion.div
                   whileHover={{ rotate: 360 }}
@@ -1639,7 +1631,7 @@ const Login = () => {
         </div>
       </div>
 
-      {/* ========== EXISTING MODAL COMPONENT ========== */}
+      {/* ========== MODAL COMPONENT ========== */}
       <Modal
         isOpen={modal.isOpen}
         onClose={() => dispatch(closeModal())}
@@ -1653,7 +1645,6 @@ const Login = () => {
       {showPlaidModal && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-2xl font-bold text-gray-800">
                 KYC Verification Required
@@ -1666,7 +1657,6 @@ const Login = () => {
               </button>
             </div>
 
-            {/* Content */}
             <div className="p-6">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1684,7 +1674,6 @@ const Login = () => {
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div className="space-y-3">
                 <button
                   onClick={openPlaidInNewWindow}
@@ -1725,7 +1714,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <p className="text-xs text-gray-500 text-center">
                 By continuing, you agree to our Terms of Service and Privacy
@@ -1736,7 +1724,7 @@ const Login = () => {
         </div>
       )}
 
-      {/* ========== EXISTING OTP MODAL ========== */}
+      {/* ========== OTP MODAL ========== */}
       {showOtpInput && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
@@ -1836,7 +1824,7 @@ const Login = () => {
         </div>
       )}
 
-      {/* ========== EXISTING PASSCODE MODAL ========== */}
+      {/* ========== PASSCODE MODAL ========== */}
       {showPasscodeInput && passcodeSent && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">

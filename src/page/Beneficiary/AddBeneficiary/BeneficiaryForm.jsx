@@ -3083,7 +3083,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 className="text-sm"
                 classNamePrefix="select"
                 options={phoneCodeOptions}
-                placeholder="Code..."
+                placeholder="Search Country Code..."
                 isSearchable
                 onChange={(selectedOption) => {
                   setCountryCodeInput(selectedOption?.value || "+1");
