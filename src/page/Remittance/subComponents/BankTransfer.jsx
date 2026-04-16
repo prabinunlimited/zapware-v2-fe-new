@@ -89,6 +89,7 @@ const BankTransfer = ({
   
   // Use props if provided, otherwise use Redux store
   const displayedSilaAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
+  const displayedSilaBankAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
   const displayedHasSilaAccounts = hasSilaAccounts || reduxHasSilaAccounts;
   const displayedSilaAccountsLoading = silaAccountsLoading || reduxSilaAccountsLoading;
   const displayedSilaAccountsError = silaAccountsError || reduxSilaAccountsError;
@@ -160,7 +161,7 @@ const BankTransfer = ({
 
   // Transform Sila bank accounts for dropdown
   const silaAccountOptions = useMemo(() => {
-    return (displayedSilaAccounts || []).map(account => {
+    return (displayedSilaBankAccounts || []).map(account => {
       const accountName = account.account_name || account.accountName || 'Unknown Account';
       const accountNumber = account.accountNumberHash || account.account_number || '****';
       const provider = account.provider || account.bank || 'Unknown Bank';
