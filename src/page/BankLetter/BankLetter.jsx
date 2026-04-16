@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  useMemo,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiDownload, FiArrowLeft, FiPrinter } from "react-icons/fi";
@@ -7,7 +13,6 @@ import { jsPDF } from "jspdf";
 import { RingLoader } from "react-spinners";
 
 // Components
-// REMOVED: UnlimitedLogo static import
 import DefaultLogo from "../../assets/images/Logo/unlimited remit logo.png"; // Fallback logo
 
 // Redux
@@ -26,7 +31,9 @@ import {
 
 import { selectAuth } from "../../features/Auth/slices/authSlice";
 
-// NEW: Import partner config hook
+import { useTransactionData } from "../../hooks/transactionHooks";
+
+// Import the corrected usePartnerConfig hook
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -36,19 +43,15 @@ const BankLetter = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { accountId } = useParams();
+  const customerId = localStorage.getItem("authcustomer_id");
+  const { fetchTransactions } = useTransactionData();
 
-  // NEW: Get partner config including logo
-  const { 
-    logoUrl, 
-    logoAltText, 
-    loading: partnerConfigLoading,
-    config: partnerConfig,
-    headerColor,
-    textColor,
-    isConfigured 
-  } = usePartnerConfig();
+  // ========== ALL SELECTORS AT THE TOP ==========
+  const reduxAccountData = useSelector(
+    (state) => state.bankLetter?.accountData,
+  );
 
-  // Redux Selectors
+  // Redux Selectors from bankLetterSlice
   const {
     loading: bankLetterLoading,
     pdfGenerating,
@@ -61,23 +64,207 @@ const BankLetter = () => {
   const isWhitelabelled = useSelector(selectIsWhitelabelled);
   const { token } = useSelector(selectAuth);
 
+  // Use the corrected usePartnerConfig hook
+  const {
+    logoUrl,
+    logoAltText,
+    loading: partnerConfigLoading,
+    config: partnerConfig,
+    headerColor,
+    textColor,
+    isConfigured,
+    partnerName,
+    hasLogo,
+    debugInfo,
+  } = usePartnerConfig();
+
   // Local Refs
   const pdfContentRef = useRef(null);
   const originalAccountData = useRef(null);
+  const loadingTimeoutRef = useRef(null);
+
+  // Local state for logos with fallback
+  const [effectiveLogo, setEffectiveLogo] = useState(null);
+  const [effectiveLogoAlt, setEffectiveLogoAlt] = useState("");
+  const [logoType, setLogoType] = useState("default");
+
+  // Loading state management
+  const [showLoading, setShowLoading] = useState(true);
+
+  const isAllowedDomain =
+    window.location.hostname === "ourzap-v2.unlimitedremit.com" ||
+    window.location.hostname === "unlimited.unlimitedremit.com" ||
+    window.location.hostname === "unlimited-v2.unlimitedremit.com";
+
+  let whitelabelledpartnerid = null;
+  try {
+    const storedId = localStorage.getItem("whitelabelledpartnerid");
+    if (storedId) {
+      whitelabelledpartnerid = parseInt(storedId, 10);
+    }
+  } catch (error) {
+    console.error(
+      "Error reading whitelabelledpartnerid from localStorage:",
+      error,
+    );
+    whitelabelledpartnerid = null;
+  }
+
+  // ========== FIXED: Move useMemo BEFORE any conditional returns ==========
+  const displayAccountData = useMemo(() => {
+    // Priority 1: Account data that matches the selected currency from location state
+    if (location.state?.selectedCurrency) {
+      // Check if accountData matches the selected currency
+      if (
+        accountData &&
+        accountData.currency === location.state.selectedCurrency
+      ) {
+        return accountData;
+      }
+
+      // Check if location state accountData matches
+      if (
+        location.state?.accountData &&
+        location.state.accountData.currency === location.state.selectedCurrency
+      ) {
+        return location.state.accountData;
+      }
+
+      // Check if originalAccountData matches
+      if (
+        originalAccountData.current &&
+        originalAccountData.current.currency === location.state.selectedCurrency
+      ) {
+        return originalAccountData.current;
+      }
+    }
+
+    // Priority 2: Fallback to existing logic
+    return (
+      accountData || originalAccountData.current || location.state?.accountData
+    );
+  }, [accountData, originalAccountData.current, location.state]);
+
+  // ========== DEBUG EFFECTS ==========
+  useEffect(() => {
+    console.log("🔍 BankLetter Mount Debug:", {
+      accountId,
+      locationState: location.state,
+      hasAccountData: !!accountData,
+      hasOriginalAccountData: !!originalAccountData.current,
+      pathname: location.pathname,
+      customerId: localStorage.getItem("authcustomer_id"),
+      selectedAccountFromStorage: localStorage.getItem("selectedAccount"),
+      search: location.search,
+    });
+  }, [
+    accountId,
+    location.state,
+    accountData,
+    location.pathname,
+    location.search,
+  ]);
+
+  // Debug 2: Log Redux state
+  useEffect(() => {
+    console.log("🔍 BankLetter Redux Debug:", {
+      accountData: accountData,
+      reduxAccountData: reduxAccountData,
+      isWhitelabelled,
+      partnerProfileData,
+      bankLetterLoading,
+    });
+  }, [
+    accountData,
+    reduxAccountData,
+    isWhitelabelled,
+    partnerProfileData,
+    bankLetterLoading,
+  ]);
+
+  // Debug 3: Log when account data changes
+  useEffect(() => {
+    if (accountData) {
+      console.log("✅ BankLetter has account data:", {
+        accountNumber: accountData.account_number,
+        currency: accountData.currency,
+        accountName: accountData.account_name,
+      });
+    } else {
+      console.log("❌ BankLetter missing account data");
+    }
+  }, [accountData]);
+
+  // Debug 4: Log partner config info
+  useEffect(() => {
+    console.log("🔍 BankLetter Partner Config Debug:", {
+      logoUrl,
+      logoAltText,
+      partnerConfigLoading,
+      headerColor,
+      textColor,
+      isConfigured,
+      partnerName,
+      hasLogo,
+      debugInfo,
+    });
+  }, [
+    logoUrl,
+    logoAltText,
+    partnerConfigLoading,
+    headerColor,
+    textColor,
+    isConfigured,
+    partnerName,
+    hasLogo,
+    debugInfo,
+  ]);
 
   // Initialize account data from location state
   useEffect(() => {
-    if (location.state?.accountData && !accountData) {
-      dispatch(setAccountData(location.state.accountData));
-      originalAccountData.current = location.state.accountData;
+    if (location.state?.accountData) {
+      // Check if we need to update
+      const shouldUpdate =
+        !accountData || // No account data yet
+        accountData.currency !== location.state.accountData.currency || // Different currency
+        accountData.account_number !==
+          location.state.accountData.account_number; // Different account
+
+      if (shouldUpdate) {
+        console.log(
+          "🔄 BankLetter - Setting/Updating account data from location state",
+        );
+        dispatch(setAccountData(location.state.accountData));
+        originalAccountData.current = location.state.accountData;
+      }
     }
-  }, [location.state, accountData, dispatch]);
+  }, [location.state, dispatch, accountData]);
+
+  // ========== LISTEN FOR CURRENCY CHANGES VIA LOCALSTORAGE ==========
+  useEffect(() => {
+    // Listen for currency changes from Account Summary via localStorage
+    const handleStorageChange = (event) => {
+      if (event.key === "selectedCurrency") {
+        console.log(
+          "🔄 BankLetter - Currency changed via storage:",
+          event.newValue,
+        );
+        // You could trigger a refetch or update here if needed
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   // Fetch partner profile if whitelabelled
   useEffect(() => {
     if (isWhitelabelled && token) {
       const partnerId = localStorage.getItem(
-        "whitelabelled_customer_partnerid"
+        "whitelabelled_customer_partnerid",
       );
       if (partnerId) {
         dispatch(fetchPartnerProfile(partnerId));
@@ -85,54 +272,80 @@ const BankLetter = () => {
     }
   }, [isWhitelabelled, token, dispatch]);
 
-  // Determine which logo to display
-  const getLogoToDisplay = () => {
-    if (isWhitelabelled) {
-      // For whitelabelled partners, use the profile logo first, then partner config logo
-      if (partnerProfileData?.logo) {
-        return {
-          src: partnerProfileData.logo,
-          alt: partnerProfileData.partner_name || "Partner Logo",
-          type: "partner-profile"
-        };
-      } else if (logoUrl) {
-        return {
-          src: logoUrl,
-          alt: logoAltText,
-          type: "partner-config"
-        };
-      }
-    } else {
-      // For regular users, use partner config logo if available, otherwise default
-      if (isConfigured && logoUrl) {
-        return {
-          src: logoUrl,
-          alt: logoAltText,
-          type: "partner-config"
-        };
-      }
-    }
-    
-    // Fallback to default logo
-    return {
-      src: DefaultLogo,
-      alt: "Unlimited Remit Logo",
-      type: "default"
-    };
-  };
+  // ========== INSTANT LOGO LOADING ==========
+  useEffect(() => {
+    // Check localStorage FIRST for instant logo display
+    const storedLogo = localStorage.getItem("partner_logo");
+    const storedName =
+      localStorage.getItem("whitelabelled_customer_partnername") ||
+      "Partner Logo";
 
-  // Get the current logo
-  const currentLogo = getLogoToDisplay();
+    console.log("🎨 BankLetter - Checking for logos:", {
+      localStorageLogo: storedLogo,
+      localStoragePartnerName: storedName,
+      hookLogoUrl: logoUrl,
+      hookLoading: partnerConfigLoading,
+    });
+
+    // Priority 1: Try localStorage for INSTANT display
+    if (storedLogo) {
+      setEffectiveLogo(storedLogo);
+      setEffectiveLogoAlt(storedName);
+      setLogoType("localStorage");
+      console.log("✅ Using logo from localStorage (instant):", storedLogo);
+      setShowLoading(false); // Hide loading immediately
+      return;
+    }
+
+    // Priority 2: If partner config is already loaded, use hook logo
+    if (!partnerConfigLoading && logoUrl) {
+      setEffectiveLogo(logoUrl);
+      setEffectiveLogoAlt(logoAltText || "Partner Logo");
+      setLogoType("hook");
+      console.log("✅ Using logo from hook:", logoUrl);
+      setShowLoading(false);
+      return;
+    }
+
+    // Priority 3: Default logo (only if we have no other options)
+    setEffectiveLogo(DefaultLogo);
+    setEffectiveLogoAlt("Unlimited Remit Logo");
+    setLogoType("default");
+    console.log("✅ Using default logo");
+
+    // Don't wait for partner config to finish loading
+    setShowLoading(false);
+  }, []); // Empty dependency array - run once on mount
+
+  // Optional: Update logo when partner config finishes loading (for cache refresh)
+  useEffect(() => {
+    if (!partnerConfigLoading && logoUrl && logoUrl !== effectiveLogo) {
+      console.log("🔄 Updating logo after partner config loaded:", logoUrl);
+      setEffectiveLogo(logoUrl);
+      setEffectiveLogoAlt(logoAltText || "Partner Logo");
+      setLogoType("hook");
+    }
+  }, [partnerConfigLoading, logoUrl, logoAltText, effectiveLogo]);
+
+  // Safety timeout for loading state
+  useEffect(() => {
+    // Set a very short timeout as safety net
+    const timer = setTimeout(() => {
+      setShowLoading(false);
+    }, 500); // Reduced from 3000ms to 500ms
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle missing account data
   const handleMissingData = () => {
     return (
-      <div className="container mx-auto py-10 text-center">
-        <p className="text-red-500 font-semibold">
+      <div className="container mx-auto py-6 px-4 text-center">
+        <p className="text-red-500 font-semibold text-sm md:text-base">
           Account data is missing. Please go back and try again.
         </p>
         <button
-          className="mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-lg shadow-lg transform hover:scale-105 transition duration-300"
+          className="mt-3 md:mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 text-sm md:text-base rounded-lg shadow-lg transform hover:scale-105 transition duration-300"
           onClick={() => navigate(-1)}
         >
           Go Back
@@ -141,7 +354,7 @@ const BankLetter = () => {
     );
   };
 
-  // Generate PDF (unchanged from your code)
+  // Generate PDF
   const generatePDF = useCallback(async () => {
     dispatch(setPdfGenerating(true));
 
@@ -222,6 +435,30 @@ const BankLetter = () => {
           font-size: 1rem;
           font-weight: 500;
         }
+        
+        /* Partner color styling */
+        ${
+          headerColor
+            ? `
+          .pdf-container {
+            border-top: 4px solid ${headerColor} !important;
+          }
+          h1, h2 {
+            color: ${headerColor} !important;
+          }
+        `
+            : ""
+        }
+        
+        ${
+          textColor
+            ? `
+          body {
+            color: ${textColor} !important;
+          }
+        `
+            : ""
+        }
       </style>
     `;
 
@@ -262,11 +499,10 @@ const BankLetter = () => {
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
-        width: 794, // 210mm in pixels
+        width: 794,
         windowWidth: 794,
         removeContainer: false,
         onclone: (clonedDoc) => {
-          // Ensure styles are applied in cloned document
           const clonedContainer = clonedDoc.body.firstChild;
           if (clonedContainer) {
             clonedContainer.style.width = "210mm";
@@ -311,9 +547,9 @@ const BankLetter = () => {
       console.error("Error generating PDF:", error);
       dispatch(setPdfGenerating(false));
     }
-  }, [accountData, dispatch]);
+  }, [accountData, dispatch, headerColor, textColor]);
 
-  // Enhanced Print Document (unchanged from your code)
+  // Enhanced Print Document
   const printDocument = useCallback(() => {
     const content = pdfContentRef.current;
     if (!content) return;
@@ -331,6 +567,7 @@ const BankLetter = () => {
       box-shadow: none !important;
       border: none !important;
       border-radius: 0 !important;
+      ${headerColor ? `border-top: 4px solid ${headerColor} !important;` : ""}
     `;
 
     // Clone the content to modify for print
@@ -344,6 +581,14 @@ const BankLetter = () => {
       logo.style.width = "auto";
       logo.style.height = "auto";
       logo.classList.add("print-logo");
+    }
+
+    // Apply partner colors to headings if available
+    if (headerColor) {
+      const headings = printContent.querySelectorAll("h1, h2");
+      headings.forEach((heading) => {
+        heading.style.color = headerColor;
+      });
     }
 
     // Create print-specific styles
@@ -370,23 +615,31 @@ const BankLetter = () => {
             padding: 15mm !important;
             margin: 0 auto !important;
             background: white !important;
+            ${
+              headerColor
+                ? `border-top: 4px solid ${headerColor} !important;`
+                : ""
+            }
           }
           
           h1 {
             font-size: 24pt !important;
             margin-top: 20px !important;
             margin-bottom: 15px !important;
+            ${headerColor ? `color: ${headerColor} !important;` : ""}
           }
           
           h2 {
             font-size: 18pt !important;
             margin-top: 15px !important;
             margin-bottom: 10px !important;
+            ${headerColor ? `color: ${headerColor} !important;` : ""}
           }
           
           p, li, span, div {
             font-size: 12pt !important;
             line-height: 1.5 !important;
+            ${textColor ? `color: ${textColor} !important;` : ""}
           }
           
           strong {
@@ -439,47 +692,62 @@ const BankLetter = () => {
         }
       }, 500);
     }, 250);
-  }, [accountData]);
+  }, [accountData, headerColor, textColor]);
 
+  // ========== FIXED: Check for missing data AFTER all hooks ==========
   // Check for missing data
-  if (!accountData && !originalAccountData.current) {
+  if (!displayAccountData) {
     return handleMissingData();
   }
 
-  const displayAccountData = accountData || originalAccountData.current;
-
-  // Loading state for partner config
-  if (partnerConfigLoading && isWhitelabelled) {
+  // Only show loading if we truly have no data
+  if (showLoading && (!displayAccountData || !effectiveLogo)) {
     return (
-      <div className="container mx-auto py-20 text-center">
-        <RingLoader size={50} color="#3b82f6" className="mx-auto mb-4" />
-        <p className="text-gray-600">Loading partner configuration...</p>
+      <div className="container mx-auto py-10 md:py-20 px-4 text-center">
+        <RingLoader
+          size={40}
+          className="md:w-12 md:h-12 mx-auto mb-3 md:mb-4"
+          color={headerColor || "#3b82f6"}
+        />
+        <p className="text-gray-600 text-sm md:text-base">
+          Loading configuration...
+        </p>
+        <button
+          className="mt-3 md:mt-4 px-3 py-1.5 md:px-4 md:py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm md:text-base"
+          onClick={() => setShowLoading(false)}
+        >
+          Skip Loading
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="container mx-auto py-4 md:py-8 px-3 sm:px-4 lg:px-8">
       {/* Header with navigation */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0 mb-4 md:mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center text-blue-600 hover:text-blue-800 font-medium"
+          className="flex items-center text-blue-600 hover:text-blue-800 font-medium text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
         >
-          <FiArrowLeft className="mr-2" /> Back
+          <FiArrowLeft className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" /> Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-800">
+        <h1 className="text-lg md:text-2xl font-bold text-gray-800 text-center">
           Bank Confirmation Letter
         </h1>
-        <div className="w-24"></div>
+        <div className="w-full sm:w-24"></div> {/* Spacer */}
       </div>
 
       {/* PDF Content */}
-      <div className="flex justify-center mb-8">
+      <div className="flex justify-center mb-6 md:mb-8">
         <div
           id="pdfContent"
           ref={pdfContentRef}
-          className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl border border-gray-200 pdf-container"
+          className="bg-white p-4 md:p-6 lg:p-8 rounded-lg md:rounded-xl shadow-lg w-full max-w-4xl border border-gray-200 pdf-container"
+          style={{
+            ...(headerColor ? { borderTop: `4px solid ${headerColor}` } : {}),
+            ...(textColor ? { color: textColor } : {}),
+          }}
         >
           {/* Inline styles with print media queries */}
           <style>
@@ -487,7 +755,7 @@ const BankLetter = () => {
               /* Screen styles */
               @media screen {
                 .pdf-container {
-                  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
                 }
               }
               
@@ -507,88 +775,105 @@ const BankLetter = () => {
               /* Main content styles */
               #pdfContent {
                 font-family: 'Arial', sans-serif;
-                color: #333;
                 line-height: 1.6;
               }
               
               #pdfContent header {
                 border-bottom: 2px solid #e2e8f0;
-                padding-bottom: 1.5rem;
-                margin-bottom: 1.5rem;
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
                 text-align: center;
               }
               
               /* Control logo size for screen */
               #pdfContent header img {
-                max-width: 200px;
-                max-height: 80px;
+                max-width: 150px;
+                max-height: 60px;
                 width: auto;
                 height: auto;
                 object-fit: contain;
-                margin-bottom: 1rem;
-              }
-              
-              /* Partner config logo size */
-              #pdfContent header img[data-logo-type="partner-config"],
-              #pdfContent header img[data-logo-type="partner-profile"] {
-                max-width: 150px;
-                max-height: 50px;
+                margin-bottom: 0.75rem;
               }
               
               #pdfContent h1 {
-                color: #2d3748;
-                font-size: 1.875rem;
-                margin-top: 0.5rem;
+                color: ${headerColor || "#2d3748"};
+                font-size: 1.25rem;
+                margin-top: 0.25rem;
+              }
+              
+              @media (min-width: 640px) {
+                #pdfContent h1 {
+                  font-size: 1.5rem;
+                }
+              }
+              
+              @media (min-width: 768px) {
+                #pdfContent h1 {
+                  font-size: 1.875rem;
+                  margin-top: 0.5rem;
+                }
+                
+                #pdfContent header img {
+                  max-width: 200px;
+                  max-height: 80px;
+                  margin-bottom: 1rem;
+                }
               }
               
               #pdfContent h2 {
-                color: #2d3748;
-                font-size: 1.25rem;
-                margin-top: 1.5rem;
-                margin-bottom: 0.75rem;
+                color: ${headerColor || "#2d3748"};
+                font-size: 1.125rem;
+                margin-top: 1rem;
+                margin-bottom: 0.5rem;
                 border-bottom: 1px solid #e2e8f0;
                 padding-bottom: 0.25rem;
               }
               
+              @media (min-width: 768px) {
+                #pdfContent h2 {
+                  font-size: 1.25rem;
+                  margin-top: 1.5rem;
+                  margin-bottom: 0.75rem;
+                }
+              }
+              
               #pdfContent ul {
-                margin-top: 0.75rem;
-                margin-bottom: 1rem;
+                margin-top: 0.5rem;
+                margin-bottom: 0.75rem;
               }
               
               #pdfContent li {
-                margin-bottom: 0.5rem;
-                padding-left: 0.5rem;
+                margin-bottom: 0.375rem;
+                padding-left: 0.375rem;
               }
               
               #pdfContent strong {
                 color: #4a5568;
-                min-width: 160px;
+                min-width: 120px;
                 display: inline-block;
               }
               
+              @media (min-width: 768px) {
+                #pdfContent strong {
+                  min-width: 160px;
+                }
+              }
+              
               #pdfContent footer {
-                margin-top: 2rem;
-                padding-top: 1.5rem;
+                margin-top: 1.5rem;
+                padding-top: 1rem;
                 border-top: 1px solid #e2e8f0;
-                font-size: 0.875rem;
+                font-size: 0.75rem;
                 color: #718096;
               }
               
-              /* Apply partner colors if available */
-              ${headerColor ? `
-                .pdf-container {
-                  border-top: 4px solid ${headerColor};
+              @media (min-width: 768px) {
+                #pdfContent footer {
+                  margin-top: 2rem;
+                  padding-top: 1.5rem;
+                  font-size: 0.875rem;
                 }
-                h1, h2 {
-                  color: ${headerColor};
-                }
-              ` : ''}
-              
-              ${textColor ? `
-                body {
-                  color: ${textColor};
-                }
-              ` : ''}
+              }
               
               /* Print media query */
               @media print {
@@ -604,7 +889,7 @@ const BankLetter = () => {
                   box-shadow: none !important;
                   border: none !important;
                   border-radius: 0 !important;
-                  border-top: 4px solid ${headerColor || '#3b82f6'} !important;
+                  border-top: 4px solid ${headerColor || "#3b82f6"} !important;
                 }
                 
                 #pdfContent header img {
@@ -617,109 +902,144 @@ const BankLetter = () => {
                 .no-print {
                   display: none !important;
                 }
+                
+                h1, h2 {
+                  color: ${headerColor || "#2d3748"} !important;
+                }
               }
               
               /* Grid styles */
               .account-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 1rem;
-                margin-bottom: 1.5rem;
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+              }
+              
+              @media (min-width: 640px) {
+                .account-grid {
+                  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                  gap: 1rem;
+                }
               }
               
               .account-detail-item {
                 background: #f8fafc;
-                padding: 1rem;
-                border-radius: 0.5rem;
+                padding: 0.75rem;
+                border-radius: 0.375rem;
                 border: 1px solid #e2e8f0;
               }
               
               .account-detail-item strong {
                 display: block;
                 color: #4a5568;
-                font-size: 0.875rem;
+                font-size: 0.75rem;
                 margin-bottom: 0.25rem;
+                min-width: auto;
+              }
+              
+              @media (min-width: 768px) {
+                .account-detail-item strong {
+                  font-size: 0.875rem;
+                }
               }
               
               .account-detail-item div {
                 color: #2d3748;
-                font-size: 1rem;
+                font-size: 0.875rem;
                 font-weight: 500;
+              }
+              
+              @media (min-width: 768px) {
+                .account-detail-item div {
+                  font-size: 1rem;
+                }
               }
             `}
           </style>
 
-          <header className="text-center pb-6 flex flex-col justify-center items-center">
-            {/* Loading state for whitelabelled partner */}
-            {isWhitelabelled && bankLetterLoading ? (
-              <div className="flex justify-center py-4">
-                <RingLoader size={30} color="#3b82f6" />
-              </div>
-            ) : (
-              <img
-                src={currentLogo.src}
-                alt={currentLogo.alt}
-                data-logo-type={currentLogo.type}
-                className={`mb-6 object-contain ${
-                  currentLogo.type === 'default' 
-                    ? 'default-logo' 
-                    : 'partner-logo'
-                }`}
-                onError={(e) => {
-                  console.error(`Failed to load logo: ${currentLogo.src}`);
-                  e.target.src = DefaultLogo;
-                  e.target.alt = "Default Logo";
-                  e.target.dataset.logoType = "default";
-                }}
-              />
-            )}
-            <h1 className="text-2xl font-bold text-gray-800">
+          <header className="text-center pb-4 md:pb-6 flex flex-col justify-center items-center">
+            {/* Logo with error handling - Will show instantly from localStorage */}
+            <img
+              src={effectiveLogo || DefaultLogo}
+              alt={effectiveLogoAlt || "Unlimited Remit Logo"}
+              data-logo-type={logoType}
+              className="mb-3 md:mb-6 object-contain"
+              onError={(e) => {
+                console.error(`Failed to load logo: ${effectiveLogo}`);
+                e.target.src = DefaultLogo;
+                e.target.alt = "Default Logo";
+                e.target.dataset.logoType = "default";
+              }}
+            />
+            <h1
+              className="text-lg md:text-2xl font-bold"
+              style={{ color: headerColor }}
+            >
               Bank Confirmation Letter
             </h1>
           </header>
 
-          <main className="px-2">
-            <div className="text-right text-sm text-gray-600 mb-6">
+          <main className="px-1 md:px-2">
+            <div className="text-right text-xs md:text-sm text-gray-600 mb-4 md:mb-6">
               {currentDate}
             </div>
 
             <div className="text-justify">
-              {isWhitelabelled ? (
-                bankLetterLoading ? (
-                  <div className="flex justify-center py-4">
-                    <RingLoader size={30} color="#3b82f6" />
-                  </div>
-                ) : (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: partnerProfileData?.text || "",
-                    }}
-                    className="prose max-w-none"
-                  />
-                )
-              ) : (
-                <>
-                  <p className="mb-6 text-lg font-medium text-gray-800">
-                    Dear Customer,
-                  </p>
-                  <p className="mb-4">
-                    Founded in 1992, Unlimited is one of the largest
-                    organizations with its sister concerns in education,
-                    internet services, software development, outsourcing, and
-                    running a cooperative bank and digital wallet for remittance
-                    services in the country.
-                  </p>
-                  <p className="mb-6">
-                    Please be advised that we have established an account for
-                    you on our platform. This account is used for collecting and
-                    disbursing payments for your business.
-                  </p>
-                </>
-              )}
+              {
+                isAllowedDomain ? (
+                  <>
+                    <p className="mb-4 md:mb-6 text-base md:text-lg font-medium text-gray-800">
+                      Dear Customer,
+                    </p>
+
+                    {/* Company description only for non-whitelabel on allowed domain */}
+                    {!isWhitelabelled && (
+                      <>
+                        <p className="mb-3 md:mb-4 text-sm md:text-base">
+                          Founded in 1992, Unlimited is one of the largest
+                          organizations with its sister concerns in education,
+                          internet services, software development, outsourcing,
+                          and running a cooperative bank and digital wallet for
+                          remittance services in the country.
+                        </p>
+
+                        <p className="mb-4 md:mb-6 text-sm md:text-base">
+                          Please be advised that we have established an account
+                          for you on our platform. This account is used for
+                          collecting and disbursing payments for your business.
+                        </p>
+                      </>
+                    )}
+                  </>
+                ) : // For non-allowed domains (like partner domains)
+                isWhitelabelled ? (
+                  bankLetterLoading ? (
+                    <div className="flex justify-center py-3 md:py-4">
+                      <RingLoader
+                        size={24}
+                        className="md:w-7 md:h-7"
+                        color={headerColor || "#3b82f6"}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: partnerProfileData?.text || "",
+                      }}
+                      className="prose max-w-none text-sm md:text-base"
+                      style={textColor ? { color: textColor } : {}}
+                    />
+                  )
+                ) : null // Or add a default message for non-whitelabel on non-allowed domains
+              }
             </div>
 
-            <div className="mt-8">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            <div className="mt-6 md:mt-8">
+              <h2
+                className="text-lg md:text-xl font-semibold mb-3 md:mb-4"
+                style={{ color: headerColor }}
+              >
                 Account Details ({displayAccountData?.currency || "N/A"}{" "}
                 Account)
               </h2>
@@ -766,7 +1086,7 @@ const BankLetter = () => {
                 {displayAccountData?.account_number && (
                   <div className="account-detail-item">
                     <strong>Account Number:</strong>
-                    <div className="font-mono">
+                    <div className="font-mono text-sm md:text-base">
                       {displayAccountData.account_number}
                     </div>
                   </div>
@@ -782,21 +1102,30 @@ const BankLetter = () => {
                 {displayAccountData?.sort_code && (
                   <div className="account-detail-item">
                     <strong>Sort Code:</strong>
-                    <div className="font-mono">
+                    <div className="font-mono text-sm md:text-base">
                       {displayAccountData.sort_code}
+                    </div>
+                  </div>
+                )}
+
+                {displayAccountData?.description && (
+                  <div className="account-detail-item">
+                    <strong>Reference Number</strong>
+                    <div className="font-mono text-sm md:text-base">
+                      {displayAccountData.description}
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {!isWhitelabelled && (
-              <footer className="mt-8 pt-6 border-t border-gray-200">
-                <p className="text-gray-600 mb-4">
+            {isAllowedDomain && (
+              <footer className="mt-6 md:mt-8 pt-4 md:pt-6 border-t border-gray-200">
+                <p className="mb-3 md:mb-4 text-sm md:text-base">
                   If you have any questions, please do not hesitate to contact
                   our support team. We are here to assist you.
                 </p>
-                <div className="text-sm text-gray-500 italic">
+                <div className="text-xs md:text-sm text-gray-500 italic">
                   Note: This is a computer generated letter so no signature is
                   required.
                 </div>
@@ -804,47 +1133,43 @@ const BankLetter = () => {
             )}
           </main>
 
-          {!isWhitelabelled && (
-            <footer className="mt-10 pt-6 border-t border-gray-200 text-center text-gray-600 text-sm">
-              <div className="font-medium mb-4">
+          {isAllowedDomain && (
+            <footer className="mt-6 md:mt-10 pt-4 md:pt-6 border-t border-gray-200 text-center text-xs md:text-sm">
+              <div className="font-medium mb-3 md:mb-4">
                 We are licensed in the following jurisdictions:
               </div>
 
-              <div className="space-y-3 text-left">
+              <div className="space-y-2 md:space-y-3 text-left text-xs md:text-sm">
                 <div>
-                  <strong className="text-gray-700">NEPAL:</strong> Lalit Money
-                  Transfer Pvt Ltd Unlimited Building, Kichapokhari, PO Box 856,
-                  Kathmandu, NEPAL holds a license for Remittances from Nepal
-                  Rastra Bank.
+                  <strong>NEPAL:</strong> Lalit Money Transfer Pvt Ltd Unlimited
+                  Building, Kichapokhari, PO Box 856, Kathmandu, NEPAL holds a
+                  license for Remittances from Nepal Rastra Bank.
                 </div>
                 <div>
-                  <strong className="text-gray-700">USA:</strong> Unlimited
-                  Cloud LLC, 10685-B Hazelhurst Dr 18549, Houston, TX 77043, USA
-                  holds MSD Registration No. 31000204408346 from Financial
-                  Crimes Enforcement Network.
+                  <strong>USA:</strong> Unlimited Cloud LLC, 10685-B Hazelhurst
+                  Dr 18549, Houston, TX 77043, USA holds MSD Registration No.
+                  31000204408346 from Financial Crimes Enforcement Network.
                 </div>
                 <div>
-                  <strong className="text-gray-700">Singapore:</strong>{" "}
-                  Unlimited Cloud Pte Ltd, 68 Circular Road #02-01, Singapore
-                  049422.
+                  <strong>Singapore:</strong> Unlimited Cloud Pte Ltd, 68
+                  Circular Road #02-01, Singapore 049422.
                 </div>
                 <div>
-                  <strong className="text-gray-700">QATAR:</strong> Unlimited
-                  Remit Middle East LLC, QFC Tower 1, Doha, Qatar holds fintech
-                  license No. 01576 from Qatar Financial Center.
+                  <strong>QATAR:</strong> Unlimited Remit Middle East LLC, QFC
+                  Tower 1, Doha, Qatar holds fintech license No. 01576 from
+                  Qatar Financial Center.
                 </div>
                 <div>
-                  <strong className="text-gray-700">CANADA:</strong> Asimit
-                  Remittance Ltd 1224-13351 Commerce Pkwy, Richmond, BC V6V 2X7,
-                  Canada.
+                  <strong>CANADA:</strong> Asimit Remittance Ltd 1224-13351
+                  Commerce Pkwy, Richmond, BC V6V 2X7, Canada.
                 </div>
                 <div>
-                  <strong className="text-gray-700">UAE:</strong> Asimit Portal
-                  Est., Dubai Mall, Downtown Dubai, UAE.
+                  <strong>UAE:</strong> Asimit Portal Est., Dubai Mall, Downtown
+                  Dubai, UAE.
                 </div>
               </div>
 
-              <div className="font-semibold mt-8 text-lg text-gray-800">
+              <div className="font-semibold mt-6 md:mt-8 text-base md:text-lg">
                 Unlimited Remittance Ltd
               </div>
             </footer>
@@ -853,44 +1178,49 @@ const BankLetter = () => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 mt-6 md:mt-8">
         <button
-          className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
+          style={{ backgroundColor: headerColor || "#3b82f6" }}
           onClick={generatePDF}
           disabled={isPdfGenerating}
         >
           {isPdfGenerating ? (
             <>
-              <RingLoader size={18} color="#ffffff" className="mr-2" />
-              Generating PDF...
+              <RingLoader
+                size={16}
+                className="mr-2 md:w-4 md:h-4"
+                color="#ffffff"
+              />
+              <span className="text-xs md:text-sm">Generating PDF...</span>
             </>
           ) : (
             <>
-              <FiDownload className="mr-2" />
-              Download PDF
+              <FiDownload className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+              <span>Download PDF</span>
             </>
           )}
         </button>
 
         <button
-          className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
           onClick={printDocument}
         >
-          <FiPrinter className="mr-2" />
-          Print
+          <FiPrinter className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+          <span>Print</span>
         </button>
 
         <button
-          className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto"
+          className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-lg shadow-md transition duration-300 w-full sm:w-auto text-sm md:text-base"
           onClick={() => navigate(-1)}
         >
-          <FiArrowLeft className="mr-2" />
-          Close
+          <FiArrowLeft className="mr-1 md:mr-2 w-4 h-4 md:w-5 md:h-5" />
+          <span>Close</span>
         </button>
       </div>
 
       {bankLetterError && (
-        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-center">
+        <div className="mt-3 md:mt-4 p-2 md:p-3 bg-red-100 border border-red-400 text-red-700 rounded text-center text-xs md:text-sm">
           {bankLetterError}
         </div>
       )}

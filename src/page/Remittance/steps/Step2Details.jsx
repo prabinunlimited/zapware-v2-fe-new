@@ -32,6 +32,7 @@ const Step2Details = ({
   manualAccountError,
   manualDetailsLoading,
   beneficiaryLoading,
+  onRecurringDataChange,
 }) => {
   // Custom styles for select components
   const selectStyles = {
@@ -168,7 +169,6 @@ const Step2Details = ({
           <h3 className="text-xl font-bold text-white">
             {formData.paymentMethod === "manual" && "Manual Deposit"}
             {formData.paymentMethod === "bank" && "Bank Transfer"}
-            {formData.paymentMethod === "card" && "Card Payment"}
           </h3>
           <p className="text-blue-100 mt-1">
             Complete the details for your selected payment method
@@ -180,7 +180,7 @@ const Step2Details = ({
       </div>
 
       {/* Selected Beneficiary Summary - READ ONLY */}
-      {selectedBeneficiary && (
+      {/* {selectedBeneficiary && (
         <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <FaUser className="text-emerald-600" />
@@ -246,10 +246,10 @@ const Step2Details = ({
             )}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Compliance Note */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+      {/* <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-white rounded-xl shadow-sm">
             <FaShieldAlt className="w-6 h-6 text-blue-600" />
@@ -267,7 +267,7 @@ const Step2Details = ({
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

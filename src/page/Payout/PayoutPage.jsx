@@ -426,7 +426,7 @@ const PayoutPage = () => {
         ) {
           // Call createpayments API after successful verification
           const res = await axios.post(
-            "https://sandbox-zapware.unlimitedremit.com/api/b4b/createpayments",
+            "https://zapware.unlimitedremit.com/api/b4b/createpayments",
             payload
           );
 
@@ -539,7 +539,7 @@ const PayoutPage = () => {
   // Helper functions
   const getAvailableTransactionTypes = (currency, providerId) => {
     if (currency === "KES") {
-      if (providerId === 33) return ["mobile"];
+      if (providerId === 33) return ["mobile","bank"];
       if (providerId === 41) return ["bank"];
     }
 

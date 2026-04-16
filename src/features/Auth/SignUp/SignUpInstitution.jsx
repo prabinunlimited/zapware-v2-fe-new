@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -11,7 +17,7 @@ import {
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
 
@@ -21,6 +27,9 @@ import PasswordField from "./FormFields/PasswordField";
 import SelectField from "./FormFields/SelectField";
 import BenefitsSection from "./FormFields/BenefitsSection";
 import institutionSchema from "../../../components/Schema/InstitutionSchema";
+
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import {
   fetchCountries,
@@ -36,6 +45,7 @@ import {
   selectIsNamedAccount,
   selectSelectedAccounts,
   selectAccountOptions,
+  selectHasAnyNamedAccounts,
 } from "../SignUp/SelectCurrencyAccount/currencyAccountsSelectors";
 
 import {
@@ -87,6 +97,107 @@ import {
 } from "../slices/institutionRegistrationSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
+
+// CustomSelect Component
+const CustomSelect = ({
+  id,
+  label,
+  name,
+  value,
+  onChange,
+  onBlur,
+  options = [],
+  touched,
+  error,
+  required = false,
+  disabled = false,
+  isLoading = false,
+  placeholder = "Select...",
+  isMulti = false,
+  isCountryField = false,
+  showPhoneCode = false,
+  className = "",
+  ...props
+}) => {
+  const customStyles = {
+    control: (base, state) => ({
+      ...base,
+      minHeight: "50px",
+      borderColor: touched && error ? "#ef4444" : "#d1d5db",
+      borderRadius: "0.5rem",
+      padding: "0.25rem 0.5rem",
+      fontSize: "0.875rem",
+      "&:hover": {
+        borderColor: touched && error ? "#ef4444" : "#9ca3af",
+      },
+      backgroundColor: disabled ? "#f3f4f6" : "white",
+      opacity: disabled ? 0.6 : 1,
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: "0.875rem",
+      color: "#6b7280",
+    }),
+    menu: (base) => ({
+      ...base,
+      fontSize: "0.875rem",
+      zIndex: 9999,
+    }),
+    singleValue: (base) => ({
+      ...base,
+      fontSize: "0.875rem",
+    }),
+    option: (base, state) => ({
+      ...base,
+      fontSize: "0.875rem",
+      backgroundColor: state.isSelected
+        ? "#3b82f6"
+        : state.isFocused
+          ? "#eff6ff"
+          : "white",
+      color: state.isSelected ? "white" : "#1f2937",
+      "&:hover": {
+        backgroundColor: "#eff6ff",
+      },
+    }),
+  };
+
+  return (
+    <div className={`space-y-2 ${className}`}>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      <Select
+        inputId={id}
+        name={name}
+        options={options}
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        isDisabled={disabled}
+        isLoading={isLoading}
+        isMulti={isMulti}
+        placeholder={placeholder}
+        isSearchable={true}
+        className="basic-single"
+        classNamePrefix="select"
+        styles={customStyles}
+        {...(isCountryField && {
+          formatOptionLabel: formatOptionLabel,
+          filterOption: filterOption,
+        })}
+        {...props}
+      />
+      {touched && error && (
+        <div className="text-red-500 text-xs mt-1 flex items-center">
+          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const CustomPlaceholder = ({ children }) => (
   <div className="flex items-center text-gray-500 text-sm">
@@ -226,7 +337,7 @@ const Institution = () => {
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
   const zipLookup = useSelector(selectZipLookup);
-  const locationLoading = useSelector(selectLocationLoading); 
+  const locationLoading = useSelector(selectLocationLoading);
 
   const isNamedAccount = useSelector(selectIsNamedAccount);
   const selectedAccounts = useSelector(selectSelectedAccounts);
@@ -236,19 +347,23 @@ const Institution = () => {
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
 
-   // ADD THESE STATE VARIABLES:
+  // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
   const [zipApiError, setZipApiError] = useState(null);
-  const countryCodeRef = useRef('');
-
-  
+  const countryCodeRef = useRef("");
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
     const isNamedAccount = useSelector(selectIsNamedAccount);
     const selectedAccounts = useSelector(selectSelectedAccounts);
     const accountOptions = useSelector(selectAccountOptions);
+
+    console.log("🔍 SelectorDebug:", {
+      isNamedAccount,
+      selectedAccountsCount: selectedAccounts?.length || 0,
+      accountOptionsCount: accountOptions?.length || 0,
+    });
 
     return null;
   };
@@ -372,7 +487,7 @@ const Institution = () => {
         }
       };
     },
-    [dispatch]
+    [dispatch],
   );
 
   const enhancedSelectChange = useCallback(
@@ -391,7 +506,7 @@ const Institution = () => {
         }
       };
     },
-    [dispatch]
+    [dispatch],
   );
 
   const enhancedPasswordChange = useCallback(
@@ -410,7 +525,7 @@ const Institution = () => {
         }
       };
     },
-    [dispatch]
+    [dispatch],
   );
 
   const getSafeCountryOptions = useCallback(() => {
@@ -440,7 +555,7 @@ const Institution = () => {
 
   const countryOptions = useMemo(
     () => getSafeCountryOptions(),
-    [getSafeCountryOptions]
+    [getSafeCountryOptions],
   );
 
   useEffect(() => {
@@ -452,7 +567,7 @@ const Institution = () => {
             data: localFormData,
             timestamp: new Date().toISOString(),
             step: currentStep,
-          })
+          }),
         );
       }
     };
@@ -489,13 +604,45 @@ const Institution = () => {
 
   const locationStateData = location.state || {};
 
+  const {
+    service_provide_ids = [],
+    referral_code = "",
+    agent_code = "",
+    package_currencies = [],
+    kyc_verify = [],
+    document_upload = null,
+    owner_add = "Y",
+    ssn_required = "N",
+    ein_required = "N",
+    remit_customer = 0,
+  } = locationStateData;
+
+  const remittanceOnlyAccepted =
+    remit_customer === 1 || remit_customer === true;
+
+  // DEBUG: Log the location state data
+  useEffect(() => {
+    console.log("🔍 locationStateData check:", {
+      hasData: !!locationStateData,
+      remit_customer: locationStateData?.remit_customer,
+      remittanceOnlyAccepted,
+      accountOptions: locationStateData?.accountOptions,
+      service_provide_ids: locationStateData?.service_provide_ids,
+    });
+  }, [locationStateData, remittanceOnlyAccepted]);
+
   const processLocationState = useCallback(
     (data) => {
       if (data && Object.keys(data).length > 0) {
         dispatch(setLocationStateData(data));
 
         if (data.service_provide_ids) {
-          // Process service provider IDs silently
+          console.log("📦 Service Provider IDs:", data.service_provide_ids);
+
+          setLocalFormData((prev) => ({
+            ...prev,
+            service_provide_ids: data.service_provide_ids,
+          }));
         }
 
         if (data.package_currencies) {
@@ -515,7 +662,7 @@ const Institution = () => {
             setReferralData({
               referralCode: data.referral_code,
               agentCode: data.agent_code,
-            })
+            }),
           );
         }
         if (data.ssn_required !== undefined) {
@@ -530,23 +677,174 @@ const Institution = () => {
         const partnerId = localStorage.getItem("whitelabelledpartnerid");
         const packageModule = localStorage.getItem("isPartnerPackageModule");
 
+        console.log("PartnerPackageModule:", packageModule);
+
         dispatch(
           setWhiteLabelInfo({
             isWhiteLabelledPartner: isWhiteLabelled,
             whiteLabelledPartnerId: partnerId,
             partnerPackageModule: packageModule,
-          })
+          }),
         );
       }
     },
-    [dispatch]
+    [dispatch],
   );
 
   useEffect(() => {
     if (locationStateData && Object.keys(locationStateData).length > 0) {
       processLocationState(locationStateData);
+
+      // Check SSN requirement from the actual API response
+      if (
+        locationStateData.service_provide_ids &&
+        locationStateData.accountOptions
+      ) {
+        // Find if any selected account requires SSN
+        const selectedAccountNeedsSSN =
+          locationStateData.service_provide_ids.some((idWithType) => {
+            const [serviceId, type] = idWithType.split("-");
+            const account = locationStateData.accountOptions.find(
+              (a) =>
+                a.service_provide_id.toString() === serviceId &&
+                a.accountType === type,
+            );
+            return account && account.ssn_required === "Y";
+          }) || false;
+
+        console.log("🔍 SSN Requirement Check:", {
+          selectedAccountNeedsSSN,
+          accountOptions: locationStateData.accountOptions,
+          selectedIds: locationStateData.service_provide_ids,
+          selectedAccounts: locationStateData.service_provide_ids.map((id) => {
+            const [serviceId, type] = id.split("-");
+            const account = locationStateData.accountOptions.find(
+              (a) =>
+                a.service_provide_id.toString() === serviceId &&
+                a.accountType === type,
+            );
+            return {
+              id,
+              currency: account?.currency,
+              type: account?.accountType,
+              ssn_required: account?.ssn_required,
+            };
+          }),
+        });
+
+        // Store this in Redux
+        dispatch(
+          setFormField({
+            field: "ssnRequiredForSelectedAccount",
+            value: selectedAccountNeedsSSN,
+          }),
+        );
+      }
     }
-  }, [locationStateData, processLocationState]);
+  }, [locationStateData, processLocationState, dispatch]);
+
+  useEffect(() => {
+    if (
+      locationStateData?.service_provide_ids &&
+      locationStateData?.accountOptions
+    ) {
+      const serviceProviderIds = locationStateData.service_provide_ids;
+      const accountOptions = locationStateData.accountOptions;
+
+      let hasNamed = false;
+      let hasUSD = false;
+      let hasUSDNamed = false;
+
+      try {
+        hasNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            return parts.length > 1 && parts[1] === "named";
+          }) || false;
+
+        hasUSD =
+          serviceProviderIds.some((idWithType) => {
+            const id = parseInt(idWithType.split("-")[0]);
+            const account = accountOptions.find(
+              (opt) => opt.service_provide_id === id,
+            );
+            return account && account.currency === "USD";
+          }) || false;
+
+        hasUSDNamed =
+          serviceProviderIds.some((idWithType) => {
+            const parts = idWithType.split("-");
+            if (parts.length > 1 && parts[1] === "named") {
+              const id = parseInt(parts[0]);
+              const account = accountOptions.find(
+                (opt) => opt.service_provide_id === id,
+              );
+              return account && account.currency === "USD";
+            }
+            return false;
+          }) || false;
+      } catch (error) {
+        console.error("❌ Error determining institution account types:", error);
+      }
+
+      console.log("🏢 Institution Account Analysis:", {
+        hasNamed,
+        hasUSD,
+        hasUSDNamed,
+        serviceProviderIds,
+        accountOptions,
+        remittanceOnlyAccepted,
+      });
+
+      // CRITICAL FIX: Set the showField flags based on conditions
+      const shouldShowFields = hasUSDNamed || remittanceOnlyAccepted;
+
+      console.log("🎯 Setting field visibility:", {
+        shouldShowFields,
+        hasUSDNamed,
+        remittanceOnlyAccepted,
+        isNamedAccount: hasUSDNamed, // This should match the selector
+      });
+
+      // Store in Redux
+      dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
+      dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
+      dispatch(setFormField({ field: "isNamedAccount", value: hasUSDNamed }));
+
+      // SET THE FIELD VISIBILITY FLAGS
+      dispatch(
+        setFormField({
+          field: "showBusinessAliasField",
+          value: shouldShowFields,
+        }),
+      );
+      dispatch(
+        setFormField({
+          field: "showBusinessTypeField",
+          value: shouldShowFields,
+        }),
+      );
+      dispatch(
+        setFormField({
+          field: "showEINField",
+          value: shouldShowFields,
+        }),
+      );
+      dispatch(
+        setFormField({
+          field: "showNAICSField",
+          value: shouldShowFields,
+        }),
+      );
+
+      dispatch(
+        setFormField({
+          field: "service_provide_ids",
+          value: serviceProviderIds,
+        }),
+      );
+    }
+  }, [locationStateData, dispatch, remittanceOnlyAccepted]);
 
   useEffect(() => {
     if (!initialLoadRef.current) {
@@ -577,8 +875,13 @@ const Institution = () => {
 
   const validateEIN = useCallback(
     (ein) => {
-      if (isNamedAccount && (!ein || ein.trim() === "")) {
-        return "EIN is required for USD Named Accounts";
+      if (
+        (isNamedAccount || remittanceOnlyAccepted) && // Check both
+        (!ein || ein.trim() === "")
+      ) {
+        return isNamedAccount
+          ? "EIN is required for USD Named Accounts"
+          : "EIN is required for Remittance Services Only";
       }
       if (ein && ein.trim() !== "") {
         const cleanEIN = ein.replace(/-/g, "");
@@ -588,14 +891,25 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted],
   );
 
   const validateSSN = useCallback(
-    (ssn, isUSSelected) => {
-      if (isNamedAccount && isUSSelected) {
+    (ssn, currentCountry = "") => {
+      const hasUSDNamedAccount = isNamedAccount;
+      const isRemittanceOnly = remittanceOnlyAccepted;
+      const isUSCountry =
+        currentCountry === "United States" || currentCountry === 186;
+
+      // Validate SSN if EITHER condition is met AND country is NOT US:
+      const shouldValidate =
+        (hasUSDNamedAccount || isRemittanceOnly) && !isUSCountry;
+
+      if (shouldValidate) {
         if (!ssn || ssn.trim() === "") {
-          return "SSN is required for USD Named Accounts for US residents";
+          return hasUSDNamedAccount
+            ? "SSN is required for USD Named Accounts"
+            : "SSN is required for Remittance Services Only accounts";
         }
         const cleanSSN = ssn.replace(/-/g, "");
         if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
@@ -604,17 +918,22 @@ const Institution = () => {
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted],
   );
 
   const validateBusinessAliasField = useCallback(
     (businessAlias) => {
-      if (isNamedAccount && (!businessAlias || businessAlias.trim() === "")) {
-        return "Business alias is required for USD Named Accounts";
+      if (
+        (isNamedAccount || remittanceOnlyAccepted) && // Check both
+        (!businessAlias || businessAlias.trim() === "")
+      ) {
+        return isNamedAccount
+          ? "Business alias is required for USD Named Accounts"
+          : "Business alias is required for Remittance Services Only";
       }
       return "";
     },
-    [isNamedAccount]
+    [isNamedAccount, remittanceOnlyAccepted],
   );
 
   const formatTaxId = useCallback((value, type) => {
@@ -629,7 +948,7 @@ const Institution = () => {
         return `${cleanValue.slice(0, 3)}-${cleanValue.slice(3)}`;
       return `${cleanValue.slice(0, 3)}-${cleanValue.slice(
         3,
-        5
+        5,
       )}-${cleanValue.slice(5, 9)}`;
     }
     return value;
@@ -658,28 +977,39 @@ const Institution = () => {
         });
 
         let conditionalFieldsValid = true;
-        if (showEINField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.ein &&
-            !validateEIN(validationValues.ein);
-        }
-        // FIXED: NAICS validation for named accounts
-        if (showNAICSField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.naice_code &&
-            validationValues.naice_code.toString().trim() !== "";
-        }
-        if (showBusinessTypeField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid && validationValues.business_type;
-        }
-        if (showBusinessAliasField && isNamedAccount) {
-          conditionalFieldsValid =
-            conditionalFieldsValid &&
-            validationValues.business_alias &&
-            !validateBusinessAliasField(validationValues.business_alias);
+
+        // Update all conditions to check both
+        const shouldValidateFields = isNamedAccount || remittanceOnlyAccepted;
+
+        if (shouldValidateFields) {
+          // Business Alias
+          if (
+            !validationValues.business_alias ||
+            validationValues.business_alias.trim() === ""
+          ) {
+            conditionalFieldsValid = false;
+          }
+
+          // Business Type
+          if (!validationValues.business_type) {
+            conditionalFieldsValid = false;
+          }
+
+          // EIN
+          if (validationValues.ein && validationValues.ein.trim() !== "") {
+            const cleanEIN = validationValues.ein.replace(/-/g, "");
+            if (cleanEIN.length !== 9 || !/^\d+$/.test(cleanEIN)) {
+              conditionalFieldsValid = false;
+            }
+          }
+
+          // NAICS Code
+          if (
+            !validationValues.naice_code ||
+            validationValues.naice_code.toString().trim() === ""
+          ) {
+            conditionalFieldsValid = false;
+          }
         }
 
         const hasValidationErrors = Object.keys(errors).some((key) => {
@@ -718,14 +1048,19 @@ const Institution = () => {
         });
 
         const hasValidationErrors = requiredFields.some(
-          (field) => errors[field] && touched[field]
+          (field) => errors[field] && touched[field],
         );
-        const isUSSelected = validationValues.country === "United States";
+
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = remittanceOnlyAccepted;
+        const isUSCountry =
+          validationValues.country === "United States" ||
+          validationValues.country === 186;
+
         const ssnValid =
-          !showSSNField ||
-          !isUSSelected ||
+          !((hasUSDNamedAccount || isRemittanceOnly) && isUSCountry) ||
           (validationValues.ssn &&
-            !validateSSN(validationValues.ssn, isUSSelected));
+            !validateSSN(validationValues.ssn, validationValues.country));
 
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
@@ -772,19 +1107,26 @@ const Institution = () => {
           (field) => {
             const value = validationValues[field];
             return value && value.toString().trim() !== "";
-          }
+          },
         );
 
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = remittanceOnlyAccepted;
         const isControllerUSSelected =
-          validationValues.controller_country_address === "United States";
+          validationValues.controller_country === "United States" ||
+          validationValues.controller_country === 186;
+
         const ssnValid =
-          !showSSNField ||
-          !isControllerUSSelected ||
+          !(
+            (hasUSDNamedAccount || isRemittanceOnly) &&
+            isControllerUSSelected
+          ) ||
           (validationValues.controller_ssn &&
             !validateSSN(
               validationValues.controller_ssn,
-              isControllerUSSelected
+              validationValues.controller_country,
             ));
+
         const passwordsMatch =
           validationValues.controller_password ===
           validationValues.controller_confirm_password;
@@ -802,7 +1144,7 @@ const Institution = () => {
         const totalOwnership = validationValues.owner_details.reduce(
           (total, owner) =>
             total + (parseFloat(owner.ownership_percentage) || 0),
-          0
+          0,
         );
 
         return Math.abs(totalOwnership - 100) < 0.01;
@@ -815,7 +1157,8 @@ const Institution = () => {
           const requiredDocs = documents.filter((doc) => doc.required);
           documentsValid = requiredDocs.every(
             (doc) =>
-              validationValues.user_image && validationValues.user_image[doc.id]
+              validationValues.user_image &&
+              validationValues.user_image[doc.id],
           );
         }
         return termsAccepted && documentsValid;
@@ -840,13 +1183,21 @@ const Institution = () => {
             "date_incorporation",
             "industry_type",
           ];
-          if (showEINField) step1Fields.push("ein");
-          if (showNAICSField) step1Fields.push("naice_code");
-          if (showBusinessTypeField) step1Fields.push("business_type");
-          if (showBusinessAliasField) step1Fields.push("business_alias");
+
+          // Always include these fields if either condition is true
+          if (isNamedAccount || remittanceOnlyAccepted) {
+            step1Fields.push(
+              "business_alias",
+              "business_type",
+              "ein",
+              "naice_code",
+            );
+          }
+
           if (showBusinessEmailField) step1Fields.push("business_email");
           if (showBusinessWebsiteField) step1Fields.push("business_website");
           return step1Fields;
+
         case 2:
           const step2Fields = [
             "first_name",
@@ -867,9 +1218,19 @@ const Institution = () => {
             "gender",
             "dob",
           ];
-          if (showSSNField && values.country === "United States")
+
+          // Add SSN field if (USD named account OR remittance only) AND country is NOT US
+          const hasUSDNamedAccount = isNamedAccount;
+          const isRemittanceOnly = remittanceOnlyAccepted;
+          const isUSCountry =
+            values.country === "United States" || values.country === 186;
+
+          // Show SSN only when NOT US country
+          if ((hasUSDNamedAccount || isRemittanceOnly) && !isUSCountry) {
             step2Fields.push("ssn");
+          }
           return step2Fields;
+
         case 3:
           const step3Fields = ["is_controller"];
           if (values.is_controller === "no") {
@@ -890,13 +1251,24 @@ const Institution = () => {
               "controller_street_address_1",
               "controller_zip_code",
               "controller_gender",
-              "controller_dob"
+              "controller_dob",
             );
-            if (showSSNField && values.controller_country === "United States") {
+
+            // ADD controller SSN condition
+            const hasUSDNamedAccount = isNamedAccount;
+            const isControllerUSCountry =
+              values.controller_country === "United States" ||
+              values.controller_country === 186;
+
+            if (
+              (hasUSDNamedAccount && isControllerUSCountry) ||
+              (remittanceOnlyAccepted && isControllerUSCountry)
+            ) {
               step3Fields.push("controller_ssn");
             }
           }
           return step3Fields;
+
         case 4:
           const ownerFields = [];
           if (values.owner_details && values.owner_details.length > 0) {
@@ -911,38 +1283,40 @@ const Institution = () => {
                 `owner_details[${index}].owner_phone_number_country_code`,
                 `owner_details[${index}].ownership_percentage`,
                 `owner_details[${index}].owner_dob`,
-                `owner_details[${index}].owner_if`
+                `owner_details[${index}].owner_if`,
               );
               if (owner.owner_if === "yes") {
                 ownerFields.push(`owner_details[${index}].owner_type`);
               }
               if (owner.owner_if === "no" || index > 0) {
                 ownerFields.push(
-                  `owner_details[${index}].owner_needs_access_to_system`
+                  `owner_details[${index}].owner_needs_access_to_system`,
                 );
                 if (owner.owner_needs_access_to_system === "yes") {
                   ownerFields.push(`owner_details[${index}].owner_role_id`);
                 }
               }
+              // Update to check both conditions
               if (
-                owner.owner_country_id === "United States" &&
-                isNamedAccount
+                (isNamedAccount || remittanceOnlyAccepted) &&
+                ssn_required === "Y"
               ) {
                 ownerFields.push(
                   `owner_details[${index}].ssn`,
                   `owner_details[${index}].doc_type`,
-                  `owner_details[${index}].doc_id`
+                  `owner_details[${index}].doc_id`,
                 );
               }
             });
           }
           return ownerFields;
+
         case 5:
           const step5Fields = ["terms_agreement"];
           if (documentUpload) {
             const requiredDocs = documents.filter((doc) => doc.required);
             requiredDocs.forEach((doc) =>
-              step5Fields.push(`user_image.${doc.id}`)
+              step5Fields.push(`user_image.${doc.id}`),
             );
           }
           return step5Fields;
@@ -951,17 +1325,15 @@ const Institution = () => {
       }
     },
     [
-      showEINField,
-      showNAICSField,
-      showBusinessTypeField,
-      showBusinessAliasField,
       showBusinessEmailField,
       showBusinessWebsiteField,
       showSSNField,
       documentUpload,
       isNamedAccount,
       documents,
-    ]
+      remittanceOnlyAccepted,
+      ssn_required,
+    ],
   );
 
   const getFirstErrorMessage = useCallback(
@@ -979,13 +1351,13 @@ const Institution = () => {
       if (currentStep === 4 && errors.owner_details) {
         const ownershipError = Object.values(errors.owner_details).find(
           (error) =>
-            error && typeof error === "string" && error.includes("ownership")
+            error && typeof error === "string" && error.includes("ownership"),
         );
         if (ownershipError) return ownershipError;
       }
       if (currentStep === 5 && errors.user_image) {
         const docError = Object.values(errors.user_image).find(
-          (error) => error && typeof error === "string"
+          (error) => error && typeof error === "string",
         );
         if (docError) return `Document required: ${docError}`;
       }
@@ -997,7 +1369,7 @@ const Institution = () => {
             return value;
           } else if (Array.isArray(value)) {
             const firstArrayError = value.find(
-              (item) => item && typeof item === "string"
+              (item) => item && typeof item === "string",
             );
             if (firstArrayError) return firstArrayError;
           } else if (typeof value === "object") {
@@ -1019,7 +1391,7 @@ const Institution = () => {
         stepSpecificMessages[currentStep] || "Please check all required fields."
       );
     },
-    []
+    [],
   );
 
   const proceedToNextStep = useCallback(() => {
@@ -1036,9 +1408,21 @@ const Institution = () => {
   const handleNextStep = useCallback(
     async (values, { setErrors, setTouched, validateForm }) => {
       try {
+        // SSN confirmation check - moved inside where values is available
+        if (
+          currentStep === 2 &&
+          (isNamedAccount || remittanceOnlyAccepted) && // Check both
+          !(values.country === "United States" || values.country === 186) // Only if NOT US
+        ) {
+          setPendingNextStep(true);
+          setShowSSNConfirmation(true);
+          return;
+        }
+
         if (currentStep === 2) {
           validateStepDataFlow(2, 4, values);
         }
+
         setFormValues(values);
         setLocalFormData((prev) => ({ ...prev, ...values }));
 
@@ -1076,14 +1460,14 @@ const Institution = () => {
             currentStep,
             values,
             formErrors,
-            touchedFields
+            touchedFields,
           );
 
           if (!stepComplete || Object.keys(formErrors).length > 0) {
             const firstError = getFirstErrorMessage(
               formErrors,
               values,
-              currentStep
+              currentStep,
             );
 
             dispatch(setErrorMessage(firstError));
@@ -1091,27 +1475,18 @@ const Institution = () => {
             return;
           }
 
-          if (
-            currentStep === 2 &&
-            isNamedAccount &&
-            values.country === "United States"
-          ) {
-            setPendingNextStep(true);
-            setShowSSNConfirmation(true);
-            return;
-          }
           proceedToNextStep();
         } else {
           dispatch(
             setErrorMessage(
-              "Validation system error. Please refresh and try again."
-            )
+              "Validation system error. Please refresh and try again.",
+            ),
           );
           dispatch(setShowPopup(true));
         }
       } catch (error) {
         dispatch(
-          setErrorMessage("An unexpected error occurred. Please try again.")
+          setErrorMessage("An unexpected error occurred. Please try again."),
         );
         dispatch(setShowPopup(true));
       }
@@ -1123,23 +1498,34 @@ const Institution = () => {
       isStepComplete,
       getFirstErrorMessage,
       isNamedAccount,
+      remittanceOnlyAccepted,
       proceedToNextStep,
-    ]
+    ],
   );
 
   const handleSSNConfirm = useCallback(() => {
     setShowSSNConfirmation(false);
     if (pendingNextStep) {
+      console.log(
+        `SSN confirmed for ${
+          isNamedAccount
+            ? "USD Named Account"
+            : "Remittance Services Only account"
+        }`,
+      );
       proceedToNextStep();
     }
-  }, [pendingNextStep, proceedToNextStep]);
+  }, [
+    pendingNextStep,
+    proceedToNextStep,
+    isNamedAccount,
+    remittanceOnlyAccepted,
+  ]);
 
   const handleSSNCancel = useCallback(() => {
     setShowSSNConfirmation(false);
     setPendingNextStep(false);
   }, []);
-
-
 
   const handleSubmit = useCallback(
     async (values, { setSubmitting, setErrors }) => {
@@ -1149,6 +1535,8 @@ const Institution = () => {
 
         const finalFormData = { ...getInitialFormData(), ...values };
 
+        const serviceProviderIds = locationStateData.service_provide_ids || [];
+
         const userImagesArray = [];
 
         if (
@@ -1156,7 +1544,7 @@ const Institution = () => {
           typeof finalFormData.user_image === "object"
         ) {
           for (const [documentId, file] of Object.entries(
-            finalFormData.user_image
+            finalFormData.user_image,
           )) {
             if (file && file instanceof File) {
               try {
@@ -1226,7 +1614,7 @@ const Institution = () => {
         const findCountryId = (countryName) => {
           if (!countryName) return null;
           const country = countryOptions.find(
-            (opt) => opt.label === countryName
+            (opt) => opt.label === countryName,
           );
           return country?.value || countryName;
         };
@@ -1243,24 +1631,25 @@ const Institution = () => {
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
+          service_providers: serviceProviderIds,
 
           user_images: userImagesArray,
 
           country_of_registration: findCountryId(
-            finalFormData.country_of_registration
+            finalFormData.country_of_registration,
           ),
           country_of_operation: findCountryId(
-            finalFormData.country_of_operation
+            finalFormData.country_of_operation,
           ),
           registered_address_street_country: findCountryId(
-            finalFormData.registered_address_street_country
+            finalFormData.registered_address_street_country,
           ),
           resident_country: findCountryId(finalFormData.resident_country),
           country: findCountryId(finalFormData.country),
           doc_country: findCountryId(finalFormData.doc_country),
 
           controllerResidentCountry: findCountryId(
-            finalFormData.controller_resident_country
+            finalFormData.controller_resident_country,
           ),
           controllerCountry: findCountryId(finalFormData.controller_country),
 
@@ -1291,7 +1680,7 @@ const Institution = () => {
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
-          isPartnerPackageModule: institutionState.partnerPackageModule,
+          isPartnerPackageModule: institutionState.partnerPackageModule || "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
           kycVerify: kycVerify,
@@ -1321,6 +1710,7 @@ const Institution = () => {
             };
           }),
 
+          bank_account_options: service_provide_ids,
           is_named_account: isNamedAccount,
           has_usd_named_account: isNamedAccount,
           customer_type: "institution",
@@ -1330,7 +1720,7 @@ const Institution = () => {
         delete finalData.user_image;
 
         const result = await dispatch(
-          submitInstitutionForm(finalData)
+          submitInstitutionForm(finalData),
         ).unwrap();
 
         if (
@@ -1342,6 +1732,39 @@ const Institution = () => {
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
 
+          // ✅ ADD SSN LOGIC HERE: Determine if SSN was collected
+          // Check for SSN in responsible person (step 2)
+          const hasResponsiblePersonSSN = !!finalFormData.ssn;
+
+          // Check for SSN in controller (step 3)
+          const hasControllerSSN = !!finalFormData.controller_ssn;
+
+          // Check for SSN in owner details (step 4)
+          const hasOwnerSSN =
+            finalFormData.owner_details?.some((owner) => !!owner.ssn) || false;
+
+          // Overall SSN status: if ANY SSN was collected
+          const hasSSN =
+            hasResponsiblePersonSSN || hasControllerSSN || hasOwnerSSN;
+
+          console.log("🔍 Institution SSN Status:", {
+            hasResponsiblePersonSSN,
+            hasControllerSSN,
+            hasOwnerSSN,
+            overallHasSSN: hasSSN,
+            responsiblePersonSSN: finalFormData.ssn
+              ? "Provided"
+              : "Not provided",
+            controllerSSN: finalFormData.controller_ssn
+              ? "Provided"
+              : "Not provided",
+            ownerSSNs:
+              finalFormData.owner_details?.map((owner) => ({
+                name: owner.owner_first_name,
+                hasSSN: !!owner.ssn,
+              })) || [],
+          });
+
           navigate("/phoneverification", {
             state: {
               mobileNumber: mobileNumber,
@@ -1349,6 +1772,7 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
+              hasSSN: hasSSN, // ✅ Pass SSN status to phone verification
             },
           });
         } else {
@@ -1367,7 +1791,7 @@ const Institution = () => {
 
             const firstError = Object.values(formattedErrors)[0];
             dispatch(
-              setErrorMessage(firstError || "Please check the form for errors")
+              setErrorMessage(firstError || "Please check the form for errors"),
             );
             dispatch(setShowPopup(true));
           } else {
@@ -1384,8 +1808,8 @@ const Institution = () => {
             const firstError = Object.values(errorData.errors)[0];
             dispatch(
               setErrorMessage(
-                Array.isArray(firstError) ? firstError[0] : firstError
-              )
+                Array.isArray(firstError) ? firstError[0] : firstError,
+              ),
             );
           } else {
             dispatch(setErrorMessage("Registration failed. Please try again."));
@@ -1393,8 +1817,9 @@ const Institution = () => {
         } else {
           dispatch(
             setErrorMessage(
-              error.message || "An unexpected error occurred. Please try again."
-            )
+              error.message ||
+                "An unexpected error occurred. Please try again.",
+            ),
           );
         }
         dispatch(setShowPopup(true));
@@ -1422,7 +1847,8 @@ const Institution = () => {
       showBusinessWebsiteField,
       institutionState,
       countryOptions,
-    ]
+      locationStateData,
+    ],
   );
 
   const validateStepDataFlow = useCallback((fromStep, toStep, values) => {
@@ -1457,7 +1883,7 @@ const Institution = () => {
           code.description || `${code.category} - ${code.subcategory}`
         }`,
       })),
-    [naicsCodes]
+    [naicsCodes],
   );
 
   const businessTypeOptions = useMemo(
@@ -1466,7 +1892,7 @@ const Institution = () => {
         value: type.name,
         label: type.label || type.name,
       })),
-    [businessTypes]
+    [businessTypes],
   );
   const industryTypeOptions = useMemo(
     () =>
@@ -1474,11 +1900,11 @@ const Institution = () => {
         value: type.id.toString(),
         label: type.name,
       })),
-    [industryTypes]
+    [industryTypes],
   );
   const genderOptions = useMemo(
     () => genders.map((gender) => ({ value: gender.id, label: gender.name })),
-    [genders]
+    [genders],
   );
   const nationalityOptions = useMemo(
     () =>
@@ -1486,15 +1912,15 @@ const Institution = () => {
         value: nationality.id,
         label: nationality.name,
       })),
-    [nationalities]
+    [nationalities],
   );
   const roleOptions = useMemo(
     () => roles.map((role) => ({ value: role.id, label: role.name })),
-    [roles]
+    [roles],
   );
   const idDocumentTypeOptions = useMemo(
     () => idDocumentTypes.map((doc) => ({ value: doc.id, label: doc.name })),
-    [idDocumentTypes]
+    [idDocumentTypes],
   );
 
   const passwordValidationRules = useMemo(
@@ -1508,7 +1934,7 @@ const Institution = () => {
         regex: /[!@#$%^&*(),.?":{}|<>]/,
       },
     ],
-    []
+    [],
   );
 
   const ControllerSection = React.memo(
@@ -1533,8 +1959,32 @@ const Institution = () => {
       formatTaxId,
       handleControllerZipLookup,
       isZipLoading,
-      activeField, 
+      activeField,
     }) => {
+      console.log("🎯 Formik Render - SSN Debug:", {
+        currentStep,
+        country: values.country,
+        isUS: values.country === "United States",
+        institutionStateSSN: institutionState.ssnRequiredForSelectedAccount,
+        locationStateDataSSNCheck: (() => {
+          if (
+            !locationStateData.accountOptions ||
+            !locationStateData.service_provide_ids
+          ) {
+            return "No data";
+          }
+          const needsSSN = locationStateData.accountOptions.some(
+            (account) =>
+              locationStateData.service_provide_ids.includes(
+                `${account.service_provide_id}-${account.accountType}`,
+              ) && account.ssn_required === "Y",
+          );
+          return needsSSN ? "YES" : "NO";
+        })(),
+        shouldShowSSN:
+          institutionState.ssnRequiredForSelectedAccount &&
+          values.country === "United States",
+      });
       const dispatch = useDispatch();
       const syncControllerFromPrimary = useCallback(() => {
         const primaryContactFields = {
@@ -1642,7 +2092,7 @@ const Institution = () => {
                 onChange={enhancedHandleChange(
                   "controller_first_name",
                   setFieldValue,
-                  setControllerFirstName
+                  setControllerFirstName,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_first_name}
@@ -1659,7 +2109,7 @@ const Institution = () => {
                 onChange={enhancedHandleChange(
                   "controller_middle_name",
                   setFieldValue,
-                  setControllerMiddleName
+                  setControllerMiddleName,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_middle_name}
@@ -1677,7 +2127,7 @@ const Institution = () => {
                 onChange={enhancedHandleChange(
                   "controller_last_name",
                   setFieldValue,
-                  setControllerLastName
+                  setControllerLastName,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_last_name}
@@ -1695,7 +2145,7 @@ const Institution = () => {
                 onChange={enhancedHandleChange(
                   "controller_email",
                   setFieldValue,
-                  setControllerEmail
+                  setControllerEmail,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_email}
@@ -1713,7 +2163,7 @@ const Institution = () => {
                 value={values.controller_password || ""}
                 onChange={enhancedPasswordChange(
                   "controller_password",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_password}
@@ -1732,7 +2182,7 @@ const Institution = () => {
                 value={values.controller_confirm_password || ""}
                 onChange={enhancedPasswordChange(
                   "controller_confirm_password",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_confirm_password}
@@ -1747,7 +2197,7 @@ const Institution = () => {
               />
 
               {/* Row 4: Resident Country & Nationality */}
-              <SelectField
+              <CustomSelect
                 id="controller_resident_country"
                 label="Resident Country"
                 options={countryOptions || []}
@@ -1758,12 +2208,12 @@ const Institution = () => {
                       setFormField({
                         field: "controller_resident_country",
                         value: option.value,
-                      })
+                      }),
                     );
                   }
                 }}
                 value={(countryOptions || []).find(
-                  (opt) => opt.value === values.controller_resident_country
+                  (opt) => opt.value === values.controller_resident_country,
                 )}
                 touched={touched.controller_resident_country}
                 error={errors.controller_resident_country}
@@ -1772,9 +2222,8 @@ const Institution = () => {
                 isLoading={countriesLoading || countryOptions.length === 0}
                 isCountryField={true}
                 showPhoneCode={false}
-                fieldStyles={FIELD_STYLES}
               />
-              <SelectField
+              <CustomSelect
                 id="controller_nationality"
                 label="Nationality"
                 options={nationalityOptions}
@@ -1785,12 +2234,12 @@ const Institution = () => {
                       setFormField({
                         field: "controller_nationality",
                         value: option.value,
-                      })
+                      }),
                     );
                   }
                 }}
                 value={nationalityOptions.find(
-                  (opt) => opt.value === values.controller_nationality
+                  (opt) => opt.value === values.controller_nationality,
                 )}
                 touched={touched.controller_nationality}
                 error={errors.controller_nationality}
@@ -1798,7 +2247,6 @@ const Institution = () => {
                 disabled={values.is_controller === "yes"}
                 isCountryField={true}
                 showPhoneCode={false}
-                fieldStyles={FIELD_STYLES}
               />
 
               {/* Row 5: Phone Number (Full Width) */}
@@ -1809,7 +2257,7 @@ const Institution = () => {
                   </label>
                   <div className="flex space-x-3">
                     <div className="w-1/2 min-w-[180px]">
-                      <SelectField
+                      <CustomSelect
                         id="controller_mobilenumber_countrycode"
                         label="Country Code"
                         options={countryOptions}
@@ -1818,13 +2266,13 @@ const Institution = () => {
                             opt.phoneCode ===
                               values.controller_mobilenumber_countrycode ||
                             opt.phone_code ===
-                              values.controller_mobilenumber_countrycode
+                              values.controller_mobilenumber_countrycode,
                         )}
                         onChange={(option) => {
                           if (option) {
                             setFieldValue(
                               "controller_mobilenumber_countrycode",
-                              option.phoneCode || option.phone_code || ""
+                              option.phoneCode || option.phone_code || "",
                             );
                             if (
                               option.value &&
@@ -1842,7 +2290,6 @@ const Institution = () => {
                         isLoading={countriesLoading}
                         isCountryField={true}
                         showPhoneCode={true}
-                        fieldStyles={FIELD_STYLES}
                       />
                     </div>
                     <div className="w-1/2">
@@ -1853,7 +2300,7 @@ const Institution = () => {
                         value={values.controller_mobile_number || ""}
                         onChange={enhancedHandleChange(
                           "controller_mobile_number",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         onBlur={handleBlur}
                         touched={touched.controller_mobile_number}
@@ -1869,7 +2316,7 @@ const Institution = () => {
               </div>
 
               {/* Row 6: Country & Zip */}
-              <SelectField
+              <CustomSelect
                 id="controller_country"
                 label="Country"
                 options={countryOptions}
@@ -1880,12 +2327,12 @@ const Institution = () => {
                       setFormField({
                         field: "controller_country",
                         value: option.value,
-                      })
+                      }),
                     );
                   }
                 }}
                 value={countryOptions.find(
-                  (opt) => opt.value === values.controller_country
+                  (opt) => opt.value === values.controller_country,
                 )}
                 touched={touched.controller_country}
                 error={errors.controller_country}
@@ -1894,44 +2341,57 @@ const Institution = () => {
                 isLoading={countriesLoading}
                 isCountryField={true}
                 showPhoneCode={false}
-                fieldStyles={FIELD_STYLES}
               />
-              <FormField
-                id="controller_zip_code"
-                label="ZIP/Postal Code"
-                name="controller_zip_code"
-                value={values.controller_zip_code || ""}
-                onChange={(e) => {
-                  const zipCode = e.target.value;
-                  enhancedHandleChange("controller_zip_code", setFieldValue)(e);
-                  
-                  // Clear previous timer
-                  if (zipDebounceTimer) {
-                    clearTimeout(zipDebounceTimer);
-                  }
-                  
-                  // Set debounced lookup
-                  const timer = setTimeout(() => {
-                    const countryId = values.controller_country;
-                    if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
-                      handleControllerZipLookup(zipCode, countryId);
+
+              {/* ZIP/Postal Code - With lookup */}
+              <div className="relative">
+                <FormField
+                  id="controller_zip_code"
+                  label="ZIP/Postal Code"
+                  name="controller_zip_code"
+                  value={values.controller_zip_code || ""}
+                  onChange={(e) => {
+                    const zipCode = e.target.value;
+                    enhancedHandleChange(
+                      "controller_zip_code",
+                      setFieldValue,
+                    )(e);
+
+                    // Clear previous timer
+                    if (zipDebounceTimer) {
+                      clearTimeout(zipDebounceTimer);
                     }
-                  }, 1000);
-                  
-                  setZipDebounceTimer(timer);
-                }}
-                onBlur={handleBlur}
-                touched={touched.controller_zip_code}
-                error={errors.controller_zip_code}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
-              />
-              {isZipLoading && activeField === "controller_zip_code" && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <RingLoader size={16} color="#3b82f6" />
-                </div>
-              )}
+
+                    // Set debounced lookup
+                    const timer = setTimeout(() => {
+                      const countryId = values.controller_country;
+                      if (
+                        zipCode &&
+                        countryId &&
+                        zipCode.replace(/\s+/g, "").length >= 3
+                      ) {
+                        handleControllerZipLookup(zipCode, countryId);
+                      }
+                    }, 1000);
+
+                    setZipDebounceTimer(timer);
+                  }}
+                  onBlur={handleBlur}
+                  onFocus={() => setActiveField("controller_zip_code")}
+                  touched={touched.controller_zip_code}
+                  error={errors.controller_zip_code}
+                  required={values.is_controller === "no"}
+                  disabled={values.is_controller === "yes"}
+                  fieldStyles={FIELD_STYLES}
+                />
+                {isZipLoading && activeField === "controller_zip_code" && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RingLoader size={16} color="#3b82f6" />
+                  </div>
+                )}
+              </div>
+
+              {/* State */}
               <FormField
                 id="controller_state"
                 label="State/Province"
@@ -1939,9 +2399,10 @@ const Institution = () => {
                 value={values.controller_state || ""}
                 onChange={enhancedHandleChange(
                   "controller_state",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_state")}
                 touched={touched.controller_state}
                 error={errors.controller_state}
                 required={values.is_controller === "no"}
@@ -1949,7 +2410,7 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 7: City & Street Address 1 */}
+              {/* City & Street Address 1 */}
               <FormField
                 id="controller_city"
                 label="City"
@@ -1957,9 +2418,10 @@ const Institution = () => {
                 value={values.controller_city || ""}
                 onChange={enhancedHandleChange(
                   "controller_city",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_city")}
                 touched={touched.controller_city}
                 error={errors.controller_city}
                 required={values.is_controller === "no"}
@@ -1973,9 +2435,10 @@ const Institution = () => {
                 value={values.controller_street_address_1 || ""}
                 onChange={enhancedHandleChange(
                   "controller_street_address_1",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_street_address_1")}
                 touched={touched.controller_street_address_1}
                 error={errors.controller_street_address_1}
                 required={values.is_controller === "no"}
@@ -1983,7 +2446,7 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 8: Street Address 2 & ZIP Code */}
+              {/* Street Address 2 (Optional) */}
               <FormField
                 id="controller_street_address_2"
                 label="Street Address 2/ Suite Address (Optional)"
@@ -1991,9 +2454,10 @@ const Institution = () => {
                 value={values.controller_street_address_2 || ""}
                 onChange={enhancedHandleChange(
                   "controller_street_address_2",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_street_address_2")}
                 touched={touched.controller_street_address_2}
                 error={errors.controller_street_address_2}
                 disabled={values.is_controller === "yes"}
@@ -2001,8 +2465,8 @@ const Institution = () => {
               />
 
               {/* Row 9: Gender */}
-          
-              <SelectField
+
+              <CustomSelect
                 id="controller_gender"
                 label="Gender"
                 options={genderOptions}
@@ -2013,18 +2477,17 @@ const Institution = () => {
                       setFormField({
                         field: "controller_gender",
                         value: option.value,
-                      })
+                      }),
                     );
                   }
                 }}
                 value={genderOptions.find(
-                  (opt) => opt.value === values.controller_gender
+                  (opt) => opt.value === values.controller_gender,
                 )}
                 touched={touched.controller_gender}
                 error={errors.controller_gender}
                 required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
               />
 
               {/* Row 10: Date of Birth & Designation */}
@@ -2049,43 +2512,67 @@ const Institution = () => {
                 value={values.controller_designation || ""}
                 onChange={enhancedHandleChange(
                   "controller_designation",
-                  setFieldValue
+                  setFieldValue,
                 )}
                 onBlur={handleBlur}
                 touched={touched.controller_designation}
                 error={errors.controller_designation}
+                required={values.is_controller === "no"} // ← CHANGE THIS LINE (from just "disabled" to conditional required)
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 11: SSN Field (Conditional - Full Width) */}
-              {values.controller_country === "United States" &&
-                isNamedAccount &&
-                values.is_controller === "no" && (
+              {(function () {
+                // Check if either USD named account OR remittance only is selected
+                const hasUSDNamedAccount = isNamedAccount;
+                const isRemittanceOnly = remittanceOnlyAccepted;
+
+                // Check if country is United States
+                const isUSCountry =
+                  values.country === "United States" || values.country === 186;
+
+                // Show SSN field if EITHER condition is true AND country is US
+                const shouldShowSSNField =
+                  (hasUSDNamedAccount || isRemittanceOnly) && isUSCountry;
+
+                console.log("🔍 Step 2 SSN Field Conditions Check:", {
+                  hasUSDNamedAccount,
+                  isRemittanceOnly,
+                  isUSCountry,
+                  shouldShowSSNField,
+                  countryValue: values.country,
+                  isNamedAccount,
+                  remittanceOnlyAccepted,
+                });
+
+                return shouldShowSSNField ? (
                   <div className="md:col-span-2">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <FormField
-                          id="controller_ssn"
+                          id="ssn"
                           label="Social Security Number (SSN)"
-                          name="controller_ssn"
-                          value={values.controller_ssn || ""}
+                          name="ssn"
+                          value={values.ssn || ""}
                           onChange={(e) => {
                             const formatted = formatTaxId(
                               e.target.value,
-                              "ssn"
+                              "ssn",
                             );
                             enhancedHandleChange(
-                              "controller_ssn",
-                              setFieldValue
-                            )({ target: { value: formatted } });
+                              "ssn",
+                              setFieldValue,
+                            )({
+                              target: { value: formatted },
+                            });
                           }}
                           onBlur={handleBlur}
-                          touched={touched.controller_ssn}
-                          error={errors.controller_ssn}
+                          onFocus={() => setActiveField("ssn")}
+                          touched={touched.ssn}
+                          error={errors.ssn}
                           required={true}
-                          disabled={values.is_controller === "yes"}
                           placeholder="XXX-XX-XXXX"
+                          activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                       </div>
@@ -2094,16 +2581,18 @@ const Institution = () => {
                       </div>
                     </div>
                     <p className="text-xs text-gray-600 mt-1">
-                      Required for US residents with USD Named Accounts for tax
-                      reporting purposes.
+                      {hasUSDNamedAccount
+                        ? "Required for USD Named Accounts with United States as registered country."
+                        : "Required for Remittance Services Only accounts with United States as registered country."}
                     </p>
                   </div>
-                )}
+                ) : null;
+              })()}
             </div>
           </div>
         </div>
       );
-    }
+    },
   );
 
   return (
@@ -2161,20 +2650,22 @@ const Institution = () => {
         initialValues={getInitialFormData()}
         validationSchema={institutionSchema(currentStep, {
           isNamedAccount,
+          remittanceOnlyAccepted,
           country: getInitialFormData().country_of_registration,
           currency: defaultCurrency?.code || defaultCurrency?.currency_code,
           kycVerify,
           documentUpload,
-          ssnRequired: isNamedAccount,
-          einRequired: isNamedAccount,
+          ssnRequired: ssn_required,
+          einRequired: isNamedAccount || remittanceOnlyAccepted,
           accountType,
-          showNAICSField: isNamedAccount,
-          showEINField,
-          showBusinessTypeField,
+          showNAICSField: isNamedAccount || remittanceOnlyAccepted,
+          showEINField: isNamedAccount || remittanceOnlyAccepted,
+          showBusinessTypeField: isNamedAccount || remittanceOnlyAccepted,
           showIndustryTypeField,
-          showBusinessAliasField,
+          showBusinessAliasField: isNamedAccount || remittanceOnlyAccepted,
           showBusinessEmailField,
           showBusinessWebsiteField,
+          ssn_required: ssn_required,
         })}
         validateOnBlur={true}
         validateOnChange={false}
@@ -2197,101 +2688,229 @@ const Institution = () => {
             setFormValues(values);
           }, [values]);
 
-           // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
-          const handleBusinessZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) {
-              console.log('❌ Country code not found for ID:', countryId);
-              return;
-            }
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                // Auto-fill city and state for business address
-                if (result.city) {
-                  setFieldValue('registered_address_street_city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('registered_address_street_state', result.state);
-                }
+          // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
+          const handleBusinessZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId,
+              );
+              if (!country || !country.country_code) {
+                console.log("❌ Country code not found for ID:", countryId);
+                return;
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-              setZipApiError(error.message || 'Unable to fetch location data');
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]); // Now setFieldValue is in scope!
 
-          const handleResponsiblePersonZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('city', result.city);
-                }
-                if (result.state) {
-                  setFieldValue('state', result.state);
-                }
-              }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+              setIsZipLoading(true);
+              setZipApiError(null);
 
-          const handleControllerZipLookup = useCallback(async (zipCode, countryId) => {
-            const country = countryOptions.find(opt => opt.value === countryId);
-            if (!country || !country.country_code) return;
-            
-            setIsZipLoading(true);
-            setZipApiError(null);
-            
-            try {
-              const result = await dispatch(fetchLocationByZip({
-                countryCode: country.country_code,
-                zipCode: zipCode
-              })).unwrap();
-              
-              if (result.success) {
-                if (result.city) {
-                  setFieldValue('controller_city', result.city);
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  }),
+                ).unwrap();
+
+                // ✅ ADD DEBUG LOG
+                console.log("🔍 ZIP Lookup Result:", result);
+
+                if (result.success) {
+                  // ✅ Check if city and state exist in the response
+                  if (result.city) {
+                    console.log("✅ Setting city to:", result.city);
+                    setFieldValue(
+                      "registered_address_street_city",
+                      result.city,
+                    );
+                    toast.success(`City auto-filled: ${result.city}`, {
+                      autoClose: 2000,
+                    });
+                  } else {
+                    console.log("⚠️ No city found in response");
+                  }
+
+                  if (result.state) {
+                    console.log("✅ Setting state to:", result.state);
+                    setFieldValue(
+                      "registered_address_street_state",
+                      result.state,
+                    );
+                    toast.success(`State auto-filled: ${result.state}`, {
+                      autoClose: 2000,
+                    });
+                  } else {
+                    console.log("⚠️ No state found in response");
+                  }
+
+                  // Optional: Show a combined toast
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Auto-filled: ${result.city}, ${result.state}`,
+                      { autoClose: 2000 },
+                    );
+                  }
+                } else {
+                  console.log("❌ ZIP lookup failed:", result.message);
+                  toast.warning(
+                    `Could not auto-fill location for ZIP code: ${zipCode}`,
+                    { autoClose: 3000 },
+                  );
                 }
-                if (result.state) {
-                  setFieldValue('controller_state', result.state);
-                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
+              } finally {
+                setIsZipLoading(false);
               }
-            } catch (error) {
-              console.log('❌ ZIP lookup failed:', error.message);
-            } finally {
-              setIsZipLoading(false);
-            }
-          }, [dispatch, countryOptions, setFieldValue]);
+            },
+            [dispatch, countryOptions, setFieldValue],
+          );
+
+          const handleResponsiblePersonZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId,
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  }),
+                ).unwrap();
+
+                console.log("🔍 Responsible Person ZIP Lookup Result:", result);
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("city", result.city);
+                    toast.success(`City auto-filled: ${result.city}`, {
+                      autoClose: 2000,
+                    });
+                  }
+                  if (result.state) {
+                    setFieldValue("state", result.state);
+                    toast.success(`State auto-filled: ${result.state}`, {
+                      autoClose: 2000,
+                    });
+                  }
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Auto-filled: ${result.city}, ${result.state}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
+                  }
+                } else {
+                  toast.warning(
+                    `Could not auto-fill location for ZIP code: ${zipCode}`,
+                    {
+                      autoClose: 3000,
+                    },
+                  );
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue],
+          );
+
+          const handleControllerZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId,
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  }),
+                ).unwrap();
+
+                console.log("🔍 Controller ZIP Lookup Result:", result);
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("controller_city", result.city);
+                    toast.success(
+                      `Controller city auto-filled: ${result.city}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
+                  }
+                  if (result.state) {
+                    setFieldValue("controller_state", result.state);
+                    toast.success(
+                      `Controller state auto-filled: ${result.state}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
+                  }
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Controller address auto-filled: ${result.city}, ${result.state}`,
+                      { autoClose: 2000 },
+                    );
+                  }
+                } else {
+                  toast.warning(
+                    `Could not auto-fill location for controller ZIP code: ${zipCode}`,
+                    { autoClose: 3000 },
+                  );
+                }
+              } catch (error) {
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue],
+          );
 
           React.useEffect(() => {
             setFormValues(values);
           }, [values]);
 
           const shouldShowSSNField = isNamedAccount && values.country === 186;
+
+          // Debug log for field visibility
+          console.log("🎯 FIELD VISIBILITY DEBUG:", {
+            isNamedAccount,
+            remittanceOnlyAccepted,
+            shouldShowBusinessFields: isNamedAccount || remittanceOnlyAccepted,
+            showBusinessAliasField,
+            showBusinessTypeField,
+            showEINField,
+            showNAICSField,
+            valuesHasBusinessAlias: !!values.business_alias,
+            valuesHasBusinessType: !!values.business_type,
+            valuesHasEIN: !!values.ein,
+            valuesHasNAICS: !!values.naice_code,
+          });
 
           return (
             <Form className="space-y-6">
@@ -2334,7 +2953,6 @@ const Institution = () => {
                     <h2 className="text-xl font-semibold mb-4">
                       Business Information
                     </h2>
-
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <FormField
@@ -2345,7 +2963,7 @@ const Institution = () => {
                         onChange={enhancedHandleChange(
                           "institution_name",
                           setFieldValue,
-                          setBusinessInstitutionName
+                          setBusinessInstitutionName,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("institution_name")}
@@ -2362,7 +2980,7 @@ const Institution = () => {
                         value={values.registration_number || ""}
                         onChange={enhancedHandleChange(
                           "registration_number",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("registration_number")}
@@ -2374,9 +2992,10 @@ const Institution = () => {
                       />
                     </div>
 
-                    {/* Business Alias and Business Type on same row */}
+                    {/* Business Alias and Business Type on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {showBusinessAliasField && (
+                      {/* Business Alias - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
                         <FormField
                           id="business_alias"
                           label="Business Alias"
@@ -2385,42 +3004,67 @@ const Institution = () => {
                           onChange={enhancedHandleChange(
                             "business_alias",
                             setFieldValue,
-                            setBusinessAlias
+                            setBusinessAlias,
                           )}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("business_alias")}
                           touched={touched.business_alias}
                           error={errors.business_alias}
-                          required={showBusinessAliasField}
+                          required={true}
                           activeField={activeField}
                           placeholder="Unique business identifier"
                           fieldStyles={FIELD_STYLES}
                         />
                       )}
-                      {showBusinessTypeField && (
-                        <SelectField
+
+                      {/* Business Type - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
+                        <CustomSelect
                           id="business_type"
                           label="Business Type"
                           options={businessTypeOptions}
                           onChange={enhancedSelectChange(
                             "business_type",
                             setFieldValue,
-                            setBusinessInstitutionBusinessType
+                            setBusinessInstitutionBusinessType,
                           )}
                           value={businessTypeOptions.find(
-                            (opt) => opt.value === values.business_type
+                            (opt) => opt.value === values.business_type,
                           )}
                           touched={touched.business_type}
                           error={errors.business_type}
-                          required={showBusinessTypeField}
-                          fieldStyles={FIELD_STYLES}
+                          required={true}
                         />
                       )}
                     </div>
 
-                    {/* EIN and NAICS Code on same row */}
+                    {/* Industry Type on full row */}
+                    <div className="mb-6">
+                      <CustomSelect
+                        id="industry_type"
+                        label="Industry Type"
+                        name="industry_type"
+                        value={industryTypeOptions.find(
+                          (opt) =>
+                            opt.value === values.industry_type?.toString(),
+                        )}
+                        onChange={enhancedSelectChange(
+                          "industry_type",
+                          setFieldValue,
+                        )}
+                        onBlur={handleBlur}
+                        options={industryTypeOptions}
+                        touched={touched.industry_type}
+                        error={errors.industry_type}
+                        required={true}
+                        placeholder="Select Industry Type"
+                      />
+                    </div>
+
+                    {/* EIN and NAICS Code on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {showEINField && (
+                      {/* EIN Field - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
                         <FormField
                           id="ein"
                           label="EIN (Employer Identification Number)"
@@ -2429,105 +3073,45 @@ const Institution = () => {
                           onChange={(e) => {
                             const formatted = formatTaxId(
                               e.target.value,
-                              "ein"
+                              "ein",
                             );
                             enhancedHandleChange(
                               "ein",
                               setFieldValue,
-                              setBusinessInstitutionEIN
-                            )({ target: { value: formatted } });
+                              setBusinessInstitutionEIN,
+                            )({
+                              target: { value: formatted },
+                            });
                           }}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("ein")}
                           touched={touched.ein}
                           error={errors.ein}
-                          required={showEINField}
+                          required={true}
                           placeholder="XX-XXXXXXX"
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                       )}
 
-                      {/* NAICS Code Field */}
-                      {showNAICSField && isNamedAccount && (
-                        <SelectField
+                      {/* NAICS Code Field - Always show if either condition is true */}
+                      {(isNamedAccount || remittanceOnlyAccepted) && (
+                        <CustomSelect
                           id="naice_code"
                           label="NAICS Code (Required for USD Named Accounts)"
                           options={naicsOptions}
                           onChange={enhancedSelectChange(
                             "naice_code",
                             setFieldValue,
-                            setBusinessInstitutionNAICS
+                            setBusinessInstitutionNAICS,
                           )}
                           value={naicsOptions.find(
-                            (opt) => opt.value === values.naice_code
+                            (opt) => opt.value === values.naice_code,
                           )}
                           touched={touched.naice_code}
                           error={errors.naice_code}
                           required={true}
-                          fieldStyles={FIELD_STYLES}
                         />
-                      )}
-                    </div>
-
-                    {/* Industry Type on full row */}
-                    <div className="mb-6">
-                      <label
-                        htmlFor="industry_type"
-                        className="block text-sm font-medium text-gray-700 mb-2"
-                      >
-                        Industry Type <span className="text-red-500">*</span>
-                      </label>
-                      <Select
-                        inputId="industry_type"
-                        name="industry_type"
-                        options={industryTypeOptions}
-                        value={industryTypeOptions.find(
-                          (opt) =>
-                            opt.value === values.industry_type?.toString()
-                        )}
-                        onChange={enhancedSelectChange(
-                          "industry_type",
-                          setFieldValue
-                        )}
-                        onBlur={handleBlur}
-                        isSearchable
-                        placeholder="Select Industry Type"
-                        className="basic-single"
-                        classNamePrefix="select"
-                        styles={{
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "50px",
-                            borderColor:
-                              touched.industry_type && errors.industry_type
-                                ? "#ef4444"
-                                : "#d1d5db",
-                            borderRadius: "0.5rem",
-                            padding: "0.25rem 0.5rem",
-                            fontSize: "0.875rem",
-                            "&:hover": {
-                              borderColor:
-                                touched.industry_type && errors.industry_type
-                                  ? "#ef4444"
-                                  : "#9ca3af",
-                            },
-                          }),
-                          placeholder: (base) => ({
-                            ...base,
-                            fontSize: "0.875rem",
-                            color: "#6b7280",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            fontSize: "0.875rem",
-                          }),
-                        }}
-                      />
-                      {touched.industry_type && errors.industry_type && (
-                        <div className="text-red-500 text-xs mt-1">
-                          {errors.industry_type}
-                        </div>
                       )}
                     </div>
 
@@ -2538,42 +3122,40 @@ const Institution = () => {
 
                       {/* Country of Registration and Primary Country of Operation on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <SelectField
+                        <CustomSelect
                           id="country_of_registration"
                           label="Country of Registration"
                           options={countryOptions}
                           onChange={enhancedSelectChange(
                             "country_of_registration",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           value={countryOptions.find(
                             (opt) =>
-                              opt.value === values.country_of_registration
+                              opt.value === values.country_of_registration,
                           )}
                           touched={touched.country_of_registration}
                           error={errors.country_of_registration}
-                          required
+                          required // ← ADD THIS LINE
                           isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                        <SelectField
+                        <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
                           options={countryOptions}
                           onChange={enhancedSelectChange(
                             "country_of_operation",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           value={countryOptions.find(
-                            (opt) => opt.value === values.country_of_operation
+                            (opt) => opt.value === values.country_of_operation,
                           )}
                           touched={touched.country_of_operation}
                           error={errors.country_of_operation}
-                          required
+                          required // ← This one already has required (good)
                           isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
                           isCountryField={true}
                           showPhoneCode={false}
                         />
@@ -2588,14 +3170,14 @@ const Institution = () => {
                           isMulti
                           options={countryOptions}
                           value={countryOptions.filter((opt) =>
-                            values.operating_countries?.includes(opt.value)
+                            values.operating_countries?.includes(opt.value),
                           )}
                           onChange={(selectedOptions) => {
                             setFieldValue(
                               "operating_countries",
                               selectedOptions
                                 ? selectedOptions.map((opt) => opt.value)
-                                : []
+                                : [],
                             );
                           }}
                           placeholder="Select countries..."
@@ -2616,36 +3198,38 @@ const Institution = () => {
                         />
                       </div>
                     </div>
-
                     <div className="mt-8">
-                      <h3 className="text-lg font-medium mb-3">
+                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Registered Address
                       </h3>
 
-                      {/* ZIP/Postal Code and Registered Address Country on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <SelectField
+                      {/* 1. Country - MOVED TO TOP */}
+                      <div className="mb-4">
+                        <CustomSelect
                           id="registered_address_street_country"
                           label="Country"
                           options={countryOptions}
                           onChange={enhancedSelectChange(
                             "registered_address_street_country",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           value={countryOptions.find(
                             (opt) =>
                               opt.value ===
-                              values.registered_address_street_country
+                              values.registered_address_street_country,
                           )}
                           touched={touched.registered_address_street_country}
                           error={errors.registered_address_street_country}
                           required
                           isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
                           isCountryField={true}
                           showPhoneCode={false}
                         />
-                       <FormField
+                      </div>
+
+                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
+                      <div className="mb-4">
+                        <FormField
                           id="registered_address_street_zip"
                           label="ZIP/Postal Code"
                           name="registered_address_street_zip"
@@ -2654,84 +3238,48 @@ const Institution = () => {
                             const zipCode = e.target.value;
                             enhancedHandleChange(
                               "registered_address_street_zip",
-                              setFieldValue
+                              setFieldValue,
                             )(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
-                              const countryId = values.registered_address_street_country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
+                              const countryId =
+                                values.registered_address_street_country;
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
                                 handleBusinessZipLookup(zipCode, countryId);
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_address_street_zip")}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_zip")
+                          }
                           touched={touched.registered_address_street_zip}
                           error={errors.registered_address_street_zip}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        {isZipLoading && activeField === "registered_address_street_zip" && (
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <RingLoader size={16} color="#3b82f6" />
-                          </div>
-                        )}
-                       
+                        {isZipLoading &&
+                          activeField === "registered_address_street_zip" && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <RingLoader size={16} color="#3b82f6" />
+                            </div>
+                          )}
                       </div>
 
-                      {/* City and State/Province on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                         <FormField
-                          id="registered_address_street_state"
-                          label="State/Province"
-                          name="registered_address_street_state"
-                          value={values.registered_address_street_state || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_state",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_state")
-                          }
-                          touched={touched.registered_address_street_state}
-                          error={errors.registered_address_street_state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="registered_address_street_city"
-                          label="City"
-                          name="registered_address_street_city"
-                          value={values.registered_address_street_city || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_city",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_city")
-                          }
-                          touched={touched.registered_address_street_city}
-                          error={errors.registered_address_street_city}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                       
-                      </div>
-
-                      {/* Street Address and Street Address 2 on same row */}
+                      {/* 3. Street Address 1 & 2 */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <FormField
                           id="registered_address_street_1"
@@ -2740,7 +3288,7 @@ const Institution = () => {
                           value={values.registered_address_street_1 || ""}
                           onChange={enhancedHandleChange(
                             "registered_address_street_1",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() =>
@@ -2759,7 +3307,7 @@ const Institution = () => {
                           value={values.registered_address_street_2 || ""}
                           onChange={enhancedHandleChange(
                             "registered_address_street_2",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() =>
@@ -2767,6 +3315,52 @@ const Institution = () => {
                           }
                           touched={touched.registered_address_street_2}
                           error={errors.registered_address_street_2}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 4. City */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_city"
+                          label="City"
+                          name="registered_address_street_city"
+                          value={values.registered_address_street_city || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_city",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_city")
+                          }
+                          touched={touched.registered_address_street_city}
+                          error={errors.registered_address_street_city}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 5. State */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_state"
+                          label="State/Province"
+                          name="registered_address_street_state"
+                          value={values.registered_address_street_state || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_state",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_state")
+                          }
+                          touched={touched.registered_address_street_state}
+                          error={errors.registered_address_street_state}
+                          required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
@@ -2782,7 +3376,7 @@ const Institution = () => {
                           value={values.date_incorporation || ""}
                           onChange={enhancedHandleChange(
                             "date_incorporation",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("date_incorporation")}
@@ -2819,7 +3413,7 @@ const Institution = () => {
                         onChange={enhancedHandleChange(
                           "first_name",
                           setFieldValue,
-                          setResponsiblePersonFirstName
+                          setResponsiblePersonFirstName,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("first_name")}
@@ -2837,7 +3431,7 @@ const Institution = () => {
                         onChange={enhancedHandleChange(
                           "middle_name",
                           setFieldValue,
-                          setResponsiblePersonMiddleName
+                          setResponsiblePersonMiddleName,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("middle_name")}
@@ -2854,7 +3448,7 @@ const Institution = () => {
                         onChange={enhancedHandleChange(
                           "last_name",
                           setFieldValue,
-                          setResponsiblePersonLastName
+                          setResponsiblePersonLastName,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("last_name")}
@@ -2873,7 +3467,7 @@ const Institution = () => {
                         onChange={enhancedHandleChange(
                           "email",
                           setFieldValue,
-                          setResponsiblePersonEmail
+                          setResponsiblePersonEmail,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("email")}
@@ -2891,7 +3485,7 @@ const Institution = () => {
                         onChange={enhancedPasswordChange(
                           "password",
                           setFieldValue,
-                          setResponsiblePersonPassword
+                          setResponsiblePersonPassword,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("password")}
@@ -2913,7 +3507,7 @@ const Institution = () => {
                         value={values.confirm_password || ""}
                         onChange={enhancedPasswordChange(
                           "confirm_password",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("confirm_password")}
@@ -2937,22 +3531,21 @@ const Institution = () => {
 
                       {/* Resident Country and Phone Number on same row */}
                       <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <SelectField
+                        <CustomSelect
                           id="resident_country"
                           label="Resident Country"
                           options={countryOptions}
                           onChange={enhancedSelectChange(
                             "resident_country",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           value={countryOptions.find(
-                            (opt) => opt.value === values.resident_country
+                            (opt) => opt.value === values.resident_country,
                           )}
                           touched={touched.resident_country}
                           error={errors.resident_country}
                           required
                           isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
                           isCountryField={true}
                           showPhoneCode={false}
                         />
@@ -2963,14 +3556,16 @@ const Institution = () => {
                           </label>
                           <div className="flex space-x-3">
                             <div className="w-1/2 min-w-[180px]">
-                              <Select
+                              <CustomSelect
+                                id="mobilenumber_countrycode"
+                                label="Country Code"
                                 options={countryOptions}
                                 value={countryOptions.find(
                                   (opt) =>
                                     opt.phoneCode ===
                                       values.mobilenumber_countrycode ||
                                     opt.phone_code ===
-                                      values.mobilenumber_countrycode
+                                      values.mobilenumber_countrycode,
                                 )}
                                 onChange={(option) => {
                                   if (option) {
@@ -2978,85 +3573,70 @@ const Institution = () => {
                                       "mobilenumber_countrycode",
                                       option.phoneCode ||
                                         option.phone_code ||
-                                        ""
+                                        "",
                                     );
                                   }
                                 }}
                                 onBlur={handleBlur}
-                                placeholder="Select Country Code"
-                                formatOptionLabel={formatOptionLabel}
-                                filterOption={filterOption} // Add this line
-                                isSearchable
+                                touched={touched.mobilenumber_countrycode}
+                                error={errors.mobilenumber_countrycode}
+                                required
                                 isLoading={countriesLoading}
-                                styles={{
-                                  control: (base) => ({
-                                    ...base,
-                                    minHeight: "50px",
-                                    borderColor: "#d1d5db",
-                                    borderRadius: "0.5rem",
-                                    "&:hover": {
-                                      borderColor: "#9ca3af",
-                                    },
-                                  }),
-                                }}
+                                isCountryField={true}
+                                showPhoneCode={true}
                               />
                             </div>
                             <div className="w-1/2">
-                              <input
-                                type="tel"
+                              <FormField
+                                id="mobile_number"
+                                label="Phone Number"
                                 name="mobile_number"
                                 value={values.mobile_number || ""}
                                 onChange={enhancedHandleChange(
                                   "mobile_number",
-                                  setFieldValue
+                                  setFieldValue,
                                 )}
                                 onBlur={handleBlur}
-                                className={`${FIELD_STYLES.base} h-[50px]`}
+                                onFocus={() => setActiveField("mobile_number")}
+                                touched={touched.mobile_number}
+                                error={errors.mobile_number}
+                                required
+                                activeField={activeField}
                                 placeholder="e.g., 1234567890"
+                                fieldStyles={FIELD_STYLES}
                               />
                             </div>
                           </div>
-                          {touched.mobile_number && errors.mobile_number && (
-                            <p className="text-red-500 text-xs flex items-center mt-1">
-                              <FontAwesomeIcon
-                                icon={faInfoCircle}
-                                className="mr-1 w-3 h-3"
-                              />
-                              {errors.mobile_number}
-                            </p>
-                          )}
                         </div>
                       </div>
 
                       {/* Nationality and Gender on same row */}
-                      <SelectField
+                      <CustomSelect
                         id="nationality"
                         label="Nationality"
                         options={nationalityOptions}
                         onChange={enhancedSelectChange(
                           "nationality",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         value={nationalityOptions.find(
-                          (opt) => opt.value === values.nationality
+                          (opt) => opt.value === values.nationality,
                         )}
                         touched={touched.nationality}
                         error={errors.nationality}
                         required
-                        fieldStyles={FIELD_STYLES}
                       />
-                      <SelectField
+                      <CustomSelect
                         id="gender"
                         label="Gender"
                         options={genderOptions}
                         onChange={enhancedSelectChange("gender", setFieldValue)}
                         value={genderOptions.find(
-                          (opt) => opt.value === values.gender
+                          (opt) => opt.value === values.gender,
                         )}
                         touched={touched.gender}
                         error={errors.gender}
                         required
-                        fieldStyles={FIELD_STYLES}
                       />
 
                       {/* Date of Birth and Designation on same row */}
@@ -3082,32 +3662,32 @@ const Institution = () => {
                         value={values.designation || ""}
                         onChange={enhancedHandleChange(
                           "designation",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("designation")}
                         touched={touched.designation}
                         error={errors.designation}
+                        required // ✅ ADD THIS LINE
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
 
                       {/* ID Document Type and ID Document Number on same row */}
-                      <SelectField
+                      <CustomSelect
                         id="doc_type"
                         label="ID Document Type"
                         options={idDocumentTypeOptions}
                         onChange={enhancedSelectChange(
                           "doc_type",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         value={idDocumentTypeOptions.find(
-                          (opt) => opt.value === values.doc_type
+                          (opt) => opt.value === values.doc_type,
                         )}
                         touched={touched.doc_type}
                         error={errors.doc_type}
-                        required
-                        fieldStyles={FIELD_STYLES}
+                        required // ← ADD THIS LINE
                       />
                       <FormField
                         id="doc_id"
@@ -3119,28 +3699,27 @@ const Institution = () => {
                         onFocus={() => setActiveField("doc_id")}
                         touched={touched.doc_id}
                         error={errors.doc_id}
-                        required
+                        required // ← ADD THIS LINE
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
 
                       {/* ID Issuing Country and ID Issue Date on same row */}
-                      <SelectField
+                      <CustomSelect
                         id="doc_country"
                         label="ID Issuing Country"
                         options={countryOptions}
                         onChange={enhancedSelectChange(
                           "doc_country",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         value={countryOptions.find(
-                          (opt) => opt.value === values.doc_country
+                          (opt) => opt.value === values.doc_country,
                         )}
                         touched={touched.doc_country}
                         error={errors.doc_country}
-                        required
+                        required // ← ADD THIS LINE
                         isLoading={countriesLoading}
-                        fieldStyles={FIELD_STYLES}
                         isCountryField={true}
                         showPhoneCode={false}
                       />
@@ -3152,57 +3731,86 @@ const Institution = () => {
                         value={values.id_issued_date || ""}
                         onChange={enhancedHandleChange(
                           "id_issued_date",
-                          setFieldValue
+                          setFieldValue,
                         )}
                         onBlur={handleBlur}
                         onFocus={() => setActiveField("id_issued_date")}
                         touched={touched.id_issued_date}
                         error={errors.id_issued_date}
-                        required
+                        required // ← ADD THIS LINE
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
 
-                      {/* FIXED: Check by country ID instead of name */}
-                      {isNamedAccount && values.country === 186 && (
-                        <div className="md:col-span-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <FormField
-                                id="ssn"
-                                label="Social Security Number (SSN)"
-                                name="ssn"
-                                value={values.ssn || ""}
-                                onChange={(e) => {
-                                  const formatted = formatTaxId(
-                                    e.target.value,
-                                    "ssn"
-                                  );
-                                  enhancedHandleChange(
-                                    "ssn",
-                                    setFieldValue
-                                  )({ target: { value: formatted } });
-                                }}
-                                onBlur={handleBlur}
-                                onFocus={() => setActiveField("ssn")}
-                                touched={touched.ssn}
-                                error={errors.ssn}
-                                required={true}
-                                placeholder="XXX-XX-XXXX"
-                                activeField={activeField}
-                                fieldStyles={FIELD_STYLES}
-                              />
+                      {(function () {
+                        // Check if either USD named account OR remittance only is selected
+                        const hasUSDNamedAccount = isNamedAccount;
+                        const isRemittanceOnly = remittanceOnlyAccepted;
+
+                        // Check if country is United States
+                        const isUSCountry =
+                          values.country === "United States" ||
+                          values.country === 186;
+
+                        // SHOW SSN field if BOTH conditions are true:
+                        // 1. Either hasUSDNamedAccount OR isRemittanceOnly is true
+                        // 2. AND isUSCountry is true
+                        const shouldShowSSNField =
+                          (hasUSDNamedAccount || isRemittanceOnly) &&
+                          isUSCountry;
+
+                        console.log("🔍 Step 2 SSN Field Logic:", {
+                          hasUSDNamedAccount,
+                          isRemittanceOnly,
+                          isUSCountry,
+                          shouldShowSSNField,
+                          countryValue: values.country,
+                        });
+
+                        return shouldShowSSNField ? (
+                          <div className="md:col-span-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <FormField
+                                  id="ssn"
+                                  label="Social Security Number (SSN)"
+                                  name="ssn"
+                                  value={values.ssn || ""}
+                                  onChange={(e) => {
+                                    const formatted = formatTaxId(
+                                      e.target.value,
+                                      "ssn",
+                                    );
+                                    enhancedHandleChange(
+                                      "ssn",
+                                      setFieldValue,
+                                    )({
+                                      target: { value: formatted },
+                                    });
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField("ssn")}
+                                  touched={touched.ssn}
+                                  error={errors.ssn}
+                                  required={true}
+                                  placeholder="XXX-XX-XXXX"
+                                  activeField={activeField}
+                                  fieldStyles={FIELD_STYLES}
+                                />
+                              </div>
+                              <div className="mt-6">
+                                <SSNInfoPopup />
+                              </div>
                             </div>
-                            <div className="mt-6">
-                              <SSNInfoPopup />
-                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                              Required for{" "}
+                              {hasUSDNamedAccount
+                                ? "USD Named Accounts"
+                                : "Remittance Services Only accounts"}
+                            </p>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">
-                            Required for US residents with USD Named Accounts
-                            for tax reporting purposes.
-                          </p>
-                        </div>
-                      )}
+                        ) : null;
+                      })()}
                     </div>
 
                     <div className="mt-8">
@@ -3210,27 +3818,30 @@ const Institution = () => {
                         Contact Address
                       </h3>
 
-                      {/* Country and State/Province on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <SelectField
+                      {/* 1. Country - MOVED TO TOP */}
+                      <div className="mb-4">
+                        <CustomSelect
                           id="country"
                           label="Country"
                           options={countryOptions}
                           onChange={enhancedSelectChange(
                             "country",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           value={countryOptions.find(
-                            (opt) => opt.value === values.country
+                            (opt) => opt.value === values.country,
                           )}
                           touched={touched.country}
                           error={errors.country}
                           required
                           isLoading={countriesLoading}
-                          fieldStyles={FIELD_STYLES}
                           isCountryField={true}
                           showPhoneCode={false}
                         />
+                      </div>
+
+                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
+                      <div className="mb-4">
                         <FormField
                           id="zip_code"
                           label="ZIP/Postal Code"
@@ -3239,20 +3850,27 @@ const Institution = () => {
                           onChange={(e) => {
                             const zipCode = e.target.value;
                             enhancedHandleChange("zip_code", setFieldValue)(e);
-                            
+
                             // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
-                            
+
                             // Set debounced lookup
                             const timer = setTimeout(() => {
                               const countryId = values.country;
-                              if (zipCode && countryId && zipCode.replace(/\s+/g, '').length >= 3) {
-                                handleResponsiblePersonZipLookup(zipCode, countryId);
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
+                                handleResponsiblePersonZipLookup(
+                                  zipCode,
+                                  countryId,
+                                );
                               }
                             }, 1000);
-                            
+
                             setZipDebounceTimer(timer);
                           }}
                           onBlur={handleBlur}
@@ -3262,56 +3880,24 @@ const Institution = () => {
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
-                          loading={isZipLoading && activeField === "zip_code"}
                         />
+                        {isZipLoading && activeField === "zip_code" && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <RingLoader size={16} color="#3b82f6" />
+                          </div>
+                        )}
                       </div>
 
-                      {/* City and Street Address 1 on same row */}
+                      {/* 3. Street Address 1 & 2 */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
-                          id="state"
-                          label="State/Province"
-                          name="state"
-                          value={values.state || ""}
-                          onChange={enhancedHandleChange(
-                            "state",
-                            setFieldValue
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("state")}
-                          touched={touched.state}
-                          error={errors.state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="city"
-                          label="City"
-                          name="city"
-                          value={values.city || ""}
-                          onChange={enhancedHandleChange("city", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("city")}
-                          touched={touched.city}
-                          error={errors.city}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                     
-                      </div>
-
-                      {/* Street Address 2 and ZIP/Postal Code on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                         <FormField
                           id="street_address_1"
                           label="Street Address 1"
                           name="street_address_1"
                           value={values.street_address_1 || ""}
                           onChange={enhancedHandleChange(
                             "street_address_1",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("street_address_1")}
@@ -3328,7 +3914,7 @@ const Institution = () => {
                           value={values.street_address_2 || ""}
                           onChange={enhancedHandleChange(
                             "street_address_2",
-                            setFieldValue
+                            setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("street_address_2")}
@@ -3337,9 +3923,46 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       
                       </div>
 
+                      {/* 4. City */}
+                      <div className="mb-4">
+                        <FormField
+                          id="city"
+                          label="City"
+                          name="city"
+                          value={values.city || ""}
+                          onChange={enhancedHandleChange("city", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("city")}
+                          touched={touched.city}
+                          error={errors.city}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 5. State */}
+                      <div className="mb-4">
+                        <FormField
+                          id="state"
+                          label="State/Province"
+                          name="state"
+                          value={values.state || ""}
+                          onChange={enhancedHandleChange(
+                            "state",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("state")}
+                          touched={touched.state}
+                          error={errors.state}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
                     </div>
 
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">
@@ -3370,7 +3993,7 @@ const Institution = () => {
                                   className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                                   checked={
                                     values.terms_and_conditions?.some(
-                                      (t) => t.id === term.id
+                                      (t) => t.id === term.id,
                                     ) || false
                                   }
                                   onChange={(e) => {
@@ -3392,11 +4015,11 @@ const Institution = () => {
                                       ]);
                                     } else {
                                       const updatedTerms = currentTerms.filter(
-                                        (t) => t.id !== term.id
+                                        (t) => t.id !== term.id,
                                       );
                                       setFieldValue(
                                         "terms_and_conditions",
-                                        updatedTerms
+                                        updatedTerms,
                                       );
                                     }
                                   }}
@@ -3473,7 +4096,7 @@ const Institution = () => {
                       passwordValidationRules={passwordValidationRules}
                       formatTaxId={formatTaxId}
                       handleControllerZipLookup={handleControllerZipLookup}
-                      isZipLoading={isZipLoading} 
+                      isZipLoading={isZipLoading}
                       activeField={activeField}
                     />
                   </motion.div>
@@ -3559,7 +4182,7 @@ const Institution = () => {
 
                                     setFieldValue(
                                       `user_image.${doc.id}`,
-                                      fileData
+                                      fileData,
                                     );
                                   }
                                 }}
@@ -3707,9 +4330,13 @@ const Institution = () => {
                 <SSNConfirmationPopup
                   onClose={handleSSNCancel}
                   onConfirm={handleSSNConfirm}
+                  accountType={
+                    isNamedAccount
+                      ? "USD Named Account"
+                      : "Remittance Services Only"
+                  }
                 />
               )}
-              
             </Form>
           );
         }}

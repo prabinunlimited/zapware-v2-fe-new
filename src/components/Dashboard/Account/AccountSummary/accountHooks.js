@@ -1,3 +1,4 @@
+// src/components/Dashboard/Account/AccountSummary/accountHooks.js - FIXED VERSION USING HOMESLICE
 import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -5,57 +6,59 @@ import {
   updateAccountBalance,
   setSelectedAccount,
   setSelectedCurrency,
-} from "./AccountSlice";
+  selectAccounts,
+  selectSelectedAccount,
+  selectSelectedCurrency,
+  selectAccountLoading,
+  selectBalanceLoading,
+  selectAccountError,
+  selectHasFetchedAccount,
+  selectLastUpdated,
+  clearAllCache,
+} from "../../../../page/Home/HomeSlice";
 import { selectAuthToken } from "../../../../store/selectors";
 
-// Custom hooks that were in AccountSlice.js
+// ✅ FIXED: Use HomeSlice instead of AccountSlice
 export const useAccountData = () => {
   const dispatch = useDispatch();
   const customerId = localStorage.getItem("authcustomer_id");
   const authtoken = useSelector(selectAuthToken);
-  const hasFetchedAccount = useSelector(
-    (state) => state.account?.hasFetchedAccount || false
-  );
-  const accountLoading = useSelector(
-    (state) => state.account?.accountLoading || false
-  );
-  const accounts = useSelector((state) => state.account?.accounts || []);
+  const hasFetchedAccount = useSelector(selectHasFetchedAccount);
+  const accountLoading = useSelector(selectAccountLoading);
+  const accounts = useSelector(selectAccounts);
+  const accountError = useSelector(selectAccountError);
+  const lastUpdated = useSelector(selectLastUpdated);
 
   const fetchAccountData = useCallback(
     (forceRefresh = false) => {
       if (!customerId || !authtoken) {
+        console.log("⏳ useAccountData: Missing auth data, skipping fetch");
         return;
       }
 
+      console.log(
+        `🚀 useAccountData: Fetching account details (forceRefresh: ${forceRefresh})`,
+      );
       dispatch(
-        fetchAccountDetails({
-          customerId,
-          authtoken,
-          isRefresh: forceRefresh,
-        })
+        fetchAccountDetails({ customerId, authtoken, isRefresh: forceRefresh }),
       );
     },
-    [customerId, authtoken, dispatch, accountLoading, hasFetchedAccount]
-  );
-
-  const stableFetchAccountData = useMemo(
-    () => fetchAccountData,
-    [fetchAccountData]
+    [customerId, authtoken, dispatch],
   );
 
   return {
-    fetchAccountData: stableFetchAccountData,
+    fetchAccountData,
     shouldFetch:
       !hasFetchedAccount && customerId && authtoken && !accountLoading,
     canFetch: Boolean(customerId && authtoken),
     isLoading: accountLoading,
-    error: useSelector((state) => state.account?.accountError || null),
+    error: accountError,
     accounts: accounts,
     hasAccounts: accounts.length > 0,
-    lastUpdated: useSelector((state) => state.account?.lastUpdated || null),
-    resetFetch: () => dispatch(resetFetchCoordination()),
+    lastUpdated: lastUpdated,
+    resetFetch: () => dispatch(clearAllCache()),
     forceRefresh: () => {
-      dispatch(forceRefreshAccounts(customerId));
+      dispatch(clearAllCache());
       fetchAccountData(true);
     },
   };
@@ -63,33 +66,29 @@ export const useAccountData = () => {
 
 export const useAccountSelection = () => {
   const dispatch = useDispatch();
-  const selectedAccount = useSelector(
-    (state) => state.account?.selectedAccount || null
-  );
-  const selectedCurrency = useSelector(
-    (state) => state.account?.selectedCurrency || "all"
-  );
-  const accounts = useSelector((state) => state.account?.accounts || []);
+  const selectedAccount = useSelector(selectSelectedAccount);
+  const selectedCurrency = useSelector(selectSelectedCurrency);
+  const accounts = useSelector(selectAccounts);
 
   const setAccount = useCallback(
     (account) => {
       dispatch(setSelectedAccount(account));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const setCurrency = useCallback(
     (currency) => {
       dispatch(setSelectedCurrency(currency));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const getAccountByCurrency = useCallback(
     (currency) => {
       return accounts.find((acc) => acc.currency === currency) || null;
     },
-    [accounts]
+    [accounts],
   );
 
   const getAvailableCurrencies = useCallback(() => {
@@ -111,15 +110,12 @@ export const useAccountBalance = () => {
   const dispatch = useDispatch();
   const customerId = localStorage.getItem("authcustomer_id");
   const authtoken = useSelector(selectAuthToken);
-  const selectedAccount = useSelector(
-    (state) => state.account?.selectedAccount || null
-  );
-  const balanceLoading = useSelector(
-    (state) => state.account?.balanceLoading || false
-  );
+  const selectedAccount = useSelector(selectSelectedAccount);
+  const balanceLoading = useSelector(selectBalanceLoading);
 
   const updateBalance = useCallback(() => {
     if (customerId && authtoken) {
+      console.log("🔄 useAccountBalance: Updating balance");
       dispatch(updateAccountBalance({ customerId, authtoken }));
     }
   }, [customerId, authtoken, dispatch]);
@@ -156,7 +152,7 @@ export const useAccountBalance = () => {
         return `${symbol}${formatted}`;
       }
     },
-    [selectedAccount]
+    [selectedAccount],
   );
 
   return {

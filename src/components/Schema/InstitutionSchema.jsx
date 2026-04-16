@@ -17,6 +17,7 @@ const institutionSchema = (currentStep, options = {}) => {
     showBusinessAliasField = false,
     showBusinessEmailField = false,
     showBusinessWebsiteField = false,
+    ssn_required = "N",
   } = options;
 
   // Common validation rules
@@ -34,7 +35,7 @@ const institutionSchema = (currentStep, options = {}) => {
     .matches(/\d/, "Password must contain at least one number")
     .matches(
       /[!@#$%^&*(),.?":{}|<>]/,
-      "Password must contain at least one special character"
+      "Password must contain at least one special character",
     )
     .required("Password is required");
 
@@ -54,7 +55,7 @@ const institutionSchema = (currentStep, options = {}) => {
       if (!value) return !einRequired;
       const cleanEIN = value.replace(/-/g, "");
       return cleanEIN.length === 9 && /^\d+$/.test(cleanEIN);
-    }
+    },
   );
 
   // FIXED: SSN validation - simplified and more robust
@@ -62,23 +63,13 @@ const institutionSchema = (currentStep, options = {}) => {
     "ssn-format",
     "SSN must be in format XXX-XX-XXXX",
     function (value) {
-      // Safely access parent values
-      const parent = this?.parent || {};
-      const country = parent.country;
-
-      // Only validate SSN if:
-      // 1. User selected USD Named Account (isNamedAccount = true)
-      // 2. User is US resident (country = "United States")
-      const shouldValidateSSN = isNamedAccount && country === "United States";
-
-      // If no value and validation is required, return error
+      const shouldValidateSSN = isNamedAccount && ssn_required === "Y";
       if (shouldValidateSSN && (!value || value.trim() === "")) {
         return this.createError({
-          message: "SSN is required for USD Named Accounts for US residents",
+          message: "SSN is required for USD Named Accounts",
         });
       }
 
-      // If value exists and validation is required, validate format
       if (shouldValidateSSN && value) {
         const cleanSSN = value.replace(/-/g, "");
         if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
@@ -88,9 +79,8 @@ const institutionSchema = (currentStep, options = {}) => {
         }
       }
 
-      // If not USD Named Account OR not US resident, no validation needed
       return true;
-    }
+    },
   );
 
   // FIXED: Controller SSN validation
@@ -102,22 +92,13 @@ const institutionSchema = (currentStep, options = {}) => {
         // Safely access parent values
         const parent = this?.parent || {};
         const is_controller = parent.is_controller;
-        const controller_country = parent.controller_country;
-
-        // Only validate if:
-        // 1. User selected USD Named Account (isNamedAccount = true)
-        // 2. User is not the controller (is_controller === "no")
-        // 3. Controller is US resident (controller_country === "United States")
         const shouldValidateControllerSSN =
-          isNamedAccount &&
-          is_controller === "no" &&
-          controller_country === "United States";
+          isNamedAccount && is_controller === "no" && ssn_required === "Y";
 
         if (shouldValidateControllerSSN) {
           if (!value || value.trim() === "") {
             return this.createError({
-              message:
-                "SSN is required for USD Named Accounts for US controllers",
+              message: "SSN is required for USD Named Accounts for controllers",
             });
           }
 
@@ -132,11 +113,9 @@ const institutionSchema = (currentStep, options = {}) => {
 
         return true;
       } catch (error) {
-        // If there's any error in validation, return true to avoid breaking the form
-        
         return true;
       }
-    }
+    },
   );
 
   // Business alias validation for named accounts
@@ -148,7 +127,7 @@ const institutionSchema = (currentStep, options = {}) => {
         return value && value.trim().length > 0;
       }
       return true;
-    }
+    },
   );
 
   // Ownership percentage validation
@@ -161,7 +140,7 @@ const institutionSchema = (currentStep, options = {}) => {
   const dateOfBirth = Yup.date()
     .max(
       new Date(Date.now() - 567648000000),
-      "You must be at least 18 years old"
+      "You must be at least 18 years old",
     )
     .required("Date of birth is required");
 
@@ -169,11 +148,11 @@ const institutionSchema = (currentStep, options = {}) => {
   const ownerSchema = Yup.object().shape({
     owner_first_name: requiredString.min(
       2,
-      "First name must be at least 2 characters"
+      "First name must be at least 2 characters",
     ),
     owner_last_name: requiredString.min(
       2,
-      "Last name must be at least 2 characters"
+      "Last name must be at least 2 characters",
     ),
     owner_email: email,
     owner_phone_number: phoneNumber,
@@ -186,7 +165,7 @@ const institutionSchema = (currentStep, options = {}) => {
       .required("This field is required"),
     owner_needs_access_to_system: Yup.string().oneOf(
       ["yes", "no"],
-      "Please select system access requirement"
+      "Please select system access requirement",
     ),
     owner_role_id: Yup.string().when("owner_needs_access_to_system", {
       is: "yes",
@@ -231,18 +210,19 @@ const institutionSchema = (currentStep, options = {}) => {
       .min(3, "Registration number must be at least 3 characters"),
 
     registered_address_street_country: Yup.string().required(
-      "Registered address country is required"
+      "Registered address country is required",
     ),
 
     registered_address_street_state: Yup.string().required(
-      "State/Province is required"
+      "State/Province is required",
     ),
 
     registered_address_street_city: Yup.string().required("City is required"),
 
-    registered_address_street_1: Yup.string()
-      .required("Street address is required")
-      .min(5, "Street address must be at least 5 characters"),
+    // REMOVED character count validation from address fields
+    registered_address_street_1: Yup.string().required(
+      "Street address is required",
+    ),
 
     registered_address_street_zip: Yup.string()
       .required("ZIP/Postal code is required")
@@ -257,11 +237,11 @@ const institutionSchema = (currentStep, options = {}) => {
       .test(
         "industry-not-empty",
         "Industry type is required",
-        (value) => value && value.toString().trim().length > 0
+        (value) => value && value.toString().trim().length > 0,
       ),
 
     country_of_registration: Yup.string().required(
-      "Country of registration is required"
+      "Country of registration is required",
     ),
 
     // Conditional fields
@@ -279,7 +259,7 @@ const institutionSchema = (currentStep, options = {}) => {
     ...(showNAICSField &&
       isNamedAccount && {
         naice_code: Yup.string().required(
-          "NAICS code is required for USD Named Accounts"
+          "NAICS code is required for USD Named Accounts",
         ),
       }),
 
@@ -297,7 +277,7 @@ const institutionSchema = (currentStep, options = {}) => {
   const step2Schema = Yup.object().shape({
     first_name: requiredString.min(
       2,
-      "First name must be at least 2 characters"
+      "First name must be at least 2 characters",
     ),
     last_name: requiredString.min(2, "Last name must be at least 2 characters"),
     email: email,
@@ -312,13 +292,11 @@ const institutionSchema = (currentStep, options = {}) => {
     country: requiredString,
     state: requiredString,
     city: requiredString,
-    street_address_1: requiredString.min(
-      5,
-      "Street address must be at least 5 characters"
-    ),
+    // REMOVED character count validation from address field
+    street_address_1: requiredString,
     zip_code: requiredString.matches(
       /^[A-Z0-9\s-]+$/,
-      "Invalid ZIP/postal code format"
+      "Invalid ZIP/postal code format",
     ),
     gender: requiredString,
     dob: dateOfBirth,
@@ -337,7 +315,7 @@ const institutionSchema = (currentStep, options = {}) => {
         Yup.object().shape({
           id: Yup.string().required(),
           accepted_at: Yup.string().required(),
-        })
+        }),
       )
       .test(
         "terms-accepted",
@@ -360,7 +338,7 @@ const institutionSchema = (currentStep, options = {}) => {
           }
 
           return true;
-        }
+        },
       )
       .required("Terms and conditions acceptance is required"),
   });
@@ -370,7 +348,7 @@ const institutionSchema = (currentStep, options = {}) => {
     .shape({
       is_controller: requiredString.oneOf(
         ["yes", "no"],
-        "Please select if you are the controller"
+        "Please select if you are the controller",
       ),
     })
     .concat(
@@ -379,18 +357,18 @@ const institutionSchema = (currentStep, options = {}) => {
         then: Yup.object().shape({
           controller_first_name: requiredString.min(
             2,
-            "First name must be at least 2 characters"
+            "First name must be at least 2 characters",
           ),
           controller_last_name: requiredString.min(
             2,
-            "Last name must be at least 2 characters"
+            "Last name must be at least 2 characters",
           ),
           controller_email: email,
           controller_password: password,
           controller_confirm_password: Yup.string()
             .oneOf(
               [Yup.ref("controller_password"), null],
-              "Passwords must match"
+              "Passwords must match",
             )
             .required("Confirm password is required"),
           controller_resident_country: requiredString,
@@ -400,168 +378,19 @@ const institutionSchema = (currentStep, options = {}) => {
           controller_country: requiredString,
           controller_state: requiredString,
           controller_city: requiredString,
-          controller_street_address_1: requiredString.min(
-            5,
-            "Street address must be at least 5 characters"
-          ),
+          // REMOVED character count validation from controller address field
+          controller_street_address_1: requiredString,
           controller_zip_code: requiredString.matches(
             /^[A-Z0-9\s-]+$/,
-            "Invalid ZIP/postal code format"
+            "Invalid ZIP/postal code format",
           ),
           controller_gender: requiredString,
           controller_dob: dateOfBirth,
           controller_designation: requiredString,
           controller_ssn: controllerSsnValidation,
         }),
-      })
+      }),
     );
-
-  // FIXED: Step 4 Schema - Use proper function context
-  // const step4Schema = Yup.object().shape({
-  //   owner_details: Yup.array()
-  //     .min(1, "At least one owner is required")
-  //     .of(
-  //       Yup.object().shape({
-  //         owner_first_name: requiredString.min(
-  //           2,
-  //           "First name must be at least 2 characters"
-  //         ),
-  //         owner_last_name: requiredString.min(
-  //           2,
-  //           "Last name must be at least 2 characters"
-  //         ),
-  //         owner_email: email,
-  //         owner_phone_number: phoneNumber,
-  //         owner_phone_number_country_code: countryCode,
-  //         owner_country_id: requiredString,
-  //         ownership_percentage: ownershipPercentage,
-  //         owner_dob: dateOfBirth,
-  //         owner_if: Yup.string()
-  //           .oneOf(["yes", "no"], "Please select if you are the owner")
-  //           .required("This field is required"),
-  //         owner_needs_access_to_system: Yup.string().oneOf(
-  //           ["yes", "no"],
-  //           "Please select system access requirement"
-  //         ),
-  //         owner_role_id: Yup.string().when("owner_needs_access_to_system", {
-  //           is: "yes",
-  //           then: () => requiredString,
-  //           otherwise: Yup.string().nullable(),
-  //         }),
-
-  //         // FIXED: Use proper function syntax for Yup context
-  //         ssn: Yup.string().test(
-  //           "ssn-validation",
-  //           "SSN validation failed",
-  //           function (value) {
-  //             const owner_country_id = this.parent.owner_country_id;
-
-  //             // Only validate if this is a named account and owner is in US
-  //             if (isNamedAccount && owner_country_id === "United States") {
-  //               if (!value) {
-  //                 return this.createError({
-  //                   message: "SSN is required for US owners in named accounts",
-  //                 });
-  //               }
-
-  //               const cleanSSN = value.replace(/-/g, "");
-  //               if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
-  //                 return this.createError({
-  //                   message: "SSN must be 9 digits in format XXX-XX-XXXX",
-  //                 });
-  //               }
-  //             }
-  //             return true;
-  //           }
-  //         ),
-
-  //         // FIXED: Use proper function syntax
-  //         doc_type: Yup.string().test(
-  //           "doc-type-validation",
-  //           "Document type validation failed",
-  //           function (value) {
-  //             const owner_country_id = this.parent.owner_country_id;
-
-  //             if (isNamedAccount && owner_country_id === "United States") {
-  //               if (!value) {
-  //                 return this.createError({
-  //                   message:
-  //                     "Document type is required for US owners in named accounts",
-  //                 });
-  //               }
-  //             }
-  //             return true;
-  //           }
-  //         ),
-
-  //         // FIXED: Use proper function syntax
-  //         doc_id: Yup.string().test(
-  //           "doc-id-validation",
-  //           "Document ID validation failed",
-  //           function (value) {
-  //             const owner_country_id = this.parent.owner_country_id;
-
-  //             if (isNamedAccount && owner_country_id === "United States") {
-  //               if (!value) {
-  //                 return this.createError({
-  //                   message:
-  //                     "Document ID is required for US owners in named accounts",
-  //                 });
-  //               }
-  //               if (value && value.length < 2) {
-  //                 return this.createError({
-  //                   message: "Document ID must be at least 2 characters",
-  //                 });
-  //               }
-  //             }
-  //             return true;
-  //           }
-  //         ),
-  //       })
-  //     )
-  //     .test(
-  //       "total-ownership",
-  //       "Total ownership percentage must equal 100%",
-  //       function (owners) {
-  //         // ✅ Regular function
-  //         if (!owners || owners.length === 0) {
-  //           return this.createError({
-  //             message: "At least one owner is required",
-  //           });
-  //         }
-
-  //         const totalPercentage = owners.reduce((total, owner) => {
-  //           return total + (parseFloat(owner.ownership_percentage) || 0);
-  //         }, 0);
-
-  //         if (Math.abs(totalPercentage - 100) >= 0.01) {
-  //           return this.createError({
-  //             message: `Total ownership percentage must equal 100%. Current total: ${totalPercentage.toFixed(
-  //               2
-  //             )}%`,
-  //           });
-  //         }
-  //         return true;
-  //       }
-  //     )
-  //     .test(
-  //       "owner-if-required",
-  //       "Please indicate if you are the owner for the first owner",
-  //       function (owners) {
-  //         // ✅ Regular function
-  //         if (owners && owners.length > 0) {
-  //           const firstOwner = owners[0];
-  //           if (!firstOwner.owner_if) {
-  //             return this.createError({
-  //               message: "Please indicate if you are the owner",
-  //               path: "owner_details[0].owner_if",
-  //             });
-  //           }
-  //         }
-  //         return true;
-  //       }
-  //     ),
-  // });
 
   const step4Schema = Yup.object().shape({
     // Completely empty - no validation for now
@@ -571,7 +400,7 @@ const institutionSchema = (currentStep, options = {}) => {
     terms_agreement: Yup.boolean()
       .oneOf(
         [true],
-        "You must accept the final agreement to complete registration"
+        "You must accept the final agreement to complete registration",
       )
       .required("Final agreement acceptance is required"),
   });

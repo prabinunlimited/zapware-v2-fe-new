@@ -11,11 +11,11 @@ import {
 // Payment method configuration based on specifications
 const getPaymentMethodsByCurrency = (currency) => {
   const paymentMethodConfig = {
-    EUR: ["card_deposit", "manual_deposit", "bank_transfer"],
-    GBP: ["card_deposit", "manual_deposit", "bank_transfer"],
-    DKK: ["card_deposit", "manual_deposit", "bank_transfer"],
-    AED: ["manual_deposit"],
-    USD: ["card_deposit", "manual_deposit", "bank_deposit"],
+    EUR: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
+    GBP: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
+    DKK: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
+    AED: ["manual_deposit"], // Removed "card_deposit"
+    USD: ["manual_deposit", "bank_deposit"], // Removed "card_deposit"
   };
 
   return paymentMethodConfig[currency] || [];
@@ -91,11 +91,11 @@ export const usePaymentMethods = (selectedCurrency, currencies) => {
     ) {
       console.log(
         "🔄 Fetching payment methods for currency:",
-        selectedCurrency
+        selectedCurrency,
       );
 
       const selectedCurrencyObj = currencies.find(
-        (currency) => currency.currency_code === selectedCurrency
+        (currency) => currency.currency_code === selectedCurrency,
       );
 
       let currencyIdentifier = null;
@@ -138,7 +138,7 @@ export const usePaymentMethods = (selectedCurrency, currencies) => {
 
     const transformedMethods = transformPaymentMethods(
       paymentMethods,
-      selectedCurrency
+      selectedCurrency,
     );
 
     const allowedMethods = getPaymentMethodsByCurrency(selectedCurrency);
@@ -146,7 +146,7 @@ export const usePaymentMethods = (selectedCurrency, currencies) => {
       "✅ Allowed methods for",
       selectedCurrency,
       ":",
-      allowedMethods
+      allowedMethods,
     );
 
     const filtered = transformedMethods.filter((method) => {
@@ -175,11 +175,6 @@ const getFallbackMethods = (currency) => {
   console.log("🔄 Using fallback methods for:", currency);
 
   const fallbackMethods = {
-    card_deposit: {
-      value: "card_deposit",
-      label: "Card Deposit",
-      description: "Instant deposit using debit/credit card",
-    },
     manual_deposit: {
       value: "manual_deposit",
       label: "Manual Deposit",
@@ -206,6 +201,6 @@ const getFallbackMethods = (currency) => {
           .replace("_", " ")
           .replace(/\b\w/g, (l) => l.toUpperCase()),
         description: `Deposit via ${method.replace("_", " ")}`,
-      }
+      },
   );
 };

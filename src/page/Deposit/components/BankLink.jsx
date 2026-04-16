@@ -3,6 +3,8 @@ import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "react-toastify";
+
 import {
   FaCheck,
   FaExclamationTriangle,
@@ -38,8 +40,10 @@ import {
   fetchBankAccounts,
   deleteBankAccount,
   handleBankLinkSuccess,
+  refreshAccountsAfterSuccess,
   setShowPlaidLink,
   setShowSuccessModal,
+  setIsProcessing,
   setCurrentPage,
   setKycStatus,
   clearErrors,
@@ -66,6 +70,475 @@ import {
 import ZapPlaidLink from "../../../components/ZapPlaidLink/ZapPlaidLink";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 
+// ========== HELPER COMPONENTS ==========
+
+// Helper function to get status badge
+const getStatusBadge = (account) => {
+  if (account.is_frozen === 1) {
+    return {
+      text: "Frozen",
+      color: "bg-red-100 text-red-800 border-red-200",
+      icon: FaSnowflake,
+    };
+  }
+  if (account.is_deleted === 1) {
+    return {
+      text: "Deleted",
+      color: "bg-gray-100 text-gray-800 border-gray-200",
+      icon: FaBan,
+    };
+  }
+  if (account.isLinkedOnSila === 1) {
+    return {
+      text: "Linked to SILA",
+      color: "bg-green-100 text-green-800 border-green-200",
+      icon: FaLink,
+    };
+  }
+  return {
+    text: "Active",
+    color: "bg-blue-100 text-blue-800 border-blue-200",
+    icon: FaCheckCircle,
+  };
+};
+
+// Helper function to get verification badges
+const getVerificationBadges = (account) => {
+  const badges = [];
+
+  if (account.web_debit_verified) {
+    badges.push({
+      text: "Web Debit",
+      color: "bg-purple-100 text-purple-800",
+      icon: FaCheckCircle,
+    });
+  }
+
+  if (account.fednow_credit_enabled) {
+    badges.push({
+      text: "FedNow Credit",
+      color: "bg-indigo-100 text-indigo-800",
+      icon: FaNetworkWired,
+    });
+  }
+
+  if (account.rtp_credit_enabled) {
+    badges.push({
+      text: "RTP Credit",
+      color: "bg-teal-100 text-teal-800",
+      icon: FaNetworkWired,
+    });
+  }
+
+  if (account.isPlaid === 1) {
+    badges.push({
+      text: "Plaid Linked",
+      color: "bg-orange-100 text-orange-800",
+      icon: FaShieldAlt,
+    });
+  }
+
+  return badges;
+};
+
+// Detailed Account Card Component
+const DetailedAccountCard = ({
+  account,
+  onDelete,
+  isDeleting,
+  expandedAccount,
+  setExpandedAccount,
+  showDeleteConfirm,
+  setShowDeleteConfirm,
+}) => {
+  const isExpanded = expandedAccount === account.account_id;
+  const status = getStatusBadge(account);
+  const verificationBadges = getVerificationBadges(account);
+  const StatusIcon = status.icon;
+
+  return (
+    <motion.div
+      layout
+      className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 overflow-hidden"
+    >
+      {/* Account Header */}
+      <div className="p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start space-x-4 flex-1">
+            {/* Bank Icon */}
+            <div
+              className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                account.isPlaid === 1
+                  ? "bg-gradient-to-br from-blue-500 to-indigo-600"
+                  : "bg-gradient-to-br from-gray-600 to-gray-800"
+              }`}
+            >
+              <FaBuilding className="text-white text-xl" />
+            </div>
+
+            {/* Account Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3">
+                  <h3 className="text-lg font-semibold text-gray-900 truncate">
+                    {account.account_name ||
+                      `${account.firstName} ${account.lastName}`}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 text-xs font-medium rounded-full border ${status.color} flex items-center`}
+                  >
+                    <StatusIcon className="mr-1.5" size={10} />
+                    {status.text}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() =>
+                    setExpandedAccount(isExpanded ? null : account.account_id)
+                  }
+                  className="ml-4 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50"
+                >
+                  {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
+                </button>
+              </div>
+
+              {/* Bank Details */}
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <div className="flex items-center text-sm text-gray-600">
+                  <FaBuilding className="mr-2 text-gray-400" />
+                  <span className="font-medium">
+                    {account.bank || account.provider || "Unknown Bank"}
+                  </span>
+                </div>
+
+                <div className="flex items-center text-sm text-gray-600">
+                  <FaIdCard className="mr-2 text-gray-400" />
+                  <span>Account: {account.accountNumberHash}</span>
+                </div>
+
+                <div className="flex items-center text-sm text-gray-600">
+                  <FaDollarSign className="mr-2 text-gray-400" />
+                  <span>{account.account_type || "Checking"}</span>
+                </div>
+
+                {account.routing_number && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <FaNetworkWired className="mr-2 text-gray-400" />
+                    <span>Routing: •••{account.routing_number.slice(-4)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Verification Badges */}
+              {verificationBadges.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {verificationBadges.map((badge, idx) => (
+                    <span
+                      key={idx}
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${badge.color}`}
+                    >
+                      {badge.text}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col items-end space-y-3 ml-6">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowDeleteConfirm(account.account_id)}
+              disabled={isDeleting}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isDeleting
+                  ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                  : "bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+              }`}
+            >
+              {isDeleting ? "Removing..." : "Remove Account"}
+            </motion.button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded Details */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="border-t border-gray-100"
+          >
+            <div className="p-6 bg-gray-50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Account Information */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center">
+                    <FaInfoCircle className="mr-2 text-blue-500" />
+                    Account Information
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Account Name</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {account.account_name || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Account Type</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {account.account_type || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Account Number</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {account.accountNumberHash || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Routing Number</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {account.routing_number || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Technical Details */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center">
+                    <FaCog className="mr-2 text-purple-500" />
+                    Technical Details
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Account ID</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {account.account_id || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Provider</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {account.provider || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Features */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center">
+                    <FaNetworkWired className="mr-2 text-indigo-500" />
+                    Payment Features
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div
+                      className={`p-3 rounded-lg ${
+                        account.web_debit_verified
+                          ? "bg-green-50 border border-green-200"
+                          : "bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">
+                          Web Debit
+                        </span>
+                        {account.web_debit_verified ? (
+                          <FaCheckCircle className="text-green-500" />
+                        ) : (
+                          <FaTimesCircle className="text-gray-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Verified</p>
+                    </div>
+
+                    <div
+                      className={`p-3 rounded-lg ${
+                        account.fednow_credit_enabled
+                          ? "bg-blue-50 border border-blue-200"
+                          : "bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">
+                          FedNow Credit
+                        </span>
+                        {account.fednow_credit_enabled ? (
+                          <FaCheckCircle className="text-blue-500" />
+                        ) : (
+                          <FaTimesCircle className="text-gray-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                    </div>
+
+                    <div
+                      className={`p-3 rounded-lg ${
+                        account.fednow_debit_enabled
+                          ? "bg-blue-50 border border-blue-200"
+                          : "bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">
+                          FedNow Debit
+                        </span>
+                        {account.fednow_debit_enabled ? (
+                          <FaCheckCircle className="text-blue-500" />
+                        ) : (
+                          <FaTimesCircle className="text-gray-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                    </div>
+
+                    <div
+                      className={`p-3 rounded-lg ${
+                        account.rtp_credit_enabled
+                          ? "bg-teal-50 border border-teal-200"
+                          : "bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">
+                          RTP Credit
+                        </span>
+                        {account.rtp_credit_enabled ? (
+                          <FaCheckCircle className="text-teal-500" />
+                        ) : (
+                          <FaTimesCircle className="text-gray-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Overlay */}
+      <AnimatePresence>
+        {showDeleteConfirm === account.account_id && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-red-50 border-t border-red-100 p-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-start">
+                <div className="mr-4 p-3 bg-red-100 rounded-xl">
+                  <FaExclamationTriangle className="text-red-600 text-xl" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-red-800 text-lg">
+                    Remove this account?
+                  </h4>
+                  <p className="text-red-600 mt-1">
+                    This will permanently unlink the account from our system.
+                    All payment methods using this account will be disabled.
+                  </p>
+                  <p className="text-sm text-red-500 mt-2">
+                    Account: {account.account_name} • Bank:{" "}
+                    {account.bank || account.provider}
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() =>
+                    onDelete(account.account_id, account.account_name)
+                  }
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? (
+                    <span className="flex items-center">
+                      <FaSyncAlt className="animate-spin mr-2" />
+                      Removing...
+                    </span>
+                  ) : (
+                    "Remove Account"
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+// Pagination Component
+const Pagination = ({ currentPage, totalPages, onPageChange }) => (
+  <div className="flex items-center justify-center space-x-2 mt-8">
+    <button
+      onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+      disabled={currentPage === 1}
+      className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+    >
+      ←
+    </button>
+
+    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+      let pageNum;
+      if (totalPages <= 5) {
+        pageNum = i + 1;
+      } else if (currentPage <= 3) {
+        pageNum = i + 1;
+      } else if (currentPage >= totalPages - 2) {
+        pageNum = totalPages - 4 + i;
+      } else {
+        pageNum = currentPage - 2 + i;
+      }
+
+      return (
+        <button
+          key={pageNum}
+          onClick={() => onPageChange(pageNum)}
+          className={`w-10 h-10 rounded-lg font-medium transition-all ${
+            currentPage === pageNum
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          {pageNum}
+        </button>
+      );
+    })}
+
+    <button
+      onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+      disabled={currentPage === totalPages}
+      className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+    >
+      →
+    </button>
+
+    <div className="ml-4 text-sm text-gray-500">
+      Page {currentPage} of {totalPages}
+    </div>
+  </div>
+);
+
+// ========== MAIN BANKLINK COMPONENT ==========
 const BankLink = () => {
   const dispatch = useDispatch();
   const { customerId } = useParams();
@@ -73,17 +546,10 @@ const BankLink = () => {
   const navigate = useNavigate();
   const [expandedAccount, setExpandedAccount] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showPlaidButton, setShowPlaidButton] = useState(true);
 
   // Check if we should auto-open Plaid link (from card payment flow)
   const shouldAutoOpenPlaid = location.state?.autoOpenBankTab;
-
-  useEffect(() => {
-    if (shouldAutoOpenPlaid) {
-      setTimeout(() => {
-        dispatch(setShowPlaidLink(true));
-      }, 500);
-    }
-  }, [customerId, location.state, shouldAutoOpenPlaid, dispatch]);
 
   // Select state from Redux
   const bankAccounts = useSelector(selectBankAccounts);
@@ -104,6 +570,35 @@ const BankLink = () => {
   const hasAccounts = useSelector(selectHasAccounts);
   const currentPage = useSelector(selectCurrentPage);
 
+  // ========== ALL FUNCTIONS MOVED HERE (ABOVE EMPTY STATE) ==========
+
+  // Auto-open Plaid effect
+  useEffect(() => {
+    if (shouldAutoOpenPlaid) {
+      setTimeout(() => {
+        dispatch(setShowPlaidLink(true));
+      }, 500);
+    }
+  }, [customerId, location.state, shouldAutoOpenPlaid, dispatch]);
+
+  // Debug effect
+  useEffect(() => {
+    console.log("🔍 Debug - SuccessModal conditions:", {
+      showSuccessModal,
+      apiResponseExists: !!apiResponse,
+      apiResponse,
+      hasSuccessAccounts: apiResponse?.success_accounts?.length > 0,
+      hasFailedAccounts: apiResponse?.failed_accounts?.length > 0,
+    });
+  }, [showSuccessModal, apiResponse]);
+
+  // Debug render log
+  console.log("🔄 Rendering BankLink - Modal should show?", {
+    showSuccessModal,
+    apiResponse,
+    hasAccounts,
+  });
+
   // Fetch bank accounts on component mount
   useEffect(() => {
     if (customerId) {
@@ -111,7 +606,7 @@ const BankLink = () => {
     }
   }, [customerId, dispatch]);
 
-  // Event handlers
+  // Event handlers - ALL DEFINED BEFORE EMPTY STATE
   const handleRefresh = useCallback(() => {
     if (customerId && !isRefreshing) {
       dispatch(fetchBankAccounts(customerId));
@@ -125,16 +620,33 @@ const BankLink = () => {
         setShowDeleteConfirm(null);
       }
     },
-    [customerId, dispatch]
+    [customerId, dispatch],
   );
 
   const handleBankLinkSuccessCallback = useCallback(
     (response) => {
+      console.log("🎯 Bank linking response received:", response);
+
       if (customerId) {
-        dispatch(handleBankLinkSuccess({ response, customerId }));
+        // Set the API response in Redux
+        dispatch({
+          type: "bankLink/setApiResponse",
+          payload: response,
+        });
+
+        // Show the success modal
+        dispatch(setShowSuccessModal(true));
+
+        // Close the Plaid modal
+        dispatch(setShowPlaidLink(false));
+
+        // Refresh accounts if any succeeded
+        if (response.success_accounts?.length > 0) {
+          dispatch(fetchBankAccounts(customerId));
+        }
       }
     },
-    [customerId, dispatch]
+    [customerId, dispatch],
   );
 
   const handleCloseSuccessModal = useCallback(() => {
@@ -144,7 +656,7 @@ const BankLink = () => {
       // If we came from card payment, offer to return
       if (location.state?.returnToCard) {
         const returnToCard = window.confirm(
-          "Bank account linked successfully! Would you like to return to card payment?"
+          "Bank account linked successfully! Would you like to return to card payment?",
         );
         if (returnToCard) {
           navigate("/deposit", { state: { openCardPayment: true } });
@@ -157,7 +669,7 @@ const BankLink = () => {
     (pageNumber) => {
       dispatch(setCurrentPage(pageNumber));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const handleDismissError = useCallback(() => {
@@ -167,6 +679,40 @@ const BankLink = () => {
   const handleReturnToCardPayment = useCallback(() => {
     navigate("/deposit", { state: { openCardPayment: true } });
   }, [navigate]);
+
+  const handleLinkNewAccount = useCallback(() => {
+    // Smooth scroll to top of the page
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    // Hide the parent button
+    setShowPlaidButton(false);
+    // Show the Plaid modal
+    dispatch(setShowPlaidLink(true));
+  }, [dispatch]);
+
+  const handleClosePlaidModal = useCallback(() => {
+    // Hide the Plaid modal
+    dispatch(setShowPlaidLink(false));
+    // Show the parent button again after closing
+    setShowPlaidButton(true);
+  }, [dispatch]);
+
+  const handleContinueSuccessModal = useCallback(() => {
+    if (customerId) {
+      // Use the new thunk to refresh accounts
+      dispatch(refreshAccountsAfterSuccess(customerId))
+        .then(() => {
+          // Close the modal after accounts are refreshed
+          dispatch(setShowSuccessModal(false));
+        })
+        .catch(() => {
+          dispatch(setShowSuccessModal(false));
+        });
+    }
+  }, [customerId, dispatch]);
 
   // Memoized values
   const refreshButtonDisabled = useMemo(() => {
@@ -180,500 +726,24 @@ const BankLink = () => {
   // Show special message if we came from card payment flow
   const showCardPaymentMessage = location.state?.returnToCard;
 
-  // Helper function to get status badge
-  const getStatusBadge = (account) => {
-    if (account.is_frozen === 1) {
-      return {
-        text: "Frozen",
-        color: "bg-red-100 text-red-800 border-red-200",
-        icon: FaSnowflake,
-      };
-    }
-    if (account.is_deleted === 1) {
-      return {
-        text: "Deleted",
-        color: "bg-gray-100 text-gray-800 border-gray-200",
-        icon: FaBan,
-      };
-    }
-    if (account.isLinkedOnSila === 1) {
-      return {
-        text: "Linked to SILA",
-        color: "bg-green-100 text-green-800 border-green-200",
-        icon: FaLink,
-      };
-    }
-    return {
-      text: "Active",
-      color: "bg-blue-100 text-blue-800 border-blue-200",
-      icon: FaCheckCircle,
+  // Account Summary Stats
+  const accountStats = useMemo(() => {
+    const stats = {
+      total: bankAccounts.length,
+      linkedToSila: bankAccounts.filter((acc) => acc.isLinkedOnSila === 1)
+        .length,
+      plaidLinked: bankAccounts.filter((acc) => acc.isPlaid === 1).length,
+      active: bankAccounts.filter(
+        (acc) => acc.is_frozen === 0 && acc.is_deleted === 0,
+      ).length,
+      frozen: bankAccounts.filter((acc) => acc.is_frozen === 1).length,
+      webDebitVerified: bankAccounts.filter((acc) => acc.web_debit_verified)
+        .length,
     };
-  };
+    return stats;
+  }, [bankAccounts]);
 
-  // Helper function to get verification badges
-  const getVerificationBadges = (account) => {
-    const badges = [];
-
-    if (account.web_debit_verified) {
-      badges.push({
-        text: "Web Debit",
-        color: "bg-purple-100 text-purple-800",
-        icon: FaCheckCircle,
-      });
-    }
-
-    if (account.fednow_credit_enabled) {
-      badges.push({
-        text: "FedNow Credit",
-        color: "bg-indigo-100 text-indigo-800",
-        icon: FaNetworkWired,
-      });
-    }
-
-    if (account.rtp_credit_enabled) {
-      badges.push({
-        text: "RTP Credit",
-        color: "bg-teal-100 text-teal-800",
-        icon: FaNetworkWired,
-      });
-    }
-
-    if (account.isPlaid === 1) {
-      badges.push({
-        text: "Plaid Linked",
-        color: "bg-orange-100 text-orange-800",
-        icon: FaShieldAlt,
-      });
-    }
-
-    return badges;
-  };
-
-  // Detailed Account Card Component
-  const DetailedAccountCard = ({ account, onDelete, isDeleting }) => {
-    const isExpanded = expandedAccount === account.account_id;
-    const status = getStatusBadge(account);
-    const verificationBadges = getVerificationBadges(account);
-    const StatusIcon = status.icon;
-
-    return (
-      <motion.div
-        layout
-        className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 overflow-hidden"
-      >
-        {/* Account Header */}
-        <div className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start space-x-4 flex-1">
-              {/* Bank Icon */}
-              <div
-                className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                  account.isPlaid === 1
-                    ? "bg-gradient-to-br from-blue-500 to-indigo-600"
-                    : "bg-gradient-to-br from-gray-600 to-gray-800"
-                }`}
-              >
-                <FaBuilding className="text-white text-xl" />
-              </div>
-
-              {/* Account Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <h3 className="text-lg font-semibold text-gray-900 truncate">
-                      {account.account_name ||
-                        `${account.firstName} ${account.lastName}`}
-                    </h3>
-                    <span
-                      className={`px-3 py-1 text-xs font-medium rounded-full border ${status.color} flex items-center`}
-                    >
-                      <StatusIcon className="mr-1.5" size={10} />
-                      {status.text}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      setExpandedAccount(isExpanded ? null : account.account_id)
-                    }
-                    className="ml-4 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50"
-                  >
-                    {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
-                  </button>
-                </div>
-
-                {/* Bank Details */}
-                <div className="flex flex-wrap items-center gap-3 mb-3">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FaBuilding className="mr-2 text-gray-400" />
-                    <span className="font-medium">
-                      {account.bank || account.provider || "Unknown Bank"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FaIdCard className="mr-2 text-gray-400" />
-                    <span>Account: {account.accountNumberHash}</span>
-                  </div>
-
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FaDollarSign className="mr-2 text-gray-400" />
-                    <span>{account.account_type || "Checking"}</span>
-                  </div>
-
-                  {account.routing_number && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <FaNetworkWired className="mr-2 text-gray-400" />
-                      <span>
-                        Routing: •••{account.routing_number.slice(-4)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Verification Badges */}
-                {verificationBadges.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {verificationBadges.map((badge, idx) => (
-                      <span
-                        key={idx}
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${badge.color}`}
-                      >
-                        {badge.text}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col items-end space-y-3 ml-6">
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Linked Status</p>
-                <div className="flex items-center justify-end mt-1">
-                  {account.isLinkedOnSila === 1 ? (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <FaLink className="mr-1.5" size={10} />
-                      SILA Linked
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      <FaUnlink className="mr-1.5" size={10} />
-                      Not on SILA
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowDeleteConfirm(account.account_id)}
-                disabled={isDeleting}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDeleting
-                    ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                    : "bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-                }`}
-              >
-                {isDeleting ? "Removing..." : "Remove Account"}
-              </motion.button>
-            </div>
-          </div>
-        </div>
-
-        {/* Expanded Details */}
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="border-t border-gray-100"
-            >
-              <div className="p-6 bg-gray-50">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Account Information */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 flex items-center">
-                      <FaInfoCircle className="mr-2 text-blue-500" />
-                      Account Information
-                    </h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Account Name</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.account_name || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Account Type</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.account_type || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Account Number</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.accountNumberHash || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Routing Number</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.routing_number || "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Customer Information */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 flex items-center">
-                      <FaUser className="mr-2 text-green-500" />
-                      Customer Information
-                    </h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Customer Name</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.firstName && account.lastName
-                            ? `${account.firstName} ${account.lastName}`
-                            : "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Customer ID</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.customer_id || "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Technical Details */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 flex items-center">
-                      <FaCog className="mr-2 text-purple-500" />
-                      Technical Details
-                    </h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Account ID</p>
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {account.account_id || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Provider</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.provider || "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Features */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 flex items-center">
-                      <FaNetworkWired className="mr-2 text-indigo-500" />
-                      Payment Features
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div
-                        className={`p-3 rounded-lg ${
-                          account.web_debit_verified
-                            ? "bg-green-50 border border-green-200"
-                            : "bg-gray-50 border border-gray-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            Web Debit
-                          </span>
-                          {account.web_debit_verified ? (
-                            <FaCheckCircle className="text-green-500" />
-                          ) : (
-                            <FaTimesCircle className="text-gray-400" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Verified</p>
-                      </div>
-
-                      <div
-                        className={`p-3 rounded-lg ${
-                          account.fednow_credit_enabled
-                            ? "bg-blue-50 border border-blue-200"
-                            : "bg-gray-50 border border-gray-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            FedNow Credit
-                          </span>
-                          {account.fednow_credit_enabled ? (
-                            <FaCheckCircle className="text-blue-500" />
-                          ) : (
-                            <FaTimesCircle className="text-gray-400" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Enabled</p>
-                      </div>
-
-                      <div
-                        className={`p-3 rounded-lg ${
-                          account.fednow_debit_enabled
-                            ? "bg-blue-50 border border-blue-200"
-                            : "bg-gray-50 border border-gray-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            FedNow Debit
-                          </span>
-                          {account.fednow_debit_enabled ? (
-                            <FaCheckCircle className="text-blue-500" />
-                          ) : (
-                            <FaTimesCircle className="text-gray-400" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Enabled</p>
-                      </div>
-
-                      <div
-                        className={`p-3 rounded-lg ${
-                          account.rtp_credit_enabled
-                            ? "bg-teal-50 border border-teal-200"
-                            : "bg-gray-50 border border-gray-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            RTP Credit
-                          </span>
-                          {account.rtp_credit_enabled ? (
-                            <FaCheckCircle className="text-teal-500" />
-                          ) : (
-                            <FaTimesCircle className="text-gray-400" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Enabled</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Account Status */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900 flex items-center">
-                      <FaCheckCircle className="mr-2 text-amber-500" />
-                      Account Status
-                    </h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          Plaid Integration
-                        </p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.isPlaid === 1 ? (
-                            <span className="inline-flex items-center text-green-600">
-                              <FaCheckCircle className="mr-1.5" />
-                              Enabled
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-gray-600">
-                              <FaTimesCircle className="mr-1.5" />
-                              Not Enabled
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">SILA Linked</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.isLinkedOnSila === 1 ? (
-                            <span className="inline-flex items-center text-green-600">
-                              <FaLink className="mr-1.5" />
-                              Linked
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-gray-600">
-                              <FaUnlink className="mr-1.5" />
-                              Not Linked
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Delete Confirmation Overlay */}
-        <AnimatePresence>
-          {showDeleteConfirm === account.account_id && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-red-50 border-t border-red-100 p-6"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-start">
-                  <div className="mr-4 p-3 bg-red-100 rounded-xl">
-                    <FaExclamationTriangle className="text-red-600 text-xl" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-red-800 text-lg">
-                      Remove this account?
-                    </h4>
-                    <p className="text-red-600 mt-1">
-                      This will permanently unlink the account from our system.
-                      All payment methods using this account will be disabled.
-                    </p>
-                    <p className="text-sm text-red-500 mt-2">
-                      Account: {account.account_name} • Bank:{" "}
-                      {account.bank || account.provider}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => setShowDeleteConfirm(null)}
-                    className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    disabled={isDeleting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() =>
-                      onDelete(account.account_id, account.account_name)
-                    }
-                    disabled={isDeleting}
-                    className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDeleting ? (
-                      <span className="flex items-center">
-                        <FaSyncAlt className="animate-spin mr-2" />
-                        Removing...
-                      </span>
-                    ) : (
-                      "Remove Account"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    );
-  };
-
-  // Empty State Component
+  // ========== EMPTY STATE COMPONENT (NOW HAS ACCESS TO ALL FUNCTIONS) ==========
   const EmptyState = ({
     onAction,
     disabled,
@@ -762,75 +832,7 @@ const BankLink = () => {
     </motion.div>
   );
 
-  // Pagination Component
-  const Pagination = ({ currentPage, totalPages, onPageChange }) => (
-    <div className="flex items-center justify-center space-x-2 mt-8">
-      <button
-        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
-        className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-      >
-        ←
-      </button>
-
-      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-        let pageNum;
-        if (totalPages <= 5) {
-          pageNum = i + 1;
-        } else if (currentPage <= 3) {
-          pageNum = i + 1;
-        } else if (currentPage >= totalPages - 2) {
-          pageNum = totalPages - 4 + i;
-        } else {
-          pageNum = currentPage - 2 + i;
-        }
-
-        return (
-          <button
-            key={pageNum}
-            onClick={() => onPageChange(pageNum)}
-            className={`w-10 h-10 rounded-lg font-medium transition-all ${
-              currentPage === pageNum
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            {pageNum}
-          </button>
-        );
-      })}
-
-      <button
-        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-        disabled={currentPage === totalPages}
-        className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-      >
-        →
-      </button>
-
-      <div className="ml-4 text-sm text-gray-500">
-        Page {currentPage} of {totalPages}
-      </div>
-    </div>
-  );
-
-  // Account Summary Stats
-  const accountStats = useMemo(() => {
-    const stats = {
-      total: bankAccounts.length,
-      linkedToSila: bankAccounts.filter((acc) => acc.isLinkedOnSila === 1)
-        .length,
-      plaidLinked: bankAccounts.filter((acc) => acc.isPlaid === 1).length,
-      active: bankAccounts.filter(
-        (acc) => acc.is_frozen === 0 && acc.is_deleted === 0
-      ).length,
-      frozen: bankAccounts.filter((acc) => acc.is_frozen === 1).length,
-      webDebitVerified: bankAccounts.filter((acc) => acc.web_debit_verified)
-        .length,
-    };
-    return stats;
-  }, [bankAccounts]);
-
+  // ========== MAIN RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-25 to-gray-50">
       {/* Main Container */}
@@ -886,118 +888,25 @@ const BankLink = () => {
                 />
               </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => dispatch(setShowPlaidLink(true))}
-                disabled={linkButtonDisabled}
-                className={`inline-flex items-center px-6 py-3.5 rounded-xl font-semibold shadow-sm transition-all duration-200 ${
-                  linkButtonDisabled
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-md hover:shadow-blue-500/25"
-                }`}
-              >
-                <FaPlus className="mr-2.5" />
-                Link New Account
-              </motion.button>
+              {showPlaidButton && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleLinkNewAccount}
+                  disabled={linkButtonDisabled}
+                  className={`inline-flex items-center px-6 py-3.5 rounded-xl font-semibold shadow-sm transition-all duration-200 ${
+                    linkButtonDisabled
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-md hover:shadow-blue-500/25"
+                  }`}
+                >
+                  <FaPlus className="mr-2.5" />
+                  Link New Account
+                </motion.button>
+              )}
             </div>
           </div>
         </motion.header>
-
-        {/* Account Statistics Dashboard */}
-        {hasAccounts && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Accounts</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {accountStats.total}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaBuilding className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">SILA Linked</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {accountStats.linkedToSila}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <FaLink className="text-green-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Plaid Linked</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {accountStats.plaidLinked}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-orange-50 rounded-lg">
-                    <FaShieldAlt className="text-orange-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Active</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {accountStats.active}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaCheckCircle className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">Frozen</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {accountStats.frozen}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <FaSnowflake className="text-red-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Web Debit Verified</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {accountStats.webDebitVerified}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <FaCreditCard className="text-purple-600" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
 
         <main className="pb-12">
           {/* Enhanced Card Payment Banner */}
@@ -1031,27 +940,22 @@ const BankLink = () => {
           {/* Enhanced Plaid Link Modal */}
           {showPlaidLink && (
             <ZapPlaidLink
-              customerId={customerId}
               onSuccess={handleBankLinkSuccessCallback}
-              onClose={() => {
-                dispatch(setShowPlaidLink(false));
-                dispatch(fetchBankAccounts(customerId)); // Refresh accounts after linking
-              }}
-              onError={(error) => {
-                dispatch(clearErrors());
-                dispatch(setShowPlaidLink(false));
-                toast.error("Failed to connect bank account");
-              }}
-              autoInitialize={true} // This makes it invisible and auto-initializes Plaid
+              onClose={handleClosePlaidModal}
+              showButton={!showPlaidButton}
             />
           )}
-          
+
           {/* Enhanced Success Modal */}
           {showSuccessModal && apiResponse && (
             <SuccessModal
               response={apiResponse}
-              onClose={handleCloseSuccessModal}
-              isProcessing={isProcessing || isAddingAccount}
+              onClose={() => {
+                // Just close the modal without refreshing
+                dispatch(setShowSuccessModal(false));
+              }}
+              onContinue={handleContinueSuccessModal}
+              isProcessing={isProcessing}
             />
           )}
 
@@ -1160,10 +1064,6 @@ const BankLink = () => {
                         methods
                       </p>
                     </div>
-                    <div className="flex items-center text-sm text-gray-500 bg-gray-50 px-4 py-2.5 rounded-xl">
-                      <FaLock className="mr-2.5 text-gray-400" />
-                      <span>All connections are 256-bit encrypted</span>
-                    </div>
                   </div>
 
                   {/* Enhanced Accounts List */}
@@ -1174,6 +1074,10 @@ const BankLink = () => {
                         account={account}
                         onDelete={handleDeleteAccount}
                         isDeleting={deletingAccountId === account.account_id}
+                        expandedAccount={expandedAccount}
+                        setExpandedAccount={setExpandedAccount}
+                        showDeleteConfirm={showDeleteConfirm}
+                        setShowDeleteConfirm={setShowDeleteConfirm}
                       />
                     ))}
                   </div>
@@ -1210,16 +1114,14 @@ const BankLink = () => {
                   )}
                 </motion.div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <EmptyState
-                    onAction={() => dispatch(setShowPlaidLink(true))}
-                    disabled={loading || isAddingAccount}
-                    showCardPaymentMessage={showCardPaymentMessage}
-                    onReturnToCard={
-                      showCardPaymentMessage ? handleReturnToCardPayment : null
-                    }
-                  />
-                </motion.div>
+                <EmptyState
+                  onAction={handleLinkNewAccount}
+                  disabled={loading || isAddingAccount}
+                  showCardPaymentMessage={showCardPaymentMessage}
+                  onReturnToCard={
+                    showCardPaymentMessage ? handleReturnToCardPayment : null
+                  }
+                />
               )}
             </>
           )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef  } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -7,8 +7,9 @@ import {
   faEye,
   faEyeSlash,
   faCheckCircle,
+  faExclamationCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import {  RingLoader } from "react-spinners";
+import { RingLoader } from "react-spinners";
 import Select from "react-select";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -17,16 +18,20 @@ import ErrorModal from "../../../components/PopupModal/ErrorModal";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 import RegistrationLayout from "../../../components/ProgressBar/RegistrationLayout";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
-import { tokenService } from "../../../services/authService";
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
+import {
+  selectIsNamedAccount as selectIsNamedAccountFromCurrency,
+  selectSelectedAccounts,
+  selectAccountOptions,
+} from "../SignUp/SelectCurrencyAccount/currencyAccountsSelectors";
 
 import {
   fetchCountries,
   setSelectedCountry,
   clearZipLookupData,
-  fetchLocationByZip, 
+  fetchLocationByZip,
   selectCountries,
   selectSelectedCountry,
   selectLocationLoading,
@@ -51,6 +56,7 @@ import {
   selectShowSSNField,
   selectHasNamedAccounts,
   selectIsUSDSelected,
+  selectIsNamedAccount as selectIsNamedAccountFromSignup,
   selectSSNError,
   selectShowSSNConfirmation,
   selectNationalitiesLoading,
@@ -86,7 +92,7 @@ class ErrorBoundary extends React.Component {
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+          <div className="max-w-4xl w-full bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <svg
                 className="w-8 h-8 text-red-600"
@@ -121,6 +127,223 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Helper functions for section validation
+const getSectionFields = (sectionIndex, values) => {
+  switch (sectionIndex) {
+    case 0: // Personal Information
+      const fields = [
+        "first_name",
+        "last_name",
+        "email",
+        "dob",
+        "nationality",
+        "gender",
+      ];
+      // Add middle_name if filled but not required
+      if (values.middle_name && values.middle_name.trim() !== "") {
+        fields.push("middle_name");
+      }
+      return fields;
+
+    case 1: // Contact Information
+      return [
+        "country",
+        "zip_code",
+        "state",
+        "city",
+        "street_address_1",
+        "mobile_number",
+        "mobilenumber_countrycode",
+      ];
+
+    case 2: // Identity Verification
+      const idFields = [
+        "idDocumentType",
+        "idDocumentNumber",
+        "idIssuedDate",
+        "idIssuedCountryCode",
+      ];
+      if (values.idDocumentType === "other") {
+        idFields.push("idDocumentTypeOther");
+      }
+
+      // Add SSN if required
+      const hasUSDNamedAccount = values.isNamedAccount;
+      const isRemittanceOnly =
+        values.remit_customer === true || values.remit_customer === "true";
+      const isUSCountry =
+        values.country === "United States" || values.country === 186;
+      const shouldShowSSNField =
+        (hasUSDNamedAccount && isUSCountry) ||
+        (isRemittanceOnly && isUSCountry);
+
+      if (shouldShowSSNField) {
+        idFields.push("ssn");
+      }
+
+      return idFields;
+
+    case 3: // Security
+      return ["password", "confirmPassword"];
+
+    case 4: // Terms & Conditions
+      return [];
+
+    default:
+      return [];
+  }
+};
+
+const getSectionRequiredFields = (sectionIndex) => {
+  switch (sectionIndex) {
+    case 0: // Personal Information
+      return [
+        "first_name",
+        "last_name",
+        "email",
+        "dob",
+        "nationality",
+        "gender",
+      ];
+
+    case 1: // Contact Information
+      return [
+        "country",
+        "zip_code",
+        "state",
+        "city",
+        "street_address_1",
+        "mobile_number",
+        "mobilenumber_countrycode",
+      ];
+
+    case 2: // Identity Verification
+      return [
+        "idDocumentType",
+        "idDocumentNumber",
+        "idIssuedDate",
+        "idIssuedCountryCode",
+      ];
+
+    case 3: // Security
+      return ["password", "confirmPassword"];
+
+    case 4: // Terms & Conditions
+      return [];
+
+    default:
+      return [];
+  }
+};
+
+// SIMPLIFIED Validation schema - FIXED
+const createValidationSchema = () => {
+  return Yup.object({
+    first_name: Yup.string()
+      .required("First name is required")
+      .min(2, "First name must be at least 2 characters")
+      .max(50, "First name cannot exceed 50 characters"),
+
+    last_name: Yup.string()
+      .required("Last name is required")
+      .min(2, "Last name must be at least 2 characters")
+      .max(50, "Last name cannot exceed 50 characters"),
+
+    middle_name: Yup.string().max(
+      50,
+      "Middle name cannot exceed 50 characters",
+    ),
+
+    email: Yup.string()
+      .email("Invalid email address")
+      .required("Email is required")
+      .matches(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email format"),
+
+    dob: Yup.date()
+      .required("Date of birth is required")
+      .max(
+        new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
+        "You must be at least 18 years old",
+      ),
+
+    nationality: Yup.string().required("Nationality is required"),
+
+    gender: Yup.string().required("Gender is required"),
+
+    country: Yup.mixed().required("Country is required"),
+
+    // REMOVED character count validation
+    zip_code: Yup.string().required("ZIP/Postal code is required"),
+
+    // REMOVED character count validation
+    state: Yup.string().required("State/Province is required"),
+
+    // REMOVED character count validation
+    city: Yup.string().required("City is required"),
+
+    // REMOVED character count validation
+    street_address_1: Yup.string().required("Street address is required"),
+
+    mobile_number: Yup.string()
+      .required("Phone number is required")
+      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
+
+    mobilenumber_countrycode: Yup.string().required("Country code is required"),
+
+    ssn: Yup.string().test(
+      "ssn-validation",
+      "SSN must be in format XXX-XX-XXXX",
+      function (value) {
+        if (!value) return true; // Not required unless specific conditions
+        const cleanSSN = value.replace(/-/g, "");
+        return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
+      },
+    ),
+
+    idDocumentType: Yup.string().required("ID Document Type is required"),
+
+    idDocumentNumber: Yup.string()
+      .required("ID Document Number is required")
+      .min(2, "Document number must be at least 2 characters"),
+
+    idIssuedDate: Yup.string()
+      .required("ID Expiry Date is required")
+      .test(
+        "future-date",
+        "Expiry date must be in the future",
+        function (value) {
+          if (!value) return false;
+          const expiryDate = new Date(value);
+          const today = new Date();
+          return expiryDate > today;
+        },
+      ),
+
+    idIssuedCountryCode: Yup.string().required("Issuing Country is required"),
+
+    idDocumentTypeOther: Yup.string().when("idDocumentType", {
+      is: "other",
+      then: Yup.string()
+        .required("Please specify document type")
+        .min(2, "Document type must be at least 2 characters"),
+    }),
+
+    password: Yup.string()
+      .required("Password is required")
+      .min(12, "Password must be at least 12 characters")
+      .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .matches(
+        /[!@#$%^&*(),.?":{}|<>]/,
+        "Password must contain at least one special character",
+      ),
+
+    // FIXED: Simple and reliable confirmPassword validation
+    confirmPassword: Yup.string()
+      .required("Confirm password is required")
+      .oneOf([Yup.ref("password")], "Passwords must match"),
+  });
+};
+
 // Main component function
 function SignUpIndividualContent() {
   // State declarations
@@ -138,41 +361,59 @@ function SignUpIndividualContent() {
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
   const [activeSection, setActiveSection] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [sectionErrors, setSectionErrors] = useState({
+    0: [],
+    1: [],
+    2: [],
+    3: [],
+    4: [],
+  });
+  const [showAllErrors, setShowAllErrors] = useState(false);
 
-  // New state variables for additional features
-  const [selectedIdDocumentType, setSelectedIdDocumentType] = useState("");
-  const [idDocumentTypeOther, setIdDocumentTypeOther] = useState("");
-  const [idDocumentNumber, setIdDocumentNumber] = useState("");
-  const [idIssuedCountryCode, setIdIssuedCountryCode] = useState("US");
-  const [idIssuedDate, setIdIssuedDate] = useState("");
-  const [ssnIssuedState, setSsnIssuedState] = useState("NY");
   const [isCancelling, setIsCancelling] = useState(false);
   const [showSSN, setShowSSN] = useState(false);
 
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
-  const [isZipLoading, setIsZipLoading] = useState(false);
+
+  // Currency account selectors
+  const isNamedAccount = useSelector(selectIsNamedAccountFromCurrency);
+  const selectedAccounts = useSelector(selectSelectedAccounts);
+  const accountOptions = useSelector(selectAccountOptions);
+
+  // Signup slice selectors (for backward compatibility)
+  const showSSNField = useSelector(selectShowSSNField);
+  const hasNamedAccounts = useSelector(selectHasNamedAccounts);
+  const isUSDSelected = useSelector(selectIsUSDSelected);
+  const ssnError = useSelector(selectSSNError);
+  const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
 
   useEffect(() => {
-    console.log("🔍 Token check on mount:", {
-      bearertoken: localStorage.getItem("bearertoken"),
-      tokenServiceToken: tokenService.getToken(),
-      authtoken: localStorage.getItem("authtoken"),
-      timestamp: new Date().toISOString(),
+    console.log("🔍 Selector Debug:", {
+      isNamedAccount,
+      hasNamedAccounts,
+      isUSDSelected,
+      showSSNField,
+      selectedAccounts,
+      accountOptionsLength: accountOptions?.length || 0,
     });
-  }, []);
+  }, [
+    isNamedAccount,
+    hasNamedAccounts,
+    isUSDSelected,
+    showSSNField,
+    selectedAccounts,
+    accountOptions,
+  ]);
 
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const countryCodeRef = useRef('');
+  const countryCodeRef = useRef("");
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
   const selectedCountry = useSelector(selectSelectedCountry);
-  const {
-    countries: loadingCountries,
-  
-  } = useSelector(selectLocationLoading);
+  const { countries: loadingCountries } = useSelector(selectLocationLoading);
 
   // Other Redux selectors
   const termsConditions = useSelector(selectTermsConditions) || [];
@@ -183,18 +424,20 @@ function SignUpIndividualContent() {
   const nationalities = useSelector(selectNationalities) || [];
   const idDocumentTypes = useSelector(selectIdDocumentTypes) || [];
 
-  const showSSNField = useSelector(selectShowSSNField);
-  const hasNamedAccounts = useSelector(selectHasNamedAccounts);
-  const isUSDSelected = useSelector(selectIsUSDSelected);
-  const ssnError = useSelector(selectSSNError);
-  const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
-
   const isLoadingNationalities = useSelector(selectNationalitiesLoading);
   const isLoadingDocumentTypes = useSelector(selectIdDocumentTypesLoading);
 
   const zipLookup = useSelector(selectZipLookup);
 
   // Extract location state with defaults
+  const locationState = location.state || {};
+  console.log("📥 LOCATION STATE RECEIVED:", {
+    locationState,
+    remit_customer: locationState.remit_customer,
+    isRemit: locationState.remit_customer,
+    type: typeof locationState.remit_customer,
+  });
+
   const {
     service_provide_ids = [],
     referral_code = "",
@@ -203,10 +446,10 @@ function SignUpIndividualContent() {
     bank_accounts = [],
     kyc_verify = [],
     accountType = null,
-    is_remit: isRemit = false,
+    remit_customer: isRemit = false,
     ssn_required = "N",
     show_remittance_only_on_registration = false,
-    accountOptions = [],
+    accountOptions: locationAccountOptions = [],
   } = location.state || {};
 
   const formSections = [
@@ -223,62 +466,7 @@ function SignUpIndividualContent() {
   const isPartnerPackageModule = localStorage.getItem("isPartnerPackageModule");
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // Update validation schema for state/city
-  const validationSchema = Yup.object({
-    first_name: Yup.string().required("First name is required"),
-    last_name: Yup.string().required("Last name is required"),
-    email: Yup.string().email("Invalid email").required("Email is required"),
-    password: Yup.string()
-      .min(12, "Password must be at least 12 characters")
-      .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .matches(
-        /[!@#$%^&*(),.?":{}|<>]/,
-        "Password must contain at least one special character"
-      )
-      .required("Password is required"),
-    confirmPassword: Yup.string()
-      .oneOf([Yup.ref("password"), null], "Passwords must match")
-      .required("Confirm password is required"),
-    mobile_number: Yup.string()
-      .required("Phone number is required")
-      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
-    street_address_1: Yup.string().required("Street address is required"),
-    city: Yup.string().required("City is required"),
-    state: Yup.string().required("State/Province is required"),
-    zip_code: Yup.string().required("ZIP/Postal code is required"),
-    country: Yup.string().required("Country is required"),
-    nationality: Yup.string().required("Nationality is required"),
-    gender: Yup.string().required("Gender is required"),
-    dob: Yup.date()
-      .required("Date of birth is required")
-      .max(
-        new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
-        "You must be at least 18 years old"
-      ),
-    ssn: Yup.string().test(
-      "ssn-conditional",
-      "SSN must be in format XXX-XX-XXXX",
-      function (value) {
-        const { showSSNField, hasNamedAccounts } = this.parent;
-
-        if (!showSSNField || !hasNamedAccounts) {
-          return true;
-        }
-
-        if (!value) {
-          return this.createError({
-            message: "SSN is required for named accounts",
-          });
-        }
-
-        const cleanSSN = value.replace(/-/g, "");
-        return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
-      }
-    ),
-    mobilenumber_countrycode: Yup.string().required("Country code is required"),
-  });
-
-  // Enhanced formik configuration
+  // Enhanced formik configuration - REMOVED custom validation function
   const formik = useFormik({
     initialValues: {
       customer_type: "individual",
@@ -304,30 +492,32 @@ function SignUpIndividualContent() {
       gender: "",
       dob: "",
       ssn: "",
-      house_number: "",
       idDocumentType: "",
       idDocumentNumber: "",
       idIssuedDate: "",
-      idIssuedCountryCode: "US",
+      idIssuedCountryCode: "",
       idDocumentTypeOther: "",
-      ssnIssuedState: "NY",
       accept_sms: 0,
       accept_privacy_policy: 0,
       accept_disclosure: 0,
       accept_fees: 0,
       showSSNField: showSSNField,
-      hasNamedAccounts: hasNamedAccounts,
+      isNamedAccount: isNamedAccount,
+      selectedAccounts: selectedAccounts,
+      remit_customer: isRemit,
     },
-    validationSchema: validationSchema,
+    validationSchema: createValidationSchema(), // Use ONLY Yup validation
     validateOnBlur: true,
-    validateOnChange: false,
+    validateOnChange: true,
     onSubmit: async (values, { setErrors, setSubmitting }) => {
       try {
+        console.log("🚀 Form submission started");
         setIsSubmitting(true);
         setShowFullScreenLoader(true);
 
         dispatch(setMetadataField({ field: "ssnError", value: "" }));
 
+        // Check terms and conditions
         if (
           termsFetched &&
           termsConditions.length > 0 &&
@@ -340,135 +530,333 @@ function SignUpIndividualContent() {
           return;
         }
 
-        if (!selectedIdDocumentType) {
-          setErrorMessage("Please select an ID document type");
-          setIsModalOpen(true);
+        // Check if all sections are valid
+        const allErrors = await formik.validateForm();
+        const hasErrors = Object.keys(allErrors).length > 0;
+
+        if (hasErrors) {
+          setShowAllErrors(true);
+          setActiveSection(0); // Go to first section with errors
+
+          // Find first section with errors
+          for (let i = 0; i < formSections.length - 1; i++) {
+            const sectionFields = getSectionFields(i, values);
+            const sectionHasError = sectionFields.some(
+              (field) => allErrors[field],
+            );
+            if (sectionHasError) {
+              setActiveSection(i);
+              break;
+            }
+          }
+
+          toast.error("Please fix all validation errors before submitting");
           setIsSubmitting(false);
           setShowFullScreenLoader(false);
           return;
         }
 
-        if (!idDocumentNumber) {
-          setErrorMessage("Please enter ID document number");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = Boolean(isRemit);
+
+        // Determine if country is United States
+        const isUSCountry =
+          values.country === "United States" || values.country === 186;
+
+        const shouldShowSSNField =
+          (hasUSDNamedAccount && isUSCountry) ||
+          (isRemittanceOnly && isUSCountry);
+
+        console.log("🔍 DEBUG - SSN Conditions:", {
+          isRemit,
+          isRemitBoolean: Boolean(isRemit),
+          isRemittanceOnly,
+          hasUSDNamedAccount,
+          shouldShowSSN: shouldShowSSNField,
+          locationState: location.state,
+        });
+
+        if (shouldShowSSNField) {
+          const cleanSSN = values.ssn?.replace(/-/g, "") || "";
+
+          if (!values.ssn || values.ssn.trim() === "") {
+            setErrorMessage(
+              hasUSDNamedAccount
+                ? "SSN is required for USD Named Accounts with United States as registered country"
+                : "SSN is required for Remittance Services with United States as registered country",
+            );
+            setIsModalOpen(true);
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
+
+          if (cleanSSN.length !== 9 || !/^\d+$/.test(cleanSSN)) {
+            setErrorMessage("SSN must be 9 digits in format XXX-XX-XXXX");
+            setIsModalOpen(true);
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
+
+          // Show confirmation popup
+          if (values.ssn && values.ssn.trim() !== "") {
+            console.log("📢 Showing SSN confirmation popup");
+            dispatch(
+              setMetadataField({ field: "showSSNConfirmation", value: true }),
+            );
+            setIsSubmitting(false);
+            setShowFullScreenLoader(false);
+            return;
+          }
         }
 
-        if (!idIssuedDate) {
-          setErrorMessage("Please select ID expiry date");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
-
-        if (!idIssuedCountryCode) {
-          setErrorMessage("Please select issuing country");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
-
-        if (
-          showSSNField &&
-          hasNamedAccounts &&
-          values.ssn &&
-          values.ssn.trim() !== ""
-        ) {
-          dispatch(
-            setMetadataField({ field: "showSSNConfirmation", value: true })
-          );
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
+        console.log("✅ Form validation passed. Proceeding to submission...", {
+          idDocumentType: values.idDocumentType,
+          idDocumentNumber: values.idDocumentNumber,
+          idIssuedDate: values.idIssuedDate,
+          idIssuedCountryCode: values.idIssuedCountryCode,
+          idDocumentTypeOther: values.idDocumentTypeOther,
+          ssn_required: ssn_required,
+          hasSSN: !!values.ssn,
+          ssnLength: values.ssn?.replace(/-/g, "").length || 0,
+        });
 
         await handleFormSubmission(values);
       } catch (error) {
-        setErrorMessage("An error occurred during form validation");
+        console.error("❌ Form validation error:", error);
+        setErrorMessage(
+          `An error occurred during form validation: ${error.message}`,
+        );
         setIsModalOpen(true);
         setIsSubmitting(false);
         setShowFullScreenLoader(false);
+      } finally {
+        setSubmitting(false);
       }
     },
   });
 
-  // Handle form submission
+  // DEBUG: Add useEffect to monitor password values and errors
+  useEffect(() => {
+    console.log("🔍 DEBUG - Formik state:", {
+      password: formik.values.password,
+      confirmPassword: formik.values.confirmPassword,
+      areEqual: formik.values.password === formik.values.confirmPassword,
+      passwordError: formik.errors.password,
+      confirmPasswordError: formik.errors.confirmPassword,
+      sectionErrors: sectionErrors[3], // Check section 3 (Security) errors
+      allFormikErrors: formik.errors,
+      touched: {
+        password: formik.touched.password,
+        confirmPassword: formik.touched.confirmPassword,
+      },
+    });
+  }, [
+    formik.values.password,
+    formik.values.confirmPassword,
+    formik.errors,
+    sectionErrors,
+  ]);
+
+  // Function to validate a section
+  const validateCurrentSection = (sectionIndex) => {
+    const sectionFields = getSectionFields(sectionIndex, formik.values);
+    const errors = {};
+
+    // Use Formik's validation results
+    sectionFields.forEach((field) => {
+      if (formik.errors[field]) {
+        errors[field] = formik.errors[field];
+      }
+    });
+
+    return errors;
+  };
+
+  // Handle navigation between sections with validation - UPDATED
+  const handleNextSection = async (currentSection) => {
+    // Mark all fields in current section as touched
+    const sectionFields = getSectionFields(currentSection, formik.values);
+    sectionFields.forEach((field) => {
+      formik.setFieldTouched(field, true);
+    });
+
+    // Trigger Formik validation for current section
+    await formik.validateForm();
+
+    // Get errors from Formik instead of re-validating with Yup
+    const sectionErrors = validateCurrentSection(currentSection);
+
+    if (Object.keys(sectionErrors).length === 0) {
+      // Clear any existing errors for this section
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: [],
+      }));
+
+      // Move to next section
+      if (currentSection < formSections.length - 1) {
+        setActiveSection(currentSection + 1);
+      }
+    } else {
+      // Show errors from Formik
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: Object.entries(sectionErrors).map(
+          ([field, error]) => ({
+            field,
+            error,
+          }),
+        ),
+      }));
+
+      // Show error message
+      const errorCount = Object.keys(sectionErrors).length;
+      toast.error(`Please fix ${errorCount} error(s) before proceeding`);
+
+      // Scroll to first error
+      const firstErrorField = Object.keys(sectionErrors)[0];
+      if (firstErrorField) {
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.focus();
+        }
+      }
+    }
+  };
+
+  const handlePreviousSection = (currentSection) => {
+    if (currentSection > 0) {
+      setActiveSection(currentSection - 1);
+    }
+  };
+
+  // Check if a section is complete
+  const isSectionComplete = async (sectionIndex) => {
+    const errors = await validateCurrentSection(sectionIndex);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleFormSubmission = async (values) => {
     try {
       setShowFullScreenLoader(true);
+      console.log("📝 Formik values before transformation:", values);
 
-      const updatedValues = {
-        ...values,
+      // Prepare the data for submission
+      const submissionData = {
+        customer_type: "individual",
+        first_name: values.first_name,
+        last_name: values.last_name,
+        email: values.email,
         mobilenumber_countrycode: values.mobilenumber_countrycode,
+        mobile_number: values.mobile_number,
+        password: values.password,
+        confirm_password: values.confirmPassword,
+        street_address_1: values.street_address_1,
+        street_address_2: values.street_address_2 || "",
+        city: values.city,
+        state: values.state,
+        zip_code: values.zip_code,
+        country: values.country,
+        nationality: values.nationality,
+        gender: values.gender,
+        dob: values.dob,
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
-        terms_and_conditions: termsFetched ? acceptedTerms : [],
+        idDocumentType: values.idDocumentType,
+        idDocumentNumber: values.idDocumentNumber,
+        idIssuedDate: values.idIssuedDate,
+        idIssuedCountryCode: values.idIssuedCountryCode,
+        idDocumentTypeOther: values.idDocumentTypeOther || "",
+        service_providers: service_provide_ids,
+        referral_code: referral_code || "",
+        agent_code: agent_code || "",
         hostname: window.location.hostname,
         remit_customer: isRemit,
-        bank_account_options: bank_accounts,
-        isPartnerPackageModule: isPartnerPackageModule,
+        bank_account_options: service_provide_ids,
+        isPartnerPackageModule: isPartnerPackageModule || "N",
         package_currencies: package_currencies,
         whitelabelledpartnerid: whitelabelledpartnerid,
         kycVerify: kyc_verify,
-        documentType: selectedIdDocumentType,
-        idDocumentTypeOther: idDocumentTypeOther,
-        ssnIssuedState: ssnIssuedState,
-        issuingCountryCode: idIssuedCountryCode,
-        documentNumber: idDocumentNumber,
-        idIssuedDate: idIssuedDate,
+        terms_and_conditions: termsFetched ? acceptedTerms : [],
+        accept_sms: values.accept_sms || 0,
+        accept_privacy_policy: values.accept_privacy_policy || 0,
+        accept_disclosure: values.accept_disclosure || 0,
+        accept_fees: values.accept_fees || 0,
+        is_named_account: isNamedAccount,
+        has_usd_named_account: isNamedAccount,
+        selected_accounts: selectedAccounts,
+        service_provide_ids: service_provide_ids,
       };
 
-      const resultAction = await dispatch(
-        submitIndividualSignup(updatedValues)
-      );
+      // Clean up empty optional fields
+      const cleanedData = { ...submissionData };
+      Object.keys(cleanedData).forEach((key) => {
+        if (
+          cleanedData[key] === "" ||
+          cleanedData[key] === null ||
+          cleanedData[key] === undefined
+        ) {
+          delete cleanedData[key];
+        }
+      });
+
+      console.log("📤 Final payload being sent:", {
+        ...cleanedData,
+        password: "***HIDDEN***",
+        confirm_password: "***HIDDEN***",
+      });
+
+      // Dispatch the submission action
+      const resultAction = await dispatch(submitIndividualSignup(cleanedData));
 
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
         const responseData = resultAction.payload;
-
-        setSuccessMessage(responseData.message || "Registration successful!");
-        setIsSuccessModalOpen(true);
+        console.log("✅ Submission successful:", responseData);
 
         if (responseData.status === "success") {
-          toast.success(responseData.message || "Registration successful!");
+          setSuccessMessage(responseData.message || "Registration successful!");
+          setIsSuccessModalOpen(true);
 
+          // Navigate to phone verification
           navigate("/phoneverification", {
             state: {
-              mobileNumber: `${updatedValues.mobilenumber_countrycode} ${updatedValues.mobile_number}`,
+              mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
+              hasSSN: !!cleanedData.ssn,
             },
           });
         } else {
-          setErrorMessage(
-            responseData.message || "Something went wrong during registration!"
-          );
+          setErrorMessage(responseData.message || "Registration failed!");
           setIsModalOpen(true);
         }
       } else {
-        const error = resultAction.payload;
+        const error = resultAction.payload || resultAction.error;
+        console.error("❌ Submission rejected:", error);
 
-        if (error.message) {
+        if (error?.message) {
           setErrorMessage(error.message);
           setIsModalOpen(true);
-        } else if (error.errors) {
+        } else if (error?.errors) {
           const formattedErrors = {};
           Object.keys(error.errors).forEach((key) => {
-            formattedErrors[key] = error.errors[key].join(", ");
+            formattedErrors[key] = Array.isArray(error.errors[key])
+              ? error.errors[key].join(", ")
+              : error.errors[key];
           });
           formik.setErrors(formattedErrors);
           toast.error("Please check the form for errors");
         } else {
-          setErrorMessage("Submission Error: Please check all the inputs");
+          setErrorMessage("Submission failed. Please try again.");
           setIsModalOpen(true);
         }
       }
     } catch (error) {
+      console.error("❌ Submission error:", error);
       setErrorMessage(
-        error.message ||
-          "An error occurred during submission. Please try again."
+        error.message || "An unexpected error occurred during submission.",
       );
       setIsModalOpen(true);
     } finally {
@@ -479,6 +867,7 @@ function SignUpIndividualContent() {
 
   // Handle SSN confirmation
   const handleSSNConfirmation = (confirmed) => {
+    console.log("🔍 SSN confirmation:", confirmed);
     dispatch(setMetadataField({ field: "showSSNConfirmation", value: false }));
     if (confirmed) {
       handleFormSubmission(formik.values);
@@ -488,71 +877,69 @@ function SignUpIndividualContent() {
   };
 
   // Initialize data
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     setIsClient(true);
+
+    // Skip if already initialized
+    if (initializedRef.current) {
+      console.log("🔄 Already initialized, skipping");
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     const initializeData = async () => {
       try {
-        setIsLoading(true);
-        setInitializationError(null);
+        if (isMounted) {
+          setIsLoading(true);
+          setInitializationError(null);
+        }
 
         console.log("🔍 [initializeData] Starting initialization", {
           hasLocationState: !!location.state,
           service_provide_ids: service_provide_ids,
-          accountOptions: accountOptions,
+          accountOptions: locationAccountOptions,
+          isNamedAccount,
         });
 
+        // Sync USD named account status to signupSlice for backward compatibility
+        dispatch(
+          setMetadataField({
+            field: "hasNamedAccounts",
+            value: isNamedAccount || false,
+          }),
+        );
+
+        dispatch(
+          setMetadataField({
+            field: "isUSDSelected",
+            value: isNamedAccount || false,
+          }),
+        );
+
+        // Sync isNamedAccount field for SSN logic
+        dispatch(
+          setMetadataField({
+            field: "isNamedAccount",
+            value: isNamedAccount || false,
+          }),
+        );
+
+        // Get partner token if needed
         try {
           console.log("🔄 Attempting to get partner token...");
-          const { getBearerToken } = await import(
-            "../../../services/authService"
-          );
+          const { getBearerToken } =
+            await import("../../../services/authService");
           const token = await getBearerToken();
           console.log("✅ Partner token obtained:", token ? "Yes" : "No");
         } catch (tokenError) {
           console.error("❌ Failed to get partner token:", tokenError.message);
         }
 
-        let hasNamed = false;
-        let hasUSD = false;
-
-        try {
-          hasNamed =
-            service_provide_ids?.some((idWithType) => {
-              const parts = idWithType.split("-");
-              return parts.length > 1 && parts[1] === "named";
-            }) || false;
-
-          hasUSD =
-            service_provide_ids?.some((idWithType) => {
-              const id = parseInt(idWithType.split("-")[0]);
-              const account = accountOptions?.find(
-                (opt) => opt.service_provide_id === id
-              );
-              return account && account.currency === "USD";
-            }) || false;
-        } catch (error) {
-          console.error("❌ Error determining account types:", error);
-        }
-
-        console.log("🔍 Account type analysis:", {
-          hasNamed,
-          hasUSD,
-          ssn_required,
-        });
-
-        dispatch(
-          setMetadataField({ field: "hasNamedAccounts", value: hasNamed })
-        );
-        dispatch(setMetadataField({ field: "isUSDSelected", value: hasUSD }));
-        dispatch(
-          setMetadataField({
-            field: "showSSNField",
-            value: ssn_required === "Y" || hasNamed,
-          })
-        );
-
+        // Check what data we need to fetch
         const apiPromises = [];
 
         if (countries.length === 0) {
@@ -562,7 +949,7 @@ function SignUpIndividualContent() {
               .catch((error) => {
                 console.error("❌ Countries fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Countries already loaded:", countries.length);
@@ -575,7 +962,7 @@ function SignUpIndividualContent() {
               .catch((error) => {
                 console.error("❌ Nationalities fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Nationalities already loaded:", nationalities.length);
@@ -588,12 +975,12 @@ function SignUpIndividualContent() {
               .catch((error) => {
                 console.error("❌ ID Document Types fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log(
             "✅ ID Document Types already loaded:",
-            idDocumentTypes.length
+            idDocumentTypes.length,
           );
         }
 
@@ -605,26 +992,27 @@ function SignUpIndividualContent() {
               .then((terms) => {
                 console.log(
                   "✅ Terms fetched successfully:",
-                  terms?.length || 0
+                  terms?.length || 0,
                 );
                 return terms;
               })
               .catch((error) => {
                 console.error("❌ Terms fetch error in component:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Terms already fetched");
         }
 
+        // Execute API calls if needed
         if (apiPromises.length > 0) {
           console.log("🚀 Executing", apiPromises.length, "API calls...");
           const timeoutPromise = new Promise((resolve) =>
             setTimeout(() => {
               console.log("⏰ API timeout after 30 seconds");
               resolve("timeout");
-            }, 30000)
+            }, 30000),
           );
 
           const results = await Promise.race([
@@ -641,7 +1029,9 @@ function SignUpIndividualContent() {
           console.log("✅ No API calls needed - all data already loaded");
         }
 
+        // Mark as initialized and finish loading
         if (isMounted) {
+          initializedRef.current = true;
           setIsLoading(false);
           console.log("✅ Initialization complete");
         }
@@ -654,21 +1044,18 @@ function SignUpIndividualContent() {
       }
     };
 
-    initializeData();
+    // Run initialization if we have location state
+    if (location.state) {
+      initializeData();
+    } else {
+      setIsLoading(false);
+    }
 
+    // Cleanup function
     return () => {
       isMounted = false;
     };
-  }, [
-    dispatch,
-    service_provide_ids,
-    countries.length,
-    termsFetched,
-    ssn_required,
-    accountOptions,
-    nationalities.length,
-    idDocumentTypes.length,
-  ]);
+  }, []);
 
   // Handle errors
   useEffect(() => {
@@ -694,8 +1081,8 @@ function SignUpIndividualContent() {
 
   // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
-    const countryId = selectedOption?.value || '';
-    const countryCode = selectedOption?.country_code || '';
+    const countryId = selectedOption?.value || "";
+    const countryCode = selectedOption?.country_code || "";
 
     // Update Redux state
     dispatch(setSelectedCountry(selectedOption));
@@ -705,14 +1092,14 @@ function SignUpIndividualContent() {
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
     formik.setFieldValue("zip_code", "");
-    
+
     // Store country code for ZIP lookup
     countryCodeRef.current = countryCode;
-    
+
     // Clear ZIP lookup data
     dispatch(clearZipLookupData());
 
-    // Auto-set SSN field for US residents
+    // Auto-set SSN field for US residents (same logic as Institution component)
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }
@@ -721,73 +1108,73 @@ function SignUpIndividualContent() {
   const handleZipCodeChange = (e) => {
     const zipCode = e.target.value;
     formik.handleChange(e);
-    
+
     const countryCode = selectedCountry?.country_code || countryCodeRef.current;
-    
+
     // Clear previous timer
     if (zipDebounceTimer) {
       clearTimeout(zipDebounceTimer);
     }
-    
+
     // Set new timer for debounced lookup
     const timer = setTimeout(() => {
       if (zipCode && countryCode && zipCode.length >= 3) {
         handleZipCodeLookup(zipCode, countryCode);
       }
     }, 1000);
-    
+
     setZipDebounceTimer(timer);
   };
 
-  const handleZipCodeLookup = useCallback(async (zipCode, countryCode) => {
-    if (!zipCode || !countryCode || zipCode.length < 3) {
-      return;
-    }
+  const handleZipCodeLookup = useCallback(
+    async (zipCode, countryCode) => {
+      if (!zipCode || !countryCode || zipCode.length < 3) {
+        return;
+      }
 
-    try {
-      setIsZipLoading(true);
-      
-      // Use Redux action to fetch location by ZIP
-      const resultAction = await dispatch(
-        fetchLocationByZip({ countryCode, zipCode })
-      );
-      
-      if (fetchLocationByZip.fulfilled.match(resultAction)) {
-        const data = resultAction.payload;
-        console.log("✅ ZIP lookup success:", data);
-        
-        if (data.success) {
-          // Update form values from API response
-          if (data.state) {
-            formik.setFieldValue('state', data.state);
+      try {
+        // Use Redux action to fetch location by ZIP
+        const resultAction = await dispatch(
+          fetchLocationByZip({ countryCode, zipCode }),
+        );
+
+        if (fetchLocationByZip.fulfilled.match(resultAction)) {
+          const data = resultAction.payload;
+          console.log("✅ ZIP lookup success:", data);
+
+          if (data.success) {
+            // Update form values from API response
+            if (data.state) {
+              formik.setFieldValue("state", data.state);
+            }
+
+            if (data.city) {
+              formik.setFieldValue("city", data.city);
+            }
+
+            // Show success message
+            const locationMsg =
+              data.city && data.state
+                ? `${data.city}, ${data.state}`
+                : data.city || data.state || "location";
+            toast.success(`Auto-filled ${locationMsg} from ZIP code`);
           }
-          
-          if (data.city) {
-            formik.setFieldValue('city', data.city);
-          }
-          
-          // Show success message
-          const locationMsg = data.city && data.state 
-            ? `${data.city}, ${data.state}`
-            : data.city || data.state || 'location';
-          toast.success(`Auto-filled ${locationMsg} from ZIP code`);
+        } else if (fetchLocationByZip.rejected.match(resultAction)) {
+          console.log("❌ ZIP lookup failed:", resultAction.payload);
+          // Don't show error - just let user enter manually
         }
-      } else if (fetchLocationByZip.rejected.match(resultAction)) {
-        console.log("❌ ZIP lookup failed:", resultAction.payload);
+      } catch (error) {
+        console.error("ZIP code lookup error:", error);
         // Don't show error - just let user enter manually
       }
-    } catch (error) {
-      console.error('ZIP code lookup error:', error);
-      // Don't show error - just let user enter manually
-    } finally {
-      setIsZipLoading(false);
-    }
-  }, [dispatch, formik]);
+    },
+    [dispatch, formik],
+  );
 
   const handleCountryCodeSelect = (selectedOption) => {
     formik.setFieldValue(
       "mobilenumber_countrycode",
-      selectedOption?.phoneCode || ""
+      selectedOption?.phoneCode || "",
     );
     formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
     setSelectedPhoneCode(selectedOption || null);
@@ -812,6 +1199,19 @@ function SignUpIndividualContent() {
     if (!/[0-9]/.test(e.key)) {
       e.preventDefault();
     }
+  };
+
+  // Custom password handlers with debugging
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    console.log("🔍 INPUT - Password changing to:", value);
+    formik.setFieldValue("password", value);
+  };
+
+  const handleConfirmPasswordChange = (e) => {
+    const value = e.target.value;
+    console.log("🔍 INPUT - Confirm password changing to:", value);
+    formik.setFieldValue("confirmPassword", value);
   };
 
   const handleSSNChange = (e) => {
@@ -851,7 +1251,7 @@ function SignUpIndividualContent() {
 
           if (ip !== "Unknown") {
             const locationResponse = await fetch(
-              `https://ipapi.co/${ip}/json/`
+              `https://ipapi.co/${ip}/json/`,
             );
             if (locationResponse.ok) {
               const locationData = await locationResponse.json();
@@ -882,7 +1282,7 @@ function SignUpIndividualContent() {
             termId,
             accepted: !acceptedTerms.some((item) => item.id === termId),
             metadata: termData,
-          })
+          }),
         );
       } catch (error) {
         dispatch(
@@ -895,11 +1295,11 @@ function SignUpIndividualContent() {
               location: "Unknown",
               device: "Unknown",
             },
-          })
+          }),
         );
       }
     },
-    [dispatch, acceptedTerms]
+    [dispatch, acceptedTerms],
   );
 
   const validationRules = [
@@ -913,173 +1313,52 @@ function SignUpIndividualContent() {
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
 
-  // FIXED PROGRESS CALCULATION - Using let instead of const for mutable variables
+  // Progress calculation with validation check
   useEffect(() => {
-    const calculateProgress = () => {
-      const fieldChecks = [
-        {
-          name: "first_name",
-          value: formik.values.first_name,
-          filled: formik.values.first_name && formik.values.first_name.trim(),
-        },
-        {
-          name: "last_name",
-          value: formik.values.last_name,
-          filled: formik.values.last_name && formik.values.last_name.trim(),
-        },
-        {
-          name: "email",
-          value: formik.values.email,
-          filled: formik.values.email && formik.values.email.trim(),
-        },
-        {
-          name: "dob",
-          value: formik.values.dob,
-          filled: formik.values.dob && formik.values.dob.trim(),
-        },
-        {
-          name: "nationality",
-          value: formik.values.nationality,
-          filled:
-            formik.values.nationality &&
-            formik.values.nationality.toString().trim(),
-        },
-        {
-          name: "gender",
-          value: formik.values.gender,
-          filled:
-            formik.values.gender && formik.values.gender.toString().trim(),
-        },
-        {
-          name: "mobilenumber_countrycode",
-          value: formik.values.mobilenumber_countrycode,
-          filled:
-            formik.values.mobilenumber_countrycode &&
-            formik.values.mobilenumber_countrycode.toString().trim(),
-        },
-        {
-          name: "mobile_number",
-          value: formik.values.mobile_number,
-          filled:
-            formik.values.mobile_number && formik.values.mobile_number.trim(),
-        },
-        {
-          name: "street_address_1",
-          value: formik.values.street_address_1,
-          filled:
-            formik.values.street_address_1 &&
-            formik.values.street_address_1.trim(),
-        },
-        {
-          name: "city",
-          value: formik.values.city,
-          filled: formik.values.city && formik.values.city.toString().trim(),
-        },
-        {
-          name: "state",
-          value: formik.values.state,
-          filled: formik.values.state && formik.values.state.toString().trim(),
-        },
-        {
-          name: "zip_code",
-          value: formik.values.zip_code,
-          filled: formik.values.zip_code && formik.values.zip_code.trim(),
-        },
-        {
-          name: "country",
-          value: formik.values.country,
-          filled:
-            formik.values.country && formik.values.country.toString().trim(),
-        },
-        {
-          name: "idDocumentType",
-          value: selectedIdDocumentType,
-          filled: selectedIdDocumentType && selectedIdDocumentType.trim(),
-        },
-        {
-          name: "idDocumentNumber",
-          value: idDocumentNumber,
-          filled: idDocumentNumber && idDocumentNumber.trim(),
-        },
-        {
-          name: "idIssuedDate",
-          value: idIssuedDate,
-          filled: idIssuedDate && idIssuedDate.trim(),
-        },
-        {
-          name: "idIssuedCountryCode",
-          value: idIssuedCountryCode,
-          filled: idIssuedCountryCode && idIssuedCountryCode.trim(),
-        },
-        {
-          name: "password",
-          value: formik.values.password,
-          filled: formik.values.password && formik.values.password.trim(),
-        },
-        {
-          name: "confirmPassword",
-          value: formik.values.confirmPassword,
-          filled:
-            formik.values.confirmPassword &&
-            formik.values.confirmPassword.trim(),
-        },
-      ];
+    const calculateProgress = async () => {
+      let filledFields = 0;
+      let totalFields = 0;
 
-      if (showSSNField && hasNamedAccounts) {
-        fieldChecks.push({
-          name: "ssn",
-          value: formik.values.ssn,
-          filled: formik.values.ssn && formik.values.ssn.trim(),
-        });
-      }
+      // Check each section
+      for (let i = 0; i < formSections.length - 1; i++) {
+        const sectionFields = getSectionFields(i, formik.values);
+        totalFields += sectionFields.length;
 
-      let filledFields = fieldChecks.filter((field) => field.filled).length;
-      const totalFields = fieldChecks.length;
+        // Check if each field is filled and valid
+        for (const field of sectionFields) {
+          const value = formik.values[field];
+          const isFilled = value && value.toString().trim() !== "";
+          const hasError = formik.errors[field];
 
-      let termsField = 0;
-      if (termsConditions.length > 0) {
-        termsField = 1;
-        if (acceptedTerms.length > 0) {
-          filledFields += 1;
+          if (isFilled && !hasError) {
+            filledFields++;
+          }
         }
       }
 
-      const totalWithTerms = totalFields + termsField;
+      // Add terms and conditions
+      if (termsConditions.length > 0) {
+        totalFields += 1; // Terms section
+        if (acceptedTerms.length > 0) {
+          filledFields += 1; // Terms accepted
+        }
+      }
+
+      // Calculate percentage
       const percentage =
-        totalWithTerms > 0
-          ? Math.round((filledFields / totalWithTerms) * 100)
-          : 0;
+        totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
 
       return percentage;
     };
 
-    setProgress(calculateProgress());
+    calculateProgress().then(setProgress);
   }, [
     formik.values,
+    formik.errors,
     acceptedTerms,
-    showSSNField,
-    hasNamedAccounts,
-    selectedIdDocumentType,
-    idDocumentNumber,
-    idIssuedDate,
-    idIssuedCountryCode,
+    isNamedAccount,
+    isRemit,
     termsConditions.length,
-    formik.values.first_name,
-    formik.values.last_name,
-    formik.values.email,
-    formik.values.dob,
-    formik.values.nationality,
-    formik.values.gender,
-    formik.values.mobilenumber_countrycode,
-    formik.values.mobile_number,
-    formik.values.street_address_1,
-    formik.values.city,
-    formik.values.state,
-    formik.values.zip_code,
-    formik.values.country,
-    formik.values.password,
-    formik.values.confirmPassword,
-    formik.values.ssn,
   ]);
 
   // Options for selects with safe defaults
@@ -1141,11 +1420,124 @@ function SignUpIndividualContent() {
     navigate(-1);
   };
 
+  // Render section errors
+  const renderSectionErrors = (sectionIndex) => {
+    const errors = sectionErrors[sectionIndex];
+    if (!errors || errors.length === 0) return null;
+
+    return (
+      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center mb-2">
+          <FontAwesomeIcon
+            icon={faExclamationCircle}
+            className="text-red-500 mr-2"
+          />
+          <h4 className="text-red-700 font-semibold">
+            Please fix the following errors:
+          </h4>
+        </div>
+        <ul className="text-red-600 text-sm list-disc pl-5">
+          {errors.map((err, index) => (
+            <li key={index} className="mb-1">
+              <span className="font-medium">
+                {err.field.replace(/_/g, " ")}:
+              </span>{" "}
+              {err.error}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Check if form has errors
+  const hasFormErrors = () => {
+    return Object.keys(formik.errors).length > 0;
+  };
+
+  // Render all form errors in the last section
+  const renderAllFormErrors = () => {
+    if (!showAllErrors || !hasFormErrors()) return null;
+
+    const allErrors = [];
+    for (let i = 0; i < formSections.length - 1; i++) {
+      const sectionFields = getSectionFields(i, formik.values);
+      const sectionErrors = sectionFields
+        .filter((field) => formik.errors[field])
+        .map((field) => ({
+          field,
+          error: formik.errors[field],
+          section: i,
+        }));
+
+      if (sectionErrors.length > 0) {
+        allErrors.push({
+          section: i,
+          sectionName: formSections[i],
+          errors: sectionErrors,
+        });
+      }
+    }
+
+    if (allErrors.length === 0) return null;
+
+    return (
+      <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center mb-3">
+          <FontAwesomeIcon
+            icon={faExclamationCircle}
+            className="text-red-500 mr-2 text-lg"
+          />
+          <h4 className="text-red-700 font-semibold text-lg">
+            Form Validation Errors
+          </h4>
+        </div>
+        <p className="text-red-600 mb-3">
+          Please fix the following errors in the indicated sections:
+        </p>
+        {allErrors.map((sectionError, idx) => (
+          <div key={idx} className="mb-3 last:mb-0">
+            <button
+              type="button"
+              onClick={() => setActiveSection(sectionError.section)}
+              className="text-blue-600 hover:text-blue-800 font-medium mb-2 flex items-center"
+            >
+              {sectionError.sectionName}
+              <svg
+                className="w-4 h-4 ml-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"
+                />
+              </svg>
+            </button>
+            <ul className="text-red-600 text-sm list-disc pl-5">
+              {sectionError.errors.map((err, errorIdx) => (
+                <li key={errorIdx} className="mb-1">
+                  <span className="font-medium">
+                    {err.field.replace(/_/g, " ")}:
+                  </span>{" "}
+                  {err.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // Return loading state during SSR
   if (!isClient) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
           <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
@@ -1197,7 +1589,7 @@ function SignUpIndividualContent() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
           <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading registration form...</p>
         </div>
@@ -1207,7 +1599,7 @@ function SignUpIndividualContent() {
 
   return (
     <RegistrationLayout>
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30">
+      <div className="min-h-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30">
         {showFullScreenLoader && (
           <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
             <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
@@ -1226,17 +1618,6 @@ function SignUpIndividualContent() {
           </div>
         )}
         <div className="max-w-6xl w-full bg-white rounded-2xl shadow-lg overflow-hidden relative border border-gray-100">
-          {isSubmitting && (
-            <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
-              <div className="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center">
-                <RingLoader color="#3b82f6" size={50} loading={isSubmitting} />
-                <p className="mt-4 text-gray-600 font-medium">
-                  Processing your request...
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Progress Bar */}
           <div className="w-full bg-gray-100 h-1.5">
             <div
@@ -1283,42 +1664,69 @@ function SignUpIndividualContent() {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex overflow-x-auto mb-8 pb-1">
-              {formSections.map((section, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveSection(idx)}
-                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 ${
-                    activeSection === idx
-                      ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                      : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
-                  }`}
-                >
-                  {section}
-                  {activeSection === idx && (
-                    <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
-                      {idx + 1}
-                    </span>
-                  )}
-                </button>
-              ))}
+            <div className="flex overflow-x-auto mb-4 pb-1">
+              {formSections.map((section, idx) => {
+                const isSectionValid = sectionErrors[idx]?.length === 0;
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      // Only allow navigation if previous sections are valid
+                      let canNavigate = true;
+                      for (let i = 0; i < idx; i++) {
+                        if (sectionErrors[i]?.length > 0) {
+                          canNavigate = false;
+                          toast.error(`Please complete section ${i + 1} first`);
+                          break;
+                        }
+                      }
+                      if (canNavigate) {
+                        setActiveSection(idx);
+                      }
+                    }}
+                    className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 relative ${
+                      activeSection === idx
+                        ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                        : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                    } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
+                  >
+                    {section}
+                    {activeSection === idx && (
+                      <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
+                        {idx + 1}
+                      </span>
+                    )}
+                    {!isSectionValid && (
+                      <span className="absolute -top-1 -right-1">
+                        <FontAwesomeIcon
+                          icon={faExclamationCircle}
+                          className="text-red-500 text-xs"
+                        />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Form */}
             <form
               onSubmit={formik.handleSubmit}
-              className="space-y-8"
+              className="space-y-6"
               noValidate
             >
               {/* Personal Information Section */}
               <section className={`${activeSection !== 0 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     1
                   </span>
                   Personal Information
                 </h3>
+
+                {renderSectionErrors(0)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {[
@@ -1351,7 +1759,7 @@ function SignUpIndividualContent() {
                       label: "Date of Birth *",
                       type: "date",
                       max: new Date(
-                        new Date().setFullYear(new Date().getFullYear() - 18)
+                        new Date().setFullYear(new Date().getFullYear() - 18),
                       )
                         .toISOString()
                         .split("T")[0],
@@ -1452,7 +1860,7 @@ function SignUpIndividualContent() {
                         }}
                         value={
                           nationalityOptions.find(
-                            (opt) => opt.value === formik.values.nationality
+                            (opt) => opt.value === formik.values.nationality,
                           ) || null
                         }
                       />
@@ -1518,7 +1926,7 @@ function SignUpIndividualContent() {
                       }}
                       value={
                         genderOptions.find(
-                          (opt) => opt.value === formik.values.gender
+                          (opt) => opt.value === formik.values.gender,
                         ) || null
                       }
                     />
@@ -1545,7 +1953,7 @@ function SignUpIndividualContent() {
                 <div className="flex justify-end mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(1)}
+                    onClick={() => handleNextSection(0)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Contact Information
@@ -1566,18 +1974,21 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
-              {/* // Contact Information Section - ZIP CODE BASED ONLY (Nodropdowns) */}
+
+              {/* Contact Information Section - REORDERED ADDRESS FIELDS */}
               <section className={`${activeSection !== 1 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     2
                   </span>
                   Contact Information
                 </h3>
 
+                {renderSectionErrors(1)}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Country Dropdown */}
-                  <div>
+                  {/* Country Dropdown - FIRST as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="country"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1615,8 +2026,8 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* ZIP Code - Auto-fills State and City */}
-                  <div>
+                  {/* ZIP Code - SECOND as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="zip_code"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1650,12 +2061,7 @@ function SignUpIndividualContent() {
 
                       {/* Loading indicator for ZIP lookup */}
                       {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                      {(isZipLoading || zipLookup.loading) && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
                           <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
@@ -1712,116 +2118,8 @@ function SignUpIndividualContent() {
                     )}
                   </div>
 
-                  {/* State Field - Auto-filled by ZIP code API */}
-                  <div>
-                    <label
-                      htmlFor="state"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      State/Province *
-                      {formik.values.state && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="state"
-                        name="state"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.state}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.state && formik.errors.state
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false} // Allow manual editing if needed
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.state && formik.errors.state ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.state}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* City Field - Auto-filled by ZIP code API */}
-                  <div>
-                    <label
-                      htmlFor="city"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      City *
-                      {formik.values.city && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="city"
-                        name="city"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.city}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.city && formik.errors.city
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false} // Allow manual editing if needed
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.city && formik.errors.city ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.city}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* Street Address 1 */}
-                  <div>
+                  {/* Street Address 1 - THIRD as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="street_address_1"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1862,8 +2160,8 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
-                  {/* Street Address 2 (Optional) */}
-                  <div>
+                  {/* Street Address 2 (Optional) - FOURTH as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="street_address_2"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1882,7 +2180,115 @@ function SignUpIndividualContent() {
                     />
                   </div>
 
-                  {/* Phone Number */}
+                  {/* City - FIFTH as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="city"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      City *
+                      {formik.values.city && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="city"
+                        name="city"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.city}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.city && formik.errors.city
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.city && formik.errors.city ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.city}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* State - SIXTH as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="state"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      State/Province *
+                      {formik.values.state && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="state"
+                        name="state"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.state}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.state && formik.errors.state
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.state && formik.errors.state ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.state}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Phone Number - SEVENTH as per requirements */}
                   <div className="md:col-span-2">
                     <label
                       htmlFor="mobile_number"
@@ -1973,7 +2379,7 @@ function SignUpIndividualContent() {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(0)}
+                    onClick={() => handlePreviousSection(1)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -1993,7 +2399,7 @@ function SignUpIndividualContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(2)}
+                    onClick={() => handleNextSection(1)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Identity Verification
@@ -2013,67 +2419,308 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
+
               {/* Identity Verification Section */}
               <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     3
                   </span>
                   Identity Verification
                 </h3>
 
+                {renderSectionErrors(2)}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* SSN Field */}
-                  {showSSNField && (
+                  {(function () {
+                    // Condition 1: Check if user has USD named account OR if it's remittance only
+                    const hasUSDNamedAccount = isNamedAccount;
+                    const isRemittanceOnly = Boolean(isRemit); // Get from location state
+
+                    // Condition 2: Check if user's country is United States
+                    const selectedCountryOption = countryOptions.find(
+                      (opt) => opt.value === formik.values.country,
+                    );
+                    const isUSCountry =
+                      formik.values.country === "United States" ||
+                      formik.values.country === 186 ||
+                      selectedCountryOption?.label === "United States";
+
+                    // Render SSN field if EITHER:
+                    // 1. Has USD named account AND is US country
+                    // 2. OR is remittance only AND is US country
+                    const shouldShowSSNField =
+                      (hasUSDNamedAccount && isUSCountry) ||
+                      (isRemittanceOnly && isUSCountry);
+
+                    console.log("🔍 Individual SSN Field Conditions Check:", {
+                      hasUSDNamedAccount,
+                      isRemittanceOnly,
+                      isUSCountry,
+                      shouldShowSSNField,
+                      countryValue: formik.values.country,
+                      selectedCountryLabel: selectedCountryOption?.label,
+                      isNamedAccount,
+                    });
+
+                    return shouldShowSSNField ? (
+                      <div className="md:col-span-2">
+                        <label
+                          htmlFor="ssn"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Social Security Number (SSN) *
+                          <span className="text-gray-500 text-xs ml-2">
+                            {hasUSDNamedAccount
+                              ? "(Required for USD Named Accounts with US registration)"
+                              : "(Required for Remittance Services with US registration)"}
+                          </span>
+                        </label>
+
+                        <div className="relative">
+                          <input
+                            type={showSSN ? "text" : "password"}
+                            id="ssn"
+                            name="ssn"
+                            onChange={handleSSNChange}
+                            onBlur={formik.handleBlur}
+                            value={formik.values.ssn}
+                            className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
+                              (formik.touched.ssn && formik.errors.ssn) ||
+                              ssnError
+                                ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                                : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            } shadow-sm`}
+                            placeholder="XXX-XX-XXXX"
+                            maxLength={11}
+                          />
+
+                          {/* Eye toggle button */}
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                            onClick={() => setShowSSN(!showSSN)}
+                            tabIndex={-1}
+                            aria-label={showSSN ? "Hide SSN" : "Show SSN"}
+                          >
+                            <FontAwesomeIcon
+                              icon={showSSN ? faEyeSlash : faEye}
+                            />
+                          </button>
+                        </div>
+
+                        {(formik.touched.ssn && formik.errors.ssn) ||
+                        ssnError ? (
+                          <p className="text-red-500 text-xs mt-2 flex items-center">
+                            <svg
+                              className="w-3.5 h-3.5 mr-1"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            {formik.errors.ssn || ssnError}
+                          </p>
+                        ) : null}
+
+                        <p className="text-xs text-gray-500 mt-1">
+                          {hasUSDNamedAccount
+                            ? "Social Security Number is required for USD Named Accounts with United States as registered country."
+                            : "Social Security Number is required for Remittance Services with United States as registered country."}
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ID Document Type *
+                    </label>
+
+                    {isLoadingDocumentTypes ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <RingLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">
+                          Loading document types...
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        name="idDocumentType" // This name must match Formik field
+                        value={formik.values.idDocumentType}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          !formik.values.idDocumentType &&
+                          formik.touched.idDocumentType
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                      >
+                        <option value="">-- Select ID Document Type --</option>
+                        {idDocumentTypes.map((docType) => (
+                          <option key={docType.name} value={docType.name}>
+                            {docType.name}
+                          </option>
+                        ))}
+                        <option value="other">Other</option>
+                      </select>
+                    )}
+                    {formik.touched.idDocumentType &&
+                    formik.errors.idDocumentType ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.idDocumentType}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Other Document Type Input */}
+                  {formik.values.idDocumentType === "other" && (
                     <div className="md:col-span-2">
                       <label
-                        htmlFor="ssn"
-                        className="block text-sm font-medium text-gray-700 mb-2.5"
+                        htmlFor="idDocumentTypeOther"
+                        className="block text-sm font-medium text-gray-700 mb-2"
                       >
-                        Social Security Number (SSN){" "}
-                        {hasNamedAccounts && (
-                          <span className="text-red-500">*</span>
-                        )}
-                        {!hasNamedAccounts && (
-                          <span className="text-gray-500 text-xs ml-2">
-                            (optional for pooled accounts)
-                          </span>
-                        )}
+                        ID Document Type (Other) *
                       </label>
+                      <input
+                        type="text"
+                        id="idDocumentTypeOther"
+                        name="idDocumentTypeOther"
+                        value={formik.values.idDocumentTypeOther}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                        placeholder="Specify document type"
+                      />
+                      {formik.touched.idDocumentTypeOther &&
+                        formik.errors.idDocumentTypeOther && (
+                          <p className="text-red-500 text-xs mt-2">
+                            {formik.errors.idDocumentTypeOther}
+                          </p>
+                        )}
+                    </div>
+                  )}
 
-                      <div className="relative">
-                        <input
-                          type={showSSN ? "text" : "password"}
-                          id="ssn"
-                          name="ssn"
-                          onChange={handleSSNChange}
-                          onBlur={formik.handleBlur}
-                          value={formik.values.ssn}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                            (formik.touched.ssn && formik.errors.ssn) ||
-                            ssnError
-                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
-                          placeholder="XXX-XX-XXXX"
-                          maxLength={11}
-                        />
-
-                        {/* Eye toggle button */}
-                        <button
-                          type="button"
-                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
-                          onClick={() => setShowSSN(!showSSN)}
-                          tabIndex={-1}
-                          aria-label={showSSN ? "Hide SSN" : "Show SSN"}
+                  {/* Document Number */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ID Document Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="idDocumentNumber"
+                      value={formik.values.idDocumentNumber}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                        !formik.values.idDocumentNumber &&
+                        formik.touched.idDocumentNumber
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                      } shadow-sm`}
+                      placeholder="Enter document number"
+                    />
+                    {formik.touched.idDocumentNumber &&
+                    formik.errors.idDocumentNumber ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
                         >
-                          <FontAwesomeIcon
-                            icon={showSSN ? faEyeSlash : faEye}
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
                           />
-                        </button>
-                      </div>
+                        </svg>
+                        {formik.errors.idDocumentNumber}
+                      </p>
+                    ) : null}
+                  </div>
 
-                      {(formik.touched.ssn && formik.errors.ssn) || ssnError ? (
+                  {/* Issuing Country - Using react-select */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ID Issuing Country *
+                    </label>
+                    <Select
+                      id="idIssuedCountryCode"
+                      name="idIssuedCountryCode"
+                      options={countries.map((country) => ({
+                        value: country.country_code,
+                        label: country.name,
+                      }))}
+                      onChange={(selectedOption) => {
+                        formik.setFieldValue(
+                          "idIssuedCountryCode",
+                          selectedOption?.value || "",
+                        );
+                      }}
+                      onBlur={formik.handleBlur}
+                      value={
+                        countries
+                          .map((country) => ({
+                            value: country.country_code,
+                            label: country.name,
+                          }))
+                          .find(
+                            (option) =>
+                              option.value ===
+                              formik.values.idIssuedCountryCode,
+                          ) || null
+                      }
+                      className="basic-single"
+                      classNamePrefix="select"
+                      placeholder="Select Issuing Country"
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...provided,
+                          minHeight: "52px",
+                          borderRadius: "12px",
+                          borderColor:
+                            formik.touched.idIssuedCountryCode &&
+                            formik.errors.idIssuedCountryCode
+                              ? "#f87171"
+                              : "#e5e7eb",
+                          boxShadow: state.isFocused
+                            ? formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                              ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
+                              : "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                            : "none",
+                          "&:hover": {
+                            borderColor:
+                              formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                                ? "#ef4444"
+                                : "#3b82f6",
+                          },
+                        }),
+                      }}
+                    />
+                    {formik.touched.idIssuedCountryCode &&
+                      formik.errors.idIssuedCountryCode && (
                         <p className="text-red-500 text-xs mt-2 flex items-center">
                           <svg
                             className="w-3.5 h-3.5 mr-1"
@@ -2087,129 +2734,42 @@ function SignUpIndividualContent() {
                               clipRule="evenodd"
                             />
                           </svg>
-                          {formik.errors.ssn || ssnError}
+                          {formik.errors.idIssuedCountryCode}
                         </p>
-                      ) : null}
-                    </div>
-                  )}
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
-                      ID Document Type *
-                    </label>
-
-                    {isLoadingDocumentTypes ? (
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <RingLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">
-                          Loading document types...
-                        </span>
-                      </div>
-                    ) : (
-                      <select
-                        name="idDocumentType"
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          !selectedIdDocumentType
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        value={selectedIdDocumentType}
-                        onChange={(e) =>
-                          setSelectedIdDocumentType(e.target.value)
-                        }
-                      >
-                        <option value="">-- Select ID Document Type --</option>
-                        {idDocumentTypes.map((docType) => (
-                          <option key={docType.name} value={docType.name}>
-                            {docType.name}
-                          </option>
-                        ))}
-                        <option value="other">Other</option>
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Other Document Type Input */}
-                  {selectedIdDocumentType === "other" && (
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2.5">
-                        ID Document Type (Other) *
-                      </label>
-                      <input
-                        type="text"
-                        value={idDocumentTypeOther}
-                        onChange={(e) => setIdDocumentTypeOther(e.target.value)}
-                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
-                        placeholder="Specify document type"
-                      />
-                    </div>
-                  )}
-
-                  {/* Document Number */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
-                      ID Document Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="idDocumentNumber"
-                      value={idDocumentNumber}
-                      onChange={(e) => setIdDocumentNumber(e.target.value)}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idDocumentNumber
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                      placeholder="Enter document number"
-                    />
-                  </div>
-
-                  {/* Issuing Country */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
-                      ID Issuing Country *
-                    </label>
-                    <select
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idIssuedCountryCode
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                      value={idIssuedCountryCode}
-                      onChange={(e) => setIdIssuedCountryCode(e.target.value)}
-                    >
-                      <option value="">Select Country</option>
-                      {countries.map((country) => (
-                        <option key={country.id} value={country.country_code}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
+                      )}
                   </div>
 
                   {/* Issue Date */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2.5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Expiry Date *
                     </label>
                     <input
                       type="date"
                       name="idIssuedDate"
-                      value={idIssuedDate}
-                      onChange={(e) => setIdIssuedDate(e.target.value)}
+                      value={formik.values.idIssuedDate}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !idIssuedDate
+                        !formik.values.idIssuedDate &&
+                        formik.touched.idIssuedDate
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                       } shadow-sm`}
                     />
+                    {formik.touched.idIssuedDate &&
+                      formik.errors.idIssuedDate && (
+                        <p className="text-red-500 text-xs mt-2">
+                          {formik.errors.idIssuedDate}
+                        </p>
+                      )}
                   </div>
                 </div>
 
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(1)}
+                    onClick={() => handlePreviousSection(2)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2230,7 +2790,7 @@ function SignUpIndividualContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(3)}
+                    onClick={() => handleNextSection(2)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Security
@@ -2251,14 +2811,17 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
+
               {/* Security Section */}
               <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     4
                   </span>
                   Security
                 </h3>
+
+                {renderSectionErrors(3)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -2273,7 +2836,7 @@ function SignUpIndividualContent() {
                         type={passwordVisible ? "text" : "password"}
                         id="password"
                         name="password"
-                        onChange={formik.handleChange}
+                        onChange={handlePasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.password}
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
@@ -2366,14 +2929,18 @@ function SignUpIndividualContent() {
                         type={confirmPasswordVisible ? "text" : "password"}
                         id="confirmPassword"
                         name="confirmPassword"
-                        onChange={formik.handleChange}
+                        onChange={handleConfirmPasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.confirmPassword}
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
                           formik.touched.confirmPassword &&
                           formik.errors.confirmPassword
                             ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            : formik.values.confirmPassword &&
+                                formik.values.password ===
+                                  formik.values.confirmPassword
+                              ? "border-green-400 focus:ring-green-500/30 focus:border-green-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                         placeholder="Confirm your password"
                       />
@@ -2389,36 +2956,52 @@ function SignUpIndividualContent() {
                           icon={confirmPasswordVisible ? faEyeSlash : faEye}
                         />
                       </button>
+
+                      {/* Show green checkmark when passwords match */}
+                      {formik.values.password &&
+                        formik.values.confirmPassword &&
+                        !formik.errors.confirmPassword &&
+                        formik.values.password ===
+                          formik.values.confirmPassword && (
+                          <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-green-500">
+                            <FontAwesomeIcon icon={faCheckCircle} />
+                          </div>
+                        )}
                     </div>
+
+                    {/* Only show errors when passwords don't match */}
                     {formik.touched.confirmPassword &&
-                      formik.errors.confirmPassword && (
-                        <p className="text-red-500 text-xs mt-2 flex items-center">
-                          <svg
-                            className="w-3.5 h-3.5 mr-1"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          {formik.errors.confirmPassword}
-                        </p>
-                      )}
+                    formik.errors.confirmPassword ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.confirmPassword}
+                      </p>
+                    ) : null}
+
+                    {/* Show green success message when passwords match and both fields have values */}
                     {formik.values.password &&
                       formik.values.confirmPassword &&
+                      !formik.errors.confirmPassword &&
                       formik.values.password ===
                         formik.values.confirmPassword && (
-                        <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
+                        <p className="text-green-600 text-xs mt-2 flex items-center">
                           <FontAwesomeIcon
                             icon={faCheckCircle}
-                            className="mr-2"
+                            className="mr-1"
                           />
                           Passwords match
-                        </div>
+                        </p>
                       )}
                   </div>
                 </div>
@@ -2426,7 +3009,7 @@ function SignUpIndividualContent() {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(2)}
+                    onClick={() => handlePreviousSection(3)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2447,7 +3030,7 @@ function SignUpIndividualContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(4)}
+                    onClick={() => handleNextSection(3)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Terms & Conditions
@@ -2468,14 +3051,18 @@ function SignUpIndividualContent() {
                   </button>
                 </div>
               </section>
+
               {/* Terms & Conditions Section */}
               <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
-                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
                     5
                   </span>
                   Terms & Conditions
                 </h3>
+
+                {/* Show all form errors if any */}
+                {renderAllFormErrors()}
 
                 {termsLoading ? (
                   <div className="flex justify-center items-center py-8">
@@ -2527,7 +3114,7 @@ function SignUpIndividualContent() {
                             type="checkbox"
                             id={`term-${term.id}`}
                             checked={acceptedTerms.some(
-                              (item) => item.id === term.id
+                              (item) => item.id === term.id,
                             )}
                             onChange={() => handleCheckboxChange(term.id)}
                             className="mt-1 mr-4 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -2566,11 +3153,11 @@ function SignUpIndividualContent() {
                   </div>
                 )}
 
-                <div className="flex justify-between">
+                <div className="flex flex-col md:flex-row justify-between gap-4 md:gap-0">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(3)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    onClick={() => handlePreviousSection(4)}
+                    className="px-4 md:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group order-2 md:order-1 w-full md:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2588,12 +3175,13 @@ function SignUpIndividualContent() {
                     </svg>
                     Previous
                   </button>
-                  <div className="flex gap-4">
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 order-1 md:order-2 w-full md:w-auto">
                     <button
                       type="button"
                       onClick={handleCancel}
                       disabled={isSubmitting}
-                      className="px-6 py-3.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isCancelling ? (
                         <>
@@ -2624,6 +3212,7 @@ function SignUpIndividualContent() {
                         </>
                       )}
                     </button>
+
                     <button
                       type="submit"
                       disabled={
@@ -2632,7 +3221,7 @@ function SignUpIndividualContent() {
                         (termsConditions.length > 0 &&
                           acceptedTerms.length === 0)
                       }
-                      className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isSubmitting ? (
                         <>
@@ -2670,7 +3259,7 @@ function SignUpIndividualContent() {
 
             <ToastContainer
               position="top-right"
-              autoClose={5000}
+              autoClose={1000}
               hideProgressBar={false}
               newestOnTop={false}
               closeOnClick
