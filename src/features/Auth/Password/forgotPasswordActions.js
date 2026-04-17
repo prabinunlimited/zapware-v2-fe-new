@@ -49,7 +49,7 @@ export const requestPasscode = (email) => async (dispatch) => {
       dispatch(setStep(2));
       dispatch(setSuccessMessage(data.message || "Passcode sent to your email."));
     } else {
-      dispatch(setError(data.message || "Failed to send passcode. Please try again."));
+      dispatch(setError(data.error || data.message || "Failed to send passcode. Please try again."));
     }
   } catch (err) {
     dispatch(setError("Network error. Please try again."));

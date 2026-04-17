@@ -7,6 +7,7 @@ import {
   faEye,
   faEyeSlash,
   faCheckCircle,
+  faExclamationCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { RingLoader } from "react-spinners";
 import Select from "react-select";
@@ -126,6 +127,223 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Helper functions for section validation
+const getSectionFields = (sectionIndex, values) => {
+  switch (sectionIndex) {
+    case 0: // Personal Information
+      const fields = [
+        "first_name",
+        "last_name",
+        "email",
+        "dob",
+        "nationality",
+        "gender",
+      ];
+      // Add middle_name if filled but not required
+      if (values.middle_name && values.middle_name.trim() !== "") {
+        fields.push("middle_name");
+      }
+      return fields;
+
+    case 1: // Contact Information
+      return [
+        "country",
+        "zip_code",
+        "state",
+        "city",
+        "street_address_1",
+        "mobile_number",
+        "mobilenumber_countrycode",
+      ];
+
+    case 2: // Identity Verification
+      const idFields = [
+        "idDocumentType",
+        "idDocumentNumber",
+        "idIssuedDate",
+        "idIssuedCountryCode",
+      ];
+      if (values.idDocumentType === "other") {
+        idFields.push("idDocumentTypeOther");
+      }
+
+      // Add SSN if required
+      const hasUSDNamedAccount = values.isNamedAccount;
+      const isRemittanceOnly =
+        values.remit_customer === true || values.remit_customer === "true";
+      const isUSCountry =
+        values.country === "United States" || values.country === 186;
+      const shouldShowSSNField =
+        (hasUSDNamedAccount && isUSCountry) ||
+        (isRemittanceOnly && isUSCountry);
+
+      if (shouldShowSSNField) {
+        idFields.push("ssn");
+      }
+
+      return idFields;
+
+    case 3: // Security
+      return ["password", "confirmPassword"];
+
+    case 4: // Terms & Conditions
+      return [];
+
+    default:
+      return [];
+  }
+};
+
+const getSectionRequiredFields = (sectionIndex) => {
+  switch (sectionIndex) {
+    case 0: // Personal Information
+      return [
+        "first_name",
+        "last_name",
+        "email",
+        "dob",
+        "nationality",
+        "gender",
+      ];
+
+    case 1: // Contact Information
+      return [
+        "country",
+        "zip_code",
+        "state",
+        "city",
+        "street_address_1",
+        "mobile_number",
+        "mobilenumber_countrycode",
+      ];
+
+    case 2: // Identity Verification
+      return [
+        "idDocumentType",
+        "idDocumentNumber",
+        "idIssuedDate",
+        "idIssuedCountryCode",
+      ];
+
+    case 3: // Security
+      return ["password", "confirmPassword"];
+
+    case 4: // Terms & Conditions
+      return [];
+
+    default:
+      return [];
+  }
+};
+
+// SIMPLIFIED Validation schema - FIXED
+const createValidationSchema = () => {
+  return Yup.object({
+    first_name: Yup.string()
+      .required("First name is required")
+      .min(2, "First name must be at least 2 characters")
+      .max(50, "First name cannot exceed 50 characters"),
+
+    last_name: Yup.string()
+      .required("Last name is required")
+      .min(2, "Last name must be at least 2 characters")
+      .max(50, "Last name cannot exceed 50 characters"),
+
+    middle_name: Yup.string().max(
+      50,
+      "Middle name cannot exceed 50 characters",
+    ),
+
+    email: Yup.string()
+      .email("Invalid email address")
+      .required("Email is required")
+      .matches(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email format"),
+
+    dob: Yup.date()
+      .required("Date of birth is required")
+      .max(
+        new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
+        "You must be at least 18 years old",
+      ),
+
+    nationality: Yup.string().required("Nationality is required"),
+
+    gender: Yup.string().required("Gender is required"),
+
+    country: Yup.mixed().required("Country is required"),
+
+    // REMOVED character count validation
+    zip_code: Yup.string().required("ZIP/Postal code is required"),
+
+    // REMOVED character count validation
+    state: Yup.string().required("State/Province is required"),
+
+    // REMOVED character count validation
+    city: Yup.string().required("City is required"),
+
+    // REMOVED character count validation
+    street_address_1: Yup.string().required("Street address is required"),
+
+    mobile_number: Yup.string()
+      .required("Phone number is required")
+      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
+
+    mobilenumber_countrycode: Yup.string().required("Country code is required"),
+
+    ssn: Yup.string().test(
+      "ssn-validation",
+      "SSN must be in format XXX-XX-XXXX",
+      function (value) {
+        if (!value) return true; // Not required unless specific conditions
+        const cleanSSN = value.replace(/-/g, "");
+        return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
+      },
+    ),
+
+    idDocumentType: Yup.string().required("ID Document Type is required"),
+
+    idDocumentNumber: Yup.string()
+      .required("ID Document Number is required")
+      .min(2, "Document number must be at least 2 characters"),
+
+    idIssuedDate: Yup.string()
+      .required("ID Expiry Date is required")
+      .test(
+        "future-date",
+        "Expiry date must be in the future",
+        function (value) {
+          if (!value) return false;
+          const expiryDate = new Date(value);
+          const today = new Date();
+          return expiryDate > today;
+        },
+      ),
+
+    idIssuedCountryCode: Yup.string().required("Issuing Country is required"),
+
+    idDocumentTypeOther: Yup.string().when("idDocumentType", {
+      is: "other",
+      then: Yup.string()
+        .required("Please specify document type")
+        .min(2, "Document type must be at least 2 characters"),
+    }),
+
+    password: Yup.string()
+      .required("Password is required")
+      .min(12, "Password must be at least 12 characters")
+      .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .matches(
+        /[!@#$%^&*(),.?":{}|<>]/,
+        "Password must contain at least one special character",
+      ),
+
+    // FIXED: Simple and reliable confirmPassword validation
+    confirmPassword: Yup.string()
+      .required("Confirm password is required")
+      .oneOf([Yup.ref("password")], "Passwords must match"),
+  });
+};
+
 // Main component function
 function SignUpIndividualContent() {
   // State declarations
@@ -143,12 +361,19 @@ function SignUpIndividualContent() {
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
   const [activeSection, setActiveSection] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [sectionErrors, setSectionErrors] = useState({
+    0: [],
+    1: [],
+    2: [],
+    3: [],
+    4: [],
+  });
+  const [showAllErrors, setShowAllErrors] = useState(false);
 
   const [isCancelling, setIsCancelling] = useState(false);
   const [showSSN, setShowSSN] = useState(false);
 
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
-  const [isZipLoading, setIsZipLoading] = useState(false);
 
   // Currency account selectors
   const isNamedAccount = useSelector(selectIsNamedAccountFromCurrency);
@@ -205,6 +430,14 @@ function SignUpIndividualContent() {
   const zipLookup = useSelector(selectZipLookup);
 
   // Extract location state with defaults
+  const locationState = location.state || {};
+  console.log("📥 LOCATION STATE RECEIVED:", {
+    locationState,
+    remit_customer: locationState.remit_customer,
+    isRemit: locationState.remit_customer,
+    type: typeof locationState.remit_customer,
+  });
+
   const {
     service_provide_ids = [],
     referral_code = "",
@@ -233,93 +466,7 @@ function SignUpIndividualContent() {
   const isPartnerPackageModule = localStorage.getItem("isPartnerPackageModule");
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // Create validation schema with better error handling
-const createValidationSchema = () => {
-  try {
-    return Yup.object({
-      first_name: Yup.string().required("First name is required"),
-      last_name: Yup.string().required("Last name is required"),
-      email: Yup.string().email("Invalid email").required("Email is required"),
-      password: Yup.string()
-        .min(12, "Password must be at least 12 characters")
-        .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
-        .matches(
-          /[!@#$%^&*(),.?":{}|<>]/,
-          "Password must contain at least one special character"
-        )
-        .required("Password is required"),
-      confirmPassword: Yup.string()
-        .oneOf([Yup.ref("password"), null], "Passwords must match")
-        .required("Confirm password is required"),
-      mobile_number: Yup.string()
-        .required("Phone number is required")
-        .matches(/^\d{10}$/, "Phone number must be 10 digits"),
-      street_address_1: Yup.string().required("Street address is required"),
-      city: Yup.string().required("City is required"),
-      state: Yup.string().required("State/Province is required"),
-      zip_code: Yup.string().required("ZIP/Postal code is required"),
-      country: Yup.mixed().required("Country is required"), // Changed to mixed
-      nationality: Yup.mixed().required("Nationality is required"), // Changed to mixed
-      gender: Yup.mixed().required("Gender is required"), // Changed to mixed
-      dob: Yup.date()
-        .required("Date of birth is required")
-        .max(
-          new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
-          "You must be at least 18 years old"
-        ),
-      mobilenumber_countrycode: Yup.mixed().required("Country code is required"), // Changed to mixed
-      idDocumentType: Yup.string().test(
-        "id-document-type",
-        "Please select an ID document type",
-        function (value) {
-          return value && value.trim() !== "";
-        }
-      ),
-      idDocumentNumber: Yup.string().test(
-        "id-document-number",
-        "Please enter ID document number",
-        function (value) {
-          return value && value.trim() !== "";
-        }
-      ),
-      idIssuedDate: Yup.string().test(
-        "id-issued-date",
-        "Please select ID expiry date",
-        function (value) {
-          return value && value.trim() !== "";
-        }
-      ),
-      idIssuedCountryCode: Yup.string().test(
-        "id-issued-country",
-        "Please select issuing country",
-        function (value) {
-          return value && value.trim() !== "";
-        }
-      ),
-      idDocumentTypeOther: Yup.string().when("idDocumentType", {
-        is: "other",
-        then: Yup.string()
-          .required("Please specify document type for 'Other'")
-          .min(2, "Document type must be at least 2 characters"),
-        otherwise: Yup.string().notRequired(),
-      }),
-    });
-  } catch (error) {
-    console.error("❌ Error creating validation schema:", error);
-    // Return a basic schema as fallback
-    return Yup.object({
-      first_name: Yup.string().required("First name is required"),
-      last_name: Yup.string().required("Last name is required"),
-      email: Yup.string().email("Invalid email").required("Email is required"),
-      password: Yup.string().required("Password is required"),
-      confirmPassword: Yup.string()
-        .oneOf([Yup.ref("password"), null], "Passwords must match")
-        .required("Confirm password is required"),
-    });
-  }
-};
-
-  // Enhanced formik configuration with better error handling
+  // Enhanced formik configuration - REMOVED custom validation function
   const formik = useFormik({
     initialValues: {
       customer_type: "individual",
@@ -348,7 +495,7 @@ const createValidationSchema = () => {
       idDocumentType: "",
       idDocumentNumber: "",
       idIssuedDate: "",
-      idIssuedCountryCode: "US",
+      idIssuedCountryCode: "",
       idDocumentTypeOther: "",
       accept_sms: 0,
       accept_privacy_policy: 0,
@@ -357,8 +504,9 @@ const createValidationSchema = () => {
       showSSNField: showSSNField,
       isNamedAccount: isNamedAccount,
       selectedAccounts: selectedAccounts,
+      remit_customer: isRemit,
     },
-    // validationSchema: createValidationSchema(),
+    validationSchema: createValidationSchema(), // Use ONLY Yup validation
     validateOnBlur: true,
     validateOnChange: true,
     onSubmit: async (values, { setErrors, setSubmitting }) => {
@@ -382,81 +530,60 @@ const createValidationSchema = () => {
           return;
         }
 
-        // Check Formik values for ID fields
-        if (!values.idDocumentType || values.idDocumentType.trim() === "") {
-          setErrorMessage("Please select an ID document type");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
+        // Check if all sections are valid
+        const allErrors = await formik.validateForm();
+        const hasErrors = Object.keys(allErrors).length > 0;
 
-        if (!values.idDocumentNumber || values.idDocumentNumber.trim() === "") {
-          setErrorMessage("Please enter ID document number");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
+        if (hasErrors) {
+          setShowAllErrors(true);
+          setActiveSection(0); // Go to first section with errors
 
-        if (!values.idIssuedDate || values.idIssuedDate.trim() === "") {
-          setErrorMessage("Please select ID expiry date");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
+          // Find first section with errors
+          for (let i = 0; i < formSections.length - 1; i++) {
+            const sectionFields = getSectionFields(i, values);
+            const sectionHasError = sectionFields.some(
+              (field) => allErrors[field],
+            );
+            if (sectionHasError) {
+              setActiveSection(i);
+              break;
+            }
+          }
 
-        if (
-          !values.idIssuedCountryCode ||
-          values.idIssuedCountryCode.trim() === ""
-        ) {
-          setErrorMessage("Please select issuing country");
-          setIsModalOpen(true);
-          setIsSubmitting(false);
-          setShowFullScreenLoader(false);
-          return;
-        }
-
-        // Conditional validation for "other" document type
-        if (
-          values.idDocumentType === "other" &&
-          (!values.idDocumentTypeOther ||
-            values.idDocumentTypeOther.trim() === "")
-        ) {
-          setErrorMessage("Please specify document type for 'Other'");
-          setIsModalOpen(true);
+          toast.error("Please fix all validation errors before submitting");
           setIsSubmitting(false);
           setShowFullScreenLoader(false);
           return;
         }
 
         const hasUSDNamedAccount = isNamedAccount;
-        const isRemittanceOnly = isRemit;
+        const isRemittanceOnly = Boolean(isRemit);
 
         // Determine if country is United States
         const isUSCountry =
           values.country === "United States" || values.country === 186;
 
-        console.log("🔍 SSN Validation Check:", {
-          hasUSDNamedAccount,
+        const shouldShowSSNField =
+          (hasUSDNamedAccount && isUSCountry) ||
+          (isRemittanceOnly && isUSCountry);
+
+        console.log("🔍 DEBUG - SSN Conditions:", {
+          isRemit,
+          isRemitBoolean: Boolean(isRemit),
           isRemittanceOnly,
-          isUSCountry,
-          ssnValue: values.ssn,
-          countryValue: values.country,
+          hasUSDNamedAccount,
+          shouldShowSSN: shouldShowSSNField,
+          locationState: location.state,
         });
 
-        if (
-          (hasUSDNamedAccount && isUSCountry) ||
-          (isRemittanceOnly && isUSCountry)
-        ) {
+        if (shouldShowSSNField) {
           const cleanSSN = values.ssn?.replace(/-/g, "") || "";
 
           if (!values.ssn || values.ssn.trim() === "") {
             setErrorMessage(
               hasUSDNamedAccount
                 ? "SSN is required for USD Named Accounts with United States as registered country"
-                : "SSN is required for Remittance Services with United States as registered country"
+                : "SSN is required for Remittance Services with United States as registered country",
             );
             setIsModalOpen(true);
             setIsSubmitting(false);
@@ -476,7 +603,7 @@ const createValidationSchema = () => {
           if (values.ssn && values.ssn.trim() !== "") {
             console.log("📢 Showing SSN confirmation popup");
             dispatch(
-              setMetadataField({ field: "showSSNConfirmation", value: true })
+              setMetadataField({ field: "showSSNConfirmation", value: true }),
             );
             setIsSubmitting(false);
             setShowFullScreenLoader(false);
@@ -484,7 +611,6 @@ const createValidationSchema = () => {
           }
         }
 
-        // Debug: log what's being validated
         console.log("✅ Form validation passed. Proceeding to submission...", {
           idDocumentType: values.idDocumentType,
           idDocumentNumber: values.idDocumentNumber,
@@ -499,7 +625,9 @@ const createValidationSchema = () => {
         await handleFormSubmission(values);
       } catch (error) {
         console.error("❌ Form validation error:", error);
-        setErrorMessage(`An error occurred during form validation: ${error.message}`);
+        setErrorMessage(
+          `An error occurred during form validation: ${error.message}`,
+        );
         setIsModalOpen(true);
         setIsSubmitting(false);
         setShowFullScreenLoader(false);
@@ -508,6 +636,108 @@ const createValidationSchema = () => {
       }
     },
   });
+
+  // DEBUG: Add useEffect to monitor password values and errors
+  useEffect(() => {
+    console.log("🔍 DEBUG - Formik state:", {
+      password: formik.values.password,
+      confirmPassword: formik.values.confirmPassword,
+      areEqual: formik.values.password === formik.values.confirmPassword,
+      passwordError: formik.errors.password,
+      confirmPasswordError: formik.errors.confirmPassword,
+      sectionErrors: sectionErrors[3], // Check section 3 (Security) errors
+      allFormikErrors: formik.errors,
+      touched: {
+        password: formik.touched.password,
+        confirmPassword: formik.touched.confirmPassword,
+      },
+    });
+  }, [
+    formik.values.password,
+    formik.values.confirmPassword,
+    formik.errors,
+    sectionErrors,
+  ]);
+
+  // Function to validate a section
+  const validateCurrentSection = (sectionIndex) => {
+    const sectionFields = getSectionFields(sectionIndex, formik.values);
+    const errors = {};
+
+    // Use Formik's validation results
+    sectionFields.forEach((field) => {
+      if (formik.errors[field]) {
+        errors[field] = formik.errors[field];
+      }
+    });
+
+    return errors;
+  };
+
+  // Handle navigation between sections with validation - UPDATED
+  const handleNextSection = async (currentSection) => {
+    // Mark all fields in current section as touched
+    const sectionFields = getSectionFields(currentSection, formik.values);
+    sectionFields.forEach((field) => {
+      formik.setFieldTouched(field, true);
+    });
+
+    // Trigger Formik validation for current section
+    await formik.validateForm();
+
+    // Get errors from Formik instead of re-validating with Yup
+    const sectionErrors = validateCurrentSection(currentSection);
+
+    if (Object.keys(sectionErrors).length === 0) {
+      // Clear any existing errors for this section
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: [],
+      }));
+
+      // Move to next section
+      if (currentSection < formSections.length - 1) {
+        setActiveSection(currentSection + 1);
+      }
+    } else {
+      // Show errors from Formik
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: Object.entries(sectionErrors).map(
+          ([field, error]) => ({
+            field,
+            error,
+          }),
+        ),
+      }));
+
+      // Show error message
+      const errorCount = Object.keys(sectionErrors).length;
+      toast.error(`Please fix ${errorCount} error(s) before proceeding`);
+
+      // Scroll to first error
+      const firstErrorField = Object.keys(sectionErrors)[0];
+      if (firstErrorField) {
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.focus();
+        }
+      }
+    }
+  };
+
+  const handlePreviousSection = (currentSection) => {
+    if (currentSection > 0) {
+      setActiveSection(currentSection - 1);
+    }
+  };
+
+  // Check if a section is complete
+  const isSectionComplete = async (sectionIndex) => {
+    const errors = await validateCurrentSection(sectionIndex);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleFormSubmission = async (values) => {
     try {
@@ -545,7 +775,7 @@ const createValidationSchema = () => {
         hostname: window.location.hostname,
         remit_customer: isRemit,
         bank_account_options: service_provide_ids,
-        isPartnerPackageModule: "N",
+        isPartnerPackageModule: isPartnerPackageModule || "N",
         package_currencies: package_currencies,
         whitelabelledpartnerid: whitelabelledpartnerid,
         kycVerify: kyc_verify,
@@ -562,8 +792,12 @@ const createValidationSchema = () => {
 
       // Clean up empty optional fields
       const cleanedData = { ...submissionData };
-      Object.keys(cleanedData).forEach(key => {
-        if (cleanedData[key] === "" || cleanedData[key] === null || cleanedData[key] === undefined) {
+      Object.keys(cleanedData).forEach((key) => {
+        if (
+          cleanedData[key] === "" ||
+          cleanedData[key] === null ||
+          cleanedData[key] === undefined
+        ) {
           delete cleanedData[key];
         }
       });
@@ -591,6 +825,7 @@ const createValidationSchema = () => {
               mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
+              hasSSN: !!cleanedData.ssn,
             },
           });
         } else {
@@ -620,7 +855,9 @@ const createValidationSchema = () => {
       }
     } catch (error) {
       console.error("❌ Submission error:", error);
-      setErrorMessage(error.message || "An unexpected error occurred during submission.");
+      setErrorMessage(
+        error.message || "An unexpected error occurred during submission.",
+      );
       setIsModalOpen(true);
     } finally {
       setIsSubmitting(false);
@@ -673,14 +910,14 @@ const createValidationSchema = () => {
           setMetadataField({
             field: "hasNamedAccounts",
             value: isNamedAccount || false,
-          })
+          }),
         );
 
         dispatch(
           setMetadataField({
             field: "isUSDSelected",
             value: isNamedAccount || false,
-          })
+          }),
         );
 
         // Sync isNamedAccount field for SSN logic
@@ -688,15 +925,14 @@ const createValidationSchema = () => {
           setMetadataField({
             field: "isNamedAccount",
             value: isNamedAccount || false,
-          })
+          }),
         );
 
         // Get partner token if needed
         try {
           console.log("🔄 Attempting to get partner token...");
-          const { getBearerToken } = await import(
-            "../../../services/authService"
-          );
+          const { getBearerToken } =
+            await import("../../../services/authService");
           const token = await getBearerToken();
           console.log("✅ Partner token obtained:", token ? "Yes" : "No");
         } catch (tokenError) {
@@ -713,7 +949,7 @@ const createValidationSchema = () => {
               .catch((error) => {
                 console.error("❌ Countries fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Countries already loaded:", countries.length);
@@ -726,7 +962,7 @@ const createValidationSchema = () => {
               .catch((error) => {
                 console.error("❌ Nationalities fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Nationalities already loaded:", nationalities.length);
@@ -739,12 +975,12 @@ const createValidationSchema = () => {
               .catch((error) => {
                 console.error("❌ ID Document Types fetch error:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log(
             "✅ ID Document Types already loaded:",
-            idDocumentTypes.length
+            idDocumentTypes.length,
           );
         }
 
@@ -756,14 +992,14 @@ const createValidationSchema = () => {
               .then((terms) => {
                 console.log(
                   "✅ Terms fetched successfully:",
-                  terms?.length || 0
+                  terms?.length || 0,
                 );
                 return terms;
               })
               .catch((error) => {
                 console.error("❌ Terms fetch error in component:", error);
                 return [];
-              })
+              }),
           );
         } else {
           console.log("✅ Terms already fetched");
@@ -776,7 +1012,7 @@ const createValidationSchema = () => {
             setTimeout(() => {
               console.log("⏰ API timeout after 30 seconds");
               resolve("timeout");
-            }, 30000)
+            }, 30000),
           );
 
           const results = await Promise.race([
@@ -897,11 +1133,9 @@ const createValidationSchema = () => {
       }
 
       try {
-        setIsZipLoading(true);
-
         // Use Redux action to fetch location by ZIP
         const resultAction = await dispatch(
-          fetchLocationByZip({ countryCode, zipCode })
+          fetchLocationByZip({ countryCode, zipCode }),
         );
 
         if (fetchLocationByZip.fulfilled.match(resultAction)) {
@@ -932,17 +1166,15 @@ const createValidationSchema = () => {
       } catch (error) {
         console.error("ZIP code lookup error:", error);
         // Don't show error - just let user enter manually
-      } finally {
-        setIsZipLoading(false);
       }
     },
-    [dispatch, formik]
+    [dispatch, formik],
   );
 
   const handleCountryCodeSelect = (selectedOption) => {
     formik.setFieldValue(
       "mobilenumber_countrycode",
-      selectedOption?.phoneCode || ""
+      selectedOption?.phoneCode || "",
     );
     formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
     setSelectedPhoneCode(selectedOption || null);
@@ -967,6 +1199,19 @@ const createValidationSchema = () => {
     if (!/[0-9]/.test(e.key)) {
       e.preventDefault();
     }
+  };
+
+  // Custom password handlers with debugging
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    console.log("🔍 INPUT - Password changing to:", value);
+    formik.setFieldValue("password", value);
+  };
+
+  const handleConfirmPasswordChange = (e) => {
+    const value = e.target.value;
+    console.log("🔍 INPUT - Confirm password changing to:", value);
+    formik.setFieldValue("confirmPassword", value);
   };
 
   const handleSSNChange = (e) => {
@@ -1006,7 +1251,7 @@ const createValidationSchema = () => {
 
           if (ip !== "Unknown") {
             const locationResponse = await fetch(
-              `https://ipapi.co/${ip}/json/`
+              `https://ipapi.co/${ip}/json/`,
             );
             if (locationResponse.ok) {
               const locationData = await locationResponse.json();
@@ -1037,7 +1282,7 @@ const createValidationSchema = () => {
             termId,
             accepted: !acceptedTerms.some((item) => item.id === termId),
             metadata: termData,
-          })
+          }),
         );
       } catch (error) {
         dispatch(
@@ -1050,11 +1295,11 @@ const createValidationSchema = () => {
               location: "Unknown",
               device: "Unknown",
             },
-          })
+          }),
         );
       }
     },
-    [dispatch, acceptedTerms]
+    [dispatch, acceptedTerms],
   );
 
   const validationRules = [
@@ -1068,199 +1313,51 @@ const createValidationSchema = () => {
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
 
-  // Progress calculation
+  // Progress calculation with validation check
   useEffect(() => {
-    const calculateProgress = () => {
-      const fieldChecks = [
-        {
-          name: "first_name",
-          value: formik.values.first_name,
-          filled: formik.values.first_name && formik.values.first_name.trim(),
-        },
-        {
-          name: "last_name",
-          value: formik.values.last_name,
-          filled: formik.values.last_name && formik.values.last_name.trim(),
-        },
-        {
-          name: "email",
-          value: formik.values.email,
-          filled: formik.values.email && formik.values.email.trim(),
-        },
-        {
-          name: "dob",
-          value: formik.values.dob,
-          filled: formik.values.dob && formik.values.dob.trim(),
-        },
-        {
-          name: "nationality",
-          value: formik.values.nationality,
-          filled:
-            formik.values.nationality &&
-            formik.values.nationality.toString().trim(),
-        },
-        {
-          name: "gender",
-          value: formik.values.gender,
-          filled:
-            formik.values.gender && formik.values.gender.toString().trim(),
-        },
-        {
-          name: "mobilenumber_countrycode",
-          value: formik.values.mobilenumber_countrycode,
-          filled:
-            formik.values.mobilenumber_countrycode &&
-            formik.values.mobilenumber_countrycode.toString().trim(),
-        },
-        {
-          name: "mobile_number",
-          value: formik.values.mobile_number,
-          filled:
-            formik.values.mobile_number && formik.values.mobile_number.trim(),
-        },
-        {
-          name: "street_address_1",
-          value: formik.values.street_address_1,
-          filled:
-            formik.values.street_address_1 &&
-            formik.values.street_address_1.trim(),
-        },
-        {
-          name: "city",
-          value: formik.values.city,
-          filled: formik.values.city && formik.values.city.toString().trim(),
-        },
-        {
-          name: "state",
-          value: formik.values.state,
-          filled: formik.values.state && formik.values.state.toString().trim(),
-        },
-        {
-          name: "zip_code",
-          value: formik.values.zip_code,
-          filled: formik.values.zip_code && formik.values.zip_code.trim(),
-        },
-        {
-          name: "country",
-          value: formik.values.country,
-          filled:
-            formik.values.country && formik.values.country.toString().trim(),
-        },
-        // Formik values for ID fields
-        {
-          name: "idDocumentType",
-          value: formik.values.idDocumentType,
-          filled:
-            formik.values.idDocumentType && formik.values.idDocumentType.trim(),
-        },
-        {
-          name: "idDocumentNumber",
-          value: formik.values.idDocumentNumber,
-          filled:
-            formik.values.idDocumentNumber &&
-            formik.values.idDocumentNumber.trim(),
-        },
-        {
-          name: "idIssuedDate",
-          value: formik.values.idIssuedDate,
-          filled:
-            formik.values.idIssuedDate && formik.values.idIssuedDate.trim(),
-        },
-        {
-          name: "idIssuedCountryCode",
-          value: formik.values.idIssuedCountryCode,
-          filled:
-            formik.values.idIssuedCountryCode &&
-            formik.values.idIssuedCountryCode.trim(),
-        },
-        {
-          name: "password",
-          value: formik.values.password,
-          filled: formik.values.password && formik.values.password.trim(),
-        },
-        {
-          name: "confirmPassword",
-          value: formik.values.confirmPassword,
-          filled:
-            formik.values.confirmPassword &&
-            formik.values.confirmPassword.trim(),
-        },
-      ];
+    const calculateProgress = async () => {
+      let filledFields = 0;
+      let totalFields = 0;
 
-      // Add idDocumentTypeOther if needed
-      if (formik.values.idDocumentType === "other") {
-        fieldChecks.push({
-          name: "idDocumentTypeOther",
-          value: formik.values.idDocumentTypeOther,
-          filled:
-            formik.values.idDocumentTypeOther &&
-            formik.values.idDocumentTypeOther.trim(),
-        });
+      // Check each section
+      for (let i = 0; i < formSections.length - 1; i++) {
+        const sectionFields = getSectionFields(i, formik.values);
+        totalFields += sectionFields.length;
+
+        // Check if each field is filled and valid
+        for (const field of sectionFields) {
+          const value = formik.values[field];
+          const isFilled = value && value.toString().trim() !== "";
+          const hasError = formik.errors[field];
+
+          if (isFilled && !hasError) {
+            filledFields++;
+          }
+        }
       }
 
-      // Use isNamedAccount and isRemit flags for SSN field requirement
-      const hasUSDNamedAccount = isNamedAccount;
-      const isRemittanceOnly = isRemit;
-      const isUSCountry =
-        formik.values.country === "United States" ||
-        formik.values.country === 186;
-
-      // Add SSN to required fields only if either condition is met
-      if (
-        (hasUSDNamedAccount && isUSCountry) ||
-        (isRemittanceOnly && isUSCountry)
-      ) {
-        fieldChecks.push({
-          name: "ssn",
-          value: formik.values.ssn,
-          filled: formik.values.ssn && formik.values.ssn.trim(),
-        });
-      }
-
-      // Count filled fields
-      let filledFields = fieldChecks.filter((field) => field.filled).length;
-      const totalFields = fieldChecks.length;
-
-      // Add terms and conditions to progress if applicable
-      let termsField = 0;
+      // Add terms and conditions
       if (termsConditions.length > 0) {
-        termsField = 1; // Terms section exists
+        totalFields += 1; // Terms section
         if (acceptedTerms.length > 0) {
-          filledFields += 1; // Terms are accepted
+          filledFields += 1; // Terms accepted
         }
       }
 
       // Calculate percentage
-      const totalWithTerms = totalFields + termsField;
       const percentage =
-        totalWithTerms > 0
-          ? Math.round((filledFields / totalWithTerms) * 100)
-          : 0;
-
-      // Optional: Debug log to see progress calculation
-      console.log("📊 Progress Calculation:", {
-        filledFields,
-        totalFields,
-        termsField,
-        totalWithTerms,
-        percentage,
-        hasUSDNamedAccount,
-        isRemittanceOnly,
-        isUSCountry,
-        ssnFilled: formik.values.ssn && formik.values.ssn.trim(),
-        hasTerms: termsConditions.length > 0,
-        termsAccepted: acceptedTerms.length > 0,
-      });
+        totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
 
       return percentage;
     };
 
-    setProgress(calculateProgress());
+    calculateProgress().then(setProgress);
   }, [
     formik.values,
+    formik.errors,
     acceptedTerms,
-    isNamedAccount, // Add isNamedAccount to dependencies
-    isRemit, // Add isRemit to dependencies
+    isNamedAccount,
+    isRemit,
     termsConditions.length,
   ]);
 
@@ -1323,11 +1420,124 @@ const createValidationSchema = () => {
     navigate(-1);
   };
 
+  // Render section errors
+  const renderSectionErrors = (sectionIndex) => {
+    const errors = sectionErrors[sectionIndex];
+    if (!errors || errors.length === 0) return null;
+
+    return (
+      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center mb-2">
+          <FontAwesomeIcon
+            icon={faExclamationCircle}
+            className="text-red-500 mr-2"
+          />
+          <h4 className="text-red-700 font-semibold">
+            Please fix the following errors:
+          </h4>
+        </div>
+        <ul className="text-red-600 text-sm list-disc pl-5">
+          {errors.map((err, index) => (
+            <li key={index} className="mb-1">
+              <span className="font-medium">
+                {err.field.replace(/_/g, " ")}:
+              </span>{" "}
+              {err.error}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Check if form has errors
+  const hasFormErrors = () => {
+    return Object.keys(formik.errors).length > 0;
+  };
+
+  // Render all form errors in the last section
+  const renderAllFormErrors = () => {
+    if (!showAllErrors || !hasFormErrors()) return null;
+
+    const allErrors = [];
+    for (let i = 0; i < formSections.length - 1; i++) {
+      const sectionFields = getSectionFields(i, formik.values);
+      const sectionErrors = sectionFields
+        .filter((field) => formik.errors[field])
+        .map((field) => ({
+          field,
+          error: formik.errors[field],
+          section: i,
+        }));
+
+      if (sectionErrors.length > 0) {
+        allErrors.push({
+          section: i,
+          sectionName: formSections[i],
+          errors: sectionErrors,
+        });
+      }
+    }
+
+    if (allErrors.length === 0) return null;
+
+    return (
+      <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center mb-3">
+          <FontAwesomeIcon
+            icon={faExclamationCircle}
+            className="text-red-500 mr-2 text-lg"
+          />
+          <h4 className="text-red-700 font-semibold text-lg">
+            Form Validation Errors
+          </h4>
+        </div>
+        <p className="text-red-600 mb-3">
+          Please fix the following errors in the indicated sections:
+        </p>
+        {allErrors.map((sectionError, idx) => (
+          <div key={idx} className="mb-3 last:mb-0">
+            <button
+              type="button"
+              onClick={() => setActiveSection(sectionError.section)}
+              className="text-blue-600 hover:text-blue-800 font-medium mb-2 flex items-center"
+            >
+              {sectionError.sectionName}
+              <svg
+                className="w-4 h-4 ml-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"
+                />
+              </svg>
+            </button>
+            <ul className="text-red-600 text-sm list-disc pl-5">
+              {sectionError.errors.map((err, errorIdx) => (
+                <li key={errorIdx} className="mb-1">
+                  <span className="font-medium">
+                    {err.field.replace(/_/g, " ")}:
+                  </span>{" "}
+                  {err.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // Return loading state during SSR
   if (!isClient) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
           <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
@@ -1379,7 +1589,7 @@ const createValidationSchema = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
           <RingLoader color="#3b82f6" size={50} />
           <p className="mt-4 text-gray-600">Loading registration form...</p>
         </div>
@@ -1408,17 +1618,6 @@ const createValidationSchema = () => {
           </div>
         )}
         <div className="max-w-6xl w-full bg-white rounded-2xl shadow-lg overflow-hidden relative border border-gray-100">
-          {isSubmitting && (
-            <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex justify-center items-center">
-              <div className="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center">
-                <RingLoader color="#3b82f6" size={50} loading={isSubmitting} />
-                <p className="mt-4 text-gray-600 font-medium">
-                  Processing your request...
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Progress Bar */}
           <div className="w-full bg-gray-100 h-1.5">
             <div
@@ -1466,25 +1665,50 @@ const createValidationSchema = () => {
 
             {/* Navigation Tabs */}
             <div className="flex overflow-x-auto mb-4 pb-1">
-              {formSections.map((section, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveSection(idx)}
-                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 ${
-                    activeSection === idx
-                      ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                      : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
-                  }`}
-                >
-                  {section}
-                  {activeSection === idx && (
-                    <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
-                      {idx + 1}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {formSections.map((section, idx) => {
+                const isSectionValid = sectionErrors[idx]?.length === 0;
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      // Only allow navigation if previous sections are valid
+                      let canNavigate = true;
+                      for (let i = 0; i < idx; i++) {
+                        if (sectionErrors[i]?.length > 0) {
+                          canNavigate = false;
+                          toast.error(`Please complete section ${i + 1} first`);
+                          break;
+                        }
+                      }
+                      if (canNavigate) {
+                        setActiveSection(idx);
+                      }
+                    }}
+                    className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 relative ${
+                      activeSection === idx
+                        ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                        : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                    } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
+                  >
+                    {section}
+                    {activeSection === idx && (
+                      <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
+                        {idx + 1}
+                      </span>
+                    )}
+                    {!isSectionValid && (
+                      <span className="absolute -top-1 -right-1">
+                        <FontAwesomeIcon
+                          icon={faExclamationCircle}
+                          className="text-red-500 text-xs"
+                        />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Form */}
@@ -1501,6 +1725,8 @@ const createValidationSchema = () => {
                   </span>
                   Personal Information
                 </h3>
+
+                {renderSectionErrors(0)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {[
@@ -1533,7 +1759,7 @@ const createValidationSchema = () => {
                       label: "Date of Birth *",
                       type: "date",
                       max: new Date(
-                        new Date().setFullYear(new Date().getFullYear() - 18)
+                        new Date().setFullYear(new Date().getFullYear() - 18),
                       )
                         .toISOString()
                         .split("T")[0],
@@ -1634,7 +1860,7 @@ const createValidationSchema = () => {
                         }}
                         value={
                           nationalityOptions.find(
-                            (opt) => opt.value === formik.values.nationality
+                            (opt) => opt.value === formik.values.nationality,
                           ) || null
                         }
                       />
@@ -1700,7 +1926,7 @@ const createValidationSchema = () => {
                       }}
                       value={
                         genderOptions.find(
-                          (opt) => opt.value === formik.values.gender
+                          (opt) => opt.value === formik.values.gender,
                         ) || null
                       }
                     />
@@ -1727,7 +1953,7 @@ const createValidationSchema = () => {
                 <div className="flex justify-end mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(1)}
+                    onClick={() => handleNextSection(0)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Contact Information
@@ -1748,7 +1974,8 @@ const createValidationSchema = () => {
                   </button>
                 </div>
               </section>
-              {/* // Contact Information Section - ZIP CODE BASED ONLY (No dropdowns) */}
+
+              {/* Contact Information Section - REORDERED ADDRESS FIELDS */}
               <section className={`${activeSection !== 1 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-sm">
@@ -1757,9 +1984,11 @@ const createValidationSchema = () => {
                   Contact Information
                 </h3>
 
+                {renderSectionErrors(1)}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Country Dropdown */}
-                  <div>
+                  {/* Country Dropdown - FIRST as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="country"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1797,8 +2026,8 @@ const createValidationSchema = () => {
                     ) : null}
                   </div>
 
-                  {/* ZIP Code - Auto-fills State and City */}
-                  <div>
+                  {/* ZIP Code - SECOND as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="zip_code"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -1832,12 +2061,7 @@ const createValidationSchema = () => {
 
                       {/* Loading indicator for ZIP lookup */}
                       {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                      {(isZipLoading || zipLookup.loading) && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
                           <RingLoader size={16} color="#3b82f6" />
                         </div>
                       )}
@@ -1894,116 +2118,8 @@ const createValidationSchema = () => {
                     )}
                   </div>
 
-                  {/* State Field - Auto-filled by ZIP code API */}
-                  <div>
-                    <label
-                      htmlFor="state"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      State/Province *
-                      {formik.values.state && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="state"
-                        name="state"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.state}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.state && formik.errors.state
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false}
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.state && formik.errors.state ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.state}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* City Field - Auto-filled by ZIP code API */}
-                  <div>
-                    <label
-                      htmlFor="city"
-                      className="block text-sm font-medium text-gray-700 mb-2.5"
-                    >
-                      City *
-                      {formik.values.city && zipLookup.data && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Auto-filled
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="city"
-                        name="city"
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        value={formik.values.city}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.city && formik.errors.city
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
-                        readOnly={false}
-                      />
-                      {zipLookup.loading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          <RingLoader size={16} color="#3b82f6" />
-                        </div>
-                      )}
-                    </div>
-
-                    {formik.touched.city && formik.errors.city ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg
-                          className="w-3.5 h-3.5 mr-1"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {formik.errors.city}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {/* Street Address 1 */}
-                  <div>
+                  {/* Street Address 1 - THIRD as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="street_address_1"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -2044,8 +2160,8 @@ const createValidationSchema = () => {
                     ) : null}
                   </div>
 
-                  {/* Street Address 2 (Optional) */}
-                  <div>
+                  {/* Street Address 2 (Optional) - FOURTH as per requirements */}
+                  <div className="md:col-span-2">
                     <label
                       htmlFor="street_address_2"
                       className="block text-sm font-medium text-gray-700 mb-2.5"
@@ -2064,7 +2180,115 @@ const createValidationSchema = () => {
                     />
                   </div>
 
-                  {/* Phone Number */}
+                  {/* City - FIFTH as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="city"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      City *
+                      {formik.values.city && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="city"
+                        name="city"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.city}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.city && formik.errors.city
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.city && formik.errors.city ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.city}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* State - SIXTH as per requirements */}
+                  <div>
+                    <label
+                      htmlFor="state"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      State/Province *
+                      {formik.values.state && zipLookup.data && (
+                        <span className="ml-2 text-xs text-green-600 font-normal">
+                          ✓ Auto-filled
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="state"
+                        name="state"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.state}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
+                          formik.touched.state && formik.errors.state
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                        placeholder="Will auto-fill from ZIP code"
+                        readOnly={false}
+                      />
+                      {zipLookup.loading && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center">
+                          <RingLoader size={16} color="#3b82f6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {formik.touched.state && formik.errors.state ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.state}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Phone Number - SEVENTH as per requirements */}
                   <div className="md:col-span-2">
                     <label
                       htmlFor="mobile_number"
@@ -2155,7 +2379,7 @@ const createValidationSchema = () => {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(0)}
+                    onClick={() => handlePreviousSection(1)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2175,7 +2399,7 @@ const createValidationSchema = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(2)}
+                    onClick={() => handleNextSection(1)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Identity Verification
@@ -2195,6 +2419,7 @@ const createValidationSchema = () => {
                   </button>
                 </div>
               </section>
+
               {/* Identity Verification Section */}
               <section className={`${activeSection !== 2 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -2204,15 +2429,17 @@ const createValidationSchema = () => {
                   Identity Verification
                 </h3>
 
+                {renderSectionErrors(2)}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {(function () {
                     // Condition 1: Check if user has USD named account OR if it's remittance only
                     const hasUSDNamedAccount = isNamedAccount;
-                    const isRemittanceOnly = isRemit; // Get from location state
+                    const isRemittanceOnly = Boolean(isRemit); // Get from location state
 
                     // Condition 2: Check if user's country is United States
                     const selectedCountryOption = countryOptions.find(
-                      (opt) => opt.value === formik.values.country
+                      (opt) => opt.value === formik.values.country,
                     );
                     const isUSCountry =
                       formik.values.country === "United States" ||
@@ -2344,6 +2571,24 @@ const createValidationSchema = () => {
                         <option value="other">Other</option>
                       </select>
                     )}
+                    {formik.touched.idDocumentType &&
+                    formik.errors.idDocumentType ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.idDocumentType}
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Other Document Type Input */}
@@ -2393,35 +2638,102 @@ const createValidationSchema = () => {
                       } shadow-sm`}
                       placeholder="Enter document number"
                     />
+                    {formik.touched.idDocumentNumber &&
+                    formik.errors.idDocumentNumber ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.idDocumentNumber}
+                      </p>
+                    ) : null}
                   </div>
 
-                  {/* Issuing Country */}
+                  {/* Issuing Country - Using react-select */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       ID Issuing Country *
                     </label>
-                    <select
+                    <Select
+                      id="idIssuedCountryCode"
                       name="idIssuedCountryCode"
-                      value={formik.values.idIssuedCountryCode}
-                      onChange={formik.handleChange}
+                      options={countries.map((country) => ({
+                        value: country.country_code,
+                        label: country.name,
+                      }))}
+                      onChange={(selectedOption) => {
+                        formik.setFieldValue(
+                          "idIssuedCountryCode",
+                          selectedOption?.value || "",
+                        );
+                      }}
                       onBlur={formik.handleBlur}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !formik.values.idIssuedCountryCode &&
-                        formik.touched.idIssuedCountryCode
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
-                    >
-                      <option value="">Select Issuing Country</option>
-                      {countries.map((country) => (
-                        <option key={country.id} value={country.country_code}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
+                      value={
+                        countries
+                          .map((country) => ({
+                            value: country.country_code,
+                            label: country.name,
+                          }))
+                          .find(
+                            (option) =>
+                              option.value ===
+                              formik.values.idIssuedCountryCode,
+                          ) || null
+                      }
+                      className="basic-single"
+                      classNamePrefix="select"
+                      placeholder="Select Issuing Country"
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...provided,
+                          minHeight: "52px",
+                          borderRadius: "12px",
+                          borderColor:
+                            formik.touched.idIssuedCountryCode &&
+                            formik.errors.idIssuedCountryCode
+                              ? "#f87171"
+                              : "#e5e7eb",
+                          boxShadow: state.isFocused
+                            ? formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                              ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
+                              : "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                            : "none",
+                          "&:hover": {
+                            borderColor:
+                              formik.touched.idIssuedCountryCode &&
+                              formik.errors.idIssuedCountryCode
+                                ? "#ef4444"
+                                : "#3b82f6",
+                          },
+                        }),
+                      }}
+                    />
                     {formik.touched.idIssuedCountryCode &&
                       formik.errors.idIssuedCountryCode && (
-                        <p className="text-red-500 text-xs mt-2">
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                           {formik.errors.idIssuedCountryCode}
                         </p>
                       )}
@@ -2457,7 +2769,7 @@ const createValidationSchema = () => {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(1)}
+                    onClick={() => handlePreviousSection(2)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2478,7 +2790,7 @@ const createValidationSchema = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(3)}
+                    onClick={() => handleNextSection(2)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Security
@@ -2499,6 +2811,7 @@ const createValidationSchema = () => {
                   </button>
                 </div>
               </section>
+
               {/* Security Section */}
               <section className={`${activeSection !== 3 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -2507,6 +2820,8 @@ const createValidationSchema = () => {
                   </span>
                   Security
                 </h3>
+
+                {renderSectionErrors(3)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -2521,7 +2836,7 @@ const createValidationSchema = () => {
                         type={passwordVisible ? "text" : "password"}
                         id="password"
                         name="password"
-                        onChange={formik.handleChange}
+                        onChange={handlePasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.password}
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
@@ -2614,14 +2929,18 @@ const createValidationSchema = () => {
                         type={confirmPasswordVisible ? "text" : "password"}
                         id="confirmPassword"
                         name="confirmPassword"
-                        onChange={formik.handleChange}
+                        onChange={handleConfirmPasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.confirmPassword}
                         className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
                           formik.touched.confirmPassword &&
                           formik.errors.confirmPassword
                             ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            : formik.values.confirmPassword &&
+                                formik.values.password ===
+                                  formik.values.confirmPassword
+                              ? "border-green-400 focus:ring-green-500/30 focus:border-green-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                         placeholder="Confirm your password"
                       />
@@ -2637,36 +2956,52 @@ const createValidationSchema = () => {
                           icon={confirmPasswordVisible ? faEyeSlash : faEye}
                         />
                       </button>
+
+                      {/* Show green checkmark when passwords match */}
+                      {formik.values.password &&
+                        formik.values.confirmPassword &&
+                        !formik.errors.confirmPassword &&
+                        formik.values.password ===
+                          formik.values.confirmPassword && (
+                          <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-green-500">
+                            <FontAwesomeIcon icon={faCheckCircle} />
+                          </div>
+                        )}
                     </div>
+
+                    {/* Only show errors when passwords don't match */}
                     {formik.touched.confirmPassword &&
-                      formik.errors.confirmPassword && (
-                        <p className="text-red-500 text-xs mt-2 flex items-center">
-                          <svg
-                            className="w-3.5 h-3.5 mr-1"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          {formik.errors.confirmPassword}
-                        </p>
-                      )}
+                    formik.errors.confirmPassword ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.confirmPassword}
+                      </p>
+                    ) : null}
+
+                    {/* Show green success message when passwords match and both fields have values */}
                     {formik.values.password &&
                       formik.values.confirmPassword &&
+                      !formik.errors.confirmPassword &&
                       formik.values.password ===
                         formik.values.confirmPassword && (
-                        <div className="text-green-600 text-sm mt-3 flex items-center bg-green-50/60 p-3 rounded-lg border border-green-200">
+                        <p className="text-green-600 text-xs mt-2 flex items-center">
                           <FontAwesomeIcon
                             icon={faCheckCircle}
-                            className="mr-2"
+                            className="mr-1"
                           />
                           Passwords match
-                        </div>
+                        </p>
                       )}
                   </div>
                 </div>
@@ -2674,7 +3009,7 @@ const createValidationSchema = () => {
                 <div className="flex justify-between mt-10">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(2)}
+                    onClick={() => handlePreviousSection(3)}
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
                   >
                     <svg
@@ -2695,7 +3030,7 @@ const createValidationSchema = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveSection(4)}
+                    onClick={() => handleNextSection(3)}
                     className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
                   >
                     Next: Terms & Conditions
@@ -2716,6 +3051,7 @@ const createValidationSchema = () => {
                   </button>
                 </div>
               </section>
+
               {/* Terms & Conditions Section */}
               <section className={`${activeSection !== 4 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -2724,6 +3060,9 @@ const createValidationSchema = () => {
                   </span>
                   Terms & Conditions
                 </h3>
+
+                {/* Show all form errors if any */}
+                {renderAllFormErrors()}
 
                 {termsLoading ? (
                   <div className="flex justify-center items-center py-8">
@@ -2775,7 +3114,7 @@ const createValidationSchema = () => {
                             type="checkbox"
                             id={`term-${term.id}`}
                             checked={acceptedTerms.some(
-                              (item) => item.id === term.id
+                              (item) => item.id === term.id,
                             )}
                             onChange={() => handleCheckboxChange(term.id)}
                             className="mt-1 mr-4 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -2814,11 +3153,11 @@ const createValidationSchema = () => {
                   </div>
                 )}
 
-                <div className="flex justify-between">
+                <div className="flex flex-col md:flex-row justify-between gap-4 md:gap-0">
                   <button
                     type="button"
-                    onClick={() => setActiveSection(3)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    onClick={() => handlePreviousSection(4)}
+                    className="px-4 md:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group order-2 md:order-1 w-full md:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2836,12 +3175,13 @@ const createValidationSchema = () => {
                     </svg>
                     Previous
                   </button>
-                  <div className="flex gap-4">
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 order-1 md:order-2 w-full md:w-auto">
                     <button
                       type="button"
                       onClick={handleCancel}
                       disabled={isSubmitting}
-                      className="px-6 py-3.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isCancelling ? (
                         <>
@@ -2872,6 +3212,7 @@ const createValidationSchema = () => {
                         </>
                       )}
                     </button>
+
                     <button
                       type="submit"
                       disabled={
@@ -2880,7 +3221,7 @@ const createValidationSchema = () => {
                         (termsConditions.length > 0 &&
                           acceptedTerms.length === 0)
                       }
-                      className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                      className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
                       {isSubmitting ? (
                         <>
@@ -2918,7 +3259,7 @@ const createValidationSchema = () => {
 
             <ToastContainer
               position="top-right"
-              autoClose={5000}
+              autoClose={1000}
               hideProgressBar={false}
               newestOnTop={false}
               closeOnClick

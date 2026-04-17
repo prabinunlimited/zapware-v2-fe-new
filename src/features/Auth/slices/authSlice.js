@@ -1,21 +1,29 @@
-// src/features/Auth/slices/authSlice.js - UPDATED TO USE CENTRALIZED API SERVICE
+// src/features/Auth/slices/authSlice.js - FIXED VERSION
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { centralizedApi } from "../../../services/api";
 
 // ===================== ASYNC THUNKS =====================
 export const fetchUserProfile = createAsyncThunk(
   "auth/fetchUserProfile",
   async ({ customerId }, { rejectWithValue, getState }) => {
     try {
-      console.log(`👤 Fetching user profile for customerId: ${customerId}`);
+      const state = getState();
+      const token = state.auth.token;
 
-      const userProfile = await centralizedApi.getCustomerProfile(customerId);
+      const response = await fetch(`/api/customer/profile/${customerId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      console.log("✅ User profile fetched successfully");
-      return userProfile;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
     } catch (error) {
-      console.error("❌ Error fetching user profile:", error);
-      return rejectWithValue(error.message || "Failed to fetch user profile");
+      return rejectWithValue(error.message);
     }
   }
 );
@@ -24,38 +32,27 @@ export const fetchAllowedModules = createAsyncThunk(
   "auth/fetchAllowedModules",
   async ({ customerId }, { rejectWithValue, getState }) => {
     try {
-      console.log(`📦 Fetching allowed modules for customerId: ${customerId}`);
+      const state = getState();
+      const token = state.auth.token;
 
-      // Note: This endpoint might need to be added to centralizedApi
-      // For now, we'll handle it directly with proper caching
-      const cacheKey = `allowed-modules-${customerId}`;
-      const cached = sessionStorage.getItem(cacheKey);
-
-      if (cached) {
-        try {
-          console.log("💾 Using cached allowed modules");
-          return JSON.parse(cached);
-        } catch (e) {
-          // Cache corrupted, continue to fetch
+      const response = await fetch(
+        `/api/customer/${customerId}/allowed-modules`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         }
-      }
-
-      const api = (await import("../../../services/api")).default;
-      const response = await api.get(`/customer/${customerId}/allowed-modules`);
-
-      if (response.data) {
-        // Cache for 5 minutes
-        sessionStorage.setItem(cacheKey, JSON.stringify(response.data));
-        console.log("✅ Allowed modules fetched and cached");
-        return response.data;
-      }
-
-      throw new Error("Invalid response structure");
-    } catch (error) {
-      console.error("❌ Error fetching allowed modules:", error);
-      return rejectWithValue(
-        error.message || "Failed to fetch allowed modules"
       );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message);
     }
   }
 );
@@ -64,74 +61,98 @@ export const fetchAllowedModules = createAsyncThunk(
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (token, { rejectWithValue, dispatch }) => {
-    const logoutTimestamp = Date.now();
-
     try {
-      console.log("🚪 Starting logout process...");
-
-      // Step 2.1: Store logout timestamp
+      // Store logout attempt timestamp
+      const logoutTimestamp = Date.now();
       localStorage.setItem("logout_time", logoutTimestamp.toString());
-      console.log("⏰ Logout timestamp stored");
 
-      // Step 2.2: Get customer ID for API call
+      // Store partner/system tokens BEFORE any cleanup
+      const systemTokensToPreserve = {
+        bearertoken: localStorage.getItem("bearertoken"),
+        whitelabelled_customer: localStorage.getItem("whitelabelled_customer"),
+        whitelabelled_customer_partnerid: localStorage.getItem("whitelabelled_customer_partnerid"),
+        whitelabelled_customer_partnername: localStorage.getItem("whitelabelled_customer_partnername"),
+        isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
+        header_color: localStorage.getItem("header_color"),
+        partner_config: localStorage.getItem("partner_config"),
+        partner_fx_currencies: localStorage.getItem("partner_fx_currencies"),
+      };
+
+      // Get customer ID for logout API
       const customerId = localStorage.getItem("authcustomer_id");
 
-      let apiSuccess = false;
-      let apiResponse = null;
+      if (!token) {
+        console.warn(
+          "No token provided for logout, performing local logout only"
+        );
+        // Still preserve partner tokens
+        clearAuthStorage(); // This now preserves partner tokens
+        return {
+          message: "Local logout completed",
+          timestamp: logoutTimestamp,
+          apiSuccess: false,
+        };
+      }
 
-      // Step 2.3: Call logout API using centralized service
-      if (token && customerId) {
-        console.log("📤 Calling logout API...");
-        try {
-          const logoutPayload = {
+      // Prepare headers for API call (using USER token, not partner token)
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+
+      // Make API call to logout endpoint
+      let apiResponse = null;
+      let apiSuccess = false;
+
+      try {
+        const response = await fetch(`/api/auth/logout`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
             customer_id: customerId,
             logout_timestamp: logoutTimestamp,
             device_info: navigator.userAgent,
             logout_reason: "user_initiated",
-          };
+          }),
+        });
 
-          // Use centralized API for logout
-          await centralizedApi.logout();
+        if (response.ok) {
+          apiResponse = await response.json();
           apiSuccess = true;
-          console.log("✅ Logout API success via centralized service");
-        } catch (apiError) {
-          console.warn("⚠️ Logout API error:", apiError.message);
-          // Continue with local logout even if API fails
+          console.log("✅ Logout API success:", apiResponse);
+        } else {
+          console.warn(
+            `Logout API returned ${response.status}, but continuing with local cleanup`
+          );
         }
-      } else {
-        console.log("ℹ️ No token/customer ID, local logout only");
+      } catch (apiError) {
+        // Non-blocking: API call failure shouldn't prevent local logout
+        console.warn(
+          "Logout API error (proceeding with local cleanup):",
+          apiError.message
+        );
       }
 
-      // Step 2.4: Clear cache for this user
-      if (customerId) {
-        try {
-          centralizedApi.clearCache(`/customer/${customerId}`);
-          console.log("🗑️ Cleared user-specific cache");
-        } catch (cacheError) {
-          console.warn("⚠️ Cache clear error:", cacheError.message);
-        }
-      }
-
-      // Step 2.5: Clear ONLY authentication tokens
+      // Clear auth storage (which now preserves partner tokens)
       clearAuthStorage();
 
-      // Step 2.6: Return success
-      console.log("🎉 Logout process completed successfully");
+      // Always return success
       return {
         success: true,
         apiResponse,
         apiSuccess,
         timestamp: logoutTimestamp,
-        message: "Logout completed",
+        message: "Logout completed successfully",
+        partnerTokenPreserved: !!systemTokensToPreserve.bearertoken,
       };
     } catch (error) {
-      console.error("❌ Logout error:", error);
-      // Even on error, clear auth storage
+      console.error("❌ Logout process error:", error);
+      // Even on error, clear auth storage (which preserves partner tokens)
       clearAuthStorage();
       return rejectWithValue({
         message: "Logout process error",
         error: error.message,
-        proceedWithCleanup: true, // Signal to proceed with cleanup
+        proceedWithCleanup: true,
       });
     }
   }
@@ -187,90 +208,31 @@ const setLocalStorageItem = (key, value) => {
 
 const clearAuthStorage = () => {
   if (typeof window !== "undefined") {
-    console.log("🚪 Clearing user auth tokens (keeping partner data)...");
+    // Store partner/system tokens BEFORE clearing
+    const systemTokensToPreserve = {
+      bearertoken: localStorage.getItem("bearertoken"),
+      whitelabelled_customer: localStorage.getItem("whitelabelled_customer"),
+      whitelabelled_customer_partnerid: localStorage.getItem("whitelabelled_customer_partnerid"),
+      whitelabelled_customer_partnername: localStorage.getItem("whitelabelled_customer_partnername"),
+      isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
+      header_color: localStorage.getItem("header_color"),
+      partner_config: localStorage.getItem("partner_config"),
+      partner_fx_currencies: localStorage.getItem("partner_fx_currencies"),
+    };
 
-    // ============ ONLY CLEAR USER-SPECIFIC DATA ============
-    const userTokensToClear = [
-      // Authentication tokens
-      "authtoken",
-      "authcustomer_id",
+    // Clear ALL storage first
+    localStorage.clear();
+    sessionStorage.clear();
 
-      // User verification status
-      "kyc_status",
-      "bank_approve_status",
-
-      // Staff/Owner info
-      "is_staff_login",
-      "staff_role",
-      "staff_id",
-      "is_owner_login",
-      "owner_id",
-      "ownerDetails",
-
-      // User profile data
-      "firstName",
-      "lastName",
-      "middleName",
-
-      // Temporary/session data
-      "plaidStatus",
-      "hasSilaBankAccount",
-      "customerUuid",
-      "logout_time",
-      "temp_auth_data",
-    ];
-
-    // Clear each user token
-    userTokensToClear.forEach((key) => {
-      const hadValue = localStorage.getItem(key) !== null;
-      localStorage.removeItem(key);
-      if (hadValue) {
-        console.log(`🗑️  Cleared user token: ${key}`);
+    // IMMEDIATELY restore system/partner tokens
+    Object.entries(systemTokensToPreserve).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        localStorage.setItem(key, value);
       }
     });
 
-    // ============ KEEP ALL PARTNER/ORGANIZATION DATA ============
-    // These items STAY in localStorage:
-    // - bearertoken (partner token)
-    // - partner_logo, partnerDetails, partnerConfig
-    // - whitelabelled_* items
-    // - header_color, text_color, etc.
-    // - beneficiary_portal_title
-    // - partner_fx_currencies
-    // - partner_name
-
-    // ============ CLEAR SESSION STORAGE ============
-    sessionStorage.clear();
-    console.log("🗑️  Cleared session storage");
-
-    // ============ VERIFY WHAT REMAINS ============
-    console.log("✅ User logout complete. Partner data preserved.");
-
-    // Debug: Show what partner data is still there
-    const partnerTokens = [
-      "bearertoken",
-      "partner_logo",
-      "partnerDetails",
-      "partnerConfig",
-      "partnerDetailsTimestamp",
-      "partnerConfigTimestamp",
-      "whitelabelled_customer_partnerid",
-      "whitelabelledpartnerid",
-      "whitelabelled_customer_partnername",
-      "header_color",
-      "text_color",
-      "beneficiary_portal_title",
-      "partner_fx_currencies",
-      "partner_name",
-    ];
-
-    const preservedTokens = partnerTokens.filter(
-      (key) => localStorage.getItem(key) !== null
-    );
-
-    console.log(
-      `🤝 ${preservedTokens.length} partner tokens preserved:`,
-      preservedTokens
+    console.log("✅ User tokens cleared, system tokens preserved:", 
+      Object.keys(systemTokensToPreserve).filter(k => systemTokensToPreserve[k]).length, "tokens"
     );
   }
 };
@@ -318,7 +280,7 @@ const initialState = {
   // User Preferences
   rememberMe: false,
   customerType: "",
-  inputType: "email",
+  inputType: "mobile",
   showCustomerType: "N",
 
   // Owner/Staff Management
@@ -560,10 +522,9 @@ const authSlice = createSlice({
       };
     },
 
+    // Note: The logoutUser reducer is now handled by the async thunk
+    // This sync action is kept for backward compatibility
     logoutUserSync: (state) => {
-      console.log("🔄 Sync logout - clearing auth state");
-
-      // Step 3.1: Reset all Redux auth state
       state.user = null;
       state.token = null;
       state.customerId = null;
@@ -584,10 +545,10 @@ const authSlice = createSlice({
       state.userProfile = null;
       state.allowedModules = null;
 
-      // Step 3.2: Clear ONLY auth tokens from localStorage
+      // This now preserves partner tokens
       clearAuthStorage();
-
-      // Step 3.3: Update logout state
+      
+      // Update logout state
       state.logoutState.success = true;
       state.logoutState.timestamp = Date.now();
       state.logoutState.partnerTokensPreserved = true;
@@ -946,99 +907,117 @@ const authSlice = createSlice({
 
         const payload = action.payload;
 
-        // ✅ FIXED: Extract data from the nested structure
-        let responseData = payload;
-
-        // Check if we have the nested structure
-        if (payload.data && typeof payload.data === "object") {
-          responseData = payload.data;
-        } else if (payload.response?.data) {
-          responseData = payload.response.data;
+        if (payload.kyc_status !== undefined) {
+          state.kycStatus = payload.kyc_status;
+          setLocalStorageItem("kyc_status", payload.kyc_status);
+        }
+        if (payload.bank_approve_status !== undefined) {
+          state.bankApproveStatus = payload.bank_approve_status;
+          setLocalStorageItem(
+            "bank_approve_status",
+            payload.bank_approve_status
+          );
         }
 
-        console.log("✅ verifyPasscode.fulfilled - Processed data:", {
-          hasToken: !!responseData.token,
-          hasCustomerId: !!responseData.customer_id,
-          originalPayload: payload,
-          extractedData: responseData,
-        });
+        if (payload.requiresPlaidRedirect) {
+          state.plaidStatus = {
+            status: "pending",
+            url: payload.plaidUrl,
+            message: "Redirecting to Plaid",
+          };
 
-        if (responseData.token && responseData.customer_id) {
-          // ✅ CRITICAL: Update Redux state
-          state.token = responseData.token;
-          state.customerId = responseData.customer_id.toString();
+          if (payload.tempToken && payload.customer_id) {
+            state.tempAuthData = {
+              token: payload.tempToken,
+              customerId: payload.customer_id,
+              requiresKyc: true,
+            };
+            sessionStorage.setItem(
+              "temp_auth_data",
+              JSON.stringify({
+                token: payload.tempToken,
+                customer_id: payload.customer_id,
+                requiresKyc: true,
+                timestamp: Date.now(),
+              })
+            );
+          }
+
+          return;
+        }
+
+        if (payload.requiresKycVerification) {
+          state.requiresKycVerification = true;
+          if (payload.tempToken && payload.customer_id) {
+            state.tempAuthData = {
+              token: payload.tempToken,
+              customerId: payload.customer_id,
+              requiresKyc: true,
+            };
+            sessionStorage.setItem(
+              "temp_auth_data",
+              JSON.stringify({
+                token: payload.tempToken,
+                customer_id: payload.customer_id,
+                requiresKyc: true,
+                timestamp: Date.now(),
+              })
+            );
+          }
+          return;
+        }
+
+        if (payload.is_owner_login) {
+          state.isOwnerLogin = true;
+          state.ownerDetails = {
+            owner_id: payload.owner_id,
+            owner_role_name: payload.owner_role_name,
+          };
+          setLocalStorageItem("is_owner_login", "1");
+          setLocalStorageItem("owner_id", payload.owner_id);
+          setLocalStorageItem("owner_role_name", payload.owner_role_name);
+          return;
+        }
+
+        if (payload.token && payload.customer_id) {
+          state.token = payload.token;
+          state.customerId = payload.customer_id.toString();
           state.isAuthenticated = true;
           state.user = {
             email: state.user?.email || "",
-            customerType: responseData.customer_type || "individual",
-            isRemittanceOnlyCustomer:
-              responseData.isRemittanceOnlyCustomer || false,
+            customerType: payload.customer_type || "individual",
+            isRemittanceOnlyCustomer: payload.isRemittanceOnlyCustomer || false,
           };
 
-          // ✅ CRITICAL: Store partner IDs
-          if (
-            responseData.whitelabelled_customer_partnerid &&
-            responseData.whitelabelled_customer_partnerid !== "0"
-          ) {
-            localStorage.setItem(
-              "whitelabelled_customer_partnerid",
-              responseData.whitelabelled_customer_partnerid
-            );
-            localStorage.setItem(
-              "whitelabelledpartnerid",
-              responseData.whitelabelled_customer_partnerid
-            );
-            state.whiteLabelInfo.partnerId = parseInt(
-              responseData.whitelabelled_customer_partnerid
-            );
-          }
+          state.tempAuthData = null;
+          sessionStorage.removeItem("temp_auth_data");
 
-          if (responseData.whitelabelled_customer_partnername) {
-            localStorage.setItem(
-              "whitelabelled_customer_partnername",
-              responseData.whitelabelled_customer_partnername
-            );
-            state.whiteLabelInfo.partnerName =
-              responseData.whitelabelled_customer_partnername;
-          }
-
-          // ✅ Store in localStorage
-          localStorage.setItem("authtoken", responseData.token);
-          localStorage.setItem(
+          setLocalStorageItem("authtoken", payload.token);
+          setLocalStorageItem(
             "authcustomer_id",
-            responseData.customer_id.toString()
+            payload.customer_id.toString()
           );
-          localStorage.setItem("kyc_status", responseData.kyc_status);
-          localStorage.setItem(
+          setLocalStorageItem("kyc_status", payload.kyc_status);
+          setLocalStorageItem(
             "bank_approve_status",
-            responseData.bank_approve_status
+            payload.bank_approve_status
           );
-          localStorage.setItem(
-            "is_staff_login",
-            responseData.is_staff_login || "0"
-          );
-          localStorage.setItem("staff_role", responseData.staff_role || "");
-          localStorage.setItem("staff_id", responseData.staff_id || "0");
-          localStorage.setItem(
-            "is_owner_login",
-            responseData.is_owner_login || "0"
-          );
-          localStorage.setItem("owner_id", responseData.owner_id || "0");
-          localStorage.setItem(
+          setLocalStorageItem("is_staff_login", payload.is_staff_login || "0");
+          setLocalStorageItem("staff_role", payload.staff_role || "");
+          setLocalStorageItem("staff_id", payload.staff_id || "0");
+          setLocalStorageItem("is_owner_login", payload.is_owner_login || "0");
+          setLocalStorageItem("owner_id", payload.owner_id || "0");
+          setLocalStorageItem(
             "whitelabelled_customer",
-            responseData.whitelabelled_customer || "N"
+            payload.whitelabelled_customer || "N"
           );
-
-          console.log("✅ Auth state updated successfully");
-          console.log("🔍 localStorage state after update:", {
-            authtoken: localStorage.getItem("authtoken"),
-            authcustomer_id: localStorage.getItem("authcustomer_id"),
-            isAuthenticated: state.isAuthenticated,
-          });
-        } else {
-          console.error(
-            "❌ Missing token or customer_id in response:",
-            responseData
+          setLocalStorageItem(
+            "whitelabelled_customer_partnerid",
+            payload.whitelabelled_customer_partnerid || "0"
+          );
+          setLocalStorageItem(
+            "whitelabelled_customer_partnername",
+            payload.whitelabelled_customer_partnername || ""
           );
         }
       })
@@ -1096,8 +1075,6 @@ const authSlice = createSlice({
           bank_approve_status,
           isRemittanceOnlyCustomer,
           customer_type,
-          whitelabelled_customer_partnerid,
-          whitelabelled_customer_partnername,
         } = action.payload;
 
         if (token && customer_id) {
@@ -1114,35 +1091,6 @@ const authSlice = createSlice({
           setLocalStorageItem("authcustomer_id", customer_id.toString());
           setLocalStorageItem("kyc_status", kyc_status);
           setLocalStorageItem("bank_approve_status", bank_approve_status);
-
-          if (
-            whitelabelled_customer_partnerid &&
-            whitelabelled_customer_partnerid !== "0"
-          ) {
-            console.log(
-              "📝 OTP Login - Storing partner ID:",
-              whitelabelled_customer_partnerid
-            );
-            localStorage.setItem(
-              "whitelabelled_customer_partnerid",
-              whitelabelled_customer_partnerid
-            );
-            localStorage.setItem(
-              "whitelabelledpartnerid",
-              whitelabelled_customer_partnerid
-            );
-          }
-
-          if (whitelabelled_customer_partnername) {
-            console.log(
-              "📝 OTP Login - Storing partner name:",
-              whitelabelled_customer_partnername
-            );
-            localStorage.setItem(
-              "whitelabelled_customer_partnername",
-              whitelabelled_customer_partnername
-            );
-          }
         }
 
         state.kycStatus = kyc_status;
@@ -1264,8 +1212,7 @@ const authSlice = createSlice({
         state.logoutState.success = true;
         state.logoutState.timestamp = action.payload.timestamp;
         state.logoutState.apiSuccess = action.payload.apiSuccess;
-        state.logoutState.partnerTokensPreserved =
-          action.payload.partnerTokenPreserved;
+        state.logoutState.partnerTokensPreserved = action.payload.partnerTokenPreserved;
 
         // Reset the entire auth state
         return {

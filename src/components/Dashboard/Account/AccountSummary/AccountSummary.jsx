@@ -1,61 +1,71 @@
-// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - COMPLETE FIXED VERSION
+// src/components/Dashboard/Account/AccountSummary/AccountSummary.js - FIXED VERSION
 import React, {
   useEffect,
   useRef,
   useCallback,
   useState,
   useMemo,
+  useReducer,
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FiChevronDown,
+  FiDownload,
+  FiFileText,
   FiRefreshCw,
   FiEye,
+  FiDollarSign,
   FiCreditCard,
   FiTrendingUp,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaUniversity } from "react-icons/fa";
+import {
+  FaPiggyBank,
+  FaUniversity,
+  FaMoneyBillWave,
+  FaChartLine,
+} from "react-icons/fa";
 import RingLoader from "react-spinners/RingLoader";
 
 // Components
 import Modal from "./Modal";
 import TransactionDetails from "../Transaction/TransactionDetails";
 
-// ✅ FIXED: Import all from HomeSlice
+// Redux - Import hooks from the same file
 import {
   setSelectedAccount,
   setSelectedCurrency,
   setAccountDropdownOpen,
+  selectAccountState, // ✅ CHANGED: Use combined selector
   fetchAccountDetails,
   updateAccountBalance,
   clearSuccessfulFetch,
-  selectAccounts,
-  selectSelectedAccount,
-  selectSelectedCurrency,
-  selectAccountLoading,
-  selectBalanceLoading,
-  selectLastUpdated,
-  selectHasFetchedAccount,
-  selectAccountError,
-  selectAccountDropdownOpen,
-} from "../../../../page/Home/HomeSlice";
+} from "./AccountSlice";
 
-// Import UI slice actions and selectors
+// Import UI slice actions and selectors separately
 import {
   openAccountDetailsModal,
   closeAccountDetailsModal,
   selectAccountDetailsModal,
 } from "../../../../features/Auth/slices/uiSlice";
 
-import { selectExporting } from "../../Account/Transaction/TransactionSlice";
+import {
+  exportTransactionsToExcel,
+  selectExporting,
+} from "../../Account/Transaction/TransactionSlice";
 import { usePartnerConfig } from "../../../../hooks/usePartnerConfig";
 
 import { selectAuthToken } from "../../../../store/selectors";
 
+import {
+  extractErrorMessage,
+  SafeErrorDisplay,
+} from "../../../../utils/errorHandling";
+
 import { useBankLetter } from "../../../../page/BankLetter/hooks/useBankLetter";
 
+// ✅ FIXED: Custom hook for token synchronization
 const useTokenSync = () => {
   const authtoken = useSelector(selectAuthToken);
 
@@ -69,60 +79,72 @@ const useTokenSync = () => {
   }, [authtoken]);
 };
 
-// ✅ Helper function for error display
-const SafeErrorDisplay = ({ error, className = "" }) => {
-  const errorMessage =
-    typeof error === "string"
-      ? error
-      : error?.message || "An unknown error occurred";
-
-  return (
-    <div
-      className={`bg-red-50 border border-red-200 rounded-lg p-4 ${className}`}
-    >
-      <div className="flex">
-        <div className="flex-shrink-0">
-          <svg
-            className="h-5 w-5 text-red-400"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <div className="ml-3">
-          <h3 className="text-sm font-medium text-red-800">Error</h3>
-          <div className="mt-2 text-sm text-red-700">
-            <p>{errorMessage}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// ✅ FIXED: Custom hook for auto-fetch with debouncing
 const useAutoFetchAccounts = (customerId, authtoken) => {
-  const dispatch = useDispatch(); // ✅ Add this
-  const accountLoading = useSelector(selectAccountLoading); // ✅ Add this
+  const dispatch = useDispatch();
+  const [fetchTrigger, forceRefresh] = useReducer((x) => x + 1, 0);
+  const fetchRef = useRef({
+    hasAttempted: false,
+    lastFetchTime: 0,
+    cooldown: 5000, // 5 seconds cooldown
+  });
+
+  const accountState = useSelector(selectAccountState);
+  const { hasFetchedAccount, accountLoading, fetchAttempted } = accountState;
+
+  const shouldFetch = useMemo(() => {
+    // Don't fetch if already loading
+    if (accountLoading) return false;
+
+    // Don't fetch if missing required data
+    if (!customerId || !authtoken) return false;
+
+    // Don't fetch if we already have data
+    if (hasFetchedAccount && !fetchTrigger) return false;
+
+    // Check cooldown
+    const now = Date.now();
+    if (now - fetchRef.current.lastFetchTime < fetchRef.current.cooldown) {
+      return false;
+    }
+
+    return true;
+  }, [
+    customerId,
+    authtoken,
+    hasFetchedAccount,
+    accountLoading,
+    fetchAttempted,
+    fetchTrigger,
+  ]);
+
+  useEffect(() => {
+    if (shouldFetch) {
+      console.log("🚀 Triggering account fetch...");
+      fetchRef.current.hasAttempted = true;
+      fetchRef.current.lastFetchTime = Date.now();
+
+      dispatch(
+        fetchAccountDetails({
+          customerId,
+          authtoken,
+          isRefresh: fetchTrigger > 0,
+        })
+      );
+    }
+  }, [shouldFetch, dispatch, customerId, authtoken, fetchTrigger]);
 
   const refreshAccounts = useCallback(() => {
-    if (customerId && authtoken) {
-      dispatch(fetchAccountDetails({ customerId, authtoken }));
+    forceRefresh();
+    if (customerId) {
+      dispatch(clearSuccessfulFetch(customerId));
     }
-  }, [customerId, authtoken, dispatch]);
+  }, [dispatch, customerId]);
 
-  return {
-    refreshAccounts,
-    isFetching: accountLoading,
-    fetchAccounts: refreshAccounts,
-  };
+  return { refreshAccounts, isFetching: accountLoading };
 };
 
-// ✅ Memoized utility functions
+// ✅ FIXED: Memoized utility functions
 const useCurrencyUtils = () => {
   const currencySymbols = useMemo(
     () => ({
@@ -212,7 +234,7 @@ const useCurrencyUtils = () => {
   };
 };
 
-// ✅ Animation variants
+// ✅ FIXED: Animation variants (memoized outside component)
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -245,16 +267,14 @@ const balanceVariants = {
   },
 };
 
-// ✅ Main Component
+// ✅ FIXED: Main Component with optimized rendering
 const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { customerId } = useParams();
   const { navigateToBankLetter } = useBankLetter();
 
-  // Get customerId from localStorage
-  const customerId = localStorage.getItem("authcustomer_id");
-
-  // ✅ All hooks called unconditionally at top
+  // ✅ FIXED: All hooks called unconditionally at top
   useTokenSync();
 
   // Refs
@@ -265,81 +285,38 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   // State for balance animation
   const [displayBalance, setDisplayBalance] = useState(0);
   const [previousBalance, setPreviousBalance] = useState(0);
-  const [componentError, setComponentError] = useState(null);
 
-  // ✅ Use HomeSlice selectors
-  const accounts = useSelector(selectAccounts);
-  const selectedAccount = useSelector(selectSelectedAccount);
-  const selectedCurrency = useSelector(selectSelectedCurrency);
-  const accountLoading = useSelector(selectAccountLoading);
-  const balanceLoading = useSelector(selectBalanceLoading);
-  const accountError = useSelector(selectAccountError);
-  const hasFetchedAccount = useSelector(selectHasFetchedAccount);
-  const lastUpdated = useSelector(selectLastUpdated);
-  const accountDropdownOpen = useSelector(selectAccountDropdownOpen);
+  // ✅ FIXED: Use combined selector to minimize re-renders
+  const accountState = useSelector(selectAccountState);
+  const {
+    accounts,
+    selectedAccount,
+    selectedCurrency,
+    accountLoading,
+    balanceLoading,
+    accountError,
+    hasFetchedAccount,
+    fetchAttempted,
+  } = accountState;
 
-  // ✅ Other selectors
+  // ✅ FIXED: Other selectors
   const authtoken = useSelector(selectAuthToken);
+  const exporting = useSelector(selectExporting);
   const accountDetailsModal = useSelector(selectAccountDetailsModal);
+  const accountDropdown = useSelector(
+    (state) => state.account?.accountDropdownOpen || false
+  );
 
-  // ✅ Custom hooks
-  const refreshAccounts = useCallback(() => {
-    if (customerId && authtoken) {
-      dispatch(fetchAccountDetails({ customerId, authtoken }));
-    }
-  }, [customerId, authtoken, dispatch]);
+  // ✅ FIXED: Custom hooks
+  const { refreshAccounts, isFetching } = useAutoFetchAccounts(
+    customerId,
+    authtoken
+  );
   const { formatCurrency, getFullFormattedAmount, getCurrencyName } =
     useCurrencyUtils();
   const config = usePartnerConfig(authtoken);
 
-  // ✅ Debug log to verify data flow
-  useEffect(() => {
-    console.log("🔍 AccountSummary - HomeSlice State:", {
-      accountsCount: accounts?.length || 0,
-      hasFetchedAccount,
-      accountLoading,
-      selectedAccount,
-      selectedCurrency,
-      customerId,
-      lastUpdated,
-      balanceLoading,
-    });
-  }, [
-    accounts,
-    hasFetchedAccount,
-    accountLoading,
-    selectedAccount,
-    selectedCurrency,
-    customerId,
-    lastUpdated,
-    balanceLoading,
-  ]);
-
-  useEffect(() => {
-    if (selectedCurrency) {
-      localStorage.setItem("selectedCurrency", selectedCurrency);
-      console.log(
-        "💾 Saved selectedCurrency to localStorage:",
-        selectedCurrency
-      );
-    }
-  }, [selectedCurrency]);
-
-  // ✅ Error boundary effect
-  useEffect(() => {
-    const handleError = (error) => {
-      console.error("Global error caught:", error);
-      setComponentError(error);
-    };
-
-    window.addEventListener("error", handleError);
-
-    return () => {
-      window.removeEventListener("error", handleError);
-    };
-  }, []);
-
-  // ✅ Memoized computed values
+  // ✅ FIXED: Memoized computed values
   const safeAccounts = useMemo(() => {
     return Array.isArray(accounts) ? accounts : [];
   }, [accounts]);
@@ -348,7 +325,17 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     return safeAccounts.length > 0;
   }, [safeAccounts]);
 
-  // ✅ Balance animation with cleanup
+  const headerColor = useMemo(
+    () => config?.header_color || localStorage.getItem("header_color"),
+    [config?.header_color]
+  );
+
+  const textColorFromConfig = useMemo(
+    () => config?.text_color || localStorage.getItem("text_color") || textColor,
+    [config?.text_color, textColor]
+  );
+
+  // ✅ FIXED: Balance animation with cleanup
   useEffect(() => {
     if (selectedAccount?.available_balance !== undefined) {
       const newBalance = parseFloat(selectedAccount.available_balance) || 0;
@@ -357,7 +344,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     }
   }, [selectedAccount?.available_balance]);
 
-  // ✅ Close dropdown handler with cleanup
+  // ✅ FIXED: Close dropdown handler with cleanup
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -365,21 +352,21 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
         !dropdownRef.current.contains(event.target) &&
         buttonRef.current &&
         !buttonRef.current.contains(event.target) &&
-        accountDropdownOpen
+        accountDropdown
       ) {
         dispatch(setAccountDropdownOpen(false));
       }
     };
 
-    if (accountDropdownOpen) {
+    if (accountDropdown) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [dispatch, accountDropdownOpen]);
+  }, [dispatch, accountDropdown]);
 
-  // ✅ Event handlers with proper dependencies
+  // ✅ FIXED: Event handlers with proper dependencies
   const handleTransactionComplete = useCallback(
     async (shouldRefresh = false) => {
       if (shouldRefresh) {
@@ -390,8 +377,8 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   );
 
   const handleDropdownToggle = useCallback(() => {
-    dispatch(setAccountDropdownOpen(!accountDropdownOpen));
-  }, [dispatch, accountDropdownOpen]);
+    dispatch(setAccountDropdownOpen(!accountDropdown));
+  }, [dispatch, accountDropdown]);
 
   const handleAccountChange = useCallback(
     (account) => {
@@ -419,59 +406,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   }, [dispatch]);
 
   const handleBankLetter = () => {
-    console.log("🔍 AccountSummary - handleBankLetter clicked:", {
-      timestamp: new Date().toISOString(),
-      customerId,
-      selectedAccount,
-      selectedAccountCurrency: selectedAccount?.currency,
-      selectedAccountNumber: selectedAccount?.account_number,
-      selectedCurrency, // This is the currently selected currency
-      safeAccountsCount: safeAccounts.length,
-      hasSelectedAccount: !!selectedAccount,
-    });
-
-    // Find the account that matches the currently selected currency
-    const accountToUse =
-      safeAccounts.find((account) => account.currency === selectedCurrency) ||
-      selectedAccount;
-
-    if (!accountToUse) {
-      console.error("❌ AccountSummary: No selected account for bank letter!");
-
-      if (safeAccounts.length > 0) {
-        console.log(
-          "🔄 AccountSummary: Using first available account:",
-          safeAccounts[0]
-        );
-
-        navigate(`/bankletter/${customerId}`, {
-          state: {
-            accountData: safeAccounts[0],
-            selectedCurrency: safeAccounts[0].currency, // Pass currency
-            source: "AccountSummary-fallback",
-          },
-        });
-        return;
-      }
-
-      alert("Please select an account first to generate a bank letter.");
-      return;
-    }
-
-    console.log("✅ AccountSummary - Using account for bank letter:", {
-      currency: accountToUse.currency,
-      accountNumber: accountToUse.account_number,
-      matchesSelectedCurrency: accountToUse.currency === selectedCurrency,
-    });
-
-    // Navigate with both account data AND selected currency
-    navigate(`/bankletter/${customerId}`, {
-      state: {
-        accountData: accountToUse,
-        selectedCurrency: selectedCurrency, // CRITICAL: Pass the selected currency
-        source: "AccountSummary-direct",
-      },
-    });
+    navigateToBankLetter(customerId);
   };
 
   const handleBalanceUpdate = useCallback(async () => {
@@ -480,33 +415,24 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     }
   }, [customerId, authtoken, dispatch]);
 
-  // ✅ Loading states
+  // ✅ FIXED: Loading states
   const isLoading = useMemo(() => {
-    return accountLoading && !hasFetchedAccount;
-  }, [accountLoading, hasFetchedAccount]);
+    return accountLoading && !fetchAttempted;
+  }, [accountLoading, fetchAttempted]);
 
   const shouldShowEmptyState = useMemo(() => {
-    return hasFetchedAccount && !accountLoading && !hasAccounts;
-  }, [hasFetchedAccount, accountLoading, hasAccounts]);
+    return fetchAttempted && !accountLoading && !hasAccounts;
+  }, [fetchAttempted, accountLoading, hasAccounts]);
 
   const shouldShowErrorState = useMemo(() => {
-    return accountError && !hasFetchedAccount && !accountLoading;
-  }, [accountError, hasFetchedAccount, accountLoading]);
+    return accountError && !hasFetchedAccount && fetchAttempted;
+  }, [accountError, hasFetchedAccount, fetchAttempted]);
 
   const shouldShowContent = useMemo(() => {
     return hasFetchedAccount && hasAccounts;
   }, [hasFetchedAccount, hasAccounts]);
 
-  if (componentError) {
-    return (
-      <SafeErrorDisplay
-        error={componentError}
-        className="flex items-center justify-center min-h-screen p-4"
-      />
-    );
-  }
-
-  // ✅ Render loading state
+  // ✅ FIXED: Render loading state
   if (isLoading) {
     return (
       <div className="flex flex-col justify-center items-center w-full space-y-6">
@@ -520,7 +446,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     );
   }
 
-  // ✅ Show empty state
+  // ✅ FIXED: Show empty state
   if (shouldShowEmptyState) {
     return (
       <div className="flex flex-col justify-center items-center w-full space-y-6">
@@ -541,7 +467,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     );
   }
 
-  // ✅ Show error state
+  // ✅ FIXED: Show error state
   if (shouldShowErrorState) {
     return (
       <div className="flex flex-col justify-center items-center w-full space-y-6">
@@ -561,7 +487,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
     );
   }
 
-  // ✅ Don't render until we have content
+  // ✅ FIXED: Don't render until we have content
   if (!shouldShowContent) {
     return (
       <div className="flex flex-col justify-center items-center w-full space-y-6">
@@ -570,25 +496,12 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
             <RingLoader color="#3B82F6" size={40} />
           </div>
           <p className="text-gray-500 mt-4">Preparing your accounts...</p>
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={refreshAccounts}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-            >
-              Load Accounts Now
-            </button>
-            <div className="text-xs text-gray-500">
-              Status: {hasFetchedAccount ? "Fetched" : "Not fetched"} |
-              Accounts: {safeAccounts.length} | Loading:{" "}
-              {accountLoading ? "Yes" : "No"}
-            </div>
-          </div>
         </div>
       </div>
     );
   }
 
-  // ✅ Main render
+  // ✅ FIXED: Main render
   return (
     <motion.div
       variants={containerVariants}
@@ -638,7 +551,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                     </div>
                   </div>
                   <motion.div
-                    animate={{ rotate: accountDropdownOpen ? 180 : 0 }}
+                    animate={{ rotate: accountDropdown ? 180 : 0 }}
                     transition={{ duration: 0.3 }}
                   >
                     <FiChevronDown className="text-gray-400 group-hover:text-gray-600" />
@@ -647,7 +560,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
               </motion.button>
 
               <AnimatePresence>
-                {accountDropdownOpen && hasAccounts && (
+                {accountDropdown && hasAccounts && (
                   <motion.div
                     ref={dropdownRef}
                     className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[9999] overflow-y-auto"

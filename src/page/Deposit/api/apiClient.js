@@ -1,5 +1,6 @@
+// src/api/apiClient.js - UPDATED
 import axios from "axios";
-import { tokenService } from "../../../services/authService"; // Your existing service
+import { tokenService } from "../../../services/authService";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -11,11 +12,31 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// ✅ MODIFIED: Request interceptor with iframe support
 apiClient.interceptors.request.use(
   (config) => {
-    // ✅ USE YOUR TOKEN SERVICE FROM AUTH SERVICE
-    const token = tokenService.getToken();
+    // ✅ AUTO-DETECT IFRAME AND ADD HEADER
+    const isIframe = window.self !== window.top;
+    if (isIframe) {
+      config.headers["X-Is-Iframe"] = "true";
+
+      // Try to get customerId from URL params for iframe
+      const urlParams = new URLSearchParams(window.location.search);
+      const iframeCustomerId = urlParams.get("customerId");
+      if (iframeCustomerId) {
+        config.headers["X-Iframe-Customer-Id"] = iframeCustomerId;
+      }
+    }
+
+    // ✅ GET TOKEN BASED ON CONTEXT
+    let token;
+    if (isIframe) {
+      // Iframe: try sessionStorage first, then tokenService
+      token = sessionStorage.getItem("iframe_token") || tokenService.getToken();
+    } else {
+      // Main app: use tokenService
+      token = tokenService.getToken();
+    }
 
     // Don't add token to login requests
     if (
@@ -40,9 +61,16 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// ✅ ADDED: Iframe token handling in response
 apiClient.interceptors.response.use(
   (response) => {
+    // If in iframe and response contains a token, store it
+    const isIframe = window.self !== window.top;
+    if (isIframe && response.data?.data?.token) {
+      const token = response.data.data.token;
+      sessionStorage.setItem("iframe_token", token);
+      tokenService.setToken(token);
+    }
     return response;
   },
   (error) => {
@@ -50,12 +78,12 @@ apiClient.interceptors.response.use(
       url: error.config?.url,
       status: error.response?.status,
       message: error.response?.data?.message,
+      isIframe: window.self !== window.top,
     });
 
-    // Handle unauthorized errors
-    if (error.response?.status === 401) {
-      console.error("🚨 401 Unauthorized - token may be invalid");
-      // Token service will handle clearing if needed
+    // Handle unauthorized in iframe
+    if (error.response?.status === 401 && window.self !== window.top) {
+      console.log("🔑 401 in iframe - token may need refresh");
     }
 
     return Promise.reject(error);

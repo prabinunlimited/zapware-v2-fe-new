@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FaUniversity,
   FaFileUpload,
@@ -59,6 +59,7 @@ const CardPayment = ({
   onSuccessCallback,
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { customerId: paramCustomerId } = useParams();
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
@@ -101,7 +102,7 @@ const CardPayment = ({
     ) {
       console.log(
         "🔄 CardPayment: Fetching beneficiaries for customer:",
-        customerId
+        customerId,
       );
       dispatch(fetchBeneficiaries(customerId));
     }
@@ -144,7 +145,7 @@ const CardPayment = ({
       { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
       { value: "fcy_deposit", label: "FCY Deposit" },
     ],
-    []
+    [],
   );
 
   // Use provided paymentOptions or fallback to defaults
@@ -171,8 +172,8 @@ const CardPayment = ({
         backgroundColor: isSelected
           ? "#eff6ff"
           : isFocused
-          ? "#f8fafc"
-          : "white",
+            ? "#f8fafc"
+            : "white",
         color: isSelected ? "#1e40af" : "#374151",
         fontWeight: isSelected ? "600" : "500",
         padding: "12px 16px",
@@ -199,7 +200,7 @@ const CardPayment = ({
         fontWeight: "600",
       }),
     }),
-    []
+    [],
   );
 
   // Fetch occupations on component mount
@@ -217,7 +218,7 @@ const CardPayment = ({
             (occupation) => ({
               value: occupation?.name,
               label: occupation?.name,
-            })
+            }),
           );
           setOccupations(transformedOccupations);
         }
@@ -292,7 +293,7 @@ const CardPayment = ({
     try {
       console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
       const result = await dispatch(
-        fetchBeneficiaryBanks(selectedOption.id)
+        fetchBeneficiaryBanks(selectedOption.id),
       ).unwrap();
 
       console.log("📋 Banks fetched successfully:", result);
@@ -302,7 +303,7 @@ const CardPayment = ({
         // Purpose
         if (selectedOption?.transfer_purpose) {
           const matchedPurpose = purposeOptions.find(
-            (opt) => opt.value === selectedOption.transfer_purpose
+            (opt) => opt.value === selectedOption.transfer_purpose,
           );
           if (matchedPurpose) {
             onFieldChange("purpose", matchedPurpose);
@@ -312,7 +313,7 @@ const CardPayment = ({
         // Income Source
         if (selectedOption?.income_source) {
           const matchedIncomeSource = incomeSourceOptions.find(
-            (opt) => opt.value === selectedOption.income_source
+            (opt) => opt.value === selectedOption.income_source,
           );
           if (matchedIncomeSource) {
             onFieldChange("incomeSource", matchedIncomeSource);
@@ -322,7 +323,7 @@ const CardPayment = ({
         // Relation
         if (selectedOption?.relationtobenef) {
           const matchedRelation = relationOptions.find(
-            (opt) => opt.value === selectedOption.relationtobenef
+            (opt) => opt.value === selectedOption.relationtobenef,
           );
           if (matchedRelation) {
             onFieldChange("relation", matchedRelation);
@@ -334,7 +335,7 @@ const CardPayment = ({
           selectedOption?.payout_method || selectedOption?.payment_method;
         if (payoutMethodValue) {
           const matchedPayoutMethod = payoutMethodOptions.find(
-            (opt) => opt.value === payoutMethodValue
+            (opt) => opt.value === payoutMethodValue,
           );
           if (matchedPayoutMethod) {
             onFieldChange("payout_method", matchedPayoutMethod);
@@ -375,7 +376,7 @@ const CardPayment = ({
     try {
       setIsLoadingCode(true);
       const result = await dispatch(
-        fetchBeneficiaryByCode(beneficiaryCode)
+        fetchBeneficiaryByCode(beneficiaryCode),
       ).unwrap();
 
       if (result?.data) {
@@ -449,8 +450,9 @@ const CardPayment = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    toast.info("Redirecting to add new beneficiary...");
-    // You can implement navigation to beneficiary creation page
+    const customerId =
+      paramCustomerId || localStorage.getItem("authcustomer_id");
+    navigate(`/addbeneficiary/${customerId}`);
   };
 
   // Bank Detail Item component (for consistency with ManualDeposit)
@@ -506,8 +508,8 @@ const CardPayment = ({
                 beneficiariesLoading
                   ? "Loading beneficiaries..."
                   : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
+                    ? "Disabled - Using beneficiary code"
+                    : "Select beneficiary..."
               }
               isSearchable
               getOptionLabel={(option) =>
@@ -682,10 +684,10 @@ const CardPayment = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : !beneficiaryBanks || beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : !beneficiaryBanks || beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option?.bank_name || "Unknown Bank";
@@ -760,7 +762,7 @@ const CardPayment = ({
                     if (Object.keys(errors).length > 0) {
                       // Show validation errors
                       Object.values(errors).forEach((error) =>
-                        toast.error(error)
+                        toast.error(error),
                       );
                       return;
                     }

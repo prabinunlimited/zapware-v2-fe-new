@@ -1,11 +1,5 @@
-// src/features/Auth/Login/Login.jsx - UPDATED TO USE CENTRALIZED API SERVICE
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useCallback,
-} from "react";
+// src/features/Auth/Login/Login.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
@@ -26,10 +20,7 @@ import { ArrowRight, UserPlus } from "lucide-react";
 // Components
 import Modal from "../../../components/PopupModal/Modal";
 
-// Centralized API Service
-import { centralizedApi } from "../../../services/api";
-
-// Thunks - Note: These thunks should already be updated in authThunk.js
+// Thunks
 import {
   initializeApp,
   loginUser,
@@ -102,50 +93,6 @@ import {
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
 
-// ===================== CUSTOM HOOK FOR CENTRALIZED DATA =====================
-const useCentralizedData = () => {
-  const [cachedCountries, setCachedCountries] = useState(null);
-  const [isFetchingCountries, setIsFetchingCountries] = useState(false);
-  const fetchAttemptedRef = useRef(false); // ADD THIS to prevent infinite calls
-
-  const fetchCountriesData = useCallback(async () => {
-    // If already fetching or already attempted, don't fetch again
-    if (isFetchingCountries || fetchAttemptedRef.current) {
-      console.log("🌍 Countries fetch already in progress or attempted");
-      return cachedCountries;
-    }
-
-    // If we already have cached data, return it
-    if (cachedCountries) {
-      console.log("🌍 Using cached countries data");
-      return cachedCountries;
-    }
-
-    try {
-      fetchAttemptedRef.current = true; // Mark as attempted
-      setIsFetchingCountries(true);
-      console.log("🌍 Fetching countries from centralized API...");
-
-      const countriesData = await centralizedApi.getCountries();
-      setCachedCountries(countriesData);
-      console.log("✅ Countries data fetched and cached");
-      return countriesData;
-    } catch (error) {
-      console.error("❌ Failed to fetch countries:", error);
-      fetchAttemptedRef.current = false; // Reset on error so we can retry
-      return null;
-    } finally {
-      setIsFetchingCountries(false);
-    }
-  }, [cachedCountries, isFetchingCountries]);
-
-  return {
-    fetchCountriesData,
-    cachedCountries,
-    isFetchingCountries,
-  };
-};
-
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -161,9 +108,8 @@ const Login = () => {
   const [iframeLoading, setIframeLoading] = useState(true);
   const iframeRef = useRef(null);
 
-  // Custom hook for centralized data
-  const { fetchCountriesData, cachedCountries, isFetchingCountries } =
-    useCentralizedData();
+  // State for country selection
+  const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -209,7 +155,7 @@ const Login = () => {
   const inputType = useSelector(selectInputType);
   const hostName = window.location.hostname;
 
-  // Validation schema
+  // ✅ Validation schema - defined before formik
   const validationSchema = Yup.object({
     email: Yup.string()
       .email("Invalid email address")
@@ -230,38 +176,19 @@ const Login = () => {
       is: "mobile",
       then: (schema) => schema.required("Country code is required"),
     }),
+    selected_country_id: Yup.string().when("inputType", {
+      is: "mobile",
+      then: (schema) => schema.required("Please select a country"),
+    }),
     customerType: Yup.string().when([], {
       is: () => showCustomerType === "Y",
       then: (schema) => schema.required("Customer type is required"),
     }),
   });
 
+  // ✅ Single initialization effect
   useEffect(() => {
-    const initializeAppData = async () => {
-      try {
-        console.log("🚀 Initializing app with centralized data...");
-
-        // Fetch countries data using centralized API (only once)
-        const countriesData = await fetchCountriesData();
-
-        if (countriesData) {
-          console.log("✅ Countries data ready");
-        }
-
-        // Initialize app through Redux (which uses centralized API)
-        dispatch(initializeApp());
-      } catch (error) {
-        console.error("❌ Failed to initialize app data:", error);
-      }
-    };
-
-    // Only initialize once when component mounts
-    initializeAppData();
-
-    // Add cleanup to reset the fetch attempt flag
-    return () => {
-      // Optional cleanup if needed
-    };
+    dispatch(initializeApp());
   }, [dispatch]);
 
   // ✅ Reset stuck loading state
@@ -287,7 +214,7 @@ const Login = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const kycStatus = urlParams.get("status");
       const kycMessage = urlParams.get("message");
-      const customerId = localStorage.getItem("authcustomer_id");
+      const customerId = urlParams.get("customer_id");
       const plaidStatus = urlParams.get("plaid_status");
       const plaidError = urlParams.get("plaid_error");
 
@@ -340,25 +267,7 @@ const Login = () => {
                   dispatch(setRedirecting(true));
                   sessionStorage.removeItem("temp_auth_data");
                   sessionStorage.removeItem("pending_kyc_auth");
-                  // ✅ UPDATED: Check if user is remittance-only customer
-                  const normalizeRemittanceFlag = (value) => {
-                    if (value === undefined || value === null) return false;
-                    return (
-                      value === "Y" ||
-                      value === true ||
-                      value === "true" ||
-                      value === 1 ||
-                      value === "1"
-                    );
-                  };
-
-                  const isRemittanceOnly = normalizeRemittanceFlag(
-                    authData?.isRemittanceOnlyCustomer
-                  );
-                  const redirectPath = isRemittanceOnly
-                    ? `/homeremit/${redirectCustomerId}`
-                    : `/home/${redirectCustomerId}`;
-                  navigate(redirectPath);
+                  navigate(`/home/${redirectCustomerId}`);
                 } else {
                   navigate("/");
                 }
@@ -417,40 +326,17 @@ const Login = () => {
     }
   }, [downloadStatus, lastDownloadUrl]);
 
+  // ✅ Auth state change handler with redirect prevention
   useEffect(() => {
-    const token = localStorage.getItem("authtoken");
-    const customerId = localStorage.getItem("authcustomer_id");
-
-    // Check both localStorage AND Redux state
     const shouldRedirect =
-      (auth.isAuthenticated &&
-        auth.customerId &&
-        auth.token &&
-        !isRedirecting) ||
-      (token && customerId && !isRedirecting);
+      auth.isAuthenticated && auth.customerId && auth.token && !isRedirecting;
 
     if (shouldRedirect) {
-      console.log("🚀 Triggering redirect...");
       dispatch(setRedirecting(true));
-
-      // If Redux state is missing but localStorage has data, sync it
-      if (!auth.isAuthenticated && token && customerId) {
-        dispatch(
-          setAuthState({
-            token: token,
-            customerId: customerId,
-            isAuthenticated: true,
-            user: auth.user || {
-              // Use existing auth.user if available
-              isRemittanceOnlyCustomer: false,
-            },
-          })
-        );
-      }
-
-      // ✅ UPDATED: Call the redirect function with customerId
-      const idToRedirect = auth.customerId || customerId;
-      handleSuccessfulLoginRedirect(idToRedirect);
+      handleSuccessfulLoginRedirect({
+        customer_id: auth.customerId,
+        isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer || false,
+      });
     }
   }, [
     auth.isAuthenticated,
@@ -461,51 +347,17 @@ const Login = () => {
     dispatch,
   ]);
 
-  useEffect(() => {
-    console.log("🔍 Auth State Debug:", {
-      isAuthenticated: auth.isAuthenticated,
-      token: auth.token,
-      customerId: auth.customerId,
-      isVerifyingPasscode: isVerifyingPasscode,
-      localStorageToken: localStorage.getItem("authtoken"),
-      localStorageCustomerId: localStorage.getItem("authcustomer_id"),
-      showPasscodeInput: showPasscodeInput,
-      passcodeSent: passcodeSent,
-      isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer,
-    });
-  }, [
-    auth.isAuthenticated,
-    auth.token,
-    auth.customerId,
-    isVerifyingPasscode,
-    showPasscodeInput,
-    passcodeSent,
-    auth.user,
-  ]);
-
   // ========== HANDLER FUNCTIONS ==========
 
-  const handleSuccessfulLoginRedirect = (customerId) => {
-    if (!customerId) {
-      console.error("❌ No customer ID for redirect");
-      return;
-    }
+  const handleSuccessfulLoginRedirect = (processedData) => {
+    const shouldRedirectToHomeRemit =
+      processedData.isRemittanceOnlyCustomer === "Y" ||
+      processedData.isRemittanceOnlyCustomer === true;
 
-    // DIRECT, SIMPLE CHECK - no normalization needed
-    const remittanceFlag = localStorage.getItem("isRemittanceOnlyCustomer");
-    const isRemittanceOnly = remittanceFlag === "Y";
+    const redirectPath = shouldRedirectToHomeRemit
+      ? `/homeremit/${processedData.customer_id}`
+      : `/home/${processedData.customer_id}`;
 
-    console.log("🎯 SIMPLE REDIRECT CHECK:", {
-      customerId,
-      remittanceFlag,
-      isRemittanceOnly,
-    });
-
-    const redirectPath = isRemittanceOnly
-      ? `/homeremit/${customerId}`
-      : `/home/${customerId}`;
-
-    console.log(`📍 Navigating to: ${redirectPath}`);
     navigate(redirectPath, { replace: true });
   };
 
@@ -523,10 +375,6 @@ const Login = () => {
         customer_id: response.customer_id,
         timestamp: Date.now(),
         plaidUrl: response.plaidUrl,
-        isRemittanceOnlyCustomer:
-          response.data?.isRemittanceOnlyCustomer ||
-          response.isRemittanceOnlyCustomer ||
-          false,
       };
       sessionStorage.setItem("pending_kyc_auth", JSON.stringify(pendingAuth));
 
@@ -659,12 +507,16 @@ const Login = () => {
     setPlaidUrl("");
   };
 
+  // ✅ Memoize country options - defined after formik will be but before it's used
+  // We'll define these after formik is initialized
+
   // ✅ Formik setup with double-submission prevention
   const formik = useFormik({
     initialValues: {
       email: "",
       password: "",
       phone_code: "",
+      selected_country_id: "",
       mobile_number: "",
       inputType: "email",
       customerType: "",
@@ -773,27 +625,13 @@ const Login = () => {
             isAuthenticated: true,
             user: {
               customerType: processedData.customer_type,
-              isRemittanceOnlyCustomer:
-                processedData.data?.isRemittanceOnlyCustomer ||
-                processedData.isRemittanceOnlyCustomer,
+              isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
               [inputType === "email" ? "email" : "mobile_number"]:
                 inputType === "email" ? values.email : values.mobile_number,
             },
           };
 
           dispatch(setAuthState(authState));
-
-          localStorage.setItem("authtoken", processedData.token);
-          localStorage.setItem(
-            "authcustomer_id",
-            processedData.customer_id.toString()
-          );
-          localStorage.setItem(
-            "isRemittanceOnlyCustomer",
-            processedData.data?.isRemittanceOnlyCustomer ||
-              processedData.isRemittanceOnlyCustomer ||
-              "N"
-          );
 
           dispatch(
             openModal({
@@ -812,9 +650,7 @@ const Login = () => {
           setTimeout(() => {
             dispatch(closeModal());
             dispatch(setRedirecting(true));
-
-            // ✅ UPDATED: Pass the processedData to the redirect function
-            handleSuccessfulLoginRedirect(processedData.customer_id);
+            handleSuccessfulLoginRedirect(processedData);
           }, 1500);
         }
       } catch (error) {
@@ -852,28 +688,45 @@ const Login = () => {
     setFieldValue,
   } = formik;
 
-  // Memoize country options - Use static data from Redux
+  // ✅ Memoize country options - AFTER formik is defined
   const countryOptions = useMemo(() => {
-    // Always use Redux state (static data)
-    if (Array.isArray(countries)) {
-      console.log("🌍 Using static countries data");
-      return countries.map((country) => ({
-        value: country.phone_code,
-        label: `${country.name} (${country.phone_code})`,
-        countryName: country.name,
-        flagUrl: country.flag_url,
-      }));
-    }
-
-    return [];
+    return Array.isArray(countries)
+      ? countries.map((country) => ({
+          value: country.id,
+          label: `${country.name} (${country.phone_code})`,
+          countryName: country.name,
+          phone_code: country.phone_code,
+          flagUrl: country.flag_url,
+        }))
+      : [];
   }, [countries]);
 
+  // ✅ Find current country option - AFTER formik is defined
   const currentCountryOption = useMemo(() => {
-    return (
-      countryOptions.find((option) => option.value === values.phone_code) ||
-      null
+    if (!values.selected_country_id) {
+      return null;
+    }
+    
+    return countryOptions.find(
+      (option) => option.value === values.selected_country_id
+    ) || null;
+  }, [countryOptions, values.selected_country_id]);
+
+  // ✅ Country select handler - defined after setFieldValue is available
+  const handleCountrySelect = (selectedOption) => {
+    if (!selectedOption) return;
+    
+    setFieldValue("selected_country_id", selectedOption.value);
+    setFieldValue("phone_code", selectedOption.phone_code);
+    
+    dispatch(
+      setSelectedCountry({
+        country: selectedOption.countryName,
+        countryCode: selectedOption.phone_code,
+        flagUrl: selectedOption.flagUrl,
+      })
     );
-  }, [countryOptions, values.phone_code]);
+  };
 
   // Handler functions
   const handleGeneratePasscode = async (e) => {
@@ -933,7 +786,6 @@ const Login = () => {
     } catch (error) {
       console.log("🔍 Passcode Generation Error:", error);
 
-      // Handle account blocked status
       if (
         error.data?.blocked_status === 1 ||
         error.payload?.data?.blocked_status === 1
@@ -958,12 +810,10 @@ const Login = () => {
         return;
       }
 
-      // ✅ SIMPLIFIED: Just pass the error object to Modal
-      // Let the Modal component handle message extraction
       dispatch(
         openModal({
           title: "Error",
-          message: error, // Pass the entire error object
+          message: error,
           type: "error",
         })
       );
@@ -973,28 +823,22 @@ const Login = () => {
   };
 
   const handleGenerateOTP = async () => {
-    console.log("Phone code value:", values.phone_code);
-    console.log("Raw phone code from form:", values.phone_code);
-    console.log("Includes +?", values.phone_code?.includes("+"));
-
     if (isGeneratingOtp) {
       return;
     }
 
     try {
-      // ✅ Check that ALL required fields are filled
       if (!values.phone_code || !values.mobile_number || !values.password) {
         dispatch(
           openModal({
             title: "Error",
-            message: "Please enter country code, mobile number, and password",
+            message: "Please enter country code, mobile number, AND password",
             type: "error",
           })
         );
         return;
       }
 
-      // ✅ Password is ALWAYS included
       const payload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
@@ -1007,39 +851,22 @@ const Login = () => {
 
       const result = await dispatch(generateOTP(payload)).unwrap();
 
-      // Determine if OTP was sent successfully
-      const isSuccess =
-        result.status === "success" ||
-        result.success === true ||
-        result.message?.toLowerCase().includes("sent") ||
-        result.message?.toLowerCase().includes("success") ||
-        result.message === "OTP sent successfully";
-
-      // Show OTP input only if successful
-      if (isSuccess) {
+      if (!result.message || result.message === "OTP sent successfully") {
         dispatch(setShowOtpInput(true));
         dispatch(setOtpSent(true));
         dispatch(setOtp(new Array(6).fill("")));
       }
 
-      // Always show the message from API response
       if (result.message) {
         dispatch(
           openModal({
-            title: isSuccess ? "Success" : "Error",
+            title: result.message.includes("Invalid") ? "Error" : "Success",
             message: result.message,
-            type: isSuccess ? "success" : "error",
+            type: result.message.includes("Invalid") ? "error" : "success",
           })
         );
       }
     } catch (error) {
-      console.error("=== OTP ERROR DEBUG ===");
-      console.error("Error object:", error);
-      console.error("Error payload:", error.payload);
-      console.error("Error type:", typeof error.payload);
-      console.error("=== END DEBUG ===");
-
-      // Handle structured errors
       if (error.requiresCustomerType) {
         dispatch(
           openModal({
@@ -1051,29 +878,10 @@ const Login = () => {
         return;
       }
 
-      // Extract error message based on structure
-      let errorMessage = "Failed to generate OTP";
-
-      // Case 1: error.payload is an object with message property
-      if (error.payload && typeof error.payload === "object") {
-        errorMessage =
-          error.payload.message ||
-          error.payload.error ||
-          "Invalid credentials. Please check your details.";
-      }
-      // Case 2: error.payload is a string
-      else if (typeof error.payload === "string") {
-        errorMessage = error.payload;
-      }
-      // Case 3: error has a message property
-      else if (error.message) {
-        errorMessage = error.message;
-      }
-
       dispatch(
         openModal({
           title: "Error",
-          message: errorMessage,
+          message: error.message || "Failed to generate OTP",
           type: "error",
         })
       );
@@ -1191,18 +999,13 @@ const Login = () => {
         verifyPayload.customer_type = values.customerType;
       }
 
-      console.log("🔍 Starting passcode verification...");
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
-      console.log("✅ Passcode verification result:", result);
 
-      // Check for owner login FIRST with proper validation
       if (result.is_owner_login === true || result.is_owner_login === "1") {
-        // Close the passcode popup
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
-        // Handle owner redirect
         dispatch(
           setOwnerDetails({
             is_owner_login: true,
@@ -1215,9 +1018,7 @@ const Login = () => {
         return;
       }
 
-      // Handle Plaid redirect
       if (result.requiresPlaidRedirect) {
-        // Close the passcode popup
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
@@ -1226,76 +1027,34 @@ const Login = () => {
         return;
       }
 
-      // ✅ CRITICAL: Check if we got a successful login response
-      const token = result.token || result.data?.token;
-      const customerId = result.customer_id || result.data?.customer_id;
-      const isRemittanceOnlyCustomer =
-        result.data?.isRemittanceOnlyCustomer ||
-        result.isRemittanceOnlyCustomer;
-      const customerType =
-        result.customer_type || result.data?.customer_type || "individual";
+      const processedData = await handleKycVerification(result, values);
 
-      if (token && customerId) {
-        console.log(
-          "✅ Login successful! Token received:",
-          token.substring(0, 20) + "..."
-        );
-        console.log("✅ Customer ID:", customerId);
-        console.log(
-          "✅ Is Remittance Only Customer:",
-          isRemittanceOnlyCustomer
-        );
+      if (processedData === null) {
+        return;
+      }
 
-        // ✅ Immediately dispatch setAuthState to update Redux
+      if (processedData && processedData.token && processedData.customer_id) {
+        const customerId = processedData.customer_id;
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         dispatch(
           setAuthState({
-            token: token,
+            token: processedData.token,
             customerId: customerId,
-            isAuthenticated: true,
             user: {
               email: values.email,
-              customerType: customerType,
-              isRemittanceOnlyCustomer: isRemittanceOnlyCustomer || false,
+              isRemittanceOnlyCustomer:
+                processedData.isRemittanceOnlyCustomer || false,
+              customerType: processedData.customer_type || "individual",
             },
           })
         );
 
-        // ✅ Also ensure localStorage has the correct data
-        localStorage.setItem("authtoken", token);
-        localStorage.setItem("authcustomer_id", customerId.toString());
-        localStorage.setItem(
-          "isRemittanceOnlyCustomer",
-          isRemittanceOnlyCustomer || "N"
-        );
-
-        // ✅ Store partner IDs if available
-        if (
-          result.whitelabelled_customer_partnerid &&
-          result.whitelabelled_customer_partnerid !== "0"
-        ) {
-          localStorage.setItem(
-            "whitelabelled_customer_partnerid",
-            result.whitelabelled_customer_partnerid
-          );
-          localStorage.setItem(
-            "whitelabelledpartnerid",
-            result.whitelabelled_customer_partnerid
-          );
-        }
-
-        if (result.whitelabelled_customer_partnername) {
-          localStorage.setItem(
-            "whitelabelled_customer_partnername",
-            result.whitelabelled_customer_partnername
-          );
-        }
-
-        // ✅ Close passcode popup on successful login
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
 
-        // ✅ Show success modal
         dispatch(
           openModal({
             title: "Login Successful",
@@ -1311,30 +1070,18 @@ const Login = () => {
           })
         );
 
-        // ✅ Wait briefly for Redux state to update, then redirect
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
-
-          console.log("🚀 Redirecting to dashboard...");
-          console.log("🔍 Auth state before redirect:", {
-            token: localStorage.getItem("authtoken"),
-            customerId: localStorage.getItem("authcustomer_id"),
-            isRemittanceOnlyCustomer:
-              result.data?.isRemittanceOnlyCustomer ||
-              result.isRemittanceOnlyCustomer ||
-              false,
+          handleSuccessfulLoginRedirect({
+            customer_id: customerId,
+            isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
           });
-
-          // ✅ UPDATED: Pass the result data to the redirect function
-          handleSuccessfulLoginRedirect(customerId);
         }, 1500);
       } else {
         throw new Error("Login successful but missing required information");
       }
     } catch (error) {
-      console.error("❌ Passcode verification error:", error);
-
       const firstInput = document.getElementById("passcode-input-0");
       if (firstInput) {
         setTimeout(() => firstInput.focus(), 100);
@@ -1345,7 +1092,6 @@ const Login = () => {
       let displayMessage =
         error.message || "Verification failed. Please try again.";
 
-      // Only show error modal if it's not a KYC/bank verification issue
       if (
         error.message &&
         !error.message.includes("KYC") &&
@@ -1414,9 +1160,7 @@ const Login = () => {
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
-      // Close OTP popup immediately when KYC verification is required
       if (result.requiresPlaidRedirect) {
-        // Close the OTP popup
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
@@ -1445,27 +1189,12 @@ const Login = () => {
               mobile_number: values.mobile_number,
               phone_code: values.phone_code,
               isRemittanceOnlyCustomer:
-                processedData.data?.isRemittanceOnlyCustomer ||
-                processedData.isRemittanceOnlyCustomer ||
-                false,
+                processedData.isRemittanceOnlyCustomer || false,
               customerType: processedData.customer_type || "individual",
             },
           })
         );
 
-        localStorage.setItem("authtoken", processedData.token);
-        localStorage.setItem(
-          "authcustomer_id",
-          processedData.customer_id.toString()
-        );
-        localStorage.setItem(
-          "isRemittanceOnlyCustomer",
-          processedData.data?.isRemittanceOnlyCustomer ||
-            processedData.isRemittanceOnlyCustomer ||
-            "N"
-        );
-
-        // Close OTP popup on successful login
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
@@ -1483,9 +1212,7 @@ const Login = () => {
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
-
-          // ✅ UPDATED: Pass the processedData to the redirect function
-          handleSuccessfulLoginRedirect(processedData.customer_id);
+          handleSuccessfulLoginRedirect(processedData);
         }, 1500);
       }
     } catch (error) {
@@ -1512,10 +1239,7 @@ const Login = () => {
     navigate("/selectaccounttype");
   };
 
-  // Use centralized loading state for countries
-  const isLoadingCountries = false;
-
-  // Render the login form - ORIGINAL UI
+  // Render the login form
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
       {/* LEFT SIDE - MAIN LOGIN FORM */}
@@ -1610,75 +1334,56 @@ const Login = () => {
             ) : (
               <div className="relative mb-6">
                 <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-                  {isLoadingCountries && (
-                    <div className="flex justify-center items-center h-full">
-                      <RingLoader size={24} color="#36d7b7" />
-                      <span className="ml-2 text-sm text-gray-500">
-                        Loading countries...
-                      </span>
-                    </div>
-                  )}
-                  {!isLoadingCountries && (
-                    <div className="relative w-full">
-                      <Select
-                        options={countryOptions}
-                        value={currentCountryOption}
-                        onChange={(option) => {
-                          dispatch(
-                            setSelectedCountry({
-                              country: option.countryName,
-                              countryCode: option.value,
-                              flagUrl: option.flagUrl,
-                            })
-                          );
-                          setFieldValue("phone_code", option.value);
-                        }}
-                        placeholder="Select country"
-                        isSearchable
-                        classNamePrefix="react-select"
-                        isLoading={false}
-                        styles={{
-                          control: (provided) => ({
-                            ...provided,
-                            minHeight: "48px",
+                  <div className="relative w-full">
+                    <Select
+                      options={countryOptions}
+                      value={currentCountryOption}
+                      onChange={handleCountrySelect}
+                      placeholder="Select country"
+                      isSearchable
+                      classNamePrefix="react-select"
+                      isLoading={countriesLoading}
+                      styles={{
+                        control: (provided) => ({
+                          ...provided,
+                          minHeight: "48px",
+                          borderColor:
+                            errors.phone_code && touched.phone_code
+                              ? "#f87171"
+                              : "#d1d5db",
+                          "&:hover": {
                             borderColor:
                               errors.phone_code && touched.phone_code
                                 ? "#f87171"
-                                : "#d1d5db",
-                            "&:hover": {
-                              borderColor:
-                                errors.phone_code && touched.phone_code
-                                  ? "#f87171"
-                                  : "#9ca3af",
-                            },
-                          }),
-                          option: (provided) => ({
-                            ...provided,
-                            padding: "10px",
-                            display: "flex",
-                            alignItems: "center",
-                          }),
-                        }}
-                        formatOptionLabel={(option) => (
-                          <div className="flex items-center">
-                            {option.flagUrl && (
-                              <img
-                                src={option.flagUrl}
-                                alt={option.label}
-                                className="w-5 h-4 object-cover mr-2"
-                              />
-                            )}
-                            <span>{option.label}</span>
-                          </div>
-                        )}
-                      />
-                      {errors.phone_code && touched.phone_code && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {errors.phone_code}
-                        </p>
+                                : "#9ca3af",
+                          },
+                        }),
+                        option: (provided) => ({
+                          ...provided,
+                          padding: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                        }),
+                      }}
+                      formatOptionLabel={(option) => (
+                        <div className="flex items-center">
+                          {option.flagUrl && (
+                            <img
+                              src={option.flagUrl}
+                              alt={option.label}
+                              className="w-5 h-4 object-cover mr-2"
+                            />
+                          )}
+                          <span>{option.label}</span>
+                        </div>
                       )}
-                    </div>
-                  )}
+                    />
+                    {errors.phone_code && touched.phone_code && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors.phone_code}
+                      </p>
+                    )}
+                  </div>
 
                   <div className="w-full">
                     <input
@@ -1838,7 +1543,6 @@ const Login = () => {
               onClick={handleNavigation}
               className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 transition-all bg-white overflow-hidden group"
             >
-              {/* Animated background gradient */}
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100"
                 initial={{ x: "-100%" }}
@@ -1848,7 +1552,6 @@ const Login = () => {
                 }}
               />
 
-              {/* Sparkle/particle effect container */}
               <div className="absolute inset-0 overflow-hidden">
                 {[...Array(3)].map((_, i) => (
                   <motion.div
@@ -1874,7 +1577,6 @@ const Login = () => {
                 ))}
               </div>
 
-              {/* Pulsing ring effect */}
               <motion.div
                 className="absolute inset-0 rounded-xl border-2 border-transparent"
                 whileHover={{
@@ -1889,7 +1591,6 @@ const Login = () => {
                 }}
               />
 
-              {/* Button content */}
               <div className="relative z-10 flex items-center justify-center space-x-2">
                 <motion.div
                   whileHover={{ rotate: 360 }}
@@ -1930,7 +1631,7 @@ const Login = () => {
         </div>
       </div>
 
-      {/* ========== EXISTING MODAL COMPONENT ========== */}
+      {/* ========== MODAL COMPONENT ========== */}
       <Modal
         isOpen={modal.isOpen}
         onClose={() => dispatch(closeModal())}
@@ -1944,7 +1645,6 @@ const Login = () => {
       {showPlaidModal && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-2xl font-bold text-gray-800">
                 KYC Verification Required
@@ -1957,7 +1657,6 @@ const Login = () => {
               </button>
             </div>
 
-            {/* Content */}
             <div className="p-6">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1975,7 +1674,6 @@ const Login = () => {
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div className="space-y-3">
                 <button
                   onClick={openPlaidInNewWindow}
@@ -2016,7 +1714,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <p className="text-xs text-gray-500 text-center">
                 By continuing, you agree to our Terms of Service and Privacy
@@ -2027,7 +1724,7 @@ const Login = () => {
         </div>
       )}
 
-      {/* ========== EXISTING OTP MODAL ========== */}
+      {/* ========== OTP MODAL ========== */}
       {showOtpInput && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
@@ -2127,14 +1824,13 @@ const Login = () => {
         </div>
       )}
 
-      {/* ========== EXISTING PASSCODE MODAL ========== */}
+      {/* ========== PASSCODE MODAL ========== */}
       {showPasscodeInput && passcodeSent && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">
             <button
               onClick={() => {
                 dispatch(setShowPasscodeInput(false));
-                dispatch(setPasscodeSent(false));
                 dispatch(setPasscode(new Array(6).fill("")));
               }}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
@@ -2236,7 +1932,7 @@ const Login = () => {
               type="button"
               onClick={handleVerifyPasscode}
               className="w-full bg-blue-600 text-white py-3.5 rounded-lg hover:bg-blue-700 
-          disabled:opacity-70 transition-colors flex items-center justify-center gap-3"
+  disabled:opacity-70 transition-colors flex items-center justify-center gap-3"
               disabled={isVerifyingPasscode || passcode.join("").length !== 6}
             >
               {isVerifyingPasscode ? (
@@ -2255,49 +1951,7 @@ const Login = () => {
               </p>
               <button
                 type="button"
-                onClick={async () => {
-                  if (isGeneratingPasscode) return;
-
-                  try {
-                    const payload = {
-                      email: values.email,
-                      password: values.password,
-                    };
-
-                    if (showCustomerType === "Y" && values.customerType) {
-                      payload.customer_type = values.customerType;
-                    }
-
-                    console.log("🔄 Resending passcode...");
-                    await dispatch(generatePasscode(payload)).unwrap();
-
-                    // Reset passcode inputs
-                    dispatch(setPasscode(new Array(6).fill("")));
-                    document.getElementById("passcode-input-0")?.focus();
-
-                    dispatch(
-                      openModal({
-                        title: "Code Resent",
-                        message:
-                          "A new verification code has been sent to your email.",
-                        type: "success",
-                        modalProps: {
-                          autoClose: true,
-                          autoCloseDelay: 3000,
-                        },
-                      })
-                    );
-                  } catch (error) {
-                    console.error("❌ Failed to resend passcode:", error);
-                    dispatch(
-                      openModal({
-                        title: "Error",
-                        message: "Failed to resend code. Please try again.",
-                        type: "error",
-                      })
-                    );
-                  }
-                }}
+                onClick={handleGeneratePasscode}
                 className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto"
                 disabled={isGeneratingPasscode}
               >

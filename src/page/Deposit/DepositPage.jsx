@@ -10,13 +10,12 @@ import {
   FaCheck,
   FaUniversity,
   FaTimes,
-  FaCreditCard,
   FaExclamationTriangle,
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { useDispatch, useSelector } from "react-redux";
 import PaymentInitiation from "./components/PaymentInitiation/PaymentInitiation";
-import CardPayment from "./components/Card/CardPayment";
+// import CardPayment from "./components/Card/CardPayment";
 
 // Hooks
 import { useDeposit } from "./hooks/useDeposit";
@@ -27,6 +26,8 @@ import { useUI } from "./hooks/useUI";
 
 import Select from "react-select";
 import { FaSearch, FaPlus } from "react-icons/fa";
+
+import ManualDepositUpload from "./components/ManualDepositUpload";
 
 // ✅ CORRECT: Import from depositSlice
 import {
@@ -121,7 +122,7 @@ const useFixedCurrency = (initialCurrency) => {
             {
               headers: { "Content-Type": "application/json" },
               timeout: 10000,
-            }
+            },
           );
 
           if (response.data?.data?.token) {
@@ -150,7 +151,7 @@ const useFixedCurrency = (initialCurrency) => {
   const currencies = useMemo(() => {
     if (accountLoading) {
       console.log(
-        "⏳ useFixedCurrency - Still loading accounts, returning empty array"
+        "⏳ useFixedCurrency - Still loading accounts, returning empty array",
       );
       return [];
     }
@@ -164,7 +165,7 @@ const useFixedCurrency = (initialCurrency) => {
 
     console.log(
       "🔄 useFixedCurrency - Transforming accounts to currencies. Account count:",
-      safeAccounts.length
+      safeAccounts.length,
     );
 
     const transformed = safeAccounts.map((account, index) => {
@@ -195,11 +196,11 @@ const useFixedCurrency = (initialCurrency) => {
 
     console.log(
       "✅ useFixedCurrency - Successfully transformed currencies:",
-      transformed.length
+      transformed.length,
     );
     console.log(
       "📋 Available currencies:",
-      transformed.map((c) => c.currency_code).join(", ")
+      transformed.map((c) => c.currency_code).join(", "),
     );
 
     return transformed;
@@ -220,17 +221,17 @@ const useFixedCurrency = (initialCurrency) => {
     ) {
       console.log(
         "✅ useFixedCurrency - Initial currency is available:",
-        initialCurrency
+        initialCurrency,
       );
     } else if (currencies.length > 0) {
       console.log(
         "ℹ️ useFixedCurrency - No initial currency provided, but",
         currencies.length,
-        "currencies available"
+        "currencies available",
       );
     } else {
       console.log(
-        "📭 useFixedCurrency - No currencies available for initial selection"
+        "📭 useFixedCurrency - No currencies available for initial selection",
       );
     }
   }, [initialCurrency, currencies]);
@@ -275,9 +276,9 @@ const useSafeCurrency = (initialCurrency) => {
   }
 };
 
-const useSafeDeposit = () => {
+const useSafeDeposit = (customerId) => {
   try {
-    const result = useDeposit();
+    const result = useDeposit(customerId);
 
     // Enhanced safety check
     if (!result || typeof result !== "object") {
@@ -370,39 +371,39 @@ const useSafePaymentMethods = (selectedCurrency, currencies) => {
 const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
   try {
     const manualAccountDetails = useSelector(
-      (state) => state.deposit?.manualAccountDetails
+      (state) => state.deposit?.manualAccountDetails,
     );
     const manualDetailsLoading = useSelector(
-      (state) => state.deposit?.manualDetailsLoading
+      (state) => state.deposit?.manualDetailsLoading,
     );
     const manualDetailsError = useSelector(
-      (state) => state.deposit?.formErrors?.manualDetails || null
+      (state) => state.deposit?.formErrors?.manualDetails || null,
     );
 
     // ✅ CORRECTED: Use selectors from bankAccountSlice
     const usdBankAccounts = useSelector(selectUSDBankAccounts);
     const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
     const usdAccountsError = useSelector(
-      (state) => state.bankAccounts?.usdAccountsError || null
+      (state) => state.bankAccounts?.usdAccountsError || null,
     );
 
     // ✅ ADD: Get bankLink accounts
     const bankLinkAccounts = useSelector(
-      (state) => state.bankLink?.bankAccounts || []
+      (state) => state.bankLink?.bankAccounts || [],
     );
     const bankLinkLoading = useSelector(
-      (state) => state.bankLink?.loading || false
+      (state) => state.bankLink?.loading || false,
     );
     const bankLinkError = useSelector((state) => state.bankLink?.error || null);
 
     const aedAccountDetails = useSelector(
-      (state) => state.bankAccounts?.aedAccountDetails || null
+      (state) => state.bankAccounts?.aedAccountDetails || null,
     );
     const aedDetailsError = useSelector(
-      (state) => state.bankAccounts?.aedDetailsError || null
+      (state) => state.bankAccounts?.aedDetailsError || null,
     );
     const aedDetailsLoading = useSelector(
-      (state) => state.bankAccounts?.aedDetailsLoading || false
+      (state) => state.bankAccounts?.aedDetailsLoading || false,
     );
 
     // ✅ COMBINE: USD accounts from all sources
@@ -421,7 +422,7 @@ const useSafeBankAccounts = (selectedCurrency, paymentMethod) => {
       const uniqueAccounts = usdAccounts.filter(
         (account, index, self) =>
           index ===
-          self.findIndex((a) => a.account_number === account.account_number)
+          self.findIndex((a) => a.account_number === account.account_number),
       );
 
       console.log("🔍 COMBINED USD ACCOUNTS DEBUG:", {
@@ -605,48 +606,48 @@ const EmptyState = ({ navigate }) => (
   </div>
 );
 
-const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
-  const handleCardPayment = async () => {
-    try {
-      // Validate
-      if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
-        toast.error("Please enter a valid amount");
-        return;
-      }
+// const CardPaymentHandler = ({ deposit, navigate, customerId }) => {
+//   const handleCardPayment = async () => {
+//     try {
+//       // Validate
+//       if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+//         toast.error("Please enter a valid amount");
+//         return;
+//       }
 
-      if (!deposit.purpose) {
-        toast.error("Please select a purpose");
-        return;
-      }
+//       if (!deposit.purpose) {
+//         toast.error("Please select a purpose");
+//         return;
+//       }
 
-      const navigationState = {
-        customerId: customerId,
-        amount: parseFloat(deposit.amount),
-        currency: deposit.selectedCurrency || selectedCurrency,
-        purpose: deposit.purpose,
-        paymentMethod: deposit.paymentMethod,
-      };
+//       const navigationState = {
+//         customerId: customerId,
+//         amount: parseFloat(deposit.amount),
+//         currency: deposit.selectedCurrency || selectedCurrency,
+//         purpose: deposit.purpose,
+//         paymentMethod: deposit.paymentMethod,
+//       };
 
-      console.log("🚀 Navigating to card payment:", navigationState);
-      navigate("/card", { state: navigationState });
-    } catch (error) {
-      console.error("❌ Card payment error:", error);
-      toast.error("Failed to initiate card payment");
-    }
-  };
+//       console.log("🚀 Navigating to card payment:", navigationState);
+//       navigate("/card", { state: navigationState });
+//     } catch (error) {
+//       console.error("❌ Card payment error:", error);
+//       toast.error("Failed to initiate card payment");
+//     }
+//   };
 
-  return (
-    <motion.button
-      type="button"
-      onClick={handleCardPayment}
-      disabled={!deposit.amount || deposit.isSubmitting}
-      className="inline-flex justify-center items-center px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-all font-sans"
-    >
-      <FaCreditCard className="mr-2" />
-      Pay with Card
-    </motion.button>
-  );
-};
+//   return (
+//     <motion.button
+//       type="button"
+//       onClick={handleCardPayment}
+//       disabled={!deposit.amount || deposit.isSubmitting}
+//       className="inline-flex justify-center items-center px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-all font-sans"
+//     >
+//       <FaCreditCard className="mr-2" />
+//       Pay with Card
+//     </motion.button>
+//   );
+// };
 
 // Main component content without error boundary
 const DepositPageContent = () => {
@@ -659,6 +660,9 @@ const DepositPageContent = () => {
   // ✅ TAB STATE
   const [activeTab, setActiveTab] = useState("deposit");
   const [sessionData, setSessionData] = useState(null);
+  const [depositDescription, setDepositDescription] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   // Safe parameter access with debugging
   const customerId = params.customerId;
@@ -668,23 +672,190 @@ const DepositPageContent = () => {
   console.log("🔍 FULL REDUX STATE STRUCTURE:", fullReduxState);
 
   // Custom hooks with safe access
-  const deposit = useSafeDeposit();
+  const deposit = useSafeDeposit(customerId);
   const currency = useSafeCurrency(initialCurrency);
   const paymentMethods = useSafePaymentMethods(
     deposit.selectedCurrency,
-    currency.currencies
+    currency.currencies,
   );
+
   const bankAccounts = useSafeBankAccounts(
     deposit.selectedCurrency,
-    deposit.paymentMethod
+    deposit.paymentMethod,
+    customerId,
   );
+
   const ui = useUI();
+
+  // ✅ ADD THESE HANDLER FUNCTIONS HERE
+  const handleFileSelect = (file) => {
+    setUploadedFile(file);
+  };
+
+  const handleUploadSuccess = (file) => {
+    setUploadSuccess(true);
+    toast.success(`File "${file.name}" uploaded successfully!`);
+  };
+
+  const handleUploadError = (error) => {
+    toast.error(`Upload failed: ${error}`);
+    setUploadSuccess(false);
+  };
+
+  // Update the validation in the form submission
+  // Update the validation in the form submission
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+
+    const errors = {};
+
+    // Basic validation
+    if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+      errors.amount = "Please enter a valid amount";
+    }
+
+    if (!deposit.purpose) {
+      errors.purpose = "Please enter a purpose for this deposit";
+    }
+
+    // Manual deposit validation
+    if (deposit.paymentMethod === "manual_deposit") {
+      if (!depositDescription.trim()) {
+        errors.description = "Please provide a deposit description";
+        toast.error("Please provide a deposit description");
+        return;
+      }
+
+      if (!uploadedFile) {
+        errors.file = "Please upload a deposit receipt or proof";
+        toast.error("Please upload a deposit receipt or proof");
+        return;
+      }
+
+      if (!uploadSuccess) {
+        errors.upload = "Please wait for the file upload to complete";
+        toast.error("Please wait for the file upload to complete");
+        return;
+      }
+    }
+
+    // If there are errors, show them and return
+    if (Object.keys(errors).length > 0) {
+      if (deposit.setFormErrors) {
+        deposit.setFormErrors(errors);
+      }
+      return;
+    }
+
+    // Proceed with deposit submission
+    try {
+      // Get customer UUID from localStorage
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        toast.error("Customer information not found. Please log in again.");
+        return;
+      }
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append("customer_id", customerUuid);
+      formData.append("currency_code", safeSelectedCurrency);
+      formData.append("amount", deposit.amount);
+      formData.append("description", depositDescription);
+      formData.append("author_source", "zap");
+      formData.append("author_type", "customer");
+      formData.append("author_id", customerUuid);
+
+      if (uploadedFile) {
+        formData.append("file", uploadedFile);
+      }
+
+      // Get auth token
+      const token = tokenService.getToken();
+
+      if (!token) {
+        toast.error("Authentication token not found. Please log in again.");
+        return;
+      }
+
+      // Show loading toast
+      const loadingToast = toast.loading("Uploading manual deposit...");
+
+      // Make API call
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/transactions/manual-deposit-upload`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            console.log(`Upload progress: ${percentCompleted}%`);
+            // You can update UI with progress if needed
+          },
+        },
+      );
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+
+      console.log("Manual deposit API response:", response.data);
+
+      if (response.data?.success || response.data?.status === "success") {
+        toast.success(
+          "Manual deposit submitted successfully! It will be processed within 1-3 business days.",
+        );
+
+        // Reset form
+        deposit.resetTransaction();
+        setDepositDescription("");
+        setUploadedFile(null);
+        setUploadSuccess(false);
+
+        // Optional: Navigate to transactions page or show success modal
+        // navigate(`/transactions/${customerUuid}`);
+      } else {
+        throw new Error(
+          response.data?.message || "Failed to submit manual deposit",
+        );
+      }
+    } catch (error) {
+      console.error("Manual deposit submission failed:", error);
+
+      // Handle specific error messages
+      let errorMessage = "Failed to submit manual deposit";
+
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        console.error("Error response data:", error.response.data);
+        console.error("Error response status:", error.response.status);
+
+        errorMessage =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = "No response from server. Please check your connection.";
+      } else {
+        // Something happened in setting up the request
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
+    }
+  };
 
   // ✅ CORRECT: USD Account Selectors from bankAccountSlice
   const allUsdBankAccounts = useSelector(selectUSDBankAccounts);
   const usdAccountsLoading = useSelector(selectUSDAccountsLoading);
   const bankLinkAccounts = useSelector(
-    (state) => state.bankLink?.bankAccounts || []
+    (state) => state.bankLink?.bankAccounts || [],
   );
 
   const showPaymentInitiation = useSelector(selectShowPaymentInitiation);
@@ -725,7 +896,7 @@ const DepositPageContent = () => {
       const uniqueAccounts = allAccounts.filter(
         (account, index, self) =>
           index ===
-          self.findIndex((a) => a.account_number === account.account_number)
+          self.findIndex((a) => a.account_number === account.account_number),
       );
 
       console.log("✅ Combined USD accounts:", uniqueAccounts.length);
@@ -787,7 +958,7 @@ const DepositPageContent = () => {
     ) {
       console.log(
         "🎯 Open Banking Bank Transfer selected for:",
-        deposit.selectedCurrency
+        deposit.selectedCurrency,
       );
       // This will be handled by your PaymentInitiation component
       // Do NOT call Sila endpoints for Open Banking currencies
@@ -798,7 +969,7 @@ const DepositPageContent = () => {
   useEffect(() => {
     if (bankLinkAccounts.length > 0 && allUsdBankAccounts.length === 0) {
       console.log(
-        "🔄 BankLink accounts available but no USD accounts, triggering sync"
+        "🔄 BankLink accounts available but no USD accounts, triggering sync",
       );
       syncCombinedUSDAccounts();
     }
@@ -898,7 +1069,7 @@ const DepositPageContent = () => {
       deposit.selectedCurrency
     ) {
       console.log(
-        `🔄 Manual deposit active for ${deposit.selectedCurrency}, ensuring data consistency`
+        `🔄 Manual deposit active for ${deposit.selectedCurrency}, ensuring data consistency`,
       );
 
       // If we have manual details but they don't match, they'll be cleared by useSafeBankAccounts
@@ -1006,7 +1177,7 @@ const DepositPageContent = () => {
     console.log("Safe Selected Currency:", deposit.selectedCurrency);
     console.log(
       "Should show payment methods:",
-      deposit.selectedCurrency && currency.currencies?.length > 0
+      deposit.selectedCurrency && currency.currencies?.length > 0,
     );
     console.log("Payment Methods hook state:", paymentMethods);
   }, [deposit.selectedCurrency, currency.currencies?.length, paymentMethods]);
@@ -1040,7 +1211,7 @@ const DepositPageContent = () => {
   const safeSelectedCurrency = deposit.selectedCurrency || "";
 
   // Check if card deposit is selected
-  const isCardDeposit = deposit.paymentMethod === "card_deposit";
+  const isCardDeposit = deposit.paymentMethod === false;
   const isManualDeposit = deposit.paymentMethod === "manual_deposit";
   const isBankDeposit = deposit.paymentMethod === "bank_deposit";
   const isBankTransfer = deposit.paymentMethod === "bank_transfer";
@@ -1192,13 +1363,7 @@ const DepositPageContent = () => {
                 </h2>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  console.log("🔍 Form onSubmit triggered");
-                  deposit.handleSubmit(e);
-                }}
-                className="px-8 py-8"
-              >
+              <form onSubmit={handleFormSubmit} className="px-8 py-8">
                 {/* ✅ UPDATED: Changed grid layout to use more columns for wider layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Currency Selection */}
@@ -1238,7 +1403,7 @@ const DepositPageContent = () => {
                 </div>
 
                 {/* Amount and Purpose Fields */}
-                {deposit.paymentMethod && !isManualDeposit && (
+                {deposit.paymentMethod && (
                   <div className="mb-8">
                     <DepositDetails
                       amount={deposit.amount}
@@ -1290,6 +1455,33 @@ const DepositPageContent = () => {
                   />
                 </div>
 
+                {/* Manual Deposit Upload Component */}
+                {deposit.paymentMethod === "manual_deposit" && (
+                  <div className="mb-8">
+                    <ManualDepositUpload
+                      selectedCurrency={safeSelectedCurrency}
+                      amount={deposit.amount}
+                      description={depositDescription}
+                      onDescriptionChange={setDepositDescription}
+                      onFileSelect={handleFileSelect}
+                      onUploadSuccess={handleUploadSuccess}
+                      onUploadError={handleUploadError}
+                      isSubmitting={deposit.isSubmitting}
+                      maxFileSize={5 * 1024 * 1024} // 5MB
+                      acceptedFileTypes={[
+                        ".pdf",
+                        ".jpg",
+                        ".jpeg",
+                        ".png",
+                        ".gif",
+                        ".bmp",
+                        ".tiff",
+                        ".webp",
+                      ]}
+                    />
+                  </div>
+                )}
+
                 {/* Info Box */}
                 {deposit.paymentMethod && (
                   <motion.div
@@ -1326,19 +1518,13 @@ const DepositPageContent = () => {
                       Cancel
                     </motion.button>
 
-                    {/* ✅ FIXED: Different buttons for different payment methods */}
-                    {isCardDeposit ? (
-                      <CardPaymentHandler
-                        deposit={deposit}
-                        navigate={navigate}
-                        customerId={customerId}
-                        selectedCurrency={deposit.selectedCurrency}
-                      />
-                    ) : // ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK
-                    (deposit.selectedCurrency === "EUR" ||
-                        deposit.selectedCurrency === "GBP" ||
-                        deposit.selectedCurrency === "DKK") &&
-                      deposit.paymentMethod === "bank_transfer" ? (
+                    {/* ✅ REMOVED: Card Payment Handler since card deposit is no longer available */}
+
+                    {/* ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK */}
+                    {(deposit.selectedCurrency === "EUR" ||
+                      deposit.selectedCurrency === "GBP" ||
+                      deposit.selectedCurrency === "DKK") &&
+                    deposit.paymentMethod === "bank_transfer" ? (
                       <motion.button
                         type="button" // Change to button type, not submit
                         onClick={() => {
@@ -1355,12 +1541,6 @@ const DepositPageContent = () => {
                               "Please enter a purpose for this deposit";
                           }
 
-                          // For Open Banking deposits, you might also need to check for selected bank account
-                          // Uncomment if needed:
-                          // if (!deposit.selectedBankAccount) {
-                          //   errors.bankAccount = "Please select a bank account";
-                          // }
-
                           if (Object.keys(errors).length > 0) {
                             // You need to make sure deposit.setFormErrors exists
                             if (deposit.setFormErrors) {
@@ -1373,7 +1553,7 @@ const DepositPageContent = () => {
                           // Then trigger Open Banking
                           console.log(
                             "🎯 Initiating Open Banking for:",
-                            deposit.selectedCurrency
+                            deposit.selectedCurrency,
                           );
                           dispatch(setShowPaymentInitiation(true));
                         }}

@@ -1,7 +1,6 @@
-// src/components/Header/Header.js - COMPLETE WITH FIXES AND ORIGINAL FUNCTIONALITIES
+// src/components/Header/Header.js
 import React, { useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import {
@@ -43,38 +42,16 @@ import {
   selectProfileData,
   selectProfileLoading,
   selectProfileError,
-} from "../Header/headerSlice";
+} from "./headerSlice";
 
-// Import logoutUser
+// FIXED: Only import logoutUser, use local selectAuthToken
 import { logoutUser } from "../../../features/Auth/slices/authSlice";
 
-// Partner config hook
+// Partner config hook - UPDATED to get logoUrl
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 
-// Import centralizedApi
-import { centralizedApi } from "../../../services/api";
-
-// Debug component for partner data
-const PartnerDebug = () => {
-  useEffect(() => {
-    console.log("🔍 HEADER DEBUG - LocalStorage State:", {
-      partnerId: localStorage.getItem("whitelabelledpartnerid"),
-      partnerName: localStorage.getItem("whitelabelled_customer_partnername"),
-      partnerLogo: localStorage.getItem("partner_logo"),
-      partnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "null"
-      ),
-      partnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "null"
-      ),
-      whitelabelledCustomer: localStorage.getItem("whitelabelled_customer"),
-      isWhiteLabelledPartner: localStorage.getItem("iswhitelabelledpartner"),
-      hasPartnerId: !!localStorage.getItem("whitelabelledpartnerid"),
-    });
-  }, []);
-
-  return null;
-};
+// API Coordination
+import { apiCoordinator } from "../../../services/api";
 
 const selectAuthToken = (state) => {
   const bearertoken = localStorage.getItem("bearertoken");
@@ -110,13 +87,13 @@ const Header = ({ customerId }) => {
   const hoverTimerRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
 
-  // Use the partner config hook - ALL original properties
+  // Use the partner config hook - UPDATED to get all new properties
   const {
     headerColor,
     logoUrl,
     logoAltText,
-    partnerName,
-    hasLogo,
+    partnerName, // NEW: Get partner name from hook
+    hasLogo, // NEW: Check if logo exists
     loading: partnerConfigLoading,
     error: partnerConfigError,
     refresh: refreshPartnerConfig,
@@ -150,7 +127,7 @@ const Header = ({ customerId }) => {
 
   // Get from localStorage
   const isWhitelabelledCustomer =
-    localStorage.getItem("whitelabelled_customer") || "N";
+    localStorage.getItem("isWhitelabelledCustomer") || "N";
   const firstName = localStorage.getItem("firstName") || "User";
   const lastName = localStorage.getItem("lastName") || "";
 
@@ -160,13 +137,7 @@ const Header = ({ customerId }) => {
   const profileFetchSignature = useRef(null);
 
   useEffect(() => {
-    // Create a config object that matches what DataManager expects
-    profileFetchSignature.current = {
-      method: "GET",
-      url: `/customers/${customerId}/profile`,
-      params: {},
-      data: {},
-    };
+    profileFetchSignature.current = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
   }, [customerId]);
 
   // ==================== DEBUG LOGGING ====================
@@ -214,10 +185,10 @@ const Header = ({ customerId }) => {
       fetchTimeoutRef.current = null;
     }
 
-    // Clear API cache on logout using centralizedApi
-    centralizedApi.clearAllCache();
+    // Clear API cache on logout
+    apiCoordinator.clear();
 
-    // Get the token for the API call
+    // Get any available token
     const tokenToUse =
       authtoken ||
       localStorage.getItem("authtoken") ||
@@ -225,28 +196,11 @@ const Header = ({ customerId }) => {
 
     try {
       if (tokenToUse) {
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/logout`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${tokenToUse}`,
-            },
-          }
-        );
-        console.log("✅ Logout API response:", response.data);
+        await dispatch(logoutUser(tokenToUse)).unwrap();
       } else {
-        console.log("ℹ️ No token available, local logout only");
+        // If no token, just clear local state
+        dispatch(logoutUserSync()); // Use the sync version as fallback
       }
-
-      // ⭐⭐ CLEAR EVERYTHING FROM LOCALSTORAGE ⭐⭐
-      localStorage.clear();
-      sessionStorage.clear();
-
-      console.log("🗑️ ALL localStorage and sessionStorage cleared");
-
-      // Clear Redux state
-      dispatch({ type: "auth/clearAuthState" });
 
       // Navigate to login
       navigate("/", { replace: true });
@@ -254,17 +208,10 @@ const Header = ({ customerId }) => {
       // Force reload to clear any cached state
       window.location.reload();
     } catch (error) {
-      console.error("❌ Logout error:", error);
-
-      // ⭐⭐ EVEN IF API FAILS, CLEAR EVERYTHING LOCALLY ⭐⭐
+      console.error("Logout error:", error);
+      // Even if API fails, clear local storage and redirect
       localStorage.clear();
       sessionStorage.clear();
-
-      // Clear Redux state
-      dispatch({ type: "auth/clearAuthState" });
-
-      console.log("🔄 Manual fallback: All storage cleared");
-
       navigate("/", { replace: true });
       window.location.reload();
     }
@@ -310,6 +257,9 @@ const Header = ({ customerId }) => {
         profileLoading,
         reduxFirstName: profileData?.first_name,
         storageFirstName: localStorage.getItem("firstName"),
+        isGloballyFetching: profileFetchSignature.current
+          ? apiCoordinator.isFetching(profileFetchSignature.current)
+          : "no-signature",
       });
 
       // ✅ Check if we have VALID data (not "User" or bad values)
@@ -325,18 +275,13 @@ const Header = ({ customerId }) => {
         localStorage.getItem("firstName") !== "undefined" &&
         localStorage.getItem("firstName") !== "null";
 
-      // ✅ Check centralizedApi coordination state
-      const cacheKey = profileFetchSignature.current
-        ? centralizedApi.dataManager.getCacheKey(profileFetchSignature.current)
-        : null;
-
-      const isGloballyFetching = cacheKey
-        ? !!centralizedApi.dataManager.getPendingRequest(cacheKey)
-        : false;
-
-      const hasGlobalData = cacheKey
-        ? centralizedApi.dataManager.get(cacheKey)
-        : false;
+      // ✅ Check global coordination state
+      const isGloballyFetching =
+        profileFetchSignature.current &&
+        apiCoordinator.isFetching(profileFetchSignature.current);
+      const hasGlobalData =
+        profileFetchSignature.current &&
+        apiCoordinator.hasRecentData(profileFetchSignature.current);
 
       // ✅ SIMPLIFIED: Fetch if we don't have valid data AND not already fetching globally
       const shouldFetchProfile =
@@ -483,7 +428,7 @@ const Header = ({ customerId }) => {
     },
   ];
 
-  // ✅ FIXED: Memoized profile section with ALL original animations and features
+  // ✅ FIXED: Memoized profile section
   const ProfileSection = useMemo(() => {
     if (profileLoading && !profileData) {
       return (
@@ -743,132 +688,77 @@ const Header = ({ customerId }) => {
     dispatch,
   ]);
 
-  useEffect(() => {
-    // Try to load logo from localStorage immediately
-    const cachedLogo = localStorage.getItem("partner_logo");
-    const cachedPartnerName = localStorage.getItem("partner_name");
-
-    if (cachedLogo) {
-      console.log("📦 Pre-loaded logo from localStorage:", cachedLogo);
-    }
-  }, []);
-
-  // ============ FIXED LOGO CONTENT ============
+  // UPDATED: Determine which icon/logo to use based on customer type and partner config
   const LogoContent = useMemo(() => {
-    // IMMEDIATE CHECK: Always show cached logo first
-    const cachedLogoUrl = localStorage.getItem("partner_logo");
-    const cachedPartnerName =
-      localStorage.getItem("whitelabelled_customer_partnername") ||
-      "Partner Portal";
-
-    console.log("🎯 LogoContent Debug:", {
-      cachedLogoUrl,
-      cachedPartnerName,
-      partnerConfigLoading,
-      logoUrl,
-      partnerName,
-      hasLogo,
-    });
-
-    // 1. Show cached logo if available (immediate display)
-    if (
-      cachedLogoUrl &&
-      cachedLogoUrl !== "null" &&
-      cachedLogoUrl !== "undefined"
-    ) {
+    // Show loading spinner if partner config is loading
+    if (partnerConfigLoading) {
       return (
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          className="flex items-center justify-center"
-        >
-          <img
-            src={cachedLogoUrl}
-            alt={cachedPartnerName}
-            className="h-20 w-auto object-contain max-w-[300px] max-h-[100px]"
-            onLoad={() => console.log("✅ Cached logo loaded")}
-            onError={(e) => {
-              console.error("❌ Cached logo failed, clearing...");
-              localStorage.removeItem("partner_logo");
-              e.target.style.display = "none";
-            }}
-          />
-        </motion.div>
+        <div className="flex items-center">
+          <RingLoader size={70} color={"#ffffff"} loading={true} />
+        </div>
       );
     }
 
-    // 2. Show partner name if we have one (even without logo)
-    if (cachedPartnerName && cachedPartnerName !== "Partner Portal") {
-      console.log("📝 Showing partner name as text:", cachedPartnerName);
+    // If we have a partner logo URL, use it
+    if (hasLogo && logoUrl) {
       return (
         <motion.div
           whileHover={{ scale: 1.05 }}
-          className="flex items-center justify-center"
-        >
-          <FaBuilding className="h-10 w-10 text-white mr-3" />
-          <span className="text-white font-semibold text-lg">
-            {cachedPartnerName}
-          </span>
-        </motion.div>
-      );
-    }
-
-    // 3. Show API logo if available (from Redux)
-    if (logoUrl && logoUrl !== "null" && logoUrl !== "undefined") {
-      return (
-        <motion.div
-          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 300 }}
           className="flex items-center justify-center"
         >
           <img
             src={logoUrl}
-            alt={partnerName || "Partner Logo"}
-            className="h-20 w-auto object-contain max-w-[300px] max-h-[100px]"
-            onLoad={() => {
-              console.log("✅ API logo loaded, caching...");
-              localStorage.setItem("partner_logo", logoUrl);
+            alt={logoAltText}
+            className="h-20 w-auto object-contain md:h-20 lg:h-20" // Much bigger
+            style={{
+              maxWidth: "300px",
+              maxHeight: "100px",
             }}
             onError={(e) => {
-              console.error("❌ API logo failed");
+              console.error("Failed to load partner logo:", logoUrl);
               e.target.style.display = "none";
             }}
+            onLoad={() =>
+              console.log("✅ Big logo loaded successfully:", logoUrl)
+            }
           />
         </motion.div>
       );
     }
 
-    // 4. REMOVED LOADING SPINNER - Show fallback immediately
-    console.log("⚠️ No logo available, showing fallback");
-
-    // Choose appropriate icon
-    let IconComponent = FaBuilding;
-    let titleText = "Partner Portal";
+    // Fallback to icon based on customer type
+    let IconComponent = FaHome;
+    let titleText = "Dashboard";
 
     if (isRemittanceOnlyCustomer === "Y") {
       IconComponent = FaMoneyCheckAlt;
       titleText = "Remittance Portal";
-    } else if (localStorage.getItem("whitelabelledpartnerid")) {
+    } else if (isWhitelabelledCustomerPartnerId) {
       IconComponent = FaBuilding;
-      titleText = "Partner Portal";
-    } else {
-      IconComponent = FaHome;
-      titleText = "Dashboard";
+      titleText = logoAltText || "Partner Portal";
     }
 
     return (
       <motion.div
         whileHover={{ scale: 1.05 }}
+        transition={{ type: "spring", stiffness: 300 }}
         className="flex items-center justify-center"
       >
-        <IconComponent className="h-10 w-10 text-white mr-3" />
-        <span className="text-white font-semibold text-lg">{titleText}</span>
+        <IconComponent
+          className="h-32 w-auto text-white group-hover:text-blue-200 transition-colors duration-300 md:h-36 lg:h-40"
+          style={{ minWidth: "100px" }}
+        />
       </motion.div>
     );
   }, [
-    // Minimal dependencies - only what's actually needed
+    partnerConfigLoading,
     logoUrl,
-    partnerName,
+    logoAltText,
+    hasLogo,
     isRemittanceOnlyCustomer,
-    // REMOVED: partnerConfigLoading (causes unnecessary re-renders)
+    isWhitelabelledCustomerPartnerId,
+    customerId,
   ]);
 
   // UPDATED: Get appropriate text for the logo area
@@ -881,7 +771,11 @@ const Header = ({ customerId }) => {
       return partnerName || "Partner Portal";
     }
     return "Dashboard";
-  }, [isRemittanceOnlyCustomer, isWhitelabelledCustomerPartnerId, partnerName]);
+  }, [
+    isRemittanceOnlyCustomer,
+    isWhitelabelledCustomerPartnerId,
+    partnerName, // Use partnerName instead of partnerConfig
+  ]);
 
   // UPDATED: Handle header color class application with better fallback
   const headerClassNames = useMemo(() => {
@@ -928,14 +822,8 @@ const Header = ({ customerId }) => {
     };
   }, []);
 
-  // Check if we should show FX rates
-  const shouldShowFxRates = useMemo(() => {
-    return hasFxData && partnerFxCurrencies.length > 0;
-  }, [hasFxData, partnerFxCurrencies]);
-
   return (
     <header className={headerClassNames} style={headerStyle}>
-      <PartnerDebug />
       <div className="max-w-[2000px] mx-auto px-6 py-3 flex justify-between items-center w-full">
         <div className="flex items-center space-x-5">
           {isRemittanceOnlyCustomer === "Y" ? (
@@ -955,8 +843,8 @@ const Header = ({ customerId }) => {
           )}
         </div>
 
-        {/* FX Rates with original animation */}
-        {shouldShowFxRates && (
+        {/* FX Rates */}
+        {hasFxData && partnerFxCurrencies.length > 0 && (
           <div className="hidden md:block w-full md:w-2/4 my-2 md:my-0">
             <div className="overflow-hidden px-6">
               <div className="overflow-hidden">
@@ -978,16 +866,16 @@ const Header = ({ customerId }) => {
           </div>
         )}
 
-        {/* Desktop: Profile on right - Original positioning */}
+        {/* Desktop: Profile on right */}
         <div className="hidden md:flex justify-end md:w-1/4 items-center">
           {ProfileSection}
         </div>
 
-        {/* Mobile: Profile menu - Original positioning */}
+        {/* Mobile: Profile menu */}
         <div className="md:hidden">{ProfileSection}</div>
       </div>
 
-      {/* Enhanced Keyframe style for marquee - Original animation */}
+      {/* Enhanced Keyframe style */}
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(100%); }

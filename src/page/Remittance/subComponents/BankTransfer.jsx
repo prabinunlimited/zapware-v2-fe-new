@@ -39,18 +39,17 @@ import {
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 // Import deposit slice actions and selectors
-import {
-  fetchUSDBankAccounts,
-  selectUSDBankAccounts,
+import { 
+  checkSilaBankAccounts,
+  selectSilaBankAccounts,
   selectHasSilaAccounts,
-  selectUSDAccountsLoading,
-  selectUSDAccountsError,
-  setUSDBankAccounts,
-} from "../../Deposit/slices/bankAccountSlice";
+  selectSilaAccountsLoading,
+  selectSilaAccountsError,
+  setSelectedBankAccount
+} from "../../Deposit/slices/depositSlice";
 
 import PaymentInitiation from "../../Deposit/components/PaymentInitiation/PaymentInitiation";
-import { setShowPaymentInitiation, setSelectedBankAccount } from "../../Deposit/slices/depositSlice";
-
+import { setShowPaymentInitiation } from "../../Deposit/slices/depositSlice";
 
 const BankTransfer = ({
   formData = {},
@@ -82,19 +81,18 @@ const BankTransfer = ({
   const dispatch = useDispatch();
   const { customerId: paramCustomerId } = useParams();
 
- const reduxSilaBankAccounts = useSelector(selectUSDBankAccounts);  // Changed
+  // Get Sila bank accounts from Redux store
+  const reduxSilaBankAccounts = useSelector(selectSilaBankAccounts);
   const reduxHasSilaAccounts = useSelector(selectHasSilaAccounts);
-  const reduxSilaAccountsLoading = useSelector(selectUSDAccountsLoading);  // Changed
-  const reduxSilaAccountsError = useSelector(selectUSDAccountsError);  // Changed
-
+  const reduxSilaAccountsLoading = useSelector(selectSilaAccountsLoading);
+  const reduxSilaAccountsError = useSelector(selectSilaAccountsError);
+  
   // Use props if provided, otherwise use Redux store
-  const displayedSilaAccounts =
-    silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
+  const displayedSilaAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
+  const displayedSilaBankAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
   const displayedHasSilaAccounts = hasSilaAccounts || reduxHasSilaAccounts;
-  const displayedSilaAccountsLoading =
-    silaAccountsLoading || reduxSilaAccountsLoading;
-  const displayedSilaAccountsError =
-    silaAccountsError || reduxSilaAccountsError;
+  const displayedSilaAccountsLoading = silaAccountsLoading || reduxSilaAccountsLoading;
+  const displayedSilaAccountsError = silaAccountsError || reduxSilaAccountsError;
 
   const allBeneficiaries = useSelector(selectBeneficiaries);
   const beneficiariesLoading = useSelector(selectBeneficiariesLoading);
@@ -142,7 +140,54 @@ const BankTransfer = ({
     }
   }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
 
+  // FETCH SILA BANK ACCOUNTS ON MOUNT
+  useEffect(() => {
+    const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
+    
+    if (customerId && !displayedSilaAccountsLoading) {
+      console.log("🔄 BankTransfer: Fetching Sila bank accounts for customer:", customerId);
+      dispatch(checkSilaBankAccounts(customerId))
+        .unwrap()
+        .then(result => {
+          console.log("✅ Sila bank accounts loaded:", result);
+        })
+        .catch(error => {
+          console.error("❌ Failed to load Sila bank accounts:", error);
+        });
+    }
+  }, [dispatch, paramCustomerId]);
+
   const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
+
+  // Transform Sila bank accounts for dropdown
+  const silaAccountOptions = useMemo(() => {
+    return (displayedSilaBankAccounts || []).map(account => {
+      const accountName = account.account_name || account.accountName || 'Unknown Account';
+      const accountNumber = account.accountNumberHash || account.account_number || '****';
+      const provider = account.provider || account.bank || 'Unknown Bank';
+      const accountType = account.account_type || account.accountType || 'Checking';
+      
+      return {
+        ...account,
+        value: account.id || account.account_id,
+        label: `${accountName} - ${provider}`,
+        fullLabel: `${accountName} - ${provider}`,
+        description: `${accountType} • ${accountNumber}`,
+        isDefault: account.is_default || false,
+        isVerified: account.web_debit_verified || false,
+        displayText: `${accountName} (${provider} - ${accountType})`,
+      };
+    });
+  }, [displayedSilaBankAccounts]);
+
+  // Auto-select first Sila account if available and none selected
+  useEffect(() => {
+    if (silaAccountOptions.length > 0 && !selectedBankAccount && onBankAccountSelect) {
+      const firstAccount = silaAccountOptions[0];
+      console.log("🔄 Auto-selecting first Sila account:", firstAccount);
+      onBankAccountSelect(firstAccount);
+    }
+  }, [silaAccountOptions, selectedBankAccount, onBankAccountSelect]);
 
   // Local state
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
@@ -151,6 +196,33 @@ const BankTransfer = ({
   const [occupations, setOccupations] = useState([]);
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
   const [showBankAccountInfo, setShowBankAccountInfo] = useState(false);
+
+  // Debug logging
+  useEffect(() => {
+    console.log("BankTransfer Props Debug:", {
+      hasOnFieldChange: !!onFieldChange,
+      purposeOptionsCount: purposeOptions?.length || 0,
+      incomeSourceOptionsCount: incomeSourceOptions?.length || 0,
+      paymentOptionsCount: paymentOptions?.length || 0,
+      relationOptionsCount: relationOptions?.length || 0,
+      formDataPurpose: formData?.purpose,
+      formDataIncomeSource: formData?.incomeSource,
+      formDataPayoutMethod: formData?.payout_method,
+      silaAccountsCount: displayedSilaBankAccounts?.length || 0,
+      hasSilaAccounts: displayedHasSilaAccounts,
+      selectedBankAccount: selectedBankAccount,
+    });
+  }, [
+    onFieldChange,
+    purposeOptions,
+    incomeSourceOptions,
+    paymentOptions,
+    relationOptions,
+    formData,
+    displayedSilaBankAccounts,
+    displayedHasSilaAccounts,
+    selectedBankAccount,
+  ]);
 
   // Default payout options - fallback if paymentOptions is empty
   const defaultPayoutOptions = useMemo(
@@ -383,17 +455,17 @@ const BankTransfer = ({
   // Handle bank account selection
   const handleBankAccountSelect = (selectedOption) => {
     console.log("BankTransfer: Sila bank account selected:", selectedOption);
-
+    
     if (onBankAccountSelect) {
       onBankAccountSelect(selectedOption);
     }
-
+    
     // Also update Redux store if needed
     if (selectedOption) {
       dispatch(setSelectedBankAccount(selectedOption));
     }
-
-    toast.success(`Selected ${selectedOption?.account_name || "bank account"}`);
+    
+    toast.success(`Selected ${selectedOption?.account_name || 'bank account'}`);
   };
 
   // Handle beneficiary code lookup
@@ -508,9 +580,7 @@ const BankTransfer = ({
     return (
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <div className="flex justify-between items-center mb-3">
-          <h4 className="text-md font-semibold text-blue-800">
-            Selected Bank Account Details
-          </h4>
+          <h4 className="text-md font-semibold text-blue-800">Selected Bank Account Details</h4>
           <button
             type="button"
             onClick={() => setShowBankAccountInfo(!showBankAccountInfo)}
@@ -519,39 +589,29 @@ const BankTransfer = ({
             {showBankAccountInfo ? "Hide Details" : "Show Details"}
           </button>
         </div>
-
+        
         {showBankAccountInfo && (
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-gray-500">Account Name</p>
-                <p className="text-sm font-medium">
-                  {selectedBankAccount.account_name}
-                </p>
+                <p className="text-sm font-medium">{selectedBankAccount.account_name}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Provider</p>
-                <p className="text-sm font-medium">
-                  {selectedBankAccount.provider || "N/A"}
-                </p>
+                <p className="text-sm font-medium">{selectedBankAccount.provider || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Account Type</p>
-                <p className="text-sm font-medium">
-                  {selectedBankAccount.account_type || "N/A"}
-                </p>
+                <p className="text-sm font-medium">{selectedBankAccount.account_type || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Account Number</p>
-                <p className="text-sm font-medium">
-                  {selectedBankAccount.accountNumberHash || "****"}
-                </p>
+                <p className="text-sm font-medium">{selectedBankAccount.accountNumberHash || '****'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Routing Number</p>
-                <p className="text-sm font-medium">
-                  {selectedBankAccount.routing_number || "N/A"}
-                </p>
+                <p className="text-sm font-medium">{selectedBankAccount.routing_number || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Status</p>
@@ -561,22 +621,18 @@ const BankTransfer = ({
                       <FaCheckCircle className="mr-1" /> Verified
                     </span>
                   ) : (
-                    <span className="text-yellow-600">
-                      Pending Verification
-                    </span>
+                    <span className="text-yellow-600">Pending Verification</span>
                   )}
                 </p>
               </div>
             </div>
-
+            
             <div className="pt-3 border-t border-blue-200">
               <p className="text-xs text-gray-500 mb-1">Additional Info</p>
               <p className="text-xs text-gray-700">
-                This account will be used as the source for your bank transfer.
-                {selectedBankAccount.fednow_credit_enabled &&
-                  " Supports FedNow transfers."}
-                {selectedBankAccount.rtp_credit_enabled &&
-                  " Supports RTP transfers."}
+                This account will be used as the source for your bank transfer. 
+                {selectedBankAccount.fednow_credit_enabled && " Supports FedNow transfers."}
+                {selectedBankAccount.rtp_credit_enabled && " Supports RTP transfers."}
               </p>
             </div>
           </div>
@@ -584,120 +640,6 @@ const BankTransfer = ({
       </div>
     );
   };
-
-  // Transform Sila bank accounts for dropdown
-  const silaAccountOptions = useMemo(() => {
-    return (displayedSilaAccounts || []).map((account) => {
-      const accountName =
-        account.account_name || account.accountName || "Unknown Account";
-      const accountNumber =
-        account.accountNumberHash || account.account_number || "****";
-      const provider = account.provider || account.bank || "Unknown Bank";
-      const accountType =
-        account.account_type || account.accountType || "Checking";
-
-      return {
-        ...account,
-        value: account.id || account.account_id,
-        label: `${accountName} - ${provider}`,
-        fullLabel: `${accountName} - ${provider}`,
-        description: `${accountType} • ${accountNumber}`,
-        isDefault: account.is_default || false,
-        isVerified: account.web_debit_verified || false,
-        displayText: `${accountName} (${provider} - ${accountType})`,
-      };
-    });
-}, [displayedSilaAccounts]);
-
-  // Auto-select first Sila account if available and none selected
-  useEffect(() => {
-    if (
-      silaAccountOptions.length > 0 &&
-      !selectedBankAccount &&
-      onBankAccountSelect
-    ) {
-      const firstAccount = silaAccountOptions[0];
-      console.log("🔄 Auto-selecting first Sila account:", firstAccount);
-      onBankAccountSelect(firstAccount);
-    }
-  }, [silaAccountOptions, selectedBankAccount, onBankAccountSelect]);
-
-  // Debug logging
-  useEffect(() => {
-    console.log("BankTransfer Props Debug:", {
-      formDataPaymentMethod: formData?.paymentMethod,
-      hasOnFieldChange: !!onFieldChange,
-      purposeOptionsCount: purposeOptions?.length || 0,
-      incomeSourceOptionsCount: incomeSourceOptions?.length || 0,
-      paymentOptionsCount: paymentOptions?.length || 0,
-      relationOptionsCount: relationOptions?.length || 0,
-      formDataPurpose: formData?.purpose,
-      formDataIncomeSource: formData?.incomeSource,
-      formDataPayoutMethod: formData?.payout_method,
-      silaAccountsCount: displayedSilaAccounts?.length || 0,
-      hasSilaAccounts: displayedHasSilaAccounts,
-      selectedBankAccount: selectedBankAccount,
-    });
-  }, [
-    onFieldChange,
-    purposeOptions,
-    incomeSourceOptions,
-    paymentOptions,
-    relationOptions,
-    formData,
-    displayedSilaAccounts,
-    displayedHasSilaAccounts,
-    selectedBankAccount,
-    formData?.paymentMethod,
-  ]);
-
-  useEffect(() => {
-  console.log("🔍 BankTransfer - Sila Accounts Debug:", {
-    displayedSilaAccounts: displayedSilaAccounts?.length || 0,
-    displayedHasSilaAccounts,
-    displayedSilaAccountsLoading,
-    displayedSilaAccountsError,
-    selectedCurrency,
-    paymentMethod: formData?.paymentMethod,
-    shouldShowDropdown: displayedHasSilaAccounts && 
-                       selectedCurrency === "USD" && 
-                       formData?.paymentMethod === "bank"
-  });
-}, [
-  displayedSilaAccounts,
-  displayedHasSilaAccounts,
-  displayedSilaAccountsLoading,
-  displayedSilaAccountsError,
-  selectedCurrency,
-  formData?.paymentMethod
-]);
-
-useEffect(() => {
-  const customerId = paramCustomerId || localStorage.getItem("customerId");
-
-  if (customerId && !displayedSilaAccountsLoading) {
-    console.log(
-      "🔄 BankTransfer: Fetching Sila bank accounts via /sila/sila-bank-details"
-    );
-    dispatch(fetchUSDBankAccounts()) // ✅ Changed to fetchUSDBankAccounts
-      .unwrap()
-      .then((result) => {
-        console.log("✅ Sila bank accounts loaded:", result);
-      })
-      .catch((error) => {
-        console.error("❌ Failed to load Sila bank accounts:", error);
-      });
-  }
-}, [dispatch, paramCustomerId]);
-
-  useEffect(() => {
-    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
-      const firstBeneficiary = beneficiaries[0];
-      if (firstBeneficiary && onBeneficiarySelect) {
-        handleBeneficiarySelect(firstBeneficiary);
-      }
-    }
-  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
 
   return (
     <div className="space-y-6">
@@ -709,118 +651,105 @@ useEffect(() => {
 
         <div className="space-y-4">
           {/* Select Your Bank Account (Sila Accounts) */}
-          {displayedHasSilaAccounts &&
-            selectedCurrency === "USD" &&
-            formData.paymentMethod === "bank" && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Select Your Bank Account *
-                  </label>
-                  {displayedSilaAccountsLoading ? (
-                    <div className="flex items-center">
-                      <RingLoader size={20} color="#3b82f6" />
-                      <span className="ml-2 text-xs text-gray-500">
-                        Loading accounts...
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-500">
-                      {silaAccountOptions.length} account(s) available
-                    </span>
-                  )}
-                </div>
-
-                {displayedSilaAccountsError ? (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-600">
-                      {displayedSilaAccountsError}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const customerId =
-                          paramCustomerId ||
-                          localStorage.getItem("customerId") ||
-                          "1720";
-                        dispatch(fetchUSDBankAccounts());
-                      }}
-                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Retry
-                    </button>
+          {displayedHasSilaAccounts && selectedCurrency === "USD" && (
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Your Bank Account *
+                </label>
+                {displayedSilaAccountsLoading ? (
+                  <div className="flex items-center">
+                    <RingLoader size={20} color="#3b82f6" />
+                    <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
                   </div>
                 ) : (
-                  <>
-                    <Select
-                      options={silaAccountOptions}
-                      value={selectedBankAccount || null}
-                      onChange={handleBankAccountSelect}
-                      isLoading={displayedSilaAccountsLoading}
-                      classNamePrefix="select"
-                      styles={selectStyles}
-                      placeholder={
-                        displayedSilaAccountsLoading
-                          ? "Loading your bank accounts..."
-                          : silaAccountOptions.length === 0
-                          ? "No bank accounts found. Please link a bank account."
-                          : "Select your bank account..."
-                      }
-                      isSearchable
-                      getOptionLabel={(option) => (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">
-                              {option.account_name}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {option.provider} • {option.account_type}
-                              {option.web_debit_verified && (
-                                <span className="ml-2 text-green-600">
-                                  <FaCheckCircle className="inline mr-1" />
-                                  Verified
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {option.accountNumberHash}
-                          </div>
-                        </div>
-                      )}
-                      getOptionValue={(option) => option.value}
-                    />
-
-                    {selectedBankAccount && renderBankAccountInfo()}
-
-                    {silaAccountOptions.length === 0 &&
-                      !displayedSilaAccountsLoading && (
-                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <div className="flex items-start">
-                            <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2" />
-                            <div>
-                              <p className="text-sm text-yellow-800">
-                                No bank accounts found. Please link a bank
-                                account to proceed.
-                              </p>
-                              <button
-                                type="button"
-                                className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                                onClick={() => {
-                                  // You can add navigation to bank linking page here
-                                  toast.info("Redirecting to bank linking...");
-                                }}
-                              >
-                                Link a Bank Account
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                  </>
+                  <span className="text-xs text-gray-500">
+                    {silaAccountOptions.length} account(s) available
+                  </span>
                 )}
               </div>
-            )}
+              
+              {displayedSilaAccountsError ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{displayedSilaAccountsError}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
+                      dispatch(checkSilaBankAccounts(customerId));
+                    }}
+                    className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Select
+                    options={silaAccountOptions}
+                    value={selectedBankAccount || null}
+                    onChange={handleBankAccountSelect}
+                    isLoading={displayedSilaAccountsLoading}
+                    classNamePrefix="select"
+                    styles={selectStyles}
+                    placeholder={
+                      displayedSilaAccountsLoading
+                        ? "Loading your bank accounts..."
+                        : silaAccountOptions.length === 0
+                        ? "No bank accounts found. Please link a bank account."
+                        : "Select your bank account..."
+                    }
+                    isSearchable
+                    getOptionLabel={(option) => (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{option.account_name}</div>
+                          <div className="text-xs text-gray-500">
+                            {option.provider} • {option.account_type}
+                            {option.web_debit_verified && (
+                              <span className="ml-2 text-green-600">
+                                <FaCheckCircle className="inline mr-1" />
+                                Verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {option.accountNumberHash}
+                        </div>
+                      </div>
+                    )}
+                    getOptionValue={(option) => option.value}
+                  />
+                  
+                  {selectedBankAccount && renderBankAccountInfo()}
+                  
+                  {silaAccountOptions.length === 0 && !displayedSilaAccountsLoading && (
+                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start">
+                        <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2" />
+                        <div>
+                          <p className="text-sm text-yellow-800">
+                            No bank accounts found. Please link a bank account to proceed.
+                          </p>
+                          <button
+                            type="button"
+                            className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                            onClick={() => {
+                              // You can add navigation to bank linking page here
+                              toast.info("Redirecting to bank linking...");
+                            }}
+                          >
+                            Link a Bank Account
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Beneficiary Selection */}
           <div>

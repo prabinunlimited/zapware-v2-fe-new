@@ -58,9 +58,13 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           );
         }
 
+        // Get currency from account or fallback to currency parameter
+        const accountCurrency =
+          account.currency_code || account.currency || currency;
+
         let bankDetails = {
           rails: account.rails,
-          currency_code: account.currency || currency,
+          currency_code: accountCurrency, // Use account-specific currency
           payment_method: account.paymentMethod || "",
           benef_iban: account.iban || "",
           swift_code: account.swift || "",
@@ -79,6 +83,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           mobile_number: account.mobileNumber || "",
           account_type: account.accountType || "",
           other_provider: account.otherProvider || "",
+          bank_country: account.bankCountry || "",
         };
 
         // Transform based on rails type
@@ -86,82 +91,89 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           bankDetails = {
             ...bankDetails,
             rails: "Swift",
-            currency_code: account.currency || currency,
+            currency_code: accountCurrency, // Use account-specific currency
             payment_method: "swift",
             benef_iban: account.iban || "",
             swift_code: account.swift || "",
             intermediary_bank_swift: account.intermediarySwift || "",
+            bank_country: account.bankCountry || "",
           };
         } else if (account.rails === "Local") {
           // Handle different currencies for local transfers
-          if (currency === "USD") {
+          if (accountCurrency === "USD") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: account.paymentMethod || "ACH",
               routing_number: account.routingNumber || "",
               bank_acc_no: account.accountNumber || "",
               account_type: account.accountType || "",
               bankCode: account.routingNumber || "",
               swift_code: account.swift || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "INR") {
+          } else if (accountCurrency === "INR") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               account_type: account.accountType || "",
               bank_name: account.bankName || "",
               ifsc: account.ifsc || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "AED") {
+          } else if (accountCurrency === "AED") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               benef_iban: account.iban || "",
               bic_code: account.swift || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "EUR") {
+          } else if (accountCurrency === "EUR") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               benef_iban: account.iban || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "GBP" || currency === "DKK") {
+          } else if (accountCurrency === "GBP" || accountCurrency === "DKK") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               sort_code: account.sortCode || "",
+              bank_country: account.bankCountry || "",
             };
           } else {
             // Default local transfer structure for other currencies
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               bank_name: account.bankName || "",
               bankCode: account.bankCode || "",
               branchCode: account.branchCode || "",
               bankState: account.bankState || "",
+              bank_country: account.bankCountry || "",
             };
           }
         } else if (account.rails === "Mobile") {
           bankDetails = {
             ...bankDetails,
             rails: "Mobile",
-            currency_code: currency,
+            currency_code: accountCurrency, // Use account-specific currency
             payment_method: "mobile",
             mobile_number: account.mobileNumber || "",
             wallet_provider: account.walletProvider || "",
@@ -172,9 +184,11 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         return bankDetails;
       });
 
+      // Create the payload with currency_code at the root level
       const payload = {
         ...beneficiaryData,
         banks: banksPayload,
+        currency_code: currency, // ADD THIS: currency_code at root level
       };
 
       // Use country_phone_code instead of country_code

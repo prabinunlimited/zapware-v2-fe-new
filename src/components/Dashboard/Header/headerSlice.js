@@ -1,4 +1,4 @@
-// src/components/Dashboard/Header/headerSlice.js - COMPLETE WITH FIXES
+// src/components/Dashboard/Header/headerSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
@@ -78,13 +78,9 @@ export const fetchUserProfile = createAsyncThunk(
       if (response.data.status === "success") {
         const profile = response.data.profile;
 
-        // Store in localStorage for persistence
-        if (profile.first_name) {
-          localStorage.setItem("firstName", profile.first_name);
-        }
-        if (profile.last_name) {
-          localStorage.setItem("lastName", profile.last_name);
-        }
+        localStorage.setItem("firstName", profile.first_name);
+        localStorage.setItem("lastName", profile.last_name);
+        localStorage.setItem("middleName", profile.middle_name || "");
 
         return profile;
       } else {
@@ -168,7 +164,7 @@ const initialState = {
   },
   headerColor: localStorage.getItem("header_color") || "bg-sky-800",
   isWhitelabelledCustomer:
-    localStorage.getItem("whitelabelled_customer") || "N",
+    localStorage.getItem("isWhitelabelledCustomer") || "N",
   authtoken: localStorage.getItem("authtoken"),
   isStaffLogin: localStorage.getItem("is_staff_login"),
   staffRole: localStorage.getItem("staff_role"),
@@ -177,8 +173,9 @@ const initialState = {
   ownerRoleName: localStorage.getItem("owner_role_name"),
   staffId: localStorage.getItem("staff_id"),
   isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
-  // FIXED: Changed from whitelabelled_customer_partnerid to whitelabelledpartnerid
-  isWhitelabelledCustomerPartnerId: localStorage.getItem("whitelabelledpartnerid") || null,
+  isWhitelabelledCustomerPartnerId: localStorage.getItem(
+    "whitelabelled_customer_partnerid"
+  ),
   logoutTime: localStorage.getItem("logoutTime")
     ? parseInt(localStorage.getItem("logoutTime"), 10)
     : 180000,
@@ -206,7 +203,7 @@ const headerSlice = createSlice({
     updateLocalStorageState: (state) => {
       state.headerColor = localStorage.getItem("header_color") || "bg-sky-800";
       state.isWhitelabelledCustomer =
-        localStorage.getItem("whitelabelled_customer") || "N";
+        localStorage.getItem("isWhitelabelledCustomer") || "N";
       state.authtoken = localStorage.getItem("authtoken");
       state.isStaffLogin = localStorage.getItem("is_staff_login");
       state.staffRole = localStorage.getItem("staff_role");
@@ -217,8 +214,9 @@ const headerSlice = createSlice({
       state.isRemittanceOnlyCustomer = localStorage.getItem(
         "isRemittanceOnlyCustomer"
       );
-      // FIXED: Updated to use correct localStorage key
-      state.isWhitelabelledCustomerPartnerId = localStorage.getItem("whitelabelledpartnerid") || null;
+      state.isWhitelabelledCustomerPartnerId = localStorage.getItem(
+        "whitelabelled_customer_partnerid"
+      );
     },
     clearAuthData: (state) => {
       state.authtoken = null;
@@ -274,17 +272,6 @@ const headerSlice = createSlice({
       state.fetchStatus.charges = "idle";
       state.chargesData = [];
     },
-    // New action for debugging
-    logHeaderState: (state) => {
-      console.log("🔍 Header Slice State:", {
-        hasFxData: state.hasFxData,
-        fxCurrenciesCount: state.partnerFxCurrencies.length,
-        profileData: state.profileData ? 'Loaded' : 'Not loaded',
-        isWhitelabelledCustomerPartnerId: state.isWhitelabelledCustomerPartnerId,
-        isRemittanceOnlyCustomer: state.isRemittanceOnlyCustomer,
-        fetchStatus: state.fetchStatus
-      });
-    }
   },
   extraReducers: (builder) => {
     builder
@@ -328,7 +315,7 @@ const headerSlice = createSlice({
         state.fetchStatus.profile = "succeeded";
         state.profileError = null;
         state.isWhitelabelledCustomer =
-          localStorage.getItem("whitelabelled_customer") || "N";
+          localStorage.getItem("isWhitelabelledCustomer") || "N";
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
         state.profileLoading = false;
@@ -423,7 +410,6 @@ export const {
   forceRefreshProfile,
   forceRefreshFx,
   forceRefreshCharges,
-  logHeaderState,
 } = headerSlice.actions;
 
 export default headerSlice.reducer;

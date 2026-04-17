@@ -202,10 +202,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   // States
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(mode === "create" ? 0 : 1); // Start at step 0 for create mode
-
   const [beneficiariesLoaded, setBeneficiariesLoaded] = useState(false);
-  const [usingExistingBeneficiary, setUsingExistingBeneficiary] =
-    useState(false);
+  const [usingExistingBeneficiary, setUsingExistingBeneficiary] = useState(false);
 
   // Phone search state
   const [phoneInput, setPhoneInput] = useState("");
@@ -225,6 +223,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [branchCode, setBranchCode] = useState("");
   const [fieldTouched, setFieldTouched] = useState({});
   const [selectedCountryCode, setSelectedCountryCode] = useState("");
+
+  // Swift support function
+  const isSwiftSupportedForCurrency = (currency) => {
+    const swiftSupportedCurrencies = ["USD", "EUR", "GBP", "CAD"];
+    return swiftSupportedCurrencies.includes(currency);
+  };
 
   // Define steps array - ADD STEP 0 FOR PHONE SEARCH
   const steps =
@@ -274,10 +278,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     { value: "other", label: "Other" },
   ];
 
+  const swiftSupportedCurrencies = ["USD", "EUR", "GBP", "CAD"];
+
   const localCurrencies = [
     "AED",
     "AUD",
     "BDT",
+    "CAD",
     "DKK",
     "EUR",
     "GBP",
@@ -294,7 +301,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     if (mode === "edit" && initialData?.banks) {
       return initialData.banks.map((bank) => ({
         rails: bank.rails || "",
-        currency: bank.currency_code || currency,
         iban: bank.benef_iban || "",
         swift: bank.swift_code || "",
         intermediarySwift: bank.intermediary_bank_swift || "",
@@ -313,13 +319,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         otherProvider: bank.other_provider || "",
         accountType: bank.account_type || "",
         sortCode: bank.sort_code || "",
+        bankCountry: bank.bank_country || "",
       }));
     }
 
     return [
       {
         rails: "",
-        currency: currency,
         iban: "",
         swift: "",
         intermediarySwift: "",
@@ -338,6 +344,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         otherProvider: "",
         accountType: "",
         sortCode: "",
+        bankCountry: "",
       },
     ];
   });
@@ -459,13 +466,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   }, [dispatch, customerId, mode]);
 
-  useEffect(() => {
-    if (mode === "edit" && beneficiaryId && !initialData && isMounted.current) {
-      console.log("🔍 Fetching beneficiary data for edit:", beneficiaryId);
-      dispatch(fetchBeneficiaryById(beneficiaryId));
-    }
-  }, [mode, beneficiaryId, initialData, dispatch]);
-
   // Populate form when beneficiary data is loaded
   useEffect(() => {
     if (
@@ -528,11 +528,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             otherProvider: bank.other_provider || "",
             accountType: bank.account_type || "",
             sortCode: bank.sort_code || "",
+            bankCountry: bank.bank_country || "",
           }))
         );
       }
     }
-  }, [beneficiaryDetails, mode, initialData, formik.setValues, currency]);
+  }, [beneficiaryDetails, mode, initialData, formik.setValues, currency, paymentMethod]);
 
   // Fetch initial data
   useEffect(() => {
@@ -541,24 +542,29 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       dispatch(fetchNationalities());
       dispatch(fetchCountries());
 
-      if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
+      // Fetch banks based on currency
+      if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(currency)) {
         dispatch(
-          fetchBanksByCurrency({ currency: currency, bankType: "int-banks" })
+          fetchBanksByCurrency({ 
+            currency: currency, 
+            bankType: "int-banks" 
+          })
         );
       } else {
         dispatch(
           fetchBanksByCurrency({
             currency: currency,
-            bankType: "currency-payout-banks",
+            bankType: "currency-payout-banks"
           })
         );
       }
 
+      // Fetch ID types if needed
       if (["BDT", "INR", "PKR"].includes(currency)) {
         dispatch(fetchIdTypesByCurrency(currency));
       }
     }
-  }, [dispatch, currency, step]);
+  }, [step, dispatch, currency]);
 
   // Handle errors and success with navigation - FIXED with mounted check
   useEffect(() => {
@@ -666,6 +672,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       dispatch(fetchIdTypesByCurrency(newCurrency));
     }
 
+    // UPDATE THIS SECTION - Add CAD to the special handling
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
         fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
@@ -796,19 +803,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           }
         }, 0);
 
-        // Set currency if available
-        if (beneficiaryData.currency) {
-          setCurrency(beneficiaryData.currency);
-        }
-
         // Set bank accounts if available
         if (beneficiaryData.banks && beneficiaryData.banks.length > 0) {
           console.log("🏦 Setting bank accounts:", beneficiaryData.banks);
           setBankAccounts(
             beneficiaryData.banks.map((bank) => ({
               rails: bank.rails || "",
-              currency:
-                bank.currency_code || beneficiaryData.currency || currency,
               iban: bank.benef_iban || "",
               swift: bank.swift_code || "",
               intermediarySwift: bank.intermediary_bank_swift || "",
@@ -827,6 +827,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               otherProvider: bank.other_provider || "",
               accountType: bank.account_type || "",
               sortCode: bank.sort_code || "",
+              bankCountry: bank.bank_country || "",
             }))
           );
         }
@@ -854,7 +855,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     phoneInput,
     formik,
     nationalities,
-    currency,
     paymentMethod,
     dispatch,
     beneficiaries.length,
@@ -1043,6 +1043,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       return false;
     }
 
+    if (step === 1) {
+      // When moving from step 1 to step 2
+      const invalidSwiftAccounts = bankAccounts.filter(
+        (account) =>
+          account.rails === "Swift" &&
+          !isSwiftSupportedForCurrency(account.currency || currency)
+      );
+
+      if (invalidSwiftAccounts.length > 0) {
+        toast.error(
+          "SWIFT is not available for the selected currency(s). Please fix before proceeding."
+        );
+        return false;
+      }
+    }
+
     setStep(step + 1);
     return true;
   };
@@ -1071,6 +1087,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         bankCode: "",
         branchCode: branchCode,
         bankState: "",
+        bankCountry: "",
       },
     ]);
   };
@@ -1094,7 +1111,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     const isRailsMissing = bankAccounts.some((account) => !account.rails);
     console.log("🔴 DEBUG - Form validation check:");
     console.log("🔴 Rails missing?", isRailsMissing);
-    console.log("🔴 Currency:", currency);
     console.log("🔴 beneficiary_id_type:", formik.values.beneficiary_id_type);
     console.log(
       "🔴 beneficiary_id_number:",
@@ -1104,6 +1120,20 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     if (isRailsMissing) {
       console.log("❌ DEBUG - Early return due to missing rails");
       toast.error("Please select rails for all bank accounts.");
+      setLoading(false);
+      return;
+    }
+
+    const invalidSwiftAccounts = bankAccounts.filter(
+      (account) =>
+        account.rails === "Swift" &&
+        !isSwiftSupportedForCurrency(account.currency || currency)
+    );
+
+    if (invalidSwiftAccounts.length > 0) {
+      toast.error(
+        "SWIFT is not available for the selected currency(s). Please fix before proceeding."
+      );
       setLoading(false);
       return;
     }
@@ -1154,9 +1184,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       country_phone_code: cleanedCountryCode, // ADD THIS - include country code in payload
     };
 
+      const bankAccountsWithCurrency = bankAccounts.map(account => {
+    const accountCurrency = account.currency || currency;
+    return {
+      ...account,
+      currency_code: accountCurrency, // ADD THIS LINE
+    };
+  });
+
     console.log(`📤 Submitting beneficiary data (${mode}):`, beneficiaryData);
-    console.log("📤 Submitting bank accounts:", bankAccounts);
-    console.log("📤 Currency:", currency);
+    console.log("📤 Submitting bank accounts:", bankAccountsWithCurrency);
     console.log("📤 Country Code:", cleanedCountryCode); // Log the country code
 
     try {
@@ -1171,8 +1208,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               ...beneficiaryData,
               country_phone_code: cleanedCountryCode,
             },
-            bankAccounts,
-            currency,
+           bankAccounts: bankAccountsWithCurrency,
+           currency: currency,
             country_code: cleanedCountryCode,
           })
         ).unwrap();
@@ -1223,6 +1260,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               ...beneficiaryData,
               country_phone_code: cleanedCountryCode,
             },
+            bankAccounts: bankAccountsWithCurrency,
+            currency: currency,
           })
         ).unwrap();
 
@@ -1260,7 +1299,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       ...bankAccounts,
       {
         rails: "",
-        currency: currency,
         iban: "",
         swift: "",
         intermediarySwift: "",
@@ -1278,6 +1316,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         otherProvider: "",
         accountType: "",
         sortCode: "",
+        bankCountry: "",
       },
     ]);
   };
@@ -1317,15 +1356,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setBankAccounts(newBankAccounts);
   };
 
-  // Get banks for current currency
+  const handleCADBankAccountChange = async (index, field, value) => {
+    const newBankAccounts = [...bankAccounts];
+    newBankAccounts[index][field] = value;
+    setBankAccounts(newBankAccounts);
+
+    // If changing bank code, fetch branches for CAD
+    if (field === "bankCode") {
+      dispatch(fetchBankBranches(value));
+    }
+  };
+
   const getBanksForCurrency = useMemo(() => {
+    // UPDATE THIS: Add CAD to the list
     if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
       return banks[`${currency}_int`] || [];
     }
     return banks[currency] || [];
   }, [banks, currency]);
 
-  // Get ID types for current currency
   const getIdTypesForCurrency = useMemo(() => {
     if (Object.keys(idTypes).length === 0) {
       return [];
@@ -1456,7 +1505,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   );
 
   // Render bank account fields
-  // Render bank account fields
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
@@ -1537,7 +1585,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   ? "ACH"
                   : "Bank"}
               </option>
-              <option value="Swift">Swift</option>
+
+              {/* CONDITIONAL SWIFT OPTION */}
+              {isSwiftSupportedForCurrency(accountCurrency) ? (
+                <option value="Swift">Swift</option>
+              ) : (
+                <option value="Swift" disabled>
+                  Swift (Not available for {accountCurrency})
+                </option>
+              )}
+
               <option value="Mobile">Mobile</option>
             </select>
             {account.rails && (
@@ -1568,7 +1625,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 value={accountCurrency}
                 onChange={(e) => {
                   handleCurrencyChange(e);
-                  handleBankAccountChange(index, "currency", e.target.value);
                 }}
                 required
                 disabled={usingExistingBeneficiary}
@@ -1652,90 +1708,165 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         {/* SWIFT TRANSFERS */}
         {account.rails === "Swift" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="mb-4">
-              <FieldLabel required info="International Bank Account Number">
-                IBAN Number
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter IBAN number"
-                value={account.iban}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "iban", e.target.value)
-                }
-                required
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+          <div>
+            {isSwiftSupportedForCurrency(accountCurrency) ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Bank Country - MANDATORY for all */}
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Country
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCountry}
+                    onChange={(e) =>
+                      handleBankAccountChange(
+                        index,
+                        "bankCountry",
+                        e.target.value
+                      )
+                    }
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank Country --</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="mb-4">
-              <FieldLabel required info="Bank Identifier Code">
-                SWIFT Code
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter SWIFT code"
-                value={account.swift}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "swift", e.target.value)
-                }
-                required
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+                {/* SWIFT Code - MANDATORY for all */}
+                <div className="mb-4">
+                  <FieldLabel required info="Bank Identifier Code">
+                    SWIFT/BIC Code
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter SWIFT/BIC code"
+                    value={account.swift}
+                    onChange={(e) =>
+                      handleBankAccountChange(index, "swift", e.target.value)
+                    }
+                    required
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
 
-            <div className="mb-4 md:col-span-2">
-              <FieldLabel info="Only if your bank requires an intermediary">
-                Intermediary Bank SWIFT (Optional)
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
+                {/* CURRENCY-SPECIFIC FIELDS */}
+
+                {/* For EUR and GBP: IBAN */}
+                {(accountCurrency === "EUR" || accountCurrency === "GBP") && (
+                  <div className="mb-4">
+                    <FieldLabel
+                      required
+                      info="International Bank Account Number"
+                    >
+                      IBAN Number
+                    </FieldLabel>
+                    <input
+                      type="text"
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                        usingExistingBeneficiary
+                          ? "bg-gray-100 cursor-not-allowed"
+                          : ""
+                      }`}
+                      placeholder="Enter IBAN number"
+                      value={account.iban}
+                      onChange={(e) =>
+                        handleBankAccountChange(index, "iban", e.target.value)
+                      }
+                      required
+                      disabled={usingExistingBeneficiary}
+                      readOnly={usingExistingBeneficiary}
+                    />
+                  </div>
                 )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
-                  usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="Enter intermediary bank SWIFT"
-                value={account.intermediarySwift}
-                onChange={(e) =>
-                  handleBankAccountChange(
-                    index,
-                    "intermediarySwift",
-                    e.target.value
-                  )
-                }
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </div>
+
+                {/* For USD and CAD: Account Number */}
+                {(accountCurrency === "USD" || accountCurrency === "CAD") && (
+                  <div className="mb-4">
+                    <FieldLabel required>Bank Account Number</FieldLabel>
+                    <input
+                      type="text"
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                        usingExistingBeneficiary
+                          ? "bg-gray-100 cursor-not-allowed"
+                          : ""
+                      }`}
+                      placeholder="Enter account number"
+                      value={account.accountNumber}
+                      onChange={(e) =>
+                        handleBankAccountChange(
+                          index,
+                          "accountNumber",
+                          e.target.value
+                        )
+                      }
+                      required
+                      disabled={usingExistingBeneficiary}
+                      readOnly={usingExistingBeneficiary}
+                    />
+                  </div>
+                )}
+
+                {/* Intermediary Bank SWIFT - OPTIONAL for all */}
+                <div className="mb-4 md:col-span-2">
+                  <FieldLabel info="Only if your bank requires an intermediary">
+                    Intermediary Bank SWIFT (Optional)
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter intermediary bank SWIFT"
+                    value={account.intermediarySwift}
+                    onChange={(e) =>
+                      handleBankAccountChange(
+                        index,
+                        "intermediarySwift",
+                        e.target.value
+                      )
+                    }
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
+              </div>
+            ) : (
+              /* SHOW WARNING FOR UNSUPPORTED CURRENCIES */
+              <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-xl mb-6">
+                <div className="flex items-center text-yellow-700">
+                  <FaExclamationTriangle className="mr-3" size={24} />
+                  <div>
+                    <h3 className="font-bold text-lg">SWIFT Not Available</h3>
+                    <p className="text-sm">
+                      Currently, SWIFT is not available for the selected currency.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1837,6 +1968,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     disabled={usingExistingBeneficiary}
                     readOnly={usingExistingBeneficiary}
                   />
+                </div>
+
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Country
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCountry || ""}
+                    onChange={(e) => {
+                      handleBankAccountChange(
+                        index,
+                        "bankCountry",
+                        e.target.value
+                      );
+                    }}
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank Country --</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {account.paymentMethod === "ACH" && (
@@ -1968,6 +2134,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     readOnly={usingExistingBeneficiary}
                   />
                 </div>
+
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Country
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCountry || ""}
+                    onChange={(e) => {
+                      handleBankAccountChange(
+                        index,
+                        "bankCountry",
+                        e.target.value
+                      );
+                    }}
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank Country --</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -1999,6 +2200,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     disabled={usingExistingBeneficiary}
                     readOnly={usingExistingBeneficiary}
                   />
+                </div>
+
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Country
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCountry || ""}
+                    onChange={(e) => {
+                      handleBankAccountChange(
+                        index,
+                        "bankCountry",
+                        e.target.value
+                      );
+                    }}
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank Country --</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
@@ -2210,18 +2446,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         accountCurrency === "LKR" ||
                         accountCurrency === "AUD"
                       ) {
-                        handleBdtBankAccountChange(
-                          index,
-                          "bankCode",
-                          e.target.value
-                        );
+                        handleBdtBankAccountChange(index, "bankCode", e.target.value);
+                      } else if (accountCurrency === "CAD") {
+                        handleCADBankAccountChange(index, "bankCode", e.target.value);
                       } else {
-                        handlePkrBankAccountChange(
-                          index,
-                          "bankCode",
-                          e.target.value
-                        );
+                        handlePkrBankAccountChange(index, "bankCode", e.target.value);
                       }
+                      
                       const selectedBank = currentBanks.find(
                         (bank) => bank.bank_code === e.target.value
                       );
@@ -2229,7 +2460,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.bank_name
+                          selectedBank.bank_name || selectedBank.name
                         );
                       }
                     }}
@@ -2488,6 +2719,227 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     readOnly={usingExistingBeneficiary}
                   />
                 </div>
+
+                {["GBP", "EUR", "CAD"].includes(accountCurrency) && (
+                  <div className="mb-4">
+                    <FieldLabel required>
+                      Bank Country
+                      {usingExistingBeneficiary && (
+                        <span className="ml-1 text-xs text-gray-500">
+                          (Pre-filled)
+                        </span>
+                      )}
+                    </FieldLabel>
+                    <select
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                        usingExistingBeneficiary
+                          ? "bg-gray-100 cursor-not-allowed"
+                          : ""
+                      }`}
+                      value={account.bankCountry || ""}
+                      onChange={(e) => {
+                        handleBankAccountChange(
+                          index,
+                          "bankCountry",
+                          e.target.value
+                        );
+                      }}
+                      required
+                      disabled={usingExistingBeneficiary}
+                    >
+                      <option value="">-- Select Bank Country --</option>
+                      {countries.map((country) => (
+                        <option key={country.id} value={country.id}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CAD Local Transfer */}
+            {accountCurrency === "CAD" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Name
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCode}
+                    onChange={(e) => {
+                      // Use the new CAD handler
+                      handleCADBankAccountChange(
+                        index,
+                        "bankCode",
+                        e.target.value
+                      );
+                      // Find selected bank from CAD banks
+                      const selectedBank = currentBanks.find(
+                        (bank) =>
+                          bank.bank_code === e.target.value ||
+                          bank.code === e.target.value
+                      );
+                      if (selectedBank) {
+                        handleBankAccountChange(
+                          index,
+                          "bankName",
+                          selectedBank.bank_name || selectedBank.name
+                        );
+                      }
+                    }}
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank --</option>
+                    {currentBanks.map((bank) => (
+                      <option
+                        key={bank.bank_code || bank.code}
+                        value={bank.bank_code || bank.code}
+                      >
+                        {bank.bank_name || bank.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <FieldLabel required>
+                    Bank Country
+                    {usingExistingBeneficiary && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        (Pre-filled)
+                      </span>
+                    )}
+                  </FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.bankCountry}
+                    onChange={(e) => {
+                      handleBankAccountChange(
+                        index,
+                        "bankCountry",
+                        e.target.value
+                      );
+                    }}
+                    required
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Bank Country --</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <FieldLabel required>Account Number *</FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter account number"
+                    value={account.accountNumber}
+                    onChange={(e) =>
+                      handleBankAccountChange(
+                        index,
+                        "accountNumber",
+                        e.target.value
+                      )
+                    }
+                    required
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <FieldLabel>Bank Branch</FieldLabel>
+                  <select
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    value={account.branchCode}
+                    onChange={(e) => {
+                      handleCADBankAccountChange(
+                        index,
+                        "branchCode",
+                        e.target.value
+                      );
+                      // Find selected branch
+                      const selectedBranch = currentBankBranches.find(
+                        (branch) =>
+                          branch.branch_code === e.target.value ||
+                          branch.branch === e.target.value
+                      );
+                      if (selectedBranch) {
+                        handleBankAccountChange(
+                          index,
+                          "branchCode",
+                          selectedBranch.branch_code || selectedBranch.branch
+                        );
+                      }
+                    }}
+                    disabled={usingExistingBeneficiary}
+                  >
+                    <option value="">-- Select Branch --</option>
+                    {currentBankBranches.map((branch) => (
+                      <option
+                        key={branch.branch_code || branch.branch}
+                        value={branch.branch_code || branch.branch}
+                      >
+                        {branch.bank_branch_name || branch.branch_name} -
+                        {branch.branch_code || branch.branch}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Add Transit Number field for CAD */}
+                <div className="mb-4">
+                  <FieldLabel>Transit Number (Optional)</FieldLabel>
+                  <input
+                    type="text"
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${
+                      usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                    placeholder="Enter transit number"
+                    value={account.routingNumber}
+                    onChange={(e) =>
+                      handleBankAccountChange(
+                        index,
+                        "routingNumber",
+                        e.target.value
+                      )
+                    }
+                    disabled={usingExistingBeneficiary}
+                    readOnly={usingExistingBeneficiary}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -2631,7 +3083,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 className="text-sm"
                 classNamePrefix="select"
                 options={phoneCodeOptions}
-                placeholder="Code..."
+                placeholder="Search Country Code..."
                 isSearchable
                 onChange={(selectedOption) => {
                   setCountryCodeInput(selectedOption?.value || "+1");
@@ -2765,7 +3217,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     <div>
                       <span className="text-sm text-gray-500">Currency:</span>
                       <p className="font-medium">
-                        {phoneSearch.data.currency || "N/A"}
+                        {phoneSearch.data.banks?.[0]?.currency_code || "N/A"}
                       </p>
                     </div>
                   </div>
@@ -2991,7 +3443,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           {mode === "create" && step === 0 && renderPhoneSearchStep()}
 
           {/* STEP 1: Beneficiary Details */}
-          {/* STEP 1: Beneficiary Details */}
           {step === 1 && (
             <form
               onSubmit={(e) => {
@@ -3110,8 +3561,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
                 {/* Currency Selection */}
                 <div className="md:col-span-2">
-                  <FieldLabel info="Select the currency for transfers">
-                    Currency
+                  <FieldLabel required>
+                    Select Currency
                   </FieldLabel>
                   <div className="relative">
                     <select
@@ -3120,7 +3571,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           ? "bg-gray-100 cursor-not-allowed"
                           : ""
                       }`}
-                      value={currency}
                       onChange={handleCurrencyChange}
                       disabled={usingExistingBeneficiary}
                     >
@@ -3517,9 +3967,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Beneficiary ID Type (for specific currencies) */}
-                  {(currency === "BDT" ||
-                    currency === "INR" ||
-                    currency === "PKR") && (
+                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Type
@@ -3561,9 +4009,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   )}
 
                   {/* Beneficiary ID Number (for specific currencies) */}
-                  {(currency === "BDT" ||
-                    currency === "INR" ||
-                    currency === "PKR") && (
+                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Number

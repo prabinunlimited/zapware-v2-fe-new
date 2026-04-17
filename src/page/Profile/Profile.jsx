@@ -94,7 +94,7 @@ const Profile = () => {
     customerId: customerId,
     hasBearerToken: !!bearertoken,
     hasProfileFirstName: profileData?.first_name,
-    hasLocalStorageFirstName: localStorage.getItem("firstName")
+    hasLocalStorageFirstName: localStorage.getItem("firstName"),
   });
 
   // Local state for editing and additional data
@@ -147,7 +147,7 @@ const Profile = () => {
       if (!bearertoken || !customerId) {
         console.log("❌ Profile: Missing token or customerId", {
           bearertoken: !!bearertoken,
-          customerId: customerId
+          customerId: customerId,
         });
         return;
       }
@@ -156,7 +156,7 @@ const Profile = () => {
       if (profileData) {
         console.log("✅ Profile: Already have data in Redux", {
           firstName: profileData.first_name,
-          lastName: profileData.last_name
+          lastName: profileData.last_name,
         });
         return;
       }
@@ -175,7 +175,7 @@ const Profile = () => {
 
       // No data and not loading/error - fetch the profile
       console.log("🚀 Profile: Fetching profile data (missing in Redux)");
-      
+
       try {
         await dispatch(fetchUserProfile({ customerId, bearertoken }));
         console.log("✅ Profile: Successfully dispatched fetch");
@@ -185,7 +185,14 @@ const Profile = () => {
     };
 
     fetchProfileIfNeeded();
-  }, [profileData, profileLoading, profileError, customerId, bearertoken, dispatch]);
+  }, [
+    profileData,
+    profileLoading,
+    profileError,
+    customerId,
+    bearertoken,
+    dispatch,
+  ]);
   // =============== END FIX ===============
 
   // Fetch additional profile data that's not in Redux
@@ -431,7 +438,7 @@ const Profile = () => {
       const response = await axios.post(
         `${API_URL}/customers/update-profile`,
         requestData,
-        { headers: { Authorization: `Bearer ${authtoken}` } }
+        { headers: { Authorization: `Bearer ${authtoken}` } },
       );
 
       if (response.data.status === "success") {
@@ -470,7 +477,7 @@ const Profile = () => {
     if (!editableData.country_id) return false;
     if (countries.length > 0) {
       const selectedCountry = countries.find(
-        (c) => c.id.toString() === editableData.country_id.toString()
+        (c) => c.id.toString() === editableData.country_id.toString(),
       );
       return (
         selectedCountry?.name.toLowerCase() === "united states" ||
@@ -1166,8 +1173,8 @@ const Profile = () => {
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RingLoader size={60} color={"#3B82F6"} loading={true} />
+        <div className="flex flex-col items-center">
+          <RingLoader size={60} color="#3B82F6" loading={true} />
           <p className="mt-4 text-gray-600 text-lg">
             Loading profile information...
           </p>
@@ -1417,7 +1424,7 @@ const Profile = () => {
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {genders.find(
-                          (g) => g.id === displayProfileData.gender_id
+                          (g) => g.id === displayProfileData.gender_id,
                         )?.name || "N/A"}
                       </span>
                     )}
@@ -1773,7 +1780,7 @@ const Profile = () => {
                           <p className="text-xs text-gray-500">
                             Agreed:{" "}
                             {new Date(
-                              item.agreed_date_time
+                              item.agreed_date_time,
                             ).toLocaleDateString()}
                           </p>
                         </div>

@@ -209,9 +209,9 @@ export const selectIsFormValid = createSelector(
         return termsAccepted && !referralError && !agentError;
       }
 
-      // ========== UPDATED: API says "Only 1 currency allowed" ==========
-      const hasPackageSelection = selectedPackageCurrencies.length === 1;
-      
+      // ========== CHANGED: Allow multiple selections ==========
+      const hasPackageSelection = selectedPackageCurrencies.length >= 1;
+
       if (!hasPackageSelection) {
         return false;
       }
@@ -221,8 +221,9 @@ export const selectIsFormValid = createSelector(
 
       return hasPackageSelection && hasAcceptedTerms && hasNoErrors;
     } else {
-      // Regular mode validation
-      const hasSelection = selectedAccounts.length > 0 || remittanceOnlyAccepted;
+      // Regular mode validation remains the same
+      const hasSelection =
+        selectedAccounts.length > 0 || remittanceOnlyAccepted;
       const hasAcceptedTerms = termsAccepted;
       const hasNoErrors = !referralError && !agentError;
 

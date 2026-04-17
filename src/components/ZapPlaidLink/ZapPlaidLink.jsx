@@ -34,7 +34,7 @@ const customStyles = {
   },
 };
 
-const ZapPlaidLink = ({ onSuccess, onClose }) => {
+const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
   const dispatch = useDispatch();
   const { customerId } = useParams();
   const linkHandlerRef = useRef(null);
@@ -86,24 +86,26 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
   const showApiResponsePopup = (response) => {
     console.log("📤 showApiResponsePopup called with:", response);
     console.log("🔍 setApiResponse function:", setApiResponse);
-    
+
     // Check if setApiResponse is available
-    if (typeof setApiResponse === 'function') {
+    if (typeof setApiResponse === "function") {
       dispatch(
         setApiResponse({
           status: response.status,
           data: response.data,
           isError: response.isError || false,
           showModal: true,
-        })
+        }),
       );
     } else {
       console.error("❌ setApiResponse is not a function!");
       // Fallback: show result locally
       setLocalResult({
         success: response.isError ? false : true,
-        message: response.isError ? response.data?.error : "Operation completed",
-        error: response.isError ? response.data?.error : null
+        message: response.isError
+          ? response.data?.error
+          : "Operation completed",
+        error: response.isError ? response.data?.error : null,
       });
     }
   };
@@ -114,7 +116,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
         public_token,
         customerId,
         metadataAccounts: metadata.accounts,
-        metadataInstitution: metadata.institution
+        metadataInstitution: metadata.institution,
       });
 
       // Show loading state
@@ -125,7 +127,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
           public_token,
           accounts: metadata.accounts,
           customerId,
-        })
+        }),
       ).unwrap();
 
       console.log("✅ storePlaidData successful response:", {
@@ -134,14 +136,14 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
         successAccountsCount: saveResponse.success_accounts?.length || 0,
         failedAccountsCount: saveResponse.failed_accounts?.length || 0,
         message: saveResponse.message,
-        responseStructure: saveResponse
+        responseStructure: saveResponse,
       });
 
       // Store the result locally to show in this modal
       setLocalResult({
         ...saveResponse,
         success: true,
-        message: saveResponse.message || "Bank account successfully linked"
+        message: saveResponse.message || "Bank account successfully linked",
       });
 
       // Pass the entire API response to onSuccess callback
@@ -154,20 +156,18 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 
       // Clear any previous API responses
       dispatch(clearApiResponse());
-
     } catch (err) {
       console.error("❌ storePlaidData failed:", err);
-      
+
       // Show error in the modal
       const errorMessage = err.message || "Failed to link bank account";
-      
+
       // Set error result locally
       setLocalResult({
         success: false,
         message: errorMessage,
-        error: errorMessage
+        error: errorMessage,
       });
-      
     } finally {
       dispatch(setPlaidLoading(false));
     }
@@ -224,7 +224,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
         deleteLinkedBankAccount({
           account_id: accountId,
           user_handle: customerId,
-        })
+        }),
       ).unwrap();
 
       showApiResponsePopup({
@@ -247,14 +247,14 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
     dispatch(clearPlaidResult());
     dispatch(clearApiResponse());
     setLocalResult(null);
-    
+
     // Also close the modal
     if (onClose) onClose();
   };
 
   const renderAccountResult = () => {
     const displayResult = localResult || result;
-    
+
     if (!displayResult) return null;
 
     return (
@@ -262,7 +262,9 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
         {displayResult.message && (
           <div
             className={`${
-              displayResult.success ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+              displayResult.success
+                ? "bg-green-50 text-green-800"
+                : "bg-red-50 text-red-800"
             } text-center font-semibold p-4 rounded-md`}
           >
             {displayResult.message}
@@ -371,7 +373,8 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
                     </span>
                     <div>
                       <div className="font-medium">
-                        {account.account_name} ({account.account_id?.slice(0, 4)}
+                        {account.account_name} (
+                        {account.account_id?.slice(0, 4)}
                         ...{account.account_id?.slice(-4) || "N/A"})
                       </div>
                       <div className="text-sm text-red-600 mt-1">
@@ -470,51 +473,55 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
             <>
               <div className="mb-4">
                 <p className="text-gray-600 mb-4">
-                  Securely connect your bank account using Plaid. Your credentials are never stored and all connections are encrypted.
+                  Securely connect your bank account using Plaid. Your
+                  credentials are never stored and all connections are
+                  encrypted.
                 </p>
               </div>
-              <button
-                onClick={initializePlaid}
-                disabled={isLoading}
-                className="w-full flex justify-center items-center px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 disabled:opacity-50 shadow-md"
-              >
-                {isLoading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
+              {showButton && (
+                <button
+                  onClick={initializePlaid}
+                  disabled={isLoading}
+                  className="w-full flex justify-center items-center px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 disabled:opacity-50 shadow-md"
+                >
+                  {isLoading ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Connecting to Plaid...
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        viewBox="0 0 24 24"
                         fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Connecting to Plaid...
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    Continue to Plaid
-                  </>
-                )}
-              </button>
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                      Continue to Plaid
+                    </>
+                  )}
+                </button>
+              )}
             </>
           )}
         </>
@@ -561,6 +568,7 @@ const ZapPlaidLink = ({ onSuccess, onClose }) => {
 ZapPlaidLink.propTypes = {
   onSuccess: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
+  showButton: PropTypes.bool,
 };
 
 export default ZapPlaidLink;

@@ -3,6 +3,7 @@ import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
 import {
   FaCheck,
   FaExclamationTriangle,
@@ -69,20 +70,86 @@ import SuccessModal from "../../../components/PopupModal/SuccessModal";
 
 const BankLink = () => {
   const dispatch = useDispatch();
-  const { requestId } = useParams();
-  const { accessToken } = useParams();
+  const { requestId, customerId, accessToken } = useParams(); // Get ALL params from URL
   const location = useLocation();
   const navigate = useNavigate();
   const [expandedAccount, setExpandedAccount] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-  const [customerId, setCustomerId] = useState('0');
   const [callbackUrl, setCallbackUrl] = useState(null);
+  const [isLoadingCallbackUrl, setIsLoadingCallbackUrl] = useState(false);
+  const [callbackUrlError, setCallbackUrlError] = useState(null);
+
+  // API endpoint (optional - only for fetching callback_url if needed)
+  const API_BASE_URL = "https://zapware.unlimitedremit.com/api";
+
+  // Initialize authentication and fetch bank accounts
+  useEffect(() => {
+    if (customerId && accessToken) {
+      // Store the access token for API calls
+      if (!localStorage.getItem("authtoken")) {
+        localStorage.setItem("authtoken", accessToken);
+      }
+
+      // Fetch bank accounts directly - NO NEED for /link-bank-token call!
+      dispatch(fetchBankAccounts(customerId));
+
+      console.log("✅ Initialized with:", {
+        customerId,
+        hasToken: !!accessToken,
+        requestId,
+      });
+    }
+  }, [customerId, accessToken, dispatch]);
+
+  // Optional: Fetch callback_url if needed (non-blocking)
+  useEffect(() => {
+    const fetchCallbackUrl = async () => {
+      if (requestId && accessToken) {
+        try {
+          setIsLoadingCallbackUrl(true);
+          setCallbackUrlError(null);
+
+          const response = await axios.post(
+            `${API_BASE_URL}/link-bank-token`,
+            { requestId },
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+            }
+          );
+
+          if (response.data.status === "success") {
+            setCallbackUrl(response.data.data.callback_url);
+            console.log(
+              "✅ Callback URL loaded:",
+              response.data.data.callback_url
+            );
+          }
+        } catch (error) {
+          console.warn(
+            "⚠️ Could not fetch callback URL, continuing without it",
+            error
+          );
+          setCallbackUrlError(
+            "Callback URL not available, but you can still link accounts"
+          );
+        } finally {
+          setIsLoadingCallbackUrl(false);
+        }
+      }
+    };
+
+    // Fetch callback URL in background - don't block UI
+    fetchCallbackUrl();
+  }, [requestId, accessToken]);
 
   // Check if we should auto-open Plaid link (from card payment flow)
   const shouldAutoOpenPlaid = location.state?.autoOpenBankTab;
 
   useEffect(() => {
-    if (shouldAutoOpenPlaid) {
+    if (shouldAutoOpenPlaid && customerId) {
       setTimeout(() => {
         dispatch(setShowPlaidLink(true));
       }, 500);
@@ -107,13 +174,6 @@ const BankLink = () => {
   const totalPages = useSelector(selectTotalPages);
   const hasAccounts = useSelector(selectHasAccounts);
   const currentPage = useSelector(selectCurrentPage);
-
-  // Fetch bank accounts on component mount
-  useEffect(() => {
-    if (customerId) {
-      dispatch(fetchBankAccounts(customerId));
-    }
-  }, [customerId, dispatch]);
 
   // Event handlers
   const handleRefresh = useCallback(() => {
@@ -145,8 +205,12 @@ const BankLink = () => {
     if (!isProcessing && !isAddingAccount) {
       dispatch(setShowSuccessModal(false));
 
+      // If we have a callback URL, redirect to it
+      if (callbackUrl) {
+        window.location.href = callbackUrl;
+      }
       // If we came from card payment, offer to return
-      if (location.state?.returnToCard) {
+      else if (location.state?.returnToCard) {
         const returnToCard = window.confirm(
           "Bank account linked successfully! Would you like to return to card payment?"
         );
@@ -155,7 +219,14 @@ const BankLink = () => {
         }
       }
     }
-  }, [isProcessing, isAddingAccount, dispatch, location.state, navigate]);
+  }, [
+    isProcessing,
+    isAddingAccount,
+    dispatch,
+    location.state,
+    navigate,
+    callbackUrl,
+  ]);
 
   const handlePageChange = useCallback(
     (pageNumber) => {
@@ -835,6 +906,9 @@ const BankLink = () => {
     return stats;
   }, [bankAccounts]);
 
+  // Show callback URL warning if needed
+  const showCallbackUrlWarning = callbackUrlError && !callbackUrl;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-25 to-gray-50">
       {/* Main Container */}
@@ -908,183 +982,209 @@ const BankLink = () => {
           </div>
         </motion.header>
 
-        {/* Account Statistics Dashboard */}
-        {hasAccounts && (
+        {/* Callback URL Warning (non-blocking) */}
+        {showCallbackUrlWarning && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
+            className="mb-4 bg-yellow-50 border border-yellow-200 rounded-xl p-4"
           >
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Accounts</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {accountStats.total}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaBuilding className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">SILA Linked</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {accountStats.linkedToSila}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <FaLink className="text-green-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Plaid Linked</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {accountStats.plaidLinked}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-orange-50 rounded-lg">
-                    <FaShieldAlt className="text-orange-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Active</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {accountStats.active}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FaCheckCircle className="text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">Frozen</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {accountStats.frozen}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <FaSnowflake className="text-red-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Web Debit Verified</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {accountStats.webDebitVerified}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <FaCreditCard className="text-purple-600" />
-                  </div>
-                </div>
+            <div className="flex items-center">
+              <FaExclamationTriangle className="text-yellow-600 mr-3" />
+              <div>
+                <p className="text-yellow-800 font-medium">
+                  {callbackUrlError}
+                </p>
+                <p className="text-yellow-700 text-sm mt-1">
+                  You can still link bank accounts, but may not be redirected
+                  automatically.
+                </p>
               </div>
             </div>
           </motion.div>
         )}
 
-        <main className="pb-12">
-          {/* Enhanced Card Payment Banner */}
-          {showCardPaymentMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg"
-            >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start">
-                  <div className="mr-4 p-3 bg-white/20 rounded-xl">
-                    <FaCreditCard className="text-white text-2xl" />
-                  </div>
-                  <div className="text-white">
-                    <h3 className="text-xl font-bold mb-1">
-                      Complete Your Setup for Card Payments
-                    </h3>
-                    <p className="text-blue-100 opacity-90">
-                      Link a bank account to enable secure card deposits and
-                      instant transfers. Your account will be encrypted with
-                      bank-level security.
-                    </p>
-                  </div>
-                </div>
-                <FaArrowRight className="text-white/80 text-2xl hidden md:block" />
-              </div>
-            </motion.div>
-          )}
+        {/* Enhanced Loading State */}
+        {loading && !hasAccounts ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20"
+          >
+            <div className="relative">
+              <div className="w-24 h-24 border-4 border-gray-200 rounded-full"></div>
+              <div className="w-24 h-24 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
+            </div>
+            <p className="mt-8 text-xl font-semibold text-gray-900">
+              Loading Bank Account Details
+            </p>
+            <p className="text-gray-500 mt-3">
+              Fetching your financial information securely...
+            </p>
+            <div className="mt-6 flex items-center space-x-2">
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-75"></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-150"></div>
+            </div>
+          </motion.div>
+        ) : (
+          /* Account List Content */
+          <>
+            {/* Enhanced Plaid Link Modal */}
+            {showPlaidLink && (
+              <ZapPlaidLink
+                customerId={customerId}
+                onSuccess={handleBankLinkSuccessCallback}
+                onClose={() => {
+                  dispatch(setShowPlaidLink(false));
+                  dispatch(fetchBankAccounts(customerId)); // Refresh accounts after linking
+                }}
+                onError={(error) => {
+                  dispatch(clearErrors());
+                  dispatch(setShowPlaidLink(false));
+                }}
+                autoInitialize={true}
+              />
+            )}
 
-          {/* Enhanced Plaid Link Modal */}
-          {showPlaidLink && (
-            <ZapPlaidLink
-              customerId={customerId}
-              onSuccess={handleBankLinkSuccessCallback}
-              onClose={() => {
-                dispatch(setShowPlaidLink(false));
-                dispatch(fetchBankAccounts(customerId)); // Refresh accounts after linking
-              }}
-              onError={(error) => {
-                dispatch(clearErrors());
-                dispatch(setShowPlaidLink(false));
-                toast.error("Failed to connect bank account");
-              }}
-              autoInitialize={true} // This makes it invisible and auto-initializes Plaid
-            />
-          )}
-          
-          {/* Enhanced Success Modal */}
-          {showSuccessModal && apiResponse && (
-            <SuccessModal
-              response={apiResponse}
-              onClose={handleCloseSuccessModal}
-              isProcessing={isProcessing || isAddingAccount}
-            />
-          )}
+            {/* Enhanced Success Modal */}
+            {showSuccessModal && apiResponse && (
+              <SuccessModal
+                response={apiResponse}
+                onClose={handleCloseSuccessModal}
+                isProcessing={isProcessing || isAddingAccount}
+              />
+            )}
 
-          {/* Enhanced Loading State */}
-          {loading ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20"
-            >
-              <div className="relative">
-                <div className="w-24 h-24 border-4 border-gray-200 rounded-full"></div>
-                <div className="w-24 h-24 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
-              </div>
-              <p className="mt-8 text-xl font-semibold text-gray-900">
-                Loading Bank Account Details
-              </p>
-              <p className="text-gray-500 mt-3">
-                Fetching your financial information securely...
-              </p>
-              <div className="mt-6 flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-75"></div>
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-150"></div>
-              </div>
-            </motion.div>
-          ) : (
-            /* Account List Content */
-            <>
+            {/* Main Content */}
+            <main className="pb-12">
+              {/* Enhanced Card Payment Banner */}
+              {showCardPaymentMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-start">
+                      <div className="mr-4 p-3 bg-white/20 rounded-xl">
+                        <FaCreditCard className="text-white text-2xl" />
+                      </div>
+                      <div className="text-white">
+                        <h3 className="text-xl font-bold mb-1">
+                          Complete Your Setup for Card Payments
+                        </h3>
+                        <p className="text-blue-100 opacity-90">
+                          Link a bank account to enable secure card deposits and
+                          instant transfers. Your account will be encrypted with
+                          bank-level security.
+                        </p>
+                      </div>
+                    </div>
+                    <FaArrowRight className="text-white/80 text-2xl hidden md:block" />
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Account Statistics Dashboard */}
+              {hasAccounts && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-8"
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            Total Accounts
+                          </p>
+                          <p className="text-2xl font-bold text-gray-900">
+                            {accountStats.total}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                          <FaBuilding className="text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">SILA Linked</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {accountStats.linkedToSila}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-green-50 rounded-lg">
+                          <FaLink className="text-green-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">Plaid Linked</p>
+                          <p className="text-2xl font-bold text-orange-600">
+                            {accountStats.plaidLinked}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-orange-50 rounded-lg">
+                          <FaShieldAlt className="text-orange-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">Active</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {accountStats.active}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                          <FaCheckCircle className="text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-500">Frozen</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {accountStats.frozen}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-red-50 rounded-lg">
+                          <FaSnowflake className="text-red-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            Web Debit Verified
+                          </p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {accountStats.webDebitVerified}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-purple-50 rounded-lg">
+                          <FaCreditCard className="text-purple-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {hasAccounts ? (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -1225,9 +1325,9 @@ const BankLink = () => {
                   />
                 </motion.div>
               )}
-            </>
-          )}
-        </main>
+            </main>
+          </>
+        )}
       </div>
     </div>
   );

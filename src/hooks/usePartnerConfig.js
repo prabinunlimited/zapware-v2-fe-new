@@ -1,12 +1,10 @@
-// src/hooks/usePartnerConfig.js - UPDATED FOR authService INTEGRATION
-import { useSelector, useDispatch } from "react-redux";
-import { useEffect, useRef, useMemo, useState, useCallback } from "react";
-import {
-  fetchPartnerBasicSetup,
+import { useSelector, useDispatch } from 'react-redux';
+import { useEffect, useRef } from 'react';
+import { 
+  fetchPartnerBasicSetup, 
   fetchPartnerDetails,
-  syncWithLocalStorage,
-  selectPartnerBasicConfig,
-  selectPartnerBasicConfigLoading,
+  selectPartnerBasicConfig, 
+  selectPartnerBasicConfigLoading, 
   selectPartnerBasicConfigError,
   selectPartnerDetails,
   selectPartnerDetailsLoading,
@@ -18,138 +16,76 @@ import {
   selectPartnerLogo,
   selectPartnerName,
   selectHasPartnerLogo,
-  selectIsPartnerPackageModule,
-  selectShowRemittanceOnlyOnRegistration,
-  selectBeneficiaryPortalTitle,
-  selectPartnerUUID,
-} from "../features/Auth/slices/partnerSlice";
+  setBasicConfig,
+  setBasicConfigError,
+  setPartnerDetails,
+  setPartnerDetailsError
+} from '../features/Auth/slices/partnerSlice';
 
-// Import default logo
-import DefaultLogo from "../assets/images/Logo/unlimited remit logo.png";
+// Global flags to prevent multiple fetches across components
+let isFetchingBasicConfig = false;
+let isFetchingPartnerDetails = false;
 
-// Helper function with retry logic
-const fetchWithRetry = async (fetchFunction, maxRetries = 3, delay = 2000) => {
-  let lastError;
+// Helper function to get auth token
+const getAuthToken = () => {
+  // Check localStorage for tokens
+  const bearertoken = localStorage.getItem("bearertoken");
+  const authtoken = localStorage.getItem("authtoken");
+  
+  const isValidToken = (token) => 
+    token &&
+    token !== "undefined" &&
+    token !== "null" &&
+    token !== "false" &&
+    typeof token === "string" &&
+    token.length > 10;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await fetchFunction();
-      console.log(`✅ Fetch attempt ${attempt} succeeded`);
-      return result;
-    } catch (error) {
-      lastError = error;
-      console.warn(`⚠️ Fetch attempt ${attempt} failed:`, error.message);
+  if (isValidToken(bearertoken)) return bearertoken;
+  if (isValidToken(authtoken)) return authtoken;
+  
+  return null;
+};
 
-      if (attempt < maxRetries) {
-        console.log(`⏳ Retrying in ${delay}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        // Exponential backoff
-        delay *= 1.5;
-      }
+// Helper to get partner ID from localStorage
+const getPartnerId = () => {
+  let partnerId = localStorage.getItem("whitelabelledpartnerid");
+  
+  if (!partnerId || partnerId === "0") {
+    partnerId = localStorage.getItem("whitelabelled_customer_partnerid");
+    console.log("Falling back to whitelabelled_customer_partnerid:", partnerId);
+
+    if (partnerId && partnerId !== "0") {
+      localStorage.setItem("whitelabelledpartnerid", partnerId);
     }
   }
 
-  throw lastError || new Error("All retry attempts failed");
+  return partnerId;
 };
 
-// Helper to check if authService has already stored partner data
-const hasAuthServiceData = () => {
-  const partnerId = localStorage.getItem("whitelabelledpartnerid");
-  const isWhiteLabelled =
-    localStorage.getItem("is_white_labelled_partner") ||
-    localStorage.getItem("iswhitelabelledpartner");
-
-  return !!(
-    partnerId &&
-    partnerId !== "0" &&
-    partnerId !== "null" &&
-    isWhiteLabelled
-  );
+// Helper to check cache validity
+const isCacheValid = (cacheTimestampKey, maxAge = 300000) => {
+  const timestamp = localStorage.getItem(cacheTimestampKey);
+  return timestamp && (Date.now() - parseInt(timestamp) < maxAge);
 };
 
-// Helper to get authService data
-const getAuthServiceData = () => {
-  return {
-    is_white_labelled_partner:
-      localStorage.getItem("is_white_labelled_partner") || "N",
-    partner_id: localStorage.getItem("whitelabelledpartnerid") || "0",
-    partner_uuid: localStorage.getItem("partner_uuid") || "",
-    isPartnerPackageModule:
-      localStorage.getItem("isPartnerPackageModule") || "N",
-    showRemittanceOnlyOnRegistration:
-      localStorage.getItem("showRemittanceOnlyOnRegistration") || "N",
-    beneficiary_portal_title:
-      localStorage.getItem("beneficiary_portal_title") || "",
-    partner_name: localStorage.getItem("partner_name") || "",
-  };
-};
-
-// Main hook with fixes
 export const usePartnerConfig = () => {
   const dispatch = useDispatch();
-
-  // Use a stable mount ID
-  const mountId = useMemo(() => {
-    return `mount-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
-  }, []);
-
-  // Use refs for tracking state
-  const hasRunInitialEffect = useRef(false);
-  const fetchTimeoutRef = useRef(null);
-  const retryCount = useRef(0);
-
-  // Memoize token and partner ID with validation
-  const authtoken = useMemo(() => {
-    try {
-      const bearertoken = localStorage.getItem("bearertoken");
-      const authtoken = localStorage.getItem("authtoken");
-
-      const isValidToken = (token) =>
-        token &&
-        token !== "undefined" &&
-        token !== "null" &&
-        token !== "false" &&
-        typeof token === "string" &&
-        token.length > 10;
-
-      if (isValidToken(bearertoken)) return bearertoken;
-      if (isValidToken(authtoken)) return authtoken;
-      return null;
-    } catch (error) {
-      console.error("Error getting auth token:", error);
-      return null;
-    }
-  }, []);
-
-  const partnerId = useMemo(() => {
-    try {
-      // First check the primary key from authService
-      let partnerId = localStorage.getItem("whitelabelledpartnerid");
-
-      if (!partnerId || partnerId === "0") {
-        // Fallback to old key
-        partnerId = localStorage.getItem("whitelabelled_customer_partnerid");
-        if (partnerId && partnerId !== "0") {
-          localStorage.setItem("whitelabelledpartnerid", partnerId);
-        }
-      }
-
-      return partnerId;
-    } catch (error) {
-      console.error("Error getting partner ID:", error);
-      return null;
-    }
-  }, []);
-
-  // Redux selectors - ADD NEW SELECTORS
+  const basicConfigAttempted = useRef(false);
+  const partnerDetailsAttempted = useRef(false);
+  
+  // Get token and partner ID
+  const authtoken = getAuthToken();
+  const partnerId = getPartnerId();
+  
+  // Redux selectors
   const config = useSelector(selectPartnerBasicConfig);
-  const configLoading = useSelector(selectPartnerBasicConfigLoading);
-  const configError = useSelector(selectPartnerBasicConfigError);
-
+  const loading = useSelector(selectPartnerBasicConfigLoading);
+  const error = useSelector(selectPartnerBasicConfigError);
+  
   const partnerDetails = useSelector(selectPartnerDetails);
   const partnerDetailsLoading = useSelector(selectPartnerDetailsLoading);
   const partnerDetailsError = useSelector(selectPartnerDetailsError);
-
+  
   const headerColor = useSelector(selectHeaderColor);
   const textColor = useSelector(selectTextColor);
   const downloadManualEnabled = useSelector(selectDownloadManualEnabled);
@@ -158,391 +94,235 @@ export const usePartnerConfig = () => {
   const partnerName = useSelector(selectPartnerName);
   const hasLogo = useSelector(selectHasPartnerLogo);
 
-  // NEW: Selectors for authService fields
-  const isPartnerPackageModule = useSelector(selectIsPartnerPackageModule);
-  const showRemittanceOnlyOnRegistration = useSelector(
-    selectShowRemittanceOnlyOnRegistration
-  );
-  const beneficiaryPortalTitle = useSelector(selectBeneficiaryPortalTitle);
-  const partnerUUID = useSelector(selectPartnerUUID);
-
-  // Local state
-  const [isFetching, setIsFetching] = useState(false);
-  const [localLogoUrl, setLocalLogoUrl] = useState(null);
-  const [localPartnerName, setLocalPartnerName] = useState(null);
-  const [isInitialFetchComplete, setIsInitialFetchComplete] = useState(false);
-  const [fetchError, setFetchError] = useState(null);
-  const [hasAuthServiceLoaded, setHasAuthServiceLoaded] = useState(false);
-
-  // Check if authService has loaded partner data
+  // Fetch basic partner config (colors, settings)
   useEffect(() => {
-    const checkAuthServiceData = () => {
-      const hasData = hasAuthServiceData();
-      setHasAuthServiceLoaded(hasData);
-
-      if (hasData) {
-        console.log(`✅ ${mountId}: authService has loaded partner data`);
-        // Sync Redux with localStorage
-        dispatch(syncWithLocalStorage());
-      }
-    };
-
-    checkAuthServiceData();
-
-    // Listen for storage changes (in case authService updates localStorage later)
-    const handleStorageChange = (e) => {
-      if (
-        e.key === "whitelabelledpartnerid" ||
-        e.key === "is_white_labelled_partner"
-      ) {
-        checkAuthServiceData();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [dispatch, mountId]);
-
-  // Check localStorage for fallback values - UPDATED
-  useEffect(() => {
-    if (!logoUrl) {
-      const storedLogo = localStorage.getItem("partner_logo");
-      if (storedLogo) {
-        setLocalLogoUrl(storedLogo);
+    // Don't fetch if already attempted in this session
+    if (basicConfigAttempted.current) return;
+    
+    // ========== 1. CHECK LOCALSTORAGE CACHE FIRST ==========
+    const cachedConfig = localStorage.getItem("partnerConfig");
+    const isCacheValidBasic = isCacheValid("partnerConfigTimestamp", 300000); // 5 minutes
+    
+    if (cachedConfig && isCacheValidBasic && !config) {
+      try {
+        const parsedConfig = JSON.parse(cachedConfig);
+        console.log("📦 Using cached partner config from localStorage");
+        dispatch(setBasicConfig(parsedConfig));
+      } catch (e) {
+        console.error("Failed to parse cached partner config:", e);
       }
     }
-
-    if (!partnerName || partnerName === "Partner Portal") {
-      // Check multiple sources for partner name
-      const sources = [
-        localStorage.getItem("partner_name"), // New authService key
-        localStorage.getItem("whitelabelled_customer_partnername"), // Old key
-        localStorage.getItem("hostname_partner_name"), // Alternative key
-      ];
-
-      for (const source of sources) {
-        if (
-          source &&
-          source !== "Partner Portal" &&
-          source !== "undefined" &&
-          source !== "null"
-        ) {
-          setLocalPartnerName(source);
-          break;
-        }
-      }
-    }
-  }, [logoUrl, partnerName]);
-
-  // ========== UPDATED FETCH LOGIC ==========
-  useEffect(() => {
-    // Clear any existing timeout
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = null;
-    }
-
-    fetchTimeoutRef.current = setTimeout(() => {
-      const currentPartnerId = localStorage.getItem("whitelabelledpartnerid");
-      const isWhiteLabelled = localStorage.getItem("is_white_labelled_partner");
-
-      console.log(`🔍 ${mountId}: Partner fetch check:`, {
-        partnerId: currentPartnerId,
-        isWhiteLabelled: isWhiteLabelled,
-        hasAuthServiceData: hasAuthServiceData(),
-        hostname: window.location.hostname,
+    
+    // ========== 2. CHECK IF WE SHOULD FETCH BASIC CONFIG ==========
+    const shouldFetchBasicConfig = 
+      partnerId && 
+      partnerId !== "0" && 
+      !config && 
+      !loading && 
+      !isFetchingBasicConfig &&
+      authtoken;
+    
+    if (shouldFetchBasicConfig) {
+      basicConfigAttempted.current = true;
+      isFetchingBasicConfig = true;
+      
+      console.log("🔄 Fetching partner basic config with:", {
+        partnerId,
+        hasToken: !!authtoken,
+        hasConfig: !!config,
+        isFetchingBasicConfig
       });
-
-      // ✅ Check if we should fetch at all
-      const shouldFetch =
-        currentPartnerId &&
-        currentPartnerId !== "0" &&
-        currentPartnerId !== "undefined" &&
-        currentPartnerId !== "null";
-
-      if (!shouldFetch) {
-        console.log(`⏳ ${mountId}: No valid partner ID found, skipping fetch`);
-        setIsInitialFetchComplete(true);
-        return;
-      }
-
-      // ✅ IMPORTANT: Sync Redux with localStorage first (authService may have updated it)
-      dispatch(syncWithLocalStorage());
-
-      // ✅ Check cache validity
-      const isCacheValid = (cacheTimestampKey, maxAge = 300000) => {
-        try {
-          const timestamp = localStorage.getItem(cacheTimestampKey);
-          if (!timestamp) return false;
-          const age = Date.now() - parseInt(timestamp);
-          return age < maxAge;
-        } catch {
-          return false;
+      
+      // Set a timeout to reset the global flag if fetch takes too long
+      const timeoutId = setTimeout(() => {
+        if (isFetchingBasicConfig) {
+          console.warn("Partner basic config fetch taking too long, resetting global flag");
+          isFetchingBasicConfig = false;
         }
-      };
-
-      const cachedConfig = localStorage.getItem("partnerConfig");
-      const cachedDetails = localStorage.getItem("partnerDetails");
-
-      const isConfigCacheValid = isCacheValid("partnerConfigTimestamp");
-      const isDetailsCacheValid = isCacheValid("partnerDetailsTimestamp");
-
-      // ✅ Check if we have fresh cache
-      const hasFreshCache =
-        cachedConfig &&
-        cachedDetails &&
-        isConfigCacheValid &&
-        isDetailsCacheValid;
-
-      // ✅ Check if we already have partner data from authService
-      const hasCompleteAuthServiceData = hasAuthServiceData();
-
-      // ✅ DECISION: Should we fetch fresh data?
-      // We'll fetch if:
-      // 1. We don't have fresh cache AND
-      // 2. We need additional data (colors, logo, etc.)
-      const shouldFetchFreshData =
-        !hasFreshCache || !localStorage.getItem("partner_logo");
-
-      if (!shouldFetchFreshData && hasCompleteAuthServiceData) {
-        console.log(`📦 ${mountId}: Using cached data + authService data`);
-        setIsInitialFetchComplete(true);
-        return;
-      }
-
-      // ✅ Fetch fresh data
-      console.log(
-        `🚀 ${mountId}: Fetching partner data for ID ${currentPartnerId}`
-      );
-      setIsFetching(true);
-
-      const fetchData = async () => {
-        try {
-          // Fetch basic setup and details in parallel
-          await Promise.allSettled([
-            dispatch(fetchPartnerBasicSetup()).unwrap(),
-            dispatch(fetchPartnerDetails()).unwrap(),
-          ]);
-
-          console.log(
-            `✅ ${mountId}: Partner data fetched for ID ${currentPartnerId}`
-          );
-        } catch (error) {
-          console.error(
-            `❌ ${mountId}: Fetch error for partner ${currentPartnerId}:`,
-            error.message
-          );
-          setFetchError(error.message || "Fetch failed");
-
-          // Even if fetch fails, we might have authService data
-          if (hasCompleteAuthServiceData) {
-            console.log(`🔄 ${mountId}: Falling back to authService data`);
+      }, 10000);
+      
+      dispatch(fetchPartnerBasicSetup())
+        .unwrap()
+        .then(() => {
+          console.log("✅ Partner basic config fetched successfully");
+        })
+        .catch((err) => {
+          console.error("❌ Partner basic config fetch failed:", err);
+          
+          // Fallback to localStorage if available
+          if (cachedConfig) {
+            try {
+              const parsedConfig = JSON.parse(cachedConfig);
+              console.log("🔄 Falling back to cached basic config due to fetch error");
+              dispatch(setBasicConfig(parsedConfig));
+              dispatch(setBasicConfigError(null)); // Clear error since we have cache
+            } catch (e) {
+              console.error("Failed to parse cached basic config:", e);
+            }
           }
-        } finally {
-          setIsFetching(false);
-          setIsInitialFetchComplete(true);
+        })
+        .finally(() => {
+          isFetchingBasicConfig = false;
+          clearTimeout(timeoutId);
+        });
+    } else {
+      console.log("🔍 Partner basic config fetch not needed:", {
+        partnerId,
+        hasConfig: !!config,
+        loading,
+        isFetchingBasicConfig,
+        hasToken: !!authtoken
+      });
+    }
+  }, [config, loading, dispatch, partnerId, authtoken]);
+
+  // Fetch partner details (logo, name, etc.)
+  useEffect(() => {
+    // Don't fetch if already attempted in this session
+    if (partnerDetailsAttempted.current) return;
+    
+    // ========== 1. CHECK LOCALSTORAGE CACHE FIRST ==========
+    const cachedDetails = localStorage.getItem("partnerDetails");
+    const isCacheValidDetails = isCacheValid("partnerDetailsTimestamp", 300000); // 5 minutes
+    
+    if (cachedDetails && isCacheValidDetails && !partnerDetails) {
+      try {
+        const parsedDetails = JSON.parse(cachedDetails);
+        console.log("📦 Using cached partner details from localStorage");
+        dispatch(setPartnerDetails(parsedDetails));
+      } catch (e) {
+        console.error("Failed to parse cached partner details:", e);
+      }
+    }
+    
+    // ========== 2. CHECK IF WE SHOULD FETCH PARTNER DETAILS ==========
+    const shouldFetchPartnerDetails = 
+      partnerId && 
+      partnerId !== "0" && 
+      !partnerDetails && 
+      !partnerDetailsLoading && 
+      !isFetchingPartnerDetails &&
+      authtoken;
+    
+    if (shouldFetchPartnerDetails) {
+      partnerDetailsAttempted.current = true;
+      isFetchingPartnerDetails = true;
+      
+      console.log("🔄 Fetching partner details with:", {
+        partnerId,
+        hasToken: !!authtoken,
+        hasDetails: !!partnerDetails,
+        isFetchingPartnerDetails
+      });
+      
+      // Set a timeout to reset the global flag if fetch takes too long
+      const timeoutId = setTimeout(() => {
+        if (isFetchingPartnerDetails) {
+          console.warn("Partner details fetch taking too long, resetting global flag");
+          isFetchingPartnerDetails = false;
         }
-      };
-
-      fetchData();
-    }, 800); // Slightly longer delay to ensure authService has time
-
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-    };
-  }, [dispatch, mountId]);
-
-  // Determine if we're actually loading
-  const isLoading = useMemo(() => {
-    // If we have authService data and initial fetch is complete, we're not loading
-    if (hasAuthServiceLoaded && isInitialFetchComplete) return false;
-
-    // Otherwise, show loading if any of these are true
-    return configLoading || partnerDetailsLoading || isFetching;
-  }, [
-    configLoading,
-    partnerDetailsLoading,
-    isFetching,
-    isInitialFetchComplete,
-    hasAuthServiceLoaded,
-  ]);
-
-  // Get final values with fallbacks - UPDATED
-  const finalLogoUrl = useMemo(() => {
-    // Check multiple sources in priority order
-    const sources = [
-      localStorage.getItem("partner_logo"), // Primary source
-      logoUrl, // From Redux
-      localLogoUrl, // Local state
-    ];
-
-    for (const source of sources) {
-      if (source && typeof source === "string" && source.length > 0) {
-        return source;
-      }
+      }, 10000);
+      
+      dispatch(fetchPartnerDetails())
+        .unwrap()
+        .then(() => {
+          console.log("✅ Partner details fetched successfully");
+        })
+        .catch((err) => {
+          console.error("❌ Partner details fetch failed:", err);
+          
+          // Fallback to localStorage if available
+          if (cachedDetails) {
+            try {
+              const parsedDetails = JSON.parse(cachedDetails);
+              console.log("🔄 Falling back to cached partner details due to fetch error");
+              dispatch(setPartnerDetails(parsedDetails));
+              dispatch(setPartnerDetailsError(null)); // Clear error since we have cache
+            } catch (e) {
+              console.error("Failed to parse cached partner details:", e);
+            }
+          }
+        })
+        .finally(() => {
+          isFetchingPartnerDetails = false;
+          clearTimeout(timeoutId);
+        });
+    } else {
+      console.log("🔍 Partner details fetch not needed:", {
+        partnerId,
+        hasDetails: !!partnerDetails,
+        partnerDetailsLoading,
+        isFetchingPartnerDetails,
+        hasToken: !!authtoken
+      });
     }
+  }, [partnerDetails, partnerDetailsLoading, dispatch, partnerId, authtoken]);
 
-    return null;
-  }, [logoUrl, localLogoUrl]);
-
-  // Get partner name with better fallbacks - UPDATED
-  const finalPartnerName = useMemo(() => {
-    // Check multiple sources in priority order
-    const sources = [
-      localStorage.getItem("partner_name"), // New authService key
-      localStorage.getItem("hostname_partner_name"),
-      partnerName, // From Redux
-      localStorage.getItem("whitelabelled_customer_partnername"),
-      localPartnerName, // Local state
-      "Partner Portal", // Default
-    ];
-
-    for (const source of sources) {
-      if (
-        source &&
-        source !== "Partner Portal" &&
-        source !== "undefined" &&
-        source !== "null" &&
-        source.trim() !== ""
-      ) {
-        return source;
-      }
+  // Manual refresh functions
+  const refreshBasicConfig = () => {
+    if (partnerId && partnerId !== "0" && authtoken) {
+      console.log("🔃 Manually refreshing partner basic config");
+      basicConfigAttempted.current = false;
+      isFetchingBasicConfig = false;
+      dispatch(fetchPartnerBasicSetup());
+    } else {
+      console.warn("Cannot refresh partner basic config - missing partnerId or auth token");
     }
-
-    return "Partner Portal";
-  }, [partnerName, localPartnerName]);
-
-  // Get beneficiary portal title
-  const finalBeneficiaryPortalTitle = useMemo(() => {
-    return (
-      beneficiaryPortalTitle ||
-      localStorage.getItem("beneficiary_portal_title") ||
-      "Beneficiary Portal"
-    );
-  }, [beneficiaryPortalTitle]);
-
-  // Return the default logo for fallback
-  const getLogoFallback = () => {
-    return DefaultLogo;
   };
 
-  // Check if we should show remittance only
-  const shouldShowRemittanceOnlyOnRegistration = useMemo(() => {
-    return (
-      showRemittanceOnlyOnRegistration === "Y" ||
-      localStorage.getItem("showRemittanceOnlyOnRegistration") === "Y"
-    );
-  }, [showRemittanceOnlyOnRegistration]);
-
-  // Check if partner package module is enabled
-  const isPartnerPackageModuleEnabled = useMemo(() => {
-    return (
-      isPartnerPackageModule === "Y" ||
-      localStorage.getItem("isPartnerPackageModule") === "Y"
-    );
-  }, [isPartnerPackageModule]);
-
-  // Refresh functions - UPDATED
-  const refreshBasicConfig = useCallback(() => {
-    const partnerId = localStorage.getItem("whitelabelledpartnerid");
-    if (partnerId && partnerId !== "0") {
-      console.log(`🔃 ${mountId}: Manually refreshing partner basic config`);
-      dispatch(fetchPartnerBasicSetup());
-    }
-  }, [dispatch, mountId]);
-
-  const refreshPartnerDetails = useCallback(() => {
-    const partnerId = localStorage.getItem("whitelabelledpartnerid");
-    if (partnerId && partnerId !== "0") {
-      console.log(`🔃 ${mountId}: Manually refreshing partner details`);
+  const refreshPartnerDetails = () => {
+    if (partnerId && partnerId !== "0" && authtoken) {
+      console.log("🔃 Manually refreshing partner details");
+      partnerDetailsAttempted.current = false;
+      isFetchingPartnerDetails = false;
       dispatch(fetchPartnerDetails());
+    } else {
+      console.warn("Cannot refresh partner details - missing partnerId or auth token");
     }
-  }, [dispatch, mountId]);
+  };
 
-  const refreshAll = useCallback(() => {
-    console.log(`🔄 ${mountId}: Manually refreshing all partner data`);
+  const refreshAll = () => {
     refreshBasicConfig();
     refreshPartnerDetails();
-  }, [refreshBasicConfig, refreshPartnerDetails]);
+  };
 
-  // Sync with localStorage (useful when authService updates data)
-  const syncWithAuthService = useCallback(() => {
-    console.log(`🔄 ${mountId}: Syncing with authService data`);
-    dispatch(syncWithLocalStorage());
-  }, [dispatch, mountId]);
-
-  // Return values - ENHANCED
   return {
     // Basic config
     config,
-    loading: isLoading,
-    error: configError || partnerDetailsError || fetchError,
+    loading: loading || partnerDetailsLoading,
+    error: error || partnerDetailsError,
     headerColor,
     textColor,
     downloadManualEnabled,
-
+    
     // Partner details
-    logoUrl: finalLogoUrl || getLogoFallback(),
-    logoAltText: finalPartnerName,
-    partnerName: finalPartnerName,
+    logoUrl,
+    logoAltText: partnerName,
+    partnerName,
     partnerId: partnerId || reduxPartnerId,
-    hasLogo: !!finalLogoUrl,
-
-    // AuthService fields
-    isWhiteLabelledPartner: hasAuthServiceData(),
-    partnerUUID: partnerUUID || localStorage.getItem("partner_uuid") || "",
-    isPartnerPackageModule: isPartnerPackageModuleEnabled,
-    showRemittanceOnlyOnRegistration: shouldShowRemittanceOnlyOnRegistration,
-    beneficiaryPortalTitle: finalBeneficiaryPortalTitle,
-
+    hasLogo,
+    
     // Refresh functions
     refresh: refreshAll,
     refreshBasicConfig,
     refreshPartnerDetails,
-    syncWithAuthService,
-
+    
     // Status flags
     isConfigured: !!config,
     hasValidConfig: !!(config && (config.header_color || config.text_color)),
     hasPartnerDetails: !!partnerDetails,
-    isInitialFetchComplete,
-    hasAuthServiceData: hasAuthServiceLoaded,
-
-    // Debug info - ENHANCED
+    
+    // Debug info
     debugInfo: {
       partnerId,
-      partnerUUID: partnerUUID || localStorage.getItem("partner_uuid"),
       hasBasicConfig: !!config,
       hasPartnerDetails: !!partnerDetails,
-      hasLogo: !!finalLogoUrl,
-      logoUrl: finalLogoUrl,
-      partnerName: finalPartnerName,
-      beneficiaryPortalTitle: finalBeneficiaryPortalTitle,
-      isPartnerPackageModule: isPartnerPackageModuleEnabled,
-      showRemittanceOnlyOnRegistration: shouldShowRemittanceOnlyOnRegistration,
-      configLoading,
-      partnerDetailsLoading,
-      isFetching,
-      isInitialFetchComplete,
-      hasAuthServiceLoaded,
-      mountId,
-      fetchError,
-      retryCount: retryCount.current,
-      localStorageCheck: {
-        partnerId: localStorage.getItem("whitelabelledpartnerid"),
-        partnerName: localStorage.getItem("partner_name"),
-        isWhiteLabelled: localStorage.getItem("is_white_labelled_partner"),
-        partnerUUID: localStorage.getItem("partner_uuid"),
-        showRemittanceOnly: localStorage.getItem(
-          "showRemittanceOnlyOnRegistration"
-        ),
-        beneficiaryPortalTitle: localStorage.getItem(
-          "beneficiary_portal_title"
-        ),
-      },
-    },
+      hasLogo,
+      logoUrl,
+      partnerName,
+      basicConfigLoading: loading,
+      detailsLoading: partnerDetailsLoading
+    }
   };
 };
 

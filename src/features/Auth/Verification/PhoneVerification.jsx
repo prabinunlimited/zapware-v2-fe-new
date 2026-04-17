@@ -57,7 +57,11 @@ function PhoneVerification() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { mobileNumber } = location.state || { mobileNumber: "" };
+  const {
+    mobileNumber,
+    hasSSN = false, // ← Extract it
+    customerData,
+  } = location.state || {};
   const otpRefs = useRef(new Array(6).fill(null));
 
   // Extract country code and number for display and submission
@@ -83,6 +87,61 @@ function PhoneVerification() {
 
   const { country_code, number } = extractPhoneParts(mobileNumber);
 
+  // ========== NEW: UNDER REVIEW MODAL LOGIC ==========
+  const showUnderReviewModal = () => {
+    // Show a toast notification first
+    toast.info(
+      "Your account is under review. Please see details in the modal.",
+    );
+
+    // Then open the modal with the same message as Login component
+    dispatch(
+      setModalData({
+        title: "Account Application Submitted",
+        message: (
+          <div className="text-left space-y-4">
+            <p className="text-gray-700">
+              Your account opening request has been received and is currently
+              under review. The approval process may take 24–48 hours.
+            </p>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <p className="font-semibold text-gray-800 mb-2">
+                For any queries, please contact Customer Service:
+              </p>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p className="flex items-center">
+                  <span className="mr-2">📞</span>
+                  <span className="font-medium text-blue-600">
+                    +977-1-5970800
+                  </span>
+                  <span className="ml-1">(Nepal)</span>
+                </p>
+                <p className="flex items-center">
+                  <span className="mr-2">📞</span>
+                  <span className="font-medium text-blue-600">
+                    +1-888-226-0712
+                  </span>
+                  <span className="ml-1">(International)</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        ),
+        type: "info",
+        modalProps: {
+          showCloseButton: true,
+          onClose: () => {
+            // Reset OTP state when modal is closed
+            dispatch(setOtp(new Array(6).fill("")));
+            // Optionally navigate to home or stay on page
+            // navigate("/");
+          },
+        },
+      }),
+    );
+  };
+  // ===================================================
+
   const initialValues = {
     mobile_number: mobileNumber,
     otp: "",
@@ -98,33 +157,76 @@ function PhoneVerification() {
     }
   }, [resendTimer, dispatch]);
 
-  // ========== PLAID HANDLER FUNCTIONS ==========
+  // ========== UPDATED: PLAID HANDLER FUNCTIONS WITH UNDER REVIEW LOGIC ==========
 
   const handleKycVerification = async (response) => {
-    
+    // ✅ IMPORTANT: Check if account is under review (plaid_kyc_required: "N")
+    if (response.plaid_kyc_required === "N") {
+      console.log("⏳ Account is under review (plaid_kyc_required: N)");
 
-    // If Plaid URL is provided, show modal for KYC verification
-    if (response.plaid_url && response.plaid_url !== "") {
+      // Reset OTP state immediately
+      dispatch(setOtp(new Array(6).fill("")));
+
+      // Show the under review modal
+      setTimeout(() => {
+        showUnderReviewModal();
+      }, 100);
+
+      return null;
+    }
+
+    // ⚠️ CRITICAL CHANGE: If user provided SSN, skip Plaid and go directly to home
+    if (hasSSN) {
+      console.log("✅ User provided SSN, skipping Plaid verification");
+      toast.success("SSN verification will be processed separately!");
+
+      // Store authentication data if available
+      if (response.token) {
+        localStorage.setItem("authtoken", response.token);
+      }
+      if (response.customer_id) {
+        localStorage.setItem("authcustomer_id", response.customer_id);
+      }
+
+      // Navigate to home immediately
+      setTimeout(() => {
+        navigate("/");
+      }, 1500);
+
+      return null; // Return null to prevent further processing
+    }
+
+    // ✅ Check if KYC verification is required (plaid_kyc_required: "Y")
+    if (
+      response.plaid_kyc_required === "Y" &&
+      response.plaid_url &&
+      response.plaid_url !== ""
+    ) {
+      console.log("✅ KYC verification required (plaid_kyc_required: Y)");
+
       setPlaidUrl(response.plaid_url);
-      
+
       // For whitelabeled partners, open directly in new tab
       if (response.is_whitelabelled_partner_customer === "1") {
         window.open(response.plaid_url, "_blank");
         toast.info("Bank verification opened in new tab");
-        
+
         // Store auth data temporarily
         if (response.token) {
           localStorage.setItem("authtoken", response.token);
         }
         if (response.customer_id) {
           localStorage.setItem("authcustomer_id", response.customer_id);
-          sessionStorage.setItem("pending_kyc_auth", JSON.stringify({
-            customer_id: response.customer_id,
-            timestamp: Date.now(),
-            plaidUrl: response.plaid_url,
-          }));
+          sessionStorage.setItem(
+            "pending_kyc_auth",
+            JSON.stringify({
+              customer_id: response.customer_id,
+              timestamp: Date.now(),
+              plaidUrl: response.plaid_url,
+            }),
+          );
         }
-        
+
         return null;
       } else {
         // For regular customers, show modal with options
@@ -151,7 +253,7 @@ function PhoneVerification() {
     const plaidWindow = window.open(
       plaidUrl,
       "plaid_verification",
-      "width=800,height=700,scrollbars=yes,resizable=yes,top=100,left=100"
+      "width=800,height=700,scrollbars=yes,resizable=yes,top=100,left=100",
     );
 
     if (plaidWindow) {
@@ -161,7 +263,7 @@ function PhoneVerification() {
       toast.info("Bank verification started in new window");
     } else {
       toast.warning(
-        "Popup blocked! Please allow popups or use the manual link."
+        "Popup blocked! Please allow popups or use the manual link.",
       );
     }
   };
@@ -189,14 +291,14 @@ function PhoneVerification() {
       if (plaidWindow.closed) {
         clearInterval(checkWindow);
         setIsPlaidLoading(false);
-        
+
         setTimeout(() => {
           toast.success("Bank verification completed!");
-          
+
           // Check if we have stored auth data
           const customerId = localStorage.getItem("authcustomer_id");
           const token = localStorage.getItem("authtoken");
-          
+
           if (customerId && token) {
             navigate(`/home/${customerId}`);
           } else {
@@ -216,7 +318,7 @@ function PhoneVerification() {
       toast.error("No verification URL available");
       return;
     }
-    
+
     navigator.clipboard.writeText(plaidUrl);
     setCopied(true);
     toast.success("Verification link copied to clipboard!");
@@ -233,17 +335,31 @@ function PhoneVerification() {
         otp: otp.join(""),
       };
 
-      
-
       try {
         const result = await dispatch(validateOtp(loginData));
 
         if (result.payload) {
           const data = result.payload;
-          
 
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
+
+            // ✅ CRITICAL: Check for under review status before proceeding
+            if (data.plaid_kyc_required === "N") {
+              console.log(
+                "⏳ Account is under review - stopping further processing",
+              );
+
+              // Reset OTP state
+              dispatch(setOtp(new Array(6).fill("")));
+
+              // Show under review modal
+              setTimeout(() => {
+                showUnderReviewModal();
+              }, 100);
+
+              return; // Stop further processing
+            }
 
             // Store authentication data if available
             if (data.token) {
@@ -253,7 +369,7 @@ function PhoneVerification() {
               localStorage.setItem("authcustomer_id", data.customer_id);
             }
 
-            // Handle KYC/Plaid flow
+            // Handle KYC/Plaid flow (only if plaid_kyc_required is not "N")
             const processedData = await handleKycVerification(data);
 
             if (processedData === null) {
@@ -278,7 +394,6 @@ function PhoneVerification() {
           toast.error(errorMessage);
         }
       } catch (error) {
-        
         toast.error("An unexpected error occurred. Please try again.");
       }
     },
@@ -299,8 +414,6 @@ function PhoneVerification() {
       dispatch(resetAuthOtpState());
     };
   }, [dispatch]);
-
-  // ... rest of your existing functions (handleOtpChange, handleCopyOtp, handlePasteOtp, handleBackspace, handleGenerateOTP, handleResendOTP, handleSubmit, handleGoBack) remain the same
 
   const handleOtpChange = (e, index) => {
     const value = e.target.value.slice(0, 1);
@@ -354,7 +467,6 @@ function PhoneVerification() {
       await dispatch(sendOtp(storedMobileNumber)).unwrap();
       toast.success("Verification code has been sent to your phone!");
     } catch (error) {
-      
       toast.error("Failed to send OTP. Please try again.");
     }
   };
@@ -380,8 +492,6 @@ function PhoneVerification() {
       otp: otp.join(""),
     };
 
-    
-
     formikSubmit();
   };
 
@@ -397,92 +507,92 @@ function PhoneVerification() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-6"
+      className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-4 sm:p-6"
     >
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer position="top-right" autoClose={1000} />
 
-      <div className="w-full flex flex-col items-center justify-between max-w-2xl bg-white rounded-xl shadow-xl p-8 space-y-8 border border-gray-100">
+      <div className="w-full flex flex-col items-center justify-between max-w-md sm:max-w-xl lg:max-w-2xl bg-white rounded-xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 border border-gray-100">
         {/* Header */}
         <div className="flex items-center justify-between w-full">
           <button
             onClick={handleGoBack}
-            className="text-gray-600 hover:text-gray-800 transition-colors p-2"
+            className="text-gray-600 hover:text-gray-800 transition-colors p-1 sm:p-2"
             disabled={isSubmitting}
           >
-            <FiArrowLeft size={24} />
+            <FiArrowLeft size={20} className="sm:w-6 sm:h-6" />
           </button>
-          <h1 className="text-3xl font-semibold text-gray-900">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 text-center">
             Phone Verification
           </h1>
-          <FiSmartphone className="text-5xl text-blue-600" />
+          <FiSmartphone className="text-3xl sm:text-4xl lg:text-5xl text-blue-600" />
         </div>
 
         {/* PLAID MODAL - Enhanced from Login component */}
         {showPlaidModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-800">
+          <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-800">
                   KYC Verification Required
                 </h2>
                 <button
                   onClick={closePlaidModal}
-                  className="text-gray-500 hover:text-gray-700 transition-colors p-2"
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-1 sm:p-2"
                   disabled={isPlaidLoading}
                 >
-                  <AiOutlineClose size={24} />
+                  <AiOutlineClose size={20} className="sm:w-6 sm:h-6" />
                 </button>
               </div>
 
-              <div className="p-6">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FiShield className="text-blue-600 text-2xl" />
+              <div className="p-4 sm:p-6">
+                <div className="text-center mb-4 sm:mb-6">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                    <FiShield className="text-blue-600 text-xl sm:text-2xl" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-1 sm:mb-2">
                     Secure KYC Verification
                   </h3>
-                  <p className="text-gray-600 mb-4">
-                    You need to complete KYC verification to access your account. 
-                    This is a secure process powered by Plaid.
+                  <p className="text-gray-600 text-sm sm:text-base mb-3 sm:mb-4">
+                    You need to complete KYC verification to access your
+                    account. This is a secure process powered by Plaid.
                   </p>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
                   <div className="flex items-start">
-                    <FiShield className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                    <FiShield className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-blue-800">
+                      <p className="text-xs sm:text-sm font-medium text-blue-800">
                         Secure & Encrypted
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Your information is protected with bank-level security. 
+                        Your information is protected with bank-level security.
                         We never store your banking credentials.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <button
                     onClick={openPlaidInNewWindow}
                     disabled={isPlaidLoading}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-3 disabled:opacity-70"
+                    className="w-full bg-blue-600 text-white py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 sm:gap-3 disabled:opacity-70 text-sm sm:text-base"
                   >
                     {isPlaidLoading ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white"></div>
                     ) : (
-                      <FaExternalLinkAlt className="text-lg" />
+                      <FaExternalLinkAlt className="text-sm sm:text-lg" />
                     )}
                     <span>
-                      {isPlaidLoading ? "Opening..." : "Open in New Window (Recommended)"}
+                      {isPlaidLoading ? "Opening..." : "Open in New Window"}
                     </span>
                   </button>
 
                   <button
                     onClick={openPlaidInSameTab}
                     disabled={isPlaidLoading}
-                    className="w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-3 disabled:opacity-70"
+                    className="w-full bg-gray-600 text-white py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 sm:gap-3 disabled:opacity-70 text-sm sm:text-base"
                   >
                     <span>Open in This Tab</span>
                   </button>
@@ -491,7 +601,7 @@ function PhoneVerification() {
                     <button
                       onClick={handleCopyPlaidLink}
                       disabled={isPlaidLoading}
-                      className="text-blue-600 hover:text-blue-800 text-sm disabled:opacity-50"
+                      className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm disabled:opacity-50"
                     >
                       {copied ? "Copied!" : "Copy verification link instead"}
                     </button>
@@ -499,9 +609,10 @@ function PhoneVerification() {
                 </div>
               </div>
 
-              <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <div className="p-3 sm:p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
                 <p className="text-xs text-gray-500 text-center">
-                  By continuing, you agree to our Terms of Service and Privacy Policy
+                  By continuing, you agree to our Terms of Service and Privacy
+                  Policy
                 </p>
               </div>
             </div>
@@ -509,30 +620,30 @@ function PhoneVerification() {
         )}
 
         {/* Main Content */}
-        <div className="w-full space-y-8">
+        <div className="w-full space-y-6 sm:space-y-8">
           {/* Mobile Number Display */}
           <div className="text-center">
-            <label className="block text-lg font-medium text-gray-700 mb-4">
+            <label className="block text-base sm:text-lg font-medium text-gray-700 mb-2 sm:mb-4">
               Verification code sent to:
             </label>
-            <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <span className="text-xl font-semibold text-gray-800">
+            <div className="flex items-center justify-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="text-base sm:text-xl font-semibold text-gray-800 break-all">
                 {country_code} {number}
               </span>
-              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center ml-3">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full flex items-center justify-center ml-2 sm:ml-3">
                 <FiCheckCircle className="text-white text-xs" />
               </div>
             </div>
           </div>
 
           {/* OTP Input Section */}
-          <div className="space-y-6">
-            <label className="block text-lg font-medium text-gray-700 text-center">
+          <div className="space-y-4 sm:space-y-6">
+            <label className="block text-base sm:text-lg font-medium text-gray-700 text-center">
               Enter 6-digit verification code
             </label>
 
             <div
-              className="flex justify-center gap-4 my-8"
+              className="flex justify-center gap-2 sm:gap-3 lg:gap-4 my-4 sm:my-6 md:my-8"
               onPaste={handlePasteOtp}
             >
               {otp.map((digit, index) => (
@@ -544,7 +655,7 @@ function PhoneVerification() {
                   value={digit}
                   onChange={(e) => handleOtpChange(e, index)}
                   onKeyDown={(e) => handleBackspace(e, index)}
-                  className="w-16 h-16 border border-gray-300 rounded-lg text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 border border-gray-300 rounded-lg text-center text-xl sm:text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   disabled={isSubmitting}
                 />
               ))}
@@ -557,27 +668,27 @@ function PhoneVerification() {
               type="button"
               onClick={handleCopyOtp}
               disabled={!isOtpComplete || copied || isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
+              className="w-full flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-3 text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-sm sm:text-base"
             >
-              <FiCopy />
+              <FiCopy className="w-4 h-4 sm:w-5 sm:h-5" />
               {copied ? "Copied to clipboard!" : "Copy OTP code"}
             </motion.button>
           </div>
 
           {/* Action Buttons */}
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleSubmit}
               disabled={!isOtpComplete || isSubmitting}
-              className="w-full bg-green-600 text-white py-4 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center font-semibold text-xl disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="w-full bg-green-600 text-white py-3 sm:py-4 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center font-semibold text-base sm:text-xl disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               {isVerifyingOtp ? (
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-white"></div>
               ) : (
                 <>
-                  <FiCheckCircle className="mr-3 text-2xl" />
+                  <FiCheckCircle className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
                   Verify Code
                 </>
               )}
@@ -588,20 +699,20 @@ function PhoneVerification() {
               whileTap={{ scale: 0.95 }}
               onClick={handleResendOTP}
               disabled={resendAttempts <= 0 || resendTimer > 0 || isSubmitting}
-              className={`w-full py-4 rounded-lg ${
+              className={`w-full py-3 sm:py-4 rounded-lg ${
                 resendTimer > 0 || resendAttempts <= 0
                   ? "bg-gray-300 text-gray-600 cursor-not-allowed"
                   : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
-              } flex items-center justify-center font-semibold text-xl`}
+              } flex items-center justify-center font-semibold text-base sm:text-xl`}
             >
-              <FiRefreshCw className="mr-3 text-2xl" />
+              <FiRefreshCw className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
               {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend Code"}
             </motion.button>
           </div>
 
           {/* Status Information */}
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between text-lg text-gray-600">
+          <div className="p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between text-sm sm:text-lg text-gray-600">
               <span>Attempts remaining:</span>
               <span
                 className={`font-semibold ${
@@ -613,25 +724,25 @@ function PhoneVerification() {
             </div>
 
             {resendAttempts <= 2 && resendAttempts > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-orange-600 text-lg">
+              <div className="mt-1 sm:mt-2 flex items-center gap-1 sm:gap-2 text-orange-600 text-sm sm:text-lg">
                 ⚠️ Only {resendAttempts} attempt
                 {resendAttempts !== 1 ? "s" : ""} remaining
               </div>
             )}
 
             {resendAttempts <= 0 && (
-              <div className="mt-2 flex items-center gap-2 text-red-600 text-lg">
+              <div className="mt-1 sm:mt-2 flex items-center gap-1 sm:gap-2 text-red-600 text-sm sm:text-lg">
                 ⚠️ No more attempts remaining. Please contact support.
               </div>
             )}
           </div>
 
           {/* Quick Tips */}
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-800 mb-3 text-lg">
+          <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-semibold text-blue-800 mb-2 sm:mb-3 text-base sm:text-lg">
               💡 Quick Tips
             </h4>
-            <ul className="text-blue-600 space-y-2 text-lg">
+            <ul className="text-blue-600 space-y-1 sm:space-y-2 text-sm sm:text-base lg:text-lg">
               <li>• Check your SMS messages for the code</li>
               <li>• Codes expire after 10 minutes</li>
               <li>• Enter all 6 digits to verify automatically</li>

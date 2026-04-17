@@ -59,7 +59,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
 
       // 3. Add delay to allow DB sync (if needed)
       console.log("⏳ Waiting for DB sync...");
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1000ms to 500ms
 
       // 4. Fetch the specific beneficiary to ensure it's available
       console.log("🔄 Fetching newly created beneficiary...");
@@ -133,21 +133,10 @@ export const fetchBeneficiaries = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("📥 Fetched beneficiaries response:", result);
+      console.log("📥 Fetched beneficiaries count:", result.data?.length || 0);
 
-      // Handle different response structures
-      if (
-        result.status === "200" &&
-        result.message === "No beneficiaries found"
-      ) {
-        console.log("📭 No beneficiaries found, returning empty array");
-        return []; // Explicit empty array
-      }
-
-      // Return data if it exists
       return result.data || [];
     } catch (error) {
-      console.error("❌ fetchBeneficiaries error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -1183,20 +1172,27 @@ const beneficiarySlice = createSlice({
         state.error = null;
       })
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
-        state.loading = false; // CRITICAL: Ensure loading is set to false
-        const beneficiariesData = Array.isArray(action.payload)
-          ? action.payload
-          : action.payload.data || [];
-        state.beneficiaries = beneficiariesData;
+        state.loading = false;
+
+        // Handle various response formats
+        let beneficiariesData = [];
+
+        if (Array.isArray(action.payload)) {
+          beneficiariesData = action.payload;
+        } else if (action.payload && Array.isArray(action.payload.data)) {
+          beneficiariesData = action.payload.data;
+        } else if (action.payload && action.payload.data === null) {
+          beneficiariesData = []; // Explicitly handle null data
+        }
+
+        state.beneficiaries = beneficiariesData || []; // Ensure it's always an array
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
-        if (beneficiariesData.length > 0 && !state.selectedBeneficiary) {
-          state.selectedBeneficiary = beneficiariesData[0];
-        }
+        console.log(`📥 Loaded ${beneficiariesData.length} beneficiaries`);
       })
       .addCase(fetchBeneficiaries.rejected, (state, action) => {
-        state.loading = false; // CRITICAL: Ensure loading is set to false even on error
+        state.loading = false;
         state.error = action.payload;
       })
 

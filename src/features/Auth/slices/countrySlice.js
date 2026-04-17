@@ -2692,18 +2692,16 @@ export const selectPhoneCodeOptions = createSelector(
   [selectCountries],
   (countries) => {
     return countries.map((country) => ({
-      value: country.phone_code,
-      label: `${country.phone_code} (${country.name})`,
+      value: `${country.phone_code}_${country.id}`, // Unique value combining phone code and ID
+      phone_code: country.phone_code, // Store actual phone code separately
+      label: `${country.name} (${country.phone_code})`,
       country: {
-        id: country.id, // ✅ Explicitly pass the ID
-        name: country.name, // ✅ Pass other needed properties
+        id: country.id,
+        name: country.name,
         flag_url: country.flag_url,
       },
-      // Or as an alternative, you can add these at the top level:
-      countryId: country.id, // ✅ Direct access to country ID
-      countryName: country.name,
     }));
-  }
+  },
 );
 
 export const selectCountryByCode = (state, phoneCode) =>

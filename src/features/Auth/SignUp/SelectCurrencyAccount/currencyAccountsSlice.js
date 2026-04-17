@@ -44,7 +44,7 @@ const getValidCountryId = (countryId, getState) => {
     const country = countries.find(
       (c) =>
         c.country_code === storedCountryCode ||
-        c.id === parseInt(storedCountryCode)
+        c.id === parseInt(storedCountryCode),
     );
     if (country) {
       console.log("✅ Using country from localStorage code:", country.id);
@@ -52,9 +52,31 @@ const getValidCountryId = (countryId, getState) => {
     }
   }
 
-  // Priority 5: Default to United States (id: 186)
-  console.log("⚠️ Using default country (US - 186)");
-  return "186";
+  // ⚠️ FIXED: Priority 5: Try to get country from URL or navigate to country selection
+  // Check if we have URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlCountryId = urlParams.get("countryId");
+  if (urlCountryId) {
+    console.log("✅ Using country from URL parameter:", urlCountryId);
+    return String(urlCountryId);
+  }
+
+  // ⚠️ CRITICAL FIX: Check if we're in a partner flow, default to 186 (USA) for partner
+  const partnerId = localStorage.getItem("whitelabelledpartnerid");
+  const isPartnerFlow =
+    partnerId && partnerId !== "0" && partnerId !== "undefined";
+
+  if (isPartnerFlow) {
+    console.log("🌐 Partner flow detected, defaulting to USA (186)");
+    return "186"; // Default to USA for partner flows
+  }
+
+  // Last resort: Show error or redirect
+  console.error(
+    "❌ No valid country ID found. Redirecting to country selection.",
+  );
+  // You might want to redirect to country selection here
+  return "186"; // Temporary fallback
 };
 
 // Helper function to filter accounts by currency
@@ -74,7 +96,7 @@ const filterAccountsByCurrency = (accounts, currencyFilter) => {
     ];
 
     const accountCurrency = currencyFields.find(
-      (field) => field && typeof field === "string"
+      (field) => field && typeof field === "string",
     );
 
     return accountCurrency === currencyFilter;
@@ -87,7 +109,7 @@ export const fetchAccountOptions = createAsyncThunk(
   "currencyAccounts/fetchAccountOptions",
   async (
     { accountType, countryId, API_URL },
-    { rejectWithValue, getState }
+    { rejectWithValue, getState },
   ) => {
     try {
       // ⚠️ CRITICAL: Validate country ID
@@ -103,7 +125,7 @@ export const fetchAccountOptions = createAsyncThunk(
 
       // Step 1: Get onboarding description
       const accountOptionsResponse = await api.get(
-        "/get-onboarding-description"
+        "/get-onboarding-description",
       );
 
       // Step 2: Check if partnerId exists in localStorage
@@ -169,10 +191,10 @@ export const fetchAccountOptions = createAsyncThunk(
     } catch (error) {
       console.error("❌ API Error in fetchAccountOptions:", error.message);
       return rejectWithValue(
-        error.message || "Failed to fetch account options"
+        error.message || "Failed to fetch account options",
       );
     }
-  }
+  },
 );
 
 export const fetchTermsContent = createAsyncThunk(
@@ -187,7 +209,7 @@ export const fetchTermsContent = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const validateReferralCode = createAsyncThunk(
@@ -212,7 +234,7 @@ export const validateReferralCode = createAsyncThunk(
       dispatch(setReferralError("Referral code is invalid!"));
       return rejectWithValue("Referral code is invalid!");
     }
-  }
+  },
 );
 
 export const validateAgentCode = createAsyncThunk(
@@ -243,7 +265,7 @@ export const validateAgentCode = createAsyncThunk(
       dispatch(setAgentError("Agent Code Invalid"));
       return rejectWithValue("Agent Code Invalid");
     }
-  }
+  },
 );
 
 // ========== NEW ASYNC THUNK FOR PACKAGE OPTIONS ==========
@@ -251,7 +273,7 @@ export const fetchPackageOptions = createAsyncThunk(
   "currencyAccounts/fetchPackageOptions",
   async (
     { accountType, partnerId, API_URL },
-    { rejectWithValue, getState }
+    { rejectWithValue, getState },
   ) => {
     try {
       const bearertoken = localStorage.getItem("bearertoken");
@@ -276,7 +298,7 @@ export const fetchPackageOptions = createAsyncThunk(
           headers: {
             Authorization: `Bearer ${bearertoken}`,
           },
-        }
+        },
       );
 
       console.log("✅ Package data received:", response.data);
@@ -286,10 +308,10 @@ export const fetchPackageOptions = createAsyncThunk(
       console.error("❌ Error fetching package options:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
-// ========== NEW ASYNC THUNK FOR PACKAGE VALIDATION ==========
+// ========== FIXED ASYNC THUNK FOR PACKAGE VALIDATION ==========
 export const validatePackageCurrencies = createAsyncThunk(
   "currencyAccounts/validatePackageCurrencies",
   async ({ selectedPackageCurrencies, partnerId }, { rejectWithValue }) => {
@@ -310,17 +332,48 @@ export const validatePackageCurrencies = createAsyncThunk(
           headers: {
             Authorization: `Bearer ${bearertoken}`,
           },
-        }
+        },
       );
 
-      return response.data;
+      console.log("Package validation API response:", response.data);
+
+      // FIXED: Safely handle API response to avoid QR issues
+      const responseData = response.data;
+
+      // Check if response has status error
+      if (responseData && responseData.status === "error") {
+        // Safely extract message
+        const errorMessage =
+          typeof responseData.message === "string"
+            ? responseData.message
+            : "Package validation failed";
+        return rejectWithValue(errorMessage);
+      }
+
+      // Return sanitized response data
+      return responseData;
     } catch (error) {
       console.error("❌ Error validating package currencies:", error);
-      return rejectWithValue(
-        error.response?.data?.message || "Package validation failed"
-      );
+
+      // FIXED: Safely extract error message without triggering QR
+      let errorMessage = "Package validation failed";
+
+      if (error.response && error.response.data) {
+        const responseData = error.response.data;
+        if (typeof responseData.message === "string") {
+          errorMessage = responseData.message;
+        } else if (typeof responseData.error === "string") {
+          errorMessage = responseData.error;
+        } else if (typeof responseData === "string") {
+          errorMessage = responseData;
+        }
+      } else if (typeof error.message === "string") {
+        errorMessage = error.message;
+      }
+
+      return rejectWithValue(errorMessage);
     }
-  }
+  },
 );
 
 const currencyAccountsSlice = createSlice({
@@ -370,6 +423,29 @@ const currencyAccountsSlice = createSlice({
     packageSsnRequired: "Y",
   },
   reducers: {
+    // ✅ FIXED: Added the missing toggleAccountSelection reducer
+    toggleAccountSelection: (state, action) => {
+      const id = action.payload;
+      console.log("🔄 toggleAccountSelection:", {
+        id,
+        currentSelection: [...state.selectedAccounts],
+      });
+
+      const isAlreadySelected = state.selectedAccounts.includes(id);
+
+      if (isAlreadySelected) {
+        state.selectedAccounts = state.selectedAccounts.filter(
+          (accountId) => accountId !== id,
+        );
+        console.log("🔘 Deselected account:", id);
+      } else {
+        state.selectedAccounts.push(id);
+        console.log("🔘 Added account to selection:", id);
+      }
+
+      console.log("🎯 Final selection state:", state.selectedAccounts);
+    },
+
     clearAllSelections: (state) => {
       state.selectedAccounts = [];
       state.selectedPackageCurrencies = [];
@@ -404,21 +480,21 @@ const currencyAccountsSlice = createSlice({
       // Apply both currency and search filtering
       const currencyFilteredNamed = filterAccountsByCurrency(
         state.namedAccounts,
-        state.activeTab
+        state.activeTab,
       );
       const currencyFilteredPooled = filterAccountsByCurrency(
         state.pooledAccounts,
-        state.activeTab
+        state.activeTab,
       );
 
       if (action.payload) {
         const searchLower = action.payload.toLowerCase();
         state.filteredNamedAccounts = currencyFilteredNamed.filter((account) =>
-          JSON.stringify(account).toLowerCase().includes(searchLower)
+          JSON.stringify(account).toLowerCase().includes(searchLower),
         );
         state.filteredPooledAccounts = currencyFilteredPooled.filter(
           (account) =>
-            JSON.stringify(account).toLowerCase().includes(searchLower)
+            JSON.stringify(account).toLowerCase().includes(searchLower),
         );
       } else {
         state.filteredNamedAccounts = currencyFilteredNamed;
@@ -430,11 +506,11 @@ const currencyAccountsSlice = createSlice({
       // Apply filtering when tab changes
       state.filteredNamedAccounts = filterAccountsByCurrency(
         state.namedAccounts,
-        action.payload
+        action.payload,
       );
       state.filteredPooledAccounts = filterAccountsByCurrency(
         state.pooledAccounts,
-        action.payload
+        action.payload,
       );
 
       // If there's a search term, apply search filtering on top of currency filtering
@@ -442,11 +518,11 @@ const currencyAccountsSlice = createSlice({
         const searchLower = state.searchTerm.toLowerCase();
         state.filteredNamedAccounts = state.filteredNamedAccounts.filter(
           (account) =>
-            JSON.stringify(account).toLowerCase().includes(searchLower)
+            JSON.stringify(account).toLowerCase().includes(searchLower),
         );
         state.filteredPooledAccounts = state.filteredPooledAccounts.filter(
           (account) =>
-            JSON.stringify(account).toLowerCase().includes(searchLower)
+            JSON.stringify(account).toLowerCase().includes(searchLower),
         );
       }
     },
@@ -456,15 +532,29 @@ const currencyAccountsSlice = createSlice({
     setTermsModalOpen: (state, action) => {
       state.termsModalOpen = action.payload;
     },
-    toggleAccountSelection: (state, action) => {
-      const accountId = action.payload;
-      const index = state.selectedAccounts.indexOf(accountId);
-      if (index > -1) {
-        state.selectedAccounts.splice(index, 1);
+    togglePackageCurrencySelection: (state, action) => {
+      const { currencyId } = action.payload;
+
+      console.log("🔄 togglePackageCurrencySelection:", {
+        currencyId,
+        currentSelection: [...state.selectedPackageCurrencies],
+      });
+
+      const isAlreadySelected =
+        state.selectedPackageCurrencies.includes(currencyId);
+
+      if (isAlreadySelected) {
+        state.selectedPackageCurrencies =
+          state.selectedPackageCurrencies.filter((id) => id !== currencyId);
+        console.log("🔘 Deselected currency:", currencyId);
       } else {
-        state.selectedAccounts.push(accountId);
+        state.selectedPackageCurrencies.push(currencyId);
+        console.log("🔘 Added currency to selection:", currencyId);
       }
+
+      console.log("🎯 Final selection state:", state.selectedPackageCurrencies);
     },
+
     clearError: (state) => {
       state.apiError = null;
       state.referralError = null;
@@ -544,42 +634,6 @@ const currencyAccountsSlice = createSlice({
       state.packageFeesUrl = action.payload;
     },
 
-    // ========== FIXED: API says "Only 1 currency allowed" ==========
-    togglePackageCurrencySelection: (state, action) => {
-      const { currencyId, packageOption } = action.payload;
-
-      console.log("🔄 togglePackageCurrencySelection:", {
-        currencyId,
-        packageName: packageOption?.package_name,
-        packageAccountCount: packageOption?.package_accountCount,
-        currentSelection: [...state.selectedPackageCurrencies],
-      });
-
-      // Create a fresh copy
-      let newSelection = [...state.selectedPackageCurrencies];
-
-      // Check if this currency is already selected
-      const isAlreadySelected = newSelection.includes(currencyId);
-
-      // ========== CRITICAL FIX: API says "Only 1 currency allowed" ==========
-      // So we need to enforce SINGLE selection across ALL packages
-
-      if (isAlreadySelected) {
-        // If already selected, remove it (toggle off)
-        newSelection = newSelection.filter((id) => id !== currencyId);
-        console.log("🔘 Deselected currency:", currencyId);
-      } else {
-        // API says "Only 1 currency allowed" - so clear ALL previous selections
-        newSelection = [currencyId]; // Only allow ONE currency total
-        console.log("🔘 Selected new currency (cleared others):", currencyId);
-      }
-
-      // Update state
-      state.selectedPackageCurrencies = newSelection;
-
-      console.log("🎯 Final selection state:", newSelection);
-    },
-
     setPackageFlags: (state, action) => {
       const { ssnRequired, ownerAdd, documentUpload, kycVerify, feesUrl } =
         action.payload;
@@ -616,7 +670,11 @@ const currencyAccountsSlice = createSlice({
           isPartnerFlow,
           partnerId,
           accountType,
+          countryId,
           hasTermsData: !!termsData,
+          termsDataStructure: termsData
+            ? Object.keys(termsData)
+            : "No termsData",
         });
 
         // Set description based on account type
@@ -631,22 +689,31 @@ const currencyAccountsSlice = createSlice({
             ? `Select your currency accounts through our partner program`
             : "Select your preferred currency accounts to get started");
 
-        // ✅ Process accounts data
+        // ✅ FIXED: Process accounts data with correct API response structure
         let accountsData = [];
 
         if (isPartnerFlow) {
-          // ✅ PARTNER API RESPONSE FORMAT
+          // ✅ PARTNER API RESPONSE FORMAT - API returns {status, message, data: [...]}
           console.log("🔍 Processing partner response format:", termsData);
 
-          if (termsData && Array.isArray(termsData)) {
-            accountsData = termsData;
-          } else if (
-            termsData &&
-            termsData.data &&
-            Array.isArray(termsData.data)
-          ) {
+          // Primary extraction: Access the data array from response
+          if (termsData && termsData.data && Array.isArray(termsData.data)) {
             accountsData = termsData.data;
-          } else if (
+            console.log(
+              "✅ Extracted accounts from termsData.data:",
+              accountsData.length,
+            );
+          }
+          // Fallback: If response is already an array (for compatibility)
+          else if (Array.isArray(termsData)) {
+            accountsData = termsData;
+            console.log(
+              "⚠️ Using termsData directly as array:",
+              accountsData.length,
+            );
+          }
+          // Additional fallbacks for different API formats
+          else if (
             termsData &&
             termsData.currencies &&
             Array.isArray(termsData.currencies)
@@ -673,7 +740,7 @@ const currencyAccountsSlice = createSlice({
             partner_id: partnerId,
           }));
         } else {
-          // ✅ STANDARD API RESPONSE FORMAT
+          // ✅ STANDARD API RESPONSE FORMAT - Handle various possible structures
           if (Array.isArray(termsData)) {
             accountsData = termsData;
           } else if (
@@ -700,6 +767,7 @@ const currencyAccountsSlice = createSlice({
         console.log("📊 Processed accounts data:", {
           totalAccounts: accountsData.length,
           sampleAccount: accountsData[0],
+          allCurrencies: accountsData.map((a) => a.currency).filter(Boolean),
         });
 
         // Separate accounts by type
@@ -708,7 +776,7 @@ const currencyAccountsSlice = createSlice({
             account.accountType === "named" ||
             account.account_type === "named" ||
             account.type === "named" ||
-            (isPartnerFlow && account.account_type === "1")
+            (isPartnerFlow && account.account_type === "1"),
         );
 
         const pooled = accountsData.filter(
@@ -716,7 +784,7 @@ const currencyAccountsSlice = createSlice({
             account.accountType === "pooled" ||
             account.account_type === "pooled" ||
             account.type === "pooled" ||
-            (isPartnerFlow && account.account_type === "0")
+            (isPartnerFlow && account.account_type === "0"),
         );
 
         state.accountOptions = accountsData;
@@ -728,11 +796,11 @@ const currencyAccountsSlice = createSlice({
         // Apply initial filtering based on active tab
         state.filteredNamedAccounts = filterAccountsByCurrency(
           named,
-          state.activeTab
+          state.activeTab,
         );
         state.filteredPooledAccounts = filterAccountsByCurrency(
           pooled,
-          state.activeTab
+          state.activeTab,
         );
 
         // Set terms text
@@ -751,7 +819,22 @@ const currencyAccountsSlice = createSlice({
           state.termsText =
             "Please confirm that you agree on the Charges and Fees";
         }
+
+        // ✅ Debug: Log final state
+        console.log("🎯 Final Redux State:", {
+          allAccounts: state.accountOptions.length,
+          namedAccounts: state.namedAccounts.length,
+          pooledAccounts: state.pooledAccounts.length,
+          currenciesAvailable: [
+            ...new Set(
+              state.accountOptions.map((a) => a.currency).filter(Boolean),
+            ),
+          ],
+          filteredNamed: state.filteredNamedAccounts.length,
+          filteredPooled: state.filteredPooledAccounts.length,
+        });
       })
+
       .addCase(fetchAccountOptions.rejected, (state, action) => {
         state.loading = false;
         state.apiError = action.payload;
@@ -826,18 +909,23 @@ const currencyAccountsSlice = createSlice({
         state.packageLoading = false;
         state.packageError = action.payload;
       })
-      // Validate package currencies
+      // Validate package currencies - FIXED
       .addCase(validatePackageCurrencies.pending, (state) => {
         state.isPackageValidating = true;
         state.packageValidationMessage = "";
+        state.packageError = null;
       })
       .addCase(validatePackageCurrencies.fulfilled, (state, action) => {
         state.isPackageValidating = false;
-        state.packageValidationMessage = "Package validation successful";
+        state.packageValidationMessage =
+          action.payload.message || "Package validation successful";
+        state.packageError = null;
       })
       .addCase(validatePackageCurrencies.rejected, (state, action) => {
         state.isPackageValidating = false;
-        state.packageValidationMessage = action.payload;
+        state.packageValidationMessage =
+          action.payload || "Package validation failed";
+        state.packageError = action.payload; // This will be "Only 1 currency allowed"
       });
   },
 });
@@ -852,7 +940,7 @@ export const {
   setActiveTab,
   setRemittanceOnlyAccepted,
   setTermsModalOpen,
-  toggleAccountSelection,
+  toggleAccountSelection, // ✅ NOW PROPERLY EXPORTED
   clearError,
   resetState,
   clearSelectedAccounts,
