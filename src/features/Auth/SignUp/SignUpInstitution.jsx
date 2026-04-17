@@ -98,6 +98,28 @@ import {
 
 import OwnerInfo from "./Steps/OwnerInfo";
 
+// ===================== DOB VALIDATION FUNCTIONS =====================
+const validateAge = (dateOfBirth) => {
+  if (!dateOfBirth) return false;
+  
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age >= 18;
+};
+
+const getMaxDateForDOB = () => {
+  const today = new Date();
+  const maxDate = new Date(today.setFullYear(today.getFullYear() - 18));
+  return maxDate.toISOString().split('T')[0];
+};
+
 // CustomSelect Component
 const CustomSelect = ({
   id,
@@ -433,7 +455,7 @@ const Institution = () => {
       terms_agreement: false,
       user_image: {},
 
-      industry_type: "", // ← ADD THIS LINE
+      industry_type: "",
 
       controller_first_name: "",
       controller_middle_name: "",
@@ -457,19 +479,25 @@ const Institution = () => {
       controller_ssn: "",
       is_controller: "",
 
+      // Add dob_error state
+      dob_error: "",
+
       ...mergedData,
     };
     return safeData;
   }, [formData, localFormData]);
 
-  useEffect(() => {
-    if (
-      Object.keys(formData).length > 0 &&
-      Object.keys(localFormData).length === 0
-    ) {
-      setLocalFormData(formData);
-    }
-  }, [formData, localFormData]);
+  useEffect(
+    () => {
+      if (
+        Object.keys(formData).length > 0 &&
+        Object.keys(localFormData).length === 0
+      ) {
+        setLocalFormData(formData);
+      }
+    },
+    [formData, localFormData],
+  );
 
   const enhancedHandleChange = useCallback(
     (fieldName, setFieldValue, actionCreator = null) => {
@@ -545,7 +573,7 @@ const Institution = () => {
           phoneCode: phoneCode,
           country_code: country.country_code,
           id: country.id,
-          flag: country.flag_url || "🏳️", // FIXED: Use flag_url instead of flag
+          flag: country.flag_url || "🏳️",
           originalData: country,
         };
       });
@@ -620,7 +648,6 @@ const Institution = () => {
   const remittanceOnlyAccepted =
     remit_customer === 1 || remit_customer === true;
 
-  // DEBUG: Log the location state data
   useEffect(() => {
     console.log("🔍 locationStateData check:", {
       hasData: !!locationStateData,
@@ -1047,6 +1074,14 @@ const Institution = () => {
           return value && value.toString().trim() !== "";
         });
 
+        // Check if DOB age is valid (18+)
+        let isAgeValid = true;
+        if (validationValues.dob) {
+          isAgeValid = validateAge(validationValues.dob);
+        } else {
+          isAgeValid = false;
+        }
+
         const hasValidationErrors = requiredFields.some(
           (field) => errors[field] && touched[field],
         );
@@ -1072,7 +1107,8 @@ const Institution = () => {
           requiredFieldsFilled &&
           !hasValidationErrors &&
           ssnValid &&
-          allTermsAccepted
+          allTermsAccepted &&
+          isAgeValid
         );
       }
 
@@ -1339,6 +1375,11 @@ const Institution = () => {
   const getFirstErrorMessage = useCallback(
     (errors, values = {}, currentStep = 1) => {
       if (currentStep === 2) {
+        // Check for age validation error
+        if (values.dob && !validateAge(values.dob)) {
+          return "You must be at least 18 years old to register";
+        }
+        
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
             ? values.terms_and_conditions?.length === termsConditions.length
@@ -1408,11 +1449,18 @@ const Institution = () => {
   const handleNextStep = useCallback(
     async (values, { setErrors, setTouched, validateForm }) => {
       try {
-        // SSN confirmation check - moved inside where values is available
+        // Check age validation for step 2
+        if (currentStep === 2 && values.dob && !validateAge(values.dob)) {
+          dispatch(setErrorMessage("You must be at least 18 years old to register"));
+          dispatch(setShowPopup(true));
+          return;
+        }
+
+        // SSN confirmation check
         if (
           currentStep === 2 &&
-          (isNamedAccount || remittanceOnlyAccepted) && // Check both
-          !(values.country === "United States" || values.country === 186) // Only if NOT US
+          (isNamedAccount || remittanceOnlyAccepted) &&
+          !(values.country === "United States" || values.country === 186)
         ) {
           setPendingNextStep(true);
           setShowSSNConfirmation(true);
@@ -1732,7 +1780,6 @@ const Institution = () => {
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
 
-          // ✅ ADD SSN LOGIC HERE: Determine if SSN was collected
           // Check for SSN in responsible person (step 2)
           const hasResponsiblePersonSSN = !!finalFormData.ssn;
 
@@ -1772,7 +1819,7 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
-              hasSSN: hasSSN, // ✅ Pass SSN status to phone verification
+              hasSSN: hasSSN,
             },
           });
         } else {
@@ -1878,7 +1925,7 @@ const Institution = () => {
   const naicsOptions = useMemo(
     () =>
       naicsCodes.map((code) => ({
-        value: code.id || code.code, // Use id or code as value
+        value: code.id || code.code,
         label: `${code.code} - ${
           code.description || `${code.category} - ${code.subcategory}`
         }`,
@@ -2517,7 +2564,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_designation}
                 error={errors.controller_designation}
-                required={values.is_controller === "no"} // ← CHANGE THIS LINE (from just "disabled" to conditional required)
+                required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
@@ -3639,22 +3686,61 @@ const Institution = () => {
                         required
                       />
 
-                      {/* Date of Birth and Designation on same row */}
-                      <FormField
-                        id="dob"
-                        label="Date of Birth"
-                        name="dob"
-                        type="date"
-                        value={values.dob || ""}
-                        onChange={enhancedHandleChange("dob", setFieldValue)}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("dob")}
-                        touched={touched.dob}
-                        error={errors.dob}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
+                      {/* Date of Birth and Designation on same row - WITH AGE VALIDATION AND MESSAGE */}
+                      <div className="relative">
+                        <FormField
+                          id="dob"
+                          label="Date of Birth"
+                          name="dob"
+                          type="date"
+                          value={values.dob || ""}
+                          onChange={(e) => {
+                            const selectedDate = e.target.value;
+                            enhancedHandleChange("dob", setFieldValue)(e);
+                            
+                            // Validate age on change
+                            if (selectedDate) {
+                              const isValidAge = validateAge(selectedDate);
+                              if (!isValidAge) {
+                                setFieldValue("dob_error", "You must be at least 18 years old to register");
+                              } else {
+                                setFieldValue("dob_error", "");
+                              }
+                            } else {
+                              setFieldValue("dob_error", "");
+                            }
+                          }}
+                          onBlur={(e) => {
+                            handleBlur(e);
+                            const selectedDate = values.dob;
+                            if (selectedDate && !validateAge(selectedDate)) {
+                              setFieldValue("dob_error", "You must be at least 18 years old to register");
+                            }
+                          }}
+                          onFocus={() => setActiveField("dob")}
+                          touched={touched.dob}
+                          error={errors.dob || values.dob_error}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                          max={getMaxDateForDOB()}
+                        />
+                        
+                        {/* Helper text - Always visible */}
+                        <div className="text-xs text-gray-500 mt-1 flex items-center">
+                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                          You must be at least 18 years old to register
+                        </div>
+                        
+                        {/* Error message - Only visible when there's an error */}
+                        {values.dob_error && (
+                          <div className="text-red-500 text-xs mt-1 flex items-center">
+                            <FontAwesomeIcon icon={faTimesCircle} className="mr-1 w-3 h-3" />
+                            {values.dob_error}
+                          </div>
+                        )}
+                      </div>
+                      
                       <FormField
                         id="designation"
                         label="Designation"
@@ -3668,7 +3754,7 @@ const Institution = () => {
                         onFocus={() => setActiveField("designation")}
                         touched={touched.designation}
                         error={errors.designation}
-                        required // ✅ ADD THIS LINE
+                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
@@ -3687,7 +3773,7 @@ const Institution = () => {
                         )}
                         touched={touched.doc_type}
                         error={errors.doc_type}
-                        required // ← ADD THIS LINE
+                        required
                       />
                       <FormField
                         id="doc_id"
@@ -3699,7 +3785,7 @@ const Institution = () => {
                         onFocus={() => setActiveField("doc_id")}
                         touched={touched.doc_id}
                         error={errors.doc_id}
-                        required // ← ADD THIS LINE
+                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
@@ -3718,7 +3804,7 @@ const Institution = () => {
                         )}
                         touched={touched.doc_country}
                         error={errors.doc_country}
-                        required // ← ADD THIS LINE
+                        required
                         isLoading={countriesLoading}
                         isCountryField={true}
                         showPhoneCode={false}
@@ -3737,35 +3823,22 @@ const Institution = () => {
                         onFocus={() => setActiveField("id_issued_date")}
                         touched={touched.id_issued_date}
                         error={errors.id_issued_date}
-                        required // ← ADD THIS LINE
+                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
 
+                      {/* SSN Field (conditional) */}
                       {(function () {
-                        // Check if either USD named account OR remittance only is selected
                         const hasUSDNamedAccount = isNamedAccount;
                         const isRemittanceOnly = remittanceOnlyAccepted;
-
-                        // Check if country is United States
                         const isUSCountry =
                           values.country === "United States" ||
                           values.country === 186;
 
-                        // SHOW SSN field if BOTH conditions are true:
-                        // 1. Either hasUSDNamedAccount OR isRemittanceOnly is true
-                        // 2. AND isUSCountry is true
                         const shouldShowSSNField =
                           (hasUSDNamedAccount || isRemittanceOnly) &&
                           isUSCountry;
-
-                        console.log("🔍 Step 2 SSN Field Logic:", {
-                          hasUSDNamedAccount,
-                          isRemittanceOnly,
-                          isUSCountry,
-                          shouldShowSSNField,
-                          countryValue: values.country,
-                        });
 
                         return shouldShowSSNField ? (
                           <div className="md:col-span-2">
@@ -3813,12 +3886,13 @@ const Institution = () => {
                       })()}
                     </div>
 
+                    {/* Terms and Conditions section remains the same */}
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Contact Address
                       </h3>
 
-                      {/* 1. Country - MOVED TO TOP */}
+                      {/* Address fields remain the same */}
                       <div className="mb-4">
                         <CustomSelect
                           id="country"
@@ -3840,7 +3914,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
                       <div className="mb-4">
                         <FormField
                           id="zip_code"
@@ -3851,12 +3924,10 @@ const Institution = () => {
                             const zipCode = e.target.value;
                             enhancedHandleChange("zip_code", setFieldValue)(e);
 
-                            // Clear previous timer
                             if (zipDebounceTimer) {
                               clearTimeout(zipDebounceTimer);
                             }
 
-                            // Set debounced lookup
                             const timer = setTimeout(() => {
                               const countryId = values.country;
                               if (
@@ -3888,7 +3959,6 @@ const Institution = () => {
                         )}
                       </div>
 
-                      {/* 3. Street Address 1 & 2 */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
                           id="street_address_1"
@@ -3925,7 +3995,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 4. City */}
                       <div className="mb-4">
                         <FormField
                           id="city"
@@ -3943,7 +4012,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 5. State */}
                       <div className="mb-4">
                         <FormField
                           id="state"
@@ -3965,6 +4033,7 @@ const Institution = () => {
                       </div>
                     </div>
 
+                    {/* Terms and Conditions section */}
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">
                       <h3 className="text-sm font-medium text-gray-700 mb-3">
                         Terms and Conditions{" "}

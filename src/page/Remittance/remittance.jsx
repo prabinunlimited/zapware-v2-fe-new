@@ -256,18 +256,43 @@ const Remittance = () => {
   const receiveCurrencyOptions = useMemo(() => {
     const currencyData = currencies?.receiveOptions || [];
 
-    // Map the options
-    const mappedOptions = currencyData.map((currency) => ({
+    return currencyData.map((currency) => ({
       value: currency.currency_code,
-      label: `${currency.icon || ""} ${currency.currency_code}`,
+      label: currency.currency_code,
       icon: currency.icon,
       default_remittance: currency.default_remittance,
       currency_code: currency.currency_code,
       payout_currency_id: currency.payout_currency_id,
     }));
-
-    return mappedOptions;
   }, [currencies?.receiveOptions]);
+
+  useEffect(() => {
+    if (!receiveCurrencyOptions.length) return;
+
+    const defaultOption = receiveCurrencyOptions.find(
+      (opt) => opt.default_remittance === "Y"
+    );
+
+    if (defaultOption) {
+      console.log("defaultOption", defaultOption);
+      dispatch(setReceiveCurrency(defaultOption));
+      activeInput.current = "receive";
+      dispatch(setExchangeRateData(null));
+      setShowRecipientDetails(false);
+
+      Object.keys(exchangeRateCache.current).forEach((key) => {
+        if (key.includes(`-${option?.value}-`)) {
+          delete exchangeRateCache.current[key];
+        }
+      });
+
+      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
+        dispatch(setSendAmount("5"));
+      }
+
+      dispatch(setReceiveAmount(""));
+    }
+  }, [receiveCurrencyOptions, dispatch]);
 
   // Copy to clipboard function
   const copyToClipboard = useCallback((text, fieldName) => {
@@ -772,6 +797,8 @@ const Remittance = () => {
 
   useEffect(() => {
   // Set default receive currency when options are loaded and no currency is selected
+  console.log("receiveCurrencyOptions",receiveCurrencyOptions);
+  console.log("formData.receiveCurrency",formData.receiveCurrency);
   if (receiveCurrencyOptions.length > 0 && !formData.receiveCurrency) {
     // Find the currency with default_remittance = "Y"
     const defaultCurrency = receiveCurrencyOptions.find(
@@ -1998,15 +2025,6 @@ const Remittance = () => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-medium text-slate-400">
-                        {formData.receiveCurrency?.value === "USD"
-                          ? "$"
-                          : formData.receiveCurrency?.value === "EUR"
-                            ? "€"
-                            : formData.receiveCurrency?.value === "GBP"
-                              ? "£"
-                              : ""}
-                      </span>
                       <input
                         type="text"
                         value={formData.receiveAmount || ""}
@@ -2024,7 +2042,9 @@ const Remittance = () => {
                     {/* ✅ Add relative positioning */}
                     <Select
                       options={receiveCurrencyOptions}
-                      value={formData.receiveCurrency}
+                      value={receiveCurrencyOptions.find(
+                        (opt) => opt.value === formData.receiveCurrency?.currency_code
+                      )}
                       onChange={handleReceiveCurrencyChange}
                       placeholder="Currency"
                       styles={{
@@ -2035,7 +2055,6 @@ const Remittance = () => {
                           position: "absolute",
                         }),
                       }}
-                      isSearchable
                       className="text-sm"
                       classNamePrefix="select"
                       menuPortalTarget={document.body} // ✅ Portal to body
