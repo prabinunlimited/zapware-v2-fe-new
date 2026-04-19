@@ -41,9 +41,6 @@ export const fetchAccountDetails = createAsyncThunk(
     }
 
     // Prevent duplicate requests
-    if (pendingRequests.has(requestKey) || globalFetchInProgress) {
-      return rejectWithValue("Request already in progress");
-    }
 
     // Track this request
     pendingRequests.set(requestKey, Date.now());

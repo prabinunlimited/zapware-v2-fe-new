@@ -455,45 +455,7 @@ const HomepageContent = React.memo(() => {
             </div>
           )}
 
-          {/* Manual reset button for debugging */}
-          {process.env.NODE_ENV === "development" && (
-            <button
-              onClick={handleResetFetch}
-              className="fixed top-4 right-4 z-50 bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded opacity-70"
-            >
-              Reset APIs
-            </button>
-          )}
-
           {/* API Coordination Debug Panel */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="fixed top-4 left-4 z-50 bg-green-600 text-white p-3 rounded-lg text-xs max-w-xs">
-              <div className="font-bold mb-2">API Coordination</div>
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span>Accounts:</span>
-                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`) ? '🔄' : '✅'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Profile:</span>
-                  <span>{apiCoordinator.isFetching(`GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`) ? '🔄' : '✅'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>FX:</span>
-                  <span>{apiCoordinator.isFetching(`POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`) ? '🔄' : '✅'}</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => {
-                  apiCoordinator.clear();
-                  window.location.reload();
-                }}
-                className="mt-2 bg-red-500 px-2 py-1 rounded text-xs w-full"
-              >
-                Clear Cache & Reload
-              </button>
-            </div>
-          )}
 
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
@@ -535,21 +497,7 @@ const HomepageContent = React.memo(() => {
           </div>
 
           {/* Debug information - only in development */}
-          {process.env.NODE_ENV === "development" && (
-            <div className="fixed bottom-4 left-4 z-40 bg-black text-white text-xs p-2 rounded opacity-70">
-              <div>Accounts: {safeArray(accounts).length}</div>
-              <div>
-                Navigation: {shouldShowNavigation ? "Visible" : "Hidden"}
-              </div>
-              <div>Currency: {selectedCurrency}</div>
-              <div>Account Fetched: {hasFetchedAccount ? "Yes" : "No"}</div>
-              <div>Profile Fetched: {hasFetchedProfile ? "Yes" : "No"}</div>
-              <div>FX Data: {hasFxData ? "Yes" : "No"}</div>
-              <div>Loading: {isLoading ? "Yes" : "No"}</div>
-              <div>Emergency Stop: {emergencyStop ? "Yes" : "No"}</div>
-              <div>API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}</div>
-            </div>
-          )}
+        
         </motion.div>
       </div>
     </>

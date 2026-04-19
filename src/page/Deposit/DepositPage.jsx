@@ -492,13 +492,6 @@ const DebugPanel = () => {
 
   return (
     <div className="fixed bottom-4 left-4 bg-black text-white p-4 rounded-lg text-xs z-50 max-w-md opacity-90 font-sans">
-      <div>
-        <strong>Debug Panel</strong>
-      </div>
-      <div>
-        Route: {params.customerId} / {params.currency}
-      </div>
-      <div>Redux Slices: {Object.keys(fullState).join(", ")}</div>
     </div>
   );
 };

@@ -375,8 +375,11 @@ export const store = configureStore({
   devTools: process.env.NODE_ENV !== "production",
 });
 
+const isBrowser = () => typeof window !== 'undefined' && window.localStorage;
+
 // ===================== STORE INITIALIZATION =====================
 const initializeAuthState = () => {
+  if (!isBrowser()) return;
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("authtoken");
     const customerId = localStorage.getItem("authcustomer_id");
