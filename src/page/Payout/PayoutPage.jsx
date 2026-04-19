@@ -247,7 +247,7 @@ const PayoutPage = () => {
     console.log("🔍 customerBankAccounts:", customerBankAccounts);
     console.log(
       "🔍 Type of customerBankAccounts:",
-      typeof customerBankAccounts
+      typeof customerBankAccounts,
     );
     console.log("🔍 Is array?", Array.isArray(customerBankAccounts));
   }, [customerBankAccounts]);
@@ -318,7 +318,7 @@ const PayoutPage = () => {
           currency_code: formValues.to,
           beneficiaryId: value,
           payment_method: formValues.transaction_type,
-        })
+        }),
       );
     }
 
@@ -354,7 +354,7 @@ const PayoutPage = () => {
     // Use safeArray to ensure we're working with an array
     const safeCustomerAccounts = safeArray(customerBankAccounts);
     const selectedAccount = safeCustomerAccounts.find(
-      (account) => account.currency_code === formValues.from
+      (account) => account.currency_code === formValues.from,
     );
 
     const payload = {
@@ -394,7 +394,7 @@ const PayoutPage = () => {
           customer_id: customerId,
           passcode: passcode,
           context: "payout_verification", // This will be used in the signature
-        })
+        }),
       ).unwrap();
 
       if (res.Status === "success") {
@@ -405,7 +405,7 @@ const PayoutPage = () => {
             headers: {
               Authorization: `Bearer ${bearertoken}`,
             },
-          }
+          },
         );
 
         const serviceProviderId = Number(toprovider.data.service_provider_id);
@@ -413,7 +413,7 @@ const PayoutPage = () => {
         // Use safeArray to ensure we're working with an array
         const safeCustomerAccounts = safeArray(customerBankAccounts);
         const selectedAccount = safeCustomerAccounts.find(
-          (account) => account.currency_code === formValues.from
+          (account) => account.currency_code === formValues.from,
         );
 
         const payload = {
@@ -432,6 +432,7 @@ const PayoutPage = () => {
         if (
           serviceProviderId !== 27 &&
           serviceProviderId !== 24 &&
+          serviceProviderId !== 59 &&
           ((formValues.from === "GBP" && formValues.to === "GBP") ||
             (formValues.from === "GBP" && formValues.to === "DKK") ||
             (formValues.from === "GBP" && formValues.to === "EUR") ||
@@ -446,7 +447,7 @@ const PayoutPage = () => {
           // Call createpayments API after successful verification
           const res = await axios.post(
             "https://zapware.unlimitedremit.com/api/b4b/createpayments",
-            payload
+            payload,
           );
 
           if (res.data.status === "Success") {
@@ -468,8 +469,8 @@ const PayoutPage = () => {
       console.error("Payout passcode verification error:", err);
       dispatch(
         setModalMessage(
-          err.response?.data?.message || err.message || "Verification failed"
-        )
+          err.response?.data?.message || err.message || "Verification failed",
+        ),
       );
       dispatch(setShowErrorModal(true));
     }
@@ -479,14 +480,14 @@ const PayoutPage = () => {
     e,
     isRecurring,
     recurringFrequency,
-    customDays
+    customDays,
   ) => {
     e.preventDefault();
 
     // Use safeArray to ensure we're working with an array
     const safeCustomerAccounts = safeArray(customerBankAccounts);
     const selectedAccount = safeCustomerAccounts.find(
-      (account) => account.currency_code === formValues.from
+      (account) => account.currency_code === formValues.from,
     );
 
     const formData = new FormData();
@@ -558,14 +559,14 @@ const PayoutPage = () => {
   // Helper functions
   const getAvailableTransactionTypes = (currency, providerId) => {
     if (currency === "KES") {
-      if (providerId === 33) return ["mobile","bank"];
+      if (providerId === 33) return ["mobile", "bank"];
       if (providerId === 41) return ["bank"];
     }
 
     const payoutMethodsByCurrency = {
       USD: ["swift", "bank"],
       NPR: ["bank"],
-      INR: ["bank"],
+      INR: ["bank", "swift"],
       CAD: ["bank"],
       KES: ["bank"],
       AED: ["bank"],
@@ -576,8 +577,8 @@ const PayoutPage = () => {
       NGN: ["bank"],
       GMD: ["cash", "bank", "mobile"],
       VND: ["card", "bank"],
-      GBP: ["bank"],
-      EUR: ["bank"],
+      GBP: ["bank", "swift"],
+      EUR: ["bank", "swift"],
       DKK: ["bank"],
     };
 
@@ -586,7 +587,7 @@ const PayoutPage = () => {
 
   const availableTransactionTypes = getAvailableTransactionTypes(
     formValues.to,
-    toServiceProviderInr
+    toServiceProviderInr,
   );
 
   const customStyles = {
@@ -650,6 +651,7 @@ const PayoutPage = () => {
     )
       return true;
     if (toServiceProviderInr === 41) return true;
+    if (toServiceProviderInr === 59) return true;
     return false;
   };
 
@@ -666,7 +668,12 @@ const PayoutPage = () => {
       toServiceProviderInr !== 49
     )
       return true;
-    if (toServiceProviderInr === 49 || toServiceProviderInr === 41) return true;
+    if (
+      toServiceProviderInr === 49 ||
+      toServiceProviderInr === 41 ||
+      toServiceProviderInr === 59
+    )
+      return true;
     return false;
   };
 
@@ -693,15 +700,15 @@ const PayoutPage = () => {
                 {loading
                   ? "Processing Transaction..."
                   : initialLoading
-                  ? "Loading Data..."
-                  : "Loading Beneficiaries..."}
+                    ? "Loading Data..."
+                    : "Loading Beneficiaries..."}
               </h3>
               <p className="text-sm text-gray-600 font-sans">
                 {loading
                   ? "Your transaction is being processed"
                   : initialLoading
-                  ? "Please wait while we load your data"
-                  : "Loading beneficiary information..."}
+                    ? "Please wait while we load your data"
+                    : "Loading beneficiary information..."}
               </p>
             </div>
           </div>
@@ -892,7 +899,7 @@ const PayoutPage = () => {
                           })
                         }
                         value={destinationcountryOptions.find(
-                          (option) => option.value === formValues.country_id
+                          (option) => option.value === formValues.country_id,
                         )}
                         classNamePrefix="react-select"
                         placeholder="Select Destination Country"
@@ -1224,12 +1231,12 @@ const PayoutPage = () => {
                                 bank.swift || "N/A"
                               }` // For other currencies, display IBAN and Swift code
                           : bank.rails === "Card"
-                          ? `[Card] (${bank.rails}) ${bank.bank_name} - ${
-                              bank.card_number || "N/A"
-                            }`
-                          : bank.bank_acc_no
-                          ? `[Local] ${bank.bank_acc_no}`
-                          : `${bank.benef_iban || "N/A"}`}
+                            ? `[Card] (${bank.rails}) ${bank.bank_name} - ${
+                                bank.card_number || "N/A"
+                              }`
+                            : bank.bank_acc_no
+                              ? `[Local] ${bank.bank_acc_no}`
+                              : `${bank.benef_iban || "N/A"}`}
                       </option>
                     ))}
                   </select>
@@ -1366,7 +1373,7 @@ const PayoutPage = () => {
                         formValues.transaction_type === "bank" ||
                           formValues.transaction_type === "mobile"
                           ? payoutRate || 0
-                          : swiftRate || 0
+                          : swiftRate || 0,
                       ).toFixed(2)}
                     </span>
                   </div>
@@ -1382,7 +1389,7 @@ const PayoutPage = () => {
                           formValues.transaction_type === "bank" ||
                             formValues.transaction_type === "mobile"
                             ? payoutRate || 0
-                            : swiftRate || 0
+                            : swiftRate || 0,
                         )
                       ).toFixed(2)}
                     </span>

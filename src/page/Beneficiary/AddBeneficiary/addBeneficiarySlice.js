@@ -8,7 +8,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
     { customerId, beneficiaryData, bankAccounts, currency, country_code },
-    { rejectWithValue }
+    { rejectWithValue },
   ) => {
     try {
       console.log("🔧 Creating beneficiary with banks...");
@@ -41,7 +41,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 
       // Validate that all bank accounts have rails
       const missingRailsAccounts = bankAccounts.filter(
-        (account) => !account.rails || account.rails.trim() === ""
+        (account) => !account.rails || account.rails.trim() === "",
       );
       if (missingRailsAccounts.length > 0) {
         console.error("❌ Missing rails in accounts:", missingRailsAccounts);
@@ -54,7 +54,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         if (!account.rails) {
           console.error(`❌ ERROR: rails is missing for bank account ${index}`);
           throw new Error(
-            `Bank account ${index + 1} is missing rails selection`
+            `Bank account ${index + 1} is missing rails selection`,
           );
         }
 
@@ -209,7 +209,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       console.log("📡 API Response status:", response.status);
@@ -238,7 +238,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
       console.error("❌ createBeneficiaryWithBanks error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
@@ -256,7 +256,7 @@ export const updateBeneficiaryBank = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(bankData),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -267,7 +267,7 @@ export const updateBeneficiaryBank = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== ADD BENEFICIARY BANK ASYNC THUNKS =====================
@@ -285,7 +285,7 @@ export const addBeneficiaryBank = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(bankData),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -296,7 +296,7 @@ export const addBeneficiaryBank = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== DELETE BENEFICIARY BANK ASYNC THUNKS =====================
@@ -313,7 +313,7 @@ export const deleteBeneficiaryBank = createAsyncThunk(
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -324,7 +324,7 @@ export const deleteBeneficiaryBank = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== FETCH BENEFICIARY BY ID ASYNC THUNK =====================
@@ -337,7 +337,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
       console.log("📥 Fetching beneficiary with ID:", beneficiaryId);
       console.log(
         "📥 Using endpoint:",
-        `/beneficiaries/benef-view/${beneficiaryId}`
+        `/beneficiaries/benef-view/${beneficiaryId}`,
       );
 
       const response = await fetch(
@@ -348,7 +348,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
-        }
+        },
       );
 
       console.log("📡 API Response status:", response.status);
@@ -384,7 +384,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
       console.error("❌ fetchBeneficiaryById error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== UPDATE BENEFICIARY ASYNC THUNK =====================
@@ -392,7 +392,7 @@ export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
   async (
     { beneficiaryId, beneficiaryData }, // Only needs beneficiaryId
-    { rejectWithValue }
+    { rejectWithValue },
   ) => {
     try {
       console.log("📤 Updating beneficiary:", {
@@ -419,7 +419,7 @@ export const updateBeneficiary = createAsyncThunk(
       console.log("📤 Payload for update:", payload);
       console.log(
         "📤 Endpoint:",
-        `/beneficiaries/update-benef/${beneficiaryId}`
+        `/beneficiaries/update-benef/${beneficiaryId}`,
       );
 
       const response = await fetch(
@@ -431,7 +431,7 @@ export const updateBeneficiary = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       console.log("📡 Update API Response status:", response.status);
@@ -442,7 +442,7 @@ export const updateBeneficiary = createAsyncThunk(
         throw new Error(
           errorResult.message ||
             errorResult.error ||
-            "Failed to update beneficiary"
+            "Failed to update beneficiary",
         );
       }
 
@@ -458,7 +458,7 @@ export const updateBeneficiary = createAsyncThunk(
       console.error("❌ updateBeneficiary error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== DROPDOWN DATA ASYNC THUNKS =====================
@@ -483,14 +483,14 @@ export const fetchNationalities = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchBanksByCurrency = createAsyncThunk(
   "beneficiaries/fetchBanksByCurrency",
   async (
     { currency, bankType = "currency-payout-banks" },
-    { rejectWithValue }
+    { rejectWithValue },
   ) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
@@ -515,7 +515,7 @@ export const fetchBanksByCurrency = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchIdTypesByCurrency = createAsyncThunk(
@@ -546,7 +546,7 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
       console.error("API Error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchCitiesByCountry = createAsyncThunk(
@@ -560,6 +560,8 @@ export const fetchCitiesByCountry = createAsyncThunk(
           Authorization: `Bearer ${authtoken}`,
         },
       });
+      console.log("countryId for fetching cities:", countryId);
+      console.log("response for fetching cities:", response);
 
       if (!response.ok) {
         throw new Error("Failed to fetch cities");
@@ -570,7 +572,7 @@ export const fetchCitiesByCountry = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchBankBranches = createAsyncThunk(
@@ -594,7 +596,7 @@ export const fetchBankBranches = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== BENEFICIARY REGISTRATION VERIFICATION ENDPOINTS =====================
@@ -643,7 +645,7 @@ export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
       console.error("❌ sendBeneficiaryRegistrationPasscode error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 /**
@@ -672,7 +674,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       const result = await response.json();
@@ -692,7 +694,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
       console.error("❌ validateBeneficiaryRegistrationPasscode error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 /**
@@ -705,7 +707,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
       console.log(
         "📱 Sending registration OTP to:",
         country_code,
-        mobile_number
+        mobile_number,
       );
 
       // Clean inputs
@@ -748,7 +750,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
       console.error("❌ sendBeneficiaryRegistrationOTP error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 /**
@@ -761,7 +763,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
       console.log(
         "✅ Validating registration OTP for:",
         country_code,
-        mobile_number
+        mobile_number,
       );
 
       // Clean inputs
@@ -798,7 +800,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
       if (result.data?.verification_token) {
         localStorage.setItem(
           "phone_verification_token",
-          result.data.verification_token
+          result.data.verification_token,
         );
       }
 
@@ -812,7 +814,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
       console.error("❌ validateBeneficiaryRegistrationOTP error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 /**
@@ -840,7 +842,7 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
 
       console.log(
         "📡 Final payload:",
-        JSON.stringify(beneficiaryData, null, 2)
+        JSON.stringify(beneficiaryData, null, 2),
       );
 
       const response = await fetch(
@@ -852,7 +854,7 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
             Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(beneficiaryData),
-        }
+        },
       );
 
       console.log("📡 API Response status:", response.status);
@@ -907,7 +909,7 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
       console.error("❌ createBeneficiaryRequestRemit error:", error);
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // ===================== INITIAL STATE =====================
@@ -1049,7 +1051,7 @@ const addBeneficiarySlice = createSlice({
       .addCase(createBeneficiaryWithBanks.rejected, (state, action) => {
         console.error(
           "❌ createBeneficiaryWithBanks REJECTED:",
-          action.payload
+          action.payload,
         );
         state.createLoading = false;
         state.createError = action.payload;
@@ -1073,7 +1075,7 @@ const addBeneficiarySlice = createSlice({
       .addCase(createBeneficiaryRequestRemit.rejected, (state, action) => {
         console.error(
           "❌ createBeneficiaryRequestRemit REJECTED:",
-          action.payload
+          action.payload,
         );
         state.createLoading = false;
         state.createError = action.payload;
@@ -1220,7 +1222,7 @@ const addBeneficiarySlice = createSlice({
         // Update beneficiary data if it exists
         if (state.beneficiaryData && state.beneficiaryData.banks) {
           const bankIndex = state.beneficiaryData.banks.findIndex(
-            (bank) => bank.id === action.payload.bankId
+            (bank) => bank.id === action.payload.bankId,
           );
           if (bankIndex !== -1) {
             state.beneficiaryData.banks[bankIndex] = {
@@ -1282,7 +1284,7 @@ const addBeneficiarySlice = createSlice({
         // Remove bank from beneficiary data if it exists
         if (state.beneficiaryData && state.beneficiaryData.banks) {
           state.beneficiaryData.banks = state.beneficiaryData.banks.filter(
-            (bank) => bank.id !== action.payload.bankId
+            (bank) => bank.id !== action.payload.bankId,
           );
         }
       })
@@ -1387,7 +1389,7 @@ export const selectBankById = (bankId) => (state) => {
   }
   return (
     state.addBeneficiary.beneficiaryData.banks.find(
-      (bank) => bank.id === bankId
+      (bank) => bank.id === bankId,
     ) || null
   );
 };

@@ -187,11 +187,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Create state from beneficiarySlice
   const beneficiariesCreateLoading = useSelector(
-    selectBeneficiariesCreateLoading
+    selectBeneficiariesCreateLoading,
   );
   const beneficiariesCreateError = useSelector(selectBeneficiariesCreateError);
   const beneficiariesCreateSuccess = useSelector(
-    selectBeneficiariesCreateSuccess
+    selectBeneficiariesCreateSuccess,
   );
 
   // Countries from Redux
@@ -203,7 +203,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(mode === "create" ? 0 : 1); // Start at step 0 for create mode
   const [beneficiariesLoaded, setBeneficiariesLoaded] = useState(false);
-  const [usingExistingBeneficiary, setUsingExistingBeneficiary] = useState(false);
+  const [usingExistingBeneficiary, setUsingExistingBeneficiary] =
+    useState(false);
 
   // Phone search state
   const [phoneInput, setPhoneInput] = useState("");
@@ -215,7 +216,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [currency, setCurrency] = useState(
     mode === "edit" && initialData?.banks?.[0]?.currency_code
       ? initialData.banks[0].currency_code
-      : "USD"
+      : "USD",
   );
   const [paymentMethod, setPaymentMethod] = useState("ACH");
   const [loading, setLoading] = useState(false);
@@ -381,8 +382,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       backgroundColor: state.isSelected
         ? "#3b82f6"
         : state.isFocused
-        ? "#eff6ff"
-        : "white",
+          ? "#eff6ff"
+          : "white",
       color: state.isSelected ? "white" : "#1f2937",
       padding: "12px 16px",
       fontSize: "0.875rem",
@@ -452,7 +453,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             setBeneficiariesLoaded(true);
             console.log(
               "✅ Beneficiaries loaded, count:",
-              beneficiaries.length
+              beneficiaries.length,
             );
           }
         } catch (error) {
@@ -476,7 +477,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ) {
       console.log(
         "📝 Populating form with beneficiary data:",
-        beneficiaryDetails
+        beneficiaryDetails,
       );
 
       formik.setValues({
@@ -529,33 +530,48 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             accountType: bank.account_type || "",
             sortCode: bank.sort_code || "",
             bankCountry: bank.bank_country || "",
-          }))
+          })),
         );
       }
     }
-  }, [beneficiaryDetails, mode, initialData, formik.setValues, currency, paymentMethod]);
+  }, [
+    beneficiaryDetails,
+    mode,
+    initialData,
+    formik.setValues,
+    currency,
+    paymentMethod,
+  ]);
+
+  useEffect(() => {
+    if (isMounted.current) {
+      // Always fetch nationalities - they are needed for step 1
+      dispatch(fetchNationalities());
+      dispatch(fetchCountries());
+    }
+  }, [dispatch]);
 
   // Fetch initial data
   useEffect(() => {
     if (step > 0 && isMounted.current) {
-      // Only fetch if past phone search step
-      dispatch(fetchNationalities());
-      dispatch(fetchCountries());
+      // // Only fetch if past phone search step
+      // dispatch(fetchNationalities());
+      // dispatch(fetchCountries());
 
       // Fetch banks based on currency
       if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(currency)) {
         dispatch(
-          fetchBanksByCurrency({ 
-            currency: currency, 
-            bankType: "int-banks" 
-          })
+          fetchBanksByCurrency({
+            currency: currency,
+            bankType: "int-banks",
+          }),
         );
       } else {
         dispatch(
           fetchBanksByCurrency({
             currency: currency,
-            bankType: "currency-payout-banks"
-          })
+            bankType: "currency-payout-banks",
+          }),
         );
       }
 
@@ -579,7 +595,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       if (beneficiariesCreateError && mounted) {
         console.log(
           "❌ DEBUG - Create error detected in useEffect:",
-          beneficiariesCreateError
+          beneficiariesCreateError,
         );
         toast.error(beneficiariesCreateError);
         dispatch(clearBeneficiariesCreateState());
@@ -615,10 +631,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Fetch cities when country changes
   useEffect(() => {
-    if (formik.values.country_id && step > 0 && isMounted.current) {
-      dispatch(fetchCitiesByCountry(formik.values.country_id));
+    const countryId = formik.values.country_id;
+    console.log("🔥 useEffect triggered, countryId:", countryId);
+    console.log("  isMounted.current:", isMounted.current);
+
+    if (countryId) {
+      console.log(
+        "📥 Dispatching fetchCitiesByCountry for country:",
+        countryId,
+      );
+      dispatch(fetchCitiesByCountry(countryId));
     }
-  }, [formik.values.country_id, dispatch, step]);
+  }, [formik.values.country_id, formik.values, dispatch]);
 
   // Get cities for selected country
   const getCitiesForCountry = () => {
@@ -675,14 +699,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     // UPDATE THIS SECTION - Add CAD to the special handling
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
-        fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
+        fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" }),
       );
     } else {
       dispatch(
         fetchBanksByCurrency({
           currency: newCurrency,
           bankType: "currency-payout-banks",
-        })
+        }),
       );
     }
 
@@ -690,7 +714,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       prevAccounts.map((account) => ({
         ...account,
         currency: newCurrency,
-      }))
+      })),
     );
 
     console.log("=== CURRENCY CHANGE END ===");
@@ -704,7 +728,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     if (!nationalityName) return "";
 
     const found = nationalitiesList.find(
-      (nat) => nat.name.toLowerCase() === nationalityName.toLowerCase()
+      (nat) => nat.name.toLowerCase() === nationalityName.toLowerCase(),
     );
 
     return found ? found.id.toString() : "";
@@ -741,13 +765,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         ) {
           nationalityId = mapNationalityToId(
             beneficiaryData.nationality,
-            nationalities
+            nationalities,
           );
           console.log(
             "🌍 Mapped nationality:",
             beneficiaryData.nationality,
             "→",
-            nationalityId
+            nationalityId,
           );
         }
 
@@ -769,7 +793,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             "👥 Mapped relationship:",
             beneficiaryData.relationtobenef,
             "→",
-            relationshipValue
+            relationshipValue,
           );
         }
 
@@ -828,7 +852,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               accountType: bank.account_type || "",
               sortCode: bank.sort_code || "",
               bankCountry: bank.bank_country || "",
-            }))
+            })),
           );
         }
 
@@ -841,7 +865,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         isMounted.current
       ) {
         toast.info(
-          "No existing beneficiary found with this phone number. You can create a new one."
+          "No existing beneficiary found with this phone number. You can create a new one.",
         );
         // Set phone in formik for new beneficiary
         formik.setFieldValue("phone_number", phoneInput);
@@ -899,7 +923,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
           countryPhoneCode: countryCodeInput,
-        })
+        }),
       );
     } catch (error) {
       console.error("Phone search error:", error);
@@ -945,7 +969,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       // If there are no beneficiaries in the system, skip search entirely
       if (beneficiaries.length === 0) {
         console.log(
-          "No beneficiaries in system, skipping search and creating new beneficiary"
+          "No beneficiaries in system, skipping search and creating new beneficiary",
         );
 
         // Store phone in formik for new beneficiary
@@ -963,7 +987,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         // Show informative toast
         toast.info(
-          "No existing beneficiaries found. You can create a new beneficiary."
+          "No existing beneficiaries found. You can create a new beneficiary.",
         );
         return true;
       }
@@ -1048,12 +1072,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       const invalidSwiftAccounts = bankAccounts.filter(
         (account) =>
           account.rails === "Swift" &&
-          !isSwiftSupportedForCurrency(account.currency || currency)
+          !isSwiftSupportedForCurrency(account.currency || currency),
       );
 
       if (invalidSwiftAccounts.length > 0) {
         toast.error(
-          "SWIFT is not available for the selected currency(s). Please fix before proceeding."
+          "SWIFT is not available for the selected currency(s). Please fix before proceeding.",
         );
         return false;
       }
@@ -1101,7 +1125,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     console.log("🚀 SUBMITTING WITH:");
     console.log(
       "country_phone_code from formik:",
-      formik.values.country_phone_code
+      formik.values.country_phone_code,
     );
     console.log("country_id:", formik.values.country_id);
 
@@ -1114,7 +1138,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     console.log("🔴 beneficiary_id_type:", formik.values.beneficiary_id_type);
     console.log(
       "🔴 beneficiary_id_number:",
-      formik.values.beneficiary_id_number
+      formik.values.beneficiary_id_number,
     );
 
     if (isRailsMissing) {
@@ -1127,12 +1151,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     const invalidSwiftAccounts = bankAccounts.filter(
       (account) =>
         account.rails === "Swift" &&
-        !isSwiftSupportedForCurrency(account.currency || currency)
+        !isSwiftSupportedForCurrency(account.currency || currency),
     );
 
     if (invalidSwiftAccounts.length > 0) {
       toast.error(
-        "SWIFT is not available for the selected currency(s). Please fix before proceeding."
+        "SWIFT is not available for the selected currency(s). Please fix before proceeding.",
       );
       setLoading(false);
       return;
@@ -1184,13 +1208,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       country_phone_code: cleanedCountryCode, // ADD THIS - include country code in payload
     };
 
-      const bankAccountsWithCurrency = bankAccounts.map(account => {
-    const accountCurrency = account.currency || currency;
-    return {
-      ...account,
-      currency_code: accountCurrency, // ADD THIS LINE
-    };
-  });
+    const bankAccountsWithCurrency = bankAccounts.map((account) => {
+      const accountCurrency = account.currency || currency;
+      return {
+        ...account,
+        currency_code: accountCurrency, // ADD THIS LINE
+      };
+    });
 
     console.log(`📤 Submitting beneficiary data (${mode}):`, beneficiaryData);
     console.log("📤 Submitting bank accounts:", bankAccountsWithCurrency);
@@ -1208,10 +1232,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               ...beneficiaryData,
               country_phone_code: cleanedCountryCode,
             },
-           bankAccounts: bankAccountsWithCurrency,
-           currency: currency,
+            bankAccounts: bankAccountsWithCurrency,
+            currency: currency,
             country_code: cleanedCountryCode,
-          })
+          }),
         ).unwrap();
 
         console.log("✅ DEBUG - Dispatch completed successfully!");
@@ -1241,7 +1265,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           console.log("❌ DEBUG - Success flag is false or missing");
           console.log(
             "❌ Full result object:",
-            JSON.stringify(result, null, 2)
+            JSON.stringify(result, null, 2),
           );
         }
 
@@ -1262,7 +1286,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             },
             bankAccounts: bankAccountsWithCurrency,
             currency: currency,
-          })
+          }),
         ).unwrap();
 
         console.log("✅ Update successful, result:", result);
@@ -1420,11 +1444,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           // Also update formik
           formik.setFieldValue(
             "country_phone_code",
-            selectedOption?.value || "+1"
+            selectedOption?.value || "+1",
           );
         }}
         value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code // Use formik value
+          (option) => option.value === formik.values.country_phone_code, // Use formik value
         )}
         formatOptionLabel={({ country, label }) => (
           <div className="flex items-center">
@@ -1450,7 +1474,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       onChange={(e) => {
         const selectedCountryId = e.target.value;
         const selectedCountry = countries.find(
-          (country) => country.id === parseInt(selectedCountryId)
+          (country) => country.id === parseInt(selectedCountryId),
         );
 
         formik.setFieldValue("country_id", selectedCountryId);
@@ -1580,10 +1604,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 {accountCurrency === "GBP"
                   ? "FPS"
                   : accountCurrency === "EUR"
-                  ? "SEPA"
-                  : accountCurrency === "USD"
-                  ? "ACH"
-                  : "Bank"}
+                    ? "SEPA"
+                    : accountCurrency === "USD"
+                      ? "ACH"
+                      : "Bank"}
               </option>
 
               {/* CONDITIONAL SWIFT OPTION */}
@@ -1732,7 +1756,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCountry",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1817,7 +1841,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "accountNumber",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       required
@@ -1845,7 +1869,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "intermediarySwift",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     disabled={usingExistingBeneficiary}
@@ -1861,7 +1885,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div>
                     <h3 className="font-bold text-lg">SWIFT Not Available</h3>
                     <p className="text-sm">
-                      Currently, SWIFT is not available for the selected currency.
+                      Currently, SWIFT is not available for the selected
+                      currency.
                     </p>
                   </div>
                 </div>
@@ -1896,7 +1921,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "paymentMethod",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1930,7 +1955,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "routingNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1961,7 +1986,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -1990,7 +2015,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCountry",
-                        e.target.value
+                        e.target.value,
                       );
                     }}
                     required
@@ -2026,7 +2051,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "accountType",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       required
@@ -2099,7 +2124,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2155,7 +2180,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCountry",
-                        e.target.value
+                        e.target.value,
                       );
                     }}
                     required
@@ -2222,7 +2247,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCountry",
-                        e.target.value
+                        e.target.value,
                       );
                     }}
                     required
@@ -2323,18 +2348,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCode",
-                        e.target.value
+                        e.target.value,
                       );
                       const selectedBank = currentBanks.find(
                         (bank) =>
                           bank.id === e.target.value ||
-                          bank.bank_code === e.target.value
+                          bank.bank_code === e.target.value,
                       );
                       if (selectedBank) {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.name || selectedBank.bank_name
+                          selectedBank.name || selectedBank.bank_name,
                         );
                       }
                     }}
@@ -2375,7 +2400,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2407,7 +2432,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "accountName",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       disabled={usingExistingBeneficiary}
@@ -2446,21 +2471,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         accountCurrency === "LKR" ||
                         accountCurrency === "AUD"
                       ) {
-                        handleBdtBankAccountChange(index, "bankCode", e.target.value);
+                        handleBdtBankAccountChange(
+                          index,
+                          "bankCode",
+                          e.target.value,
+                        );
                       } else if (accountCurrency === "CAD") {
-                        handleCADBankAccountChange(index, "bankCode", e.target.value);
+                        handleCADBankAccountChange(
+                          index,
+                          "bankCode",
+                          e.target.value,
+                        );
                       } else {
-                        handlePkrBankAccountChange(index, "bankCode", e.target.value);
+                        handlePkrBankAccountChange(
+                          index,
+                          "bankCode",
+                          e.target.value,
+                        );
                       }
-                      
+
                       const selectedBank = currentBanks.find(
-                        (bank) => bank.bank_code === e.target.value
+                        (bank) => bank.bank_code === e.target.value,
                       );
                       if (selectedBank) {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.bank_name || selectedBank.name
+                          selectedBank.bank_name || selectedBank.name,
                         );
                       }
                     }}
@@ -2498,7 +2535,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2530,7 +2567,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "branchCode",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       disabled={usingExistingBeneficiary}
@@ -2559,7 +2596,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "branchCode",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       disabled={usingExistingBeneficiary}
@@ -2590,7 +2627,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankState",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     disabled={usingExistingBeneficiary}
@@ -2647,7 +2684,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           handleBankAccountChange(
                             index,
                             "accountTitle",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         disabled={usingExistingBeneficiary}
@@ -2684,7 +2721,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2741,7 +2778,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(
                           index,
                           "bankCountry",
-                          e.target.value
+                          e.target.value,
                         );
                       }}
                       required
@@ -2783,19 +2820,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleCADBankAccountChange(
                         index,
                         "bankCode",
-                        e.target.value
+                        e.target.value,
                       );
                       // Find selected bank from CAD banks
                       const selectedBank = currentBanks.find(
                         (bank) =>
                           bank.bank_code === e.target.value ||
-                          bank.code === e.target.value
+                          bank.code === e.target.value,
                       );
                       if (selectedBank) {
                         handleBankAccountChange(
                           index,
                           "bankName",
-                          selectedBank.bank_name || selectedBank.name
+                          selectedBank.bank_name || selectedBank.name,
                         );
                       }
                     }}
@@ -2834,7 +2871,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "bankCountry",
-                        e.target.value
+                        e.target.value,
                       );
                     }}
                     required
@@ -2864,7 +2901,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "accountNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     required
@@ -2886,19 +2923,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleCADBankAccountChange(
                         index,
                         "branchCode",
-                        e.target.value
+                        e.target.value,
                       );
                       // Find selected branch
                       const selectedBranch = currentBankBranches.find(
                         (branch) =>
                           branch.branch_code === e.target.value ||
-                          branch.branch === e.target.value
+                          branch.branch === e.target.value,
                       );
                       if (selectedBranch) {
                         handleBankAccountChange(
                           index,
                           "branchCode",
-                          selectedBranch.branch_code || selectedBranch.branch
+                          selectedBranch.branch_code || selectedBranch.branch,
                         );
                       }
                     }}
@@ -2933,7 +2970,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       handleBankAccountChange(
                         index,
                         "routingNumber",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     disabled={usingExistingBeneficiary}
@@ -2968,7 +3005,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   handleBankAccountChange(
                     index,
                     "walletProvider",
-                    e.target.value
+                    e.target.value,
                   )
                 }
                 required
@@ -3032,7 +3069,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     handleBankAccountChange(
                       index,
                       "otherProvider",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   required
@@ -3091,7 +3128,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   setSelectedCountryCode(selectedOption?.value || "+1");
                 }}
                 value={phoneCodeOptions.find(
-                  (option) => option.value === countryCodeInput
+                  (option) => option.value === countryCodeInput,
                 )}
                 formatOptionLabel={({ country, label }) => (
                   <div className="flex items-center">
@@ -3136,8 +3173,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   phoneSearchLoading
                     ? "bg-gray-300 cursor-not-allowed"
                     : !phoneInput.trim()
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-blue-500 hover:bg-blue-600 text-white"
                 }`}
               >
                 {phoneSearchLoading ? (
@@ -3209,7 +3246,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         {phoneSearch.data.country_id
                           ? countries.find(
                               (c) =>
-                                c.id === parseInt(phoneSearch.data.country_id)
+                                c.id === parseInt(phoneSearch.data.country_id),
                             )?.name || "N/A"
                           : "N/A"}
                       </p>
@@ -3381,8 +3418,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       step === stepItem.number
                         ? "bg-blue-500"
                         : step > stepItem.number
-                        ? "bg-blue-400"
-                        : "bg-blue-300"
+                          ? "bg-blue-400"
+                          : "bg-blue-300"
                     } text-white font-bold text-lg shadow-lg`}
                   >
                     {step === stepItem.number ? (
@@ -3420,10 +3457,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   step === 0 && mode === "create"
                     ? "bg-blue-600 text-white"
                     : step >= 1
-                    ? step === 1
-                      ? "bg-blue-600 text-white"
+                      ? step === 1
+                        ? "bg-blue-600 text-white"
+                        : "bg-blue-100 text-blue-600"
                       : "bg-blue-100 text-blue-600"
-                    : "bg-blue-100 text-blue-600"
                 }`}
               >
                 {step}
@@ -3561,9 +3598,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
                 {/* Currency Selection */}
                 <div className="md:col-span-2">
-                  <FieldLabel required>
-                    Select Currency
-                  </FieldLabel>
+                  <FieldLabel required>Select Currency</FieldLabel>
                   <div className="relative">
                     <select
                       className={`w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${
@@ -3676,13 +3711,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             if (!usingExistingBeneficiary) {
                               formik.setFieldValue(
                                 "country_phone_code",
-                                selectedOption?.value || "+1"
+                                selectedOption?.value || "+1",
                               );
                             }
                           }}
                           value={phoneCodeOptions.find(
                             (option) =>
-                              option.value === formik.values.country_phone_code
+                              option.value === formik.values.country_phone_code,
                           )}
                           formatOptionLabel={({ country, label }) => (
                             <div className="flex items-center">
@@ -3793,7 +3828,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           const selectedCountryId = e.target.value;
                           const selectedCountry = countries.find(
                             (country) =>
-                              country.id === parseInt(selectedCountryId)
+                              country.id === parseInt(selectedCountryId),
                           );
 
                           formik.setFieldValue("country_id", selectedCountryId);
@@ -3801,7 +3836,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           if (selectedCountry) {
                             formik.setFieldValue(
                               "country_phone_code",
-                              selectedCountry.phone_code || "+1"
+                              selectedCountry.phone_code || "+1",
                             );
                           }
                         }
@@ -3967,7 +4002,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Beneficiary ID Type (for specific currencies) */}
-                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
+                  {(currency === "BDT" ||
+                    currency === "INR" ||
+                    currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Type
@@ -4009,7 +4046,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   )}
 
                   {/* Beneficiary ID Number (for specific currencies) */}
-                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
+                  {(currency === "BDT" ||
+                    currency === "INR" ||
+                    currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Number
@@ -4056,7 +4095,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             if (!usingExistingBeneficiary) {
                               formik.handleChange(e);
                               setShowOtherRelationship(
-                                e.target.value === "other"
+                                e.target.value === "other",
                               );
                             }
                           }}
@@ -4165,7 +4204,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <form onSubmit={handleSubmit} className="space-y-8">
                 {bankAccounts.map((account, index) =>
-                  renderBankAccountFields(index)
+                  renderBankAccountFields(index),
                 )}
 
                 {/* Add Bank Account Button */}
