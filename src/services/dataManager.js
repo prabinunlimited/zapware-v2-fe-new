@@ -29,11 +29,6 @@ class UnifiedDataManager {
       }
     }
 
-    // Prevent duplicate requests
-    if (this.pendingRequests.has(cacheKey)) {
-      return this.pendingRequests.get(cacheKey);
-    }
-
     // Make the request
     const promise = fetchFn();
     this.pendingRequests.set(cacheKey, promise);

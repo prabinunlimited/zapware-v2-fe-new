@@ -210,7 +210,6 @@ const Header = ({ customerId }) => {
     } catch (error) {
       console.error("Logout error:", error);
       // Even if API fails, clear local storage and redirect
-      localStorage.clear();
       sessionStorage.clear();
       navigate("/", { replace: true });
       window.location.reload();

@@ -11,6 +11,7 @@ const getProfileSignature = (customerId) => {
 
 const getFxSignature = () => {
   const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+  console.log("headerslice isWhiteLabelled",isWhiteLabelled);
   const partnerId =
     isWhiteLabelled === "1"
       ? localStorage.getItem("whitelabelledpartnerid") || "9"
@@ -92,7 +93,6 @@ export const fetchUserProfile = createAsyncThunk(
       }
     } catch (error) {
       console.error("❌ fetchUserProfile error:", error);
-      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
