@@ -164,9 +164,7 @@ api.interceptors.request.use(
       switch (reason) {
         case "global-in-progress":
           console.log(`🔄 Request cancelled (duplicate): ${config.url}`);
-          return Promise.reject(
-            new axios.Cancel("Duplicate request - globally coordinated")
-          );
+          return;
 
         case "throttled":
           console.log(`🚦 Request throttled: ${config.url}`);
@@ -188,7 +186,7 @@ api.interceptors.request.use(
           });
 
         default:
-          return Promise.reject(new axios.Cancel("Duplicate request"));
+          return;
       }
     }
 
@@ -349,10 +347,6 @@ api.interceptors.response.use(
           }
         } catch (refreshError) {
           if (!isLoginEndpoint) {
-            tokenService.clearToken();
-            localStorage.removeItem("authtoken");
-            localStorage.removeItem("authcustomer_id");
-            clearApiCache();
             window.location.href = "/";
           }
           return Promise.reject(
@@ -440,10 +434,6 @@ export const apiCoordinator = {
       url.includes(endpoint)
     );
   },
-};
-
-export const forceRefreshEndpoint = (endpointPattern) => {
-  clearApiCache(endpointPattern);
 };
 
 // Enhanced debug utility
