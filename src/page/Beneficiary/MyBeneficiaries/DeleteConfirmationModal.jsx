@@ -3,7 +3,6 @@ import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
-import { useParams } from "react-router-dom";
 import {
   hideDeleteModal,
   setDeleteModalLoading,
@@ -21,10 +20,9 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
-const DeleteConfirmationModal = () => {
+const DeleteConfirmationModal = ({ customerId }) => {
   const dispatch = useDispatch();
   const deleteModal = useSelector((state) => state.modal.deleteModal);
-  const { customerId } = useParams();
 
   // Prevent body scroll when modal is open
   useEffect(() => {
