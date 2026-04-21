@@ -17,6 +17,21 @@ const isCancellationError = (payload) => {
   );
 };
 
+const getFxSignature = () => {
+  const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+  console.log("headerslice isWhiteLabelled",isWhiteLabelled);
+  const partnerId =
+    isWhiteLabelled === "1"
+      ? localStorage.getItem("whitelabelledpartnerid") || "9"
+      : "9";
+  return `POST-${API_URL}/partner-fxcurrencies-{"partner_id":"${partnerId}"}`;
+};
+
+const getChargesSignature = (customerId) => {
+  return `GET-${API_URL}/get-charges/${customerId}-{}`;
+};
+
+// FX currencies thunk with coordination
 export const fetchPartnerFxCurrencies = createAsyncThunk(
   "header/fetchPartnerFxCurrencies",
   async (bearertoken, { rejectWithValue }) => {
@@ -74,7 +89,6 @@ export const fetchUserProfile = createAsyncThunk(
       }
     } catch (error) {
       console.error("❌ fetchUserProfile error:", error);
-      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );

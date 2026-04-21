@@ -221,7 +221,6 @@ const clearAuthStorage = () => {
     };
 
     // Clear ALL storage first
-    localStorage.clear();
     sessionStorage.clear();
 
     // IMMEDIATELY restore system/partner tokens

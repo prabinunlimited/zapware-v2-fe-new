@@ -16,9 +16,7 @@ export const handleApiError = (error, dispatch = null) => {
     switch (error.response.status) {
       case 401:
         errorMessage = "Session expired. Please login again.";
-        localStorage.removeItem("authtoken");
-        localStorage.removeItem("authcustomer_id");
-        tokenService.clearToken();
+    
         window.location.href = "/";
         break;
       case 403:
@@ -247,10 +245,7 @@ export const generatePasscode = createAsyncThunk(
       });
 
       // Handle multiple accounts scenario
-      if (
-        response.data.status === "error" &&
-        response.data.data?.checkMultipleCustomer === "Y"
-      ) {
+      if (response.data?.data?.checkMultipleCustomer === "Y") {
         dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
         return {
           status: "multiple_accounts",
@@ -259,11 +254,6 @@ export const generatePasscode = createAsyncThunk(
         };
       }
 
-      if (response.data.status === "error") {
-        return rejectWithValue(
-          response.data.message || "Failed to generate passcode"
-        );
-      }
 
       if (response.data.status === "success") {
         dispatch({ type: "auth/setShowPasscodeInput", payload: true });
@@ -277,7 +267,7 @@ export const generatePasscode = createAsyncThunk(
         };
       }
 
-      return rejectWithValue("Unexpected response format from server");
+      return response.data;
     } catch (error) {
       if (error.response) {
         const responseData = error.response.data;

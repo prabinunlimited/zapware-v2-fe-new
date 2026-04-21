@@ -121,7 +121,7 @@ function NavigateSectionContent({
       }
     } catch (error) {
       console.error("Fetch error:", error);
-      setLocalError(error.message || "Failed to fetch navigation data");
+      ///setLocalError(error.message || "Failed to fetch navigation data");
       hasFetchBeenCalled.current = false;
     } finally {
       setIsFetching(false);

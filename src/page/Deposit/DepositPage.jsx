@@ -492,13 +492,6 @@ const DebugPanel = () => {
 
   return (
     <div className="fixed bottom-4 left-4 bg-black text-white p-4 rounded-lg text-xs z-50 max-w-md opacity-90 font-sans">
-      <div>
-        <strong>Debug Panel</strong>
-      </div>
-      <div>
-        Route: {params.customerId} / {params.currency}
-      </div>
-      <div>Redux Slices: {Object.keys(fullState).join(", ")}</div>
     </div>
   );
 };
@@ -750,7 +743,7 @@ const DepositPageContent = () => {
     // Proceed with deposit submission
     try {
       // Get customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("authcustomer_id");
 
       if (!customerUuid) {
         toast.error("Customer information not found. Please log in again.");
