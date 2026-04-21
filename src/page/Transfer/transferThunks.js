@@ -1,5 +1,6 @@
 // src/features/Transfer/transferThunks.js - REFACTORED WITH CACHING
 import {
+  setCustomerBankAccounts,
   setAccountsFetched,
   openConfirmationModal,
   closeConfirmationModal,
