@@ -293,6 +293,7 @@ function NavigateSectionContent({
       const customerUuid = localStorage.getItem("customerUuid");
       const authCustomerId = localStorage.getItem("authcustomer_id");
       const effectiveCustomerId = customerUuid || customerId || authCustomerId;
+
       navigate(`/recurring-remit/${effectiveCustomerId}`);
     } catch (error) {
       console.error("Navigation error:", error);
