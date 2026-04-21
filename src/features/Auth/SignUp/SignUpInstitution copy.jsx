@@ -39,9 +39,6 @@ import {
   selectZipLookup,
   selectLocationLoading,
   clearZipLookupData,
-  fetchServiceProviderCurrencies,
-  selectServiceProviderCurrencies,
-  selectCurrenciesLoading,
 } from "../../../features/Auth/slices/countrySlice";
 
 import {
@@ -104,26 +101,23 @@ import OwnerInfo from "./Steps/OwnerInfo";
 // ===================== DOB VALIDATION FUNCTIONS =====================
 const validateAge = (dateOfBirth) => {
   if (!dateOfBirth) return false;
-
+  
   const today = new Date();
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < birthDate.getDate())
-  ) {
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-
+  
   return age >= 18;
 };
 
 const getMaxDateForDOB = () => {
   const today = new Date();
   const maxDate = new Date(today.setFullYear(today.getFullYear() - 18));
-  return maxDate.toISOString().split("T")[0];
+  return maxDate.toISOString().split('T')[0];
 };
 
 // CustomSelect Component
@@ -396,44 +390,6 @@ const Institution = () => {
     return null;
   };
 
-  const serviceProviderCurrencies = useSelector(
-    selectServiceProviderCurrencies,
-  );
-  const currenciesLoading = useSelector(selectCurrenciesLoading);
-
-  useEffect(() => {
-    // Fetch currencies for service provider ID 59 (transfermate)
-    dispatch(fetchServiceProviderCurrencies(59));
-  }, [dispatch]);
-
-  const payoutCurrencyOptions = useMemo(() => {
-    if (!serviceProviderCurrencies || serviceProviderCurrencies.length === 0) {
-      return [];
-    }
-    // Filter currencies where currency_type is 'payout' for OUT
-    return serviceProviderCurrencies
-      .filter((curr) => curr.currency_type === "payout")
-      .map((curr) => ({
-        value: curr.currency_code,
-        label: `${curr.currency_code}`,
-        id: curr.id,
-      }));
-  }, [serviceProviderCurrencies]);
-
-  const bankAccountCurrencyOptions = useMemo(() => {
-    if (!serviceProviderCurrencies || serviceProviderCurrencies.length === 0) {
-      return [];
-    }
-    // Filter currencies where currency_type is 'bankaccount' for IN
-    return serviceProviderCurrencies
-      .filter((curr) => curr.currency_type === "bankaccount")
-      .map((curr) => ({
-        value: curr.currency_code,
-        label: `${curr.currency_code}`,
-        id: curr.id,
-      }));
-  }, [serviceProviderCurrencies]);
-
   const {
     currentStep,
     formData,
@@ -526,41 +482,22 @@ const Institution = () => {
       // Add dob_error state
       dob_error: "",
 
-      // Customer Payment Data fields
-      business_model_overview: "",
-      business_size: "",
-      high_risk_countries: 0,
-      specify_high_risk_countries: [],
-      conducting_payment_activities: "",
-      employees_number: "",
-      reason_for_payments: "",
-      product_services_required: "",
-      beneficiary_types: "",
-      beneficiary_types_other: "",
-      beneficiary_industries_top_5: "",
-      expected_frequency_payments_out: "",
-      expected_avg_payments_out_currency: "",
-      expected_avg_payments_out_amount: "",
-      sender_types: "",
-      sender_types_other: "",
-      sender_industries_top_5: "",
-      expected_frequency_payments_in: "",
-      expected_avg_payments_in_currency: "",
-      expected_avg_payments_in_amount: "",
-
       ...mergedData,
     };
     return safeData;
   }, [formData, localFormData]);
 
-  useEffect(() => {
-    if (
-      Object.keys(formData).length > 0 &&
-      Object.keys(localFormData).length === 0
-    ) {
-      setLocalFormData(formData);
-    }
-  }, [formData, localFormData]);
+  useEffect(
+    () => {
+      if (
+        Object.keys(formData).length > 0 &&
+        Object.keys(localFormData).length === 0
+      ) {
+        setLocalFormData(formData);
+      }
+    },
+    [formData, localFormData],
+  );
 
   const enhancedHandleChange = useCallback(
     (fieldName, setFieldValue, actionCreator = null) => {
@@ -1250,21 +1187,6 @@ const Institution = () => {
       }
 
       case 5: {
-        const requiredFields = [
-          "business_model_overview",
-          "conducting_payment_activities",
-          "product_services_required",
-        ];
-
-        const requiredFieldsFilled = requiredFields.every((field) => {
-          const value = validationValues[field];
-          return value && value.toString().trim() !== "";
-        });
-
-        return requiredFieldsFilled;
-      }
-
-      case 6: {
         const termsAccepted = validationValues.terms_agreement === true;
         let documentsValid = true;
         if (documentUpload) {
@@ -1426,39 +1348,14 @@ const Institution = () => {
           return ownerFields;
 
         case 5:
-          const step5Fields = [
-            "business_model_overview",
-            "business_size",
-            "high_risk_countries",
-            "specify_high_risk_countries",
-            "conducting_payment_activities",
-            "employees_number",
-            "reason_for_payments",
-            "product_services_required",
-            "beneficiary_types",
-            "beneficiary_types_other",
-            "beneficiary_industries_top_5",
-            "expected_frequency_payments_out",
-            "expected_avg_payments_out_currency",
-            "expected_avg_payments_out_amount",
-            "sender_types",
-            "sender_types_other",
-            "sender_industries_top_5",
-            "expected_frequency_payments_in",
-            "expected_avg_payments_in_currency",
-            "expected_avg_payments_in_amount",
-          ];
-          return step5Fields;
-
-        case 6:
-          const step6Fields = ["terms_agreement"];
+          const step5Fields = ["terms_agreement"];
           if (documentUpload) {
             const requiredDocs = documents.filter((doc) => doc.required);
             requiredDocs.forEach((doc) =>
-              step6Fields.push(`user_image.${doc.id}`),
+              step5Fields.push(`user_image.${doc.id}`),
             );
           }
-          return step6Fields;
+          return step5Fields;
         default:
           return [];
       }
@@ -1482,7 +1379,7 @@ const Institution = () => {
         if (values.dob && !validateAge(values.dob)) {
           return "You must be at least 18 years old to register";
         }
-
+        
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
             ? values.terms_and_conditions?.length === termsConditions.length
@@ -1490,7 +1387,7 @@ const Institution = () => {
         if (!allTermsAccepted)
           return "Please accept all Terms and Conditions to continue.";
       }
-      if (currentStep === 6 && values.terms_agreement !== true)
+      if (currentStep === 5 && values.terms_agreement !== true)
         return "Please accept the Final Agreement to complete registration.";
       if (currentStep === 4 && errors.owner_details) {
         const ownershipError = Object.values(errors.owner_details).find(
@@ -1499,7 +1396,7 @@ const Institution = () => {
         );
         if (ownershipError) return ownershipError;
       }
-      if (currentStep === 6 && errors.user_image) {
+      if (currentStep === 5 && errors.user_image) {
         const docError = Object.values(errors.user_image).find(
           (error) => error && typeof error === "string",
         );
@@ -1528,8 +1425,7 @@ const Institution = () => {
         2: "Please complete all contact information and accept the terms.",
         3: "Please complete controller information.",
         4: "Please complete owner details and ensure ownership totals 100%.",
-        5: "Please complete the payment business information.",
-        6: "Please upload required documents and accept the final agreement.",
+        5: "Please upload required documents and accept the final agreement.",
       };
 
       return (
@@ -1555,9 +1451,7 @@ const Institution = () => {
       try {
         // Check age validation for step 2
         if (currentStep === 2 && values.dob && !validateAge(values.dob)) {
-          dispatch(
-            setErrorMessage("You must be at least 18 years old to register"),
-          );
+          dispatch(setErrorMessage("You must be at least 18 years old to register"));
           dispatch(setShowPopup(true));
           return;
         }
@@ -1731,7 +1625,7 @@ const Institution = () => {
           }
         }
 
-        const finalErrors = await institutionSchema(6, {
+        const finalErrors = await institutionSchema(5, {
           isNamedAccount,
           country: finalFormData.country_of_registration,
           currency: defaultCurrency?.code || defaultCurrency?.currency_code,
@@ -1869,38 +1763,6 @@ const Institution = () => {
           has_usd_named_account: isNamedAccount,
           customer_type: "institution",
           selected_accounts: selectedAccounts,
-
-          // Customer Payment Data
-          customer_payment_data: {
-            business_model_overview: finalFormData.business_model_overview,
-            business_size: finalFormData.business_size,
-            high_risk_countries: finalFormData.high_risk_countries,
-            specify_high_risk_countries: finalFormData.specify_high_risk_countries,
-            conducting_payment_activities:
-              finalFormData.conducting_payment_activities,
-            employees_number: finalFormData.employees_number,
-            reason_for_payments: finalFormData.reason_for_payments,
-            product_services_required: finalFormData.product_services_required,
-            beneficiary_types: finalFormData.beneficiary_types,
-            beneficiary_types_other: finalFormData.beneficiary_types_other,
-            beneficiary_industries_top_5:
-              finalFormData.beneficiary_industries_top_5,
-            expected_frequency_payments_out:
-              finalFormData.expected_frequency_payments_out,
-            expected_avg_payments_out_currency:
-              finalFormData.expected_avg_payments_out_currency,
-            expected_avg_payments_out_amount:
-              finalFormData.expected_avg_payments_out_amount,
-            sender_types: finalFormData.sender_types,
-            sender_types_other: finalFormData.sender_types_other,
-            sender_industries_top_5: finalFormData.sender_industries_top_5,
-            expected_frequency_payments_in:
-              finalFormData.expected_frequency_payments_in,
-            expected_avg_payments_in_currency:
-              finalFormData.expected_avg_payments_in_currency,
-            expected_avg_payments_in_amount:
-              finalFormData.expected_avg_payments_in_amount,
-          },
         };
 
         delete finalData.user_image;
@@ -2780,38 +2642,6 @@ const Institution = () => {
     },
   );
 
-  // Business Size Options
-  const businessSizeOptions = [
-    {
-      value: "small",
-      label: "Small (Annual Turnover of less than 2 million EUR)",
-    },
-    {
-      value: "medium",
-      label: "Medium (Annual Turnover of less than 10 million EUR)",
-    },
-    {
-      value: "large",
-      label: "Large (All other businesses above the thresholds noted above)",
-    },
-  ];
-
-  // Product Services Required Options
-  const productServicesOptions = [
-    { value: "incoming", label: "Incoming" },
-    { value: "outgoing", label: "Outgoing" },
-  ];
-
-  // Frequency Options
-  const frequencyOptions = [
-    { value: "Daily", label: "Daily" },
-    { value: "Weekly", label: "Weekly" },
-    { value: "Fortnightly", label: "Fortnightly" },
-    { value: "Monthly", label: "Monthly" },
-    { value: "Biannually", label: "Biannually" },
-    { value: "Annually", label: "Annually" },
-  ];
-
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       {/* ADD FULL SCREEN LOADER */}
@@ -3133,7 +2963,7 @@ const Institution = () => {
             <Form className="space-y-6">
               <div className="bg-white p-4 rounded-lg shadow-sm">
                 <div className="flex justify-between items-center mb-4">
-                  {[1, 2, 3, 4, 5, 6].map((step) => (
+                  {[1, 2, 3, 4, 5].map((step) => (
                     <div key={step} className="flex flex-col items-center">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -3151,7 +2981,7 @@ const Institution = () => {
                 <div className="w-full bg-gray-200 h-2 rounded-full">
                   <div
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(currentStep / 6) * 100}%` }}
+                    style={{ width: `${(currentStep / 5) * 100}%` }}
                   ></div>
                 </div>
               </div>
@@ -3867,15 +3697,12 @@ const Institution = () => {
                           onChange={(e) => {
                             const selectedDate = e.target.value;
                             enhancedHandleChange("dob", setFieldValue)(e);
-
+                            
                             // Validate age on change
                             if (selectedDate) {
                               const isValidAge = validateAge(selectedDate);
                               if (!isValidAge) {
-                                setFieldValue(
-                                  "dob_error",
-                                  "You must be at least 18 years old to register",
-                                );
+                                setFieldValue("dob_error", "You must be at least 18 years old to register");
                               } else {
                                 setFieldValue("dob_error", "");
                               }
@@ -3887,10 +3714,7 @@ const Institution = () => {
                             handleBlur(e);
                             const selectedDate = values.dob;
                             if (selectedDate && !validateAge(selectedDate)) {
-                              setFieldValue(
-                                "dob_error",
-                                "You must be at least 18 years old to register",
-                              );
+                              setFieldValue("dob_error", "You must be at least 18 years old to register");
                             }
                           }}
                           onFocus={() => setActiveField("dob")}
@@ -3901,28 +3725,22 @@ const Institution = () => {
                           fieldStyles={FIELD_STYLES}
                           max={getMaxDateForDOB()}
                         />
-
+                        
                         {/* Helper text - Always visible */}
                         <div className="text-xs text-gray-500 mt-1 flex items-center">
-                          <FontAwesomeIcon
-                            icon={faInfoCircle}
-                            className="mr-1 w-3 h-3"
-                          />
+                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
                           You must be at least 18 years old to register
                         </div>
-
+                        
                         {/* Error message - Only visible when there's an error */}
                         {values.dob_error && (
                           <div className="text-red-500 text-xs mt-1 flex items-center">
-                            <FontAwesomeIcon
-                              icon={faTimesCircle}
-                              className="mr-1 w-3 h-3"
-                            />
+                            <FontAwesomeIcon icon={faTimesCircle} className="mr-1 w-3 h-3" />
                             {values.dob_error}
                           </div>
                         )}
                       </div>
-
+                      
                       <FormField
                         id="designation"
                         label="Designation"
@@ -4398,597 +4216,6 @@ const Institution = () => {
                     className="bg-white p-6 rounded-lg shadow-sm"
                   >
                     <h2 className="text-xl font-semibold mb-4">
-                      Payment Business Information
-                    </h2>
-
-                    <div className="space-y-6">
-                      {/* Business Model Overview */}
-                      <div>
-                        <FormField
-                          id="business_model_overview"
-                          label="Business Model Overview"
-                          name="business_model_overview"
-                          as="textarea"
-                          rows={4}
-                          value={values.business_model_overview || ""}
-                          onChange={enhancedHandleChange(
-                            "business_model_overview",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("business_model_overview")
-                          }
-                          touched={touched.business_model_overview}
-                          error={errors.business_model_overview}
-                          required
-                          activeField={activeField}
-                          placeholder="Describe your business model"
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* Business Size and High Risk Countries */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <CustomSelect
-                          id="business_size"
-                          label="Business Size"
-                          options={businessSizeOptions}
-                          onChange={enhancedSelectChange(
-                            "business_size",
-                            setFieldValue,
-                          )}
-                          value={businessSizeOptions.find(
-                            (opt) => opt.value === values.business_size,
-                          )}
-                          touched={touched.business_size}
-                          error={errors.business_size}
-                          placeholder="Select business size"
-                        />
-
-                        {/* High Risk Countries Involved */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            High Risk Countries Involved
-                          </label>
-                          <div className="flex items-center space-x-4 mb-4">
-                            <label className="inline-flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="high_risk_countries"
-                                value="1"
-                                checked={values.high_risk_countries === 1}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value);
-                                  setFieldValue("high_risk_countries", value);
-                                  setLocalFormData((prev) => ({
-                                    ...prev,
-                                    high_risk_countries: value,
-                                    specify_high_risk_countries:
-                                      value === 0
-                                        ? []
-                                        : prev.specify_high_risk_countries, // Clear if No
-                                  }));
-                                  dispatch(
-                                    setFormField({
-                                      field: "high_risk_countries",
-                                      value,
-                                    }),
-                                  );
-                                }}
-                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">
-                                Yes
-                              </span>
-                            </label>
-                            <label className="inline-flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="high_risk_countries"
-                                value="0"
-                                checked={values.high_risk_countries === 0}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value);
-                                  setFieldValue("high_risk_countries", value);
-                                  setFieldValue(
-                                    "specify_high_risk_countries",
-                                    [],
-                                  ); // Clear the array when No
-                                  setLocalFormData((prev) => ({
-                                    ...prev,
-                                    high_risk_countries: value,
-                                    specify_high_risk_countries: [],
-                                  }));
-                                  dispatch(
-                                    setFormField({
-                                      field: "high_risk_countries",
-                                      value,
-                                    }),
-                                  );
-                                  dispatch(
-                                    setFormField({
-                                      field: "specify_high_risk_countries",
-                                      value: [],
-                                    }),
-                                  );
-                                }}
-                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">
-                                No
-                              </span>
-                            </label>
-                          </div>
-
-                          {/* Conditional multi-select for specifying high risk countries */}
-                          {values.high_risk_countries === 1 && (
-                            <div className="mt-3">
-                              <CustomSelect
-                                id="specify_high_risk_countries"
-                                label="Specify High Risk Countries"
-                                options={countryOptions}
-                                isMulti={true}
-                                onChange={(selectedOptions) => {
-                                  const selectedIds = selectedOptions
-                                    ? selectedOptions.map((opt) => opt.value)
-                                    : [];
-                                  setFieldValue(
-                                    "specify_high_risk_countries",
-                                    selectedIds,
-                                  );
-                                  setLocalFormData((prev) => ({
-                                    ...prev,
-                                    specify_high_risk_countries: selectedIds,
-                                  }));
-                                  dispatch(
-                                    setFormField({
-                                      field: "specify_high_risk_countries",
-                                      value: selectedIds,
-                                    }),
-                                  );
-                                }}
-                                value={countryOptions.filter((opt) =>
-                                  values.specify_high_risk_countries?.includes(
-                                    opt.value,
-                                  ),
-                                )}
-                                touched={touched.specify_high_risk_countries}
-                                error={errors.specify_high_risk_countries}
-                                placeholder="Select high risk countries..."
-                                isLoading={countriesLoading}
-                                required={values.high_risk_countries === 1}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Conducting Payment Activities */}
-                      <div>
-                        <FormField
-                          id="conducting_payment_activities"
-                          label="Conducting Payment Activities"
-                          name="conducting_payment_activities"
-                          as="textarea"
-                          value={values.conducting_payment_activities || ""}
-                          onChange={enhancedHandleChange(
-                            "conducting_payment_activities",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("conducting_payment_activities")
-                          }
-                          touched={touched.conducting_payment_activities}
-                          error={errors.conducting_payment_activities}
-                          required
-                          activeField={activeField}
-                          placeholder="Describe your payment activities"
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* Employees Number and Reason for Payments */}
-                      <div>
-                        <CustomSelect
-                          id="employees_number"
-                          label="Number of Employees"
-                          options={[
-                            { value: "1", label: "1-9 employees", id: 1 },
-                            { value: "2", label: "10-99 employees", id: 2 },
-                            { value: "3", label: "100-499 employees", id: 3 },
-                            { value: "4", label: "500+ employees", id: 4 },
-                          ]}
-                          onChange={(option) => {
-                            if (option) {
-                              setFieldValue("employees_number", option.value);
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                employees_number: option.value,
-                              }));
-                              dispatch(
-                                setFormField({
-                                  field: "employees_number",
-                                  value: option.value,
-                                }),
-                              );
-                            }
-                          }}
-                          value={[
-                            { value: "1", label: "1-9 employees", id: 1 },
-                            { value: "2", label: "10-99 employees", id: 2 },
-                            { value: "3", label: "100-499 employees", id: 3 },
-                            { value: "4", label: "500+ employees", id: 4 },
-                          ].find(
-                            (opt) => opt.value === values.employees_number,
-                          )}
-                          touched={touched.employees_number}
-                          error={errors.employees_number}
-                          required={true}
-                          placeholder="Select number of employees"
-                        />
-                      </div>
-
-                      <FormField
-                        id="reason_for_payments"
-                        label="Reason for Payments"
-                        name="reason_for_payments"
-                        as="textarea"
-                        value={values.reason_for_payments || ""}
-                        onChange={enhancedHandleChange(
-                          "reason_for_payments",
-                          setFieldValue,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("reason_for_payments")}
-                        touched={touched.reason_for_payments}
-                        error={errors.reason_for_payments}
-                        placeholder="Explain the reason for payment processing"
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-
-                      {/* Product Services Required */}
-                      <div>
-                        <CustomSelect
-                          id="product_services_required"
-                          label="Product Services Required"
-                          options={productServicesOptions}
-                          onChange={enhancedSelectChange(
-                            "product_services_required",
-                            setFieldValue,
-                          )}
-                          value={productServicesOptions.find(
-                            (opt) =>
-                              opt.value === values.product_services_required,
-                          )}
-                          touched={touched.product_services_required}
-                          error={errors.product_services_required}
-                          required
-                          placeholder="Select product services required"
-                        />
-                      </div>
-
-                      {/* Beneficiary Types */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <CustomSelect
-                            id="beneficiary_types"
-                            label="Beneficiary Types"
-                            options={[
-                              { value: "Individual", label: "Individual" },
-                              { value: "Business", label: "Business" },
-                              { value: "Both", label: "Both" },
-                              { value: "Other", label: "Other" },
-                            ]}
-                            onChange={enhancedSelectChange(
-                              "beneficiary_types",
-                              setFieldValue,
-                            )}
-                            value={[
-                              { value: "individual", label: "Individual" },
-                              { value: "business", label: "Business" },
-                              { value: "both", label: "Both" },
-                              { value: "other", label: "Other" },
-                            ].find(
-                              (opt) => opt.value === values.beneficiary_types,
-                            )}
-                            touched={touched.beneficiary_types}
-                            error={errors.beneficiary_types}
-                            placeholder="Select beneficiary types"
-                          />
-                        </div>
-
-                        {values.beneficiary_types === "Other" && (
-                          <FormField
-                            id="beneficiary_types_other"
-                            label="Other Beneficiary Types"
-                            name="beneficiary_types_other"
-                            value={values.beneficiary_types_other || ""}
-                            onChange={enhancedHandleChange(
-                              "beneficiary_types_other",
-                              setFieldValue,
-                            )}
-                            onBlur={handleBlur}
-                            onFocus={() =>
-                              setActiveField("beneficiary_types_other")
-                            }
-                            touched={touched.beneficiary_types_other}
-                            error={errors.beneficiary_types_other}
-                            placeholder="Specify other beneficiary types"
-                            activeField={activeField}
-                            fieldStyles={FIELD_STYLES}
-                          />
-                        )}
-                      </div>
-
-                      {/* Beneficiary Industries Top 5 */}
-                      <div>
-                        <FormField
-                          id="beneficiary_industries_top_5"
-                          label="Beneficiary Industries Top 5"
-                          name="beneficiary_industries_top_5"
-                          as="textarea"
-                          value={values.beneficiary_industries_top_5 || ""}
-                          onChange={enhancedHandleChange(
-                            "beneficiary_industries_top_5",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("beneficiary_industries_top_5")
-                          }
-                          touched={touched.beneficiary_industries_top_5}
-                          error={errors.beneficiary_industries_top_5}
-                          placeholder="List top 5 beneficiary industries (comma separated)"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* Expected Frequency Payments Out */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <CustomSelect
-                          id="expected_frequency_payments_out"
-                          label="Expected Frequency of Payments Out"
-                          options={frequencyOptions}
-                          onChange={enhancedSelectChange(
-                            "expected_frequency_payments_out",
-                            setFieldValue,
-                          )}
-                          value={frequencyOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.expected_frequency_payments_out,
-                          )}
-                          touched={touched.expected_frequency_payments_out}
-                          error={errors.expected_frequency_payments_out}
-                          placeholder="Select frequency"
-                        />
-
-                        <CustomSelect
-                          id="expected_avg_payments_out_currency"
-                          label="Expected Avg Payments Out Currency"
-                          options={payoutCurrencyOptions}
-                          onChange={(option) => {
-                            if (option) {
-                              setFieldValue(
-                                "expected_avg_payments_out_currency",
-                                option.value,
-                              );
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                expected_avg_payments_out_currency:
-                                  option.value,
-                              }));
-                              dispatch(
-                                setFormField({
-                                  field: "expected_avg_payments_out_currency",
-                                  value: option.value,
-                                }),
-                              );
-                            }
-                          }}
-                          value={payoutCurrencyOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.expected_avg_payments_out_currency,
-                          )}
-                          touched={touched.expected_avg_payments_out_currency}
-                          error={errors.expected_avg_payments_out_currency}
-                          placeholder="Select currency"
-                          isLoading={currenciesLoading}
-                          required
-                        />
-
-                        <FormField
-                          id="expected_avg_payments_out_amount"
-                          label="Expected Avg Payments Out Amount"
-                          name="expected_avg_payments_out_amount"
-                          type="number"
-                          step="0.01"
-                          value={values.expected_avg_payments_out_amount || ""}
-                          onChange={enhancedHandleChange(
-                            "expected_avg_payments_out_amount",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("expected_avg_payments_out_amount")
-                          }
-                          touched={touched.expected_avg_payments_out_amount}
-                          error={errors.expected_avg_payments_out_amount}
-                          placeholder="e.g., 10000.00"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* Sender Types */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <CustomSelect
-                            id="sender_types"
-                            label="Sender Types"
-                            options={[
-                              { value: "Individual", label: "Individual" },
-                              { value: "Business", label: "Business" },
-                              { value: "Both", label: "Both" },
-                              { value: "Other", label: "Other" },
-                            ]}
-                            onChange={enhancedSelectChange(
-                              "sender_types",
-                              setFieldValue,
-                            )}
-                            value={[
-                              { value: "individual", label: "Individual" },
-                              { value: "business", label: "Business" },
-                              { value: "both", label: "Both" },
-                              { value: "other", label: "Other" },
-                            ].find((opt) => opt.value === values.sender_types)}
-                            touched={touched.sender_types}
-                            error={errors.sender_types}
-                            placeholder="Select sender types"
-                          />
-                        </div>
-
-                        {values.sender_types === "Other" && (
-                          <FormField
-                            id="sender_types_other"
-                            label="Other Sender Types"
-                            name="sender_types_other"
-                            value={values.sender_types_other || ""}
-                            onChange={enhancedHandleChange(
-                              "sender_types_other",
-                              setFieldValue,
-                            )}
-                            onBlur={handleBlur}
-                            onFocus={() => setActiveField("sender_types_other")}
-                            touched={touched.sender_types_other}
-                            error={errors.sender_types_other}
-                            placeholder="Specify other sender types"
-                            activeField={activeField}
-                            fieldStyles={FIELD_STYLES}
-                          />
-                        )}
-                      </div>
-
-                      {/* Sender Industries Top 5 */}
-                      <div>
-                        <FormField
-                          id="sender_industries_top_5"
-                          label="Sender Industries Top 5"
-                          name="sender_industries_top_5"
-                          as="textarea"
-                          value={values.sender_industries_top_5 || ""}
-                          onChange={enhancedHandleChange(
-                            "sender_industries_top_5",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("sender_industries_top_5")
-                          }
-                          touched={touched.sender_industries_top_5}
-                          error={errors.sender_industries_top_5}
-                          placeholder="List top 5 sender industries (comma separated)"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* Expected Frequency Payments In */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <CustomSelect
-                          id="expected_frequency_payments_in"
-                          label="Expected Frequency of Payments In"
-                          options={frequencyOptions}
-                          onChange={enhancedSelectChange(
-                            "expected_frequency_payments_in",
-                            setFieldValue,
-                          )}
-                          value={frequencyOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.expected_frequency_payments_in,
-                          )}
-                          touched={touched.expected_frequency_payments_in}
-                          error={errors.expected_frequency_payments_in}
-                          placeholder="Select frequency"
-                        />
-
-                        <CustomSelect
-                          id="expected_avg_payments_in_currency"
-                          label="Expected Avg Payments IN Currency"
-                          options={bankAccountCurrencyOptions}
-                          onChange={(option) => {
-                            if (option) {
-                              setFieldValue(
-                                "expected_avg_payments_in_currency",
-                                option.value,
-                              );
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                expected_avg_payments_in_currency: option.value,
-                              }));
-                              dispatch(
-                                setFormField({
-                                  field: "expected_avg_payments_in_currency",
-                                  value: option.value,
-                                }),
-                              );
-                            }
-                          }}
-                          value={bankAccountCurrencyOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.expected_avg_payments_in_currency,
-                          )}
-                          touched={touched.expected_avg_payments_in_currency}
-                          error={errors.expected_avg_payments_in_currency}
-                          placeholder="Select currency"
-                          isLoading={currenciesLoading}
-                          required
-                        />
-
-                        <FormField
-                          id="expected_avg_payments_in_amount"
-                          label="Expected Avg Payments In Amount"
-                          name="expected_avg_payments_in_amount"
-                          type="number"
-                          step="0.01"
-                          value={values.expected_avg_payments_in_amount || ""}
-                          onChange={enhancedHandleChange(
-                            "expected_avg_payments_in_amount",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("expected_avg_payments_in_amount")
-                          }
-                          touched={touched.expected_avg_payments_in_amount}
-                          error={errors.expected_avg_payments_in_amount}
-                          placeholder="e.g., 10000.00"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {currentStep === 6 && (
-                  <motion.div
-                    key="step6"
-                    variants={stepVariants}
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    transition={{ duration: 0.5 }}
-                    className="bg-white p-6 rounded-lg shadow-sm"
-                  >
-                    <h2 className="text-xl font-semibold mb-4">
                       Document Upload & Final Review
                     </h2>
                     {documentUpload && (
@@ -5112,7 +4339,7 @@ const Institution = () => {
                   <div />
                 )}
 
-                {currentStep < 6 ? (
+                {currentStep < 5 ? (
                   <button
                     type="button"
                     onClick={() =>
@@ -5132,7 +4359,7 @@ const Institution = () => {
                     type="submit"
                     disabled={
                       loading ||
-                      !isStepComplete(6, values, errors, touched) ||
+                      !isStepComplete(5, values, errors, touched) ||
                       isSubmitting
                     }
                     className="flex items-center justify-center w-full md:w-auto gap-2 rounded-xl bg-green-600 px-8 py-3 text-white shadow-md hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 font-medium"
