@@ -1,8 +1,9 @@
-// src/features/Transfer/components/TransferForm.jsx - UPDATED
-import React from "react";
+// src/features/Transfer/components/TransferForm.jsx - WITH DEBUGGING
+import React, { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { motion } from "framer-motion";
 import { selectFormErrors } from "./transferSelectors";
+
 
 const TransferForm = ({
   customerBankAccounts,
@@ -15,10 +16,31 @@ const TransferForm = ({
 }) => {
   const formErrors = useSelector(selectFormErrors);
 
-  // Find selected account for display (removed balance since not in API)
+  // Debug logging
+  useEffect(() => {
+    console.log("TransferForm mounted/updated:", {
+      customerBankAccountsCount: customerBankAccounts?.length,
+      selectedCurrency,
+      transferAmount,
+      formErrors
+    });
+  }, [customerBankAccounts, selectedCurrency, transferAmount, formErrors]);
+
   const selectedAccount = customerBankAccounts.find(
     (account) => account.currency_code === selectedCurrency
   );
+
+  console.log("Selected account:", selectedAccount);
+
+  const handleCurrencyChange = (value) => {
+    console.log("Currency changed to:", value);
+    onCurrencyChange(value);
+  };
+
+  const handleAmountChange = (value) => {
+    console.log("Amount changed to:", value);
+    onAmountChange(value);
+  };
 
   return (
     <div className="space-y-6">
@@ -29,7 +51,7 @@ const TransferForm = ({
         </label>
         <select
           value={selectedCurrency}
-          onChange={(e) => onCurrencyChange(e.target.value)}
+          onChange={(e) => handleCurrencyChange(e.target.value)}
           className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
             formErrors.currency
               ? "border-red-300 bg-red-50"
@@ -37,9 +59,10 @@ const TransferForm = ({
           }`}
         >
           <option value="">Select currency</option>
-          {customerBankAccounts.map((account) => (
+          {customerBankAccounts?.map((account) => (
             <option key={account.id} value={account.currency_code}>
-              {account.currency_code}
+              {account.currency_code} - {account.serviceprovidername}
+              {account.approved_status !== "Approved" && " (Pending)"}
             </option>
           ))}
         </select>
@@ -74,7 +97,7 @@ const TransferForm = ({
           <input
             type="number"
             value={transferAmount}
-            onChange={(e) => onAmountChange(e.target.value)}
+            onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0.00"
             step="0.01"
             min="0"
@@ -114,12 +137,16 @@ const TransferForm = ({
         )}
       </div>
 
-      {/* Account Information (Updated based on API response) */}
+      {/* Account Information */}
       {selectedAccount && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-blue-50 border border-blue-200 rounded-xl p-4"
+          className={`rounded-xl p-4 ${
+            selectedAccount.approved_status === "Approved"
+              ? "bg-blue-50 border border-blue-200"
+              : "bg-yellow-50 border border-yellow-200"
+          }`}
         >
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
@@ -130,29 +157,42 @@ const TransferForm = ({
               >
                 <path d="M2.5 1A1.5 1.5 0 001 2.5v15A1.5 1.5 0 002.5 19h15a1.5 1.5 0 001.5-1.5v-15A1.5 1.5 0 0017.5 1h-15zm12 3a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1V5a1 1 0 00-1-1h-1zM5 5a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1H6a1 1 0 01-1-1V5zm10 8a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1v-1a1 1 0 00-1-1h-1zM5 13a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-1z" />
               </svg>
-              <span className="text-sm text-blue-700 font-medium">
+              <span className="text-sm font-medium">
                 Selected Account:
               </span>
             </div>
             <div className="text-right">
-              <span className="text-lg font-bold text-blue-800">
-                {selectedAccount.serviceprovidername}{" "}
-                {/* Display service provider name */}
+              <span className="text-lg font-bold">
+                {selectedAccount.serviceprovidername}
               </span>
-              <p className="text-xs text-blue-600 mt-1">
+              <p className="text-xs mt-1">
                 Currency:{" "}
                 <span className="font-semibold">
                   {selectedAccount.currency_code}
                 </span>
                 <br />
                 Status:{" "}
-                <span className="font-semibold">
-                  {selectedAccount.approved_status}
+                <span className={`font-semibold ${
+                  selectedAccount.approved_status === "Approved" 
+                    ? "text-green-600" 
+                    : "text-yellow-600"
+                }`}>
+                  {selectedAccount.approved_status || "Pending"}
                 </span>
               </p>
             </div>
           </div>
         </motion.div>
+      )}
+
+      {/* Warning if no approved accounts */}
+      {customerBankAccounts?.length > 0 && 
+       !customerBankAccounts.some(acc => acc.approved_status === "Approved") && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+          <p className="text-yellow-800 text-sm">
+            ⚠️ You don't have any approved bank accounts. Please link and verify a bank account first.
+          </p>
+        </div>
       )}
     </div>
   );

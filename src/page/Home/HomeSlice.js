@@ -52,12 +52,6 @@ export const fetchAccountDetails = createAsyncThunk(
   ) => {
     const requestKey = getRequestKey(customerId, isRefresh);
 
-    // Check if request already in progress
-    if (pendingRequests.has(requestKey)) {
-      console.log(`⏳ Account fetch already in progress for ${customerId}`);
-      return rejectWithValue("Request already in progress");
-    }
-
     // Track this request
     pendingRequests.set(requestKey, true);
 
@@ -207,6 +201,7 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
       }
 
       const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+      console.log("homeslice isWhiteLabelled",isWhiteLabelled);
       const partnerId =
         isWhiteLabelled === "1"
           ? localStorage.getItem("whitelabelledpartnerid") || "9"
@@ -552,9 +547,6 @@ const homeSlice = createSlice({
       })
 
       .addCase(fetchAccountDetails.rejected, (state, action) => {
-        if (action.payload === "Request already in progress") {
-          return;
-        }
 
         state.initialLoading = false;
         state.isLoading = false;

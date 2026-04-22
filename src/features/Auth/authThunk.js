@@ -16,9 +16,7 @@ export const handleApiError = (error, dispatch = null) => {
     switch (error.response.status) {
       case 401:
         errorMessage = "Session expired. Please login again.";
-        localStorage.removeItem("authtoken");
-        localStorage.removeItem("authcustomer_id");
-        tokenService.clearToken();
+    
         window.location.href = "/";
         break;
       case 403:
@@ -247,10 +245,7 @@ export const generatePasscode = createAsyncThunk(
       });
 
       // Handle multiple accounts scenario
-      if (
-        response.data.status === "error" &&
-        response.data.data?.checkMultipleCustomer === "Y"
-      ) {
+      if (response.data?.data?.checkMultipleCustomer === "Y") {
         dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
         return {
           status: "multiple_accounts",
@@ -259,11 +254,6 @@ export const generatePasscode = createAsyncThunk(
         };
       }
 
-      if (response.data.status === "error") {
-        return rejectWithValue(
-          response.data.message || "Failed to generate passcode"
-        );
-      }
 
       if (response.data.status === "success") {
         dispatch({ type: "auth/setShowPasscodeInput", payload: true });
@@ -277,7 +267,7 @@ export const generatePasscode = createAsyncThunk(
         };
       }
 
-      return rejectWithValue("Unexpected response format from server");
+      return response.data;
     } catch (error) {
       if (error.response) {
         const responseData = error.response.data;
@@ -456,14 +446,19 @@ export const verifyPasscode = createAsyncThunk(
           throw new Error("Bank account not approved. Please contact support.");
         }
 
+        // ✅ SAVE customerUuid to localStorage
+        if (responseData.customerUuid) {
+          localStorage.setItem('customerUuid', responseData.customerUuid);
+          console.log('✅ Customer UUID saved from verifyPasscode:', responseData.customerUuid);
+        }
+
         // Successful login with KYC verified
         return {
           token: responseData.token,
           customer_id: responseData.customer_id,
           kyc_status: responseData.kyc_status,
           bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer:
-            responseData.isRemittanceOnlyCustomer || false,
+          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
           customer_type: responseData.customer_type || "individual",
           is_staff_login: responseData.is_staff_login || "0",
           staff_role: responseData.staff_role || "",
@@ -471,10 +466,8 @@ export const verifyPasscode = createAsyncThunk(
           is_owner_login: responseData.is_owner_login || "0",
           owner_id: responseData.owner_id || "0",
           whitelabelled_customer: responseData.whitelabelled_customer || "N",
-          whitelabelled_customer_partnerid:
-            responseData.whitelabelled_customer_partnerid || "0",
-          whitelabelled_customer_partnername:
-            responseData.whitelabelled_customer_partnername || "",
+          whitelabelled_customer_partnerid: responseData.whitelabelled_customer_partnerid || "0",
+          whitelabelled_customer_partnername: responseData.whitelabelled_customer_partnername || "",
           customerUuid: responseData.customerUuid || null,
           message: "Login successful",
         };
@@ -752,6 +745,12 @@ export const verifyOTP = createAsyncThunk(
           };
         }
 
+        // ✅ SAVE customerUuid to localStorage
+        if (responseData.customerUuid) {
+          localStorage.setItem('customerUuid', responseData.customerUuid);
+          console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
+        }
+
         // Successful login
         return {
           status: "success",
@@ -759,8 +758,7 @@ export const verifyOTP = createAsyncThunk(
           customer_id: responseData.customer_id,
           kyc_status: responseData.kyc_status,
           bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer:
-            responseData.isRemittanceOnlyCustomer || false,
+          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
           customer_type: responseData.customer_type || "individual",
           message: response.data.message || "Login successful",
           data: responseData,
@@ -1276,11 +1274,18 @@ export const loginUser = createAsyncThunk(
           kyc_status,
           bank_approve_status,
           plaid_link_url,
+          customerUuid,
         } = response.data.data;
 
         // Store user token as "authtoken", NOT "bearertoken"
         localStorage.setItem("authtoken", userToken);
         localStorage.setItem("authcustomer_id", customer_id);
+
+        // ✅ SAVE customerUuid to localStorage
+        if (customerUuid) {
+          localStorage.setItem('customerUuid', customerUuid);
+          console.log('✅ Customer UUID saved from loginUser:', customerUuid);
+        }
 
         if (is_owner_login === "1") {
           dispatch({
@@ -1429,6 +1434,13 @@ export const logoutUser = createAsyncThunk(
         }
       );
 
+      // Clear all auth-related data from localStorage
+      localStorage.removeItem('customerUuid');
+      localStorage.removeItem('authtoken');
+      localStorage.removeItem('authcustomer_id');
+      localStorage.removeItem('currentCustomerId');
+      localStorage.removeItem('bearertoken');
+      
       dispatch({ type: "auth/clearAuthState" });
       return true;
     } catch (error) {

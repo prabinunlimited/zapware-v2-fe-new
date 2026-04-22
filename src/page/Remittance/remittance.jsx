@@ -253,10 +253,20 @@ const Remittance = () => {
     [bankAccounts],
   );
 
+  // FIXED: receiveCurrencyOptions - Only shows currencies from the API endpoint
   const receiveCurrencyOptions = useMemo(() => {
-    const currencyData = currencies?.receiveOptions || [];
-
-    return currencyData.map((currency) => ({
+    // Get the payout currencies from the API response
+    const payoutData = currencies?.payoutCurrencies;
+    
+    if (!payoutData) return [];
+    
+    // Handle both formats (with or without .data wrapper)
+    const currencyList = payoutData.data || (Array.isArray(payoutData) ? payoutData : []);
+    
+    if (!currencyList.length) return [];
+    
+    // Map the currencies to the format needed by the Select component
+    return currencyList.map((currency) => ({
       value: currency.currency_code,
       label: currency.currency_code,
       icon: currency.icon,
@@ -264,7 +274,7 @@ const Remittance = () => {
       currency_code: currency.currency_code,
       payout_currency_id: currency.payout_currency_id,
     }));
-  }, [currencies?.receiveOptions]);
+  }, [currencies?.payoutCurrencies]);
 
   useEffect(() => {
     if (!receiveCurrencyOptions.length) return;
@@ -274,14 +284,14 @@ const Remittance = () => {
     );
 
     if (defaultOption) {
-      console.log("defaultOption", defaultOption);
+      console.log("Setting default receive currency:", defaultOption);
       dispatch(setReceiveCurrency(defaultOption));
       activeInput.current = "receive";
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
-        if (key.includes(`-${option?.value}-`)) {
+        if (key.includes(`-${defaultOption?.value}-`)) {
           delete exchangeRateCache.current[key];
         }
       });
@@ -314,9 +324,12 @@ const Remittance = () => {
     const initializeData = async () => {
       if (customerId) {
         try {
+          console.log("🔍 Initializing with customerId:", customerId);
+          console.log("🔍 partner_id from localStorage:", localStorage.getItem("partner_id"));
+          
           await Promise.all([
             dispatch(fetchBankAccounts(customerId)),
-            dispatch(fetchPayoutCurrencies()),
+            dispatch(fetchPayoutCurrencies()), // No need to pass customerId, it will use partner_id from localStorage
             dispatch(fetchAllStaticData()),
           ]);
         } catch (error) {
@@ -755,31 +768,6 @@ const Remittance = () => {
   }, [formData.paymentMethod, formData]);
 
   useEffect(() => {
-    console.log("🔍 PARENT VALIDATION CHECK:", {
-      step,
-      selectedBeneficiary: !!selectedBeneficiary,
-      beneficiaryId: selectedBeneficiary?.id,
-      purpose: formData.purpose,
-      purposeType: formData.purpose ? typeof formData.purpose : "undefined",
-      purposeValue: formData.purpose?.value,
-      incomeSource: formData.incomeSource,
-      incomeSourceValue: formData.incomeSource?.value,
-      selectedBank: !!selectedBank,
-      bankId: selectedBank?.id,
-      sendCurrency: formData.sendCurrency?.value,
-      isUSD: formData.sendCurrency?.value === "USD",
-      hasSilaAccount: !!selectedSilaBankAccount,
-      allFormDataKeys: Object.keys(formData),
-    });
-  }, [
-    step,
-    selectedBeneficiary,
-    formData,
-    selectedBank,
-    selectedSilaBankAccount,
-  ]);
-
-  useEffect(() => {
     window.scrollTo({
       top: 0,
       behavior: "smooth",
@@ -794,26 +782,6 @@ const Remittance = () => {
       isInitialMount.current = false;
     }
   }, [dispatch]);
-
-  useEffect(() => {
-  // Set default receive currency when options are loaded and no currency is selected
-  console.log("receiveCurrencyOptions",receiveCurrencyOptions);
-  console.log("formData.receiveCurrency",formData.receiveCurrency);
-  if (receiveCurrencyOptions.length > 0 && !formData.receiveCurrency) {
-    // Find the currency with default_remittance = "Y"
-    const defaultCurrency = receiveCurrencyOptions.find(
-      (currency) => currency.default_remittance === "Y"
-    );
-    
-    // If found, set it as default, otherwise use the first option
-    const currencyToSet = defaultCurrency || receiveCurrencyOptions[0];
-    
-    if (currencyToSet) {
-      console.log("Setting default receive currency:", currencyToSet);
-      dispatch(setReceiveCurrency(currencyToSet));
-    }
-  }
-}, [receiveCurrencyOptions, formData.receiveCurrency, dispatch]);
 
   const formatAmountInput = (value) => {
     if (value === "" || value === null || value === undefined) return "";
@@ -1664,8 +1632,8 @@ const Remittance = () => {
         boxShadow:
           "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
         overflow: "hidden",
-        zIndex: 9999, // ✅ Add high z-index
-        position: "absolute", // ✅ Ensure absolute positioning
+        zIndex: 9999,
+        position: "absolute",
       }),
       menuList: (base) => ({
         ...base,
@@ -1936,8 +1904,6 @@ const Remittance = () => {
                     </p>
                   </div>
                   <div className="sm:w-48 relative">
-                    {" "}
-                    {/* ✅ Add relative positioning */}
                     <Select
                       options={sendCurrencyOptions}
                       value={formData.sendCurrency}
@@ -1947,8 +1913,8 @@ const Remittance = () => {
                       isSearchable
                       className="text-sm"
                       classNamePrefix="select"
-                      menuPortalTarget={document.body} // ✅ Portal to body for better z-index
-                      menuPosition="fixed" // ✅ Fixed position to avoid clipping
+                      menuPortalTarget={document.body}
+                      menuPosition="fixed"
                       formatOptionLabel={({ label, balance }) => (
                         <div className="flex justify-between items-center">
                           <span>{label}</span>
@@ -2038,12 +2004,12 @@ const Remittance = () => {
                     </div>
                   </div>
                   <div className="sm:w-48 relative">
-                    {" "}
-                    {/* ✅ Add relative positioning */}
                     <Select
                       options={receiveCurrencyOptions}
                       value={receiveCurrencyOptions.find(
-                        (opt) => opt.value === formData.receiveCurrency?.currency_code
+                        (opt) => 
+                          opt.value === formData.receiveCurrency?.currency_code || 
+                          opt.value === formData.receiveCurrency?.value
                       )}
                       onChange={handleReceiveCurrencyChange}
                       placeholder="Currency"
@@ -2057,12 +2023,14 @@ const Remittance = () => {
                       }}
                       className="text-sm"
                       classNamePrefix="select"
-                      menuPortalTarget={document.body} // ✅ Portal to body
-                      menuPosition="fixed" // ✅ Fixed position
-                      formatOptionLabel={({ label, icon }) => (
-                        <div className="flex items-center gap-2">
-                          <span>{icon}</span>
-                          <span>{label}</span>
+                      menuPortalTarget={document.body}
+                      menuPosition="fixed"
+                      formatOptionLabel={({ label, icon, default_remittance }) => (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            <span>{icon}</span>
+                            <span>{label}</span>
+                          </div>
                         </div>
                       )}
                     />

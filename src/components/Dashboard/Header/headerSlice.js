@@ -1,16 +1,25 @@
-// src/components/Dashboard/Header/headerSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Helper function to get API signature for coordination
-const getProfileSignature = (customerId) => {
-  return `GET-${API_URL}/customers/${customerId}/profile-{}`;
+// ✅ Helper: detect coordination/cancellation artifacts — never show these as real errors
+const isCancellationError = (payload) => {
+  if (!payload) return false;
+  const msg = typeof payload === "string" ? payload : String(payload);
+  return (
+    msg.includes("Duplicate request") ||
+    msg.includes("globally coordinated") ||
+    msg.includes("throttled") ||
+    msg.includes("cancelled") ||
+    msg.includes("Cancel") ||
+    msg.includes("already in progress")
+  );
 };
 
 const getFxSignature = () => {
   const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+  console.log("headerslice isWhiteLabelled",isWhiteLabelled);
   const partnerId =
     isWhiteLabelled === "1"
       ? localStorage.getItem("whitelabelledpartnerid") || "9"
@@ -26,12 +35,8 @@ const getChargesSignature = (customerId) => {
 export const fetchPartnerFxCurrencies = createAsyncThunk(
   "header/fetchPartnerFxCurrencies",
   async (bearertoken, { rejectWithValue }) => {
-    const signature = getFxSignature();
-
     try {
-      if (!bearertoken) {
-        throw new Error("Bearer token missing");
-      }
+      if (!bearertoken) throw new Error("Bearer token missing");
 
       const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
       const partnerId =
@@ -43,15 +48,14 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
         `/partner-fxcurrencies?partner_id=${partnerId}`,
         {},
         {
-          headers: {
-            Authorization: `Bearer ${bearertoken}`,
-          },
-          timeout: 10000,
+          headers: { Authorization: `Bearer ${bearertoken}` },
+          timeout: 30000, // ✅ increased from 10000
         }
       );
 
-      const rates = response.data.rates || [];
-      return rates;
+      if (response?.__cancelled) return [];
+
+      return response.data.rates || [];
     } catch (error) {
       console.error("❌ fetchPartnerFxCurrencies error:", error);
       return rejectWithValue(error.response?.data || error.message);
@@ -59,59 +63,49 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
   }
 );
 
-// Profile fetching thunk with coordination
 export const fetchUserProfile = createAsyncThunk(
   "header/fetchUserProfile",
   async ({ customerId, bearertoken }, { rejectWithValue }) => {
     try {
-      if (!bearertoken || !customerId) {
+      if (!bearertoken || !customerId)
         throw new Error("Missing token or customer ID");
-      }
 
       const response = await api.get(`/customers/${customerId}/profile`, {
-        headers: {
-          Authorization: `Bearer ${bearertoken}`,
-        },
-        timeout: 10000,
+        headers: { Authorization: `Bearer ${bearertoken}` },
+        timeout: 30000, // ✅ increased from 10000
       });
+
+      // ✅ Silently cancelled (Header duplicate) — return null, not an error
+      if (response?.__cancelled) return null;
 
       if (response.data.status === "success") {
         const profile = response.data.profile;
-
         localStorage.setItem("firstName", profile.first_name);
         localStorage.setItem("lastName", profile.last_name);
         localStorage.setItem("middleName", profile.middle_name || "");
-
         return profile;
       } else {
-        console.error(
-          "❌ Profile API returned non-success status:",
-          response.data
-        );
         throw new Error("Failed to fetch profile - non-success status");
       }
     } catch (error) {
       console.error("❌ fetchUserProfile error:", error);
-      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
-// Charges data thunk with coordination
 export const fetchChargesData = createAsyncThunk(
   "header/fetchChargesData",
   async ({ customerId, authtoken }, { rejectWithValue }) => {
     try {
-      if (!authtoken || !customerId) {
+      if (!authtoken || !customerId)
         throw new Error("Missing authentication token or customer ID");
-      }
 
       const response = await api.get(`/get-charges/${customerId}`, {
-        headers: {
-          Authorization: `Bearer ${authtoken}`,
-        },
-        timeout: 8000,
+        headers: { Authorization: `Bearer ${authtoken}` },
+        timeout: 30000, // ✅ increased from 8000
       });
+
+      if (response?.__cancelled) return [];
 
       const chargesData =
         response.data.charge_details ||
@@ -126,9 +120,7 @@ export const fetchChargesData = createAsyncThunk(
       }
     } catch (error) {
       console.error("❌ fetchChargesData error:", error);
-
       let errorMessage = "Failed to fetch charges data";
-
       if (error.response) {
         errorMessage =
           error.response.data?.message ||
@@ -138,7 +130,6 @@ export const fetchChargesData = createAsyncThunk(
       } else {
         errorMessage = error.message || "Unknown error occurred";
       }
-
       return rejectWithValue(errorMessage);
     }
   }
@@ -223,11 +214,7 @@ const headerSlice = createSlice({
       state.error = null;
       state.loading = false;
       state.isDropdownOpen = false;
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
+      state.fetchStatus = { fx: "idle", profile: "idle", charges: "idle" };
     },
     clearProfileData: (state) => {
       state.profileData = null;
@@ -249,19 +236,15 @@ const headerSlice = createSlice({
       state.chargesError = null;
     },
     resetFetchStatus: (state) => {
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
+      state.fetchStatus = { fx: "idle", profile: "idle", charges: "idle" };
     },
     resetHeaderState: () => initialState,
-    clearApiCache: (state) => {
-      // Cache clearing handled by api service
-    },
+    clearApiCache: () => {},
     forceRefreshProfile: (state) => {
       state.fetchStatus.profile = "idle";
       state.profileData = null;
+      state.profileError = null; // ✅ also clear error so retry works
+      state.profileLoading = false;
     },
     forceRefreshFx: (state) => {
       state.fetchStatus.fx = "idle";
@@ -275,6 +258,7 @@ const headerSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // ── FX ──────────────────────────────────────────────────────────────
       .addCase(fetchPartnerFxCurrencies.pending, (state) => {
         state.loading = true;
         state.fetchStatus.fx = "loading";
@@ -282,57 +266,68 @@ const headerSlice = createSlice({
       })
       .addCase(fetchPartnerFxCurrencies.fulfilled, (state, action) => {
         state.loading = false;
-        state.partnerFxCurrencies = action.payload;
-        state.hasFxData = action.payload.length > 0;
+        state.partnerFxCurrencies = action.payload || [];
+        state.hasFxData = (action.payload || []).length > 0;
         state.fetchStatus.fx = "succeeded";
         state.error = null;
       })
       .addCase(fetchPartnerFxCurrencies.rejected, (state, action) => {
         state.loading = false;
-        if (
-          action.payload !==
-          "FX fetch already in progress (global coordination)"
-        ) {
+        state.hasFxData = false;
+        if (isCancellationError(action.payload)) {
+          state.fetchStatus.fx = "idle";
+        } else {
           state.error = action.payload;
           state.fetchStatus.fx = "failed";
-        } else {
-          state.fetchStatus.fx = "idle";
         }
-        state.hasFxData = false;
       })
+
+      // ── PROFILE ─────────────────────────────────────────────────────────
       .addCase(fetchUserProfile.pending, (state) => {
         state.profileLoading = true;
         state.fetchStatus.profile = "loading";
         state.profileError = null;
       })
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
-        console.log(
-          "✅ REDUX: Profile data received:",
-          action.payload?.first_name
-        );
         state.profileLoading = false;
-        state.profileData = action.payload;
-        state.fetchStatus.profile = "succeeded";
         state.profileError = null;
-        state.isWhitelabelledCustomer =
-          localStorage.getItem("isWhitelabelledCustomer") || "N";
+
+        if (action.payload !== null) {
+          console.log(
+            "✅ REDUX: Profile data received:",
+            action.payload?.first_name
+          );
+          state.profileData = action.payload;
+          state.fetchStatus.profile = "succeeded";
+          state.isWhitelabelledCustomer =
+            localStorage.getItem("isWhitelabelledCustomer") || "N";
+        } else {
+          // null = silently cancelled, keep existing data
+          console.log(
+            "⚠️ REDUX: Profile fetch cancelled (coordination) — keeping existing data"
+          );
+          state.fetchStatus.profile = "idle";
+        }
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
         state.profileLoading = false;
-        if (
-          action.payload !==
-          "Profile fetch already in progress (global coordination)"
-        ) {
+        if (isCancellationError(action.payload)) {
+          // ✅ Never surface coordination errors to the UI
+          console.log(
+            "⚠️ REDUX: Profile duplicate/throttled — ignoring silently"
+          );
+          state.fetchStatus.profile = "idle";
+        } else {
           state.profileError = action.payload;
           state.fetchStatus.profile = "failed";
           console.error(
             "❌ Profile fetch rejected in reducer:",
             action.payload
           );
-        } else {
-          state.fetchStatus.profile = "idle";
         }
       })
+
+      // ── CHARGES ─────────────────────────────────────────────────────────
       .addCase(fetchChargesData.pending, (state) => {
         state.chargesLoading = true;
         state.chargesError = null;
@@ -340,24 +335,21 @@ const headerSlice = createSlice({
       })
       .addCase(fetchChargesData.fulfilled, (state, action) => {
         state.chargesLoading = false;
-        state.chargesData = action.payload;
+        state.chargesData = action.payload || [];
         state.chargesError = null;
         state.chargesLastFetched = new Date().toISOString();
         state.fetchStatus.charges = "succeeded";
       })
       .addCase(fetchChargesData.rejected, (state, action) => {
         state.chargesLoading = false;
-        if (
-          action.payload !==
-          "Charges fetch already in progress (global coordination)"
-        ) {
+        state.chargesData = [];
+        if (isCancellationError(action.payload)) {
+          state.fetchStatus.charges = "idle";
+        } else {
           state.chargesError = action.payload;
           state.fetchStatus.charges = "failed";
           console.error("❌ Charges fetch failed:", action.payload);
-        } else {
-          state.fetchStatus.charges = "idle";
         }
-        state.chargesData = [];
       });
   },
 });

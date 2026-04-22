@@ -1,5 +1,5 @@
 // components/AddTeamMember.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { 
@@ -27,7 +27,7 @@ import { countries } from "../../features/Auth/slices/countrySlice.js";
 import {
   useTeamMemberActions,
   useTeamMemberState,
-} from "../../page/Team/Hooks/useTeamMemberActions.js";
+} from "../Team/Hooks/useTeamMemberActions.js"
 
 const AddTeamMember = () => {
   const navigate = useNavigate();
@@ -37,6 +37,8 @@ const AddTeamMember = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [shouldNavigate, setShouldNavigate] = useState(false);
 
   const bearertoken = localStorage.getItem("bearertoken");
   const authtoken = localStorage.getItem("authtoken");
@@ -45,7 +47,7 @@ const AddTeamMember = () => {
 
   // Redux state and actions
   const { roles, loading, error, success, showPopup } = useTeamMemberState();
-  const { loadRoles, createTeamMember, resetError, updateShowPopup } =
+  const { loadRoles, createTeamMember, resetError, resetSuccess, updateShowPopup } =
     useTeamMemberActions();
 
   // Use the partner config hook
@@ -77,55 +79,7 @@ const AddTeamMember = () => {
   const textColorProps = getTextColorStyle();
   const headerColorProps = getHeaderColorStyle();
 
-  // Fetch roles on component mount
-  useEffect(() => {
-    if (bearertoken && API_URL) {
-      loadRoles(bearertoken, API_URL);
-    }
-  }, [bearertoken, API_URL, loadRoles]);
-
-  // Handle success and error states
-  useEffect(() => {
-    if (success) {
-      toast.success("🎉 Team member added successfully!");
-      setTimeout(() => {
-        navigate(`/teammember/${customerId}`);
-      }, 1500);
-    }
-  }, [success, navigate, customerId]);
-
-  useEffect(() => {
-    if (error && !showPopup) {
-      toast.error(`❌ ${error}`);
-      resetError();
-    }
-  }, [error, showPopup, resetError]);
-
-  const handleCountryChange = (country) => {
-    setSelectedCountry(country);
-    formik.setFieldValue("mobilenumber_countrycode", country.phone_code);
-    formik.setFieldValue("flag_url", country.flag_url);
-    setIsDropdownOpen(false);
-    setSearchTerm("");
-  };
-
-  // Safe countries filtering
-  const filteredCountries = Array.isArray(countriesData) 
-    ? countriesData.filter((country) => {
-        if (!country || typeof country !== 'object') return false;
-        
-        const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-        const normalizedCountryName = (country.name || '').trim().toLowerCase();
-        const normalizedPhoneCode = (country.phone_code || '').trim().toLowerCase();
-
-        return (
-          normalizedCountryName.includes(normalizedSearchTerm) ||
-          normalizedPhoneCode.includes(normalizedSearchTerm)
-        );
-      }).slice(0, 100) // Limit results for performance
-    : [];
-
-  // Formik setup
+  // Formik setup - MOVED UP before useEffect that uses it
   const formik = useFormik({
     initialValues: {
       first_name: "",
@@ -163,14 +117,92 @@ const AddTeamMember = () => {
         .min(6, "Mobile number must be at least 6 digits"),
     }),
     onSubmit: async (values) => {
+      // Prevent double submission
+      if (isSubmittingRef.current) return;
+      
       setIsSubmitting(true);
+      isSubmittingRef.current = true;
+      
       try {
         await createTeamMember(customerId, values, authtoken, API_URL);
+      } catch (error) {
+        console.error("Submission error:", error);
+        toast.error("Failed to create team member. Please try again.");
       } finally {
         setIsSubmitting(false);
+        isSubmittingRef.current = false;
       }
     },
   });
+
+  // Fetch roles on component mount
+  useEffect(() => {
+    if (bearertoken && API_URL) {
+      loadRoles(bearertoken, API_URL);
+    }
+  }, [bearertoken, API_URL, loadRoles]);
+
+  // Handle success and error states
+  useEffect(() => {
+    if (success) {
+      toast.success("🎉 Team member added successfully!");
+      
+      // Reset success state immediately to prevent re-triggering
+      resetSuccess();
+      
+      // Reset form values
+      formik.resetForm();
+      // Reset country selection
+      setSelectedCountry(null);
+      setSearchTerm("");
+      setIsDropdownOpen(false);
+      setPasswordVisible(false);
+      
+      // Navigate back to team list after a short delay
+      setTimeout(() => {
+        navigate(`/team/${customerId}`);
+      }, 1500);
+    }
+  }, [success, navigate, customerId, formik, resetSuccess]);
+
+  useEffect(() => {
+    if (error && !showPopup) {
+      toast.error(`❌ ${error}`);
+      resetError();
+    }
+  }, [error, showPopup, resetError]);
+
+  // Reset state when component unmounts
+  useEffect(() => {
+    return () => {
+      resetError();
+      resetSuccess();
+    };
+  }, [resetError, resetSuccess]);
+
+  const handleCountryChange = (country) => {
+    setSelectedCountry(country);
+    formik.setFieldValue("mobilenumber_countrycode", country.phone_code);
+    formik.setFieldValue("flag_url", country.flag_url);
+    setIsDropdownOpen(false);
+    setSearchTerm("");
+  };
+
+  // Safe countries filtering
+  const filteredCountries = Array.isArray(countriesData) 
+    ? countriesData.filter((country) => {
+        if (!country || typeof country !== 'object') return false;
+        
+        const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+        const normalizedCountryName = (country.name || '').trim().toLowerCase();
+        const normalizedPhoneCode = (country.phone_code || '').trim().toLowerCase();
+
+        return (
+          normalizedCountryName.includes(normalizedSearchTerm) ||
+          normalizedPhoneCode.includes(normalizedSearchTerm)
+        );
+      }).slice(0, 100) // Limit results for performance
+    : [];
 
   // Toggle password visibility
   const togglePasswordVisibility = () => {
@@ -222,7 +254,7 @@ const AddTeamMember = () => {
       variants={containerVariants}
       className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8"
     >
-      <div className="max-w-6xl mx-auto"> {/* Increased from max-w-4xl to max-w-6xl */}
+      <div className="max-w-6xl mx-auto">
         {/* Header Section */}
         <motion.div 
           variants={itemVariants}
@@ -246,7 +278,7 @@ const AddTeamMember = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(`/teammember/${customerId}`)}
+              onClick={() => navigate(`/team/${customerId}`)}
               className={`text-white px-6 py-3 rounded-xl shadow-lg font-semibold flex items-center gap-3 min-w-[140px] justify-center ${headerColorProps.className}`}
             >
               <FaUsers className="text-lg" />
@@ -304,6 +336,7 @@ const AddTeamMember = () => {
                 <div className="relative">
                   <input
                     id="first_name"
+                    name="first_name"
                     type="text"
                     value={formik.values.first_name}
                     onChange={formik.handleChange}
@@ -338,6 +371,7 @@ const AddTeamMember = () => {
                 </label>
                 <input
                   id="middle_name"
+                  name="middle_name"
                   type="text"
                   value={formik.values.middle_name}
                   onChange={formik.handleChange}
@@ -356,6 +390,7 @@ const AddTeamMember = () => {
                 <div className="relative">
                   <input
                     id="last_name"
+                    name="last_name"
                     type="text"
                     value={formik.values.last_name}
                     onChange={formik.handleChange}
@@ -391,6 +426,7 @@ const AddTeamMember = () => {
                 <div className="relative">
                   <input
                     id="email"
+                    name="email"
                     type="email"
                     value={formik.values.email}
                     onChange={formik.handleChange}
@@ -426,6 +462,7 @@ const AddTeamMember = () => {
                 <div className="relative">
                   <input
                     id="password"
+                    name="password"
                     type={passwordVisible ? "text" : "password"}
                     value={formik.values.password}
                     onChange={formik.handleChange}
@@ -534,8 +571,11 @@ const AddTeamMember = () => {
                                 src={selectedCountry.flag_url}
                                 alt={`${selectedCountry.name} flag`}
                                 className="w-6 h-4 rounded object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
                               />
-                              <span className="font-medium">+{selectedCountry.phone_code}</span>
+                              <span className="font-medium">{selectedCountry.phone_code}</span>
                             </>
                           ) : (
                             <span className="text-gray-500">Select country</span>
@@ -584,13 +624,16 @@ const AddTeamMember = () => {
                                       src={country.flag_url}
                                       alt={`${country.name} flag`}
                                       className="w-6 h-4 rounded object-cover mr-3"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                      }}
                                     />
                                     <div className="flex-1">
                                       <div className="font-medium text-gray-900">
                                         {country.name}
                                       </div>
                                       <div className="text-sm text-gray-500">
-                                        +{country.phone_code}
+                                        {country.phone_code}
                                       </div>
                                     </div>
                                     {selectedCountry?.id === country.id && (
@@ -628,6 +671,7 @@ const AddTeamMember = () => {
                       <input
                         type="text"
                         id="mobile_number"
+                        name="mobile_number"
                         value={formik.values.mobile_number}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}

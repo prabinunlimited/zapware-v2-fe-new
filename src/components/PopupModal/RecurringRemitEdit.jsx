@@ -1,4 +1,4 @@
-// RecurringRemitEdit.jsx - UPDATED WITH CURRENCY FETCHING
+// RecurringRemitEdit.jsx - COMPLETE FIXED VERSION
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -18,26 +18,50 @@ import {
   fetchPayoutCurrencies,
 } from "../../page/Remittance/slices/remittanceSlice";
 
-// --- SUB-COMPONENTS ---
+// --- SAFE READONLY FIELD COMPONENT ---
 const ReadOnlyField = ({
   label,
   value,
   prefix = "",
   suffix = "",
   className = "",
-}) => (
-  <div className={className}>
-    <label className="block text-sm font-medium text-gray-600 mb-1">
-      {label}
-    </label>
-    <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-700">
-      {prefix && <span className="mr-1 text-gray-500">{prefix}</span>}
-      <span className="font-medium">{value || "N/A"}</span>
-      {suffix && <span className="ml-1 text-gray-500">{suffix}</span>}
+}) => {
+  // ✅ SAFELY convert value to string
+  let displayValue = "N/A";
+  
+  if (value !== null && value !== undefined) {
+    if (typeof value === 'string') {
+      displayValue = value;
+    } else if (typeof value === 'number') {
+      displayValue = value.toString();
+    } else if (typeof value === 'object') {
+      // If it's an object, try to extract author_source or stringify safely
+      try {
+        displayValue = value.author_source || value.author_type || JSON.stringify(value);
+      } catch {
+        displayValue = "Invalid data";
+      }
+      console.warn("Object detected in ReadOnlyField:", { label, value, displayValue });
+    } else {
+      displayValue = String(value);
+    }
+  }
+  
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium text-gray-600 mb-1">
+        {label}
+      </label>
+      <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-700">
+        {prefix && <span className="mr-1 text-gray-500">{prefix}</span>}
+        <span className="font-medium">{displayValue}</span>
+        {suffix && <span className="ml-1 text-gray-500">{suffix}</span>}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
+// --- SAFE EDITABLE FIELD COMPONENT ---
 const EditableField = ({
   label,
   name,
@@ -54,46 +78,64 @@ const EditableField = ({
   errors,
   isLoading,
   isFetching,
-}) => (
-  <div className={className}>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <div className="relative">
-      {prefix && (
-        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-          {prefix}
-        </span>
+}) => {
+  // ✅ SAFELY get string value for input
+  let inputValue = "";
+  
+  if (value !== null && value !== undefined) {
+    if (typeof value === 'string') {
+      inputValue = value;
+    } else if (typeof value === 'number') {
+      inputValue = value.toString();
+    } else if (typeof value === 'object') {
+      inputValue = value.author_source || value.author_type || "";
+    } else {
+      inputValue = String(value);
+    }
+  }
+  
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {prefix && (
+          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+            {prefix}
+          </span>
+        )}
+        {children || (
+          <input
+            type={type}
+            name={name}
+            value={inputValue}
+            onChange={onChange}
+            className={`w-full rounded-lg border px-3 py-2.5 focus:outline-none focus:ring-2 transition-all duration-200 ${inputClassName} ${
+              errors[name]
+                ? "border-red-300 focus:ring-red-200"
+                : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
+            } ${prefix ? "pl-10" : "pl-3"}`}
+            placeholder={placeholder}
+            disabled={isLoading || isFetching}
+            autoComplete="off"
+          />
+        )}
+      </div>
+      {errors[name] && (
+        <p className="mt-1 text-sm text-red-600">{errors[name]}</p>
       )}
-      {children || (
-        <input
-          type={type}
-          name={name}
-          value={value}
-          onChange={onChange}
-          className={`w-full rounded-lg border px-3 py-2.5 focus:outline-none focus:ring-2 transition-all duration-200 ${inputClassName} ${
-            errors[name]
-              ? "border-red-300 focus:ring-red-200"
-              : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
-          } ${prefix ? "pl-10" : "pl-3"}`}
-          placeholder={placeholder}
-          disabled={isLoading || isFetching}
-          autoComplete="off"
-        />
+      {showCustomDaysNote && (
+        <p className="text-xs text-gray-500 mt-1">
+          For "specific_day": Day of month (1-31). For "custom": Number of days
+          between executions.
+        </p>
       )}
     </div>
-    {errors[name] && (
-      <p className="mt-1 text-sm text-red-600">{errors[name]}</p>
-    )}
-    {showCustomDaysNote && (
-      <p className="text-xs text-gray-500 mt-1">
-        For "specific_day": Day of month (1-31). For "custom": Number of days
-        between executions.
-      </p>
-    )}
-  </div>
-);
+  );
+};
 
+// --- SUCCESS OVERLAY ---
 const SuccessOverlay = ({ show, message, onClose }) => {
   if (!show) return null;
   return (
@@ -128,6 +170,7 @@ const SuccessOverlay = ({ show, message, onClose }) => {
   );
 };
 
+// --- ERROR OVERLAY ---
 const ErrorOverlay = ({ show, error, onClose, onCancel }) => {
   if (!show) return null;
   return (
@@ -224,21 +267,17 @@ const RecurringRemitEdit = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // Get customer ID from multiple sources
+  // Get UUID from localStorage for payload
+  const customerUuid = localStorage.getItem("customerUuid");
+  
+  // Get numeric ID for API calls (GET requests)
   const getEffectiveCustomerId = useCallback(() => {
-    // ✅ Priority: prop > customerUuid > authcustomer_id > currentCustomerId
-    const id =
-      customerId ||
-      localStorage.getItem("customerUuid") ||
-      localStorage.getItem("authcustomer_id") ||
-      localStorage.getItem("currentCustomerId");
-
+    const id = customerId || localStorage.getItem("authcustomer_id");
     if (!id || id === "undefined" || id === "null" || id.trim() === "") {
       console.warn("No valid customer ID found in RecurringRemitEdit");
       return null;
     }
-
-    console.log("Using customer ID in EditModal:", id);
+    console.log("Using numeric customer ID for GET requests:", id);
     return id;
   }, [customerId]);
 
@@ -251,17 +290,12 @@ const RecurringRemitEdit = ({
       setDataFetchAttempted(true);
 
       try {
-        // Fetch beneficiaries if needed
         if (!beneficiariesHasFetched || beneficiariesFromStore.length === 0) {
           await dispatch(fetchBeneficiaries(effectiveCustomerId));
         }
-
-        // Fetch source currencies (bank accounts) if needed
         if (sourceCurrencies.length === 0) {
           await dispatch(fetchBankAccounts(effectiveCustomerId));
         }
-
-        // Fetch destination currencies (payout currencies) if needed
         if (destinationCurrencies.length === 0) {
           await dispatch(fetchPayoutCurrencies());
         }
@@ -312,21 +346,14 @@ const RecurringRemitEdit = ({
 
   // Fetch recurring remittance details
   const fetchDetails = useCallback(async () => {
-    if (
-      !isOpen ||
-      !recurringRemittanceId ||
-      recurringRemittanceId === "undefined"
-    ) {
-      console.warn("Cannot fetch details: No valid recurring remittance ID");
+    if (!isOpen || !recurringRemittanceId || recurringRemittanceId === "undefined") {
       return;
     }
 
     setIsFetching(true);
     setApiError("");
     try {
-      const authToken =
-        localStorage.getItem("bearertoken") ||
-        localStorage.getItem("authtoken");
+      const authToken = localStorage.getItem("bearertoken") || localStorage.getItem("authtoken");
       if (!authToken) {
         throw new Error("No authentication token found");
       }
@@ -341,6 +368,16 @@ const RecurringRemitEdit = ({
 
       if (response.data.status === "success" && response.data.data?.[0]) {
         const item = response.data.data[0];
+        
+        // ✅ SAFELY extract values as strings
+        const safeAuthorSource = (() => {
+          if (typeof item.author_source === 'string') return item.author_source;
+          if (item.author_source && typeof item.author_source === 'object') {
+            return item.author_source.author_source || "zap";
+          }
+          return "zap";
+        })();
+        
         setFormData((prev) => ({
           ...prev,
           source_amount: item.source_amount || "",
@@ -348,22 +385,20 @@ const RecurringRemitEdit = ({
           destination_currency: item.destination_currency || "",
           recurring_frequency: item.frequency || "specific_day",
           custom_days: item.custom_days?.toString() || "5",
-          author_id: effectiveCustomerId || "",
+          author_id: customerUuid || "",
           amount: item.amount || "",
           activeStatus: item.activeStatus || "Y",
           nextDate: item.nextDate || "",
           frequency: item.frequency || "monthly",
           payment_method: item.payment_method || "Bank",
           beneficiary_name: item.beneficiary_name || "",
-          beneficiary_bank_account_number:
-            item.beneficiary_bank_account_number || "",
+          beneficiary_bank_account_number: item.beneficiary_bank_account_number || "",
           notes: item.notes || "",
+          author_type: "customer",
+          author_source: safeAuthorSource, // ✅ Ensure it's a string
         }));
 
-        findBeneficiaryName(
-          item.beneficiary_name,
-          item.beneficiary_bank_account_number,
-        );
+        findBeneficiaryName(item.beneficiary_name, item.beneficiary_bank_account_number);
       } else {
         throw new Error(response.data.message || "Failed to fetch details");
       }
@@ -373,13 +408,7 @@ const RecurringRemitEdit = ({
     } finally {
       setIsFetching(false);
     }
-  }, [
-    isOpen,
-    recurringRemittanceId,
-    API_URL,
-    effectiveCustomerId,
-    findBeneficiaryName,
-  ]);
+  }, [isOpen, recurringRemittanceId, API_URL, customerUuid, findBeneficiaryName]);
 
   useEffect(() => {
     fetchDetails();
@@ -420,26 +449,29 @@ const RecurringRemitEdit = ({
     setIsLoading(true);
     setApiError("");
     try {
-      const authToken =
-        localStorage.getItem("bearertoken") ||
-        localStorage.getItem("authtoken");
+      const authToken = localStorage.getItem("bearertoken") || localStorage.getItem("authtoken");
       if (!authToken) {
         throw new Error("No authentication token found");
       }
 
+      // ✅ Use UUID for author_id and customer_id
       const payload = {
         recurring_remittance_id: recurringRemittanceId,
-        source_amount: formData.source_amount,
+        source_amount: parseFloat(formData.source_amount),
         source_currency: formData.source_currency,
         destination_currency: formData.destination_currency,
         recurring_frequency: formData.recurring_frequency,
-        custom_days: formData.custom_days,
+        custom_days: formData.recurring_frequency === "specific_day" || formData.recurring_frequency === "custom" 
+          ? parseInt(formData.custom_days) 
+          : null,
         author_type: "customer",
-        author_id: effectiveCustomerId,
+        author_id: customerUuid,
+        customer_id: customerUuid,
         author_source: "zap",
+        source: "zap",
       };
 
-      console.log("Submitting update:", payload);
+      console.log("📤 Edit update payload (with UUID):", payload);
 
       const res = await axios.post(
         `${API_URL}/recurring-remittance/update-detail`,
@@ -453,15 +485,21 @@ const RecurringRemitEdit = ({
       if (res.data.status === "success") {
         setSuccessMessage(res.data.message || "Updated successfully!");
         setShowSuccessOverlay(true);
-        if (onSave) onSave(payload);
+        if (onSave) {
+          onSave({
+            recurring_remittance_id: recurringRemittanceId,
+            source_amount: formData.source_amount,
+            source_currency: formData.source_currency,
+            recurring_frequency: formData.recurring_frequency,
+            custom_days: formData.custom_days,
+          });
+        }
       } else {
         throw new Error(res.data.message || "Update failed");
       }
     } catch (err) {
       console.error("Submit error:", err);
-      setApiError(
-        err.response?.data?.message || err.message || "An error occurred",
-      );
+      setApiError(err.response?.data?.message || err.message || "An error occurred");
       setShowErrorOverlay(true);
     } finally {
       setIsLoading(false);
@@ -489,30 +527,13 @@ const RecurringRemitEdit = ({
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />
         <div className="relative w-full max-w-md rounded-xl bg-white p-8 shadow-2xl text-center">
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
-            <svg
-              className="h-12 w-12 text-red-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="3"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
+            <svg className="h-12 w-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h3 className="mb-3 text-xl font-bold text-gray-900">
-            Invalid Remittance ID
-          </h3>
-          <p className="mb-6 text-gray-600">
-            Cannot load recurring remittance details. Please try again.
-          </p>
-          <button
-            onClick={onClose}
-            className="rounded-xl bg-blue-600 px-8 py-3 text-white font-medium hover:bg-blue-700"
-          >
+          <h3 className="mb-3 text-xl font-bold text-gray-900">Invalid Remittance ID</h3>
+          <p className="mb-6 text-gray-600">Cannot load recurring remittance details. Please try again.</p>
+          <button onClick={onClose} className="rounded-xl bg-blue-600 px-8 py-3 text-white font-medium hover:bg-blue-700">
             Close
           </button>
         </div>
@@ -541,13 +562,8 @@ const RecurringRemitEdit = ({
       />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="absolute inset-0 bg-black/50"
-          onClick={!isLoading ? onClose : undefined}
-        />
-        <div
-          className={`relative w-full max-w-2xl rounded-xl bg-white shadow-2xl ${showErrorOverlay || showSuccessOverlay ? "blur-sm" : ""}`}
-        >
+        <div className="absolute inset-0 bg-black/50" onClick={!isLoading ? onClose : undefined} />
+        <div className={`relative w-full max-w-2xl rounded-xl bg-white shadow-2xl ${showErrorOverlay || showSuccessOverlay ? "blur-sm" : ""}`}>
           {/* Header */}
           <div className="flex items-center justify-between border-b px-6 py-5">
             <div>
@@ -577,11 +593,7 @@ const RecurringRemitEdit = ({
                 {/* Transaction Info */}
                 <div className="bg-blue-50/50 rounded-xl p-5 border border-blue-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-2 text-blue-600"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
+                    <svg className="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4z" />
                     </svg>
                     Transaction Information
@@ -597,13 +609,9 @@ const RecurringRemitEdit = ({
                       isLoading={isLoading}
                       isFetching={isFetching}
                     />
-                    <ReadOnlyField
-                      label="Destination Amount"
-                      value={formData.amount}
-                    />
+                    <ReadOnlyField label="Destination Amount" value={formData.amount} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-4">
-                    {/* Source Currency - Dynamic from API */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Source Currency *
@@ -617,18 +625,12 @@ const RecurringRemitEdit = ({
                       >
                         <option value="">Select Currency</option>
                         {sourceCurrencies.map((account) => (
-                          <option
-                            key={account.id}
-                            value={account.currency_code}
-                          >
-                            {account.currency_code} -{" "}
-                            {account.bank_name || account.currency_name}
+                          <option key={account.id} value={account.currency_code}>
+                            {account.currency_code} - {account.bank_name || account.currency_name}
                           </option>
                         ))}
                       </select>
                     </div>
-
-                    {/* Destination Currency - Dynamic from API */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Destination Currency *
@@ -642,13 +644,9 @@ const RecurringRemitEdit = ({
                       >
                         <option value="">Select Currency</option>
                         {destinationCurrencies.map((currency) => (
-                          <option
-                            key={currency.payout_currency_id}
-                            value={currency.currency_code}
-                          >
+                          <option key={currency.payout_currency_id} value={currency.currency_code}>
                             {currency.currency_code} {currency.icon}
-                            {currency.default_remittance === "Y" &&
-                              " (Default)"}
+                            {currency.default_remittance === "Y" && " (Default)"}
                           </option>
                         ))}
                       </select>
@@ -662,21 +660,11 @@ const RecurringRemitEdit = ({
                     Schedule Information
                   </h3>
                   <div className="grid grid-cols-2 gap-5">
-                    <ReadOnlyField
-                      label="Next Execution"
-                      value={formatDateForDisplay(formData.nextDate)}
-                    />
-                    <ReadOnlyField
-                      label="Current Frequency"
-                      value={formData.frequency}
-                    />
+                    <ReadOnlyField label="Next Execution" value={formatDateForDisplay(formData.nextDate)} />
+                    <ReadOnlyField label="Current Frequency" value={formData.frequency} />
                   </div>
                   <div className="mt-4">
-                    <EditableField
-                      label="Recurring Frequency"
-                      name="recurring_frequency"
-                      errors={errors}
-                    >
+                    <EditableField label="Recurring Frequency" name="recurring_frequency" errors={errors}>
                       <select
                         name="recurring_frequency"
                         value={formData.recurring_frequency}
@@ -686,15 +674,12 @@ const RecurringRemitEdit = ({
                         <option value="daily">Daily</option>
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
-                        <option value="specific_day">
-                          Specific Day of Month
-                        </option>
+                        <option value="specific_day">Specific Day of Month</option>
                         <option value="custom">Custom Interval</option>
                       </select>
                     </EditableField>
                   </div>
-                  {(formData.recurring_frequency === "custom" ||
-                    formData.recurring_frequency === "specific_day") && (
+                  {(formData.recurring_frequency === "custom" || formData.recurring_frequency === "specific_day") && (
                     <div className="mt-4">
                       <EditableField
                         label="Day / Interval"
@@ -714,32 +699,20 @@ const RecurringRemitEdit = ({
                     Beneficiary Information
                   </h3>
                   <div className="grid grid-cols-2 gap-5">
-                    <ReadOnlyField
-                      label="Name"
-                      value={formData.beneficiary_name}
-                    />
-                    <ReadOnlyField
-                      label="Account"
-                      value={formData.beneficiary_bank_account_number}
-                    />
+                    <ReadOnlyField label="Name" value={formData.beneficiary_name} />
+                    <ReadOnlyField label="Account" value={formData.beneficiary_bank_account_number} />
                   </div>
                 </div>
 
-                {/* Author Information */}
+                {/* Author Information - SAFE VERSION */}
                 <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">
                     Author Information
                   </h3>
                   <div className="grid grid-cols-3 gap-5">
-                    <ReadOnlyField label="Type" value={formData.author_type} />
-                    <ReadOnlyField
-                      label="ID"
-                      value={effectiveCustomerId || "N/A"}
-                    />
-                    <ReadOnlyField
-                      label="Source"
-                      value={formData.author_source}
-                    />
+                    <ReadOnlyField label="Type" value={typeof formData.author_type === 'string' ? formData.author_type : "customer"} />
+                    <ReadOnlyField label="UUID" value={customerUuid || "N/A"} />
+                    <ReadOnlyField label="Source" value={typeof formData.author_source === 'string' ? formData.author_source : "zap"} />
                   </div>
                 </div>
 

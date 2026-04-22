@@ -845,9 +845,6 @@ export const handleApiError = (error, dispatch = null) => {
     switch (error.response.status) {
       case 401:
         errorMessage = "Session expired. Please login again.";
-        localStorage.removeItem("authtoken");
-        localStorage.removeItem("authcustomer_id");
-        tokenService.clearToken();
         window.location.href = "/";
         break;
       case 403:

@@ -130,11 +130,12 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
   const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
   const [bankError, setBankError] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
     customer_id: "",
-    recurring_frequency: "monthly",
+    recurring_frequency: "specific_day",
     source_amount: "",
     source_currency: "",
     destination_currency: "",
@@ -192,48 +193,71 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
   const authCustomerId = localStorage.getItem("authcustomer_id");
   const currentCustomerId = localStorage.getItem("currentCustomerId");
 
-  // Effective ID Logic
-  const getEffectiveCustomerId = () => {
-    // Priority: prop > customerUuid > authcustomer_id > currentCustomerId
-    const id =
-      customerId || customerUuid || authCustomerId || currentCustomerId;
-
-    if (!id || id === "null" || id === "undefined") {
-      console.error("No valid customer ID found");
+  // =========================================================================
+  // HELPER FUNCTIONS - SEPARATE NUMERIC ID FROM UUID
+  // =========================================================================
+  
+  // ✅ For data fetching (beneficiaries, bank accounts) - use numeric ID
+  const getNumericCustomerId = () => {
+    // Priority: prop > authcustomer_id > currentCustomerId
+    const numericId = customerId || authCustomerId || currentCustomerId;
+    
+    if (!numericId || numericId === "null" || numericId === "undefined") {
+      console.error("No valid numeric customer ID found for data fetching");
       return null;
     }
-
-    // ✅ Log which ID is being used
-    console.log(
-      "Using customer ID in AddModal:",
-      id,
-      "(from:",
-      customerId
-        ? "prop"
-        : customerUuid
-          ? "customerUuid"
-          : authCustomerId
-            ? "authcustomer_id"
-            : "currentCustomerId",
-      ")",
-    );
-
-    return id;
+    
+    console.log("🔢 Using numeric ID for data fetching:", numericId);
+    return numericId;
   };
 
-  const effectiveCustomerId = getEffectiveCustomerId();
+  // ✅ For API payload - use UUID
+  const getCustomerUuid = () => {
+    const uuid = customerUuid;
+    if (!uuid || uuid === "null" || uuid === "undefined") {
+      console.error("No valid customer UUID found for API payload");
+      return null;
+    }
+    console.log("🆔 Using UUID for API payload:", uuid);
+    return uuid;
+  };
+
+  const numericCustomerId = getNumericCustomerId();
+  const customerUuidValue = getCustomerUuid();
+
+  // Helper function to format date with ordinal suffix
+  const formatSelectedDate = (date) => {
+    if (!date) return "Select Monthly";
+    const day = date.getDate();
+    const month = date.toLocaleString('default', { month: 'long' });
+    
+    const getOrdinalSuffix = (day) => {
+      if (day > 3 && day < 21) return 'th';
+      switch (day % 10) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+      }
+    };
+    
+    return `${day}${getOrdinalSuffix(day)} ${month}`;
+  };
 
   // =========================================================================
   // DATA FETCHING & EFFECTS
   // =========================================================================
+  
+  // Set form data with UUID for payload
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
-      author_id: customerUuid || "",
-      customer_id: effectiveCustomerId,
+      author_id: customerUuidValue || "",
+      customer_id: customerUuidValue || "",
     }));
-  }, [customerId, customerUuid, effectiveCustomerId]);
+  }, [customerUuidValue]);
 
+  // Fetch all required data when modal opens
   useEffect(() => {
     const fetchAllData = async () => {
       if (!isOpen || dataFetchAttempted) return;
@@ -241,17 +265,19 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
       setLoading(true);
 
       try {
-        // Fetch beneficiaries
-        if (!beneficiariesHasFetched || beneficiariesFromStore.length === 0) {
-          await dispatch(fetchBeneficiaries(effectiveCustomerId));
+        // ✅ Use numeric ID for fetching beneficiaries
+        if ((!beneficiariesHasFetched || beneficiariesFromStore.length === 0) && numericCustomerId) {
+          console.log("Fetching beneficiaries with numeric ID:", numericCustomerId);
+          await dispatch(fetchBeneficiaries(numericCustomerId));
         }
 
-        // Fetch source currencies (bank accounts)
-        if (sourceCurrencies.length === 0) {
-          await dispatch(fetchBankAccounts(effectiveCustomerId));
+        // ✅ Use numeric ID for fetching bank accounts
+        if (sourceCurrencies.length === 0 && numericCustomerId) {
+          console.log("Fetching bank accounts with numeric ID:", numericCustomerId);
+          await dispatch(fetchBankAccounts(numericCustomerId));
         }
 
-        // Fetch destination currencies (payout currencies)
+        // Fetch payout currencies (doesn't need customer ID)
         if (destinationCurrencies.length === 0) {
           await dispatch(fetchPayoutCurrencies());
         }
@@ -272,11 +298,13 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
       }
     };
 
-    if (isOpen) fetchAllData();
+    if (isOpen) {
+      fetchAllData();
+    }
   }, [
     isOpen,
     dispatch,
-    effectiveCustomerId,
+    numericCustomerId,
     beneficiariesHasFetched,
     beneficiariesFromStore.length,
     sourceCurrencies.length,
@@ -290,7 +318,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
   // Fetch beneficiary banks when beneficiary is selected
   useEffect(() => {
     if (formData.beneficiaryNumericId && formData.destination_currency) {
-      // ✅ Pass just the beneficiary ID, not an object
+      console.log("Fetching beneficiary banks for ID:", formData.beneficiaryNumericId);
       dispatch(fetchBeneficiaryBanks(formData.beneficiaryNumericId));
       setBankError("");
     }
@@ -352,14 +380,29 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
     setBankSearchTerm("");
   };
 
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    if (date) {
+      const dayOfMonth = date.getDate();
+      setFormData((prev) => ({
+        ...prev,
+        custom_days: dayOfMonth.toString(),
+      }));
+      setShowCalendar(false);
+    }
+  };
+
   const validateCurrentStep = () => {
     if (activeStep === 1) {
-      return (
+      const hasBasicDetails = 
         formData.source_amount &&
         formData.source_amount > 0 &&
         formData.source_currency &&
-        formData.destination_currency
-      );
+        formData.destination_currency;
+      
+      const hasCustomDay = formData.custom_days && formData.custom_days !== "";
+      
+      return hasBasicDetails && hasCustomDay;
     }
     if (activeStep === 2) {
       return (
@@ -379,8 +422,15 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
     setError(null);
 
     try {
+      // ✅ Use UUID for API payload
+      const finalCustomerUuid = customerUuidValue;
+      
+      if (!finalCustomerUuid) {
+        throw new Error("Customer UUID not found. Please login again.");
+      }
+
       const payload = {
-        customer_id: customerUuid || effectiveCustomerId,
+        customer_id: finalCustomerUuid, // Send UUID
         source_amount: formData.source_amount,
         source_currency: formData.source_currency,
         destination_currency: formData.destination_currency,
@@ -389,15 +439,14 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         occupation: formData.occupation,
         income_source: formData.income_source,
         purpose: formData.purpose,
-        recurring_frequency: formData.recurring_frequency,
-        custom_days:
-          formData.recurring_frequency === "specific_day"
-            ? formData.custom_days
-            : "",
+        recurring_frequency: "specific_day",
+        custom_days: formData.custom_days,
         author_source: "zap",
         author_type: "customer",
-        author_id: customerUuid || "",
+        author_id: finalCustomerUuid, // Send UUID
       };
+
+      console.log("📤 Submitting payload with UUID:", payload);
 
       const response = await fetch(
         `${API_URL}/recurring-remittance/add-detail`,
@@ -415,6 +464,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
       const responseData = await response.json();
 
       if (responseData.status === "success") {
+        console.log("✅ Recurring remit added successfully:", responseData);
         onSave(responseData.data);
         resetForm();
         onClose();
@@ -433,6 +483,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         }
       }
     } catch (err) {
+      console.error("❌ Submit error:", err);
       setError(err.message || "An error occurred");
     } finally {
       setLoading(false);
@@ -441,8 +492,8 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
 
   const resetForm = () => {
     setFormData({
-      customer_id: effectiveCustomerId,
-      recurring_frequency: "monthly",
+      customer_id: customerUuidValue || "",
+      recurring_frequency: "specific_day",
       source_amount: "",
       source_currency: "",
       destination_currency: "",
@@ -455,9 +506,10 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
       custom_days: "",
       author_source: "zap",
       author_type: "customer",
-      author_id: customerUuid || "",
+      author_id: customerUuidValue || "",
     });
     setSelectedDate(null);
+    setShowCalendar(false);
     setActiveStep(1);
     setBankError("");
   };
@@ -619,17 +671,32 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-white/5">
-                  <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400">
-                    <User size={14} />
+                <div className="flex flex-col gap-2 pt-4 border-t border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400">
+                      <Repeat size={14} />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase">
+                        Recurring Day
+                      </p>
+                      <p className="text-xs font-bold">
+                        {selectedDate ? formatSelectedDate(selectedDate) : "Not selected"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase">
-                      To Recipient
-                    </p>
-                    <p className="text-xs font-bold truncate">
-                      {selectedBeneficiary?.benef_name || "---"}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400">
+                      <User size={14} />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase">
+                        To Recipient
+                      </p>
+                      <p className="text-xs font-bold truncate">
+                        {selectedBeneficiary?.benef_name || "---"}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -641,7 +708,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
             <header className="flex justify-between items-start mb-10">
               <div>
                 <h3 className="text-3xl font-black text-slate-900 tracking-tight">
-                  {activeStep === 1 && "Payment Details"}
+                  {activeStep === 1 && "Add Recurring Remit"}
                   {activeStep === 2 && "Who are you sending to?"}
                   {activeStep === 3 && "Security & Compliance"}
                 </h3>
@@ -720,58 +787,61 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
                           <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">
                             Frequency *
                           </label>
-                          <div className="flex bg-slate-100 p-1.5 rounded-[1.5rem]">
-                            {["monthly", "specific_day"].map((freq) => (
-                              <button
-                                key={freq}
-                                type="button"
-                                onClick={() =>
-                                  setFormData((p) => ({
-                                    ...p,
-                                    recurring_frequency: freq,
-                                  }))
-                                }
-                                className={`flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs transition-all ${
-                                  formData.recurring_frequency === freq
-                                    ? "bg-white shadow-lg text-indigo-600"
-                                    : "text-slate-500 hover:text-slate-700"
-                                }`}
-                              >
-                                {freq === "monthly"
-                                  ? "Every Month"
-                                  : "Custom Day"}
-                              </button>
-                            ))}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setShowCalendar(!showCalendar)}
+                              className="w-full p-5 bg-slate-50 border-2 border-transparent hover:border-indigo-200 rounded-[1.5rem] text-left flex items-center justify-between transition-all"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Calendar className="text-indigo-500" size={20} />
+                                <span className="font-bold text-slate-700">
+                                  {selectedDate ? formatSelectedDate(selectedDate) : "Select Monthly"}
+                                </span>
+                              </div>
+                              <ChevronDown
+                                className={`transition-transform text-slate-400 ${showCalendar ? "rotate-180" : ""}`}
+                                size={18}
+                              />
+                            </button>
+
+                            {/* Calendar Dropdown */}
+                            <AnimatePresence>
+                              {showCalendar && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: 10 }}
+                                  className="absolute z-30 w-full mt-3 bg-white rounded-[2rem] shadow-[0_24px_48px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden p-6"
+                                >
+                                  <div className="flex justify-between items-center mb-4">
+                                    <p className="text-xs font-black uppercase text-slate-400 tracking-widest">
+                                      Select Day of Month
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCalendar(false)}
+                                      className="text-slate-400 hover:text-slate-600"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                  <DatePicker
+                                    selected={selectedDate}
+                                    onChange={handleDateSelect}
+                                    inline
+                                    showMonthYearPicker={false}
+                                    dateFormat="MMMM d"
+                                  />
+                                  <p className="text-xs text-slate-500 mt-4 text-center">
+                                    This transfer will recur on the selected day each month
+                                  </p>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </div>
                       </div>
-
-                      {formData.recurring_frequency === "specific_day" && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          className="p-8 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 flex flex-col items-center"
-                        >
-                          <div className="flex items-center gap-2 mb-6">
-                            <Calendar size={18} className="text-indigo-600" />
-                            <p className="text-xs font-black text-indigo-900 uppercase tracking-widest">
-                              Select recurring day of month
-                            </p>
-                          </div>
-                          <DatePicker
-                            selected={selectedDate}
-                            onChange={(date) => {
-                              setSelectedDate(date);
-                              if (date)
-                                setFormData((p) => ({
-                                  ...p,
-                                  custom_days: date.getDate().toString(),
-                                }));
-                            }}
-                            inline
-                          />
-                        </motion.div>
-                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-3">
@@ -1139,7 +1209,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
                       <input
                         type="hidden"
                         name="author_id"
-                        value={customerUuid || ""}
+                        value={customerUuidValue || ""}
                       />
                     </div>
                   )}

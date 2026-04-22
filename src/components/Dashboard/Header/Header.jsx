@@ -1,4 +1,3 @@
-// src/components/Header/Header.js
 import React, { useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
@@ -18,9 +17,7 @@ import {
 import { RingLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Redux imports from headerSlice
 import {
-  fetchPartnerFxCurrencies,
   fetchUserProfile,
   openDropdown,
   closeDropdown,
@@ -44,13 +41,8 @@ import {
   selectProfileError,
 } from "./headerSlice";
 
-// FIXED: Only import logoutUser, use local selectAuthToken
 import { logoutUser } from "../../../features/Auth/slices/authSlice";
-
-// Partner config hook - UPDATED to get logoUrl
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
-
-// API Coordination
 import { apiCoordinator } from "../../../services/api";
 
 const selectAuthToken = (state) => {
@@ -63,9 +55,7 @@ const selectAuthToken = (state) => {
     typeof bearertoken === "string" &&
     bearertoken.length > 10;
 
-  if (isValidToken) {
-    return bearertoken;
-  }
+  if (isValidToken) return bearertoken;
 
   const token = state.auth?.token;
   const isValidReduxToken =
@@ -86,37 +76,28 @@ const Header = ({ customerId }) => {
   const timerRef = useRef(null);
   const hoverTimerRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
+  const isNavigatingRef = useRef(false);
+  const navigationTimerRef = useRef(null);
 
-  // Use the partner config hook - UPDATED to get all new properties
   const {
     headerColor,
     logoUrl,
     logoAltText,
-    partnerName, // NEW: Get partner name from hook
-    hasLogo, // NEW: Check if logo exists
+    partnerName,
+    hasLogo,
     loading: partnerConfigLoading,
-    error: partnerConfigError,
-    refresh: refreshPartnerConfig,
-    config: partnerConfig,
   } = usePartnerConfig();
 
-  // Use individual selectors to prevent unnecessary re-renders
   const partnerFxCurrencies = useSelector(selectPartnerFxCurrencies);
   const hasFxData = useSelector(selectHasFxData);
-  const headerLoading = useSelector(selectHeaderLoading);
-  const headerError = useSelector(selectHeaderError);
   const isDropdownOpen = useSelector(selectIsDropdownOpen);
   const authtoken = useSelector(selectAuthToken);
-
-  // Profile selectors
   const profileData = useSelector(selectProfileData);
   const profileLoading = useSelector(selectProfileLoading);
   const profileError = useSelector(selectProfileError);
-
   const isStaffLogin = useSelector(selectIsStaffLogin);
   const staffRole = useSelector(selectStaffRole);
   const isOwnerLogin = useSelector(selectIsOwnerLogin);
-  const ownerId = useSelector(selectOwnerId);
   const ownerRoleName = useSelector(selectOwnerRoleName);
   const staffId = useSelector(selectStaffId);
   const isRemittanceOnlyCustomer = useSelector(selectIsRemittanceOnlyCustomer);
@@ -125,70 +106,52 @@ const Header = ({ customerId }) => {
   );
   const fetchStatus = useSelector(selectFetchStatus);
 
-  // Get from localStorage
-  const isWhitelabelledCustomer =
-    localStorage.getItem("isWhitelabelledCustomer") || "N";
-  const firstName = localStorage.getItem("firstName") || "User";
-  const lastName = localStorage.getItem("lastName") || "";
-
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // NEW: API coordination refs
-  const profileFetchSignature = useRef(null);
+  // ✅ Helper: clear coordinator locks and navigate safely
+  const clearAndNavigate = useCallback(
+    (path) => {
+      isNavigatingRef.current = true;
 
-  useEffect(() => {
-    profileFetchSignature.current = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
-  }, [customerId]);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = null;
+      }
 
-  // ==================== DEBUG LOGGING ====================
-  useEffect(() => {
-    console.log("🔍 Header Partner Config Debug:", {
-      hasLogo,
-      logoUrl,
-      logoAltText,
-      partnerName,
-      partnerConfigLoading,
-      isWhitelabelledCustomerPartnerId,
-      isRemittanceOnlyCustomer,
-      localStoragePartnerName: localStorage.getItem(
-        "whitelabelled_customer_partnername"
-      ),
-      localStoragePartnerLogo: localStorage.getItem("partner_logo"),
-      localStoragePartnerConfig: JSON.parse(
-        localStorage.getItem("partnerConfig") || "{}"
-      ),
-      localStoragePartnerDetails: JSON.parse(
-        localStorage.getItem("partnerDetails") || "{}"
-      ),
-    });
-  }, [
-    hasLogo,
-    logoUrl,
-    logoAltText,
-    partnerName,
-    partnerConfigLoading,
-    isWhitelabelledCustomerPartnerId,
-    isRemittanceOnlyCustomer,
-  ]);
-  // ==================== END DEBUG ====================
+      try {
+        apiCoordinator.clear();
+      } catch (e) {
+        console.warn("apiCoordinator.clear() failed:", e);
+      }
+
+      dispatch(closeDropdown());
+      navigate(path);
+
+      if (navigationTimerRef.current) {
+        clearTimeout(navigationTimerRef.current);
+      }
+      navigationTimerRef.current = setTimeout(() => {
+        isNavigatingRef.current = false;
+      }, 2000);
+    },
+    [dispatch, navigate]
+  );
 
   // Handle logout
   const handleLogout = useCallback(async () => {
-    // Clear timers
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
       fetchTimeoutRef.current = null;
     }
 
-    // Clear API cache on logout
-    apiCoordinator.clear();
+    try {
+      apiCoordinator.clear();
+    } catch (e) {}
 
-    // Get any available token
     const tokenToUse =
       authtoken ||
       localStorage.getItem("authtoken") ||
@@ -198,19 +161,13 @@ const Header = ({ customerId }) => {
       if (tokenToUse) {
         await dispatch(logoutUser(tokenToUse)).unwrap();
       } else {
-        // If no token, just clear local state
-        dispatch(logoutUserSync()); // Use the sync version as fallback
+        dispatch(logoutUser());
       }
-
-      // Navigate to login
       navigate("/", { replace: true });
-
-      // Force reload to clear any cached state
       window.location.reload();
     } catch (error) {
       console.error("Logout error:", error);
       // Even if API fails, clear local storage and redirect
-      localStorage.clear();
       sessionStorage.clear();
       navigate("/", { replace: true });
       window.location.reload();
@@ -219,50 +176,32 @@ const Header = ({ customerId }) => {
 
   // Listen for header color changes
   useEffect(() => {
-    const handleStorageChange = () => {
-      dispatch(updateLocalStorageState());
-    };
-
+    const handleStorageChange = () => dispatch(updateLocalStorageState());
     window.addEventListener("storage", handleStorageChange);
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, [dispatch]);
 
-  // Close dropdown when clicking outside or mouse leaves
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         dispatch(closeDropdown());
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dispatch]);
 
-  // ✅ FIXED: Aggressive Profile fetch with duplicate handling
+  // Profile fetch — skips when navigating
   useEffect(() => {
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
 
     fetchTimeoutRef.current = setTimeout(() => {
-      console.log("🔍 Header Profile Fetch Check:", {
-        bearertoken: !!bearertoken,
-        customerId,
-        fetchStatus: fetchStatus.profile,
-        profileLoading,
-        reduxFirstName: profileData?.first_name,
-        storageFirstName: localStorage.getItem("firstName"),
-        isGloballyFetching: profileFetchSignature.current
-          ? apiCoordinator.isFetching(profileFetchSignature.current)
-          : "no-signature",
-      });
+      if (isNavigatingRef.current) {
+        console.log("🚫 Header: Skipping profile fetch — navigation in progress");
+        return;
+      }
 
-      // ✅ Check if we have VALID data (not "User" or bad values)
       const hasValidReduxData =
         profileData?.first_name &&
         profileData.first_name !== "User" &&
@@ -275,77 +214,40 @@ const Header = ({ customerId }) => {
         localStorage.getItem("firstName") !== "undefined" &&
         localStorage.getItem("firstName") !== "null";
 
-      // ✅ Check global coordination state
-      const isGloballyFetching =
-        profileFetchSignature.current &&
-        apiCoordinator.isFetching(profileFetchSignature.current);
-      const hasGlobalData =
-        profileFetchSignature.current &&
-        apiCoordinator.hasRecentData(profileFetchSignature.current);
-
-      // ✅ SIMPLIFIED: Fetch if we don't have valid data AND not already fetching globally
       const shouldFetchProfile =
         bearertoken &&
         customerId &&
         !hasValidReduxData &&
         !hasValidStorageData &&
-        !isGloballyFetching &&
         !profileLoading;
 
       if (shouldFetchProfile) {
-        console.log("👤 Header: Fetching profile - no valid data found");
-
-        // Reset fetch status to idle to allow the fetch
-        if (fetchStatus.profile !== "idle") {
-          console.log("🔄 Resetting fetch status to idle");
-        }
-
+        console.log("👤 Header: Fetching profile");
         dispatch(fetchUserProfile({ customerId, bearertoken }));
-      } else {
-        console.log("🔍 Header: Profile fetch not needed", {
-          hasValidReduxData,
-          hasValidStorageData,
-          isGloballyFetching,
-          profileLoading,
-          fetchStatus: fetchStatus.profile,
-        });
       }
     }, 300);
 
     return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
-  }, [
-    dispatch,
-    bearertoken,
-    customerId,
-    fetchStatus.profile,
-    profileLoading,
-    profileData,
-  ]);
+  }, [dispatch, bearertoken, customerId, profileLoading, profileData]);
 
   // Navigation handlers
-  const handleBeneficiariesClick = useCallback(() => {
-    navigate(`/beneficiaries/${customerId}`);
-    dispatch(closeDropdown());
-  }, [customerId, navigate, dispatch]);
-
   const handleProfileClick = useCallback(() => {
-    navigate(`/profile/${customerId}`);
-    dispatch(closeDropdown());
-  }, [customerId, navigate, dispatch]);
+    clearAndNavigate(`/profile/${customerId}`);
+  }, [customerId, clearAndNavigate]);
+
+  const handleBeneficiariesClick = useCallback(() => {
+    clearAndNavigate(`/beneficiaries/${customerId}`);
+  }, [customerId, clearAndNavigate]);
 
   const handleTeamClick = useCallback(() => {
-    navigate(`/team/${customerId}`);
-    dispatch(closeDropdown());
-  }, [customerId, navigate, dispatch]);
+    clearAndNavigate(`/team/${customerId}`);
+  }, [customerId, clearAndNavigate]);
 
   const handleChangePasswordStaff = useCallback(() => {
-    navigate(`/changepasswordstaff/${staffId}`);
-    dispatch(closeDropdown());
-  }, [staffId, navigate, dispatch]);
+    clearAndNavigate(`/changepasswordstaff/${staffId}`);
+  }, [staffId, clearAndNavigate]);
 
   // Hover handlers
   const handleMouseEnter = useCallback(() => {
@@ -364,10 +266,7 @@ const Header = ({ customerId }) => {
 
   // Auto-logout timer
   const resetTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       handleLogout();
     }, 36000000);
@@ -377,21 +276,25 @@ const Header = ({ customerId }) => {
     if (authtoken) {
       const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
       events.forEach((event) => window.addEventListener(event, resetTimer));
-
       resetTimer();
-
       return () => {
         events.forEach((event) =>
           window.removeEventListener(event, resetTimer)
         );
-        if (timerRef.current) {
-          clearTimeout(timerRef.current);
-        }
+        if (timerRef.current) clearTimeout(timerRef.current);
       };
     }
   }, [resetTimer, authtoken]);
 
-  // Enhanced dropdown items
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+      if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
+    };
+  }, []);
+
   const dropdownItems = [
     {
       id: 1,
@@ -428,7 +331,6 @@ const Header = ({ customerId }) => {
     },
   ];
 
-  // ✅ FIXED: Memoized profile section
   const ProfileSection = useMemo(() => {
     if (profileLoading && !profileData) {
       return (
@@ -437,10 +339,6 @@ const Header = ({ customerId }) => {
           <span className="ml-2 text-white text-sm">Loading Profile...</span>
         </div>
       );
-    }
-
-    if (profileError) {
-      console.error("🔍 Profile error in ProfileSection:", profileError);
     }
 
     const displayName =
@@ -455,6 +353,7 @@ const Header = ({ customerId }) => {
           localStorage.getItem("firstName") !== "null"
         ? localStorage.getItem("firstName")
         : "User";
+
     const userRole =
       isStaffLogin === "1"
         ? staffRole
@@ -518,12 +417,15 @@ const Header = ({ customerId }) => {
               style={{
                 background:
                   "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
+                maxHeight: "calc(100vh - 100px)",
+                overflowY: "auto",
               }}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             >
+              {/* Profile Header */}
               <motion.div
-                className="p-8 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600"
+                className="p-8 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 sticky top-0 z-10"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
@@ -576,93 +478,89 @@ const Header = ({ customerId }) => {
                 </div>
               </motion.div>
 
-              <div className="p-6">
-                <div className="space-y-3">
-                  {dropdownItems.map((item, index) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: item.delay,
-                        type: "spring",
-                        stiffness: 500,
-                      }}
-                      whileHover={{
-                        scale: 1.02,
-                        x: 5,
-                      }}
-                    >
-                      <button
-                        onClick={item.onClick}
-                        className="flex items-start w-full text-left p-5 rounded-2xl transition-all duration-300 group border border-gray-100 hover:border-gray-200 hover:shadow-lg bg-white/50 hover:bg-white"
+              {/* Menu Items */}
+              <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
+                <div className="p-6">
+                  <div className="space-y-3">
+                    {dropdownItems.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          delay: item.delay,
+                          type: "spring",
+                          stiffness: 500,
+                        }}
+                        whileHover={{ scale: 1.02, x: 5 }}
                       >
-                        <div
-                          className={`p-4 rounded-xl ${item.bgColor} border ${item.borderColor} group-hover:scale-110 transition-all duration-300 shadow-sm`}
+                        <button
+                          onClick={item.onClick}
+                          className="flex items-start w-full text-left p-5 rounded-2xl transition-all duration-300 group border border-gray-100 hover:border-gray-200 hover:shadow-lg bg-white/50 hover:bg-white"
                         >
-                          <item.icon className={`w-6 h-6 ${item.color}`} />
-                        </div>
-                        <div className="ml-5 flex-1 min-w-0">
-                          <div className="flex items-center">
-                            <span
-                              className={`font-semibold text-gray-900 group-hover:text-gray-800 transition-colors duration-200`}
-                            >
+                          <div
+                            className={`p-4 rounded-xl ${item.bgColor} border ${item.borderColor} group-hover:scale-110 transition-all duration-300 shadow-sm`}
+                          >
+                            <item.icon className={`w-6 h-6 ${item.color}`} />
+                          </div>
+                          <div className="ml-5 flex-1 min-w-0">
+                            <span className="font-semibold text-gray-900 group-hover:text-gray-800 transition-colors duration-200">
                               {item.label}
                             </span>
+                            <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                              {item.description}
+                            </p>
                           </div>
-                          <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                            {item.description}
-                          </p>
-                        </div>
-                        <FaChevronRight
-                          className={`w-4 h-4 text-gray-400 group-hover:text-gray-600 mt-1 group-hover:translate-x-1 transition-all duration-200`}
-                        />
-                      </button>
-                    </motion.div>
-                  ))}
+                          <FaChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 mt-1 group-hover:translate-x-1 transition-all duration-200" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <motion.div
-                className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
-              >
-                <motion.button
-                  onClick={handleLogout}
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center w-full p-5 rounded-2xl bg-white border border-red-200 hover:border-red-300 hover:shadow-lg transition-all duration-300 group"
+                {/* Logout */}
+                <motion.div
+                  className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7 }}
                 >
-                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-200 group-hover:bg-red-500/20 transition-colors duration-200">
-                    <FaSignOutAlt className="w-6 h-6 text-red-500" />
-                  </div>
-                  <div className="ml-5 flex-1 text-left">
-                    <span className="font-semibold text-red-600 group-hover:text-red-700 transition-colors duration-200">
-                      Logout
-                    </span>
-                    <p className="text-sm text-red-500/80 mt-2">
-                      Sign out from your account
-                    </p>
-                  </div>
-                  <FaChevronRight className="w-4 h-4 text-red-400 group-hover:text-red-500 mt-1 group-hover:translate-x-1 transition-all duration-200" />
-                </motion.button>
-              </motion.div>
+                  <motion.button
+                    onClick={handleLogout}
+                    whileHover={{ scale: 1.02 }}
+                    className="flex items-center w-full p-5 rounded-2xl bg-white border border-red-200 hover:border-red-300 hover:shadow-lg transition-all duration-300 group"
+                  >
+                    <div className="p-4 rounded-xl bg-red-500/10 border border-red-200 group-hover:bg-red-500/20 transition-colors duration-200">
+                      <FaSignOutAlt className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div className="ml-5 flex-1 text-left">
+                      <span className="font-semibold text-red-600 group-hover:text-red-700 transition-colors duration-200">
+                        Logout
+                      </span>
+                      <p className="text-sm text-red-500/80 mt-2">
+                        Sign out from your account
+                      </p>
+                    </div>
+                    <FaChevronRight className="w-4 h-4 text-red-400 group-hover:text-red-500 mt-1 group-hover:translate-x-1 transition-all duration-200" />
+                  </motion.button>
+                </motion.div>
 
-              <motion.div
-                className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <FaStar className="w-4 h-4 text-yellow-500 mr-2" />
-                    <span>Secure Portal • v2.1.0</span>
+                {/* Footer */}
+                <motion.div
+                  className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <FaStar className="w-4 h-4 text-yellow-500 mr-2" />
+                      <span>Secure Portal • v2.1.0</span>
+                    </div>
+                    <div className="text-xs text-gray-400">Last login: Today</div>
                   </div>
-                  <div className="text-xs text-gray-400">Last login: Today</div>
-                </div>
-              </motion.div>
+                </motion.div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -688,9 +586,7 @@ const Header = ({ customerId }) => {
     dispatch,
   ]);
 
-  // UPDATED: Determine which icon/logo to use based on customer type and partner config
   const LogoContent = useMemo(() => {
-    // Show loading spinner if partner config is loading
     if (partnerConfigLoading) {
       return (
         <div className="flex items-center">
@@ -699,7 +595,6 @@ const Header = ({ customerId }) => {
       );
     }
 
-    // If we have a partner logo URL, use it
     if (hasLogo && logoUrl) {
       return (
         <motion.div
@@ -710,11 +605,8 @@ const Header = ({ customerId }) => {
           <img
             src={logoUrl}
             alt={logoAltText}
-            className="h-20 w-auto object-contain md:h-20 lg:h-20" // Much bigger
-            style={{
-              maxWidth: "300px",
-              maxHeight: "100px",
-            }}
+            className="h-20 w-auto object-contain md:h-20 lg:h-20"
+            style={{ maxWidth: "300px", maxHeight: "100px" }}
             onError={(e) => {
               console.error("Failed to load partner logo:", logoUrl);
               e.target.style.display = "none";
@@ -727,16 +619,11 @@ const Header = ({ customerId }) => {
       );
     }
 
-    // Fallback to icon based on customer type
     let IconComponent = FaHome;
-    let titleText = "Dashboard";
-
     if (isRemittanceOnlyCustomer === "Y") {
       IconComponent = FaMoneyCheckAlt;
-      titleText = "Remittance Portal";
     } else if (isWhitelabelledCustomerPartnerId) {
       IconComponent = FaBuilding;
-      titleText = logoAltText || "Partner Portal";
     }
 
     return (
@@ -758,69 +645,25 @@ const Header = ({ customerId }) => {
     hasLogo,
     isRemittanceOnlyCustomer,
     isWhitelabelledCustomerPartnerId,
-    customerId,
   ]);
 
-  // UPDATED: Get appropriate text for the logo area
-  const logoText = useMemo(() => {
-    if (isRemittanceOnlyCustomer === "Y") {
-      return "Remittance Portal";
-    }
-    if (isWhitelabelledCustomerPartnerId) {
-      // Use partner name from hook (which comes from partner details API)
-      return partnerName || "Partner Portal";
-    }
-    return "Dashboard";
-  }, [
-    isRemittanceOnlyCustomer,
-    isWhitelabelledCustomerPartnerId,
-    partnerName, // Use partnerName instead of partnerConfig
-  ]);
-
-  // UPDATED: Handle header color class application with better fallback
   const headerClassNames = useMemo(() => {
     const baseClasses = "w-full shadow-xl";
-
-    // If we have a header color from partner config
     if (headerColor) {
-      // Check if it's a hex color or Tailwind class
-      if (headerColor.startsWith("#")) {
-        return baseClasses; // Use inline style for hex colors
-      }
-      // It's a Tailwind class
+      if (headerColor.startsWith("#")) return baseClasses;
       return `${baseClasses} ${headerColor}`;
     }
-
-    // Default gradient
     return `${baseClasses} bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700`;
   }, [headerColor]);
 
-  // UPDATED: Inline style for hex colors with better gradient
   const headerStyle = useMemo(() => {
     if (headerColor?.startsWith("#")) {
-      // Create a gradient from the header color
-      const baseColor = headerColor;
-      const darkerColor = headerColor + "CC"; // 80% opacity
-      const darkestColor = headerColor + "99"; // 60% opacity
-
       return {
-        background: `linear-gradient(135deg, ${baseColor} 0%, ${darkerColor} 50%, ${darkestColor} 100%)`,
+        background: `linear-gradient(135deg, ${headerColor} 0%, ${headerColor}CC 50%, ${headerColor}99 100%)`,
       };
     }
     return {};
   }, [headerColor]);
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current) {
-        clearTimeout(hoverTimerRef.current);
-      }
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return (
     <header className={headerClassNames} style={headerStyle}>
@@ -843,7 +686,6 @@ const Header = ({ customerId }) => {
           )}
         </div>
 
-        {/* FX Rates */}
         {hasFxData && partnerFxCurrencies.length > 0 && (
           <div className="hidden md:block w-full md:w-2/4 my-2 md:my-0">
             <div className="overflow-hidden px-6">
@@ -866,16 +708,13 @@ const Header = ({ customerId }) => {
           </div>
         )}
 
-        {/* Desktop: Profile on right */}
         <div className="hidden md:flex justify-end md:w-1/4 items-center">
           {ProfileSection}
         </div>
 
-        {/* Mobile: Profile menu */}
         <div className="md:hidden">{ProfileSection}</div>
       </div>
 
-      {/* Enhanced Keyframe style */}
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(100%); }
