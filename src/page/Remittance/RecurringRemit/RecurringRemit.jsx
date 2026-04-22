@@ -1,4 +1,4 @@
-// src/page/RecurringRemit/index.jsx - PREMIUM UI/UX VERSION
+// src/page/RecurringRemit/index.jsx - PREMIUM UI/UX VERSION (FIXED - WITH NULL CHECKS)
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -18,28 +18,15 @@ import {
   Edit2,
   Power,
   TrendingUp,
-  Wallet,
-  ArrowRight,
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Bell,
-  Shield,
-  Zap,
-  Star,
-  Users,
-  Globe,
-  CreditCard,
   Activity,
-  BarChart3,
-  Settings,
-  HelpCircle,
-  Menu,
-  X,
+  Zap,
 } from "lucide-react";
 import { RingLoader } from "react-spinners";
 import RecurringRemitEdit from "../../../components/PopupModal/RecurringRemitEdit";
-import AddRecurringRemitPopup from "../../../components/PopupModal/AddRecurringRemit";
+import AddRecurringRemitPopup from "../../../components/PopupModal/AddRecurringRemit"
 
 const RecurringRemit = () => {
   const { customerId: paramCustomerId } = useParams();
@@ -51,8 +38,7 @@ const RecurringRemit = () => {
   const [remittanceList, setRemittanceList] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedRecurringRemittanceId, setSelectedRecurringRemittanceId] =
-    useState(null);
+  const [selectedRecurringRemittanceId, setSelectedRecurringRemittanceId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("nextDate");
@@ -75,32 +61,28 @@ const RecurringRemit = () => {
     nextPayment: null,
   });
 
-  // Get customer IDs from localStorage
-  const customerUuid = localStorage.getItem("customerUuid");
+  // Get IDs from localStorage
   const authCustomerId = localStorage.getItem("authcustomer_id");
-  const currentCustomerId = localStorage.getItem("currentCustomerId");
   const bearerToken = localStorage.getItem("bearertoken");
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // Customer ID resolution
-  const getEffectiveCustomerId = useCallback(() => {
-    if (paramCustomerId && paramCustomerId === authCustomerId && customerUuid) {
-      return customerUuid;
-    }
-    const id =
-      customerUuid || paramCustomerId || authCustomerId || currentCustomerId;
-    if (!id || id === "null" || id === "undefined" || id.trim() === "") {
-      return null;
-    }
-    return id;
-  }, [paramCustomerId, customerUuid, authCustomerId, currentCustomerId]);
+  // ✅ Use numeric ID from URL param or localStorage
+  const numericCustomerId = paramCustomerId || authCustomerId;
 
-  const effectiveCustomerId = getEffectiveCustomerId();
+  // Debug logging
+  useEffect(() => {
+    console.log("Debug - Customer IDs:", {
+      paramCustomerId,
+      authCustomerId,
+      numericCustomerId,
+    });
+  }, [paramCustomerId, authCustomerId, numericCustomerId]);
 
-  // Fetch remittance list
+  // Fetch remittance list - ✅ Use NUMERIC ID
   const fetchRemittanceList = useCallback(
     async (showLoading = true) => {
-      if (!effectiveCustomerId || !bearerToken) {
+      if (!numericCustomerId || !bearerToken) {
+        console.error("Missing required data:", { numericCustomerId, bearerToken: !!bearerToken });
         setError("Missing authentication information");
         setLoading(false);
         return;
@@ -108,7 +90,9 @@ const RecurringRemit = () => {
 
       try {
         if (showLoading) setLoading(true);
-        const endpoint = `${API_URL}/recurring-remittance/list/${effectiveCustomerId}`;
+        const endpoint = `${API_URL}/recurring-remittance/list/${numericCustomerId}`;
+        console.log("Fetching from endpoint:", endpoint);
+        
         const response = await fetch(endpoint, {
           method: "GET",
           headers: {
@@ -153,34 +137,30 @@ const RecurringRemit = () => {
         setLoading(false);
       }
     },
-    [effectiveCustomerId, bearerToken, API_URL],
+    [numericCustomerId, bearerToken, API_URL],
   );
 
   useEffect(() => {
-    if (effectiveCustomerId) {
+    if (numericCustomerId) {
       fetchRemittanceList();
     } else {
       setLoading(false);
       setError("Unable to identify customer. Please log in again.");
     }
-  }, [effectiveCustomerId, fetchRemittanceList]);
+  }, [numericCustomerId, fetchRemittanceList]);
 
-  // Filter and sort data
+  // Filter and sort data with safe property access
   const filteredAndSortedData = React.useMemo(() => {
-    if (!remittanceList?.data) return [];
+    if (!remittanceList?.data || !Array.isArray(remittanceList.data)) return [];
 
     let filtered = [...remittanceList.data];
 
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter((item) => {
-        const id = (
-          item.recurringRemittanceId ||
-          item.recurringId ||
-          ""
-        ).toString();
-        const amount = (item.amount || item.source_amount || "").toString();
-        return id.includes(searchTerm) || amount.includes(searchTerm);
+        const id = item.recurringRemittanceId || item.recurringId || item.id || "";
+        const amount = item.amount || item.source_amount || "";
+        return id.toString().includes(searchTerm) || amount.toString().includes(searchTerm);
       });
     }
 
@@ -206,8 +186,8 @@ const RecurringRemit = () => {
           bVal = new Date(b.nextDate || 0);
           break;
         default:
-          aVal = a.recurringRemittanceId || a.recurringId || 0;
-          bVal = b.recurringRemittanceId || b.recurringId || 0;
+          aVal = a.recurringRemittanceId || a.recurringId || a.id || 0;
+          bVal = b.recurringRemittanceId || b.recurringId || b.id || 0;
       }
       if (sortOrder === "asc") return aVal > bVal ? 1 : -1;
       return aVal < bVal ? 1 : -1;
@@ -228,6 +208,7 @@ const RecurringRemit = () => {
   };
 
   const handleOpenAddModal = () => {
+    console.log("Opening add modal with customerId:", numericCustomerId);
     setIsAddModalOpen(true);
   };
 
@@ -249,7 +230,7 @@ const RecurringRemit = () => {
   const handleSaveEdit = (updatedData) => {
     if (remittanceList && remittanceList.data) {
       const updatedArray = remittanceList.data.map((item) => {
-        const itemId = item.recurringRemittanceId || item.recurringId;
+        const itemId = item.recurringRemittanceId || item.recurringId || item.id;
         if (itemId === updatedData.recurring_remittance_id) {
           return {
             ...item,
@@ -267,15 +248,13 @@ const RecurringRemit = () => {
   };
 
   const handleViewDetails = (id) => {
-    const navCustomerId = customerUuid || effectiveCustomerId;
-    navigate(`/recurring-remit/${navCustomerId}/${id}`);
+    navigate(`/recurring-remit/${numericCustomerId}/${id}`);
   };
 
   const handleStatusUpdate = async (recurringRemittanceId, currentStatus) => {
     const newStatus = currentStatus === "Y" ? "N" : "Y";
     const action = newStatus === "Y" ? "Activated" : "Deactivated";
-    const processingAction =
-      newStatus === "Y" ? "Activating..." : "Deactivating...";
+    const processingAction = newStatus === "Y" ? "Activating..." : "Deactivating...";
 
     setProcessingStatus({
       id: recurringRemittanceId,
@@ -288,31 +267,27 @@ const RecurringRemit = () => {
         recurring_active_status: newStatus,
         source: "zap",
         author_type: "customer",
-        author_id: effectiveCustomerId,
+        author_id: numericCustomerId,
+        customer_id: numericCustomerId,
       };
 
-      const response = await fetch(
-        `${API_URL}/recurring-remittance/update-status`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${bearerToken}`,
-          },
-          body: JSON.stringify(payload),
+      const response = await fetch(`${API_URL}/recurring-remittance/update-status`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${bearerToken}`,
         },
-      );
+        body: JSON.stringify(payload),
+      });
 
       const responseData = await response.json();
 
       if (responseData.status === "success") {
         if (remittanceList && remittanceList.data) {
           const updatedArray = remittanceList.data.map((item) => {
-            if (
-              (item.recurringRemittanceId || item.recurringId) ===
-              recurringRemittanceId
-            ) {
+            const itemId = item.recurringRemittanceId || item.recurringId || item.id;
+            if (itemId === recurringRemittanceId) {
               return { ...item, activeStatus: newStatus };
             }
             return item;
@@ -321,16 +296,10 @@ const RecurringRemit = () => {
         }
         showNotification(`Recurring Remit Successfully ${action}`, "success");
       } else {
-        throw new Error(
-          responseData.message ||
-            `Failed to ${action.toLowerCase()} recurring remit`,
-        );
+        throw new Error(responseData.message || `Failed to ${action.toLowerCase()} recurring remit`);
       }
     } catch (err) {
-      showNotification(
-        err.message || `Failed to ${action.toLowerCase()} recurring remit`,
-        "error",
-      );
+      showNotification(err.message || `Failed to ${action.toLowerCase()} recurring remit`, "error");
     } finally {
       setProcessingStatus({ id: null, action: "" });
     }
@@ -366,7 +335,44 @@ const RecurringRemit = () => {
     });
   };
 
-  // Loading state with animation
+  // Helper function to safely get item ID
+  const getItemId = (item) => {
+    return item?.recurringRemittanceId || item?.recurringId || item?.id || item?.recurring_remittance_id;
+  };
+
+  // Helper function to safely get amount
+  const getItemAmount = (item) => {
+    return item?.amount || item?.source_amount || 0;
+  };
+
+  // Helper function to safely get currency
+  const getItemCurrency = (item) => {
+    return item?.source_currency || item?.currency || "USD";
+  };
+
+  // Helper function to safely get frequency
+  const getItemFrequency = (item) => {
+    return item?.frequency || item?.recurring_frequency || "Monthly";
+  };
+
+  // Helper function to safely get custom days
+  const getItemCustomDays = (item) => {
+    return item?.custom_days || item?.day_of_month;
+  };
+
+  // Helper function to safely get next date
+  const getItemNextDate = (item) => {
+    return item?.nextDate || item?.next_payment_date;
+  };
+
+  // Helper function to safely get active status
+  const getItemActiveStatus = (item) => {
+    return item?.activeStatus || item?.status === "active" ? "Y" : "N";
+  };
+
+  const showMissingCustomerWarning = !numericCustomerId && !loading;
+
+  // Loading state
   if (loading && !remittanceList) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -403,7 +409,7 @@ const RecurringRemit = () => {
     );
   }
 
-  // Error state with animation
+  // Error state
   if (error && !remittanceList) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
@@ -420,9 +426,7 @@ const RecurringRemit = () => {
           >
             <AlertCircle size={40} className="text-red-600" />
           </motion.div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Oops! Something went wrong
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Oops! Something went wrong</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -461,16 +465,10 @@ const RecurringRemit = () => {
           >
             <div
               className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 ${
-                notification.type === "success"
-                  ? "bg-green-500 text-white"
-                  : "bg-red-500 text-white"
+                notification.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
               }`}
             >
-              {notification.type === "success" ? (
-                <CheckCircle size={24} />
-              ) : (
-                <XCircle size={24} />
-              )}
+              {notification.type === "success" ? <CheckCircle size={24} /> : <XCircle size={24} />}
               <span className="font-semibold">{notification.message}</span>
             </div>
           </motion.div>
@@ -478,7 +476,29 @@ const RecurringRemit = () => {
       </AnimatePresence>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section with Animation */}
+        {/* Customer ID Warning */}
+        <AnimatePresence>
+          {showMissingCustomerWarning && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl"
+            >
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-yellow-600" size={24} />
+                <div>
+                  <h3 className="font-semibold text-yellow-800">Customer ID Missing</h3>
+                  <p className="text-sm text-yellow-700">
+                    Please ensure you're logged in properly. The "Create New" button will work once the customer ID is available.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Header Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -517,7 +537,10 @@ const RecurringRemit = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
               onClick={handleOpenAddModal}
-              className="mt-4 lg:mt-0 flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+              disabled={!numericCustomerId}
+              className={`mt-4 lg:mt-0 flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 ${
+                !numericCustomerId ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             >
               <Plus className="w-5 h-5 mr-2" />
               Create New Recurring Remit
@@ -533,62 +556,24 @@ const RecurringRemit = () => {
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
         >
           {[
-            {
-              title: "Total Remittances",
-              value: stats.total,
-              icon: <Repeat className="text-blue-600" size={24} />,
-              gradient: "from-blue-50 to-blue-100",
-              color: "blue",
-            },
-            {
-              title: "Active Remittances",
-              value: stats.active,
-              icon: <Activity className="text-green-600" size={24} />,
-              gradient: "from-green-50 to-green-100",
-              color: "green",
-            },
-            {
-              title: "Total Volume",
-              value: `$${formatCurrency(stats.totalAmount)}`,
-              icon: <DollarSign className="text-purple-600" size={24} />,
-              gradient: "from-purple-50 to-purple-100",
-              color: "purple",
-            },
-            {
-              title: "Next Payment",
-              value: stats.nextPayment
-                ? formatDate(stats.nextPayment)
-                : "No upcoming",
-              icon: <Calendar className="text-orange-600" size={24} />,
-              gradient: "from-orange-50 to-orange-100",
-              color: "orange",
-            },
+            { title: "Total Remittances", value: stats.total, icon: <Repeat className="text-blue-600" size={24} />, gradient: "from-blue-50 to-blue-100" },
+            { title: "Active Remittances", value: stats.active, icon: <Activity className="text-green-600" size={24} />, gradient: "from-green-50 to-green-100" },
+            { title: "Total Volume", value: `$${formatCurrency(stats.totalAmount)}`, icon: <DollarSign className="text-purple-600" size={24} />, gradient: "from-purple-50 to-purple-100" },
+            { title: "Next Payment", value: stats.nextPayment ? formatDate(stats.nextPayment) : "No upcoming", icon: <Calendar className="text-orange-600" size={24} />, gradient: "from-orange-50 to-orange-100" },
           ].map((stat, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 + index * 0.1 }}
-              whileHover={{ y: -5, transition: { duration: 0.2 } }}
-              className={`bg-gradient-to-br ${stat.gradient} rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer`}
+              whileHover={{ y: -5 }}
+              className={`bg-gradient-to-br ${stat.gradient} rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300`}
             >
               <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 bg-white rounded-xl shadow-sm`}>
-                  {stat.icon}
-                </div>
-                <motion.div
-                  whileHover={{ rotate: 180 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <TrendingUp
-                    className={`text-${stat.color}-400 opacity-50`}
-                    size={20}
-                  />
-                </motion.div>
+                <div className="p-2 bg-white rounded-xl shadow-sm">{stat.icon}</div>
+                <TrendingUp className="text-gray-400 opacity-50" size={20} />
               </div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">
-                {stat.title}
-              </h3>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">{stat.title}</h3>
               <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
             </motion.div>
           ))}
@@ -603,253 +588,103 @@ const RecurringRemit = () => {
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
             <div className="relative flex-1 lg:max-w-md">
-              <Search
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={20}
-              />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder="Search by ID or amount..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div className="flex items-center space-x-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
+              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50">
                 <Filter size={18} className="mr-2" />
-                Filters
-                {showFilters ? (
-                  <ChevronUp size={18} className="ml-2" />
-                ) : (
-                  <ChevronDown size={18} className="ml-2" />
-                )}
-              </motion.button>
+                Filters {showFilters ? <ChevronUp size={18} className="ml-2" /> : <ChevronDown size={18} className="ml-2" />}
+              </button>
 
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 border border-gray-200 rounded-xl">
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
 
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-4 py-2 border border-gray-200 rounded-xl">
                 <option value="id">Sort by ID</option>
                 <option value="amount">Sort by Amount</option>
                 <option value="nextDate">Sort by Next Date</option>
               </select>
 
-              <motion.button
-                whileHover={{ rotate: 180 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() =>
-                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-                }
-                className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                {sortOrder === "asc" ? (
-                  <ChevronUp size={18} />
-                ) : (
-                  <ChevronDown size={18} />
-                )}
-              </motion.button>
+              <button onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50">
+                {sortOrder === "asc" ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </button>
             </div>
           </div>
-
-          {/* Expanded Filters */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mt-4 pt-4 border-t border-gray-100"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date Range
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Amount Range
-                    </label>
-                    <div className="flex space-x-2">
-                      <input
-                        type="number"
-                        placeholder="Min"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Max"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Frequency
-                    </label>
-                    <select className="w-full px-4 py-2 border border-gray-200 rounded-xl">
-                      <option>All</option>
-                      <option>Daily</option>
-                      <option>Weekly</option>
-                      <option>Monthly</option>
-                    </select>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
 
-        {/* Main Content - Cards View */}
+        {/* Cards View */}
         <AnimatePresence>
           {filteredAndSortedData.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-2xl shadow-sm p-12 text-center"
-            >
-              <motion.div
-                animate={{
-                  y: [0, -10, 0],
-                  rotate: [0, 5, -5, 0],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                }}
-                className="inline-block"
-              >
-                <Zap size={64} className="text-gray-300 mx-auto mb-4" />
-              </motion.div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No recurring remittances found
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Get started by creating your first recurring remittance
-              </p>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleOpenAddModal}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
-              >
+            <motion.div className="bg-white rounded-2xl shadow-sm p-12 text-center">
+              <Zap size={64} className="text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No recurring remittances found</h3>
+              <p className="text-gray-600 mb-6">Get started by creating your first recurring remittance</p>
+              <button onClick={handleOpenAddModal} disabled={!numericCustomerId} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
                 Create New Recurring Remit
-              </motion.button>
+              </button>
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredAndSortedData.map((item, index) => {
-                const itemId = item.recurringRemittanceId || item.recurringId;
+                const itemId = getItemId(item);
                 const isProcessing = processingStatus.id === itemId;
-                const isActive = item.activeStatus === "Y";
+                const isActive = getItemActiveStatus(item) === "Y";
 
                 return (
                   <motion.div
-                    key={itemId}
+                    key={itemId || index}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ delay: index * 0.05 }}
-                    whileHover={{ y: -8, transition: { duration: 0.2 } }}
-                    onHoverStart={() => setHoveredCard(itemId)}
-                    onHoverEnd={() => setHoveredCard(null)}
+                    whileHover={{ y: -8 }}
                     className={`relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border ${
                       isActive ? "border-green-200" : "border-gray-200"
                     }`}
                   >
-                    {/* Status Badge */}
-                    <div
-                      className={`absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-semibold ${
-                        isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
+                    <div className={`absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-semibold ${
+                      isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                    }`}>
                       {isActive ? "Active" : "Inactive"}
                     </div>
 
-                    {/* Animated gradient border on hover */}
-                    {hoveredCard === itemId && (
-                      <motion.div
-                        layoutId="cardBorder"
-                        className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl -z-0"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{ padding: 2 }}
-                      />
-                    )}
-
-                    <div className="relative bg-white rounded-2xl p-6 z-10">
-                      {/* Header */}
+                    <div className="relative bg-white rounded-2xl p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <div className="flex items-center space-x-2 mb-2">
-                            <div
-                              className={`p-2 rounded-xl ${
-                                isActive ? "bg-green-100" : "bg-gray-100"
-                              }`}
-                            >
-                              <Repeat
-                                size={20}
-                                className={
-                                  isActive ? "text-green-600" : "text-gray-600"
-                                }
-                              />
+                            <div className={`p-2 rounded-xl ${isActive ? "bg-green-100" : "bg-gray-100"}`}>
+                              <Repeat size={20} className={isActive ? "text-green-600" : "text-gray-600"} />
                             </div>
                             <span className="text-xs font-mono text-gray-500">
-                              ID: {itemId.toString().slice(0, 8)}...
+                              ID: {itemId ? itemId.toString().slice(0, 8) : "N/A"}...
                             </span>
                           </div>
                           <div className="flex items-baseline space-x-2">
                             <span className="text-3xl font-bold text-gray-900">
-                              $
-                              {formatCurrency(
-                                item.amount || item.source_amount,
-                              )}
+                              ${formatCurrency(getItemAmount(item))}
                             </span>
-                            <span className="text-sm text-gray-500">
-                              {item.source_currency || "USD"}
-                            </span>
+                            <span className="text-sm text-gray-500">{getItemCurrency(item)}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Details */}
                       <div className="space-y-3 mb-6">
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center text-gray-600">
                             <Calendar size={16} className="mr-2" />
                             <span>Next Payment</span>
                           </div>
-                          <span className="font-semibold text-gray-900">
-                            {formatDate(item.nextDate)}
-                          </span>
+                          <span className="font-semibold text-gray-900">{formatDate(getItemNextDate(item))}</span>
                         </div>
 
                         <div className="flex items-center justify-between text-sm">
@@ -857,78 +692,50 @@ const RecurringRemit = () => {
                             <Clock size={16} className="mr-2" />
                             <span>Frequency</span>
                           </div>
-                          <span className="font-semibold text-gray-900 capitalize">
-                            {item.frequency ||
-                              item.recurring_frequency ||
-                              "Monthly"}
-                          </span>
+                          <span className="font-semibold text-gray-900 capitalize">{getItemFrequency(item)}</span>
                         </div>
 
-                        {item.custom_days && (
+                        {getItemCustomDays(item) && (
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center text-gray-600">
                               <Calendar size={16} className="mr-2" />
                               <span>Day of Month</span>
                             </div>
-                            <span className="font-semibold text-gray-900">
-                              Day {item.custom_days}
-                            </span>
+                            <span className="font-semibold text-gray-900">Day {getItemCustomDays(item)}</span>
                           </div>
                         )}
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center space-x-3 pt-4 border-t border-gray-100">
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleViewDetails(itemId)}
-                          className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 transition-colors flex items-center justify-center space-x-2"
-                        >
+                        <button onClick={() => handleViewDetails(itemId)} className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 flex items-center justify-center space-x-2">
                           <Eye size={16} />
                           <span>View</span>
-                        </motion.button>
+                        </button>
 
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleOpenEditModal(itemId)}
-                          className="flex-1 px-4 py-2 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors flex items-center justify-center space-x-2"
-                        >
+                        <button onClick={() => handleOpenEditModal(itemId)} className="flex-1 px-4 py-2 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 flex items-center justify-center space-x-2">
                           <Edit2 size={16} />
                           <span>Edit</span>
-                        </motion.button>
+                        </button>
 
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() =>
-                            handleStatusUpdate(itemId, item.activeStatus)
-                          }
+                        <button
+                          onClick={() => handleStatusUpdate(itemId, getItemActiveStatus(item))}
                           disabled={isProcessing}
                           className={`flex-1 px-4 py-2 rounded-xl font-medium flex items-center justify-center space-x-2 transition-all ${
-                            isActive
-                              ? "bg-red-50 text-red-600 hover:bg-red-100"
-                              : "bg-green-50 text-green-600 hover:bg-green-100"
+                            isActive ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-600 hover:bg-green-100"
                           } disabled:opacity-50`}
                         >
                           {isProcessing ? (
                             <>
-                              <RingLoader
-                                size={16}
-                                color={isActive ? "#dc2626" : "#16a34a"}
-                              />
+                              <RingLoader size={16} color={isActive ? "#dc2626" : "#16a34a"} />
                               <span>{processingStatus.action}</span>
                             </>
                           ) : (
                             <>
                               <Power size={16} />
-                              <span>
-                                {isActive ? "Deactivate" : "Activate"}
-                              </span>
+                              <span>{isActive ? "Deactivate" : "Activate"}</span>
                             </>
                           )}
-                        </motion.button>
+                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -941,53 +748,38 @@ const RecurringRemit = () => {
 
       {/* Modals */}
       <AnimatePresence>
-        {isEditModalOpen && customerUuid && (
+        {isEditModalOpen && numericCustomerId && (
           <RecurringRemitEdit
             isOpen={isEditModalOpen}
             onSave={handleSaveEdit}
             onClose={handleCloseEditModal}
             recurringRemittanceId={selectedRecurringRemittanceId}
-            customerId={customerUuid}
+            customerId={numericCustomerId}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAddModalOpen && customerUuid && (
+        {isAddModalOpen && numericCustomerId && (
           <AddRecurringRemitPopup
             isOpen={isAddModalOpen}
             onClose={handleCloseAddModal}
             onSave={handleAddRecurringRemit}
-            customerId={customerUuid}
+            customerId={numericCustomerId}
           />
         )}
       </AnimatePresence>
 
-      {/* Add custom CSS for animations */}
-      <style jsx>{`
+      <style>{`
         @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
         }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
       `}</style>
     </div>
   );

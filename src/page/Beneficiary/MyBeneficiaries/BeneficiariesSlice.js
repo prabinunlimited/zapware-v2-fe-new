@@ -1707,7 +1707,7 @@ export const selectRemittanceReadyBanks = createSelector(
   }
 );
 
-
+// Add this selector with your other selectors
 export const selectHasFetched = (state) => {
   // Check if beneficiaries have been fetched at least once
   return state.beneficiaries?.lastUpdated !== null || 
