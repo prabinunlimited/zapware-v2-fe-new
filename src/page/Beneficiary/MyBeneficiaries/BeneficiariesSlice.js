@@ -1707,5 +1707,13 @@ export const selectRemittanceReadyBanks = createSelector(
   }
 );
 
+// Add this selector with your other selectors
+export const selectHasFetched = (state) => {
+  // Check if beneficiaries have been fetched at least once
+  return state.beneficiaries?.lastUpdated !== null || 
+         state.beneficiaries?.beneficiaries?.length > 0 ||
+         state.beneficiaries?.hasFetched === true;
+};
+
 // ===================== DEFAULT EXPORT =====================
 export default beneficiarySlice.reducer;

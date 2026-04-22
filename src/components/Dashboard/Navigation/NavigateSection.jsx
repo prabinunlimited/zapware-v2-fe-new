@@ -290,10 +290,20 @@ function NavigateSectionContent({
 
   const handleRecurringRemitClick = () => {
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
-      const authCustomerId = localStorage.getItem("authcustomer_id");
-      const effectiveCustomerId = customerUuid || customerId || authCustomerId;
-      navigate(`/recurring-remit/${effectiveCustomerId}`);
+      // For navigation, use the numeric customer_id from localStorage or prop
+      // The customerId prop already contains the numeric ID (12773)
+      const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
+      
+      console.log("Navigating to recurring remit with numeric ID:", numericCustomerId);
+      
+      if (!numericCustomerId) {
+        showPopup("Customer ID not found. Please login again.");
+        return;
+      }
+      // alert(numericCustomerId)
+      
+      // Navigate using numeric customer_id (12773)
+      navigate(`/recurring-remit/${numericCustomerId}`);
     } catch (error) {
       console.error("Navigation error:", error);
       showPopup(
@@ -451,7 +461,7 @@ function NavigateSectionContent({
       iconColor: "text-purple-600",
       bgColor: "bg-purple-50",
       onClick: handleRecurringRemitClick,
-      visible: isRecurringRemitAllowed, // ✅ FIXED: Show everywhere, not just on remittance page
+      visible: isRecurringRemitAllowed, // Show everywhere, not just on remittance page
       description: "Schedule recurring transfers",
     },
   ];
