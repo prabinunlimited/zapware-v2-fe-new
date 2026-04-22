@@ -1,4 +1,4 @@
-// src/page/RecurringRemit/index.jsx - PREMIUM UI/UX VERSION (FIXED - WITH NULL CHECKS)
+// src/page/RecurringRemit/index.jsx - PREMIUM UI/UX VERSION (FIXED - WITH UUID FOR PAYLOADS)
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -63,11 +63,15 @@ const RecurringRemit = () => {
 
   // Get IDs from localStorage
   const authCustomerId = localStorage.getItem("authcustomer_id");
+  const customerUuid = localStorage.getItem("customerUuid");
   const bearerToken = localStorage.getItem("bearertoken");
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // ✅ Use numeric ID from URL param or localStorage
+  // ✅ Use numeric ID from URL param or localStorage for API endpoints (GET requests)
   const numericCustomerId = paramCustomerId || authCustomerId;
+  
+  // ✅ Use UUID for payload data (POST/PUT requests)
+  const uuidCustomerId = customerUuid;
 
   // Debug logging
   useEffect(() => {
@@ -75,10 +79,12 @@ const RecurringRemit = () => {
       paramCustomerId,
       authCustomerId,
       numericCustomerId,
+      customerUuid,
+      uuidCustomerId,
     });
-  }, [paramCustomerId, authCustomerId, numericCustomerId]);
+  }, [paramCustomerId, authCustomerId, numericCustomerId, customerUuid, uuidCustomerId]);
 
-  // Fetch remittance list - ✅ Use NUMERIC ID
+  // Fetch remittance list - ✅ Use NUMERIC ID for GET request
   const fetchRemittanceList = useCallback(
     async (showLoading = true) => {
       if (!numericCustomerId || !bearerToken) {
@@ -248,6 +254,7 @@ const RecurringRemit = () => {
   };
 
   const handleViewDetails = (id) => {
+      
     navigate(`/recurring-remit/${numericCustomerId}/${id}`);
   };
 
@@ -262,14 +269,17 @@ const RecurringRemit = () => {
     });
 
     try {
+      // ✅ IMPORTANT: Use UUID for customer_id and author_id in payload
       const payload = {
         recurring_remittance_id: recurringRemittanceId,
         recurring_active_status: newStatus,
         source: "zap",
         author_type: "customer",
-        author_id: numericCustomerId,
-        customer_id: numericCustomerId,
+        author_id: uuidCustomerId, // ✅ Use UUID
+        customer_id: uuidCustomerId, // ✅ Use UUID
       };
+
+      console.log("📤 Status update payload:", payload);
 
       const response = await fetch(`${API_URL}/recurring-remittance/update-status`, {
         method: "POST",
@@ -299,6 +309,7 @@ const RecurringRemit = () => {
         throw new Error(responseData.message || `Failed to ${action.toLowerCase()} recurring remit`);
       }
     } catch (err) {
+      console.error("Status update error:", err);
       showNotification(err.message || `Failed to ${action.toLowerCase()} recurring remit`, "error");
     } finally {
       setProcessingStatus({ id: null, action: "" });
@@ -367,7 +378,7 @@ const RecurringRemit = () => {
 
   // Helper function to safely get active status
   const getItemActiveStatus = (item) => {
-    return item?.activeStatus || item?.status === "active" ? "Y" : "N";
+    return item?.activeStatus === "Y" ? "Y" : "N";
   };
 
   const showMissingCustomerWarning = !numericCustomerId && !loading;
@@ -706,36 +717,40 @@ const RecurringRemit = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center space-x-3 pt-4 border-t border-gray-100">
-                        <button onClick={() => handleViewDetails(itemId)} className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 flex items-center justify-center space-x-2">
-                          <Eye size={16} />
+                      <div className="flex items-stretch space-x-3 pt-4 border-t border-gray-100">
+                        <button  onClick={() => handleViewDetails(itemId)} 
+                             className="flex-1 px-2 py-2 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 flex items-center justify-center gap-1 transition-all text-sm"
+                        >
+                          <Eye size={14} />
                           <span>View</span>
                         </button>
 
-                        <button onClick={() => handleOpenEditModal(itemId)} className="flex-1 px-4 py-2 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 flex items-center justify-center space-x-2">
-                          <Edit2 size={16} />
-                          <span>Edit</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleStatusUpdate(itemId, getItemActiveStatus(item))}
-                          disabled={isProcessing}
-                          className={`flex-1 px-4 py-2 rounded-xl font-medium flex items-center justify-center space-x-2 transition-all ${
-                            isActive ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-600 hover:bg-green-100"
-                          } disabled:opacity-50`}
+                        <button onClick={() => handleOpenEditModal(itemId)} 
+                              className="flex-1 px-2 py-2 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 flex items-center justify-center gap-1 transition-all text-sm"
                         >
-                          {isProcessing ? (
-                            <>
-                              <RingLoader size={16} color={isActive ? "#dc2626" : "#16a34a"} />
-                              <span>{processingStatus.action}</span>
-                            </>
+                          <Edit2 size={14} />
+                          <span>Edit</span>
+                         </button>
+
+                        <button onClick={() => handleStatusUpdate(itemId, getItemActiveStatus(item))}
+                                disabled={isProcessing}
+                                className={`flex-1 px-2 py-2 rounded-xl font-medium flex items-center justify-center gap-1 transition-all text-sm ${
+                                    isActive ? "bg-red-50 text-red-600 hover:bg-red-100" 
+                                    : "bg-green-50 text-green-600 hover:bg-green-100"
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                              {isProcessing ? (
+                                <>
+                                  <RingLoader size={12} color={isActive ? "#dc2626" : "#16a34a"} />
+                                  <span className="whitespace-nowrap text-xs">{processingStatus.action}</span>
+                                </>
                           ) : (
-                            <>
-                              <Power size={16} />
-                              <span>{isActive ? "Deactivate" : "Activate"}</span>
-                            </>
-                          )}
-                        </button>
+                          <>
+                            <Power size={14} />
+                           <span className="whitespace-nowrap">{isActive ? "Deactivate" : "Activate"}</span>
+                          </>
+                            )}
+                          </button>
                       </div>
                     </div>
                   </motion.div>

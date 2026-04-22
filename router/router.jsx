@@ -40,6 +40,7 @@ import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
 import RecurringRemit from "../src/page/Remittance/RecurringRemit/RecurringRemit"
+import RecurringRemitDetail from "../src/page/Remittance/RecurringRemit/RecurringRemitDetail";
 import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
@@ -179,6 +180,10 @@ const router = createBrowserRouter([
       {
         path: "recurring-remit/:customerId",
         element: <RecurringRemit/>,
+      },
+      {
+        path: "recurring-remit/:customerId/:recurringRemittanceId",
+        element: <RecurringRemitDetail />,
       },
        {
         path: "/bankletter/:accountId",
