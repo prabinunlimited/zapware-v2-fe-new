@@ -21,6 +21,8 @@ import {
   fetchAllowedModules,
   downloadUserManual,
   setPopupData,
+  setHasFetchedProfile,
+  setHasFetchedModules,
 } from "./NavigateSectionSlice";
 
 // Import selectors
@@ -92,6 +94,21 @@ function NavigateSectionContent({
     (module) => module.module_name === "Recurring Remit",
   );
 
+  // Cleanup effect for invalid customerId
+  useEffect(() => {
+    // If customerId is missing or invalid, reset the component state
+    if (!customerId || customerId === "undefined" || customerId === "null") {
+      console.log("NavigateSection: Invalid customerId, resetting state");
+      hasFetchBeenCalled.current = false;
+      setIsFetching(false);
+      setLocalError(null);
+      
+      // Also reset Redux flags to allow refetch on next login
+      dispatch(setHasFetchedProfile(false));
+      dispatch(setHasFetchedModules(false));
+    }
+  }, [customerId, dispatch]);
+
   const fetchData = useCallback(async () => {
     if (hasFetchBeenCalled.current || !customerId) return;
 
@@ -121,7 +138,6 @@ function NavigateSectionContent({
       }
     } catch (error) {
       console.error("Fetch error:", error);
-      ///setLocalError(error.message || "Failed to fetch navigation data");
       hasFetchBeenCalled.current = false;
     } finally {
       setIsFetching(false);
@@ -300,7 +316,6 @@ function NavigateSectionContent({
         showPopup("Customer ID not found. Please login again.");
         return;
       }
-      // alert(numericCustomerId)
       
       // Navigate using numeric customer_id (12773)
       navigate(`/recurring-remit/${numericCustomerId}`);
