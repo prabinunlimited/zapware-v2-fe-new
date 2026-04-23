@@ -42,6 +42,7 @@ import {
 } from "./headerSlice";
 
 import { logoutUser } from "../../../features/Auth/slices/authSlice";
+import { resetNavigateSection } from "../Navigation/NavigateSectionSlice"
 import { usePartnerConfig } from "../../../hooks/usePartnerConfig";
 import { apiCoordinator } from "../../../services/api";
 
@@ -108,7 +109,7 @@ const Header = ({ customerId }) => {
 
   const bearertoken = localStorage.getItem("bearertoken");
 
-  // ✅ Helper: clear coordinator locks and navigate safely
+  // Helper: clear coordinator locks and navigate safely
   const clearAndNavigate = useCallback(
     (path) => {
       isNavigatingRef.current = true;
@@ -137,8 +138,10 @@ const Header = ({ customerId }) => {
     [dispatch, navigate]
   );
 
-  // Handle logout
+  // Handle logout - UPDATED with proper cleanup
   const handleLogout = useCallback(async () => {
+    console.log("🔴 Starting logout process...");
+    
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -147,32 +150,40 @@ const Header = ({ customerId }) => {
       clearTimeout(fetchTimeoutRef.current);
       fetchTimeoutRef.current = null;
     }
-
+  
     try {
       apiCoordinator.clear();
-    } catch (e) {}
-
+    } catch (e) {
+      console.warn("API coordinator clear error:", e);
+    }
+  
     const tokenToUse =
       authtoken ||
       localStorage.getItem("authtoken") ||
       localStorage.getItem("bearertoken");
-
+  
     try {
       if (tokenToUse) {
         await dispatch(logoutUser(tokenToUse)).unwrap();
       } else {
         dispatch(logoutUser());
       }
-      navigate("/", { replace: true });
-      window.location.reload();
+      
+      dispatch(resetNavigateSection());
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      console.log("✅ Logout successful, redirecting...");
+      window.location.href = "/";
+      
     } catch (error) {
       console.error("Logout error:", error);
-      // Even if API fails, clear local storage and redirect
+      dispatch(resetNavigateSection());
+      localStorage.clear();
       sessionStorage.clear();
-      navigate("/", { replace: true });
-      window.location.reload();
+      window.location.href = "/";
     }
-  }, [authtoken, dispatch, navigate]);
+  }, [authtoken, dispatch]);
 
   // Listen for header color changes
   useEffect(() => {
