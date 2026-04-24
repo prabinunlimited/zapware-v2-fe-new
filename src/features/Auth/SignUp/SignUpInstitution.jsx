@@ -42,6 +42,9 @@ import {
   fetchServiceProviderCurrencies,
   selectServiceProviderCurrencies,
   selectCurrenciesLoading,
+  fetchStatesByCountry,
+  selectStates,
+  selectStatesLoading,
 } from "../../../features/Auth/slices/countrySlice";
 
 import {
@@ -365,6 +368,10 @@ const Institution = () => {
   const institutionState = useSelector(selectInstitutionRegistration);
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
+  const [isManualStateInput, setIsManualStateInput] = useState(false);
+
+  const states = useSelector(selectStates);
+  const statesLoading = useSelector(selectStatesLoading);
   const zipLookup = useSelector(selectZipLookup);
   const locationLoading = useSelector(selectLocationLoading);
 
@@ -556,6 +563,7 @@ const Institution = () => {
 
       no_of_trading_names: "",
       trading_names: [],
+      principal_business_address_state: "",
 
       ...mergedData,
     };
@@ -657,6 +665,18 @@ const Institution = () => {
     () => getSafeCountryOptions(),
     [getSafeCountryOptions],
   );
+
+  const stateOptions = useMemo(() => {
+    if (!states || states.length === 0) {
+      return [];
+    }
+    return states.map((state) => ({
+      value: state.state_code,
+      label: `${state.name} (${state.state_code})`,
+      code: state.state_code,
+      name: state.name,
+    }));
+  }, [states]);
 
   useEffect(() => {
     return () => {
@@ -1818,6 +1838,13 @@ const Institution = () => {
             finalFormData.controller_resident_country,
           ),
           controllerCountry: findCountryId(finalFormData.controller_country),
+          principal_business_address_state:
+            finalFormData.principal_business_address_state,
+          institution_type_id: finalFormData.institution_type_id,
+          business_website_social_media:
+            finalFormData.business_website_social_media,
+          trust_purpose: finalFormData.trust_purpose,
+          tax_id: finalFormData.tax_id,
 
           mobilenumber_countrycode: finalFormData.mobilenumber_countrycode,
           hostname: window.location.hostname,
@@ -3143,6 +3170,30 @@ const Institution = () => {
 
           const shouldShowSSNField = isNamedAccount && values.country === 186;
 
+          // Add useEffect to fetch states when country changes
+          useEffect(() => {
+            if (values.country_of_operation) {
+              const selectedCountry = countryOptions.find(
+                (opt) => opt.value === values.country_of_operation,
+              );
+              if (selectedCountry && selectedCountry.id) {
+                console.log("Fetching states for country:", selectedCountry.id);
+                dispatch(fetchStatesByCountry(selectedCountry.id));
+              }
+            }
+          }, [values.country_of_operation, dispatch, countryOptions]);
+
+          // Add useEffect to check if states were found or not
+          useEffect(() => {
+            if (!statesLoading && states) {
+              if (states.length === 0) {
+                setIsManualStateInput(true);
+              } else {
+                setIsManualStateInput(false);
+              }
+            }
+          }, [states, statesLoading]);
+
           // Debug log for field visibility
           console.log("🎯 FIELD VISIBILITY DEBUG:", {
             isNamedAccount,
@@ -3593,6 +3644,68 @@ const Institution = () => {
                           isCountryField={true}
                           showPhoneCode={false}
                         />
+
+                        {!isManualStateInput && states && states.length > 0 ? (
+                          <CustomSelect
+                            id="principal_business_address_state"
+                            label="State/Province"
+                            options={stateOptions}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue(
+                                  "principal_business_address_state",
+                                  option.value,
+                                );
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  principal_business_address_state:
+                                    option.value,
+                                }));
+                                dispatch(
+                                  setFormField({
+                                    field: "principal_business_address_state",
+                                    value: option.value,
+                                  }),
+                                );
+                              }
+                            }}
+                            value={stateOptions.find(
+                              (opt) =>
+                                opt.value ===
+                                values.principal_business_address_state,
+                            )}
+                            touched={touched.principal_business_address_state}
+                            error={errors.principal_business_address_state}
+                            placeholder="Select State/Province"
+                            isLoading={statesLoading}
+                            isDisabled={!values.country_of_operation}
+                            required={true}
+                          />
+                        ) : (
+                          <FormField
+                            id="principal_business_address_state"
+                            label="State/Province"
+                            name="principal_business_address_state"
+                            value={
+                              values.principal_business_address_state || ""
+                            }
+                            onChange={enhancedHandleChange(
+                              "principal_business_address_state",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() =>
+                              setActiveField("principal_business_address_state")
+                            }
+                            touched={touched.principal_business_address_state}
+                            error={errors.principal_business_address_state}
+                            required={true}
+                            placeholder="Enter State/Province"
+                            disabled={!values.country_of_operation}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        )}
                       </div>
 
                       {/* Additional Operating Countries on full row */}

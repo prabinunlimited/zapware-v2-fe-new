@@ -2507,6 +2507,21 @@ export const fetchCountry = createAsyncThunk(
   },
 );
 
+export const fetchStatesByCountry = createAsyncThunk(
+  "countries/fetchStatesByCountry",
+  async (countryId, { rejectWithValue }) => {
+    try {
+      console.log(" Fetching states for country ID:", countryId);
+      const response = await api.get(`/states/${countryId}`);
+      console.log(" States API Response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error(" Error fetching states:", error);
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  },
+);
+
 export const fetchServiceProviderCurrencies = createAsyncThunk(
   "countries/fetchServiceProviderCurrencies",
   async (spId, { rejectWithValue }) => {
@@ -2529,6 +2544,8 @@ const initialState = {
   selectedCountry: null,
   serviceProviderCurrencies: [],
   currenciesLoading: false,
+  states: [], // Add states array
+  statesLoading: false,
   loading: false,
   zipLookup: {
     loading: false,
@@ -2600,6 +2617,20 @@ const countriesSlice = createSlice({
         state.loading = false;
         state.error = action.payload || action.error.message;
       })
+      //state by country
+      .addCase(fetchStatesByCountry.pending, (state) => {
+        state.statesLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchStatesByCountry.fulfilled, (state, action) => {
+        state.statesLoading = false;
+        state.states = action.payload;
+      })
+      .addCase(fetchStatesByCountry.rejected, (state, action) => {
+        state.statesLoading = false;
+        state.error = action.payload;
+        state.states = [];
+      })
       // Fetch single country
       .addCase(fetchCountry.pending, (state) => {
         state.loading = true;
@@ -2658,6 +2689,10 @@ export const {
 export const selectCountries = (state) => state.countries.countries;
 export const selectSelectedCountry = (state) => state.countries.selectedCountry;
 export const selectCountriesLoading = (state) => state.countries.loading;
+
+export const selectStates = (state) => state.countries.states;
+export const selectStatesLoading = (state) => state.countries.statesLoading;
+
 export const selectCountriesError = (state) => state.countries.error;
 export const selectServiceProviderCurrencies = (state) =>
   state.countries.serviceProviderCurrencies;
