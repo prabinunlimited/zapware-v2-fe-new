@@ -63,6 +63,7 @@ import {
   setLocationStateData,
   setAccountType,
   fetchIndustryTypes,
+  fetchInstitutionTypes,
   setPackageCurrencies,
   setKycRequirements,
   setDocumentRequirements,
@@ -441,6 +442,7 @@ const Institution = () => {
     naicsCodes,
     businessTypes,
     industryTypes,
+    institutionTypes,
     genders,
     nationalities,
     roles,
@@ -500,6 +502,10 @@ const Institution = () => {
       user_image: {},
 
       industry_type: "",
+      institution_type: "",
+      business_website_social_media: "",
+      trust_purpose: "",
+      tax_id: "",
 
       controller_first_name: "",
       controller_middle_name: "",
@@ -946,6 +952,7 @@ const Institution = () => {
       dispatch(fetchGenders());
       dispatch(fetchNationalities());
       dispatch(fetchIndustryTypes());
+      dispatch(fetchInstitutionTypes());
       dispatch(fetchTermsAndConditions());
       dispatch(fetchInstitutionData());
       setTimeout(() => {
@@ -1062,6 +1069,7 @@ const Institution = () => {
           "registered_address_street_zip",
           "date_incorporation",
           "industry_type",
+          "institution_type",
         ];
 
         const requiredFieldsFilled = requiredFields.every((field) => {
@@ -1299,6 +1307,7 @@ const Institution = () => {
             "registered_address_street_zip",
             "date_incorporation",
             "industry_type",
+            "institution_type",
           ];
 
           // Always include these fields if either condition is true
@@ -2091,6 +2100,22 @@ const Institution = () => {
       })),
     [industryTypes],
   );
+
+  const institutionTypeOptions = useMemo(() => {
+    console.log("institutionTypes in useMemo:", institutionTypes);
+    if (
+      !institutionTypes ||
+      !Array.isArray(institutionTypes) ||
+      institutionTypes.length === 0
+    ) {
+      return [];
+    }
+    return institutionTypes.map((type) => ({
+      value: type.id?.toString() || type.value,
+      label: type.name || type.label,
+      name: type.name,
+    }));
+  }, [institutionTypes]);
   const genderOptions = useMemo(
     () => genders.map((gender) => ({ value: gender.id, label: gender.name })),
     [genders],
@@ -3380,6 +3405,95 @@ const Institution = () => {
                         placeholder="Select Industry Type"
                       />
                     </div>
+
+                    {/* Institution Type on full row */}
+                    <div className="mb-6">
+                      <CustomSelect
+                        id="institution_type"
+                        label="Institution Type"
+                        name="institution_type"
+                        value={institutionTypeOptions.find(
+                          (opt) =>
+                            opt.value === values.institution_type?.toString(),
+                        )}
+                        onChange={enhancedSelectChange(
+                          "institution_type",
+                          setFieldValue,
+                        )}
+                        onBlur={handleBlur}
+                        options={institutionTypeOptions}
+                        touched={touched.institution_type}
+                        error={errors.institution_type}
+                        required={true}
+                        placeholder="Select Insitution Type"
+                      />
+                    </div>
+                    {/* Business Website/Social Media */}
+                    <div className="mb-6">
+                      <FormField
+                        id="business_website_social_media"
+                        label="Business Website / Social Media"
+                        name="business_website_social_media"
+                        value={values.business_website_social_media || ""}
+                        onChange={enhancedHandleChange(
+                          "business_website_social_media",
+                          setFieldValue,
+                        )}
+                        onBlur={handleBlur}
+                        onFocus={() =>
+                          setActiveField("business_website_social_media")
+                        }
+                        touched={touched.business_website_social_media}
+                        error={errors.business_website_social_media}
+                        placeholder="https://www.example.com or @socialmedia"
+                        activeField={activeField}
+                        fieldStyles={FIELD_STYLES}
+                      />
+                    </div>
+
+                    {values.institution_type === "13" && (
+                      <div className="mb-6">
+                        <FormField
+                          id="trust_purpose"
+                          label="Purpose of the Trust Account"
+                          name="trust_purpose"
+                          as="textarea"
+                          rows={3}
+                          value={values.trust_purpose || ""}
+                          onChange={enhancedHandleChange(
+                            "trust_purpose",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("trust_purpose")}
+                          touched={touched.trust_purpose}
+                          error={errors.trust_purpose}
+                          placeholder="Describe the purpose of the trust account"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+                    )}
+
+                    {/* You'll need to determine if account_role is sole_trader from your state */}
+                    {/* {values.account_role !== "sole_trader" && ( */}
+                    <div className="mb-6">
+                      <FormField
+                        id="tax_id"
+                        label="Tax ID"
+                        name="tax_id"
+                        value={values.tax_id || ""}
+                        onChange={enhancedHandleChange("tax_id", setFieldValue)}
+                        onBlur={handleBlur}
+                        onFocus={() => setActiveField("tax_id")}
+                        touched={touched.tax_id}
+                        error={errors.tax_id}
+                        placeholder="Enter tax ID"
+                        activeField={activeField}
+                        fieldStyles={FIELD_STYLES}
+                      />
+                    </div>
+                    {/* )} */}
 
                     {/* EIN and NAICS Code on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
