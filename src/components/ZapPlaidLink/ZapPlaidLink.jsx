@@ -551,11 +551,11 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true, autoInitialize = 
           ) : (
             <>
               <div className="mb-4">
-                <p className="text-gray-600 mb-4">
+                {/* <p className="text-gray-600 mb-4">
                   Securely connect your bank account using Plaid. Your
                   credentials are never stored and all connections are
                   encrypted.
-                </p>
+                </p> */}
                 {!scriptLoaded && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
                     <p className="text-yellow-800 text-sm">Loading Plaid connection...</p>
