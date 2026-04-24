@@ -4,18 +4,16 @@ import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import Modal from "react-modal";
 
-// Redux actions - Make sure the import path is correct
-// If ZapPlaidLink.jsx is in the same directory as plaidSlice.js, use "./plaidSlice"
-// If it's in a different directory, adjust the path accordingly
+// Redux actions
 import {
   initializePlaidLink,
   storePlaidData,
   deleteLinkedBankAccount,
   clearPlaidResult,
-  setApiResponse, // This IS exported from plaidSlice.js
+  setApiResponse,
   clearApiResponse,
   setPlaidLoading,
-} from "./plaidSlice"; // ← Check this path!
+} from "./plaidSlice";
 
 const customStyles = {
   content: {
@@ -32,78 +30,156 @@ const customStyles = {
   },
 };
 
-const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
+const ZapPlaidLink = ({ onSuccess, onClose, showButton = true, autoInitialize = false }) => {
   const dispatch = useDispatch();
   const { customerId } = useParams();
   const linkHandlerRef = useRef(null);
-
-  const plaidState = useSelector((state) => state.plaid);
-
-  useEffect(() => {
-    console.log("🔍 Redux plaid slice state:", plaidState);
-    console.log("🔍 storePlaidData function available?", typeof storePlaidData);
-    console.log("🔍 setApiResponse function available?", typeof setApiResponse); // Add this debug
-  }, []);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Redux state
-  const { isLoading, error, result, apiResponse, showResponseModal } =
+  const { isLoading, error, result, apiResponse } =
     useSelector((state) => state.plaid || {});
 
-  const [actionType, setActionType] = useState("link"); // 'link' or 'delete'
-  const [localResult, setLocalResult] = useState(null); // Local state to show result
+  const [actionType, setActionType] = useState("link");
+  const [localResult, setLocalResult] = useState(null);
+
+  // Helper function to clean error messages - RENAMED to avoid conflict
+  const getCleanErrorMessage = (errorMsg) => {
+    if (!errorMsg) return "An error occurred";
+    
+    // Handle string errors
+    if (typeof errorMsg === 'string') {
+      // Check for USD Wallet
+      if (errorMsg.includes("USD Wallet")) {
+        return "USD Wallet not found.";
+      }
+      // Check for JSON string
+      if (errorMsg.includes('"error"') || errorMsg.includes('"message"')) {
+        try {
+          const parsed = JSON.parse(errorMsg);
+          if (parsed.error) return parsed.error;
+          if (parsed.message) return parsed.message;
+          if (parsed.data?.error) return parsed.data.error;
+        } catch(e) {}
+      }
+      return errorMsg;
+    }
+    
+    // Handle object errors
+    if (typeof errorMsg === 'object') {
+      if (errorMsg.message) return errorMsg.message;
+      if (errorMsg.error) return errorMsg.error;
+      if (errorMsg.data?.error) return errorMsg.data.error;
+      if (errorMsg.response?.data?.error) return errorMsg.response.data.error;
+      if (errorMsg.response?.data?.message) return errorMsg.response.data.message;
+    }
+    
+    return "Unable to complete request";
+  };
 
   // Make sure to bind modal to your appElement
   useEffect(() => {
     Modal.setAppElement("#root");
   }, []);
 
+  // Load Plaid script
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-    script.async = true;
-    document.body.appendChild(script);
+    const loadPlaidScript = () => {
+      // Check if script already exists
+      if (document.querySelector('script[src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"]')) {
+        console.log("✅ Plaid script already loaded");
+        if (window.Plaid) {
+          setScriptLoaded(true);
+        }
+        return;
+      }
 
-    return () => {
-      document.body.removeChild(script);
+      console.log("📦 Loading Plaid script...");
+      const script = document.createElement("script");
+      script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+      script.async = true;
+      script.onload = () => {
+        console.log("✅ Plaid script loaded successfully");
+        if (window.Plaid) {
+          setScriptLoaded(true);
+        } else {
+          console.error("❌ Plaid object not available after script load");
+        }
+      };
+      script.onerror = (error) => {
+        console.error("❌ Failed to load Plaid script:", error);
+        showApiResponsePopup({
+          status: 500,
+          data: { error: "Failed to load Plaid. Please check your internet connection." },
+          isError: true,
+        });
+      };
+      document.body.appendChild(script);
     };
+
+    loadPlaidScript();
   }, []);
 
-  const parseErrorMessage = (errorString) => {
-    try {
-      const jsonMatch = errorString.match(/\{.*\}/s);
-      if (jsonMatch) {
-        const errorObj = JSON.parse(jsonMatch[0]);
-        return errorObj.message || errorString;
-      }
-      return errorString;
-    } catch (e) {
-      return errorString;
+  // Auto-initialize Plaid if autoInitialize is true
+  useEffect(() => {
+    if (autoInitialize && scriptLoaded && showButton && !isLoading) {
+      console.log("🚀 Auto-initializing Plaid...");
+      setTimeout(() => {
+        initializePlaid();
+      }, 500);
     }
-  };
+  }, [autoInitialize, scriptLoaded, showButton, isLoading]);
 
   const showApiResponsePopup = (response) => {
     console.log("📤 showApiResponsePopup called with:", response);
-    console.log("🔍 setApiResponse function:", setApiResponse);
-
-    // Check if setApiResponse is available
-    if (typeof setApiResponse === "function") {
-      dispatch(
-        setApiResponse({
-          status: response.status,
-          data: response.data,
-          isError: response.isError || false,
-          showModal: true,
-        }),
-      );
+    
+    // Extract and clean the error message
+    let cleanMessage = "";
+    let cleanTitle = "Error";
+    
+    if (response.isError) {
+      // Extract error message from various formats
+      if (response.data?.error) {
+        cleanMessage = getCleanErrorMessage(response.data.error);
+        cleanTitle = "Unable to Link Bank Account";
+      } else if (response.data?.message) {
+        cleanMessage = getCleanErrorMessage(response.data.message);
+      } else if (typeof response.data === 'string') {
+        cleanMessage = getCleanErrorMessage(response.data);
+      } else {
+        cleanMessage = "An error occurred";
+      }
+      
+      // Special case for USD Wallet
+      if (cleanMessage.includes("USD Wallet")) {
+        cleanMessage = "USD Wallet not found.";
+        cleanTitle = "Unable to Link Bank Account";
+      }
     } else {
-      console.error("❌ setApiResponse is not a function!");
+      cleanMessage = response.data?.message || "Operation completed successfully";
+      cleanTitle = "Success";
+    }
+    
+    // Create a clean response object
+    const cleanResponse = {
+      isError: response.isError,
+      message: cleanMessage,
+      title: cleanTitle,
+      showModal: true,
+      data: response.data
+    };
+    
+    console.log("📤 Cleaned response:", cleanResponse);
+    
+    // Dispatch the cleaned response
+    if (typeof setApiResponse === "function") {
+      dispatch(setApiResponse(cleanResponse));
+    } else {
       // Fallback: show result locally
       setLocalResult({
-        success: response.isError ? false : true,
-        message: response.isError
-          ? response.data?.error
-          : "Operation completed",
-        error: response.isError ? response.data?.error : null,
+        success: !response.isError,
+        message: cleanMessage,
+        error: response.isError ? cleanMessage : null,
       });
     }
   };
@@ -117,7 +193,6 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
         metadataInstitution: metadata.institution,
       });
 
-      // Show loading state
       dispatch(setPlaidLoading(true));
 
       const saveResponse = await dispatch(
@@ -125,19 +200,12 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
           public_token,
           accounts: metadata.accounts,
           customerId,
-        }),
+        })
       ).unwrap();
 
-      console.log("✅ storePlaidData successful response:", {
-        keys: Object.keys(saveResponse),
-        hasSuccessAccounts: saveResponse.success_accounts?.length > 0,
-        successAccountsCount: saveResponse.success_accounts?.length || 0,
-        failedAccountsCount: saveResponse.failed_accounts?.length || 0,
-        message: saveResponse.message,
-        responseStructure: saveResponse,
-      });
+      console.log("✅ storePlaidData successful response:", saveResponse);
 
-      // Store the result locally to show in this modal
+      // Store the result locally
       setLocalResult({
         ...saveResponse,
         success: true,
@@ -148,23 +216,18 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
       if (onSuccess) {
         console.log("🎯 Calling onSuccess callback with response");
         onSuccess(saveResponse);
-      } else {
-        console.warn("⚠️ onSuccess callback not provided!");
       }
 
-      // Clear any previous API responses
       dispatch(clearApiResponse());
     } catch (err) {
       console.error("❌ storePlaidData failed:", err);
-
-      // Show error in the modal
-      const errorMessage = err.message || "Failed to link bank account";
-
-      // Set error result locally
+      
+      const cleanMessage = getCleanErrorMessage(err.message || "Failed to link bank account");
+      
       setLocalResult({
         success: false,
-        message: errorMessage,
-        error: errorMessage,
+        message: cleanMessage,
+        error: cleanMessage,
       });
     } finally {
       dispatch(setPlaidLoading(false));
@@ -174,9 +237,10 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
   const handlePlaidExit = (err) => {
     if (err) {
       console.log("🚪 Plaid exit with error:", err);
+      const cleanMessage = getCleanErrorMessage(err.message || err.error_message || "Plaid exit with error");
       showApiResponsePopup({
         status: 400,
-        data: { error: err },
+        data: { error: cleanMessage },
         isError: true,
       });
     } else {
@@ -186,29 +250,74 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
   };
 
   const initializePlaid = async () => {
+    console.log("🔧 initializePlaid called");
+    
+    if (!customerId) {
+      console.error("❌ No customerId available");
+      showApiResponsePopup({
+        status: 500,
+        data: { error: "Customer ID not found. Please login again." },
+        isError: true,
+      });
+      return;
+    }
+
+    if (!window.Plaid) {
+      console.error("❌ Plaid object not available");
+      showApiResponsePopup({
+        status: 500,
+        data: { error: "Plaid not loaded. Please refresh the page." },
+        isError: true,
+      });
+      return;
+    }
+
     setActionType("link");
     dispatch(clearPlaidResult());
-    setLocalResult(null); // Clear any previous results
+    setLocalResult(null);
+    dispatch(setPlaidLoading(true));
 
     try {
+      console.log("🔑 Fetching Plaid link token for customer:", customerId);
       const data = await dispatch(initializePlaidLink(customerId)).unwrap();
 
       console.log("🔑 Plaid link token received:", data.link_token);
 
-      linkHandlerRef.current = window.Plaid.create({
+      if (!data.link_token) {
+        throw new Error("No link token received from server");
+      }
+
+      const linkConfig = {
         token: data.link_token,
         onSuccess: handlePlaidSuccess,
         onExit: handlePlaidExit,
-      });
+      };
 
+      console.log("🎨 Creating Plaid Link handler with config:", linkConfig);
+      linkHandlerRef.current = window.Plaid.create(linkConfig);
+      
+      console.log("🚀 Opening Plaid Link modal");
       linkHandlerRef.current.open();
     } catch (error) {
       console.error("❌ Failed to initialize Plaid:", error);
+      
+      // Clean the error message - FIXED: use getCleanErrorMessage
+      let cleanErrorMsg = "Unable to link bank account";
+      
+      if (error.message) {
+        cleanErrorMsg = getCleanErrorMessage(error.message);
+      } else if (error.response?.data?.error) {
+        cleanErrorMsg = getCleanErrorMessage(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        cleanErrorMsg = getCleanErrorMessage(error.response.data.message);
+      }
+      
       showApiResponsePopup({
         status: 500,
-        data: { error: error.message },
+        data: { error: cleanErrorMsg },
         isError: true,
       });
+      dispatch(setPlaidLoading(false));
     }
   };
 
@@ -222,7 +331,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
         deleteLinkedBankAccount({
           account_id: accountId,
           user_handle: customerId,
-        }),
+        })
       ).unwrap();
 
       showApiResponsePopup({
@@ -233,9 +342,10 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
 
       if (onSuccess) onSuccess();
     } catch (err) {
+      const cleanMessage = getCleanErrorMessage(err.message || "Failed to delete account");
       showApiResponsePopup({
         status: 500,
-        data: { error: err.message },
+        data: { error: cleanMessage },
         isError: true,
       });
     }
@@ -246,7 +356,6 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
     dispatch(clearApiResponse());
     setLocalResult(null);
 
-    // Also close the modal
     if (onClose) onClose();
   };
 
@@ -255,59 +364,31 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
 
     if (!displayResult) return null;
 
+    // Get clean error message
+    const getCleanMessage = () => {
+      if (displayResult.message) {
+        return getCleanErrorMessage(displayResult.message);
+      }
+      if (displayResult.error) {
+        return getCleanErrorMessage(displayResult.error);
+      }
+      return displayResult.success ? "Operation completed" : "An error occurred";
+    };
+
+    const cleanMessage = getCleanMessage();
+    const isSuccess = displayResult.success === true;
+
     return (
       <div className="space-y-4 mt-4">
-        {displayResult.message && (
+        {cleanMessage && (
           <div
             className={`${
-              displayResult.success
+              isSuccess
                 ? "bg-green-50 text-green-800"
                 : "bg-red-50 text-red-800"
             } text-center font-semibold p-4 rounded-md`}
           >
-            {displayResult.message}
-
-            {!displayResult.success && displayResult.error && (
-              <div className="mt-2 text-sm">
-                {(() => {
-                  try {
-                    const errorMatch = displayResult.error.match(/\{.*\}/s);
-                    if (errorMatch) {
-                      const parsedError = JSON.parse(errorMatch[0]);
-                      return (
-                        <>
-                          {parsedError.message && (
-                            <p>
-                              <strong>Details:</strong> {parsedError.message}
-                            </p>
-                          )}
-                          {parsedError.reference && (
-                            <p>
-                              <strong>Reference ID:</strong>{" "}
-                              {parsedError.reference}
-                            </p>
-                          )}
-                        </>
-                      );
-                    } else {
-                      const simpleMessageMatch =
-                        displayResult.error.match(/"message":"([^"]+)"/);
-                      return simpleMessageMatch
-                        ? simpleMessageMatch[1]
-                        : displayResult.error;
-                    }
-                  } catch (e) {
-                    return displayResult.error;
-                  }
-                })()}
-              </div>
-            )}
-
-            {displayResult.reference && (
-              <div className="text-xs mt-2 opacity-75">
-                Reference ID: {displayResult.reference}
-              </div>
-            )}
+            {cleanMessage}
           </div>
         )}
 
@@ -353,8 +434,8 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
               </h3>
               <ul className="space-y-10 py-2">
                 {displayResult.failed_accounts.map((account, index) => (
-                  <li key={index} className="flex items-center text-red-700">
-                    <span className="mr-2">
+                  <li key={index} className="flex items-start text-red-700">
+                    <span className="mr-2 mt-1">
                       <svg
                         className="w-4 h-4 text-red-700"
                         xmlns="http://www.w3.org/2000/svg"
@@ -376,7 +457,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
                         ...{account.account_id?.slice(-4) || "N/A"})
                       </div>
                       <div className="text-sm text-red-600 mt-1">
-                        {parseErrorMessage(account.message)}
+                        {getCleanErrorMessage(account.message)}
                       </div>
                     </div>
                   </li>
@@ -475,11 +556,16 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
                   credentials are never stored and all connections are
                   encrypted.
                 </p>
+                {!scriptLoaded && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+                    <p className="text-yellow-800 text-sm">Loading Plaid connection...</p>
+                  </div>
+                )}
               </div>
               {showButton && (
                 <button
                   onClick={initializePlaid}
-                  disabled={isLoading}
+                  disabled={isLoading || !scriptLoaded}
                   className="w-full flex justify-center items-center px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 disabled:opacity-50 shadow-md"
                 >
                   {isLoading ? (
@@ -527,7 +613,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
         renderAccountResult()
       )}
 
-      {/* API Response Modal */}
+      {/* API Response Modal - Cleaned Version */}
       {apiResponse?.showModal && (
         <Modal
           isOpen={true}
@@ -537,7 +623,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
         >
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">
-              {apiResponse.isError ? "Error Response" : "API Response"}
+              {apiResponse.title || (apiResponse.isError ? "Error" : "Success")}
             </h2>
             <div
               className={`p-3 rounded ${
@@ -546,9 +632,9 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true }) => {
                   : "bg-green-50 border border-green-200"
               }`}
             >
-              <pre className="text-sm whitespace-pre-wrap">
-                {JSON.stringify(apiResponse, null, 2)}
-              </pre>
+              <p className="text-sm">
+                {apiResponse.message || (apiResponse.isError ? "An error occurred" : "Operation completed")}
+              </p>
             </div>
             <button
               onClick={() => dispatch(clearApiResponse())}
@@ -567,6 +653,7 @@ ZapPlaidLink.propTypes = {
   onSuccess: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
   showButton: PropTypes.bool,
+  autoInitialize: PropTypes.bool,
 };
 
 export default ZapPlaidLink;
