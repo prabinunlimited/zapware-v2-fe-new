@@ -548,6 +548,9 @@ const Institution = () => {
       expected_avg_payments_in_currency: "",
       expected_avg_payments_in_amount: "",
 
+      no_of_trading_names: "",
+      trading_names: [],
+
       ...mergedData,
     };
     return safeData;
@@ -1875,7 +1878,8 @@ const Institution = () => {
             business_model_overview: finalFormData.business_model_overview,
             business_size: finalFormData.business_size,
             high_risk_countries: finalFormData.high_risk_countries,
-            specify_high_risk_countries: finalFormData.specify_high_risk_countries,
+            specify_high_risk_countries:
+              finalFormData.specify_high_risk_countries,
             conducting_payment_activities:
               finalFormData.conducting_payment_activities,
             employees_number: finalFormData.employees_number,
@@ -3208,6 +3212,105 @@ const Institution = () => {
                         fieldStyles={FIELD_STYLES}
                       />
                     </div>
+
+                    {/* No of Trading Names */}
+                    <div className="mb-4">
+                      <CustomSelect
+                        id="no_of_trading_names"
+                        label="Number of Trading Names"
+                        options={[
+                          { value: "1", label: "1" },
+                          { value: "2", label: "2" },
+                          { value: "3", label: "3" },
+                        ]}
+                        onChange={(option) => {
+                          const count = option ? parseInt(option.value) : 0;
+                          setFieldValue("no_of_trading_names", count);
+
+                          // Reset trading names array based on count
+                          const newTradingNames = [];
+                          for (let i = 0; i < count; i++) {
+                            newTradingNames.push(values.trading_names[i] || "");
+                          }
+                          setFieldValue("trading_names", newTradingNames);
+
+                          setLocalFormData((prev) => ({
+                            ...prev,
+                            no_of_trading_names: count,
+                            trading_names: newTradingNames,
+                          }));
+                          dispatch(
+                            setFormField({
+                              field: "no_of_trading_names",
+                              value: count,
+                            }),
+                          );
+                          dispatch(
+                            setFormField({
+                              field: "trading_names",
+                              value: newTradingNames,
+                            }),
+                          );
+                        }}
+                        value={[
+                          { value: "1", label: "1" },
+                          { value: "2", label: "2" },
+                          { value: "3", label: "3" },
+                        ].find(
+                          (opt) =>
+                            parseInt(opt.value) === values.no_of_trading_names,
+                        )}
+                        touched={touched.no_of_trading_names}
+                        error={errors.no_of_trading_names}
+                        placeholder="Select number of trading names"
+                      />
+                    </div>
+
+                    {/* Dynamic Trading Names Input Fields */}
+                    {values.no_of_trading_names > 0 && (
+                      <div className="mb-4">
+                        <div className="space-y-3">
+                          {Array.from({
+                            length: values.no_of_trading_names,
+                          }).map((_, index) => (
+                            <FormField
+                              key={index}
+                              id={`trading_name_${index}`}
+                              label={`Trading Name ${index + 1}`}
+                              name={`trading_names[${index}]`}
+                              value={values.trading_names[index] || ""}
+                              onChange={(e) => {
+                                const newTradingNames = [
+                                  ...values.trading_names,
+                                ];
+                                newTradingNames[index] = e.target.value;
+                                setFieldValue("trading_names", newTradingNames);
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  trading_names: newTradingNames,
+                                }));
+                                dispatch(
+                                  setFormField({
+                                    field: "trading_names",
+                                    value: newTradingNames,
+                                  }),
+                                );
+                              }}
+                              onBlur={handleBlur}
+                              onFocus={() =>
+                                setActiveField(`trading_name_${index}`)
+                              }
+                              touched={touched.trading_names?.[index]}
+                              error={errors.trading_names?.[index]}
+                              required={true}
+                              placeholder={`Enter trading name ${index + 1}`}
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Business Alias and Business Type on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
