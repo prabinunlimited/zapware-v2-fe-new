@@ -1907,6 +1907,7 @@ const Institution = () => {
           documentNumber: finalFormData.idDocumentNumber,
           idIssuedDate: finalFormData.idIssuedDate,
           ownerAdd: ownerAdd,
+          same_as_business_address: finalFormData.same_as_business_address,
 
           owner_details: finalFormData.owner_details?.map((owner) => {
             const processedOwner = {
