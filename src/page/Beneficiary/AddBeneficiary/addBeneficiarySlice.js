@@ -193,9 +193,9 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 
       // Use country_phone_code instead of country_code
       if (finalCountryCode.startsWith("+")) {
-        payload.country_phone_code = finalCountryCode.substring(1);
-      } else {
         payload.country_phone_code = finalCountryCode;
+      } else {
+        payload.country_phone_code = `+${finalCountryCode}`;
       }
 
       console.log("📡 Final payload:", JSON.stringify(payload, null, 2));
@@ -391,11 +391,12 @@ export const fetchBeneficiaryById = createAsyncThunk(
 export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
   async (
-    { beneficiaryId, beneficiaryData }, // Only needs beneficiaryId
+    { customerId, beneficiaryId, beneficiaryData },
     { rejectWithValue }
   ) => {
     try {
       console.log("📤 Updating beneficiary:", {
+        customerId,
         beneficiaryId,
         beneficiaryData,
       });
@@ -403,24 +404,25 @@ export const updateBeneficiary = createAsyncThunk(
       const authtoken = localStorage.getItem("authtoken");
       const currentDateTime = new Date().toLocaleString();
 
-      // Create payload exactly like your non-redux version
+      // Create payload with customer_id - ONLY beneficiary details, NO banks
       const payload = {
+        customer_id: customerId,
         ...beneficiaryData,
         current_date_time: currentDateTime,
       };
 
-      // Clean up the payload
+      // Remove banks if they somehow exist in beneficiaryData
+      delete payload.banks;
+
+      // Clean up the payload (remove empty/undefined values)
       Object.keys(payload).forEach((key) => {
         if (payload[key] === undefined || payload[key] === "") {
           delete payload[key];
         }
       });
 
-      console.log("📤 Payload for update:", payload);
-      console.log(
-        "📤 Endpoint:",
-        `/beneficiaries/update-benef/${beneficiaryId}`
-      );
+      console.log("📤 Final payload for update:", JSON.stringify(payload, null, 2));
+      console.log("📤 Endpoint:", `/beneficiaries/update-benef/${beneficiaryId}`);
 
       const response = await fetch(
         `${API_URL}/beneficiaries/update-benef/${beneficiaryId}`,
@@ -450,6 +452,7 @@ export const updateBeneficiary = createAsyncThunk(
       console.log("✅ Update successful:", result);
 
       return {
+        customerId,
         beneficiaryId,
         beneficiary: result.data || beneficiaryData,
         message: result.message || "Beneficiary updated successfully",
