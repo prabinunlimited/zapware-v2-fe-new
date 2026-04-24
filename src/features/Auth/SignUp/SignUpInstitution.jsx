@@ -368,8 +368,18 @@ const Institution = () => {
   const institutionState = useSelector(selectInstitutionRegistration);
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
-  const [isManualStateInput, setIsManualStateInput] = useState(false);
 
+  // Replace the single states and statesLoading with separate ones
+  const [primaryStates, setPrimaryStates] = useState([]);
+  const [primaryStatesLoading, setPrimaryStatesLoading] = useState(false);
+  const [isManualPrimaryStateInput, setIsManualPrimaryStateInput] =
+    useState(false);
+
+  const [registeredStates, setRegisteredStates] = useState([]);
+  const [registeredStatesLoading, setRegisteredStatesLoading] = useState(false);
+  const [isManualRegisteredStateInput, setIsManualRegisteredStateInput] =
+    useState(false);
+  const [isManualStateInput, setIsManualStateInput] = useState(false);
   const states = useSelector(selectStates);
   const statesLoading = useSelector(selectStatesLoading);
   const zipLookup = useSelector(selectZipLookup);
@@ -564,6 +574,13 @@ const Institution = () => {
       no_of_trading_names: "",
       trading_names: [],
       principal_business_address_state: "",
+      registered_business_address_apartment_unit_no: "",
+      registered_business_address_suburb: "",
+      principal_business_address_apartment_unit_no: "",
+      principal_business_street: "",
+      principal_business_address_city: "",
+      principal_business_address_post_code: "",
+      same_as_business_address: 0,
 
       ...mergedData,
     };
@@ -1830,6 +1847,12 @@ const Institution = () => {
           registered_address_street_country: findCountryId(
             finalFormData.registered_address_street_country,
           ),
+          registered_address_street_state:
+            finalFormData.registered_address_street_state,
+          registered_business_address_apartment_unit_no:
+            finalFormData.registered_business_address_apartment_unit_no,
+          registered_business_address_suburb:
+            finalFormData.registered_business_address_suburb,
           resident_country: findCountryId(finalFormData.resident_country),
           country: findCountryId(finalFormData.country),
           doc_country: findCountryId(finalFormData.doc_country),
@@ -3170,29 +3193,100 @@ const Institution = () => {
 
           const shouldShowSSNField = isNamedAccount && values.country === 186;
 
-          // Add useEffect to fetch states when country changes
+          // For Primary Country of Operation States
           useEffect(() => {
             if (values.country_of_operation) {
               const selectedCountry = countryOptions.find(
                 (opt) => opt.value === values.country_of_operation,
               );
               if (selectedCountry && selectedCountry.id) {
-                console.log("Fetching states for country:", selectedCountry.id);
-                dispatch(fetchStatesByCountry(selectedCountry.id));
+                setPrimaryStatesLoading(true);
+                dispatch(fetchStatesByCountry(selectedCountry.id)).then(
+                  (result) => {
+                    if (result.payload && result.payload) {
+                      setPrimaryStates(result.payload);
+                      setIsManualPrimaryStateInput(result.payload.length === 0);
+                    }
+                    setPrimaryStatesLoading(false);
+                  },
+                );
               }
+            } else {
+              setPrimaryStates([]);
+              setIsManualPrimaryStateInput(false);
+              setFieldValue("principal_business_address_state", "");
             }
-          }, [values.country_of_operation, dispatch, countryOptions]);
+          }, [
+            values.country_of_operation,
+            dispatch,
+            countryOptions,
+            setFieldValue,
+          ]);
 
-          // Add useEffect to check if states were found or not
+          // For Registered Address Country States
           useEffect(() => {
-            if (!statesLoading && states) {
-              if (states.length === 0) {
-                setIsManualStateInput(true);
-              } else {
-                setIsManualStateInput(false);
+            if (values.registered_address_street_country) {
+              const selectedCountry = countryOptions.find(
+                (opt) => opt.value === values.registered_address_street_country,
+              );
+              if (selectedCountry && selectedCountry.id) {
+                setRegisteredStatesLoading(true);
+                dispatch(fetchStatesByCountry(selectedCountry.id)).then(
+                  (result) => {
+                    console.log(" Extracted states data:", result.payload);
+
+                    if (result.payload && result.payload) {
+                      setRegisteredStates(result.payload);
+                      setIsManualRegisteredStateInput(
+                        result.payload.length === 0,
+                      );
+                    }
+                    setRegisteredStatesLoading(false);
+                  },
+                );
               }
+            } else {
+              setRegisteredStates([]);
+              setIsManualRegisteredStateInput(false);
+              setFieldValue("registered_address_street_state", "");
             }
-          }, [states, statesLoading]);
+          }, [
+            values.registered_address_street_country,
+            dispatch,
+            countryOptions,
+            setFieldValue,
+          ]);
+
+          // Create separate options for each
+          const primaryStateOptions = useMemo(() => {
+            if (!primaryStates || primaryStates.length === 0) {
+              return [];
+            }
+            console.log("✅ Extracted states data:", primaryStates);
+
+            return primaryStates.map((state) => ({
+              value: state.state_code,
+              label: `${state.name} (${state.state_code})`,
+              code: state.state_code,
+              name: state.name,
+            }));
+          }, [primaryStates]);
+
+          const registeredStateOptions = useMemo(() => {
+            if (!registeredStates || registeredStates.length === 0) {
+              return [];
+            }
+            console.log(
+              "✅ Extracted registered states data:",
+              registeredStates,
+            );
+            return registeredStates.map((state) => ({
+              value: state.state_code,
+              label: `${state.name} (${state.state_code})`,
+              code: state.state_code,
+              name: state.name,
+            }));
+          }, [registeredStates]);
 
           // Debug log for field visibility
           console.log("🎯 FIELD VISIBILITY DEBUG:", {
@@ -3599,15 +3693,455 @@ const Institution = () => {
                         />
                       )}
                     </div>
+                    <div className="mt-8">
+                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
+                        Registered Address
+                      </h3>
+
+                      {/* 1. Country - MOVED TO TOP */}
+                      <div className="mb-4">
+                        <CustomSelect
+                          id="registered_address_street_country"
+                          label="Country"
+                          options={countryOptions}
+                          onChange={enhancedSelectChange(
+                            "registered_address_street_country",
+                            setFieldValue,
+                          )}
+                          value={countryOptions.find(
+                            (opt) =>
+                              opt.value ===
+                              values.registered_address_street_country,
+                          )}
+                          touched={touched.registered_address_street_country}
+                          error={errors.registered_address_street_country}
+                          required
+                          isLoading={countriesLoading}
+                          isCountryField={true}
+                          showPhoneCode={false}
+                        />
+                      </div>
+
+                      {/* 5. State - With dropdown or input */}
+                      <div className="mb-4">
+                        {/* Registered Address State Field */}
+                        {!isManualRegisteredStateInput &&
+                        registeredStates &&
+                        registeredStates.length > 0 ? (
+                          <CustomSelect
+                            id="registered_address_street_state"
+                            label="State/Province"
+                            options={registeredStateOptions}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue(
+                                  "registered_address_street_state",
+                                  option.value,
+                                );
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  registered_address_street_state: option.value,
+                                }));
+                                dispatch(
+                                  setFormField({
+                                    field: "registered_address_street_state",
+                                    value: option.value,
+                                  }),
+                                );
+                              }
+                            }}
+                            value={registeredStateOptions.find(
+                              (opt) =>
+                                opt.value ===
+                                values.registered_address_street_state,
+                            )}
+                            touched={touched.registered_address_street_state}
+                            error={errors.registered_address_street_state}
+                            placeholder="Select State/Province"
+                            isLoading={registeredStatesLoading}
+                            isDisabled={
+                              !values.registered_address_street_country
+                            }
+                            required={true}
+                          />
+                        ) : (
+                          <FormField
+                            id="registered_address_street_state"
+                            label="State/Province"
+                            name="registered_address_street_state"
+                            value={values.registered_address_street_state || ""}
+                            onChange={enhancedHandleChange(
+                              "registered_address_street_state",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() =>
+                              setActiveField("registered_address_street_state")
+                            }
+                            touched={touched.registered_address_street_state}
+                            error={errors.registered_address_street_state}
+                            required={true}
+                            placeholder="Enter State/Province"
+                            disabled={!values.registered_address_street_country}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        )}
+                      </div>
+
+                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_zip"
+                          label="ZIP/Postal Code"
+                          name="registered_address_street_zip"
+                          value={values.registered_address_street_zip || ""}
+                          onChange={(e) => {
+                            const zipCode = e.target.value;
+                            enhancedHandleChange(
+                              "registered_address_street_zip",
+                              setFieldValue,
+                            )(e);
+
+                            // Clear previous timer
+                            if (zipDebounceTimer) {
+                              clearTimeout(zipDebounceTimer);
+                            }
+
+                            // Set debounced lookup
+                            const timer = setTimeout(() => {
+                              const countryId =
+                                values.registered_address_street_country;
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
+                                handleBusinessZipLookup(zipCode, countryId);
+                              }
+                            }, 1000);
+
+                            setZipDebounceTimer(timer);
+                          }}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_zip")
+                          }
+                          touched={touched.registered_address_street_zip}
+                          error={errors.registered_address_street_zip}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        {isZipLoading &&
+                          activeField === "registered_address_street_zip" && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <RingLoader size={16} color="#3b82f6" />
+                            </div>
+                          )}
+                      </div>
+
+                      {/* 4. City */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_city"
+                          label="City"
+                          name="registered_address_street_city"
+                          value={values.registered_address_street_city || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_city",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_city")
+                          }
+                          touched={touched.registered_address_street_city}
+                          error={errors.registered_address_street_city}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 3. Street Address 1 & 2 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField
+                          id="registered_address_street_1"
+                          label="Street Address"
+                          name="registered_address_street_1"
+                          value={values.registered_address_street_1 || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_1",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_1")
+                          }
+                          touched={touched.registered_address_street_1}
+                          error={errors.registered_address_street_1}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        <FormField
+                          id="registered_address_street_2"
+                          label="Street Address 2/ Suite Address (Optional)"
+                          name="registered_address_street_2"
+                          value={values.registered_address_street_2 || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_2",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_2")
+                          }
+                          touched={touched.registered_address_street_2}
+                          error={errors.registered_address_street_2}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_business_address_apartment_unit_no"
+                          label="Apartment No. "
+                          name="registered_business_address_apartment_unit_no"
+                          value={
+                            values.registered_business_address_apartment_unit_no ||
+                            ""
+                          }
+                          onChange={enhancedHandleChange(
+                            "registered_business_address_apartment_unit_no",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField(
+                              "registered_business_address_apartment_unit_no",
+                            )
+                          }
+                          touched={
+                            touched.registered_business_address_apartment_unit_no
+                          }
+                          error={
+                            errors.registered_business_address_apartment_unit_no
+                          }
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_business_address_suburb"
+                          label="Address Suburb "
+                          name="registered_business_address_suburb"
+                          value={
+                            values.registered_business_address_suburb || ""
+                          }
+                          onChange={enhancedHandleChange(
+                            "registered_business_address_suburb",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_business_address_suburb")
+                          }
+                          touched={touched.registered_business_address_suburb}
+                          error={errors.registered_business_address_suburb}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* Date of Incorporation on full row */}
+                      <div className="mt-4">
+                        <FormField
+                          id="date_incorporation"
+                          label="Date of Incorporation"
+                          name="date_incorporation"
+                          type="date"
+                          value={values.date_incorporation || ""}
+                          onChange={enhancedHandleChange(
+                            "date_incorporation",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("date_incorporation")}
+                          touched={touched.date_incorporation}
+                          error={errors.date_incorporation}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+                    </div>
 
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Country Information
                       </h3>
+                      <div className="mb-6">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            name="same_as_business_address"
+                            checked={values.same_as_business_address === 1}
+                            onChange={(e) => {
+                              const isChecked = e.target.checked;
+                              const value = isChecked ? 1 : 0;
+                              setFieldValue("same_as_business_address", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                same_as_business_address: value,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "same_as_business_address",
+                                  value,
+                                }),
+                              );
+
+                              // Copy data from Registered Address to Principal Business Address
+                              if (isChecked) {
+                                // Copy only the fields that have values
+                                if (values.registered_address_street_country) {
+                                  setFieldValue(
+                                    "country_of_operation",
+                                    values.registered_address_street_country,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    country_of_operation:
+                                      values.registered_address_street_country,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field: "country_of_operation",
+                                      value:
+                                        values.registered_address_street_country,
+                                    }),
+                                  );
+                                }
+
+                                if (values.registered_address_street_state) {
+                                  setFieldValue(
+                                    "principal_business_address_state",
+                                    values.registered_address_street_state,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_address_state:
+                                      values.registered_address_street_state,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field: "principal_business_address_state",
+                                      value:
+                                        values.registered_address_street_state,
+                                    }),
+                                  );
+                                }
+
+                                if (values.registered_address_street_zip) {
+                                  setFieldValue(
+                                    "principal_business_address_post_code",
+                                    values.registered_address_street_zip,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_address_post_code:
+                                      values.registered_address_street_zip,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field:
+                                        "principal_business_address_post_code",
+                                      value:
+                                        values.registered_address_street_zip,
+                                    }),
+                                  );
+                                }
+
+                                if (values.registered_address_street_city) {
+                                  setFieldValue(
+                                    "principal_business_address_city",
+                                    values.registered_address_street_city,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_address_city:
+                                      values.registered_address_street_city,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field: "principal_business_address_city",
+                                      value:
+                                        values.registered_address_street_city,
+                                    }),
+                                  );
+                                }
+
+                                if (values.registered_address_street_1) {
+                                  setFieldValue(
+                                    "principal_business_street",
+                                    values.registered_address_street_1,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_street:
+                                      values.registered_address_street_1,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field: "principal_business_street",
+                                      value: values.registered_address_street_1,
+                                    }),
+                                  );
+                                }
+
+                                if (
+                                  values.registered_business_address_apartment_unit_no
+                                ) {
+                                  setFieldValue(
+                                    "registered_business_address_apartment_unit_no",
+                                    values.registered_business_address_apartment_unit_no,
+                                  );
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    registered_business_address_apartment_unit_no:
+                                      values.registered_business_address_apartment_unit_no,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field:
+                                        "registered_business_address_apartment_unit_no",
+                                      value:
+                                        values.registered_business_address_apartment_unit_no,
+                                    }),
+                                  );
+                                }
+                              }
+                            }}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">
+                            Same as Registered Business Address
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          Check this box if the Principal Business Address is
+                          the same as the Registered Address above
+                        </p>
+                      </div>
 
                       {/* Country of Registration and Primary Country of Operation on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <CustomSelect
+                        {/* <CustomSelect
                           id="country_of_registration"
                           label="Country of Registration"
                           options={countryOptions}
@@ -3625,7 +4159,7 @@ const Institution = () => {
                           isLoading={countriesLoading}
                           isCountryField={true}
                           showPhoneCode={false}
-                        />
+                        /> */}
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
@@ -3645,11 +4179,14 @@ const Institution = () => {
                           showPhoneCode={false}
                         />
 
-                        {!isManualStateInput && states && states.length > 0 ? (
+                        {/* Primary Country of Operation State Field */}
+                        {!isManualPrimaryStateInput &&
+                        primaryStates &&
+                        primaryStates.length > 0 ? (
                           <CustomSelect
                             id="principal_business_address_state"
                             label="State/Province"
-                            options={stateOptions}
+                            options={primaryStateOptions}
                             onChange={(option) => {
                               if (option) {
                                 setFieldValue(
@@ -3669,7 +4206,7 @@ const Institution = () => {
                                 );
                               }
                             }}
-                            value={stateOptions.find(
+                            value={primaryStateOptions.find(
                               (opt) =>
                                 opt.value ===
                                 values.principal_business_address_state,
@@ -3677,7 +4214,7 @@ const Institution = () => {
                             touched={touched.principal_business_address_state}
                             error={errors.principal_business_address_state}
                             placeholder="Select State/Province"
-                            isLoading={statesLoading}
+                            isLoading={primaryStatesLoading}
                             isDisabled={!values.country_of_operation}
                             required={true}
                           />
@@ -3744,47 +4281,18 @@ const Institution = () => {
                           }}
                         />
                       </div>
-                    </div>
-                    <div className="mt-8">
-                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
-                        Registered Address
-                      </h3>
-
-                      {/* 1. Country - MOVED TO TOP */}
-                      <div className="mb-4">
-                        <CustomSelect
-                          id="registered_address_street_country"
-                          label="Country"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "registered_address_street_country",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.registered_address_street_country,
-                          )}
-                          touched={touched.registered_address_street_country}
-                          error={errors.registered_address_street_country}
-                          required
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        />
-                      </div>
-
-                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
                       <div className="mb-4">
                         <FormField
-                          id="registered_address_street_zip"
+                          id="principal_business_address_post_code"
                           label="ZIP/Postal Code"
-                          name="registered_address_street_zip"
-                          value={values.registered_address_street_zip || ""}
+                          name="principal_business_address_post_code"
+                          value={
+                            values.principal_business_address_post_code || ""
+                          }
                           onChange={(e) => {
                             const zipCode = e.target.value;
                             enhancedHandleChange(
-                              "registered_address_street_zip",
+                              "principal_business_address_post_code",
                               setFieldValue,
                             )(e);
 
@@ -3795,8 +4303,7 @@ const Institution = () => {
 
                             // Set debounced lookup
                             const timer = setTimeout(() => {
-                              const countryId =
-                                values.registered_address_street_country;
+                              const countryId = values.country_of_operation;
                               if (
                                 zipCode &&
                                 countryId &&
@@ -3810,125 +4317,93 @@ const Institution = () => {
                           }}
                           onBlur={handleBlur}
                           onFocus={() =>
-                            setActiveField("registered_address_street_zip")
+                            setActiveField(
+                              "principal_business_address_post_code",
+                            )
                           }
-                          touched={touched.registered_address_street_zip}
-                          error={errors.registered_address_street_zip}
+                          touched={touched.principal_business_address_post_code}
+                          error={errors.principal_business_address_post_code}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                         {isZipLoading &&
-                          activeField === "registered_address_street_zip" && (
+                          activeField ===
+                            "principal_business_address_post_code" && (
                             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                               <RingLoader size={16} color="#3b82f6" />
                             </div>
                           )}
                       </div>
 
-                      {/* 3. Street Address 1 & 2 */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <FormField
-                          id="registered_address_street_1"
-                          label="Street Address"
-                          name="registered_address_street_1"
-                          value={values.registered_address_street_1 || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_1",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_1")
-                          }
-                          touched={touched.registered_address_street_1}
-                          error={errors.registered_address_street_1}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="registered_address_street_2"
-                          label="Street Address 2/ Suite Address (Optional)"
-                          name="registered_address_street_2"
-                          value={values.registered_address_street_2 || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_2",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_2")
-                          }
-                          touched={touched.registered_address_street_2}
-                          error={errors.registered_address_street_2}
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
                       {/* 4. City */}
                       <div className="mb-4">
                         <FormField
-                          id="registered_address_street_city"
+                          id="principal_business_address_city"
                           label="City"
-                          name="registered_address_street_city"
-                          value={values.registered_address_street_city || ""}
+                          name="principal_business_address_city"
+                          value={values.principal_business_address_city || ""}
                           onChange={enhancedHandleChange(
-                            "registered_address_street_city",
+                            "principal_business_address_city",
                             setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() =>
-                            setActiveField("registered_address_street_city")
+                            setActiveField("principal_business_address_city")
                           }
-                          touched={touched.registered_address_street_city}
-                          error={errors.registered_address_street_city}
+                          touched={touched.principal_business_address_city}
+                          error={errors.principal_business_address_city}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                       </div>
 
-                      {/* 5. State */}
-                      <div className="mb-4">
+                      {/* 3. Street Address 1 & 2 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <FormField
-                          id="registered_address_street_state"
-                          label="State/Province"
-                          name="registered_address_street_state"
-                          value={values.registered_address_street_state || ""}
+                          id="principal_business_street"
+                          label="Street Address"
+                          name="principal_business_street"
+                          value={values.principal_business_street || ""}
                           onChange={enhancedHandleChange(
-                            "registered_address_street_state",
+                            "principal_business_street",
                             setFieldValue,
                           )}
                           onBlur={handleBlur}
                           onFocus={() =>
-                            setActiveField("registered_address_street_state")
+                            setActiveField("principal_business_street")
                           }
-                          touched={touched.registered_address_street_state}
-                          error={errors.registered_address_street_state}
+                          touched={touched.principal_business_street}
+                          error={errors.principal_business_street}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                      </div>
-
-                      {/* Date of Incorporation on full row */}
-                      <div className="mt-4">
                         <FormField
-                          id="date_incorporation"
-                          label="Date of Incorporation"
-                          name="date_incorporation"
-                          type="date"
-                          value={values.date_incorporation || ""}
+                          id="registered_business_address_apartment_unit_no"
+                          label="Apartment No. "
+                          name="registered_business_address_apartment_unit_no"
+                          value={
+                            values.registered_business_address_apartment_unit_no ||
+                            ""
+                          }
                           onChange={enhancedHandleChange(
-                            "date_incorporation",
+                            "registered_business_address_apartment_unit_no",
                             setFieldValue,
                           )}
                           onBlur={handleBlur}
-                          onFocus={() => setActiveField("date_incorporation")}
-                          touched={touched.date_incorporation}
-                          error={errors.date_incorporation}
+                          onFocus={() =>
+                            setActiveField(
+                              "registered_business_address_apartment_unit_no",
+                            )
+                          }
+                          touched={
+                            touched.registered_business_address_apartment_unit_no
+                          }
+                          error={
+                            errors.registered_business_address_apartment_unit_no
+                          }
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
