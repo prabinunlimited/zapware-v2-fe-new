@@ -30,6 +30,7 @@ import {
   FaInfoCircle,
   FaExclamationTriangle,
   FaSpinner,
+  FaSync,
 } from "react-icons/fa";
 import { FiSend, FiCheck, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { HiOutlineBanknotes } from "react-icons/hi2";
@@ -166,6 +167,10 @@ const Remittance = () => {
   const isTyping = useRef(false);
   const isUserEditing = useRef(false);
 
+  const [isInitializing, setIsInitializing] = useState(true)
+  const defaultCurrencySet = useRef(false)
+  const isFirstLoad = useRef(true)
+
   // Professional payment method options
   const paymentOptions = useMemo(
     () => [
@@ -277,17 +282,17 @@ const Remittance = () => {
   }, [currencies?.payoutCurrencies]);
 
   useEffect(() => {
-    if (!receiveCurrencyOptions.length) return;
+    if (!receiveCurrencyOptions.length || defaultCurrencySet.current || isInitializing) return;
 
     const defaultOption = receiveCurrencyOptions.find(
       (opt) => opt.default_remittance === "Y"
     );
 
-    if (defaultOption) {
+    if (defaultOption && !formData.receiveCurrency) {
       console.log("Setting default receive currency:", defaultOption);
       dispatch(setReceiveCurrency(defaultOption));
       activeInput.current = "receive";
-      dispatch(setExchangeRateData(null));
+      defaultCurrencySet.current = true
       setShowRecipientDetails(false);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
@@ -302,7 +307,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     }
-  }, [receiveCurrencyOptions, dispatch]);
+  }, [receiveCurrencyOptions, dispatch, formData.receiveCurrency, formData.sendAmount, isInitializing]);
 
   // Copy to clipboard function
   const copyToClipboard = useCallback((text, fieldName) => {
@@ -332,13 +337,24 @@ const Remittance = () => {
             dispatch(fetchPayoutCurrencies()), // No need to pass customerId, it will use partner_id from localStorage
             dispatch(fetchAllStaticData()),
           ]);
+
+          //Mark initialization as complete after a short delay
+          setTimeout(() => {
+            setIsInitializing(false)
+            isFirstLoad.current = false
+          },500);
+
         } catch (error) {
           console.error("Failed to initialize data:", error);
+          setIsInitializing(false)
+          isFirstLoad.current = false
         } finally {
           setInitialLoading(false);
         }
       } else {
         setInitialLoading(false);
+        setIsInitializing(false)
+        isFirstLoad.current = false
         navigate("/login");
       }
     };
@@ -380,24 +396,22 @@ const Remittance = () => {
 
   // Reset exchange rate data when currencies change
   useEffect(() => {
-    if (formData.sendCurrency?.value || formData.receiveCurrency?.value) {
-      const currentPair = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value}`;
-      const cachedPair = exchangeRateData
-        ? `${exchangeRateData.fromCurrency}-${exchangeRateData.toCurrency}`
-        : null;
+   if (isInitializing || isFirstLoad.current) return;
 
-      if (cachedPair !== currentPair) {
-        dispatch(setExchangeRateData(null));
+   if(formData.sendCurrency?.value && formData.receiveCurrency?.value) {
+    const currentPair = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value}`;
+    const cachedPair = exchangeRateData
+      ? `${exchangeRateData.fromCurrency}-${exchangeRateData.toCurrency}`
+      : null;
+
+      if (cachedPair && cachedPair !== currentPair) {
+        console.log('Currency pair changed, clearing exchange rate')
+        dispatch(setExchangeRateData(null))
         isManualUpdate.current = false;
-        dispatch(setReceiveAmount(""));
+        dispatch(setReceiveAmount(""))
       }
-    }
-  }, [
-    formData.sendCurrency,
-    formData.receiveCurrency,
-    dispatch,
-    exchangeRateData,
-  ]);
+   }
+  },[formData.sendCurrency, formData.receiveCurrency, dispatch, exchangeRateData, isInitializing]);
 
   // Fetch exchange rate with deduplication and caching
   useEffect(() => {
@@ -408,7 +422,7 @@ const Remittance = () => {
       const sendCurrencyValue = formData.sendCurrency?.value;
       const receiveCurrencyValue = formData.receiveCurrency?.value;
 
-      if (!sendCurrencyValue || !receiveCurrencyValue) {
+      if (!sendCurrencyValue || !receiveCurrencyValue || isInitializing) {
         return;
       }
 
@@ -554,6 +568,7 @@ const Remittance = () => {
     customerId,
     dispatch,
     `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value}`,
+    isInitializing,
   ]);
 
   useEffect(() => {
@@ -594,7 +609,8 @@ const Remittance = () => {
       formData.sendAmount &&
       parseFloat(formData.sendAmount) >= 5 &&
       !isManualUpdate.current &&
-      !isTyping.current
+      !isTyping.current && 
+      !isInitializing
     ) {
       const sendNum = parseFloat(formData.sendAmount);
       if (!isNaN(sendNum) && sendNum >= 5) {
@@ -614,6 +630,7 @@ const Remittance = () => {
     formData.sendAmount,
     formData.receiveAmount,
     dispatch,
+    isInitializing
   ]);
 
   useEffect(() => {
@@ -1971,7 +1988,7 @@ const Remittance = () => {
                           </>
                         ) : (
                           <>
-                            <FaExchangeAlt className="w-3 h-3" />
+                            <FaSync className="w-3 h-3" />
                             <span>Refresh</span>
                           </>
                         )}
@@ -2323,7 +2340,8 @@ const Remittance = () => {
                   loading ||
                   manualDetailsLoading ||
                   beneficiaryLoading ||
-                  openBankingProcessing
+                  openBankingProcessing ||
+                  isInitializing
                 }
                 className="flex-[2] px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
