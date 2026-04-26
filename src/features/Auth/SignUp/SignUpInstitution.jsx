@@ -28,6 +28,9 @@ import SelectField from "./FormFields/SelectField";
 import BenefitsSection from "./FormFields/BenefitsSection";
 import institutionSchema from "../../../components/Schema/InstitutionSchema";
 
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
 import {
   fetchCountries,
   selectCountriesOptions,
@@ -94,6 +97,28 @@ import {
 } from "../slices/institutionRegistrationSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
+
+// ===================== DOB VALIDATION FUNCTIONS =====================
+const validateAge = (dateOfBirth) => {
+  if (!dateOfBirth) return false;
+  
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age >= 18;
+};
+
+const getMaxDateForDOB = () => {
+  const today = new Date();
+  const maxDate = new Date(today.setFullYear(today.getFullYear() - 18));
+  return maxDate.toISOString().split('T')[0];
+};
 
 // CustomSelect Component
 const CustomSelect = ({
@@ -430,7 +455,7 @@ const Institution = () => {
       terms_agreement: false,
       user_image: {},
 
-      industry_type: "", // ← ADD THIS LINE
+      industry_type: "",
 
       controller_first_name: "",
       controller_middle_name: "",
@@ -454,19 +479,25 @@ const Institution = () => {
       controller_ssn: "",
       is_controller: "",
 
+      // Add dob_error state
+      dob_error: "",
+
       ...mergedData,
     };
     return safeData;
   }, [formData, localFormData]);
 
-  useEffect(() => {
-    if (
-      Object.keys(formData).length > 0 &&
-      Object.keys(localFormData).length === 0
-    ) {
-      setLocalFormData(formData);
-    }
-  }, [formData, localFormData]);
+  useEffect(
+    () => {
+      if (
+        Object.keys(formData).length > 0 &&
+        Object.keys(localFormData).length === 0
+      ) {
+        setLocalFormData(formData);
+      }
+    },
+    [formData, localFormData],
+  );
 
   const enhancedHandleChange = useCallback(
     (fieldName, setFieldValue, actionCreator = null) => {
@@ -542,7 +573,7 @@ const Institution = () => {
           phoneCode: phoneCode,
           country_code: country.country_code,
           id: country.id,
-          flag: country.flag_url || "🏳️", // FIXED: Use flag_url instead of flag
+          flag: country.flag_url || "🏳️",
           originalData: country,
         };
       });
@@ -617,7 +648,6 @@ const Institution = () => {
   const remittanceOnlyAccepted =
     remit_customer === 1 || remit_customer === true;
 
-  // DEBUG: Log the location state data
   useEffect(() => {
     console.log("🔍 locationStateData check:", {
       hasData: !!locationStateData,
@@ -673,6 +703,8 @@ const Institution = () => {
           localStorage.getItem("iswhitelabelledpartner") === "Y";
         const partnerId = localStorage.getItem("whitelabelledpartnerid");
         const packageModule = localStorage.getItem("isPartnerPackageModule");
+
+        console.log("PartnerPackageModule:", packageModule);
 
         dispatch(
           setWhiteLabelInfo({
@@ -1042,6 +1074,14 @@ const Institution = () => {
           return value && value.toString().trim() !== "";
         });
 
+        // Check if DOB age is valid (18+)
+        let isAgeValid = true;
+        if (validationValues.dob) {
+          isAgeValid = validateAge(validationValues.dob);
+        } else {
+          isAgeValid = false;
+        }
+
         const hasValidationErrors = requiredFields.some(
           (field) => errors[field] && touched[field],
         );
@@ -1067,7 +1107,8 @@ const Institution = () => {
           requiredFieldsFilled &&
           !hasValidationErrors &&
           ssnValid &&
-          allTermsAccepted
+          allTermsAccepted &&
+          isAgeValid
         );
       }
 
@@ -1334,6 +1375,11 @@ const Institution = () => {
   const getFirstErrorMessage = useCallback(
     (errors, values = {}, currentStep = 1) => {
       if (currentStep === 2) {
+        // Check for age validation error
+        if (values.dob && !validateAge(values.dob)) {
+          return "You must be at least 18 years old to register";
+        }
+        
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
             ? values.terms_and_conditions?.length === termsConditions.length
@@ -1403,11 +1449,18 @@ const Institution = () => {
   const handleNextStep = useCallback(
     async (values, { setErrors, setTouched, validateForm }) => {
       try {
-        // SSN confirmation check - moved inside where values is available
+        // Check age validation for step 2
+        if (currentStep === 2 && values.dob && !validateAge(values.dob)) {
+          dispatch(setErrorMessage("You must be at least 18 years old to register"));
+          dispatch(setShowPopup(true));
+          return;
+        }
+
+        // SSN confirmation check
         if (
           currentStep === 2 &&
-          (isNamedAccount || remittanceOnlyAccepted) && // Check both
-          !(values.country === "United States" || values.country === 186) // Only if NOT US
+          (isNamedAccount || remittanceOnlyAccepted) &&
+          !(values.country === "United States" || values.country === 186)
         ) {
           setPendingNextStep(true);
           setShowSSNConfirmation(true);
@@ -1675,7 +1728,7 @@ const Institution = () => {
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
-          isPartnerPackageModule: "N",
+          isPartnerPackageModule: institutionState.partnerPackageModule || "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
           kycVerify: kycVerify,
@@ -1727,7 +1780,6 @@ const Institution = () => {
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
 
-          // ✅ ADD SSN LOGIC HERE: Determine if SSN was collected
           // Check for SSN in responsible person (step 2)
           const hasResponsiblePersonSSN = !!finalFormData.ssn;
 
@@ -1767,7 +1819,7 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
-              hasSSN: hasSSN, // ✅ Pass SSN status to phone verification
+              hasSSN: hasSSN,
             },
           });
         } else {
@@ -1873,7 +1925,7 @@ const Institution = () => {
   const naicsOptions = useMemo(
     () =>
       naicsCodes.map((code) => ({
-        value: code.id || code.code, // Use id or code as value
+        value: code.id || code.code,
         label: `${code.code} - ${
           code.description || `${code.category} - ${code.subcategory}`
         }`,
@@ -2337,46 +2389,56 @@ const Institution = () => {
                 isCountryField={true}
                 showPhoneCode={false}
               />
-              <FormField
-                id="controller_zip_code"
-                label="ZIP/Postal Code"
-                name="controller_zip_code"
-                value={values.controller_zip_code || ""}
-                onChange={(e) => {
-                  const zipCode = e.target.value;
-                  enhancedHandleChange("controller_zip_code", setFieldValue)(e);
 
-                  // Clear previous timer
-                  if (zipDebounceTimer) {
-                    clearTimeout(zipDebounceTimer);
-                  }
+              {/* ZIP/Postal Code - With lookup */}
+              <div className="relative">
+                <FormField
+                  id="controller_zip_code"
+                  label="ZIP/Postal Code"
+                  name="controller_zip_code"
+                  value={values.controller_zip_code || ""}
+                  onChange={(e) => {
+                    const zipCode = e.target.value;
+                    enhancedHandleChange(
+                      "controller_zip_code",
+                      setFieldValue,
+                    )(e);
 
-                  // Set debounced lookup
-                  const timer = setTimeout(() => {
-                    const countryId = values.controller_country;
-                    if (
-                      zipCode &&
-                      countryId &&
-                      zipCode.replace(/\s+/g, "").length >= 3
-                    ) {
-                      handleControllerZipLookup(zipCode, countryId);
+                    // Clear previous timer
+                    if (zipDebounceTimer) {
+                      clearTimeout(zipDebounceTimer);
                     }
-                  }, 1000);
 
-                  setZipDebounceTimer(timer);
-                }}
-                onBlur={handleBlur}
-                touched={touched.controller_zip_code}
-                error={errors.controller_zip_code}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
-              />
-              {isZipLoading && activeField === "controller_zip_code" && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <RingLoader size={16} color="#3b82f6" />
-                </div>
-              )}
+                    // Set debounced lookup
+                    const timer = setTimeout(() => {
+                      const countryId = values.controller_country;
+                      if (
+                        zipCode &&
+                        countryId &&
+                        zipCode.replace(/\s+/g, "").length >= 3
+                      ) {
+                        handleControllerZipLookup(zipCode, countryId);
+                      }
+                    }, 1000);
+
+                    setZipDebounceTimer(timer);
+                  }}
+                  onBlur={handleBlur}
+                  onFocus={() => setActiveField("controller_zip_code")}
+                  touched={touched.controller_zip_code}
+                  error={errors.controller_zip_code}
+                  required={values.is_controller === "no"}
+                  disabled={values.is_controller === "yes"}
+                  fieldStyles={FIELD_STYLES}
+                />
+                {isZipLoading && activeField === "controller_zip_code" && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RingLoader size={16} color="#3b82f6" />
+                  </div>
+                )}
+              </div>
+
+              {/* State */}
               <FormField
                 id="controller_state"
                 label="State/Province"
@@ -2387,6 +2449,7 @@ const Institution = () => {
                   setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_state")}
                 touched={touched.controller_state}
                 error={errors.controller_state}
                 required={values.is_controller === "no"}
@@ -2394,7 +2457,7 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 7: City & Street Address 1 */}
+              {/* City & Street Address 1 */}
               <FormField
                 id="controller_city"
                 label="City"
@@ -2405,6 +2468,7 @@ const Institution = () => {
                   setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_city")}
                 touched={touched.controller_city}
                 error={errors.controller_city}
                 required={values.is_controller === "no"}
@@ -2421,6 +2485,7 @@ const Institution = () => {
                   setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_street_address_1")}
                 touched={touched.controller_street_address_1}
                 error={errors.controller_street_address_1}
                 required={values.is_controller === "no"}
@@ -2428,7 +2493,7 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
-              {/* Row 8: Street Address 2 & ZIP Code */}
+              {/* Street Address 2 (Optional) */}
               <FormField
                 id="controller_street_address_2"
                 label="Street Address 2/ Suite Address (Optional)"
@@ -2439,6 +2504,7 @@ const Institution = () => {
                   setFieldValue,
                 )}
                 onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_street_address_2")}
                 touched={touched.controller_street_address_2}
                 error={errors.controller_street_address_2}
                 disabled={values.is_controller === "yes"}
@@ -2498,6 +2564,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_designation}
                 error={errors.controller_designation}
+                required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
@@ -2690,26 +2757,56 @@ const Institution = () => {
                   }),
                 ).unwrap();
 
+                // ✅ ADD DEBUG LOG
+                console.log("🔍 ZIP Lookup Result:", result);
+
                 if (result.success) {
-                  // Auto-fill city and state for business address
+                  // ✅ Check if city and state exist in the response
                   if (result.city) {
+                    console.log("✅ Setting city to:", result.city);
                     setFieldValue(
                       "registered_address_street_city",
                       result.city,
                     );
+                    toast.success(`City auto-filled: ${result.city}`, {
+                      autoClose: 2000,
+                    });
+                  } else {
+                    console.log("⚠️ No city found in response");
                   }
+
                   if (result.state) {
+                    console.log("✅ Setting state to:", result.state);
                     setFieldValue(
                       "registered_address_street_state",
                       result.state,
                     );
+                    toast.success(`State auto-filled: ${result.state}`, {
+                      autoClose: 2000,
+                    });
+                  } else {
+                    console.log("⚠️ No state found in response");
                   }
+
+                  // Optional: Show a combined toast
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Auto-filled: ${result.city}, ${result.state}`,
+                      { autoClose: 2000 },
+                    );
+                  }
+                } else {
+                  console.log("❌ ZIP lookup failed:", result.message);
+                  toast.warning(
+                    `Could not auto-fill location for ZIP code: ${zipCode}`,
+                    { autoClose: 3000 },
+                  );
                 }
               } catch (error) {
-                console.log("❌ ZIP lookup failed:", error.message);
-                setZipApiError(
-                  error.message || "Unable to fetch location data",
-                );
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
               } finally {
                 setIsZipLoading(false);
               }
@@ -2735,16 +2832,42 @@ const Institution = () => {
                   }),
                 ).unwrap();
 
+                console.log("🔍 Responsible Person ZIP Lookup Result:", result);
+
                 if (result.success) {
                   if (result.city) {
                     setFieldValue("city", result.city);
+                    toast.success(`City auto-filled: ${result.city}`, {
+                      autoClose: 2000,
+                    });
                   }
                   if (result.state) {
                     setFieldValue("state", result.state);
+                    toast.success(`State auto-filled: ${result.state}`, {
+                      autoClose: 2000,
+                    });
                   }
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Auto-filled: ${result.city}, ${result.state}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
+                  }
+                } else {
+                  toast.warning(
+                    `Could not auto-fill location for ZIP code: ${zipCode}`,
+                    {
+                      autoClose: 3000,
+                    },
+                  );
                 }
               } catch (error) {
-                console.log("❌ ZIP lookup failed:", error.message);
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
               } finally {
                 setIsZipLoading(false);
               }
@@ -2770,16 +2893,44 @@ const Institution = () => {
                   }),
                 ).unwrap();
 
+                console.log("🔍 Controller ZIP Lookup Result:", result);
+
                 if (result.success) {
                   if (result.city) {
                     setFieldValue("controller_city", result.city);
+                    toast.success(
+                      `Controller city auto-filled: ${result.city}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
                   }
                   if (result.state) {
                     setFieldValue("controller_state", result.state);
+                    toast.success(
+                      `Controller state auto-filled: ${result.state}`,
+                      {
+                        autoClose: 2000,
+                      },
+                    );
                   }
+                  if (result.city && result.state) {
+                    toast.success(
+                      `Controller address auto-filled: ${result.city}, ${result.state}`,
+                      { autoClose: 2000 },
+                    );
+                  }
+                } else {
+                  toast.warning(
+                    `Could not auto-fill location for controller ZIP code: ${zipCode}`,
+                    { autoClose: 3000 },
+                  );
                 }
               } catch (error) {
-                console.log("❌ ZIP lookup failed:", error.message);
+                console.log("❌ ZIP lookup failed:", error);
+                toast.warning(`Invalid ZIP code or service unavailable`, {
+                  autoClose: 3000,
+                });
               } finally {
                 setIsZipLoading(false);
               }
@@ -3032,7 +3183,7 @@ const Institution = () => {
                           )}
                           touched={touched.country_of_registration}
                           error={errors.country_of_registration}
-                          required
+                          required // ← ADD THIS LINE
                           isLoading={countriesLoading}
                           isCountryField={true}
                           showPhoneCode={false}
@@ -3050,7 +3201,7 @@ const Institution = () => {
                           )}
                           touched={touched.country_of_operation}
                           error={errors.country_of_operation}
-                          required
+                          required // ← This one already has required (good)
                           isLoading={countriesLoading}
                           isCountryField={true}
                           showPhoneCode={false}
@@ -3095,98 +3246,35 @@ const Institution = () => {
                       </div>
                     </div>
                     <div className="mt-8">
-                      <h3 className="text-lg font-medium mb-3">
+                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Registered Address
                       </h3>
 
-                      {/* 1. Street Address 1 & 2 */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <FormField
-                          id="registered_address_street_1"
-                          label="Street Address"
-                          name="registered_address_street_1"
-                          value={values.registered_address_street_1 || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_1",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_1")
-                          }
-                          touched={touched.registered_address_street_1}
-                          error={errors.registered_address_street_1}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="registered_address_street_2"
-                          label="Street Address 2/ Suite Address (Optional)"
-                          name="registered_address_street_2"
-                          value={values.registered_address_street_2 || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_2",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_2")
-                          }
-                          touched={touched.registered_address_street_2}
-                          error={errors.registered_address_street_2}
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* 2. City */}
+                      {/* 1. Country - MOVED TO TOP */}
                       <div className="mb-4">
-                        <FormField
-                          id="registered_address_street_city"
-                          label="City"
-                          name="registered_address_street_city"
-                          value={values.registered_address_street_city || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_city",
+                        <CustomSelect
+                          id="registered_address_street_country"
+                          label="Country"
+                          options={countryOptions}
+                          onChange={enhancedSelectChange(
+                            "registered_address_street_country",
                             setFieldValue,
                           )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_city")
-                          }
-                          touched={touched.registered_address_street_city}
-                          error={errors.registered_address_street_city}
+                          value={countryOptions.find(
+                            (opt) =>
+                              opt.value ===
+                              values.registered_address_street_country,
+                          )}
+                          touched={touched.registered_address_street_country}
+                          error={errors.registered_address_street_country}
                           required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
+                          isLoading={countriesLoading}
+                          isCountryField={true}
+                          showPhoneCode={false}
                         />
                       </div>
 
-                      {/* 3. State */}
-                      <div className="mb-4">
-                        <FormField
-                          id="registered_address_street_state"
-                          label="State/Province"
-                          name="registered_address_street_state"
-                          value={values.registered_address_street_state || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_state",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_state")
-                          }
-                          touched={touched.registered_address_street_state}
-                          error={errors.registered_address_street_state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* 4. ZIP/Postal Code */}
+                      {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
                       <div className="mb-4">
                         <FormField
                           id="registered_address_street_zip"
@@ -3238,27 +3326,90 @@ const Institution = () => {
                           )}
                       </div>
 
-                      {/* 5. Country */}
-                      <div className="mb-4">
-                        <CustomSelect
-                          id="registered_address_street_country"
-                          label="Country"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "registered_address_street_country",
+                      {/* 3. Street Address 1 & 2 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField
+                          id="registered_address_street_1"
+                          label="Street Address"
+                          name="registered_address_street_1"
+                          value={values.registered_address_street_1 || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_1",
                             setFieldValue,
                           )}
-                          value={countryOptions.find(
-                            (opt) =>
-                              opt.value ===
-                              values.registered_address_street_country,
-                          )}
-                          touched={touched.registered_address_street_country}
-                          error={errors.registered_address_street_country}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_1")
+                          }
+                          touched={touched.registered_address_street_1}
+                          error={errors.registered_address_street_1}
                           required
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        <FormField
+                          id="registered_address_street_2"
+                          label="Street Address 2/ Suite Address (Optional)"
+                          name="registered_address_street_2"
+                          value={values.registered_address_street_2 || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_2",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_2")
+                          }
+                          touched={touched.registered_address_street_2}
+                          error={errors.registered_address_street_2}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 4. City */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_city"
+                          label="City"
+                          name="registered_address_street_city"
+                          value={values.registered_address_street_city || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_city",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_city")
+                          }
+                          touched={touched.registered_address_street_city}
+                          error={errors.registered_address_street_city}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* 5. State */}
+                      <div className="mb-4">
+                        <FormField
+                          id="registered_address_street_state"
+                          label="State/Province"
+                          name="registered_address_street_state"
+                          value={values.registered_address_street_state || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_address_street_state",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField("registered_address_street_state")
+                          }
+                          touched={touched.registered_address_street_state}
+                          error={errors.registered_address_street_state}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
                         />
                       </div>
 
@@ -3535,22 +3686,61 @@ const Institution = () => {
                         required
                       />
 
-                      {/* Date of Birth and Designation on same row */}
-                      <FormField
-                        id="dob"
-                        label="Date of Birth"
-                        name="dob"
-                        type="date"
-                        value={values.dob || ""}
-                        onChange={enhancedHandleChange("dob", setFieldValue)}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("dob")}
-                        touched={touched.dob}
-                        error={errors.dob}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
+                      {/* Date of Birth and Designation on same row - WITH AGE VALIDATION AND MESSAGE */}
+                      <div className="relative">
+                        <FormField
+                          id="dob"
+                          label="Date of Birth"
+                          name="dob"
+                          type="date"
+                          value={values.dob || ""}
+                          onChange={(e) => {
+                            const selectedDate = e.target.value;
+                            enhancedHandleChange("dob", setFieldValue)(e);
+                            
+                            // Validate age on change
+                            if (selectedDate) {
+                              const isValidAge = validateAge(selectedDate);
+                              if (!isValidAge) {
+                                setFieldValue("dob_error", "You must be at least 18 years old to register");
+                              } else {
+                                setFieldValue("dob_error", "");
+                              }
+                            } else {
+                              setFieldValue("dob_error", "");
+                            }
+                          }}
+                          onBlur={(e) => {
+                            handleBlur(e);
+                            const selectedDate = values.dob;
+                            if (selectedDate && !validateAge(selectedDate)) {
+                              setFieldValue("dob_error", "You must be at least 18 years old to register");
+                            }
+                          }}
+                          onFocus={() => setActiveField("dob")}
+                          touched={touched.dob}
+                          error={errors.dob || values.dob_error}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                          max={getMaxDateForDOB()}
+                        />
+                        
+                        {/* Helper text - Always visible */}
+                        <div className="text-xs text-gray-500 mt-1 flex items-center">
+                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                          You must be at least 18 years old to register
+                        </div>
+                        
+                        {/* Error message - Only visible when there's an error */}
+                        {values.dob_error && (
+                          <div className="text-red-500 text-xs mt-1 flex items-center">
+                            <FontAwesomeIcon icon={faTimesCircle} className="mr-1 w-3 h-3" />
+                            {values.dob_error}
+                          </div>
+                        )}
+                      </div>
+                      
                       <FormField
                         id="designation"
                         label="Designation"
@@ -3564,6 +3754,7 @@ const Institution = () => {
                         onFocus={() => setActiveField("designation")}
                         touched={touched.designation}
                         error={errors.designation}
+                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
@@ -3637,30 +3828,17 @@ const Institution = () => {
                         fieldStyles={FIELD_STYLES}
                       />
 
+                      {/* SSN Field (conditional) */}
                       {(function () {
-                        // Check if either USD named account OR remittance only is selected
                         const hasUSDNamedAccount = isNamedAccount;
                         const isRemittanceOnly = remittanceOnlyAccepted;
-
-                        // Check if country is United States
                         const isUSCountry =
                           values.country === "United States" ||
                           values.country === 186;
 
-                        // SHOW SSN field if BOTH conditions are true:
-                        // 1. Either hasUSDNamedAccount OR isRemittanceOnly is true
-                        // 2. AND isUSCountry is true
                         const shouldShowSSNField =
                           (hasUSDNamedAccount || isRemittanceOnly) &&
                           isUSCountry;
-
-                        console.log("🔍 Step 2 SSN Field Logic:", {
-                          hasUSDNamedAccount,
-                          isRemittanceOnly,
-                          isUSCountry,
-                          shouldShowSSNField,
-                          countryValue: values.country,
-                        });
 
                         return shouldShowSSNField ? (
                           <div className="md:col-span-2">
@@ -3708,12 +3886,79 @@ const Institution = () => {
                       })()}
                     </div>
 
+                    {/* Terms and Conditions section remains the same */}
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Contact Address
                       </h3>
 
-                      {/* 1. Street Address 1 & 2 */}
+                      {/* Address fields remain the same */}
+                      <div className="mb-4">
+                        <CustomSelect
+                          id="country"
+                          label="Country"
+                          options={countryOptions}
+                          onChange={enhancedSelectChange(
+                            "country",
+                            setFieldValue,
+                          )}
+                          value={countryOptions.find(
+                            (opt) => opt.value === values.country,
+                          )}
+                          touched={touched.country}
+                          error={errors.country}
+                          required
+                          isLoading={countriesLoading}
+                          isCountryField={true}
+                          showPhoneCode={false}
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <FormField
+                          id="zip_code"
+                          label="ZIP/Postal Code"
+                          name="zip_code"
+                          value={values.zip_code || ""}
+                          onChange={(e) => {
+                            const zipCode = e.target.value;
+                            enhancedHandleChange("zip_code", setFieldValue)(e);
+
+                            if (zipDebounceTimer) {
+                              clearTimeout(zipDebounceTimer);
+                            }
+
+                            const timer = setTimeout(() => {
+                              const countryId = values.country;
+                              if (
+                                zipCode &&
+                                countryId &&
+                                zipCode.replace(/\s+/g, "").length >= 3
+                              ) {
+                                handleResponsiblePersonZipLookup(
+                                  zipCode,
+                                  countryId,
+                                );
+                              }
+                            }, 1000);
+
+                            setZipDebounceTimer(timer);
+                          }}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("zip_code")}
+                          touched={touched.zip_code}
+                          error={errors.zip_code}
+                          required
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        {isZipLoading && activeField === "zip_code" && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <RingLoader size={16} color="#3b82f6" />
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <FormField
                           id="street_address_1"
@@ -3750,7 +3995,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 2. City */}
                       <div className="mb-4">
                         <FormField
                           id="city"
@@ -3768,7 +4012,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 3. State */}
                       <div className="mb-4">
                         <FormField
                           id="state"
@@ -3788,74 +4031,9 @@ const Institution = () => {
                           fieldStyles={FIELD_STYLES}
                         />
                       </div>
-
-                      {/* 4. ZIP/Postal Code */}
-                      <div className="mb-4">
-                        <FormField
-                          id="zip_code"
-                          label="ZIP/Postal Code"
-                          name="zip_code"
-                          value={values.zip_code || ""}
-                          onChange={(e) => {
-                            const zipCode = e.target.value;
-                            enhancedHandleChange("zip_code", setFieldValue)(e);
-
-                            // Clear previous timer
-                            if (zipDebounceTimer) {
-                              clearTimeout(zipDebounceTimer);
-                            }
-
-                            // Set debounced lookup
-                            const timer = setTimeout(() => {
-                              const countryId = values.country;
-                              if (
-                                zipCode &&
-                                countryId &&
-                                zipCode.replace(/\s+/g, "").length >= 3
-                              ) {
-                                handleResponsiblePersonZipLookup(
-                                  zipCode,
-                                  countryId,
-                                );
-                              }
-                            }, 1000);
-
-                            setZipDebounceTimer(timer);
-                          }}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("zip_code")}
-                          touched={touched.zip_code}
-                          error={errors.zip_code}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                          loading={isZipLoading && activeField === "zip_code"}
-                        />
-                      </div>
-
-                      {/* 5. Country */}
-                      <div className="mb-4">
-                        <CustomSelect
-                          id="country"
-                          label="Country"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "country",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) => opt.value === values.country,
-                          )}
-                          touched={touched.country}
-                          error={errors.country}
-                          required
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        />
-                      </div>
                     </div>
 
+                    {/* Terms and Conditions section */}
                     <div className="mt-6 bg-blue-50 p-4 rounded-lg">
                       <h3 className="text-sm font-medium text-gray-700 mb-3">
                         Terms and Conditions{" "}

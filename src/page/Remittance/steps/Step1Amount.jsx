@@ -17,6 +17,7 @@ const Step1Amount = ({
   loading,
   showFeeBreakdown,
   onToggleFeeBreakdown,
+  onRecurringDataChange,
 }) => {
   return (
     <div className="space-y-8">

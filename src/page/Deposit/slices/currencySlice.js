@@ -80,7 +80,6 @@ export const fetchPaymentMethodsByCurrency = createAsyncThunk(
       return methodsData;
     } catch (error) {
       if (error.response?.status === 401) {
-        tokenService.clearToken();
         return rejectWithValue("Authentication failed. Please log in again.");
       }
 

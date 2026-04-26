@@ -4,63 +4,6 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE BENEFICIARY ASYNC THUNKS =====================
 
-const getHeaders = () => {
-  const token = localStorage.getItem("bearertoken");
-  const headers = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-};
-
-// ===================== NEW: PUBLIC REGISTRATION THUNK =====================
-export const createPublicBeneficiary = createAsyncThunk(
-  "beneficiaries/createPublic",
-  async (
-    { beneficiaryData, bankAccounts, currency, country_code },
-    { rejectWithValue }
-  ) => {
-    try {
-      // Reuse the logic to format the banks payload for the API
-      const banksPayload = bankAccounts.map((account) => ({
-        rails: account.rails,
-        currency_code: account.currency || currency,
-        payment_method: account.paymentMethod || "",
-        benef_iban: account.iban || "",
-        swift_code: account.swift || "",
-        routing_number: account.routingNumber || "",
-        bank_acc_no: account.accountNumber || "",
-        bank_name: account.bankName || "",
-        ifsc: account.ifsc || "",
-        bankCode: account.bankCode || "",
-        branchCode: account.branchCode || "",
-        account_name: account.accountName || "",
-        account_type: account.accountType || "",
-      }));
-
-      const payload = {
-        ...beneficiaryData,
-        banks: banksPayload,
-        country_phone_code: country_code,
-      };
-
-      const response = await fetch(
-        `${API_URL}/beneficiaries/create-requestremit-benef`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.message || "Public Registration Failed");
-      return result;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
 export const createBeneficiaryWithBanks = createAsyncThunk(
   "beneficiaries/createBeneficiaryWithBanks",
   async (
@@ -94,7 +37,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 
       console.log("🔧 Final Country Code to use:", finalCountryCode);
 
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
 
       // Validate that all bank accounts have rails
       const missingRailsAccounts = bankAccounts.filter(
@@ -115,9 +58,13 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           );
         }
 
+        // Get currency from account or fallback to currency parameter
+        const accountCurrency =
+          account.currency_code || account.currency || currency;
+
         let bankDetails = {
           rails: account.rails,
-          currency_code: account.currency || currency,
+          currency_code: accountCurrency, // Use account-specific currency
           payment_method: account.paymentMethod || "",
           benef_iban: account.iban || "",
           swift_code: account.swift || "",
@@ -136,6 +83,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           mobile_number: account.mobileNumber || "",
           account_type: account.accountType || "",
           other_provider: account.otherProvider || "",
+          bank_country: account.bankCountry || "",
         };
 
         // Transform based on rails type
@@ -143,82 +91,89 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           bankDetails = {
             ...bankDetails,
             rails: "Swift",
-            currency_code: account.currency || currency,
+            currency_code: accountCurrency, // Use account-specific currency
             payment_method: "swift",
             benef_iban: account.iban || "",
             swift_code: account.swift || "",
             intermediary_bank_swift: account.intermediarySwift || "",
+            bank_country: account.bankCountry || "",
           };
         } else if (account.rails === "Local") {
           // Handle different currencies for local transfers
-          if (currency === "USD") {
+          if (accountCurrency === "USD") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: account.paymentMethod || "ACH",
               routing_number: account.routingNumber || "",
               bank_acc_no: account.accountNumber || "",
               account_type: account.accountType || "",
               bankCode: account.routingNumber || "",
               swift_code: account.swift || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "INR") {
+          } else if (accountCurrency === "INR") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               account_type: account.accountType || "",
               bank_name: account.bankName || "",
               ifsc: account.ifsc || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "AED") {
+          } else if (accountCurrency === "AED") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               benef_iban: account.iban || "",
               bic_code: account.swift || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "EUR") {
+          } else if (accountCurrency === "EUR") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               benef_iban: account.iban || "",
+              bank_country: account.bankCountry || "",
             };
-          } else if (currency === "GBP" || currency === "DKK") {
+          } else if (accountCurrency === "GBP" || accountCurrency === "DKK") {
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               sort_code: account.sortCode || "",
+              bank_country: account.bankCountry || "",
             };
           } else {
             // Default local transfer structure for other currencies
             bankDetails = {
               ...bankDetails,
               rails: "Local",
-              currency_code: currency,
+              currency_code: accountCurrency, // Use account-specific currency
               payment_method: "",
               bank_acc_no: account.accountNumber || "",
               bank_name: account.bankName || "",
               bankCode: account.bankCode || "",
               branchCode: account.branchCode || "",
               bankState: account.bankState || "",
+              bank_country: account.bankCountry || "",
             };
           }
         } else if (account.rails === "Mobile") {
           bankDetails = {
             ...bankDetails,
             rails: "Mobile",
-            currency_code: currency,
+            currency_code: accountCurrency, // Use account-specific currency
             payment_method: "mobile",
             mobile_number: account.mobileNumber || "",
             wallet_provider: account.walletProvider || "",
@@ -229,16 +184,18 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
         return bankDetails;
       });
 
+      // Create the payload with currency_code at the root level
       const payload = {
         ...beneficiaryData,
         banks: banksPayload,
+        currency_code: currency, // ADD THIS: currency_code at root level
       };
 
       // Use country_phone_code instead of country_code
       if (finalCountryCode.startsWith("+")) {
-        payload.country_phone_code = finalCountryCode.substring(1);
-      } else {
         payload.country_phone_code = finalCountryCode;
+      } else {
+        payload.country_phone_code = `+${finalCountryCode}`;
       }
 
       console.log("📡 Final payload:", JSON.stringify(payload, null, 2));
@@ -249,7 +206,7 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`,
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
         }
@@ -289,14 +246,14 @@ export const updateBeneficiaryBank = createAsyncThunk(
   "beneficiaries/updateBeneficiaryBank",
   async ({ beneficiaryId, bankId, bankData }, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(bankData),
         }
@@ -318,14 +275,14 @@ export const addBeneficiaryBank = createAsyncThunk(
   "beneficiaries/addBeneficiaryBank",
   async ({ beneficiaryId, bankData }, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(bankData),
         }
@@ -347,14 +304,14 @@ export const deleteBeneficiaryBank = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryBank",
   async ({ beneficiaryId, bankId }, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
         `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
         }
       );
@@ -375,7 +332,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryById",
   async (beneficiaryId, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
 
       console.log("📥 Fetching beneficiary with ID:", beneficiaryId);
       console.log(
@@ -389,7 +346,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
         }
       );
@@ -434,36 +391,38 @@ export const fetchBeneficiaryById = createAsyncThunk(
 export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
   async (
-    { beneficiaryId, beneficiaryData }, // Only needs beneficiaryId
+    { customerId, beneficiaryId, beneficiaryData },
     { rejectWithValue }
   ) => {
     try {
       console.log("📤 Updating beneficiary:", {
+        customerId,
         beneficiaryId,
         beneficiaryData,
       });
 
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const currentDateTime = new Date().toLocaleString();
 
-      // Create payload exactly like your non-redux version
+      // Create payload with customer_id - ONLY beneficiary details, NO banks
       const payload = {
+        customer_id: customerId,
         ...beneficiaryData,
         current_date_time: currentDateTime,
       };
 
-      // Clean up the payload
+      // Remove banks if they somehow exist in beneficiaryData
+      delete payload.banks;
+
+      // Clean up the payload (remove empty/undefined values)
       Object.keys(payload).forEach((key) => {
         if (payload[key] === undefined || payload[key] === "") {
           delete payload[key];
         }
       });
 
-      console.log("📤 Payload for update:", payload);
-      console.log(
-        "📤 Endpoint:",
-        `/beneficiaries/update-benef/${beneficiaryId}`
-      );
+      console.log("📤 Final payload for update:", JSON.stringify(payload, null, 2));
+      console.log("📤 Endpoint:", `/beneficiaries/update-benef/${beneficiaryId}`);
 
       const response = await fetch(
         `${API_URL}/beneficiaries/update-benef/${beneficiaryId}`,
@@ -471,7 +430,7 @@ export const updateBeneficiary = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
         }
@@ -493,6 +452,7 @@ export const updateBeneficiary = createAsyncThunk(
       console.log("✅ Update successful:", result);
 
       return {
+        customerId,
         beneficiaryId,
         beneficiary: result.data || beneficiaryData,
         message: result.message || "Beneficiary updated successfully",
@@ -509,11 +469,11 @@ export const fetchNationalities = createAsyncThunk(
   "beneficiaries/fetchNationalities",
   async (_, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(`${API_URL}/nationalities`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`, // CHANGED
+          Authorization: `Bearer ${authtoken}`,
         },
       });
 
@@ -536,7 +496,7 @@ export const fetchBanksByCurrency = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const endpoint =
         bankType === "int-banks"
           ? `/int-banks/${currency}`
@@ -545,7 +505,7 @@ export const fetchBanksByCurrency = createAsyncThunk(
       const response = await fetch(`${API_URL}${endpoint}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`, // CHANGED
+          Authorization: `Bearer ${authtoken}`,
         },
       });
 
@@ -567,11 +527,11 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
     try {
       console.log(`API: Fetching ID types for currency: ${currency}`);
 
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(`${API_URL}/currency-id-type/${currency}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`, // CHANGED
+          Authorization: `Bearer ${authtoken}`,
         },
       });
 
@@ -596,11 +556,11 @@ export const fetchCitiesByCountry = createAsyncThunk(
   "beneficiaries/fetchCitiesByCountry",
   async (countryId, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(`${API_URL}/cities/${countryId}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`, // CHANGED
+          Authorization: `Bearer ${authtoken}`,
         },
       });
 
@@ -620,11 +580,11 @@ export const fetchBankBranches = createAsyncThunk(
   "beneficiaries/fetchBankBranches",
   async (bankCode, { rejectWithValue }) => {
     try {
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(`${API_URL}/int-banks-branch/${bankCode}`, {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`, // CHANGED
+          Authorization: `Bearer ${authtoken}`,
         },
       });
 
@@ -651,9 +611,7 @@ export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
     try {
       console.log("📧 Sending registration passcode to:", email);
 
-      const bearertoken = localStorage.getItem("bearertoken");
-      console.log("📧 Bearer token exists:", !!bearertoken);
-
+      const authtoken = localStorage.getItem("authtoken");
       const payload = {
         email: email.trim().toLowerCase(),
         user_type: "beneficiary",
@@ -662,35 +620,22 @@ export const sendBeneficiaryRegistrationPasscode = createAsyncThunk(
       };
 
       console.log("📧 Payload:", payload);
-      console.log("📧 API URL:", `${API_URL}/send-passcode-registration`);
 
       const response = await fetch(`${API_URL}/send-passcode-registration`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`,
+          Authorization: `Bearer ${authtoken}`,
         },
         body: JSON.stringify(payload),
       });
 
-      console.log("📧 Response Status:", response.status);
-
-      // Handle 302 redirect specifically
-      if (response.status === 302) {
-        console.error("❌ 302 Redirect detected - Token may be invalid");
-        throw new Error(
-          "Authentication token expired or invalid. Please refresh the page."
-        );
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("❌ API Error Response:", errorText);
-        throw new Error("Failed to send passcode");
-      }
-
       const result = await response.json();
       console.log("📧 Response:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to send passcode");
+      }
 
       return {
         status: "success",
@@ -713,7 +658,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
     try {
       console.log("✅ Validating registration passcode for:", email);
 
-      const bearertoken = localStorage.getItem("bearertoken");
+      const authtoken = localStorage.getItem("authtoken");
       const payload = {
         email: email.trim().toLowerCase(),
         passcode: passcode,
@@ -727,7 +672,7 @@ export const validateBeneficiaryRegistrationPasscode = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`,
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(payload),
         }
@@ -770,7 +715,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
       const cleanMobileNumber = mobile_number.replace(/\D/g, "");
       const cleanCountryCode = country_code.replace(/\D/g, "");
 
-      const bearertoken = localStorage.getItem("bearertoken");
+      const authtoken = localStorage.getItem("authtoken");
       const payload = {
         country_code: cleanCountryCode,
         mobile_number: cleanMobileNumber,
@@ -785,7 +730,7 @@ export const sendBeneficiaryRegistrationOTP = createAsyncThunk(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`,
+          Authorization: `Bearer ${authtoken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -827,7 +772,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
       const cleanCountryCode = country_code.replace(/\D/g, "");
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
 
-      const bearertoken = localStorage.getItem("bearertoken");
+      const authtoken = localStorage.getItem("authtoken");
       const payload = {
         country_code: cleanCountryCode,
         mobile_number: cleanMobileNumber,
@@ -840,7 +785,7 @@ export const validateBeneficiaryRegistrationOTP = createAsyncThunk(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${bearertoken}`,
+          Authorization: `Bearer ${authtoken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -881,17 +826,20 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
   async (beneficiaryData, { rejectWithValue }) => {
     try {
       console.log("🔧 Creating beneficiary with request-remit flow...");
+      console.log("🔧 Beneficiary Data:", beneficiaryData);
 
-      const bearertoken = localStorage.getItem("bearertoken"); // CHANGED
+      const authtoken = localStorage.getItem("authtoken");
 
-      // Get partner ID from localStorage (set by getBearerToken)
-      const partnerId = localStorage.getItem("whitelabelledpartnerid") || "0";
+      // Add hostname if not present
+      if (!beneficiaryData.hostname) {
+        beneficiaryData.hostname = window.location.hostname;
+      }
 
-      // Add partner_id to beneficiaryData
-      beneficiaryData.partner_id = partnerId;
-
-      // Add hostname
-      beneficiaryData.hostname = window.location.hostname;
+      // Add partner_id if not present
+      if (!beneficiaryData.partner_id) {
+        beneficiaryData.partner_id =
+          localStorage.getItem("whitelabelledpartnerid") || "0";
+      }
 
       console.log(
         "📡 Final payload:",
@@ -904,34 +852,49 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${bearertoken}`, // CHANGED
+            Authorization: `Bearer ${authtoken}`,
           },
           body: JSON.stringify(beneficiaryData),
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
       const responseText = await response.text();
       console.log("📡 API Response text:", responseText);
 
       if (!response.ok) {
+        console.error("❌ API Error Response:", responseText);
         const errorData = JSON.parse(responseText);
-        const errorMessages = [];
 
         // Handle field-specific errors
-        if (errorData.message?.phone_number) {
-          errorMessages.push(...errorData.message.phone_number);
-        }
-        if (errorData.message?.email) {
-          errorMessages.push(...errorData.message.email);
-        }
-        if (errorData.message?.password) {
-          errorMessages.push(...errorData.message.password);
-        }
-        if (errorData.message && typeof errorData.message === "string") {
-          errorMessages.push(errorData.message);
+        if (errorData.message) {
+          const errorMessages = [];
+
+          // Handle phone number errors
+          if (errorData.message.phone_number) {
+            errorMessages.push(...errorData.message.phone_number);
+          }
+
+          // Handle email errors
+          if (errorData.message.email) {
+            errorMessages.push(...errorData.message.email);
+          }
+
+          // Handle password errors
+          if (errorData.message.password) {
+            errorMessages.push(...errorData.message.password);
+          }
+
+          // Handle general errors
+          if (errorData.message && typeof errorData.message === "string") {
+            errorMessages.push(errorData.message);
+          }
+
+          throw new Error(errorMessages.join(", "));
         }
 
-        throw new Error(errorMessages.join(", "));
+        throw new Error(errorData.message || "Failed to create beneficiary");
       }
 
       const result = JSON.parse(responseText);
@@ -941,7 +904,7 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
         status: "success",
         message: result.message || "Beneficiary created successfully",
         data: result.data || {},
-        benefCode: result.benefCode, // Extract beneficiary code
+        benefCode: result.benefCode,
       };
     } catch (error) {
       console.error("❌ createBeneficiaryRequestRemit error:", error);

@@ -1,187 +1,227 @@
-// src/services/api.js - UPDATED WITHOUT COUNTRIES API
 import axios from "axios";
-import {
-  tokenService,
-  getBearerToken as fetchBearerToken,
-} from "./authService";
+import { tokenService, getBearerToken } from "./authService";
 
-// ===================== CONFIG =====================
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
   timeout: 80000,
 });
 
-// ===================== CENTRALIZED DATA STORE =====================
-class DataManager {
-  constructor() {
-    this.store = new Map(); // In-memory store
-    this.pendingRequests = new Map(); // Request deduplication
-    this.staleTimes = new Map(); // Cache TTL per endpoint
-    this.retryCounts = new Map(); // Retry tracking
+const activeRequests = new Map();
+const completedRequests = new Map();
+const requestThrottle = new Map();
+const globalFetchState = new Map();
 
-    // Configure stale times (in milliseconds)
-    this.staleTimes.set("/partner-basic-setup/", 5 * 60 * 1000); // 5 minutes
-    this.staleTimes.set("/partners/get-partner-detail/", 10 * 60 * 1000); // 10 minutes
-    // REMOVE THIS LINE: this.staleTimes.set("/countries", 30 * 60 * 1000); // 30 minutes
-    this.staleTimes.set("/gif-images", 15 * 60 * 1000); // 15 minutes
-    this.staleTimes.set("/logout", 1 * 60 * 1000); // 1 minute
-  }
+const BYPASS_COORDINATION_ENDPOINTS = [
+  "verify-passcode",
+  "send-passcode",
+  "generate-passcode",
+  "request-passcode-login",
+  "payout/remit-payout",
+  "/profile",
+];
 
-  // Generate cache key from config
-  getCacheKey(config) {
-    const method = config.method?.toUpperCase() || "GET";
-    const url = config.url;
-    const params = config.params ? JSON.stringify(config.params) : "";
-    const data = config.data ? JSON.stringify(config.data) : "";
-    return `${method}:${url}:${params}:${data}`;
-  }
+const getRequestSignature = (config) => {
+  const method = config.method?.toUpperCase() || "GET";
+  const url = new URL(config.url, config.baseURL);
+  const pathname = url.pathname.replace(/\/$/, "");
 
-  // Check if data is still fresh
-  isFresh(cacheKey, endpoint) {
-    const cached = this.store.get(cacheKey);
-    if (!cached) return false;
+  const params = config.params
+    ? Object.keys(config.params)
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = String(config.params[key]).toLowerCase();
+          return acc;
+        }, {})
+    : {};
 
-    const staleTime = this.getStaleTime(endpoint);
-    return Date.now() - cached.timestamp < staleTime;
-  }
-
-  // Get stale time for endpoint
-  getStaleTime(endpoint) {
-    for (const [pattern, time] of this.staleTimes) {
-      if (endpoint.includes(pattern)) {
-        return time;
+  let data = "";
+  if (config.data) {
+    if (typeof config.data === "string") {
+      try {
+        const parsed = JSON.parse(config.data);
+        data = JSON.stringify(parsed, Object.keys(parsed).sort());
+      } catch {
+        data = config.data;
       }
-    }
-    return 0; // No caching by default
-  }
-
-  // Get cached data
-  get(cacheKey) {
-    const cached = this.store.get(cacheKey);
-    return cached ? cached.data : null;
-  }
-
-  // Set cached data
-  set(cacheKey, data, endpoint) {
-    this.store.set(cacheKey, {
-      data,
-      timestamp: Date.now(),
-      endpoint,
-    });
-  }
-
-  // Register a pending request
-  registerRequest(cacheKey, promise) {
-    this.pendingRequests.set(cacheKey, promise);
-    promise.finally(() => {
-      this.pendingRequests.delete(cacheKey);
-    });
-    return promise;
-  }
-
-  // Get pending request
-  getPendingRequest(cacheKey) {
-    return this.pendingRequests.get(cacheKey);
-  }
-
-  // Clear cache for specific endpoint
-  clearCache(endpointPattern) {
-    for (const [key, value] of this.store) {
-      if (
-        key.includes(endpointPattern) ||
-        value.endpoint?.includes(endpointPattern)
-      ) {
-        this.store.delete(key);
-      }
+    } else {
+      data = JSON.stringify(config.data, Object.keys(config.data).sort());
     }
   }
 
-  // Clear all cache
-  clearAll() {
-    this.store.clear();
-    this.pendingRequests.clear();
+  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(
+    (endpoint) => pathname.includes(endpoint)
+  );
+
+  if (shouldBypassCoordination) {
+    const context = config.context || "default";
+    const uniqueId = config.uniqueId || Date.now();
+    return `${method}-${pathname}-${context}-${uniqueId}-${JSON.stringify(params)}-${data}`;
   }
 
-  // Get cache stats
-  getStats() {
+  const context = config.context ? `-${config.context}` : "";
+  return `${method}-${pathname}${context}-${JSON.stringify(params)}-${data}`;
+};
+
+const checkAndRegisterRequest = (config) => {
+  const signature = getRequestSignature(config);
+
+  const shouldBypassCoordination = BYPASS_COORDINATION_ENDPOINTS.some(
+    (endpoint) => config.url.includes(endpoint)
+  );
+
+  if (shouldBypassCoordination) {
+    globalFetchState.set(signature, "fetching");
+    requestThrottle.set(signature, Date.now());
+    return { isDuplicate: false, signature, bypassed: true };
+  }
+
+  if (globalFetchState.has(signature)) {
+    const state = globalFetchState.get(signature);
+    if (state === "fetching") {
+      return { isDuplicate: true, reason: "global-in-progress", signature };
+    }
+  }
+
+  const lastRequest = requestThrottle.get(signature);
+  if (lastRequest && Date.now() - lastRequest < 3000) {
+    return { isDuplicate: true, reason: "throttled", signature };
+  }
+
+  const completed = completedRequests.get(signature);
+  if (completed && Date.now() - completed.timestamp < 10000) {
     return {
-      totalCached: this.store.size,
-      pendingRequests: this.pendingRequests.size,
-      cacheKeys: Array.from(this.store.keys()),
+      isDuplicate: true,
+      reason: "cached",
+      signature,
+      data: completed.data,
     };
   }
-}
 
-// Initialize data manager
-const dataManager = new DataManager();
+  globalFetchState.set(signature, "fetching");
+  requestThrottle.set(signature, Date.now());
 
-// ===================== ENHANCED REQUEST INTERCEPTOR =====================
+  return { isDuplicate: false, signature };
+};
+
+export const clearApiCache = (urlPattern = null) => {
+  if (urlPattern) {
+    const patterns = Array.isArray(urlPattern) ? urlPattern : [urlPattern];
+    for (const [signature] of globalFetchState) {
+      const shouldDelete = patterns.some((pattern) =>
+        signature.includes(pattern)
+      );
+      if (shouldDelete) {
+        globalFetchState.delete(signature);
+        completedRequests.delete(signature);
+        requestThrottle.delete(signature);
+        activeRequests.delete(signature);
+      }
+    }
+  } else {
+    globalFetchState.clear();
+    completedRequests.clear();
+    requestThrottle.clear();
+    activeRequests.clear();
+  }
+};
+
 api.interceptors.request.use(
   async (config) => {
-    const cacheKey = dataManager.getCacheKey(config);
-    const endpoint = config.url;
+    const requestId = Math.random().toString(36).substring(7);
+    config.requestId = requestId;
 
-    // Check for pending request
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending request: ${endpoint}`);
-      return Promise.reject({
-        __isPendingReuse: true,
-        promise: pending,
-        config,
-      });
-    }
+    const duplicateCheck = checkAndRegisterRequest(config);
 
-    // Check cache for GET requests
-    if (config.method?.toUpperCase() === "GET") {
-      const cached = dataManager.get(cacheKey);
-      if (cached && dataManager.isFresh(cacheKey, endpoint)) {
-        console.log(`💾 Serving cached: ${endpoint}`);
-        return Promise.reject({
-          __isCachedResponse: true,
-          data: cached,
-          config,
-        });
+    if (duplicateCheck.isDuplicate && !duplicateCheck.bypassed) {
+      const { reason, signature, data } = duplicateCheck;
+
+      switch (reason) {
+        case "global-in-progress":
+          console.log(`🔄 Request cancelled (duplicate): ${config.url}`);
+          return;
+
+        case "throttled":
+          console.log(`🚦 Request throttled: ${config.url}`);
+          return Promise.reject(new axios.Cancel("Request throttled"));
+
+        case "cached":
+          console.log(`💾 Serving cached response: ${config.url}`);
+          return Promise.reject({
+            __isCachedResponse: true,
+            response: {
+              data: data,
+              status: 200,
+              statusText: "OK",
+              headers: {},
+              config: config,
+              request: {},
+            },
+          });
+
+        default:
+          return;
       }
     }
 
-    // Add auth token if needed
+    const signature = duplicateCheck.signature;
+    activeRequests.set(signature, {
+      timestamp: Date.now(),
+      config: config,
+      requestId: requestId,
+      url: config.url,
+      method: config.method,
+    });
+
+    let urlPath = config.url;
+    if (config.baseURL && urlPath.startsWith(config.baseURL)) {
+      urlPath = urlPath.replace(config.baseURL, "");
+    }
+    urlPath = urlPath.split("?")[0];
+
     const publicEndpoints = [
+      "/",
+      "/register",
       "/partner-login",
-      "/login",
       "/request-passcode-login",
-      "/send-otp-login",
-      "/send-otp",
-      "/validate-otp",
+      "/generate-passcode",
+      "/verify-passcode",
+      "/generate-otp",
+      "/verify-otp",
       "/forgot-password",
       "/reset-password",
-      "/register",
-      "/verify-email",
-      // REMOVE THIS: "/countries",  // <-- REMOVED
-      "/partners/get-partner-detail/",
-      "/partner-basic-setup/",
+      "/get-manuals",
       "/gif-images",
       "/logout",
-      "/get-manuals",
+      "/send-otp-login",
+      "/countries",
+      "/partners/get-partner-detail",
+      "/partner-basic-setup",
+      "/login",
       "/kyc",
       "/kycs",
       "/kyc/initiate",
     ];
 
-    const isPublic = publicEndpoints.some((ep) => endpoint.includes(ep));
+    const isPublicEndpoint = publicEndpoints.some((endpoint) => {
+      return (
+        urlPath === endpoint ||
+        urlPath.startsWith(endpoint + "/") ||
+        (endpoint !== "/" && urlPath.includes(endpoint))
+      );
+    });
 
-    if (!isPublic) {
-      try {
-        const token = tokenService.getToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (error) {
-        return Promise.reject(error);
+    if (isPublicEndpoint) {
+      return config;
+    }
+
+    try {
+      const token = tokenService.getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
+    } catch (error) {
+      return Promise.reject(error);
     }
 
     return config;
@@ -192,56 +232,57 @@ api.interceptors.request.use(
   }
 );
 
-// ===================== ENHANCED RESPONSE INTERCEPTOR =====================
 api.interceptors.response.use(
   (response) => {
-    const cacheKey = dataManager.getCacheKey(response.config);
-    const endpoint = response.config.url;
+    const signature = getRequestSignature(response.config);
 
-    // Cache GET responses
-    if (
-      response.config.method?.toUpperCase() === "GET" &&
-      response.status === 200
-    ) {
-      dataManager.set(cacheKey, response.data, endpoint);
-      console.log(`✅ Cached response: ${endpoint}`);
+    if (response.status >= 200 && response.status < 300) {
+      const shouldNotCache = BYPASS_COORDINATION_ENDPOINTS.some((endpoint) =>
+        response.config.url.includes(endpoint)
+      );
+
+      if (!shouldNotCache && JSON.stringify(response.data).length < 100000) {
+        completedRequests.set(signature, {
+          timestamp: Date.now(),
+          data: response.data,
+        });
+      }
+      globalFetchState.set(signature, "completed");
+    } else {
+      globalFetchState.delete(signature);
     }
 
+    activeRequests.delete(signature);
     return response;
   },
   async (error) => {
-    // Handle cached responses
     if (error.__isCachedResponse) {
-      console.log(`💾 Returning cached data: ${error.config.url}`);
-      return Promise.resolve({
-        data: error.data.data,
-        status: 200,
-        statusText: "OK (Cached)",
-        headers: {},
-        config: error.config,
-      });
+      return Promise.resolve(error.response);
     }
 
-    // Handle pending request reuse
-    if (error.__isPendingReuse) {
-      console.log(`🔄 Waiting for pending request: ${error.config.url}`);
-      try {
-        const result = await error.promise;
-        return Promise.resolve(result);
-      } catch (err) {
-        return Promise.reject(err);
+    if (error.config) {
+      const signature = getRequestSignature(error.config);
+      globalFetchState.delete(signature);
+      activeRequests.delete(signature);
+
+      const shouldBypassThrottle = BYPASS_COORDINATION_ENDPOINTS.some(
+        (endpoint) => error.config.url.includes(endpoint)
+      );
+      if (shouldBypassThrottle) {
+        requestThrottle.delete(signature);
       }
     }
 
-    // Handle axios cancel
+    // ✅ KEY FIX: Cancelled/duplicate requests silently resolve with a
+    // __cancelled flag instead of rejecting — this prevents profileError
+    // from being set in Redux when the Header's duplicate fetch is blocked
     if (axios.isCancel(error)) {
-      console.log("⚠️ Request cancelled:", error.message);
-      return Promise.reject(error);
+      console.log("⚠️ Request cancelled (silently resolved):", error.message);
+      return Promise.resolve({ data: null, __cancelled: true, status: 200 });
     }
 
     const originalRequest = error.config;
 
-    // Network errors
     if (!error.response) {
       if (error.code === "ECONNABORTED") {
         error.message = "Request timeout. Please check your connection.";
@@ -251,69 +292,28 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
-      const originalRequest = error.config;
-
-      // ✅ Check for request-passcode-login FIRST
-      const isRequestPasscodeLogin = originalRequest.url.includes(
-        "/request-passcode-login"
-      );
       const isLoginEndpoint = originalRequest.url.includes("/login");
 
-      console.log("🔍 401 Error Debug:", {
-        url: originalRequest.url,
-        isRequestPasscodeLogin,
-        isLoginEndpoint,
-        responseData: error.response.data,
-      });
-
-      // ✅ SPECIAL HANDLING FOR request-passcode-login
-      if (isRequestPasscodeLogin) {
-        // This 401 is for INVALID USER CREDENTIALS, NOT token issue
-        const errorMessage =
-          error.response.data?.message || "Invalid email or password";
-        console.log(
-          "🔍 request-passcode-login 401 - User credentials issue:",
-          errorMessage
-        );
-
-        // Create a clean error object
-        const credentialsError = new Error(errorMessage);
-        credentialsError.response = error.response;
-        credentialsError.config = originalRequest;
-        return Promise.reject(credentialsError);
-      }
-
-      // Handle regular login endpoints
       if (isLoginEndpoint && !originalRequest._retry) {
         error.message =
           "Invalid email or passcode. Please check your credentials.";
         return Promise.reject(error);
       }
 
-      // ✅ Only refresh token for non-login endpoints
-      if (
-        !isRequestPasscodeLogin &&
-        !isLoginEndpoint &&
-        !originalRequest._retry
-      ) {
+      if (!isLoginEndpoint && !originalRequest._retry) {
         originalRequest._retry = true;
-
         try {
-          console.log("🔄 Token appears invalid, attempting to refresh...");
-          const newToken = await fetchBearerToken(true);
+          const newToken = await getBearerToken(true);
           if (newToken) {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            dataManager.clearCache(originalRequest.url);
+            clearApiCache(originalRequest.url);
             return api(originalRequest);
           }
         } catch (refreshError) {
-          tokenService.clearToken();
-          localStorage.removeItem("authtoken");
-          localStorage.removeItem("authcustomer_id");
-          dataManager.clearAll();
-          window.location.href = "/";
+          if (!isLoginEndpoint) {
+            window.location.href = "/";
+          }
           return Promise.reject(
             new Error("Session expired. Please login again.")
           );
@@ -321,7 +321,6 @@ api.interceptors.response.use(
       }
     }
 
-    // Enhanced error messages
     if (error.response.status === 400) {
       error.message =
         error.response.data?.message ||
@@ -340,529 +339,59 @@ api.interceptors.response.use(
   }
 );
 
-// ===================== CENTRALIZED API SERVICE =====================
-class CentralizedApiService {
-  constructor() {
-    this.api = api;
-    this.dataManager = dataManager;
-  }
-
-  // ========== PARTNER DATA ==========
-
-  async getPartnerByHostname(hostname, forceRefresh = false) {
-    const endpoint = `/partners/get-partner-detail/${hostname}`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    // Check for pending request
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(
-        `🔄 Reusing pending partner hostname request for: ${hostname}`
-      );
-      return pending;
-    }
-
-    // Make new request
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch partner by hostname ${hostname}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  async getPartnerBasicSetup(partnerId, forceRefresh = false) {
-    const endpoint = `/partner-basic-setup/${partnerId}`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending partner setup for ID: ${partnerId}`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch partner setup for ID ${partnerId}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  // ========== COMMON DATA ==========
-
-  // ⚠️ REMOVED THE getCountries METHOD ENTIRELY ⚠️
-  // No more countries API calls from here!
-
-  async getGifImages(forceRefresh = false) {
-    const endpoint = `/gif-images`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending GIF images request`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error("❌ Failed to fetch GIF images:", error);
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  async getLogoutTime(forceRefresh = false) {
-    const endpoint = `/logout`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending logout time request`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error("❌ Failed to fetch logout time:", error);
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  // ========== AUTH OPERATIONS ==========
-
-  async requestPasscodeLogin(payload) {
-    console.trace("centralizedApi.requestPasscodeLogin called");
-    console.log("Payload:", payload);
-
-    let token = tokenService.getToken();
-
-    console.log(
-      "✅ Token from tokenService:",
-      token ? token.substring(0, 20) + "..." : "No token"
-    );
-
-    console.log("🔍 Token validation check:", {
-      hasToken: !!token,
-      tokenPreview: token ? token.substring(0, 50) + "..." : "none",
-      tokenValidation: token ? tokenService.safeValidateToken(token) : null,
-    });
-
-    if (token) {
-      const validation = tokenService.safeValidateToken(token);
-      if (!validation.isValid || validation.isExpired) {
-        console.log("⚠️ Token invalid or expired, will fetch fresh one");
-        token = null;
-      }
-    }
-
-    if (!token) {
-      console.log("🔄 Token missing or invalid, fetching fresh token...");
-
-      try {
-        const freshToken = await fetchBearerToken();
-        if (freshToken) {
-          token = freshToken;
-          console.log(
-            "✅ Fresh token obtained:",
-            token.substring(0, 20) + "..."
-          );
-          tokenService.setToken(token);
-        } else {
-          throw new Error("Authentication token required");
-        }
-      } catch (tokenError) {
-        console.error("❌ Token fetch failed:", tokenError);
-        throw new Error("Unable to authenticate. Please try again.");
-      }
-    }
-
-    console.log("🔄 Making request-passcode-login API call with token...");
-    console.log("🔍 Final token to use:", token.substring(0, 50) + "...");
-
-    return this.api.post("/request-passcode-login", payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-  }
-
-  async login(payload) {
-    return this.api.post("/login", payload);
-  }
-
-  async sendOtpLogin(payload) {
-    return this.api.post("/send-otp-login", payload);
-  }
-
-  async sendOtp(mobileNumber) {
-    return this.api.post("/send-otp", { mobile_number: mobileNumber });
-  }
-
-  async validateOtp(payload) {
-    return this.api.post("/validate-otp", payload);
-  }
-
-  async logout() {
-    dataManager.clearAll();
-    return this.api.post("/logout");
-  }
-
-  // ========== UTILITY METHODS ==========
-
-  clearCache(endpointPattern) {
-    dataManager.clearCache(endpointPattern);
-  }
-
-  clearAllCache() {
-    dataManager.clearAll();
-  }
-
-  getCacheStats() {
-    return dataManager.getStats();
-  }
-
-  // ========== USER DATA ==========
-
-  async getActiveAccountDetails(customerId, forceRefresh = false) {
-    const endpoint = `/active-account-details/${customerId}`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(
-        `🔄 Reusing pending account details for customer: ${customerId}`
-      );
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch account details for customer ${customerId}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  async getCustomerProfile(customerId, forceRefresh = false) {
-    const endpoint = `/customers/${customerId}/profile`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending customer profile for ID: ${customerId}`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch customer profile for ID ${customerId}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  async getPartnerFxCurrencies(partnerId, forceRefresh = false) {
-    const endpoint = `/partner-fxcurrencies`;
-    const cacheKey = `GET:${endpoint}:${JSON.stringify({
-      partner_id: partnerId,
-    })}:`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending FX currencies for partner: ${partnerId}`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint, { params: { partner_id: partnerId } })
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch FX currencies for partner ${partnerId}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  clearPartnerSpecificCache(partnerId) {
-    console.log(`🧹 FORCE-CLEARING cache for partner ${partnerId}`);
-
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.includes("ourzap-modules")) {
-        keysToRemove.push(key);
-      }
-    }
-
-    keysToRemove.forEach((key) => {
-      localStorage.removeItem(key);
-      console.log(`🔥 Removed localStorage cache: ${key}`);
-    });
-
-    for (const [key, value] of this.dataManager.store) {
-      if (key.includes("/partners/ourzap-modules/")) {
-        const match = key.match(/\/partners\/ourzap-modules\/(\d+)/);
-        if (match && match[1] !== partnerId) {
-          console.log(`🗑️ Removing other partner's modules: ${key}`);
-          this.dataManager.store.delete(key);
-        }
-      }
-    }
-
-    for (const [key] of this.dataManager.pendingRequests) {
-      if (key.includes("/partners/ourzap-modules/")) {
-        console.log(`🗑️ Clearing pending modules request: ${key}`);
-        this.dataManager.pendingRequests.delete(key);
-      }
-    }
-  }
-
-  async getPartnerModules(partnerId, forceRefresh = false) {
-    const endpoint = `/partners/ourzap-modules/${partnerId}`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    this.clearPartnerSpecificCache(partnerId);
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) {
-        console.log(`✅ Using cached modules for partner ${partnerId}`);
-        return cached;
-      }
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(`🔄 Reusing pending modules for partner: ${partnerId}`);
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch modules for partner ${partnerId}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-
-  async getCurrencyTransactionDetails(
-    customerId,
-    currency,
-    forceRefresh = false
-  ) {
-    const endpoint = `/transactions/currency-transaction-details/${customerId}/${currency}`;
-    const cacheKey = `GET:${endpoint}::`;
-
-    if (!forceRefresh) {
-      const cached = dataManager.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    const pending = dataManager.getPendingRequest(cacheKey);
-    if (pending) {
-      console.log(
-        `🔄 Reusing pending transaction details for customer ${customerId}, currency ${currency}`
-      );
-      return pending;
-    }
-
-    const requestPromise = this.api
-      .get(endpoint)
-      .then((response) => response.data)
-      .catch((error) => {
-        console.error(
-          `❌ Failed to fetch transaction details for customer ${customerId}, currency ${currency}:`,
-          error
-        );
-        throw error;
-      });
-
-    return dataManager.registerRequest(cacheKey, requestPromise);
-  }
-}
-
-// Create and export singleton instance
-const centralizedApi = new CentralizedApiService();
-
 export const apiCoordinator = {
-  isFetching: (signature) => {
-    const parts = signature.split("-");
-    if (parts.length >= 3) {
-      const method = parts[0];
-      const url = parts[1];
-      const paramsStr = parts[2];
-      const dataStr = parts[3] || "{}";
+  setFetching: (signature) => globalFetchState.set(signature, "fetching"),
 
-      let params = {},
-        data = {};
-      try {
-        if (paramsStr && paramsStr !== "{}") params = JSON.parse(paramsStr);
-        if (dataStr && dataStr !== "{}") data = JSON.parse(dataStr);
-      } catch (e) {
-        console.warn("Failed to parse signature:", signature);
-      }
-
-      const config = { method, url, params, data };
-      const cacheKey = dataManager.getCacheKey(config);
-      return !!dataManager.getPendingRequest(cacheKey);
+  setCompleted: (signature, data = null) => {
+    globalFetchState.set(signature, "completed");
+    if (data) {
+      completedRequests.set(signature, { timestamp: Date.now(), data });
     }
-    return false;
   },
 
-  hasRecentData: (signature, maxAge = 60000) => {
-    const parts = signature.split("-");
-    if (parts.length >= 3) {
-      const method = parts[0];
-      const url = parts[1];
-      const paramsStr = parts[2];
-      const dataStr = parts[3] || "{}";
+  setFailed: (signature) => globalFetchState.delete(signature),
 
-      let params = {},
-        data = {};
-      try {
-        if (paramsStr && paramsStr !== "{}") params = JSON.parse(paramsStr);
-        if (dataStr && dataStr !== "{}") data = JSON.parse(dataStr);
-      } catch (e) {
-        console.warn("Failed to parse signature:", signature);
-      }
+  isFetching: (signature) => globalFetchState.get(signature) === "fetching",
 
-      const config = { method, url, params, data };
-      const cacheKey = dataManager.getCacheKey(config);
-      const cached = dataManager.get(cacheKey);
-      if (!cached) return false;
-
-      return dataManager.isFresh(cacheKey, url);
-    }
-    return false;
+  hasRecentData: (signature) => {
+    const completed = completedRequests.get(signature);
+    return completed && Date.now() - completed.timestamp < 10000;
   },
 
   getRecentData: (signature) => {
-    const parts = signature.split("-");
-    if (parts.length >= 3) {
-      const method = parts[0];
-      const url = parts[1];
-      const paramsStr = parts[2];
-      const dataStr = parts[3] || "{}";
-
-      let params = {},
-        data = {};
-      try {
-        if (paramsStr && paramsStr !== "{}") params = JSON.parse(paramsStr);
-        if (dataStr && dataStr !== "{}") data = JSON.parse(dataStr);
-      } catch (e) {
-        console.warn("Failed to parse signature:", signature);
-      }
-
-      const config = { method, url, params, data };
-      const cacheKey = dataManager.getCacheKey(config);
-      return dataManager.get(cacheKey);
-    }
-    return null;
+    const completed = completedRequests.get(signature);
+    return completed?.data || null;
   },
+
+  clear: (pattern = null) => clearApiCache(pattern),
 
   clearSignature: (signature) => {
-    const parts = signature.split("-");
-    if (parts.length >= 2) {
-      const url = parts[1];
-      dataManager.clearCache(url);
-    }
+    globalFetchState.delete(signature);
+    completedRequests.delete(signature);
+    requestThrottle.delete(signature);
+    activeRequests.delete(signature);
   },
 
-  clear: () => {
-    dataManager.clearAll();
-  },
+  getState: () => ({
+    active: Array.from(activeRequests.entries()),
+    completed: Array.from(completedRequests.entries()),
+    global: Array.from(globalFetchState.entries()),
+  }),
 
-  setFetching: (signature) => {
-    // Handled automatically by DataManager
-  },
-
-  setCompleted: (signature, data) => {
-    // Handled automatically by DataManager
-  },
-
-  setFailed: (signature) => {
-    // Handled automatically by DataManager
-  },
+  shouldBypassCoordination: (url) =>
+    BYPASS_COORDINATION_ENDPOINTS.some((endpoint) => url.includes(endpoint)),
 };
 
-// ===================== EXPORTS =====================
+// Enhanced debug utility
+export const debugApiState = () => {
+  console.group("🔧 API Coordinator State");
+  console.log("Active Requests:", activeRequests.size);
+  console.log("Completed Requests:", completedRequests.size);
+  console.log("Global Fetch State:", globalFetchState.size);
+  activeRequests.forEach((value, key) => {
+    console.log(`Active: ${key}`, value);
+  });
+  console.groupEnd();
+};
+
 export default api;
-export { centralizedApi, dataManager };

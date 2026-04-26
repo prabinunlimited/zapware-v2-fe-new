@@ -1,35 +1,84 @@
 // src/router/PublicRoute.jsx
-import { useSelector } from "react-redux";
-import { Outlet } from "react-router-dom";
-import { selectIsInitialized } from "../src/store/selectors";
-import Login from "../src/features/Auth/Login/Login"; // Import directly
-
-const PublicRouteLoading = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-    <div className="text-center">
-      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-      <p className="text-gray-600">Loading login page...</p>
-    </div>
-  </div>
-);
+import { useSelector, useDispatch } from "react-redux";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
+import {
+  selectAuthToken,
+  selectCustomerId,
+  selectIsInitialized,
+} from "../src/store/selectors";
+import { clearAuthState } from "../src/features/Auth/slices/authSlice";
 
 const PublicRoute = () => {
+  const token = useSelector(selectAuthToken);
+  const customerId = useSelector(selectCustomerId);
   const isInitialized = useSelector(selectIsInitialized);
+  const location = useLocation();
+  const dispatch = useDispatch();
 
-  console.log("🔍 PublicRoute - isInitialized:", isInitialized);
-  console.log(
-    "🔍 PublicRoute - rendering:",
-    isInitialized ? "Outlet/Login" : "Loading",
-  );
+  // Helper function to determine if user should go to remittance homepage
+  const shouldRedirectToRemittanceHome = () => {
+    const isRemittanceOnlyCustomer =
+      localStorage.getItem("isRemittanceOnlyCustomer") === "Y";
+    const partnerId = localStorage.getItem("whitelabelledpartnerid");
+    const REMITTANCE_ONLY_PARTNER_IDS = ["4", "8"];
+    const isRemittancePartner = REMITTANCE_ONLY_PARTNER_IDS.includes(partnerId);
 
-  // Always show loading while initializing
+    return isRemittanceOnlyCustomer || isRemittancePartner;
+  };
+
+  // Helper function to get the correct homepage path
+  const getHomepagePath = (customerId) => {
+    return shouldRedirectToRemittanceHome()
+      ? `/homeremit/${customerId}`
+      : `/home/${customerId}`;
+  };
+
+  // Show nothing while initializing
   if (!isInitialized) {
-    return <PublicRouteLoading />;
+    return null;
   }
 
-  // Once initialized, ALWAYS render Login directly
-  // This bypasses the Outlet system which might be causing issues
-  return <Login />;
+  // FIX: Clear inconsistent auth state - customerId without token
+  const hasCustomerIdButNoToken =
+    !token && customerId && customerId !== "undefined" && customerId !== "null";
+  if (hasCustomerIdButNoToken) {
+    dispatch(clearAuthState());
+    // Don't return here, let the component continue to render
+  }
+
+  // Define routes that should remain public even when authenticated
+  const alwaysPublicRoutes = [
+    "/selectaccounttype",
+    "/signupindividual",
+    "/signupinstitution",
+    "/opencurrencyaccount",
+    "/phoneverification",
+    "/otpverification",
+    "/forgotpassword",
+  ];
+
+  const isAlwaysPublic = alwaysPublicRoutes.some((route) =>
+    location.pathname.includes(route),
+  );
+
+  // If current route is always public, allow access regardless of auth status
+  if (isAlwaysPublic) {
+    return <Outlet />;
+  }
+
+  const shouldRedirect =
+    token && customerId && customerId !== "undefined" && customerId !== "null";
+
+  // If authenticated and has valid customerId, redirect to appropriate homepage
+  if (shouldRedirect) {
+    const redirectPath = getHomepagePath(customerId);
+    console.log(
+      `📍 PublicRoute - Authenticated user redirecting to: ${redirectPath}`,
+    );
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  return <Outlet />;
 };
 
 export default PublicRoute;

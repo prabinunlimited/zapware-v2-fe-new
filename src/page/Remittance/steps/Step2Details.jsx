@@ -32,6 +32,7 @@ const Step2Details = ({
   manualAccountError,
   manualDetailsLoading,
   beneficiaryLoading,
+  onRecurringDataChange,
 }) => {
   // Custom styles for select components
   const selectStyles = {
@@ -248,7 +249,7 @@ const Step2Details = ({
       )} */}
 
       {/* Compliance Note */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+      {/* <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-white rounded-xl shadow-sm">
             <FaShieldAlt className="w-6 h-6 text-blue-600" />
@@ -266,7 +267,7 @@ const Step2Details = ({
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

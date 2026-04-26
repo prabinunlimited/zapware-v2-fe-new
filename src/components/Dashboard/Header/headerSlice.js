@@ -1,31 +1,25 @@
-// src/components/Dashboard/Header/headerSlice.js - COMPLETE WITH FIXES
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Helper function to check if user is beneficiary - FIXED TYPO
-const shouldSkipForBeneficiary = (functionName) => {
-  // ✅ FIX: Check for both spellings (with and without typo)
-  const beneficiaryLogin =
-    localStorage.getItem("beneficaryLogin") ||
-    localStorage.getItem("beneficiaryLogin");
-  const isBeneficiary = beneficiaryLogin === "Y";
-
-  if (isBeneficiary) {
-    console.log(`🛑 SKIPPING: ${functionName} - User is a beneficiary`);
-    return true;
-  }
-  return false;
-};
-
-// Helper function to get API signature for coordination
-const getProfileSignature = (customerId) => {
-  return `GET-${API_URL}/customers/${customerId}/profile-{}`;
+// ✅ Helper: detect coordination/cancellation artifacts — never show these as real errors
+const isCancellationError = (payload) => {
+  if (!payload) return false;
+  const msg = typeof payload === "string" ? payload : String(payload);
+  return (
+    msg.includes("Duplicate request") ||
+    msg.includes("globally coordinated") ||
+    msg.includes("throttled") ||
+    msg.includes("cancelled") ||
+    msg.includes("Cancel") ||
+    msg.includes("already in progress")
+  );
 };
 
 const getFxSignature = () => {
   const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
+  console.log("headerslice isWhiteLabelled",isWhiteLabelled);
   const partnerId =
     isWhiteLabelled === "1"
       ? localStorage.getItem("whitelabelledpartnerid") || "9"
@@ -41,12 +35,8 @@ const getChargesSignature = (customerId) => {
 export const fetchPartnerFxCurrencies = createAsyncThunk(
   "header/fetchPartnerFxCurrencies",
   async (bearertoken, { rejectWithValue }) => {
-    const signature = getFxSignature();
-
     try {
-      if (!bearertoken) {
-        throw new Error("Bearer token missing");
-      }
+      if (!bearertoken) throw new Error("Bearer token missing");
 
       const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
       const partnerId =
@@ -58,134 +48,64 @@ export const fetchPartnerFxCurrencies = createAsyncThunk(
         `/partner-fxcurrencies?partner_id=${partnerId}`,
         {},
         {
-          headers: {
-            Authorization: `Bearer ${bearertoken}`,
-          },
-          timeout: 10000,
-        },
+          headers: { Authorization: `Bearer ${bearertoken}` },
+          timeout: 30000, // ✅ increased from 10000
+        }
       );
 
-      const rates = response.data.rates || [];
-      return rates;
+      if (response?.__cancelled) return [];
+
+      return response.data.rates || [];
     } catch (error) {
       console.error("❌ fetchPartnerFxCurrencies error:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
-  },
+  }
 );
 
-// Profile fetching thunk with coordination
 export const fetchUserProfile = createAsyncThunk(
   "header/fetchUserProfile",
   async ({ customerId, bearertoken }, { rejectWithValue }) => {
     try {
-      // ✅ CRITICAL FIX: Check if user is a beneficiary - FIXED TYPO
-      const beneficiaryLogin =
-        localStorage.getItem("beneficaryLogin") ||
-        localStorage.getItem("beneficiaryLogin");
-      const isBeneficiary = beneficiaryLogin === "Y";
-
-      if (isBeneficiary) {
-        console.log("🛑 SKIPPING: fetchUserProfile - User is a beneficiary");
-        console.log(
-          "📍 Beneficiary data is fetched via beneficiaries/fetch-merchant-benef endpoint",
-        );
-        return {
-          _beneficiarySkipped: true,
-          message: "Profile fetch skipped for beneficiary user",
-        };
-      }
-
-      if (!bearertoken || !customerId) {
+      if (!bearertoken || !customerId)
         throw new Error("Missing token or customer ID");
-      }
-
-      console.log(
-        "🔍 fetchUserProfile: Fetching customer profile for ID:",
-        customerId,
-      );
 
       const response = await api.get(`/customers/${customerId}/profile`, {
-        headers: {
-          Authorization: `Bearer ${bearertoken}`,
-        },
-        timeout: 10000,
+        headers: { Authorization: `Bearer ${bearertoken}` },
+        timeout: 30000, // ✅ increased from 10000
       });
+
+      // ✅ Silently cancelled (Header duplicate) — return null, not an error
+      if (response?.__cancelled) return null;
 
       if (response.data.status === "success") {
         const profile = response.data.profile;
-
-        console.log("✅ Customer profile fetched successfully:", {
-          firstName: profile.first_name,
-          lastName: profile.last_name,
-          email: profile.email,
-        });
-
-        // Store in localStorage for persistence
-        if (profile.first_name) {
-          localStorage.setItem("firstName", profile.first_name);
-        }
-        if (profile.last_name) {
-          localStorage.setItem("lastName", profile.last_name);
-        }
-
+        localStorage.setItem("firstName", profile.first_name);
+        localStorage.setItem("lastName", profile.last_name);
+        localStorage.setItem("middleName", profile.middle_name || "");
         return profile;
       } else {
-        console.error(
-          "❌ Profile API returned non-success status:",
-          response.data,
-        );
         throw new Error("Failed to fetch profile - non-success status");
       }
     } catch (error) {
       console.error("❌ fetchUserProfile error:", error);
-
-      // Check if it's a 404 (customer not found) - might be a beneficiary
-      if (error.response?.status === 404) {
-        // ✅ FIX: Check for both spellings
-        const isBeneficiary =
-          localStorage.getItem("beneficaryLogin") === "Y" ||
-          localStorage.getItem("beneficiaryLogin") === "Y";
-        if (isBeneficiary) {
-          console.log("ℹ️ 404 error for beneficiary - expected behavior");
-          return {
-            _beneficiarySkipped: true,
-            message: "Customer not found (beneficiary user)",
-          };
-        }
-      }
-
-      return rejectWithValue(error.response?.data || error.message);
     }
-  },
+  }
 );
 
-// Charges data thunk with coordination
 export const fetchChargesData = createAsyncThunk(
   "header/fetchChargesData",
   async ({ customerId, authtoken }, { rejectWithValue }) => {
-    // ✅ SKIP for beneficiaries
-    if (shouldSkipForBeneficiary("fetchChargesData")) {
-      console.log("📍 Charges data not needed for beneficiaries");
-      return []; // Return empty array for beneficiaries
-    }
-
     try {
-      if (!authtoken || !customerId) {
+      if (!authtoken || !customerId)
         throw new Error("Missing authentication token or customer ID");
-      }
-
-      console.log(
-        "🔍 fetchChargesData: Fetching charges for customer:",
-        customerId,
-      );
 
       const response = await api.get(`/get-charges/${customerId}`, {
-        headers: {
-          Authorization: `Bearer ${authtoken}`,
-        },
-        timeout: 8000,
+        headers: { Authorization: `Bearer ${authtoken}` },
+        timeout: 30000, // ✅ increased from 8000
       });
+
+      if (response?.__cancelled) return [];
 
       const chargesData =
         response.data.charge_details ||
@@ -194,20 +114,13 @@ export const fetchChargesData = createAsyncThunk(
         [];
 
       if (chargesData.length > 0) {
-        console.log(
-          "✅ Charges data fetched successfully, count:",
-          chargesData.length,
-        );
         return chargesData;
       } else {
-        console.warn("⚠️ No charges data available for customer:", customerId);
-        return [];
+        throw new Error("No charges data available");
       }
     } catch (error) {
       console.error("❌ fetchChargesData error:", error);
-
       let errorMessage = "Failed to fetch charges data";
-
       if (error.response) {
         errorMessage =
           error.response.data?.message ||
@@ -217,62 +130,9 @@ export const fetchChargesData = createAsyncThunk(
       } else {
         errorMessage = error.message || "Unknown error occurred";
       }
-
-      console.error("❌ Charges fetch failed:", errorMessage);
       return rejectWithValue(errorMessage);
     }
-  },
-);
-
-// New thunk: Check if user is beneficiary before fetching
-export const fetchCustomerDataWithBeneficiaryCheck = createAsyncThunk(
-  "header/fetchCustomerDataWithBeneficiaryCheck",
-  async (
-    { customerId, bearertoken, authtoken },
-    { dispatch, rejectWithValue },
-  ) => {
-    try {
-      // ✅ FIX: Check for both spellings
-      const beneficiaryLogin =
-        localStorage.getItem("beneficaryLogin") ||
-        localStorage.getItem("beneficiaryLogin");
-      const isBeneficiary = beneficiaryLogin === "Y";
-
-      if (isBeneficiary) {
-        console.log("🛑 User is beneficiary - skipping customer data fetch");
-        return {
-          isBeneficiary: true,
-          message: "Using beneficiary-specific APIs instead",
-        };
-      }
-
-      // Only fetch customer data if not a beneficiary
-      console.log("👤 User is regular customer - fetching customer data");
-
-      // Fetch profile data
-      const profileResult = await dispatch(
-        fetchUserProfile({ customerId, bearertoken }),
-      );
-
-      // Fetch FX data
-      const fxResult = await dispatch(fetchPartnerFxCurrencies(bearertoken));
-
-      // Fetch charges data
-      const chargesResult = await dispatch(
-        fetchChargesData({ customerId, authtoken }),
-      );
-
-      return {
-        isBeneficiary: false,
-        profile: profileResult.payload,
-        fx: fxResult.payload,
-        charges: chargesResult.payload,
-      };
-    } catch (error) {
-      console.error("❌ fetchCustomerDataWithBeneficiaryCheck error:", error);
-      return rejectWithValue(error.message);
-    }
-  },
+  }
 );
 
 const initialState = {
@@ -295,7 +155,7 @@ const initialState = {
   },
   headerColor: localStorage.getItem("header_color") || "bg-sky-800",
   isWhitelabelledCustomer:
-    localStorage.getItem("whitelabelled_customer") || "N",
+    localStorage.getItem("isWhitelabelledCustomer") || "N",
   authtoken: localStorage.getItem("authtoken"),
   isStaffLogin: localStorage.getItem("is_staff_login"),
   staffRole: localStorage.getItem("staff_role"),
@@ -304,15 +164,12 @@ const initialState = {
   ownerRoleName: localStorage.getItem("owner_role_name"),
   staffId: localStorage.getItem("staff_id"),
   isRemittanceOnlyCustomer: localStorage.getItem("isRemittanceOnlyCustomer"),
-  isWhitelabelledCustomerPartnerId:
-    localStorage.getItem("whitelabelledpartnerid") || null,
+  isWhitelabelledCustomerPartnerId: localStorage.getItem(
+    "whitelabelled_customer_partnerid"
+  ),
   logoutTime: localStorage.getItem("logoutTime")
     ? parseInt(localStorage.getItem("logoutTime"), 10)
     : 180000,
-  // ✅ FIX: Check for both spellings in initialState
-  isBeneficiaryUser:
-    localStorage.getItem("beneficaryLogin") === "Y" ||
-    localStorage.getItem("beneficiaryLogin") === "Y",
 };
 
 const headerSlice = createSlice({
@@ -337,7 +194,7 @@ const headerSlice = createSlice({
     updateLocalStorageState: (state) => {
       state.headerColor = localStorage.getItem("header_color") || "bg-sky-800";
       state.isWhitelabelledCustomer =
-        localStorage.getItem("whitelabelled_customer") || "N";
+        localStorage.getItem("isWhitelabelledCustomer") || "N";
       state.authtoken = localStorage.getItem("authtoken");
       state.isStaffLogin = localStorage.getItem("is_staff_login");
       state.staffRole = localStorage.getItem("staff_role");
@@ -346,25 +203,18 @@ const headerSlice = createSlice({
       state.ownerRoleName = localStorage.getItem("owner_role_name");
       state.staffId = localStorage.getItem("staff_id");
       state.isRemittanceOnlyCustomer = localStorage.getItem(
-        "isRemittanceOnlyCustomer",
+        "isRemittanceOnlyCustomer"
       );
-      state.isWhitelabelledCustomerPartnerId =
-        localStorage.getItem("whitelabelledpartnerid") || null;
-      // ✅ FIX: Check for both spellings in updateLocalStorageState
-      state.isBeneficiaryUser =
-        localStorage.getItem("beneficaryLogin") === "Y" ||
-        localStorage.getItem("beneficiaryLogin") === "Y";
+      state.isWhitelabelledCustomerPartnerId = localStorage.getItem(
+        "whitelabelled_customer_partnerid"
+      );
     },
     clearAuthData: (state) => {
       state.authtoken = null;
       state.error = null;
       state.loading = false;
       state.isDropdownOpen = false;
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
+      state.fetchStatus = { fx: "idle", profile: "idle", charges: "idle" };
     },
     clearProfileData: (state) => {
       state.profileData = null;
@@ -386,19 +236,15 @@ const headerSlice = createSlice({
       state.chargesError = null;
     },
     resetFetchStatus: (state) => {
-      state.fetchStatus = {
-        fx: "idle",
-        profile: "idle",
-        charges: "idle",
-      };
+      state.fetchStatus = { fx: "idle", profile: "idle", charges: "idle" };
     },
     resetHeaderState: () => initialState,
-    clearApiCache: (state) => {
-      // Cache clearing handled by api service
-    },
+    clearApiCache: () => {},
     forceRefreshProfile: (state) => {
       state.fetchStatus.profile = "idle";
       state.profileData = null;
+      state.profileError = null; // ✅ also clear error so retry works
+      state.profileLoading = false;
     },
     forceRefreshFx: (state) => {
       state.fetchStatus.fx = "idle";
@@ -409,28 +255,10 @@ const headerSlice = createSlice({
       state.fetchStatus.charges = "idle";
       state.chargesData = [];
     },
-    setBeneficiaryUser: (state, action) => {
-      state.isBeneficiaryUser = action.payload;
-      // Set both spellings for compatibility
-      localStorage.setItem("beneficaryLogin", action.payload ? "Y" : "N");
-      localStorage.setItem("beneficiaryLogin", action.payload ? "Y" : "N");
-    },
-    // New action for debugging
-    logHeaderState: (state) => {
-      console.log("🔍 Header Slice State:", {
-        isBeneficiaryUser: state.isBeneficiaryUser,
-        hasFxData: state.hasFxData,
-        fxCurrenciesCount: state.partnerFxCurrencies.length,
-        profileData: state.profileData ? "Loaded" : "Not loaded",
-        isWhitelabelledCustomerPartnerId:
-          state.isWhitelabelledCustomerPartnerId,
-        isRemittanceOnlyCustomer: state.isRemittanceOnlyCustomer,
-        fetchStatus: state.fetchStatus,
-      });
-    },
   },
   extraReducers: (builder) => {
     builder
+      // ── FX ──────────────────────────────────────────────────────────────
       .addCase(fetchPartnerFxCurrencies.pending, (state) => {
         state.loading = true;
         state.fetchStatus.fx = "loading";
@@ -438,89 +266,68 @@ const headerSlice = createSlice({
       })
       .addCase(fetchPartnerFxCurrencies.fulfilled, (state, action) => {
         state.loading = false;
-        state.partnerFxCurrencies = action.payload;
-        state.hasFxData = action.payload.length > 0;
+        state.partnerFxCurrencies = action.payload || [];
+        state.hasFxData = (action.payload || []).length > 0;
         state.fetchStatus.fx = "succeeded";
         state.error = null;
       })
       .addCase(fetchPartnerFxCurrencies.rejected, (state, action) => {
         state.loading = false;
-        if (
-          action.payload !==
-          "FX fetch already in progress (global coordination)"
-        ) {
+        state.hasFxData = false;
+        if (isCancellationError(action.payload)) {
+          state.fetchStatus.fx = "idle";
+        } else {
           state.error = action.payload;
           state.fetchStatus.fx = "failed";
-        } else {
-          state.fetchStatus.fx = "idle";
         }
-        state.hasFxData = false;
       })
+
+      // ── PROFILE ─────────────────────────────────────────────────────────
       .addCase(fetchUserProfile.pending, (state) => {
         state.profileLoading = true;
         state.fetchStatus.profile = "loading";
         state.profileError = null;
       })
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
-        console.log(
-          "✅ REDUX: Profile fetch completed:",
-          action.payload?.first_name || action.payload?._beneficiarySkipped
-            ? "Skipped for beneficiary"
-            : "Empty",
-        );
-
         state.profileLoading = false;
-
-        // Only set profileData if we actually got real profile data (not skipped for beneficiary)
-        if (action.payload && !action.payload._beneficiarySkipped) {
-          state.profileData = action.payload;
-          console.log("✅ Profile data stored in Redux");
-        } else {
-          console.log(
-            "ℹ️ Profile fetch skipped or returned empty for beneficiary",
-          );
-          // Keep existing profileData or null, don't overwrite
-        }
-
-        state.fetchStatus.profile = "succeeded";
         state.profileError = null;
-        state.isWhitelabelledCustomer =
-          localStorage.getItem("whitelabelled_customer") || "N";
+
+        if (action.payload !== null) {
+          console.log(
+            "✅ REDUX: Profile data received:",
+            action.payload?.first_name
+          );
+          state.profileData = action.payload;
+          state.fetchStatus.profile = "succeeded";
+          state.isWhitelabelledCustomer =
+            localStorage.getItem("isWhitelabelledCustomer") || "N";
+        } else {
+          // null = silently cancelled, keep existing data
+          console.log(
+            "⚠️ REDUX: Profile fetch cancelled (coordination) — keeping existing data"
+          );
+          state.fetchStatus.profile = "idle";
+        }
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
         state.profileLoading = false;
-
-        // Special handling for beneficiary 404 errors
-        // ✅ FIX: Check for both spellings
-        const isBeneficiary =
-          state.isBeneficiaryUser ||
-          localStorage.getItem("beneficaryLogin") === "Y" ||
-          localStorage.getItem("beneficiaryLogin") === "Y";
-        const is404Error =
-          action.payload?.message?.includes("404") ||
-          action.payload?.message?.includes("Customer not found");
-
-        if (isBeneficiary && is404Error) {
-          console.log("ℹ️ Profile 404 error for beneficiary - expected");
-          state.profileError = null;
-          state.fetchStatus.profile = "skipped";
-          return;
-        }
-
-        if (
-          action.payload !==
-          "Profile fetch already in progress (global coordination)"
-        ) {
+        if (isCancellationError(action.payload)) {
+          // ✅ Never surface coordination errors to the UI
+          console.log(
+            "⚠️ REDUX: Profile duplicate/throttled — ignoring silently"
+          );
+          state.fetchStatus.profile = "idle";
+        } else {
           state.profileError = action.payload;
           state.fetchStatus.profile = "failed";
           console.error(
             "❌ Profile fetch rejected in reducer:",
-            action.payload,
+            action.payload
           );
-        } else {
-          state.fetchStatus.profile = "idle";
         }
       })
+
+      // ── CHARGES ─────────────────────────────────────────────────────────
       .addCase(fetchChargesData.pending, (state) => {
         state.chargesLoading = true;
         state.chargesError = null;
@@ -528,54 +335,22 @@ const headerSlice = createSlice({
       })
       .addCase(fetchChargesData.fulfilled, (state, action) => {
         state.chargesLoading = false;
-        state.chargesData = action.payload;
+        state.chargesData = action.payload || [];
         state.chargesError = null;
         state.chargesLastFetched = new Date().toISOString();
         state.fetchStatus.charges = "succeeded";
       })
       .addCase(fetchChargesData.rejected, (state, action) => {
         state.chargesLoading = false;
-        if (
-          action.payload !==
-          "Charges fetch already in progress (global coordination)"
-        ) {
+        state.chargesData = [];
+        if (isCancellationError(action.payload)) {
+          state.fetchStatus.charges = "idle";
+        } else {
           state.chargesError = action.payload;
           state.fetchStatus.charges = "failed";
           console.error("❌ Charges fetch failed:", action.payload);
-        } else {
-          state.fetchStatus.charges = "idle";
         }
-        state.chargesData = [];
-      })
-      .addCase(fetchCustomerDataWithBeneficiaryCheck.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(
-        fetchCustomerDataWithBeneficiaryCheck.fulfilled,
-        (state, action) => {
-          state.loading = false;
-          state.isBeneficiaryUser = action.payload.isBeneficiary;
-          state.error = null;
-
-          if (!action.payload.isBeneficiary) {
-            console.log("✅ Customer data fetched successfully");
-          } else {
-            console.log("✅ Skipped customer data fetch for beneficiary");
-          }
-        },
-      )
-      .addCase(
-        fetchCustomerDataWithBeneficiaryCheck.rejected,
-        (state, action) => {
-          state.loading = false;
-          state.error = action.payload;
-          console.error(
-            "❌ fetchCustomerDataWithBeneficiaryCheck error:",
-            action.payload,
-          );
-        },
-      );
+      });
   },
 });
 
@@ -608,8 +383,6 @@ export const selectIsRemittanceOnlyCustomer = (state) =>
   state.header.isRemittanceOnlyCustomer;
 export const selectIsWhitelabelledCustomerPartnerId = (state) =>
   state.header.isWhitelabelledCustomerPartnerId;
-export const selectIsBeneficiaryUser = (state) =>
-  state.header.isBeneficiaryUser;
 
 export const {
   setLoading,
@@ -629,8 +402,6 @@ export const {
   forceRefreshProfile,
   forceRefreshFx,
   forceRefreshCharges,
-  setBeneficiaryUser,
-  logHeaderState,
 } = headerSlice.actions;
 
 export default headerSlice.reducer;

@@ -127,8 +127,6 @@ const BeneficiariesHeader = ({ beneficiaryId }) => {
         const itemsToKeep = ["language", "theme"]; // Add any items you want to keep
         const currentStorage = { ...localStorage };
 
-        localStorage.clear();
-
         // Restore items you want to keep
         itemsToKeep.forEach((key) => {
           if (currentStorage[key]) {
@@ -146,7 +144,6 @@ const BeneficiariesHeader = ({ beneficiaryId }) => {
       } catch (error) {
         console.error("Beneficiaries Logout error:", error);
         // Even if API call fails, clear everything
-        localStorage.clear();
         sessionStorage.clear();
         navigate("/");
         window.location.reload();

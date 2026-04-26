@@ -28,93 +28,172 @@ import {
   FaEye,
   FaEyeSlash,
   FaBuilding,
+  FaSpinner,
+  FaRegSmile,
+  FaRegHandshake,
+  FaChartLine,
+  FaEnvelope,
+  FaGlobe,
+  FaMapMarkerAlt,
+  FaIdCard,
+  FaCalendarAlt,
+  FaFlag,
+  FaRegBuilding,
+  FaRegUser,
+  FaMobileAlt,
+  FaUserPlus,
+  FaSync,
+  FaUserFriends, // ← ADD THIS
 } from "react-icons/fa";
-
+import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
 import SuccessPopup from "../../../components/PopupModal/BeneficiarySuccessPopup";
 
-// ========== CONSISTENT STYLING CONSTANTS ==========
-const STYLES = {
-  // Container styles
-  container: "min-h-screen bg-gray-50 p-4 md:p-8",
-
-  // Card/Form container
-  formContainer: "bg-white rounded-2xl border border-gray-200 shadow-sm",
-  formPadding: "p-6 md:p-8",
-
-  // Input styles
-  inputBase:
-    "w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200",
-  inputHover: "hover:border-gray-400",
-  inputDisabled: "bg-gray-100 cursor-not-allowed opacity-70",
-
-  // Select styles
-  selectBase:
-    "w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400",
-
-  // Button styles
-  buttonPrimary:
-    "px-6 py-3 rounded-xl transition-all duration-300 font-medium bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl",
-  buttonSecondary:
-    "px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 font-medium",
-  buttonSuccess:
-    "px-6 py-3 rounded-xl transition-all duration-300 font-medium bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl",
-  buttonDanger:
-    "px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-300 font-medium",
-  buttonWarning:
-    "px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl transition-all duration-300 font-medium",
-
-  // Section styles
-  sectionTitle: "text-2xl font-bold text-gray-800",
-  sectionSubtitle: "text-gray-600 mt-1",
-  sectionHeader: "flex items-center justify-between mb-6",
-
-  // Field styles
-  fieldLabel: "block text-sm font-medium text-gray-700 mb-2",
-  fieldRequired: "text-red-500 ml-1",
-  fieldContainer: "mb-5",
-  fieldGrid: "grid grid-cols-1 md:grid-cols-2 gap-5",
-
-  // Card styles
-  infoCard:
-    "p-6 rounded-xl border-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200",
-  warningCard: "p-6 rounded-xl border-2 border-yellow-200 bg-yellow-50",
-  successCard: "p-6 rounded-xl border-2 border-green-200 bg-green-50",
-
-  // Icon styles
-  iconCircle: "flex items-center justify-center w-10 h-10 rounded-full",
-
-  // Divider
-  divider: "border-t border-gray-200 pt-6 mt-6",
-
-  // Step indicator
-  stepActive: "bg-blue-600 text-white",
-  stepInactive: "bg-gray-200 text-gray-500",
-  stepCompleted: "bg-green-500 text-white",
+// ========== ANIMATION VARIANTS ==========
+const pageVariants = {
+  initial: { opacity: 0, x: -20 },
+  animate: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
+  exit: { opacity: 0, x: 20, transition: { duration: 0.3 } },
 };
 
-// ========== REUSABLE COMPONENTS ==========
+const stepVariants = {
+  hidden: { opacity: 0, y: 30, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.5,
+      type: "spring",
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -30,
+    scale: 0.95,
+    transition: { duration: 0.3 },
+  },
+};
+
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  exit: { opacity: 0, y: -20, transition: { duration: 0.2 } },
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const cardHover = {
+  scale: 1.02,
+  transition: { duration: 0.2, type: "spring", stiffness: 300 },
+};
+
+const buttonTap = { scale: 0.98 };
+
+// ========== CONSISTENT STYLING CONSTANTS ==========
+const STYLES = {
+  container:
+    "min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 p-4 md:p-8",
+  formContainer:
+    "bg-white rounded-3xl border border-gray-200 shadow-xl backdrop-blur-sm",
+  formPadding: "p-6 md:p-8",
+  inputBase:
+    "w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 hover:shadow-md",
+  inputHover: "hover:border-gray-400 hover:shadow-md",
+  inputDisabled: "bg-gray-100 cursor-not-allowed opacity-70",
+  selectBase:
+    "w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 hover:shadow-md",
+  buttonPrimary:
+    "px-6 py-3 rounded-xl transition-all duration-300 font-medium bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5",
+  buttonSecondary:
+    "px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 font-medium transform hover:-translate-y-0.5",
+  buttonSuccess:
+    "px-6 py-3 rounded-xl transition-all duration-300 font-medium bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5",
+  buttonDanger:
+    "px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-300 font-medium transform hover:-translate-y-0.5",
+  buttonWarning:
+    "px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl transition-all duration-300 font-medium transform hover:-translate-y-0.5",
+  sectionTitle:
+    "text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent",
+  sectionSubtitle: "text-gray-600 mt-2",
+  sectionHeader: "flex items-center justify-between mb-8",
+  fieldLabel: "block text-sm font-medium text-gray-700 mb-2",
+  fieldRequired: "text-red-500 ml-1",
+  fieldContainer: "mb-6",
+  fieldGrid: "grid grid-cols-1 md:grid-cols-2 gap-6",
+  infoCard:
+    "p-6 rounded-2xl border-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 shadow-lg",
+  warningCard:
+    "p-6 rounded-2xl border-2 border-yellow-200 bg-yellow-50 shadow-lg",
+  successCard:
+    "p-6 rounded-2xl border-2 border-green-200 bg-green-50 shadow-lg",
+  iconCircle: "flex items-center justify-center w-12 h-12 rounded-full",
+  divider: "border-t border-gray-200 pt-8 mt-8",
+  stepActive: "bg-gradient-to-r from-blue-600 to-purple-600 text-white",
+  stepInactive: "bg-gray-200 text-gray-500",
+  stepCompleted: "bg-gradient-to-r from-green-500 to-green-600 text-white",
+};
+
+// ========== REUSABLE COMPONENTS WITH ANIMATIONS ==========
 const SectionHeader = ({ title, subtitle, onBack }) => (
-  <div className={STYLES.sectionHeader}>
+  <motion.div
+    className={STYLES.sectionHeader}
+    initial={{ opacity: 0, y: -20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5 }}
+  >
     <div>
-      <h1 className={STYLES.sectionTitle}>{title}</h1>
-      {subtitle && <p className={STYLES.sectionSubtitle}>{subtitle}</p>}
+      <motion.h1
+        className={STYLES.sectionTitle}
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.2 }}
+      >
+        {title}
+      </motion.h1>
+      {subtitle && (
+        <motion.p
+          className={STYLES.sectionSubtitle}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          {subtitle}
+        </motion.p>
+      )}
     </div>
     {onBack && (
-      <button
+      <motion.button
         type="button"
         onClick={onBack}
         className="flex items-center text-gray-600 hover:text-gray-800 transition-colors duration-200"
+        whileHover={{ x: -5 }}
+        whileTap={{ scale: 0.95 }}
       >
         <FaArrowLeft className="mr-2" />
         Back
-      </button>
+      </motion.button>
     )}
-  </div>
+  </motion.div>
 );
 
 const FieldContainer = ({ children, className = "" }) => (
-  <div className={`${STYLES.fieldContainer} ${className}`}>{children}</div>
+  <motion.div
+    className={`${STYLES.fieldContainer} ${className}`}
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+  >
+    {children}
+  </motion.div>
 );
 
 const InfoBox = ({ type = "info", title, description, children }) => {
@@ -137,60 +216,91 @@ const InfoBox = ({ type = "info", title, description, children }) => {
   };
 
   return (
-    <div className={`${cardStyles[type]} mb-6`}>
+    <motion.div
+      className={`${cardStyles[type]} mb-6`}
+      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.4, type: "spring" }}
+      whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+    >
       <div className="flex items-start">
-        <div className={`${iconColors[type]} mr-4 flex-shrink-0`}>
+        <motion.div
+          className={`${iconColors[type]} mr-4 flex-shrink-0`}
+          whileHover={{ rotate: 360, transition: { duration: 0.5 } }}
+        >
           {icons[type]}
-        </div>
+        </motion.div>
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
           {description && <p className="text-gray-600 mb-4">{description}</p>}
           {children}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
 const LoadingButton = ({ loading, children, ...props }) => (
-  <button {...props} disabled={loading}>
+  <motion.button
+    {...props}
+    disabled={loading}
+    whileHover={!loading ? { scale: 1.02, y: -2 } : {}}
+    whileTap={!loading ? { scale: 0.98 } : {}}
+    className={props.className}
+  >
     {loading ? (
       <>
-        <RingLoader size={20} color="#ffffff" className="mr-2" />
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="inline-block mr-2"
+        >
+          <RingLoader size={20} color="#ffffff" />
+        </motion.div>
         Loading...
       </>
     ) : (
       children
     )}
-  </button>
+  </motion.button>
 );
 
 const AlertBox = ({ message = "Please log in to continue!", onClose }) => {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
       role="dialog"
       aria-labelledby="alert-title"
       aria-describedby="alert-message"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
     >
-      <div className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-lg shadow-xl bg-red-600 text-white text-center">
+      <motion.div
+        className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-2xl shadow-2xl bg-gradient-to-r from-red-600 to-red-700 text-white text-center"
+        initial={{ scale: 0.9, y: 50, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        transition={{ type: "spring", damping: 15 }}
+      >
         <h2
           id="alert-title"
-          className="text-xl font-extrabold mb-4 tracking-wide"
+          className="text-2xl font-extrabold mb-4 tracking-wide"
         >
           Action Required!
         </h2>
         <p id="alert-message" className="text-sm md:text-base mb-6">
           {message}
         </p>
-        <button
+        <motion.button
           onClick={onClose}
-          className="px-4 py-2 bg-white text-red-600 rounded-md font-medium hover:bg-gray-100 transition-colors"
+          className="px-6 py-2 bg-white text-red-600 rounded-xl font-medium hover:bg-gray-100 transition-all duration-300"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
           Close
-        </button>
-      </div>
-    </div>
+        </motion.button>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -203,19 +313,223 @@ AlertBox.defaultProps = {
   message: "Please log in to continue!",
 };
 
+// Animated Input Component
+const AnimatedInput = ({
+  label,
+  required,
+  info,
+  disabled,
+  error,
+  icon: Icon,
+  ...props
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <div className="relative">
+      <FieldLabel required={required} info={info}>
+        {label}
+      </FieldLabel>
+      <motion.div
+        animate={isFocused ? { scale: 1.01 } : { scale: 1 }}
+        transition={{ duration: 0.2 }}
+        className="relative"
+      >
+        {Icon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <Icon size={18} />
+          </div>
+        )}
+        <input
+          {...props}
+          onFocus={() => setIsFocused(true)}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur?.(e);
+          }}
+          className={`${STYLES.inputBase} ${Icon ? "pl-10" : ""} ${disabled ? STYLES.inputDisabled : STYLES.inputHover} ${error ? "border-red-500 focus:ring-red-500" : ""}`}
+        />
+      </motion.div>
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="text-red-500 text-xs mt-1"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// Animated Select Component
+const AnimatedSelect = ({
+  label,
+  required,
+  info,
+  disabled,
+  options,
+  value,
+  onChange,
+  icon: Icon,
+  ...props
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <div className="relative">
+      <FieldLabel required={required} info={info}>
+        {label}
+      </FieldLabel>
+      <motion.div
+        animate={isFocused ? { scale: 1.01 } : { scale: 1 }}
+        transition={{ duration: 0.2 }}
+        className="relative"
+      >
+        {Icon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10 text-gray-400">
+            <Icon size={18} />
+          </div>
+        )}
+        <Select
+          {...props}
+          options={options}
+          value={value}
+          onChange={onChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          styles={{
+            ...customStyles,
+            control: (provided, state) => ({
+              ...customStyles.control(provided, state),
+              paddingLeft: Icon ? "30px" : "12px",
+              border: isFocused
+                ? "2px solid #3b82f6"
+                : state.isFocused
+                  ? "2px solid #3b82f6"
+                  : "1px solid #d1d5db",
+              boxShadow: isFocused
+                ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                : "none",
+            }),
+          }}
+          isDisabled={disabled}
+        />
+      </motion.div>
+    </div>
+  );
+};
+
+// Progress Indicator
+const ProgressIndicator = ({ step, totalSteps }) => {
+  const progress = (step / (totalSteps - 1)) * 100;
+
+  return (
+    <div className="relative mb-8">
+      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+        <motion.div
+          className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          style={{
+            backgroundSize: "200% 100%",
+            animation: "shimmer 2s infinite linear",
+          }}
+        />
+      </div>
+      <motion.div
+        className="absolute top-0 left-0 w-4 h-4 -mt-1 rounded-full bg-blue-500 shadow-lg"
+        style={{ left: `${progress}%` }}
+        animate={{ scale: [1, 1.2, 1] }}
+        transition={{ duration: 1, repeat: Infinity }}
+      />
+    </div>
+  );
+};
+
+// Floating Label Input
+const FloatingLabelInput = ({
+  label,
+  value,
+  onChange,
+  required,
+  icon: Icon,
+  ...props
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const isFloating = isFocused || value;
+
+  return (
+    <div className="relative">
+      <motion.label
+        className={`absolute left-4 transition-all duration-200 pointer-events-none ${
+          isFloating
+            ? "text-xs top-2 text-blue-500"
+            : "text-gray-500 top-3.5 text-sm"
+        }`}
+        animate={isFloating ? { y: -8, scale: 0.85 } : { y: 0, scale: 1 }}
+      >
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </motion.label>
+      {Icon && (
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+          <Icon size={18} />
+        </div>
+      )}
+      <input
+        {...props}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={(e) => {
+          setIsFocused(false);
+          props.onBlur?.(e);
+        }}
+        className={`w-full px-4 pt-6 pb-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+          isFocused ? "border-blue-500" : ""
+        } ${Icon ? "pl-10" : ""}`}
+      />
+    </div>
+  );
+};
+
+// Field Label Component
+const FieldLabel = ({ children, required = false, info = null }) => (
+  <div className="flex items-center justify-between mb-2">
+    <label className={STYLES.fieldLabel}>
+      {children}
+      {required && <span className={STYLES.fieldRequired}>*</span>}
+    </label>
+    {info && (
+      <div className="group relative">
+        <FaInfoCircle
+          className="text-gray-400 hover:text-gray-600 cursor-help"
+          size={14}
+        />
+        <div className="absolute right-0 top-full mt-1 w-64 p-2 bg-gray-900 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+          {info}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
+// ========== MAIN COMPONENT ==========
 const BaseBeneficiaryForm = ({
-  // ========== REQUIRED PROPS ==========
   mode = "create",
   initialData = null,
-
-  // ========== NEW CONFIGURATION PROPS ==========
   isPublic = false,
   customerId = null,
   beneficiaryId = null,
-
-  // ========== FUNCTION PROPS ==========
   onSubmit,
   onCancel,
+  onResetSearch,
   onPhoneSearch,
   onFetchCountries,
   onFetchNationalities,
@@ -223,8 +537,6 @@ const BaseBeneficiaryForm = ({
   onFetchIdTypes,
   onFetchCities,
   onFetchBankBranches,
-
-  // ========== DATA PROPS ==========
   nationalities = [],
   banks = {},
   idTypes = {},
@@ -234,8 +546,6 @@ const BaseBeneficiaryForm = ({
   countriesOptions = [],
   phoneCodeOptions = [],
   beneficiaries = [],
-
-  // ========== STATE PROPS ==========
   isLoading = false,
   phoneSearchLoading = false,
   phoneSearch = {
@@ -245,13 +555,9 @@ const BaseBeneficiaryForm = ({
     processed: false,
   },
   dropdownLoading = false,
-
-  // ========== OTHER PROPS ==========
   showPhoneSearch = true,
   usingExistingBeneficiary: initialUsingExisting = false,
   foundBeneficiary: initialFoundBeneficiary = null,
-
-  // ========== PUBLIC REGISTRATION PROPS ==========
   emailVerified = false,
   phoneVerified = false,
   onSendEmailPasscode = null,
@@ -260,8 +566,6 @@ const BaseBeneficiaryForm = ({
   setPhoneVerified = null,
   resendEmailLoading = false,
   resendPhoneLoading = false,
-
-  // Password props
   showPassword = false,
   showConfirmPassword = false,
   setShowPassword = null,
@@ -269,37 +573,32 @@ const BaseBeneficiaryForm = ({
   passwordErrors = {},
   setPasswordErrors = null,
   validatePassword = null,
-
-  // Partner ID
   partnerId = "0",
-
-  // Page title
   pageTitle = "Register Beneficiary",
 }) => {
   const navigate = useNavigate();
   const isMounted = useRef(true);
-
   const nationalitiesFetched = useRef(false);
   const countriesFetched = useRef(false);
   const banksFetched = useRef({});
   const idTypesFetched = useRef({});
   const citiesFetched = useRef({});
+  const isProcessingPhoneSearch = useRef(false);
 
   // ========== LOCAL STATE ==========
   const [step, setStep] = useState(
-    mode === "create" && showPhoneSearch ? 0 : 1
+    mode === "create" && showPhoneSearch ? 0 : 1,
   );
   const [isLoadingLocal, setIsLoadingLocal] = useState(false);
   const [currency, setCurrency] = useState(
     mode === "edit" && initialData?.banks?.[0]?.currency_code
       ? initialData.banks[0].currency_code
-      : "USD"
+      : "USD",
   );
   const [paymentMethod, setPaymentMethod] = useState("ACH");
   const [showOtherRelationship, setShowOtherRelationship] = useState(false);
   const [branchCode, setBranchCode] = useState("");
   const [fieldTouched, setFieldTouched] = useState({});
-
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [benefCode, setBenefCode] = useState("");
 
@@ -310,7 +609,7 @@ const BaseBeneficiaryForm = ({
   const [usingExistingBeneficiary, setUsingExistingBeneficiary] =
     useState(initialUsingExisting);
   const [foundBeneficiary, setFoundBeneficiary] = useState(
-    initialFoundBeneficiary
+    initialFoundBeneficiary,
   );
 
   // Steps configuration
@@ -323,6 +622,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUser className="text-sm" />,
           description: "Personal & Contact Information",
           color: "blue",
+          gradient: "from-blue-500 to-blue-600",
         },
         {
           number: 2,
@@ -330,6 +630,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUniversity className="text-sm" />,
           description: "Account & Payment Details",
           color: "purple",
+          gradient: "from-purple-500 to-purple-600",
         },
       ];
     } else if (mode === "create" && showPhoneSearch) {
@@ -340,6 +641,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaSearch className="text-sm" />,
           description: "Find existing beneficiary",
           color: "indigo",
+          gradient: "from-indigo-500 to-indigo-600",
         },
         {
           number: 1,
@@ -347,6 +649,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUser className="text-sm" />,
           description: "Personal information",
           color: "blue",
+          gradient: "from-blue-500 to-blue-600",
         },
         {
           number: 2,
@@ -354,6 +657,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUniversity className="text-sm" />,
           description: "Account details",
           color: "purple",
+          gradient: "from-purple-500 to-purple-600",
         },
       ];
     } else {
@@ -364,6 +668,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUser className="text-sm" />,
           description: "Personal information",
           color: "blue",
+          gradient: "from-blue-500 to-blue-600",
         },
         {
           number: 2,
@@ -371,6 +676,7 @@ const BaseBeneficiaryForm = ({
           icon: <FaUniversity className="text-sm" />,
           description: "Account details",
           color: "purple",
+          gradient: "from-purple-500 to-purple-600",
         },
       ];
     }
@@ -405,7 +711,7 @@ const BaseBeneficiaryForm = ({
   const [bankAccounts, setBankAccounts] = useState(() => {
     if (mode === "edit" && initialData?.banks) {
       return initialData.banks.map((bank) => ({
-        rails: bank.rails || "",
+        rails: bank.rails || "Local",
         currency: bank.currency_code || currency,
         iban: bank.benef_iban || "",
         swift: bank.swift_code || "",
@@ -427,10 +733,9 @@ const BaseBeneficiaryForm = ({
         sortCode: bank.sort_code || "",
       }));
     }
-
     return [
       {
-        rails: "",
+        rails: "Local",
         currency: currency,
         iban: "",
         swift: "",
@@ -454,56 +759,9 @@ const BaseBeneficiaryForm = ({
     ];
   });
 
-  const customStyles = {
-    control: (provided, state) => ({
-      ...provided,
-      backgroundColor: "white",
-      border: state.isFocused ? "2px solid #3b82f6" : "1px solid #d1d5db",
-      borderRadius: "0.75rem",
-      padding: "8px 12px",
-      fontSize: "0.875rem",
-      color: "#111827",
-      boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none",
-      minHeight: "48px",
-      transition: "all 0.2s ease",
-      "&:hover": {
-        borderColor: "#9ca3af",
-      },
-    }),
-    menu: (provided) => ({
-      ...provided,
-      borderRadius: "0.75rem",
-      boxShadow:
-        "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-      zIndex: 20,
-    }),
-    placeholder: (provided) => ({
-      ...provided,
-      color: "#6b7280",
-    }),
-    option: (provided, state) => ({
-      ...provided,
-      backgroundColor: state.isSelected
-        ? "#3b82f6"
-        : state.isFocused
-        ? "#eff6ff"
-        : "white",
-      color: state.isSelected ? "white" : "#1f2937",
-      padding: "12px 16px",
-      fontSize: "0.875rem",
-      borderRadius: "0.5rem",
-      margin: "2px",
-      "&:active": {
-        backgroundColor: "#3b82f6",
-        color: "white",
-      },
-    }),
-  };
-
   // ========== FORMIK ==========
   const formik = useFormik({
     initialValues: {
-      // Existing fields
       name: initialData?.name || "",
       country_id: initialData?.country_id?.toString() || "",
       country_phone_code: initialData?.country_phone_code || "+1",
@@ -521,8 +779,6 @@ const BaseBeneficiaryForm = ({
       nic_bcc_code: initialData?.nic_bcc_code || "",
       beneficiary_id_type: initialData?.beneficiary_id_type || "",
       beneficiary_id_number: initialData?.beneficiary_id_number || "",
-
-      // NEW FIELDS FOR PUBLIC REGISTRATION
       first_name: initialData?.first_name || "",
       middle_name: initialData?.middle_name || "",
       last_name: initialData?.last_name || "",
@@ -540,7 +796,6 @@ const BaseBeneficiaryForm = ({
   useEffect(() => {
     return () => {
       isMounted.current = false;
-      // ERASE THE CHECKLIST when leaving the page
       nationalitiesFetched.current = false;
       countriesFetched.current = false;
       banksFetched.current = {};
@@ -549,196 +804,19 @@ const BaseBeneficiaryForm = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (step > 0 && isMounted.current) {
-      if (
-        onFetchNationalities &&
-        !nationalitiesFetched.current &&
-        isMounted.current
-      ) {
-        onFetchNationalities();
-        nationalitiesFetched.current = true;
-      }
+  // Helper function to get bank type
+  const getBankType = useCallback(
+    (currencyParam) => {
+      const currencyToUse = currencyParam || currency;
+      const intBankCurrencies = ["BDT", "LKR", "AUD", "PKR"];
+      return intBankCurrencies.includes(currencyToUse)
+        ? "int-banks"
+        : "currency-payout-banks";
+    },
+    [currency],
+  );
 
-      if (onFetchCountries && !countriesFetched.current && isMounted.current) {
-        onFetchCountries();
-        countriesFetched.current = true;
-      }
-
-      const bankType = getBankType();
-      if (
-        onFetchBanks &&
-        !banksFetched.current[currency] &&
-        isMounted.current
-      ) {
-        onFetchBanks?.({ currency, bankType });
-        banksFetched.current[currency] = true;
-      }
-
-      if (["BDT", "INR", "PKR"].includes(currency)) {
-        if (
-          onFetchIdTypes &&
-          !idTypesFetched.current[currency] &&
-          isMounted.current
-        ) {
-          onFetchIdTypes?.(currency);
-          idTypesFetched.current[currency] = true;
-        }
-      }
-    }
-  }, [
-    currency,
-    step,
-    isPublic,
-    onFetchNationalities,
-    onFetchCountries,
-    onFetchBanks,
-    onFetchIdTypes,
-  ]);
-
-  const handleCopyBenefCode = useCallback(() => {
-    toast.success("Copied to clipboard!");
-  }, []);
-
-  const handleContinueFromSuccess = useCallback(() => {
-    setShowSuccessPopup(false);
-    navigate(isPublic ? "/dashboard" : "/beneficiaries");
-  }, [navigate, isPublic]);
-
-  // Handle phone search results
-  useEffect(() => {
-    if (
-      phoneSearch.searched &&
-      phoneSearch.exists &&
-      phoneSearch.data &&
-      !phoneSearch.processed
-    ) {
-      const beneficiaryData = phoneSearch.data;
-
-      // Map nationality
-      let nationalityId = beneficiaryData.nationality_id;
-      if (
-        !nationalityId &&
-        beneficiaryData.nationality &&
-        nationalities.length > 0
-      ) {
-        const found = nationalities.find(
-          (nat) =>
-            nat.name.toLowerCase() === beneficiaryData.nationality.toLowerCase()
-        );
-        nationalityId = found ? found.id.toString() : "";
-      }
-
-      // Map relationship
-      let relationshipValue = beneficiaryData.relationtobenef;
-      const relationshipMap = {
-        Father: "father",
-        Mother: "mother",
-        Sister: "sister",
-        Brother: "brother",
-        Cousin: "cousin",
-        Friend: "friend",
-        Other: "other",
-      };
-
-      if (relationshipValue && relationshipMap[relationshipValue]) {
-        relationshipValue = relationshipMap[relationshipValue];
-      }
-
-      const formValues = {
-        name: beneficiaryData.name || "",
-        country_id: beneficiaryData.country_id?.toString() || "",
-        country_phone_code:
-          beneficiaryData.country_phone_code || countryCodeInput,
-        phone_number: beneficiaryData.phone_number || phoneInput,
-        email: beneficiaryData.email || "",
-        beneftype: beneficiaryData.beneftype || "individual",
-        state: beneficiaryData.state || "",
-        city: beneficiaryData.city || "",
-        street: beneficiaryData.street || "",
-        postalcode: beneficiaryData.postalcode || "",
-        relationtobenef: relationshipValue || "",
-        otherRelationship: beneficiaryData.otherRelationship || "",
-        nationality_id: nationalityId?.toString() || "",
-        status: beneficiaryData.status?.toString() || "1",
-        nic_bcc_code: beneficiaryData.nic_bcc_code || "",
-        beneficiary_id_type: beneficiaryData.beneficiary_id_type || "",
-        beneficiary_id_number: beneficiaryData.beneficiary_id_number || "",
-      };
-
-      setTimeout(() => {
-        if (isMounted.current) {
-          formik.setValues(formValues);
-        }
-      }, 0);
-
-      // Set currency if available
-      if (beneficiaryData.currency) {
-        setCurrency(beneficiaryData.currency);
-      }
-
-      // Set bank accounts if available
-      if (beneficiaryData.banks && beneficiaryData.banks.length > 0) {
-        setBankAccounts(
-          beneficiaryData.banks.map((bank) => ({
-            rails: bank.rails || "",
-            currency:
-              bank.currency_code || beneficiaryData.currency || currency,
-            iban: bank.benef_iban || "",
-            swift: bank.swift_code || "",
-            intermediarySwift: bank.intermediary_bank_swift || "",
-            routingNumber: bank.routing_number || "",
-            accountNumber: bank.bank_acc_no || "",
-            bankName: bank.bank_name || "",
-            ifsc: bank.ifsc || "",
-            bankCode: bank.bankCode || "",
-            paymentMethod: bank.payment_method || paymentMethod,
-            bankState: bank.bankState || "",
-            branchCode: bank.branchCode || "",
-            accountName: bank.account_name || "",
-            accountTitle: bank.account_title || "",
-            walletProvider: bank.wallet_provider || "",
-            mobileNumber: bank.mobile_number || "",
-            otherProvider: bank.other_provider || "",
-            accountType: bank.account_type || "",
-            sortCode: bank.sort_code || "",
-          }))
-        );
-      }
-
-      if (isMounted.current) {
-        toast.success("Beneficiary found! Form has been pre-filled.");
-      }
-    } else if (
-      phoneSearch.searched &&
-      !phoneSearch.exists &&
-      isMounted.current
-    ) {
-      toast.info(
-        "No existing beneficiary found with this phone number. You can create a new one."
-      );
-      formik.setFieldValue("phone_number", phoneInput);
-      formik.setFieldValue("country_phone_code", countryCodeInput);
-      setFoundBeneficiary(null);
-      setShowSearchResults(true);
-    }
-  }, [
-    phoneSearch,
-    phoneInput,
-    formik,
-    nationalities,
-    currency,
-    paymentMethod,
-    countryCodeInput,
-  ]);
-
-  // ========== HELPER FUNCTIONS ==========
-  const getBankType = () => {
-    return ["BDT", "LKR", "AUD", "PKR"].includes(currency)
-      ? "int-banks"
-      : "currency-payout-banks";
-  };
-
+  // Get banks for currency
   const getBanksForCurrency = useMemo(() => {
     if (["BDT", "LKR", "AUD", "PKR"].includes(currency)) {
       return banks[`${currency}_int`] || [];
@@ -746,50 +824,131 @@ const BaseBeneficiaryForm = ({
     return banks[currency] || [];
   }, [banks, currency]);
 
+  // Get ID types for currency
   const getIdTypesForCurrency = useMemo(() => {
-    if (Object.keys(idTypes).length === 0) {
+    if (Object.keys(idTypes).length === 0 || !currency) {
       return [];
     }
-
-    const types = idTypes[currency];
-    if (!types) {
-      return [];
-    }
-
-    if (Array.isArray(types)) {
-      return types;
-    }
-
-    if (types && types.data && Array.isArray(types.data)) {
-      return types.data;
-    }
-
-    if (types && typeof types === "object") {
-      return Object.values(types);
-    }
-
+    const currentBeneficiaryType = formik.values.beneftype || "individual";
+    const storageKey =
+      currentBeneficiaryType === "institution"
+        ? `${currency}_institution`
+        : currency;
+    const types = idTypes[storageKey];
+    if (!types) return [];
+    if (Array.isArray(types)) return types;
+    if (types && types.data && Array.isArray(types.data)) return types.data;
+    if (types && typeof types === "object") return Object.values(types);
     return [];
-  }, [idTypes, currency]);
+  }, [idTypes, currency, formik.values.beneftype]);
 
+  // Get bank branches
   const getBankBranches = useMemo(() => {
     const currentBankCode = bankAccounts[0]?.bankCode;
     return currentBankCode ? bankBranches[currentBankCode] || [] : [];
   }, [bankBranches, bankAccounts]);
 
-  // ========== VALIDATION LOGIC ==========
+  // First effect - Initial data fetch
+  useEffect(() => {
+    if (!currency || currency === "" || step <= 0 || !isMounted.current) {
+      return;
+    }
+
+    if (
+      onFetchNationalities &&
+      !nationalitiesFetched.current &&
+      isMounted.current
+    ) {
+      onFetchNationalities();
+      nationalitiesFetched.current = true;
+    }
+
+    if (onFetchCountries && !countriesFetched.current && isMounted.current) {
+      onFetchCountries();
+      countriesFetched.current = true;
+    }
+
+    const bankType = getBankType(currency);
+    if (onFetchBanks && !banksFetched.current[currency] && isMounted.current) {
+      onFetchBanks?.({ currency, bankType });
+      banksFetched.current[currency] = true;
+    }
+
+    if (
+      currency &&
+      currency !== "" &&
+      ["BDT", "INR", "PKR"].includes(currency) &&
+      onFetchIdTypes
+    ) {
+      const currentBeneficiaryType = formik.values.beneftype || "individual";
+      const cacheKey = `${currency}_${currentBeneficiaryType}`;
+      if (!idTypesFetched.current[cacheKey] && isMounted.current) {
+        onFetchIdTypes?.(currency, currentBeneficiaryType);
+        idTypesFetched.current[cacheKey] = true;
+      }
+    }
+  }, [
+    currency,
+    step,
+    onFetchNationalities,
+    onFetchCountries,
+    onFetchBanks,
+    onFetchIdTypes,
+    formik.values.beneftype,
+    getBankType,
+  ]);
+
+  // Second effect - Fetch ID types on beneficiary type change
+  useEffect(() => {
+    if (!currency || currency === "" || step <= 0) {
+      return;
+    }
+
+    if (
+      currency &&
+      currency !== "" &&
+      ["BDT", "INR", "PKR"].includes(currency) &&
+      onFetchIdTypes
+    ) {
+      const currentBeneficiaryType = formik.values.beneftype || "individual";
+      const cacheKey = `${currency}_${currentBeneficiaryType}`;
+      if (!idTypesFetched.current[cacheKey]) {
+        onFetchIdTypes?.(currency, currentBeneficiaryType);
+        idTypesFetched.current[cacheKey] = true;
+      }
+    }
+  }, [currency, formik.values.beneftype, step, onFetchIdTypes]);
+
+  // Handle copy benef code
+  const handleCopyBenefCode = useCallback(() => {
+    toast.success("Copied to clipboard!");
+  }, []);
+
+  // Handle continue from success
+  const handleContinueFromSuccess = useCallback(() => {
+    setShowSuccessPopup(false);
+    navigate(isPublic ? "/dashboard" : "/beneficiaries");
+  }, [navigate, isPublic]);
+
+  // Set country code from formik
+  useEffect(() => {
+    if (formik.values.country_phone_code) {
+      setCountryCodeInput(formik.values.country_phone_code);
+    }
+  }, [formik.values.country_phone_code]);
+
+  // Validation logic
   const isFormValid = useCallback(() => {
+    // Your existing validation logic here
     if (formik.values.beneftype === "") return false;
 
-    // For public registration
     if (isPublic) {
-      // Check individual vs institution
       if (formik.values.beneftype === "individual") {
         if (!formik.values.first_name || !formik.values.last_name) return false;
       } else if (formik.values.beneftype === "institution") {
         if (!formik.values.institution_name) return false;
       }
 
-      // Check required fields
       if (
         !formik.values.email ||
         !formik.values.country_id ||
@@ -800,7 +959,6 @@ const BaseBeneficiaryForm = ({
       )
         return false;
 
-      // Check password
       if (!formik.values.password || !formik.values.confirmPassword)
         return false;
       if (formik.values.password !== formik.values.confirmPassword)
@@ -808,10 +966,8 @@ const BaseBeneficiaryForm = ({
       if (validatePassword && !validatePassword(formik.values.password))
         return false;
 
-      // Check verification
       if (!emailVerified || !phoneVerified) return false;
 
-      // Currency-specific validations
       if (currency === "BDT" || currency === "INR" || currency === "PKR") {
         if (
           !formik.values.beneficiary_id_type ||
@@ -823,7 +979,6 @@ const BaseBeneficiaryForm = ({
       return true;
     }
 
-    // Original validation for private forms
     if (
       formik.values.name === "" ||
       formik.values.country_id === "" ||
@@ -858,31 +1013,41 @@ const BaseBeneficiaryForm = ({
     validatePassword,
   ]);
 
-  // ========== CURRENCY CHANGE HANDLER ==========
-  const handleCurrencyChange = async (e) => {
-    const newCurrency = e.target.value;
-    setCurrency(newCurrency);
+  // Currency change handler
+  const handleCurrencyChange = useCallback(
+    (selectedOption) => {
+      const newCurrency = selectedOption?.value;
 
-    formik.setFieldValue("beneficiary_id_type", "");
-    formik.setFieldValue("beneficiary_id_number", "");
+      if (!newCurrency || newCurrency === "") {
+        return;
+      }
 
-    if (["BDT", "INR", "PKR"].includes(newCurrency)) {
-      onFetchIdTypes?.(newCurrency);
-    }
+      setCurrency(newCurrency);
+      formik.setFieldValue("beneficiary_id_type", "");
+      formik.setFieldValue("beneficiary_id_number", "");
 
-    const bankType = getBankType();
-    onFetchBanks?.({ currency: newCurrency, bankType });
+      if (["BDT", "INR", "PKR"].includes(newCurrency)) {
+        const currentBeneficiaryType = formik.values.beneftype || "individual";
+        onFetchIdTypes?.(newCurrency, currentBeneficiaryType);
+      }
 
-    setBankAccounts((prevAccounts) =>
-      prevAccounts.map((account) => ({
-        ...account,
-        currency: newCurrency,
-      }))
-    );
-  };
+      const bankType = getBankType(newCurrency);
+      onFetchBanks?.({ currency: newCurrency, bankType: bankType });
 
-  // ========== PHONE SEARCH HANDLERS ==========
+      setBankAccounts((prevAccounts) =>
+        prevAccounts.map((account) => ({
+          ...account,
+          currency: newCurrency,
+          rails: account.rails || "Local",
+        })),
+      );
+    },
+    [formik, onFetchBanks, onFetchIdTypes, getBankType],
+  );
+
+  // Phone search click handler
   const handlePhoneSearchClick = () => {
+    // Validate phone input
     if (!phoneInput.trim()) {
       toast.error("Please enter a phone number to search");
       return;
@@ -894,32 +1059,258 @@ const BaseBeneficiaryForm = ({
       return;
     }
 
-    onPhoneSearch?.({
-      phoneNumber: phoneInput,
-      countryPhoneCode: countryCodeInput,
-      beneficiaries,
-    });
+    // Prevent multiple searches while already searching
+    if (phoneSearchLoading) {
+      toast.info("Search in progress, please wait...");
+      return;
+    }
+
+    // Clear any previous search state
+    setShowSearchResults(false);
+    setFoundBeneficiary(null);
+    setUsingExistingBeneficiary(false);
+
+    // Store the phone number and country code in formik for context
+    formik.setFieldValue("phone_number", phoneInput);
+    formik.setFieldValue("country_phone_code", countryCodeInput);
+    setCountryCodeInput(countryCodeInput);
+
+    // If no beneficiaries exist, don't even try to search
+    if (beneficiaries.length === 0) {
+      setShowSearchResults(true);
+      toast.info("No existing beneficiaries found. You can create a new one.");
+      return;
+    }
+
+    // Use the onPhoneSearch prop to trigger the search (Redux)
+    if (onPhoneSearch) {
+      console.log("🔍 Triggering phone search via Redux for:", phoneInput);
+      onPhoneSearch({
+        phoneNumber: phoneInput,
+        countryPhoneCode: countryCodeInput,
+      });
+    } else {
+      // Fallback: local search (this should ideally not happen as onPhoneSearch should be provided)
+      console.warn(
+        "⚠️ onPhoneSearch prop not provided, using fallback local search",
+      );
+
+      const cleanPhoneInput = phoneInput.replace(/[\s\-\(\)]/g, "");
+
+      const foundBeneficiaryLocal = beneficiaries.find((benef) => {
+        const benefPhone = benef.phone_number || "";
+        const benefFullPhone = benef.full_phone_number || "";
+        return (
+          benefPhone === cleanPhoneInput ||
+          benefFullPhone.includes(cleanPhoneInput) ||
+          benefFullPhone ===
+            `${countryCodeInput.replace("+", "")}${cleanPhoneInput}`
+        );
+      });
+
+      if (foundBeneficiaryLocal) {
+        const formattedBeneficiary = {
+          name:
+            foundBeneficiaryLocal.name ||
+            `${foundBeneficiaryLocal.first_name || ""} ${foundBeneficiaryLocal.last_name || ""}`.trim(),
+          country_id: foundBeneficiaryLocal.country_id?.toString(),
+          country_phone_code:
+            foundBeneficiaryLocal.country_phone_code ||
+            countryCodeInput.replace("+", ""),
+          phone_number: foundBeneficiaryLocal.phone_number,
+          email: foundBeneficiaryLocal.email,
+          beneftype: foundBeneficiaryLocal.beneftype || "individual",
+          state: foundBeneficiaryLocal.state,
+          city: foundBeneficiaryLocal.city,
+          street: foundBeneficiaryLocal.street,
+          postalcode: foundBeneficiaryLocal.postalcode,
+          relationtobenef: foundBeneficiaryLocal.relationtobenef,
+          otherRelationship: foundBeneficiaryLocal.otherRelationship || "",
+          nationality_id: foundBeneficiaryLocal.nationality_id?.toString(),
+          status: foundBeneficiaryLocal.status?.toString() || "1",
+          nic_bcc_code: foundBeneficiaryLocal.nic_bcc_code || "",
+          beneficiary_id_type: foundBeneficiaryLocal.beneficiary_id_type || "",
+          beneficiary_id_number:
+            foundBeneficiaryLocal.beneficiary_id_number || "",
+          currency: foundBeneficiaryLocal.currency || "USD",
+          banks: foundBeneficiaryLocal.banks || [],
+        };
+
+        setShowSearchResults(true);
+        setFoundBeneficiary(formattedBeneficiary);
+        toast.success("Beneficiary found! Review the details below.");
+      } else {
+        setShowSearchResults(true);
+        setFoundBeneficiary(null);
+        toast.info(
+          "No existing beneficiary found with this phone number. You can create a new one.",
+        );
+      }
+    }
   };
 
+  // Use found beneficiary handler
   const handleUseFoundBeneficiary = () => {
+    if (foundBeneficiary) {
+      let relationshipValue = foundBeneficiary.relationtobenef;
+      const relationshipMap = {
+        father: "father",
+        mother: "mother",
+        sister: "sister",
+        brother: "brother",
+        cousin: "cousin",
+        friend: "friend",
+        other: "other",
+      };
+
+      if (relationshipValue && !relationshipMap[relationshipValue]) {
+        const lowerValue = relationshipValue.toLowerCase();
+        if (relationshipMap[lowerValue]) {
+          relationshipValue = relationshipMap[lowerValue];
+        }
+      }
+
+      formik.setValues({
+        name: foundBeneficiary.name || "",
+        country_id: foundBeneficiary.country_id?.toString() || "",
+        country_phone_code:
+          foundBeneficiary.country_phone_code ||
+          countryCodeInput.replace("+", ""),
+        phone_number: foundBeneficiary.phone_number || phoneInput,
+        email: foundBeneficiary.email || "",
+        beneftype: foundBeneficiary.beneftype || "individual",
+        state: foundBeneficiary.state || "",
+        city: foundBeneficiary.city || "",
+        street: foundBeneficiary.street || "",
+        postalcode: foundBeneficiary.postalcode || "",
+        relationtobenef: relationshipValue || "",
+        otherRelationship: foundBeneficiary.otherRelationship || "",
+        nationality_id: foundBeneficiary.nationality_id?.toString() || "",
+        status: foundBeneficiary.status?.toString() || "1",
+        nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
+        beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
+        beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
+      });
+
+      if (foundBeneficiary.currency) {
+        setCurrency(foundBeneficiary.currency);
+      }
+
+      if (foundBeneficiary.banks && foundBeneficiary.banks.length > 0) {
+        const mappedBanks = foundBeneficiary.banks.map((bank) => ({
+          rails: bank.rails || "Local",
+          currency: bank.currency_code || foundBeneficiary.currency || currency,
+          iban: bank.benef_iban || "",
+          swift: bank.swift_code || "",
+          intermediarySwift: bank.intermediary_bank_swift || "",
+          routingNumber: bank.routing_number || "",
+          accountNumber: bank.bank_acc_no || "",
+          bankName: bank.bank_name || "",
+          ifsc: bank.ifsc || "",
+          bankCode: bank.bankCode || bank.bank_code || "",
+          paymentMethod: bank.payment_method || paymentMethod,
+          bankState: bank.bankState || bank.bank_state || "",
+          branchCode: bank.branchCode || bank.branch_code || "",
+          accountName: bank.account_name || bank.nameInBankAc || "",
+          accountTitle: bank.account_title || "",
+          walletProvider: bank.wallet_provider || "",
+          mobileNumber: bank.mobile_number || "",
+          otherProvider: bank.other_provider || "",
+          accountType: bank.account_type || "",
+          sortCode: bank.sort_code || "",
+        }));
+        setBankAccounts(mappedBanks);
+      }
+
+      if (relationshipValue === "other") {
+        setShowOtherRelationship(true);
+      } else {
+        setShowOtherRelationship(false);
+      }
+
+      toast.success("Beneficiary details loaded successfully!");
+    }
+
     setUsingExistingBeneficiary(true);
     setShowSearchResults(false);
     setStep(1);
   };
 
+  // Create new beneficiary handler
   const handleCreateNewBeneficiary = () => {
-    setUsingExistingBeneficiary(false);
+    // Preserve the phone number and country code that was searched
+    const preservedPhoneNumber = phoneInput;
+    const preservedCountryCode = countryCodeInput;
+
+    // Reset form but keep the phone number and country code
+    formik.resetForm();
+    formik.setFieldValue("phone_number", preservedPhoneNumber);
+    formik.setFieldValue("country_phone_code", preservedCountryCode);
+
+    // Set the country ID based on the selected country code
+    const selectedCountry = countriesOptions.find(
+      (option) => option.phoneCode === preservedCountryCode,
+    );
+    if (selectedCountry) {
+      formik.setFieldValue("country_id", selectedCountry.value?.toString());
+    }
+
+    // Reset currency to default
+    setCurrency("USD");
+
+    // Reset bank accounts to one empty account
+    setBankAccounts([
+      {
+        rails: "Local",
+        currency: "USD",
+        iban: "",
+        swift: "",
+        intermediarySwift: "",
+        routingNumber: "",
+        accountNumber: "",
+        bankName: "",
+        ifsc: "",
+        bankCode: "",
+        paymentMethod: paymentMethod,
+        bankState: "",
+        branchCode: "",
+        accountName: "",
+        accountTitle: "",
+        walletProvider: "",
+        mobileNumber: "",
+        otherProvider: "",
+        accountType: "",
+        sortCode: "",
+      },
+    ]);
+
+    // Reset relationship states
+    setShowOtherRelationship(false);
+
+    // ✅ Clear ALL search-related state
     setFoundBeneficiary(null);
     setShowSearchResults(false);
-    setPhoneInput("");
-    formik.setFieldValue("phone_number", phoneInput);
-    formik.setFieldValue("country_phone_code", countryCodeInput);
+    setUsingExistingBeneficiary(false);
+
+    // ✅ Clear Redux search state
+    dispatch(clearPhoneSearch());
+
+    // ✅ Reset the processing flag
+    if (isProcessingPhoneSearch.current) {
+      isProcessingPhoneSearch.current = false;
+    }
+
+    // Move to next step
     setStep(1);
+
+    toast.info("Starting with a new beneficiary. Please fill in the details.");
   };
 
-  // ========== STEP NAVIGATION ==========
+  // Step navigation
   const nextStep = () => {
+    // Step 0: Phone Search Step
     if (step === 0) {
+      // Validate phone input
       if (!phoneInput.trim()) {
         toast.error("Please enter a phone number to search");
         return false;
@@ -931,7 +1322,16 @@ const BaseBeneficiaryForm = ({
         return false;
       }
 
+      // If we already have a found beneficiary from local search
+      if (foundBeneficiary) {
+        setUsingExistingBeneficiary(true);
+        setStep(1);
+        return true;
+      }
+
+      // Check if there are any beneficiaries in the system
       if (beneficiaries.length === 0) {
+        // No beneficiaries exist, skip search and go to details step
         formik.setFieldValue("phone_number", phoneInput);
         formik.setFieldValue("country_phone_code", countryCodeInput);
         setFoundBeneficiary(null);
@@ -939,16 +1339,18 @@ const BaseBeneficiaryForm = ({
         setShowSearchResults(false);
         setStep(1);
         toast.info(
-          "No existing beneficiaries found. You can create a new beneficiary."
+          "No existing beneficiaries found. You can create a new beneficiary.",
         );
         return true;
       }
 
+      // If we haven't performed a search yet, do it now
       if (!phoneSearch.searched) {
         handlePhoneSearchClick();
-        return false;
+        return false; // Don't proceed yet, wait for search results
       }
 
+      // If we've searched and found a beneficiary, use it
       if (phoneSearch.searched && phoneSearch.exists && phoneSearch.data) {
         setFoundBeneficiary(phoneSearch.data);
         setUsingExistingBeneficiary(true);
@@ -956,6 +1358,7 @@ const BaseBeneficiaryForm = ({
         return true;
       }
 
+      // If we've searched and no beneficiary found, create new
       if (phoneSearch.searched && !phoneSearch.exists) {
         formik.setFieldValue("phone_number", phoneInput);
         formik.setFieldValue("country_phone_code", countryCodeInput);
@@ -965,63 +1368,71 @@ const BaseBeneficiaryForm = ({
         return true;
       }
 
+      // Default fallback - just set the phone number and move to next step
       formik.setFieldValue("phone_number", phoneInput);
       formik.setFieldValue("country_phone_code", countryCodeInput);
       setStep(1);
       return true;
     }
 
-    // For public forms, check verification before proceeding
-    if (isPublic && step === 1) {
-      if (!emailVerified) {
-        toast.error("Please verify your email before proceeding");
-        return false;
+    // Step 1: Beneficiary Details Step
+    if (step === 1) {
+      // Check if we're in public registration mode
+      if (isPublic) {
+        if (!emailVerified) {
+          toast.error("Please verify your email before proceeding");
+          return false;
+        }
+        if (!phoneVerified) {
+          toast.error("Please verify your phone number before proceeding");
+          return false;
+        }
       }
-      if (!phoneVerified) {
-        toast.error("Please verify your phone number before proceeding");
+
+      // Currency-specific validations for BDT, INR, PKR
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        const countryInput = formik.values.country_id;
+        if (countryInput === "" || countryInput === " ") {
+          toast.error(`Country Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const streetInput = formik.values.street;
+        if (streetInput === "" || streetInput === " ") {
+          toast.error(`Street Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const idTypeInput = formik.values.beneficiary_id_type;
+        if (idTypeInput === "" || idTypeInput === " ") {
+          toast.error(`ID Type Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const idNumber = formik.values.beneficiary_id_number;
+        if (idNumber === "" || idNumber === " ") {
+          toast.error(`ID Number Required for Currency: ${currency}`);
+          return false;
+        }
+
+        // INR specific city validation
+        if (currency === "INR") {
+          const cityInput = formik.values.city;
+          if (cityInput === "" || cityInput === " ") {
+            toast.error(`City Required for Currency: ${currency}`);
+            return false;
+          }
+        }
+      }
+
+      // General form validation
+      if (!isFormValid()) {
+        toast.error("Please fill all required fields before proceeding");
         return false;
       }
     }
 
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      const countryInput = formik.values.country_id;
-      if (countryInput === "" || countryInput === " ") {
-        toast.error(`Country Required for Currency: ${currency}`);
-        return false;
-      }
-      const streetInput = formik.values.street;
-      if (streetInput === "" || streetInput === " ") {
-        toast.error(`Street Required for Currency: ${currency}`);
-        return false;
-      }
-      const idTypeInput = formik.values.beneficiary_id_type;
-      if (idTypeInput === "" || idTypeInput === " ") {
-        toast.error(`ID Type Required for Currency: ${currency}`);
-        return false;
-      }
-
-      const idNumber = formik.values.beneficiary_id_number;
-      if (idNumber === "" || idNumber === " ") {
-        toast.error(`ID Number Required for Currency: ${currency}`);
-        return false;
-      }
-
-      if (currency === "INR") {
-        // const cityInput = formik.values.city;
-        // if (cityInput === "" || cityInput === " ") {
-        //   toast.error(`City Required for Currency: ${currency}`);
-        //   return false;
-        // }
-      }
-    }
-
-    // General form validation
-    if (!isFormValid()) {
-      toast.error("Please fill all required fields before proceeding");
-      return false;
-    }
-
+    // Move to next step
     setStep(step + 1);
     return true;
   };
@@ -1034,31 +1445,12 @@ const BaseBeneficiaryForm = ({
     }
   };
 
-  // ========== BANK ACCOUNT FUNCTIONS ==========
-  const resetForm = () => {
-    setBankAccounts([
-      {
-        rails: "",
-        iban: "",
-        swift: "",
-        intermediarySwift: "",
-        routingNumber: "",
-        accountNumber: "",
-        sortCode: "",
-        bankName: "",
-        ifsc: "",
-        bankCode: "",
-        branchCode: branchCode,
-        bankState: "",
-      },
-    ]);
-  };
-
+  // Bank account functions
   const addBankAccount = () => {
     setBankAccounts([
       ...bankAccounts,
       {
-        rails: "",
+        rails: "Local",
         currency: currency,
         iban: "",
         swift: "",
@@ -1100,31 +1492,14 @@ const BaseBeneficiaryForm = ({
     }
   };
 
-  const handleBdtBankAccountChange = async (index, field, value) => {
-    const newBankAccounts = [...bankAccounts];
-    newBankAccounts[index][field] = value;
-    setBankAccounts(newBankAccounts);
-
-    if (field === "bankCode") {
-      onFetchBankBranches?.(value);
-    }
-  };
-
-  const handlePkrBankAccountChange = async (index, field, value) => {
-    const newBankAccounts = [...bankAccounts];
-    newBankAccounts[index][field] = value;
-    setBankAccounts(newBankAccounts);
-  };
-
-  // ========== SUBMIT HANDLER ==========
+  // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // For public registration, check verification
     if (isPublic) {
       if (!emailVerified || !phoneVerified) {
         toast.error(
-          "Please verify your email and phone number before submitting"
+          "Please verify your email and phone number before submitting",
         );
         return;
       }
@@ -1151,7 +1526,7 @@ const BaseBeneficiaryForm = ({
 
     try {
       const cleanedCountryCode = formik.values.country_phone_code.startsWith(
-        "+"
+        "+",
       )
         ? formik.values.country_phone_code.substring(1)
         : formik.values.country_phone_code;
@@ -1162,11 +1537,9 @@ const BaseBeneficiaryForm = ({
           ? formik.values.otherRelationship.trim()
           : formik.values.relationtobenef;
 
-      // Prepare beneficiary data based on public/private
       let beneficiaryData;
 
       if (isPublic) {
-        // Public registration payload
         beneficiaryData = {
           beneftype: formik.values.beneftype,
           first_name: formik.values.first_name || "",
@@ -1192,7 +1565,6 @@ const BaseBeneficiaryForm = ({
           hostname: window.location.hostname,
         };
       } else {
-        // Private registration payload
         beneficiaryData = {
           name: formik.values.name,
           country_id: formik.values.country_id,
@@ -1214,7 +1586,6 @@ const BaseBeneficiaryForm = ({
         };
       }
 
-      // Call onSubmit and wait for result
       const result = await onSubmit({
         beneficiaryData,
         bankAccounts,
@@ -1226,26 +1597,23 @@ const BaseBeneficiaryForm = ({
         mode,
       });
 
-      // If the result contains a beneficiary code, show success popup
       if (result && result.beneficiaryCode) {
         setBenefCode(result.beneficiaryCode);
         setShowSuccessPopup(true);
       } else if (result && result.benefCode) {
-        // Handle different response format
         setBenefCode(result.benefCode);
         setShowSuccessPopup(true);
       } else {
-        // Fallback: show success toast and reset form
         toast.success(
           mode === "create"
             ? "Beneficiary created successfully!"
-            : "Beneficiary updated successfully!"
+            : "Beneficiary updated successfully!",
         );
         if (mode === "create") {
           formik.resetForm();
           setBankAccounts([
             {
-              rails: "",
+              rails: "Local",
               currency: currency,
               iban: "",
               swift: "",
@@ -1278,977 +1646,1348 @@ const BaseBeneficiaryForm = ({
   };
 
   // ========== RENDER FUNCTIONS ==========
-  const FieldLabel = ({ children, required = false, info = null }) => (
-    <div className="flex items-center justify-between mb-2">
-      <label className={STYLES.fieldLabel}>
-        {children}
-        {required && <span className={STYLES.fieldRequired}>*</span>}
-      </label>
-      {info && (
-        <div className="group relative">
-          <FaInfoCircle
-            className="text-gray-400 hover:text-gray-600 cursor-help"
-            size={14}
-          />
-          <div className="absolute right-0 top-full mt-1 w-64 p-2 bg-gray-900 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-            {info}
+  const renderPhoneSearchStep = () => (
+    <motion.div
+      className="space-y-8"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
+      {/* Header Section */}
+      <motion.div
+        className="bg-gradient-to-r from-blue-50 to-indigo-50 p-8 rounded-3xl border border-blue-200 shadow-xl overflow-hidden relative"
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.3 }}
+      >
+        <motion.div
+          className="absolute top-0 right-0 w-64 h-64 bg-blue-400 rounded-full opacity-10"
+          animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+          transition={{ duration: 20, repeat: Infinity }}
+          style={{ top: -100, right: -100 }}
+        />
+        <div className="relative z-10 flex items-center">
+          <motion.div
+            className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white mr-5 shadow-lg"
+            whileHover={{ rotate: 360, scale: 1.1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <FaPhone size={28} />
+          </motion.div>
+          <div>
+            <motion.h2
+              className="text-2xl font-bold text-gray-800"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              Search Existing Beneficiary
+            </motion.h2>
+            <motion.p
+              className="text-gray-600"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              Enter the beneficiary's phone number to check if they already
+              exist in the system.
+            </motion.p>
           </div>
         </div>
-      )}
-    </div>
-  );
+      </motion.div>
 
-  const renderPhoneCodeSelector = () => (
-    <div className="w-full md:w-1/3">
-      <Select
-        className="text-sm"
-        classNamePrefix="select"
-        options={phoneCodeOptions}
-        placeholder="Code..."
-        isSearchable
-        onChange={(selectedOption) => {
-          setCountryCodeInput(selectedOption?.value || "+1");
-          formik.setFieldValue(
-            "country_phone_code",
-            selectedOption?.value || "+1"
-          );
-        }}
-        value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code
-        )}
-        formatOptionLabel={({ country, label }) => (
-          <div className="flex items-center">
-            {country?.flag_url && (
-              <img
-                src={country.flag_url}
-                alt="Flag"
-                className="w-6 h-4 mr-2 rounded-sm"
-              />
-            )}
-            <span>{label}</span>
-          </div>
-        )}
-        styles={customStyles}
-      />
-    </div>
-  );
-
-  const renderCountryDropdown = () => (
-    <select
-      className={`${STYLES.selectBase} ${
-        usingExistingBeneficiary ? STYLES.inputDisabled : ""
-      }`}
-      onChange={(e) => {
-        const selectedCountryId = e.target.value;
-        const selectedCountry = countries.find(
-          (country) => country.id === parseInt(selectedCountryId)
-        );
-
-        formik.setFieldValue("country_id", selectedCountryId);
-
-        if (selectedCountry) {
-          let countryPhoneCode = selectedCountry.phone_code || "+1";
-          if (!countryPhoneCode.startsWith("+")) {
-            countryPhoneCode = `+${countryPhoneCode}`;
-          }
-          formik.setFieldValue("country_phone_code", countryPhoneCode);
-          setCountryCodeInput(countryPhoneCode);
-        }
-      }}
-      value={formik.values.country_id}
-      name="country_id"
-      disabled={usingExistingBeneficiary}
-    >
-      <option value="">Select Country</option>
-      {countriesOptions.map((country) => (
-        <option key={country.value} value={country.id}>
-          {country.label} ({country.country_code})
-        </option>
-      ))}
-    </select>
-  );
-
-  // ========== RENDER NAME FIELD BASED ON PUBLIC/PRIVATE ==========
-  const renderNameField = () => {
-    if (isPublic) {
-      if (formik.values.beneftype === "individual") {
-        return (
-          <>
-            <FieldContainer>
-              <FieldLabel required>
-                First Name
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter first name"
-                value={formik.values.first_name}
+      <motion.div className="space-y-6" variants={staggerContainer}>
+        {/* Phone Input with Refresh Button */}
+        <motion.div variants={fadeInUp} className="relative">
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <FloatingLabelInput
+                label="Beneficiary Phone Number"
+                required
+                value={phoneInput}
                 onChange={(e) => {
-                  if (!usingExistingBeneficiary) {
-                    formik.handleChange(e);
-                    // Reset verification if name changes for public forms
-                    if (isPublic && emailVerified && setEmailVerified) {
-                      setEmailVerified(false);
-                    }
+                  setPhoneInput(e.target.value);
+                  // ✅ Clear ALL search state when typing
+                  setShowSearchResults(false);
+                  setFoundBeneficiary(null);
+                  setUsingExistingBeneficiary(false);
+                  dispatch(clearPhoneSearch());
+                  // ✅ Reset the processed flag
+                  if (isProcessingPhoneSearch.current) {
+                    isProcessingPhoneSearch.current = false;
                   }
                 }}
-                name="first_name"
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
+                type="tel"
+                disabled={phoneSearchLoading}
+                icon={FaMobileAlt}
               />
-            </FieldContainer>
-
-            <FieldContainer>
-              <FieldLabel>
-                Middle Name
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter middle name"
-                value={formik.values.middle_name}
-                onChange={formik.handleChange}
-                name="middle_name"
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-
-            <FieldContainer>
-              <FieldLabel required>
-                Last Name
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter last name"
-                value={formik.values.last_name}
-                onChange={formik.handleChange}
-                name="last_name"
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-          </>
-        );
-      } else {
-        return (
-          <FieldContainer className="md:col-span-2">
-            <FieldLabel required>
-              Institution Name
-              {usingExistingBeneficiary && (
-                <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-              )}
-            </FieldLabel>
-            <input
-              type="text"
-              className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                usingExistingBeneficiary ? STYLES.inputDisabled : ""
-              }`}
-              placeholder="Enter institution name"
-              value={formik.values.institution_name}
-              onChange={formik.handleChange}
-              name="institution_name"
-              disabled={usingExistingBeneficiary}
-              readOnly={usingExistingBeneficiary}
-            />
-          </FieldContainer>
-        );
-      }
-    } else {
-      return (
-        <FieldContainer>
-          <FieldLabel required>
-            Name
-            {usingExistingBeneficiary && (
-              <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-            )}
-          </FieldLabel>
-          <input
-            id="name"
-            type="text"
-            className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-              usingExistingBeneficiary ? STYLES.inputDisabled : ""
-            }`}
-            placeholder="Enter beneficiary name"
-            value={formik.values.name}
-            name="name"
-            onChange={formik.handleChange}
-            onBlur={formik.handleBlur}
-            disabled={usingExistingBeneficiary}
-            readOnly={usingExistingBeneficiary}
-          />
-        </FieldContainer>
-      );
-    }
-  };
-
-  // ========== RENDER EMAIL FIELD WITH VERIFICATION ==========
-  const renderEmailField = () => (
-    <FieldContainer className="md:col-span-2">
-      <FieldLabel info="For notifications and receipts" required>
-        Email
-        {usingExistingBeneficiary && (
-          <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-        )}
-      </FieldLabel>
-      <div className="flex flex-col md:flex-row gap-3">
-        <input
-          id="email"
-          type="email"
-          value={formik.values.email}
-          onChange={(e) => {
-            if (!usingExistingBeneficiary) {
-              formik.handleChange(e);
-              // Reset verification if email changes
-              if (isPublic && emailVerified && setEmailVerified) {
-                setEmailVerified(false);
-              }
-            }
-          }}
-          onBlur={formik.handleBlur}
-          className={`${STYLES.inputBase} ${STYLES.inputHover} flex-1 ${
-            usingExistingBeneficiary ? STYLES.inputDisabled : ""
-          }`}
-          placeholder="email@example.com"
-          disabled={usingExistingBeneficiary}
-          readOnly={usingExistingBeneficiary}
-        />
-
-        {/* Email verification button for public forms */}
-        {isPublic && onSendEmailPasscode && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!formik.values.email) {
-                toast.error("Please enter email first");
-                return;
-              }
-              onSendEmailPasscode?.(formik.values.email);
-            }}
-            disabled={
-              emailVerified ||
-              !formik.values.email ||
-              usingExistingBeneficiary ||
-              resendEmailLoading // Add this
-            }
-            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center min-w-32 ${
-              emailVerified
-                ? "bg-green-500 text-white cursor-default"
-                : !formik.values.email || usingExistingBeneficiary
-                ? "bg-gray-300 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
-            }`}
-          >
-            {resendEmailLoading ? ( // Show loader here
-              <>
-                <RingLoader size={16} color="#ffffff" className="mr-2" />
-                Sending...
-              </>
-            ) : emailVerified ? (
-              <span className="flex items-center">
-                <FaCheckCircle className="text-white mr-2" />
-                Verified
-              </span>
-            ) : (
-              "Verify Email"
-            )}
-          </button>
-        )}
-      </div>
-    </FieldContainer>
-  );
-
-  // ========== RENDER PHONE FIELD WITH VERIFICATION ==========
-  const renderPhoneField = () => (
-    <FieldContainer className="md:col-span-2">
-      <FieldLabel required>
-        Phone Number
-        {usingExistingBeneficiary && (
-          <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-        )}
-      </FieldLabel>
-      <div className="flex flex-col md:flex-row gap-3">
-        <div
-          className={`w-full md:w-1/3 ${
-            usingExistingBeneficiary ? "opacity-70" : ""
-          }`}
-        >
-          <Select
-            className="text-sm"
-            classNamePrefix="select"
-            options={phoneCodeOptions}
-            placeholder="Code..."
-            isSearchable
-            onChange={(selectedOption) => {
-              if (!usingExistingBeneficiary) {
-                formik.setFieldValue(
-                  "country_phone_code",
-                  selectedOption?.value || ""
-                );
-                // Reset verification if country code changes
-                if (isPublic && phoneVerified && setPhoneVerified) {
-                  setPhoneVerified(false);
-                }
-              }
-            }}
-            value={phoneCodeOptions.find(
-              (option) => option.value === formik.values.country_phone_code
-            )}
-            formatOptionLabel={({ country, label }) => (
-              <div className="flex items-center">
-                {country?.flag_url && (
-                  <img
-                    src={country.flag_url}
-                    alt="Flag"
-                    className="w-6 h-4 mr-2 rounded-sm"
-                  />
-                )}
-                <span>{label}</span>
-              </div>
-            )}
-            styles={{
-              ...customStyles,
-              control: (provided, state) => ({
-                ...customStyles.control(provided, state),
-                backgroundColor: usingExistingBeneficiary ? "#f3f4f6" : "white",
-                cursor: usingExistingBeneficiary ? "not-allowed" : "default",
-                opacity: usingExistingBeneficiary ? 0.7 : 1,
-              }),
-            }}
-            isDisabled={usingExistingBeneficiary}
-          />
-        </div>
-        <div className="flex gap-3 w-full md:flex-1">
-          <input
-            id="phone_number"
-            type="tel"
-            className={`${STYLES.inputBase} ${STYLES.inputHover} flex-1 ${
-              usingExistingBeneficiary ? STYLES.inputDisabled : ""
-            }`}
-            placeholder="Enter phone number"
-            value={formik.values.phone_number}
-            name="phone_number"
-            onChange={(e) => {
-              if (!usingExistingBeneficiary) {
-                formik.handleChange(e);
-                // Reset verification if phone number changes
-                if (isPublic && phoneVerified && setPhoneVerified) {
-                  setPhoneVerified(false);
-                }
-              }
-            }}
-            onBlur={formik.handleBlur}
-            disabled={usingExistingBeneficiary}
-            readOnly={usingExistingBeneficiary}
-          />
-
-          {/* Phone verification button for public forms */}
-          {isPublic && onSendPhoneOTP && (
-            <button
+            </div>
+            
+            <motion.button
               type="button"
               onClick={() => {
-                if (
-                  !formik.values.phone_number ||
-                  !formik.values.country_phone_code
-                ) {
-                  toast.error("Please enter phone number and country code");
-                  return;
+                if (customerId && phoneInput.trim()) {
+                  console.log("🔄 Manual refresh - searching again...");
+                  // Reset processing flag
+                  if (isProcessingPhoneSearch.current) {
+                    isProcessingPhoneSearch.current = false;
+                  }
+                  // Trigger a new search
+                  handlePhoneSearchClick();
+                } else if (!phoneInput.trim()) {
+                  toast.error("Please enter a phone number to search");
+                } else if (!customerId) {
+                  toast.error("Customer ID missing");
                 }
-                onSendPhoneOTP?.(
-                  formik.values.country_phone_code,
-                  formik.values.phone_number
+              }}
+              className="px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all duration-300 flex items-center justify-center shadow-sm hover:shadow-md"
+              whileHover={{ scale: 1.05, rotate: 90 }}
+              whileTap={{ scale: 0.95 }}
+              title="Search again"
+              disabled={phoneSearchLoading}
+            >
+              <FaSync
+                className={`text-gray-600 ${phoneSearchLoading ? "animate-spin" : ""}`}
+                size={18}
+              />
+            </motion.button>
+          </div>
+
+          {/* Beneficiaries Count Indicator */}
+          {beneficiaries.length > 0 && !phoneSearchLoading && (
+            <motion.div
+              className="flex items-center gap-2 mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded-lg"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <FaCheckCircle size={12} className="text-green-500" />
+              <span>
+                {beneficiaries.length} existing beneficiary(ies) loaded for
+                search
+              </span>
+              <span className="text-gray-300">•</span>
+              <span>Phone numbers will be checked against this list</span>
+            </motion.div>
+          )}
+
+          <motion.p
+            className="text-sm text-gray-500 mt-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            We'll check if a beneficiary with this phone number already exists
+          </motion.p>
+        </motion.div>
+
+        {/* Country Code Select */}
+        <motion.div variants={fadeInUp}>
+          <AnimatedSelect
+            label="Country Code"
+            required
+            options={countriesOptions}
+            icon={FaGlobe}
+            value={(() => {
+              if (formik.values.country_id) {
+                const selectedById = countriesOptions.find(
+                  (option) =>
+                    option.value === parseInt(formik.values.country_id),
                 );
-              }}
-              disabled={
-                phoneVerified ||
-                !formik.values.phone_number ||
-                !formik.values.country_phone_code ||
-                usingExistingBeneficiary ||
-                resendPhoneLoading // Add this
+                if (selectedById) return selectedById;
               }
-              className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center min-w-32 ${
-                phoneVerified
-                  ? "bg-green-500 text-white cursor-default"
-                  : !formik.values.phone_number ||
-                    !formik.values.country_phone_code ||
-                    usingExistingBeneficiary
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
-              }`}
-            >
-              {resendPhoneLoading ? ( // Show loader here
-                <>
-                  <RingLoader size={16} color="#ffffff" className="mr-2" />
-                  Sending...
-                </>
-              ) : phoneVerified ? (
-                <span className="flex items-center">
-                  <FaCheckCircle className="text-white mr-2" />
-                  Verified
-                </span>
-              ) : (
-                "Verify Phone"
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    </FieldContainer>
-  );
-
-  // ========== RENDER PASSWORD FIELDS ==========
-  const renderPasswordFields = () => {
-    if (!isPublic) return null;
-
-    return (
-      <>
-        <FieldContainer>
-          <FieldLabel required>Password</FieldLabel>
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              autoComplete="new-password"
-              value={formik.values.password}
-              onChange={(e) => {
-                formik.handleChange(e);
-                if (validatePassword) {
-                  validatePassword(e.target.value);
-                }
-              }}
-              onBlur={formik.handleBlur}
-              placeholder="Enter password (min 12 characters)"
-              className={`${STYLES.inputBase} ${STYLES.inputHover} pr-12`}
-            />
-            {setShowPassword && (
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
-              </button>
-            )}
-          </div>
-
-          {/* Password Validation Rules */}
-          {formik.values.password && passwordErrors && (
-            <div className="mt-3 space-y-2">
-              {Object.entries(passwordErrors).map(([key, isValid]) => (
-                <div
-                  key={key}
-                  className={`flex items-center text-sm ${
-                    isValid ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full mr-2 ${
-                      isValid ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  ></div>
-                  {key === "length" && "At least 12 characters"}
-                  {key === "uppercase" && "At least one uppercase letter (A-Z)"}
-                  {key === "lowercase" && "At least one lowercase letter (a-z)"}
-                  {key === "number" && "At least one number (0-9)"}
-                  {key === "special" && "At least one special character"}
-                </div>
-              ))}
-            </div>
-          )}
-        </FieldContainer>
-
-        <FieldContainer>
-          <FieldLabel required>Confirm Password</FieldLabel>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              name="confirmPassword"
-              autoComplete="new-password"
-              value={formik.values.confirmPassword}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              placeholder="Confirm password"
-              className={`${STYLES.inputBase} ${STYLES.inputHover} pr-12`}
-            />
-            {setShowConfirmPassword && (
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? (
-                  <FaEyeSlash size={20} />
-                ) : (
-                  <FaEye size={20} />
+              if (formik.values.country_phone_code) {
+                return countriesOptions.find(
+                  (option) =>
+                    option.phoneCode === formik.values.country_phone_code,
+                );
+              }
+              return null;
+            })()}
+            onChange={(selectedOption) => {
+              // Always allow changing country code, even when beneficiary is found
+              const phoneCode = selectedOption?.phoneCode || "+1";
+              const countryId = selectedOption?.value;
+              formik.setFieldValue("country_phone_code", phoneCode);
+              formik.setFieldValue("country_id", countryId?.toString());
+              setCountryCodeInput(phoneCode);
+            }}
+            formatOptionLabel={(option) => (
+              <div className="flex items-center">
+                {option.flag_url && (
+                  <img
+                    src={option.flag_url}
+                    alt={`${option.label} flag`}
+                    className="w-6 h-4 mr-2 rounded-sm object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = "none";
+                    }}
+                  />
                 )}
-              </button>
+                <span>
+                  {option.phoneCode} ({option.label})
+                </span>
+              </div>
             )}
-          </div>
+            // No disabled condition - always enabled
+          />
+        </motion.div>
 
-          {/* Password Match Validation */}
-          {formik.values.confirmPassword && (
-            <div className="mt-2">
-              <div
-                className={`flex items-center text-sm ${
-                  formik.values.password === formik.values.confirmPassword
-                    ? "text-green-600"
-                    : "text-red-500"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    formik.values.password === formik.values.confirmPassword
-                      ? "bg-green-500"
-                      : "bg-red-500"
-                  }`}
-                ></div>
-                {formik.values.password === formik.values.confirmPassword
-                  ? "Passwords match"
-                  : "Passwords must match"}
-              </div>
-            </div>
-          )}
-        </FieldContainer>
-      </>
-    );
-  };
-
-  // ========== RENDER BIC/NCC FIELD ==========
-  const renderBicNccField = () => {
-    if (!isPublic) return null;
-
-    return (
-      <FieldContainer>
-        <FieldLabel info="Bank Identifier Code / National Clearing Code">
-          BIC/NCC Code
-        </FieldLabel>
-        <input
-          type="text"
-          className={`${STYLES.inputBase} ${STYLES.inputHover}`}
-          placeholder="Enter BIC/NCC code"
-          value={formik.values.bic_ncc_code}
-          onChange={formik.handleChange}
-          name="bic_ncc_code"
-        />
-      </FieldContainer>
-    );
-  };
-
-  // ========== ADD THIS NEW FUNCTION HERE ==========
-  const renderBeneficiaryTypeSelection = () => (
-    <FieldContainer>
-      <FieldLabel required>
-        Beneficiary Type
-        {usingExistingBeneficiary && (
-          <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-        )}
-      </FieldLabel>
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-3 border border-gray-300 rounded-xl">
-        <label className="flex items-center cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex-1">
-          <div className="relative mr-3">
-            <input
-              type="radio"
-              name="beneftype"
-              value="individual"
-              checked={formik.values.beneftype === "individual"}
-              onChange={formik.handleChange}
-              disabled={usingExistingBeneficiary}
-              className="h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2 cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 mr-3">
-              <FaUser size={18} />
-            </div>
-            <div>
-              <span className="text-gray-700 font-medium">Individual</span>
-              <p className="text-sm text-gray-500">
-                Personal beneficiary account
-              </p>
-            </div>
-          </div>
-        </label>
-
-        <label className="flex items-center cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex-1">
-          <div className="relative mr-3">
-            <input
-              type="radio"
-              name="beneftype"
-              value="institution"
-              checked={formik.values.beneftype === "institution"}
-              onChange={formik.handleChange}
-              disabled={usingExistingBeneficiary}
-              className="h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2 cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 mr-3">
-              <FaBuilding size={18} />
-            </div>
-            <div>
-              <span className="text-gray-700 font-medium">Institution</span>
-              <p className="text-sm text-gray-500">
-                Business or organization account
-              </p>
-            </div>
-          </div>
-        </label>
-      </div>
-
-      {/* Validation feedback */}
-      {formik.touched.beneftype && formik.errors.beneftype && (
-        <div className="mt-2 text-sm text-red-600 flex items-center">
-          <FaExclamationTriangle className="mr-1" size={14} />
-          {formik.errors.beneftype}
-        </div>
-      )}
-    </FieldContainer>
-  );
-
-  // ========== RENDER VERIFICATION STATUS ==========
-  const renderVerificationStatus = () => {
-    if (!isPublic) return null;
-
-    return (
-      <div className="mb-6">
-        <div className={STYLES.fieldGrid}>
-          <div
-            className={`p-4 rounded-xl border-2 ${
-              emailVerified
-                ? "border-green-500 bg-green-50"
-                : "border-gray-300 bg-gray-50"
+        {/* Search Button */}
+        <motion.div variants={fadeInUp}>
+          <motion.button
+            type="button"
+            onClick={handlePhoneSearch}
+            disabled={!phoneInput.trim() || phoneSearchLoading}
+            className={`w-full px-6 py-4 rounded-xl transition-all duration-300 flex items-center justify-center font-medium ${
+              phoneSearchLoading || !phoneInput.trim()
+                ? "bg-gray-300 cursor-not-allowed text-gray-500"
+                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl"
             }`}
+            whileHover={
+              !phoneSearchLoading && phoneInput.trim()
+                ? { scale: 1.02, y: -2 }
+                : {}
+            }
+            whileTap={
+              !phoneSearchLoading && phoneInput.trim() ? { scale: 0.98 } : {}
+            }
           >
-            <div className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                  emailVerified
-                    ? "bg-green-100 text-green-600"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                <FaCheckCircle size={16} />
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-800">
-                  Email Verification
-                </h4>
-                <p className="text-sm text-gray-600">
-                  {emailVerified ? "Verified" : "Pending"}
-                </p>
-              </div>
-            </div>
-          </div>
+            {phoneSearchLoading ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="mr-2"
+                >
+                  <FaSpinner />
+                </motion.div>
+                Searching...
+              </>
+            ) : (
+              <>
+                <FaSearch className="mr-2" />
+                Search Beneficiary
+              </>
+            )}
+          </motion.button>
+        </motion.div>
 
-          <div
-            className={`p-4 rounded-xl border-2 ${
-              phoneVerified
-                ? "border-green-500 bg-green-50"
-                : "border-gray-300 bg-gray-50"
-            }`}
-          >
-            <div className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                  phoneVerified
-                    ? "bg-green-100 text-green-600"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                <FaCheckCircle size={16} />
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-800">
-                  Phone Verification
-                </h4>
-                <p className="text-sm text-gray-600">
-                  {phoneVerified ? "Verified" : "Pending"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ========== RENDER PHONE SEARCH STEP ==========
-  const renderPhoneSearchStep = () => (
-    <div className="space-y-6">
-      <InfoBox
-        type="info"
-        title="Search Existing Beneficiary"
-        description="Enter the beneficiary's phone number to check if they already exist in the system."
-      />
-
-      <div className={STYLES.formContainer}>
-        <div className={STYLES.formPadding}>
-          {/* Phone Input */}
-          <FieldContainer>
-            <FieldLabel
-              required
-              info="Enter the phone number of the beneficiary you want to add"
+        {/* Beneficiary Found Section - Enhanced */}
+        <AnimatePresence mode="wait">
+          {foundBeneficiary && (
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="relative overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200"
             >
-              Beneficiary Phone Number
-            </FieldLabel>
-            <div className="flex flex-col md:flex-row gap-3">
-              {/* Country Code Selector */}
-              <div className="w-full md:w-1/3">
-                <Select
-                  className="text-sm"
-                  classNamePrefix="select"
-                  options={phoneCodeOptions}
-                  placeholder="Code..."
-                  isSearchable
-                  onChange={(selectedOption) => {
-                    setCountryCodeInput(selectedOption?.value || "+1");
-                  }}
-                  value={phoneCodeOptions.find(
-                    (option) => option.value === countryCodeInput
-                  )}
-                  formatOptionLabel={({ country, label }) => (
-                    <div className="flex items-center">
-                      {country?.flag_url && (
-                        <img
-                          src={country.flag_url}
-                          alt="Flag"
-                          className="w-6 h-4 mr-2 rounded-sm"
-                        />
-                      )}
-                      <span>{label}</span>
+              {/* Header with gradient */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <FaCheckCircle className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      Beneficiary Found!
+                    </h3>
+                    <p className="text-white/80 text-sm">
+                      An existing profile was found for this phone number.
+                      Review the details below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Beneficiary Details Section - Enhanced */}
+              <div className="p-6">
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
+                  <FaUser className="mr-2 text-blue-500" size={14} />
+                  Beneficiary Information
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Personal Details Column */}
+                  <div className="space-y-4">
+                    {/* Full Name */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <FaUser className="text-blue-600" size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Full Name
+                        </p>
+                        <p className="font-semibold text-gray-900 mt-1">
+                          {foundBeneficiary.name || "N/A"}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  styles={customStyles}
-                />
-              </div>
 
-              {/* Phone Number Input */}
-              <div className="flex gap-3 w-full md:flex-1">
-                <input
-                  type="tel"
-                  value={phoneInput}
-                  onChange={(e) => {
-                    setPhoneInput(e.target.value);
-                    if (phoneSearch.searched) {
-                      setShowSearchResults(false);
-                      setFoundBeneficiary(null);
-                      setUsingExistingBeneficiary(false);
-                    }
-                  }}
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} flex-1`}
-                  placeholder="Enter phone number"
-                  disabled={phoneSearchLoading}
-                />
-                <button
-                  type="button"
-                  onClick={handlePhoneSearchClick}
-                  disabled={!phoneInput.trim() || phoneSearchLoading}
-                  className={`px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap flex items-center justify-center min-w-32 ${
-                    phoneSearchLoading
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : !phoneInput.trim()
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-blue-500 hover:bg-blue-600 text-white"
-                  }`}
-                >
-                  {phoneSearchLoading ? (
-                    <>
-                      <RingLoader size={16} color="#ffffff" className="mr-2" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <FaSearch className="mr-2" />
-                      Search
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              We'll check if a beneficiary with this phone number already exists
-            </p>
-          </FieldContainer>
+                    {/* Email Address */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                        <FaEnvelope className="text-purple-600" size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Email Address
+                        </p>
+                        <p className="font-semibold text-gray-900 break-all mt-1">
+                          {foundBeneficiary.email || "Not provided"}
+                        </p>
+                      </div>
+                    </div>
 
-          {/* Search Results */}
-          {phoneSearch.searched && !phoneSearchLoading && (
-            <div className="mb-6">
-              {phoneSearch.exists && phoneSearch.data ? (
-                <InfoBox
-                  type="warning"
-                  title="Beneficiary Found!"
-                  description="We found an existing beneficiary with this phone number"
-                >
-                  <div className="mb-4 p-4 bg-white rounded-lg border border-yellow-100">
-                    <h4 className="font-semibold text-gray-800 mb-3">
-                      Existing Beneficiary Details:
-                    </h4>
-                    <div className={STYLES.fieldGrid}>
-                      <div>
-                        <span className="text-sm text-gray-500">Name:</span>
-                        <p className="font-medium">
-                          {phoneSearch.data.name || "N/A"}
+                    {/* Phone Number */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <FaPhone className="text-green-600" size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Phone Number
+                        </p>
+                        <p className="font-semibold text-gray-900 mt-1">
+                          {foundBeneficiary.phone_number || "N/A"}
                         </p>
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Email:</span>
-                        <p className="font-medium">
-                          {phoneSearch.data.email || "N/A"}
+                    </div>
+
+                    {/* Beneficiary Type */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                        <FaUserFriends className="text-orange-600" size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Beneficiary Type
+                        </p>
+                        <p className="font-semibold text-gray-900 capitalize mt-1">
+                          {foundBeneficiary.beneftype || "Individual"}
                         </p>
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Phone:</span>
-                        <p className="font-medium">
-                          {phoneSearch.data.phone_number || "N/A"}
-                        </p>
+                    </div>
+                  </div>
+
+                  {/* Additional Details Column */}
+                  <div className="space-y-4">
+                    {/* Country */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                        <FaGlobe className="text-indigo-600" size={14} />
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Country:</span>
-                        <p className="font-medium">
-                          {phoneSearch.data.country_id
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Country
+                        </p>
+                        <p className="font-semibold text-gray-900 mt-1">
+                          {foundBeneficiary.country_id
                             ? countries.find(
                                 (c) =>
-                                  c.id === parseInt(phoneSearch.data.country_id)
+                                  c.id ===
+                                  parseInt(foundBeneficiary.country_id),
                               )?.name || "N/A"
                             : "N/A"}
                         </p>
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Currency:</span>
-                        <p className="font-medium">
-                          {phoneSearch.data.currency || "N/A"}
+                    </div>
+
+                    {/* Default Currency */}
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                        <FaMoneyBillWave
+                          className="text-yellow-600"
+                          size={14}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Default Currency
+                        </p>
+                        <p className="font-semibold text-gray-900 mt-1">
+                          {foundBeneficiary.currency || "USD"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Relationship (if individual) */}
+                    {foundBeneficiary.relationtobenef && (
+                      <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center">
+                          <FaRegHandshake className="text-pink-600" size={14} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                            Relationship
+                          </p>
+                          <p className="font-semibold text-gray-900 capitalize mt-1">
+                            {foundBeneficiary.relationtobenef}
+                            {foundBeneficiary.otherRelationship &&
+                              ` (${foundBeneficiary.otherRelationship})`}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Registration Date */}
+                    {foundBeneficiary.created_at && (
+                      <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+                          <FaCalendarAlt className="text-teal-600" size={14} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                            Registered On
+                          </p>
+                          <p className="font-semibold text-gray-900 mt-1">
+                            {new Date(
+                              foundBeneficiary.created_at,
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Address Section (if available) */}
+                {foundBeneficiary.street && (
+                  <div className="mt-5 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center">
+                        <FaMapMarkerAlt className="text-blue-600" size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          Address
+                        </p>
+                        <p className="text-gray-700 mt-1">
+                          {foundBeneficiary.street}
+                          {foundBeneficiary.city &&
+                            `, ${foundBeneficiary.city}`}
+                          {foundBeneficiary.state &&
+                            `, ${foundBeneficiary.state}`}
+                          {foundBeneficiary.postalcode &&
+                            ` ${foundBeneficiary.postalcode}`}
                         </p>
                       </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <button
-                      type="button"
-                      onClick={handleUseFoundBeneficiary}
-                      className={STYLES.buttonWarning}
-                    >
-                      <FaCheckCircle className="mr-2" />
-                      Use Existing Beneficiary
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCreateNewBeneficiary}
-                      className={STYLES.buttonSecondary}
-                    >
-                      <FaUser className="mr-2" />
-                      Create New Instead
-                    </button>
-                  </div>
-                </InfoBox>
-              ) : (
-                <InfoBox
-                  type="success"
-                  title="No Existing Beneficiary Found"
-                  description="You can create a new beneficiary with this phone number"
-                >
-                  <div className="mb-4 p-4 bg-white rounded-lg border border-green-100">
-                    <p className="text-gray-700">
-                      No beneficiary was found with the phone number{" "}
-                      <span className="font-semibold">{phoneInput}</span>. You
-                      can proceed to create a new beneficiary.
+                {/* Bank Accounts Section */}
+                {foundBeneficiary.banks &&
+                  foundBeneficiary.banks.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
+                        <FaUniversity
+                          className="mr-2 text-blue-500"
+                          size={14}
+                        />
+                        Bank Accounts ({foundBeneficiary.banks.length})
+                      </h4>
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                        {foundBeneficiary.banks.slice(0, 5).map((bank, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200 hover:shadow-md transition-all"
+                          >
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                              <FaUniversity
+                                className="text-gray-600"
+                                size={14}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <p className="font-medium text-gray-800">
+                                  {bank.bank_name || "Bank Account"}
+                                </p>
+                                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                                  {bank.rails || "Local"}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600 mt-1">
+                                <span className="font-medium">Currency:</span>{" "}
+                                {bank.currency_code ||
+                                  foundBeneficiary.currency ||
+                                  "USD"}
+                              </div>
+                              {bank.bank_acc_no && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Account: ****{bank.bank_acc_no.slice(-4)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {foundBeneficiary.banks.length > 5 && (
+                          <p className="text-xs text-blue-600 text-center mt-2">
+                            +{foundBeneficiary.banks.length - 5} more account(s)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Note about pre-filled fields */}
+                <div className="mt-6 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                  <div className="flex items-start gap-2">
+                    <FaInfoCircle
+                      className="text-amber-600 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                    <p className="text-xs text-amber-700">
+                      This beneficiary already exists in the system. You can
+                      review their information above. If you want to create a
+                      new beneficiary with different details, click "Create New
+                      Beneficiary" below.
                     </p>
                   </div>
+                </div>
+              </div>
 
-                  <button
-                    type="button"
+              {/* Action Buttons - Only "Create New Beneficiary" */}
+              <div className="border-t border-gray-200 p-6 bg-gray-50/50">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <motion.button
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleCreateNewBeneficiary}
-                    className={STYLES.buttonSuccess}
+                    className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-md shadow-blue-200 flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                   >
-                    <FaUser className="mr-2" />
+                    <FaUserPlus size={18} />
                     Create New Beneficiary
-                  </button>
-                </InfoBox>
+                  </motion.button>
+                  {/* ✅ Add this button for starting a fresh search */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      // Clear all search state
+                      setPhoneInput("");
+                      setCountryCodeInput("+1");
+                      setShowSearchResults(false);
+                      setFoundBeneficiary(null);
+                      setUsingExistingBeneficiary(false);
+                      dispatch(clearPhoneSearch());
+                      if (isProcessingPhoneSearch.current) {
+                        isProcessingPhoneSearch.current = false;
+                      }
+                      // Reset the country code in formik
+                      formik.setFieldValue("country_phone_code", "+1");
+                      toast.info("Ready to search for a different beneficiary");
+                    }}
+                    className="flex-1 py-3.5 bg-white border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    <FaSearch size={18} />
+                    Search Different Number
+                  </motion.button>
+                </div>
+                <p className="text-xs text-gray-500 text-center mt-4">
+                  Create a new beneficiary with different details. The existing
+                  beneficiary information shown above is for reference only.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* No Beneficiary Found State */}
+          {!foundBeneficiary &&
+            showSearchResults &&
+            !phoneSearchLoading &&
+            phoneInput && (
+              <motion.div
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                className="relative overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200"
+              >
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-xl">
+                      <FaCheckCircle className="text-white" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">
+                        Ready to Create
+                      </h3>
+                      <p className="text-white/80 text-sm">
+                        This phone number is available for a new beneficiary
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-6">
+                    <FaPhone className="text-emerald-600" size={24} />
+                    <div>
+                      <p className="text-sm text-gray-600">
+                        No existing records found for
+                      </p>
+                      <p className="font-bold text-gray-900 text-lg">
+                        {phoneInput}
+                      </p>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCreateNewBeneficiary}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition-all"
+                  >
+                    <FaPlus size={18} />
+                    Create New Beneficiary
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+        </AnimatePresence>
+
+        {/* Navigation Buttons */}
+        <motion.div
+          className="flex flex-col md:flex-row gap-4 pt-8 border-t border-gray-200"
+          variants={fadeInUp}
+        >
+          <motion.button
+            type="button"
+            onClick={handleCancel}
+            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 flex items-center justify-center font-medium"
+            whileHover={{ x: -5, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <FaArrowLeft className="mr-2" />
+            Cancel
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={nextStep}
+            disabled={phoneSearchLoading || !phoneInput.trim()}
+            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium ${
+              phoneSearchLoading || !phoneInput.trim()
+                ? "bg-gray-300 cursor-not-allowed text-gray-500"
+                : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
+            }`}
+            whileHover={
+              !phoneSearchLoading && phoneInput.trim()
+                ? { x: 5, scale: 1.02 }
+                : {}
+            }
+            whileTap={
+              !phoneSearchLoading && phoneInput.trim() ? { scale: 0.98 } : {}
+            }
+          >
+            {phoneSearchLoading ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="mr-2"
+                >
+                  <FaSpinner />
+                </motion.div>
+                Searching...
+              </>
+            ) : (
+              <>
+                Continue
+                <FaChevronRight className="ml-2" />
+              </>
+            )}
+          </motion.button>
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+
+  const renderBeneficiaryDetailsStep = () => {
+    return (
+      <motion.div
+        className="space-y-8"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div
+          className="bg-gradient-to-r from-blue-50 to-indigo-50 p-8 rounded-3xl border border-blue-200 shadow-xl overflow-hidden relative"
+          whileHover={{ scale: 1.02 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            className="absolute top-0 right-0 w-64 h-64 bg-blue-400 rounded-full opacity-10"
+            animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+            transition={{ duration: 20, repeat: Infinity }}
+            style={{ top: -100, right: -100 }}
+          />
+          <div className="relative z-10 flex items-center">
+            <motion.div
+              className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white mr-5 shadow-lg"
+              whileHover={{ rotate: 360, scale: 1.1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <FaUser size={28} />
+            </motion.div>
+            <div>
+              <motion.h2
+                className="text-2xl font-bold text-gray-800"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                Beneficiary Details
+              </motion.h2>
+              <motion.p
+                className="text-gray-600"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                Please provide the personal information of the beneficiary
+              </motion.p>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2">
+            <FieldLabel required>Beneficiary Type</FieldLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                {
+                  type: "individual",
+                  title: "Individual",
+                  desc: "Personal beneficiary",
+                  icon: FaRegUser,
+                },
+                {
+                  type: "institution",
+                  title: "Institution",
+                  desc: "Company or organization",
+                  icon: FaRegBuilding,
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.type}
+                  className={`p-5 border-2 rounded-2xl cursor-pointer transition-all duration-300 ${
+                    formik.values.beneftype === item.type
+                      ? "border-blue-500 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-lg"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-md"
+                  } ${usingExistingBeneficiary ? "opacity-50 cursor-not-allowed" : ""}`}
+                  onClick={() => {
+                    if (!usingExistingBeneficiary) {
+                      formik.setFieldValue("beneftype", item.type);
+                    }
+                  }}
+                  whileHover={
+                    !usingExistingBeneficiary ? { scale: 1.02, y: -2 } : {}
+                  }
+                  whileTap={!usingExistingBeneficiary ? { scale: 0.98 } : {}}
+                >
+                  <div className="flex items-center">
+                    <div
+                      className={`w-6 h-6 rounded-full border-2 mr-3 flex items-center justify-center transition-all duration-200 ${
+                        formik.values.beneftype === item.type
+                          ? "border-blue-500 bg-blue-500"
+                          : "border-gray-300"
+                      }`}
+                    >
+                      {formik.values.beneftype === item.type && (
+                        <motion.div
+                          className="w-2 h-2 rounded-full bg-white"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 500 }}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-800 flex items-center">
+                        <item.icon className="mr-2 text-blue-500" size={18} />
+                        {item.title}
+                        {usingExistingBeneficiary && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (Pre-filled)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">{item.desc}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            {usingExistingBeneficiary && (
+              <motion.p
+                className="text-sm text-yellow-600 mt-2"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <FaInfoCircle className="inline mr-1" />
+                Using existing beneficiary information. Fields are pre-filled
+                and cannot be edited.
+              </motion.p>
+            )}
+          </div>
+
+          <div className="md:col-span-2">
+            <AnimatedSelect
+              label="Beneficiary Currency"
+              info="Select the currency for transfers"
+              icon={FaMoneyBillWave}
+              options={localCurrencies.map((cur) => ({
+                value: cur,
+                label: cur,
+              }))}
+              value={localCurrencies
+                .map((cur) => ({ value: cur, label: cur }))
+                .find((option) => option.value === currency)}
+              onChange={handleCurrencyChange}
+              disabled={usingExistingBeneficiary}
+            />
+          </div>
+
+          {formik.values.beneftype === "individual" ? (
+            <>
+              <div>
+                <FloatingLabelInput
+                  label="First Name"
+                  required
+                  value={formik.values.first_name}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  name="first_name"
+                  disabled={usingExistingBeneficiary}
+                  icon={FaUser}
+                />
+              </div>
+              <div>
+                <FloatingLabelInput
+                  label="Last Name"
+                  required
+                  value={formik.values.last_name}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  name="last_name"
+                  disabled={usingExistingBeneficiary}
+                  icon={FaUser}
+                />
+              </div>
+              <div>
+                <FloatingLabelInput
+                  label="Middle Name"
+                  value={formik.values.middle_name}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  name="middle_name"
+                  disabled={usingExistingBeneficiary}
+                  icon={FaUser}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="md:col-span-2">
+              <FloatingLabelInput
+                label="Institution Name"
+                required
+                value={formik.values.institution_name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                name="institution_name"
+                disabled={usingExistingBeneficiary}
+                icon={FaBuilding}
+              />
+            </div>
+          )}
+
+          <div>
+            <FloatingLabelInput
+              label="Email Address"
+              required
+              info="For notifications and receipts"
+              value={formik.values.email}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="email"
+              type="email"
+              disabled={usingExistingBeneficiary}
+              icon={FaEnvelope}
+            />
+          </div>
+
+          <div>
+            <FloatingLabelInput
+              label="Phone Number"
+              required
+              value={formik.values.phone_number}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="phone_number"
+              type="tel"
+              disabled={usingExistingBeneficiary}
+              icon={FaPhone}
+            />
+          </div>
+
+          <div>
+            <AnimatedSelect
+              label="Country"
+              required
+              icon={FaGlobe}
+              options={countriesOptions}
+              value={(() => {
+                if (formik.values.country_id) {
+                  const selectedById = countriesOptions.find(
+                    (option) =>
+                      option.value === parseInt(formik.values.country_id),
+                  );
+                  if (selectedById) return selectedById;
+                }
+                return null;
+              })()}
+              onChange={(selectedOption) => {
+                if (!usingExistingBeneficiary) {
+                  const countryId = selectedOption?.value;
+                  formik.setFieldValue("country_id", countryId?.toString());
+                }
+              }}
+              formatOptionLabel={(option) => (
+                <div className="flex items-center">
+                  {option.flag_url && (
+                    <img
+                      src={option.flag_url}
+                      alt={`${option.label} flag`}
+                      className="w-6 h-4 mr-2 rounded-sm object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.style.display = "none";
+                      }}
+                    />
+                  )}
+                  <span>{option.label}</span>
+                </div>
+              )}
+              disabled={usingExistingBeneficiary}
+            />
+          </div>
+
+          <div>
+            <AnimatedSelect
+              label="Nationality"
+              icon={FaFlag}
+              options={nationalities.map((nat) => ({
+                value: nat.id.toString(),
+                label: nat.name,
+              }))}
+              value={nationalities
+                .map((nat) => ({
+                  value: nat.id.toString(),
+                  label: nat.name,
+                }))
+                .find(
+                  (option) => option.value === formik.values.nationality_id,
+                )}
+              onChange={(selectedOption) => {
+                if (!usingExistingBeneficiary) {
+                  formik.setFieldValue("nationality_id", selectedOption?.value);
+                }
+              }}
+              disabled={usingExistingBeneficiary}
+            />
+          </div>
+
+          <div>
+            <FloatingLabelInput
+              label="City"
+              required
+              value={formik.values.city}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="city"
+              disabled={usingExistingBeneficiary}
+              icon={FaMapMarkerAlt}
+            />
+          </div>
+
+          <div>
+            <FloatingLabelInput
+              label="Street Address"
+              required
+              value={formik.values.street}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="street"
+              disabled={usingExistingBeneficiary}
+              icon={FaMapMarkerAlt}
+            />
+          </div>
+
+          <div>
+            <FloatingLabelInput
+              label="Postal Code"
+              value={formik.values.postalcode}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="postalcode"
+              disabled={usingExistingBeneficiary}
+              icon={FaMapMarkerAlt}
+            />
+          </div>
+
+          <div>
+            <FloatingLabelInput
+              label="State/Province"
+              value={formik.values.state}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              name="state"
+              disabled={usingExistingBeneficiary}
+              icon={FaMapMarkerAlt}
+            />
+          </div>
+
+          {formik.values.beneftype === "individual" && (
+            <div>
+              <AnimatedSelect
+                label="Relationship to Beneficiary"
+                required
+                icon={FaRegHandshake}
+                options={relationshipOptions}
+                value={relationshipOptions.find(
+                  (option) => option.value === formik.values.relationtobenef,
+                )}
+                onChange={(selectedOption) => {
+                  if (!usingExistingBeneficiary) {
+                    const value = selectedOption?.value;
+                    formik.setFieldValue("relationtobenef", value);
+                    setShowOtherRelationship(value === "other");
+                    if (value !== "other") {
+                      formik.setFieldValue("otherRelationship", "");
+                    }
+                  }
+                }}
+                disabled={usingExistingBeneficiary}
+              />
+              {showOtherRelationship && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3"
+                >
+                  <FloatingLabelInput
+                    label="Please specify relationship"
+                    required
+                    value={formik.values.otherRelationship}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    name="otherRelationship"
+                    disabled={usingExistingBeneficiary}
+                  />
+                </motion.div>
               )}
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className={`${STYLES.divider} flex flex-col md:flex-row gap-3`}>
-            <button
-              type="button"
-              onClick={onCancel}
-              className={STYLES.buttonSecondary}
+          {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
+            <>
+              <div>
+                <AnimatedSelect
+                  label="ID Type"
+                  required
+                  icon={FaIdCard}
+                  options={getIdTypesForCurrency.map((type) => ({
+                    value:
+                      type.id?.toString() || type.value?.toString() || type,
+                    label: type.name || type.label || type,
+                  }))}
+                  value={getIdTypesForCurrency
+                    .map((type) => ({
+                      value:
+                        type.id?.toString() || type.value?.toString() || type,
+                      label: type.name || type.label || type,
+                    }))
+                    .find(
+                      (option) =>
+                        option.value === formik.values.beneficiary_id_type,
+                    )}
+                  onChange={(selectedOption) => {
+                    if (!usingExistingBeneficiary) {
+                      formik.setFieldValue(
+                        "beneficiary_id_type",
+                        selectedOption?.value,
+                      );
+                    }
+                  }}
+                  disabled={usingExistingBeneficiary}
+                />
+              </div>
+              <div>
+                <FloatingLabelInput
+                  label="ID Number"
+                  required
+                  value={formik.values.beneficiary_id_number}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  name="beneficiary_id_number"
+                  disabled={usingExistingBeneficiary}
+                  icon={FaIdCard}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <motion.div
+          className="flex flex-col-reverse md:flex-row justify-between pt-8 gap-4 border-t border-gray-200"
+          variants={fadeInUp}
+        >
+          <motion.button
+            onClick={prevStep}
+            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 md:flex-none flex items-center justify-center font-medium"
+            whileHover={{ x: -5, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <FaChevronLeft className="mr-2" />
+            Back
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={nextStep}
+            disabled={isLoadingLocal || !isFormValid()}
+            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 md:flex-none font-medium ${
+              isLoadingLocal || !isFormValid()
+                ? "bg-gray-300 cursor-not-allowed text-gray-500"
+                : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
+            }`}
+            whileHover={
+              !isLoadingLocal && isFormValid() ? { x: 5, scale: 1.02 } : {}
+            }
+            whileTap={!isLoadingLocal && isFormValid() ? { scale: 0.98 } : {}}
+          >
+            {isLoadingLocal ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="mr-2"
+              >
+                <FaSpinner />
+              </motion.div>
+            ) : (
+              <>
+                Next Step
+                <FaChevronRight className="ml-2" />
+              </>
+            )}
+          </motion.button>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderBankInfoStep = () => {
+    return (
+      <motion.div
+        className="space-y-8"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div
+          className="bg-gradient-to-r from-blue-50 to-indigo-50 p-8 rounded-3xl border border-blue-200 shadow-xl overflow-hidden relative"
+          whileHover={{ scale: 1.02 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            className="absolute top-0 right-0 w-64 h-64 bg-blue-400 rounded-full opacity-10"
+            animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+            transition={{ duration: 20, repeat: Infinity }}
+            style={{ top: -100, right: -100 }}
+          />
+          <div className="relative z-10 flex items-center">
+            <motion.div
+              className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white mr-5 shadow-lg"
+              whileHover={{ rotate: 360, scale: 1.1 }}
+              transition={{ duration: 0.5 }}
             >
-              <FaArrowLeft className="mr-2" />
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={nextStep}
-              disabled={phoneSearchLoading || !phoneInput.trim()}
-              className={`${STYLES.buttonPrimary} flex-1 ${
-                phoneSearchLoading || !phoneInput.trim()
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
+              <FaUniversity size={28} />
+            </motion.div>
+            <div>
+              <motion.h2
+                className="text-2xl font-bold text-gray-800"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                Beneficiary Bank Details
+              </motion.h2>
+              <motion.p
+                className="text-gray-600"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                Please provide the bank account information for your
+                beneficiary.
+                {bankAccounts.length > 0 &&
+                  ` You have ${bankAccounts.length} bank account${
+                    bankAccounts.length > 1 ? "s" : ""
+                  }.`}
+              </motion.p>
+            </div>
+          </div>
+        </motion.div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <AnimatePresence>
+            {bankAccounts.map((account, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -50, scale: 0.95 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+              >
+                {renderBankAccountFields(index)}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          <motion.button
+            type="button"
+            onClick={addBankAccount}
+            disabled={usingExistingBeneficiary}
+            className={`w-full p-6 border-2 border-dashed border-gray-300 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center ${
+              usingExistingBeneficiary
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:border-blue-400 hover:bg-blue-50 hover:shadow-lg"
+            }`}
+            whileHover={!usingExistingBeneficiary ? { scale: 1.02, y: -2 } : {}}
+            whileTap={!usingExistingBeneficiary ? { scale: 0.98 } : {}}
+          >
+            <div
+              className={`flex items-center ${
+                usingExistingBeneficiary ? "text-gray-400" : "text-blue-600"
               }`}
             >
-              {phoneSearchLoading ? (
+              <motion.div
+                whileHover={{ rotate: 90 }}
+                transition={{ duration: 0.3 }}
+              >
+                <FaPlus className="mr-3" size={20} />
+              </motion.div>
+              <span className="font-medium">Add Another Bank Account</span>
+            </div>
+            <p
+              className={`text-sm mt-2 ${
+                usingExistingBeneficiary ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              {usingExistingBeneficiary
+                ? "Cannot add accounts to existing beneficiary"
+                : "Add multiple accounts for different currencies or payment methods"}
+            </p>
+          </motion.button>
+
+          <motion.div
+            className="flex flex-col md:flex-row gap-4 pt-8 border-t border-gray-200"
+            variants={fadeInUp}
+          >
+            <motion.button
+              type="button"
+              onClick={prevStep}
+              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 flex items-center justify-center font-medium"
+              whileHover={{ x: -5, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <FaChevronLeft className="mr-2" />
+              Back to Details
+            </motion.button>
+            <motion.button
+              type="submit"
+              disabled={isLoadingLocal}
+              className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium ${
+                isLoadingLocal
+                  ? "bg-gray-300 cursor-not-allowed text-gray-500"
+                  : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl"
+              }`}
+              whileHover={!isLoadingLocal ? { scale: 1.02, y: -2 } : {}}
+              whileTap={!isLoadingLocal ? { scale: 0.98 } : {}}
+            >
+              {isLoadingLocal ? (
                 <>
-                  <RingLoader size={20} color="#ffffff" className="mr-2" />
-                  Searching...
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="mr-2"
+                  >
+                    <FaSpinner />
+                  </motion.div>
+                  Processing...
+                </>
+              ) : mode === "create" ? (
+                <>
+                  <FaCheckCircle className="mr-2" />
+                  Create Beneficiary
                 </>
               ) : (
                 <>
-                  Continue
-                  <FaChevronRight className="ml-2" />
+                  <FaCheckCircle className="mr-2" />
+                  Update Beneficiary
                 </>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+            </motion.button>
+          </motion.div>
+        </form>
+      </motion.div>
+    );
+  };
 
-  // ========== BANK ACCOUNT FIELDS RENDERER ==========
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
-    const currentBanks = getBanksForCurrency;
-    const currentIdTypes = getIdTypesForCurrency;
-    const currentBankBranches = getBankBranches;
 
-    // Get loading state for banks
-    const banksLoading = dropdownLoading && !currentBanks?.length;
+    const getRailsOptions = (accountCurrency) => {
+      const options = [{ value: "Swift", label: "Swift" }];
+
+      if (accountCurrency === "GBP") {
+        options.unshift({ value: "Local", label: "FPS" });
+      } else if (accountCurrency === "EUR") {
+        options.unshift({ value: "Local", label: "SEPA" });
+      } else if (accountCurrency === "USD") {
+        options.unshift({ value: "Local", label: "ACH" });
+      } else {
+        options.unshift({ value: "Local", label: "Bank" });
+      }
+
+      options.push({ value: "Mobile", label: "Mobile" });
+      return options;
+    };
 
     return (
-      <div
-        key={index}
-        className="p-6 border border-gray-200 rounded-xl bg-white mb-6 shadow-sm hover:shadow-md transition-shadow duration-300"
+      <motion.div
+        className="p-6 border border-gray-200 rounded-2xl bg-white mb-6 shadow-md hover:shadow-xl transition-all duration-300"
+        whileHover={{ y: -4, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}
       >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 mr-3">
-              <FaUniversity size={16} />
-            </div>
+            <motion.div
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white mr-3"
+              whileHover={{ rotate: 360, scale: 1.1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <FaUniversity size={18} />
+            </motion.div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800">
                 Bank Account {index + 1}
@@ -2266,14 +3005,16 @@ const BaseBeneficiaryForm = ({
             </div>
           </div>
           {index > 0 && !usingExistingBeneficiary && (
-            <button
+            <motion.button
               type="button"
               onClick={() => removeBankAccount(index)}
               className="flex items-center text-red-600 hover:text-red-800 text-sm font-medium transition-colors duration-200 p-2 hover:bg-red-50 rounded-lg"
+              whileHover={{ scale: 1.05, x: 2 }}
+              whileTap={{ scale: 0.95 }}
             >
               <FaTrash className="mr-2" size={14} />
               Remove
-            </button>
+            </motion.button>
           )}
           {index > 0 && usingExistingBeneficiary && (
             <span className="text-sm text-gray-500 italic">
@@ -2282,1057 +3023,207 @@ const BaseBeneficiaryForm = ({
           )}
         </div>
 
-        <div className={STYLES.fieldGrid}>
-          {/* Select Rails */}
-          <FieldContainer>
-            <FieldLabel required>
-              Select Rails
-              {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-gray-500">(Pre-filled)</span>
-              )}
-            </FieldLabel>
-            <select
-              className={`${STYLES.selectBase} ${
-                usingExistingBeneficiary ? STYLES.inputDisabled : ""
-              }`}
-              value={account.rails}
-              onChange={(e) =>
-                handleBankAccountChange(index, "rails", e.target.value)
-              }
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="mb-4">
+            <AnimatedSelect
+              label="Select Rails"
               required
-              disabled={usingExistingBeneficiary}
-            >
-              <option value="">Select Rails</option>
-              <option value="Local">
-                {accountCurrency === "GBP"
-                  ? "FPS"
-                  : accountCurrency === "EUR"
-                  ? "SEPA"
-                  : accountCurrency === "USD"
-                  ? "ACH"
-                  : "Bank"}
-              </option>
-              <option value="Swift">Swift</option>
-              <option value="Mobile">Mobile</option>
-            </select>
+              icon={FaUniversity}
+              options={getRailsOptions(accountCurrency)}
+              value={
+                account.rails
+                  ? getRailsOptions(accountCurrency).find(
+                      (option) => option.value === account.rails,
+                    ) || getRailsOptions(accountCurrency)[0]
+                  : getRailsOptions(accountCurrency)[0]
+              }
+              onChange={(selectedOption) =>
+                handleBankAccountChange(index, "rails", selectedOption?.value)
+              }
+              disabled={
+                usingExistingBeneficiary ||
+                (mode === "edit" && !usingExistingBeneficiary && account.rails)
+              }
+            />
             {account.rails && (
-              <div className="flex items-center mt-2 text-green-600 text-sm">
+              <motion.div
+                className="flex items-center mt-2 text-green-600 text-sm"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
                 <FaCheckCircle className="mr-1" size={12} />
                 <span>Rails selected: {account.rails}</span>
-              </div>
+              </motion.div>
             )}
-          </FieldContainer>
+          </div>
 
-          {/* Select Currency */}
           {account.rails !== "Mobile" && (
-            <FieldContainer>
-              <FieldLabel required>
-                Select Currency
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <select
-                className={`${STYLES.selectBase} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={accountCurrency}
-                onChange={(e) => {
-                  handleCurrencyChange(e);
-                  handleBankAccountChange(index, "currency", e.target.value);
-                }}
+            <div className="mb-4">
+              <AnimatedSelect
+                label="Select Currency"
                 required
+                icon={FaMoneyBillWave}
+                options={localCurrencies.map((cur) => ({
+                  value: cur,
+                  label: cur,
+                }))}
+                value={localCurrencies
+                  .map((cur) => ({ value: cur, label: cur }))
+                  .find((option) => option.value === currency)}
+                onChange={(selectedOption) => {
+                  if (selectedOption?.value) {
+                    handleCurrencyChange(selectedOption);
+                  }
+                }}
                 disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Currency</option>
-                {localCurrencies.map((cur, i) => (
-                  <option key={i} value={cur}>
-                    {cur}
-                  </option>
-                ))}
-              </select>
-            </FieldContainer>
-          )}
-
-          {/* Currency-Specific ID Fields */}
-          {(accountCurrency === "BDT" ||
-            accountCurrency === "INR" ||
-            accountCurrency === "PKR") && (
-            <>
-              <FieldContainer>
-                <FieldLabel required info="Required for regulatory compliance">
-                  Beneficiary ID Type
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <select
-                  className={`${STYLES.selectBase} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={formik.values.beneficiary_id_type}
-                  onChange={formik.handleChange}
-                  name="beneficiary_id_type"
-                  required
-                  disabled={usingExistingBeneficiary}
-                >
-                  <option value="">Select ID Type</option>
-                  {currentIdTypes.map((idType) => (
-                    <option key={idType.name} value={idType.name}>
-                      {idType.name}
-                    </option>
-                  ))}
-                </select>
-              </FieldContainer>
-
-              <FieldContainer>
-                <FieldLabel
-                  required
-                  info="Enter the ID number exactly as on the document"
-                >
-                  Beneficiary ID Number
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={formik.values.beneficiary_id_number}
-                  onChange={formik.handleChange}
-                  name="beneficiary_id_number"
-                  placeholder="Enter ID number"
-                  required
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-            </>
+              />
+            </div>
           )}
         </div>
 
-        {/* Bank Account Details */}
-        <div className={STYLES.fieldGrid}>
-          {/* Account Number */}
-          <FieldContainer>
-            <FieldLabel required>
-              Account Number
-              {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-gray-500">(Pre-filled)</span>
-              )}
-            </FieldLabel>
-            <input
-              type="text"
-              className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                usingExistingBeneficiary ? STYLES.inputDisabled : ""
-              }`}
-              value={account.accountNumber}
-              onChange={(e) =>
-                handleBankAccountChange(index, "accountNumber", e.target.value)
-              }
-              placeholder="Enter account number"
-              required
-              disabled={usingExistingBeneficiary}
-            />
-          </FieldContainer>
+        {account.rails === "Swift" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="IBAN Number"
+                required
+                value={account.iban}
+                onChange={(e) =>
+                  handleBankAccountChange(index, "iban", e.target.value)
+                }
+                disabled={usingExistingBeneficiary}
+                icon={FaIdCard}
+              />
+            </div>
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="SWIFT Code"
+                required
+                value={account.swift}
+                onChange={(e) =>
+                  handleBankAccountChange(index, "swift", e.target.value)
+                }
+                disabled={usingExistingBeneficiary}
+                icon={FaUniversity}
+              />
+            </div>
+          </div>
+        )}
 
-          {/* Bank Name/Selection - MATCHING NON-REDUX VERSION */}
-          <FieldContainer>
-            <FieldLabel required>
-              Bank
-              {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-gray-500">(Pre-filled)</span>
-              )}
-            </FieldLabel>
-
-            {banksLoading ? (
-              <div className="w-full border border-gray-300 rounded-xl p-4 bg-gray-50 flex items-center justify-center">
-                <RingLoader size={20} color="#3B82F6" />
-                <span className="ml-2 text-gray-600">Loading banks...</span>
-              </div>
-            ) : (
-              <>
-                {currentBanks && currentBanks.length > 0 ? (
-                  <select
-                    className={`${STYLES.selectBase} ${
-                      usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                    }`}
-                    value={account.bankCode || account.bankName || ""}
-                    onChange={(e) => {
-                      const selectedValue = e.target.value;
-
-                      // Find the selected bank like non-redux version
-                      const selectedBank = currentBanks.find(
-                        (bank) =>
-                          bank.bank_code === selectedValue ||
-                          bank.code === selectedValue ||
-                          bank.id === selectedValue ||
-                          bank.name === selectedValue
-                      );
-
-                      if (selectedBank) {
-                        // Set both bank code and bank name like non-redux version
-                        handleBankAccountChange(
-                          index,
-                          "bankCode",
-                          selectedValue
-                        );
-                        handleBankAccountChange(
-                          index,
-                          "bankName",
-                          selectedBank.bank_name ||
-                            selectedBank.name ||
-                            selectedValue
-                        );
-
-                        // Trigger branch fetch for BDT banks
-                        if (accountCurrency === "BDT" && selectedValue) {
-                          onFetchBankBranches?.(selectedValue);
-                        }
-                      } else {
-                        // Just set the bank name
-                        handleBankAccountChange(
-                          index,
-                          "bankName",
-                          selectedValue
-                        );
-                      }
-                    }}
-                    required
-                    disabled={usingExistingBeneficiary}
-                  >
-                    <option value="">Select Bank</option>
-                    {currentBanks.map((bank) => {
-                      const bankKey =
-                        bank.bank_code || bank.code || bank.id || bank.name;
-                      const bankName = bank.bank_name || bank.name;
-                      return (
-                        <option key={bankKey} value={bankKey}>
-                          {bankName}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  // Fallback to text input if no banks from API
-                  <>
-                    <input
-                      type="text"
-                      className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                        usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                      }`}
-                      value={account.bankName}
-                      onChange={(e) =>
-                        handleBankAccountChange(
-                          index,
-                          "bankName",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Enter bank name"
-                      required
-                      disabled={usingExistingBeneficiary}
-                    />
-                    {accountCurrency && !usingExistingBeneficiary && (
-                      <p className="text-orange-500 text-sm mt-1">
-                        No banks available for {accountCurrency}. Please enter
-                        bank name manually.
-                      </p>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Debug info - remove in production */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="mt-2 text-xs text-gray-500">
-                Selected: {account.bankName} (Code: {account.bankCode})
-              </div>
-            )}
-          </FieldContainer>
-
-          {/* Branch Code (for BDT) */}
-          {accountCurrency === "BDT" && account.bankCode && (
-            <FieldContainer>
-              <FieldLabel required>
-                Branch
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              {dropdownLoading ? (
-                <div className="w-full border border-gray-300 rounded-xl p-4 bg-gray-50 flex items-center justify-center">
-                  <RingLoader size={20} color="#3B82F6" />
-                  <span className="ml-2 text-gray-600">
-                    Loading branches...
-                  </span>
-                </div>
-              ) : (
-                <select
-                  className={`${STYLES.selectBase} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.branchCode}
-                  onChange={(e) =>
-                    handleBankAccountChange(index, "branchCode", e.target.value)
-                  }
-                  required
-                  disabled={usingExistingBeneficiary}
-                >
-                  <option value="">Select Branch</option>
-                  {currentBankBranches.map((branch) => (
-                    <option key={branch.branch_code} value={branch.branch_code}>
-                      {branch.branch_name} ({branch.branch_code})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </FieldContainer>
-          )}
-
-          {/* Additional fields based on rails */}
-          {account.rails === "Swift" && (
-            <>
-              <FieldContainer>
-                <FieldLabel>
-                  Swift Code
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.swift}
-                  onChange={(e) =>
-                    handleBankAccountChange(index, "swift", e.target.value)
-                  }
-                  placeholder="Enter SWIFT/BIC code"
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-
-              <FieldContainer>
-                <FieldLabel>
-                  Intermediary Bank SWIFT
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.intermediarySwift}
-                  onChange={(e) =>
-                    handleBankAccountChange(
-                      index,
-                      "intermediarySwift",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Enter intermediary bank SWIFT"
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-
-              <FieldContainer>
-                <FieldLabel>
-                  IBAN Number
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.iban}
-                  onChange={(e) =>
-                    handleBankAccountChange(index, "iban", e.target.value)
-                  }
-                  placeholder="Enter IBAN number"
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-            </>
-          )}
-
-          {account.rails === "Local" && accountCurrency === "USD" && (
-            <FieldContainer>
-              <FieldLabel>
-                Routing Number
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
+        {account.rails === "Local" && accountCurrency === "USD" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Routing Number"
+                required
                 value={account.routingNumber}
                 onChange={(e) =>
                   handleBankAccountChange(
                     index,
                     "routingNumber",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                placeholder="Enter routing number"
                 disabled={usingExistingBeneficiary}
+                icon={FaUniversity}
               />
-            </FieldContainer>
-          )}
+            </div>
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Account Number"
+                required
+                value={account.accountNumber}
+                onChange={(e) =>
+                  handleBankAccountChange(
+                    index,
+                    "accountNumber",
+                    e.target.value,
+                  )
+                }
+                disabled={usingExistingBeneficiary}
+                icon={FaIdCard}
+              />
+            </div>
+          </div>
+        )}
 
-          {account.rails === "Local" && accountCurrency === "GBP" && (
-            <FieldContainer>
-              <FieldLabel>
-                Sort Code
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
+        {account.rails === "Local" && accountCurrency === "GBP" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Sort Code"
+                required
                 value={account.sortCode}
                 onChange={(e) =>
                   handleBankAccountChange(index, "sortCode", e.target.value)
                 }
-                placeholder="Enter sort code"
                 disabled={usingExistingBeneficiary}
+                icon={FaUniversity}
               />
-            </FieldContainer>
-          )}
-
-          {account.rails === "Local" && accountCurrency === "INR" && (
-            <FieldContainer>
-              <FieldLabel>
-                IFSC Code
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={account.ifsc}
+            </div>
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Account Number"
+                required
+                value={account.accountNumber}
                 onChange={(e) =>
-                  handleBankAccountChange(index, "ifsc", e.target.value)
-                }
-                placeholder="Enter IFSC code"
-                disabled={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-          )}
-
-          {/* Mobile wallet fields */}
-          {account.rails === "Mobile" && (
-            <>
-              <FieldContainer>
-                <FieldLabel required>
-                  Mobile Number
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.mobileNumber}
-                  onChange={(e) =>
-                    handleBankAccountChange(
-                      index,
-                      "mobileNumber",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Enter mobile number"
-                  required
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-
-              <FieldContainer>
-                <FieldLabel required>
-                  Wallet Provider
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <select
-                  className={`${STYLES.selectBase} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  value={account.walletProvider}
-                  onChange={(e) =>
-                    handleBankAccountChange(
-                      index,
-                      "walletProvider",
-                      e.target.value
-                    )
-                  }
-                  required
-                  disabled={usingExistingBeneficiary}
-                >
-                  <option value="">Select Provider</option>
-                  <option value="bkash">bKash</option>
-                  <option value="nagad">Nagad</option>
-                  <option value="rocket">Rocket</option>
-                  <option value="upay">Upay</option>
-                  <option value="other">Other</option>
-                </select>
-              </FieldContainer>
-
-              {account.walletProvider === "other" && (
-                <FieldContainer>
-                  <FieldLabel required>
-                    Other Provider
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                      usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                    }`}
-                    value={account.otherProvider}
-                    onChange={(e) =>
-                      handleBankAccountChange(
-                        index,
-                        "otherProvider",
-                        e.target.value
-                      )
-                    }
-                    placeholder="Enter provider name"
-                    required
-                    disabled={usingExistingBeneficiary}
-                  />
-                </FieldContainer>
-              )}
-            </>
-          )}
-
-          {/* Bank State */}
-          {(accountCurrency === "BDT" || accountCurrency === "PKR") && (
-            <FieldContainer>
-              <FieldLabel>
-                Bank State
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={account.bankState}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "bankState", e.target.value)
-                }
-                placeholder="Enter bank state"
-                disabled={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-          )}
-
-          {/* Account Type */}
-          {accountCurrency === "USD" && (
-            <FieldContainer>
-              <FieldLabel>
-                Account Type
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <select
-                className={`${STYLES.selectBase} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={account.accountType}
-                onChange={(e) =>
-                  handleBankAccountChange(index, "accountType", e.target.value)
+                  handleBankAccountChange(
+                    index,
+                    "accountNumber",
+                    e.target.value,
+                  )
                 }
                 disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Account Type</option>
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
-              </select>
-            </FieldContainer>
-          )}
-        </div>
-      </div>
+                icon={FaIdCard}
+              />
+            </div>
+          </div>
+        )}
+
+        {account.rails === "Mobile" && (
+          <div className="grid grid-cols-1 gap-6 mt-4">
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Mobile Number"
+                required
+                value={account.mobileNumber}
+                onChange={(e) =>
+                  handleBankAccountChange(index, "mobileNumber", e.target.value)
+                }
+                disabled={usingExistingBeneficiary}
+                icon={FaPhone}
+              />
+            </div>
+            <div className="mb-4">
+              <FloatingLabelInput
+                label="Wallet Provider"
+                required
+                value={account.walletProvider}
+                onChange={(e) =>
+                  handleBankAccountChange(
+                    index,
+                    "walletProvider",
+                    e.target.value,
+                  )
+                }
+                disabled={usingExistingBeneficiary}
+                icon={FaBuilding}
+              />
+            </div>
+          </div>
+        )}
+      </motion.div>
     );
   };
 
-  // ========== RENDER BENEFICIARY DETAILS STEP ==========
-  const renderBeneficiaryDetailsStep = () => (
-    <div className="space-y-6">
-      <SectionHeader
-        title={pageTitle}
-        subtitle="Fill in the beneficiary's personal information"
-        onBack={!isPublic ? prevStep : undefined}
-      />
-
-      {/* Verification Status (for public forms) */}
-      {isPublic && renderVerificationStatus()}
-
-      <div className={STYLES.formContainer}>
-        <div className={STYLES.formPadding}>
-          {/* Beneficiary Type - FULL WIDTH ROW */}
-          <div className="mb-6">{renderBeneficiaryTypeSelection()}</div>
-
-          <div className={STYLES.fieldGrid}>
-            {/* Currency Selection - Now in its own grid cell but full width on mobile */}
-            <FieldContainer>
-              <FieldLabel required>
-                Payout Currency
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <select
-                className={`${STYLES.selectBase} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={currency}
-                onChange={handleCurrencyChange}
-                disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Currency</option>
-                {localCurrencies.map((cur) => (
-                  <option key={cur} value={cur}>
-                    {cur}
-                  </option>
-                ))}
-              </select>
-            </FieldContainer>
-
-            {/* Name Fields */}
-            {renderNameField()}
-
-            {/* Email Field */}
-            {renderEmailField()}
-
-            {/* Phone Field */}
-            {renderPhoneField()}
-
-            {/* Password Fields (only for public) */}
-            {renderPasswordFields()}
-
-            {/* Country */}
-            <FieldContainer>
-              <FieldLabel required>
-                Country
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              {renderCountryDropdown()}
-            </FieldContainer>
-
-            {/* Nationality */}
-            <FieldContainer>
-              <FieldLabel required>
-                Nationality
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <select
-                className={`${STYLES.selectBase} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                value={formik.values.nationality_id}
-                onChange={formik.handleChange}
-                name="nationality_id"
-                disabled={usingExistingBeneficiary}
-              >
-                <option value="">Select Nationality</option>
-                {nationalities.map((nationality) => (
-                  <option
-                    key={nationality.id}
-                    value={nationality.id.toString()}
-                  >
-                    {nationality.name}
-                  </option>
-                ))}
-              </select>
-            </FieldContainer>
-
-            {/* State/Province */}
-            <FieldContainer>
-              <FieldLabel>
-                State/Province
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter state/province"
-                value={formik.values.state}
-                onChange={formik.handleChange}
-                name="state"
-                disabled={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-
-            {/* City */}
-            <FieldContainer>
-              <FieldLabel required>
-                City*
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter city (e.g., New York, London, Mumbai)"
-                value={formik.values.city}
-                onChange={formik.handleChange}
-                name="city"
-                disabled={usingExistingBeneficiary}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Enter the city where the beneficiary resides
-              </p>
-            </FieldContainer>
-
-            {/* Street Address */}
-            <FieldContainer className="md:col-span-2">
-              <FieldLabel required>
-                Street Address
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter street address"
-                value={formik.values.street}
-                onChange={formik.handleChange}
-                name="street"
-                disabled={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-
-            {/* Postal Code */}
-            <FieldContainer>
-              <FieldLabel>
-                Postal Code
-                {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
-              </FieldLabel>
-              <input
-                type="text"
-                className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                  usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                }`}
-                placeholder="Enter postal code"
-                value={formik.values.postalcode}
-                onChange={formik.handleChange}
-                name="postalcode"
-                disabled={usingExistingBeneficiary}
-              />
-            </FieldContainer>
-
-            {/* Relationship (only for private individual) */}
-            {!isPublic && formik.values.beneftype === "individual" && (
-              <FieldContainer>
-                <FieldLabel required>
-                  Relationship to Beneficiary
-                  {usingExistingBeneficiary && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <Select
-                  className="text-sm"
-                  classNamePrefix="select"
-                  options={relationshipOptions}
-                  placeholder="Select relationship..."
-                  onChange={(selectedOption) => {
-                    formik.setFieldValue(
-                      "relationtobenef",
-                      selectedOption?.value || ""
-                    );
-                    setShowOtherRelationship(selectedOption?.value === "other");
-                  }}
-                  value={relationshipOptions.find(
-                    (option) => option.value === formik.values.relationtobenef
-                  )}
-                  styles={{
-                    ...customStyles,
-                    control: (provided, state) => ({
-                      ...customStyles.control(provided, state),
-                      backgroundColor: usingExistingBeneficiary
-                        ? "#f3f4f6"
-                        : "white",
-                      cursor: usingExistingBeneficiary
-                        ? "not-allowed"
-                        : "default",
-                    }),
-                  }}
-                  isDisabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-            )}
-
-            {/* Other Relationship Input */}
-            {showOtherRelationship && (
-              <FieldContainer>
-                <FieldLabel required>
-                  Specify Relationship
-                  {usingExistingBeneficiary && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  placeholder="Enter relationship"
-                  value={formik.values.otherRelationship}
-                  onChange={formik.handleChange}
-                  name="otherRelationship"
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-            )}
-
-            {/* NIC/BCC Code (for private) */}
-            {!isPublic && (
-              <FieldContainer>
-                <FieldLabel>
-                  NIC/BCC Code
-                  {usingExistingBeneficiary && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
-                </FieldLabel>
-                <input
-                  type="text"
-                  className={`${STYLES.inputBase} ${STYLES.inputHover} ${
-                    usingExistingBeneficiary ? STYLES.inputDisabled : ""
-                  }`}
-                  placeholder="Enter NIC/BCC code"
-                  value={formik.values.nic_bcc_code}
-                  onChange={formik.handleChange}
-                  name="nic_bcc_code"
-                  disabled={usingExistingBeneficiary}
-                />
-              </FieldContainer>
-            )}
-          </div>
-
-          {/* Step Navigation Buttons */}
-          <div className={`${STYLES.divider} flex flex-col md:flex-row gap-3`}>
-            <button
-              type="button"
-              onClick={prevStep}
-              className={STYLES.buttonSecondary}
-            >
-              <FaChevronLeft className="mr-2" />
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={nextStep}
-              disabled={isLoading || dropdownLoading || !formik.isValid}
-              className={`${STYLES.buttonPrimary} flex-1 ${
-                isLoading || dropdownLoading || !formik.isValid
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
-            >
-              {isLoading || dropdownLoading ? (
-                <>
-                  <RingLoader size={20} color="#ffffff" className="mr-2" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  Continue to Bank Details
-                  <FaChevronRight className="ml-2" />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ========== RENDER BANK INFO STEP ==========
-  const renderBankInfoStep = () => (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Bank Information"
-        subtitle="Fill in the beneficiary's banking details"
-        onBack={prevStep}
-      />
-
-      <div className={STYLES.formContainer}>
-        <div className={STYLES.formPadding}>
-          {/* Currency Selection */}
-          <FieldContainer>
-            <FieldLabel required>
-              Payout Currency
-              {usingExistingBeneficiary && (
-                <span className="ml-2 text-xs text-gray-500">(Pre-filled)</span>
-              )}
-            </FieldLabel>
-            <select
-              className={`${STYLES.selectBase} ${
-                usingExistingBeneficiary ? STYLES.inputDisabled : ""
-              }`}
-              value={currency}
-              onChange={handleCurrencyChange}
-              disabled={usingExistingBeneficiary}
-            >
-              <option value="">Select Currency</option>
-              {localCurrencies.map((cur) => (
-                <option key={cur} value={cur}>
-                  {cur}
-                </option>
-              ))}
-            </select>
-          </FieldContainer>
-
-          {/* Bank Accounts */}
-          {bankAccounts.map((_, index) => renderBankAccountFields(index))}
-
-          {/* Add Bank Account Button */}
-          {!usingExistingBeneficiary && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={addBankAccount}
-                className="flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 p-3 hover:bg-blue-50 rounded-xl"
-              >
-                <FaPlus className="mr-2" />
-                Add Another Bank Account
-              </button>
-            </div>
-          )}
-
-          {/* Submit Buttons */}
-          <div className={`${STYLES.divider} flex flex-col md:flex-row gap-3`}>
-            <button
-              type="button"
-              onClick={prevStep}
-              className={STYLES.buttonSecondary}
-            >
-              <FaChevronLeft className="mr-2" />
-              Back
-            </button>
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              disabled={isLoading || isLoadingLocal || dropdownLoading}
-              className={`${STYLES.buttonSuccess} flex-1 ${
-                isLoading || isLoadingLocal || dropdownLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
-            >
-              {isLoading || isLoadingLocal ? (
-                <>
-                  <RingLoader size={20} color="#ffffff" className="mr-2" />
-                  {mode === "create" ? "Creating..." : "Updating..."}
-                </>
-              ) : mode === "create" ? (
-                "Create Beneficiary"
-              ) : (
-                "Update Beneficiary"
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // ========== MAIN RENDER ==========
   return (
-    <div className={STYLES.container}>
+    <motion.div
+      className={STYLES.container}
+      initial="initial"
+      animate="animate"
+      variants={pageVariants}
+    >
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -3343,62 +3234,77 @@ const BaseBeneficiaryForm = ({
         pauseOnFocusLoss
         draggable
         pauseOnHover
+        toastClassName="rounded-xl shadow-lg"
       />
 
-      {showSuccessPopup && (
-        <SuccessPopup
-          benefCode={benefCode}
-          onClose={() => setShowSuccessPopup(false)}
-          onCopy={handleCopyBenefCode}
-          onContinue={handleContinueFromSuccess}
-        />
-      )}
+      <AnimatePresence>
+        {showSuccessPopup && (
+          <SuccessPopup
+            benefCode={benefCode}
+            onClose={() => setShowSuccessPopup(false)}
+            onCopy={handleCopyBenefCode}
+            onContinue={handleContinueFromSuccess}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Stepper Header */}
+      {/* Enhanced Stepper Header */}
       {steps.length > 1 && (
-        <div className="mb-10">
-          {/* Progress Bar Background */}
-          <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-6">
-            <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out"
-              style={{
-                width: `${(step / (steps.length - 1)) * 100}%`,
-              }}
-            />
-          </div>
+        <motion.div
+          className="mb-12"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <ProgressIndicator step={step} totalSteps={steps.length} />
 
-          {/* Steps Container */}
           <div className="flex items-start justify-between relative">
             {steps.map((stepItem, index) => {
               const isActive = step === stepItem.number;
               const isCompleted = step > stepItem.number;
-              const isFuture = step < stepItem.number;
 
               return (
-                <div
+                <motion.div
                   key={stepItem.number}
                   className="flex flex-col items-center relative z-10 w-32"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
                 >
-                  {/* Step Circle */}
-                  <div className="relative mb-3">
-                    {/* Outer Glow Effect for Active/Completed */}
+                  <motion.div
+                    className="relative mb-3"
+                    whileHover={{ scale: 1.1 }}
+                  >
                     {(isActive || isCompleted) && (
-                      <div className="absolute inset-0 rounded-full animate-pulse bg-gradient-to-r from-blue-400 to-purple-400 opacity-30 scale-125"></div>
+                      <motion.div
+                        className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 to-purple-400 opacity-30"
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      />
                     )}
 
-                    {/* Step Circle */}
-                    <div
-                      className={`relative flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 transform ${
+                    <motion.div
+                      className={`relative flex items-center justify-center w-14 h-14 rounded-full border-2 transition-all duration-300 transform ${
                         isActive
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white scale-110 border-transparent shadow-lg"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white scale-110 border-transparent shadow-xl"
                           : isCompleted
-                          ? "bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent shadow-md"
-                          : "bg-white text-gray-400 border-gray-300"
+                            ? "bg-gradient-to-r from-green-500 to-green-600 text-white border-transparent shadow-md"
+                            : "bg-white text-gray-400 border-gray-300"
                       }`}
+                      animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+                      transition={{
+                        duration: 0.5,
+                        repeat: isActive ? Infinity : 0,
+                      }}
                     >
-                      {/* Icon or Check */}
                       {isCompleted ? (
-                        <FaCheckCircle className="w-5 h-5" />
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 500 }}
+                        >
+                          <FaCheckCircle className="w-6 h-6" />
+                        </motion.div>
                       ) : (
                         <div className="flex items-center">
                           {stepItem.icon}
@@ -3407,54 +3313,64 @@ const BaseBeneficiaryForm = ({
                           </span>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
 
-                    {/* Active Indicator */}
                     {isActive && (
-                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
-                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 animate-ping"></div>
-                      </div>
+                      <motion.div
+                        className="absolute -bottom-1 left-1/2 transform -translate-x-1/2"
+                        animate={{ y: [0, 5, 0] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                      </motion.div>
                     )}
-                  </div>
+                  </motion.div>
 
-                  {/* Step Label */}
                   <div className="text-center">
-                    <div
+                    <motion.div
                       className={`text-sm font-semibold transition-colors duration-300 ${
                         isActive
                           ? "text-gray-900"
                           : isCompleted
-                          ? "text-green-600"
-                          : "text-gray-500"
+                            ? "text-green-600"
+                            : "text-gray-500"
                       }`}
                     >
                       {stepItem.title}
-                    </div>
-                    <div
+                    </motion.div>
+                    <motion.div
                       className={`text-xs mt-1 transition-colors duration-300 ${
                         isActive
                           ? "text-gray-700"
                           : isCompleted
-                          ? "text-green-500"
-                          : "text-gray-400"
+                            ? "text-green-500"
+                            : "text-gray-400"
                       }`}
                     >
                       {stepItem.description}
-                    </div>
+                    </motion.div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
 
-          {/* Current Step Indicator */}
-          <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100">
+          <motion.div
+            className="mt-8 p-5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border border-blue-100 shadow-md"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 }}
+          >
             <div className="flex items-center">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mr-3">
+              <motion.div
+                className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mr-3"
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.5 }}
+              >
                 {steps.find((s) => s.number === step)?.icon || (
                   <FaUser className="text-white text-sm" />
                 )}
-              </div>
+              </motion.div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">
                   Step {step + 1} of {steps.length}:{" "}
@@ -3465,16 +3381,65 @@ const BaseBeneficiaryForm = ({
                 </p>
               </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
-      <form onSubmit={handleSubmit} className="max-w-6xl mx-auto">
-        {step === 0 && renderPhoneSearchStep()}
-        {step === 1 && renderBeneficiaryDetailsStep()}
-        {step === 2 && renderBankInfoStep()}
-      </form>
-    </div>
+      <div className="max-w-6xl mx-auto">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            variants={stepVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {step === 0 && renderPhoneSearchStep()}
+            {step === 1 && renderBeneficiaryDetailsStep()}
+            {step === 2 && renderBankInfoStep()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      <style jsx>{`
+        @keyframes shimmer {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+
+        @keyframes float {
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes glow {
+          0%,
+          100% {
+            box-shadow: 0 0 5px rgba(59, 130, 246, 0.2);
+          }
+          50% {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+          }
+        }
+
+        .animate-float {
+          animation: float 3s ease-in-out infinite;
+        }
+
+        .animate-glow {
+          animation: glow 2s ease-in-out infinite;
+        }
+      `}</style>
+    </motion.div>
   );
 };
 
@@ -3562,6 +3527,51 @@ BaseBeneficiaryForm.defaultProps = {
   passwordErrors: {},
   partnerId: "0",
   pageTitle: "Register Beneficiary",
+};
+
+// Custom styles for react-select
+const customStyles = {
+  control: (provided, state) => ({
+    ...provided,
+    backgroundColor: "white",
+    border: state.isFocused ? "2px solid #3b82f6" : "1px solid #d1d5db",
+    borderRadius: "0.75rem",
+    padding: "8px 12px",
+    fontSize: "0.875rem",
+    color: "#111827",
+    boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none",
+    minHeight: "48px",
+    transition: "all 0.2s ease",
+    "&:hover": { borderColor: "#9ca3af" },
+  }),
+  menu: (provided) => ({
+    ...provided,
+    borderRadius: "0.75rem",
+    boxShadow:
+      "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+    zIndex: 20,
+  }),
+  placeholder: (provided) => ({
+    ...provided,
+    color: "#6b7280",
+  }),
+  option: (provided, state) => ({
+    ...provided,
+    backgroundColor: state.isSelected
+      ? "#3b82f6"
+      : state.isFocused
+        ? "#eff6ff"
+        : "white",
+    color: state.isSelected ? "white" : "#1f2937",
+    padding: "12px 16px",
+    fontSize: "0.875rem",
+    borderRadius: "0.5rem",
+    margin: "2px",
+    "&:active": {
+      backgroundColor: "#3b82f6",
+      color: "white",
+    },
+  }),
 };
 
 export default BaseBeneficiaryForm;

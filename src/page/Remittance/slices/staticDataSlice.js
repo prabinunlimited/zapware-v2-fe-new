@@ -30,7 +30,7 @@ export const fetchPurposes = createAsyncThunk(
       console.error("Error fetching purposes:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
-  }
+  },
 );
 
 export const fetchIncomeSources = createAsyncThunk(
@@ -56,7 +56,7 @@ export const fetchIncomeSources = createAsyncThunk(
       console.error("Error fetching income sources:", error);
       return rejectWithValue(error.response?.data || error.message);
     }
-  }
+  },
 );
 
 export const fetchOccupations = createAsyncThunk(
@@ -88,35 +88,10 @@ export const fetchOccupations = createAsyncThunk(
         { value: "professional", label: "Professional" },
       ];
     }
-  }
+  },
 );
 
-export const fetchPaymentMethods = createAsyncThunk(
-  "static/fetchPaymentMethods",
-  async (_, { rejectWithValue }) => {
-    try {
-      const token = localStorage.getItem("bearertoken");
-      const response = await axios.get(`${API_URL}/payment-methods`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = response.data?.data || response.data || [];
-
-      return data.map((method) => ({
-        value:
-          method.value ||
-          method.id ||
-          method.name?.toLowerCase().replace(/\s+/g, "_"),
-        label: method.label || method.name,
-        icon: method.icon,
-        description: method.description,
-      }));
-    } catch (error) {
-      console.error("Error fetching payment methods:", error);
-      return rejectWithValue(error.response?.data || error.message);
-    }
-  }
-);
+// REMOVED: fetchPaymentMethods thunk - API doesn't exist
 
 const CACHE_DURATION = 5 * 60 * 1000;
 
@@ -145,20 +120,20 @@ export const fetchAllStaticData = createAsyncThunk(
         dispatch(fetchPurposes()),
         dispatch(fetchIncomeSources()),
         dispatch(fetchOccupations()),
-        dispatch(fetchPaymentMethods()),
+        // REMOVED: dispatch(fetchPaymentMethods())
       ]);
       return { success: true, cached: false };
     } catch (error) {
       return rejectWithValue("Failed to fetch static data");
     }
-  }
+  },
 );
 
 const initialState = {
   purposes: [],
   incomeSources: [],
   occupations: [],
-  paymentMethods: [],
+  paymentMethods: [], // Keep the array but it will be populated with fallbacks only
   loading: false,
   error: null,
   lastFetched: null,
@@ -275,18 +250,21 @@ const staticDataSlice = createSlice({
         // Fallback occupations already returned in thunk
       })
 
-      // Fetch payment methods
-      .addCase(fetchPaymentMethods.fulfilled, (state, action) => {
-        state.paymentMethods = action.payload;
-      })
-      .addCase(fetchPaymentMethods.rejected, (state) => {
-        // Set fallback payment methods
-        state.paymentMethods = [
-          { value: "bank_deposit", label: "Bank Deposit" },
-          { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
-          { value: "fcy_deposit", label: "FCY Deposit" },
-        ];
-      });
+      // REMOVED: fetchPaymentMethods cases - no longer needed
+      // Payment methods will be set with fallbacks only
+      .addMatcher(
+        (action) => action.type === fetchAllStaticData.fulfilled.type,
+        (state) => {
+          // Set fallback payment methods since there's no API
+          if (state.paymentMethods.length === 0) {
+            state.paymentMethods = [
+              { value: "bank_deposit", label: "Bank Deposit" },
+              { value: "fdr_npr", label: "Fixed Deposit (NPR)" },
+              { value: "fcy_deposit", label: "FCY Deposit" },
+            ];
+          }
+        },
+      );
   },
 });
 

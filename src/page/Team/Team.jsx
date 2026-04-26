@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+// page/Team/Team.jsx
+import React, { useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -9,7 +10,6 @@ import {
   AiOutlineUser,
   AiOutlineMail,
   AiOutlinePhone,
-  AiOutlineTeam,
   AiOutlineInfoCircle,
 } from "react-icons/ai";
 import { FaArrowLeft } from "react-icons/fa";
@@ -21,10 +21,13 @@ import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 import { useTeamActions, useTeamState } from "./Hooks/useTeamActions";
 
 const Team = () => {
-  const { customerId } = useParams();
+  const { customerId: urlCustomerId } = useParams();
   const navigate = useNavigate();
-
   
+  // Get customerId from URL or localStorage
+  const customerId = urlCustomerId && urlCustomerId !== "undefined" && urlCustomerId !== "null" 
+    ? urlCustomerId 
+    : localStorage.getItem("customerId");
 
   // Redux state and actions
   const { teamMembers, loading, deletingId, isInitialized, error } =
@@ -62,6 +65,14 @@ const Team = () => {
   const textColorProps = getTextColorStyle();
   const headerColorProps = getHeaderColorStyle();
 
+  // Store customerId in localStorage when valid
+  useEffect(() => {
+    if (customerId && customerId !== "undefined" && customerId !== "null") {
+      localStorage.setItem("customerId", customerId);
+    }
+  }, [customerId]);
+
+  // Validate customerId and load team members
   useEffect(() => {
     if (!authToken) {
       toast.error("Authentication token is missing. Please log in.", {
@@ -71,6 +82,15 @@ const Team = () => {
       navigate("/");
       return;
     }
+
+    if (!customerId || customerId === "undefined" || customerId === "null") {
+      toast.error("Customer ID is missing. Please refresh the page or contact support.", {
+        position: "bottom-right",
+        autoClose: 5000,
+      });
+      return;
+    }
+
     loadTeamMembers(customerId, authToken, API_URL);
   }, [customerId, authToken, navigate, loadTeamMembers, API_URL]);
 
@@ -85,14 +105,19 @@ const Team = () => {
     }
   }, [error, resetError]);
 
-  const handleAddMember = () => {
+  const handleAddMember = useCallback(() => {
+    const validCustomerId = customerId || localStorage.getItem("customerId");
     
-    if (!customerId) {
-      toast.error("Customer ID is missing. Cannot add team member.");
+    if (!validCustomerId || validCustomerId === "undefined" || validCustomerId === "null") {
+      toast.error("Customer ID is missing. Cannot add team member.", {
+        position: "bottom-right",
+        autoClose: 5000,
+      });
       return;
     }
-    navigate(`/addteam/${customerId}`);
-  };
+    
+    navigate(`/addteam/${validCustomerId}`);
+  }, [customerId, navigate]);
 
   const handleDeleteMember = async (staffId) => {
     if (!window.confirm("Are you sure you want to delete this team member?"))
@@ -105,14 +130,18 @@ const Team = () => {
           position: "bottom-right",
           autoClose: 3000,
         });
+        // Reload team members after deletion
+        const validCustomerId = customerId || localStorage.getItem("customerId");
+        if (validCustomerId) {
+          loadTeamMembers(validCustomerId, authToken, API_URL);
+        }
       }
     } catch (error) {
-      // Error is handled by Redux and displayed in the error effect
-      
+      console.error("Delete error:", error);
     }
   };
 
-  const handleEditMember = (staffId) => {
+  const handleEditMember = useCallback((staffId) => {
     if (!isInitialized) {
       toast.info("Please wait while we finish loading team data", {
         position: "bottom-right",
@@ -120,8 +149,48 @@ const Team = () => {
       });
       return;
     }
-    navigate(`/editmember/${customerId}/${staffId}`);
-  };
+
+    const validCustomerId = customerId || localStorage.getItem("customerId");
+    
+    if (!validCustomerId || validCustomerId === "undefined" || validCustomerId === "null") {
+      toast.error("Customer ID is missing. Cannot edit team member.", {
+        position: "bottom-right",
+        autoClose: 5000,
+      });
+      return;
+    }
+
+    if (!staffId) {
+      toast.error("Staff ID is missing. Cannot edit team member.", {
+        position: "bottom-right",
+        autoClose: 5000,
+      });
+      return;
+    }
+
+    navigate(`/editmember/${validCustomerId}/${staffId}`);
+  }, [customerId, isInitialized, navigate]);
+
+  // If no customerId, show error state
+  if (!customerId || customerId === "undefined" || customerId === "null") {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-red-800 mb-2">Invalid Customer ID</h2>
+            <p className="text-red-600 mb-6">Customer ID is missing or invalid. Please go back and try again.</p>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 to-white py-12 px-4 sm:px-6 lg:px-8">
@@ -270,7 +339,7 @@ const Team = () => {
                             </motion.div>
                             <div>
                               <div className="font-medium text-gray-900">
-                                {member.first_name} {member.middle_name}{" "}
+                                {member.first_name} {member.middle_name || ""}{" "}
                                 {member.last_name}
                               </div>
                               {member.role && (
@@ -296,8 +365,8 @@ const Team = () => {
                           <div className="flex items-center text-gray-700">
                             <AiOutlinePhone className="mr-2 text-blue-400" />
                             <span>
-                              {member.phone_number_country_code}{" "}
-                              {member.phone_no}
+                              {member.phone_number_country_code || member.mobilenumber_countrycode}{" "}
+                              {member.phone_no || member.mobile_number}
                             </span>
                           </div>
                         </td>
@@ -305,7 +374,7 @@ const Team = () => {
                           <div className="flex items-center justify-center space-x-3">
                             <motion.button
                               onClick={() => handleEditMember(member.staff_id)}
-                              className="text-blue-600 hover:text-blue-800 p-1.5 rounded-full hover:bg-blue-50"
+                              className="text-blue-600 hover:text-blue-800 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               title="Edit member"
@@ -317,7 +386,7 @@ const Team = () => {
                               onClick={() =>
                                 handleDeleteMember(member.staff_id)
                               }
-                              className="text-red-500 hover:text-red-700 p-1.5 rounded-full hover:bg-red-50"
+                              className="text-red-500 hover:text-red-700 p-1.5 rounded-full hover:bg-red-50 transition-colors"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               disabled={
@@ -352,19 +421,14 @@ const Team = () => {
                 Showing {teamMembers.length} team member
                 {teamMembers.length !== 1 ? "s" : ""}
               </div>
-              {teamMembers.length > 5 && (
-                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                  View All
-                </button>
-              )}
             </motion.div>
           </motion.div>
         )}
 
-        <div className="flex justify-center items-center mt-4">
+        <div className="flex justify-center items-center mt-8">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-blue-600 border border-blue-600 hover:bg-blue-50 transition-colors duration-200"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-blue-600 border border-blue-600 hover:bg-blue-50 transition-colors duration-200 font-medium"
           >
             <FaArrowLeft className="text-blue-600" />
             <span>Back to Dashboard</span>

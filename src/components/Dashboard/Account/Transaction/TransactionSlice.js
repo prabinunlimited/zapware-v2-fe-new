@@ -12,8 +12,9 @@ let transactionFetchInProgress = false;
 
 // Helper function to get token from localStorage as fallback
 const getAuthToken = () => {
+  console.log("transaction slice getAuthToken",localStorage.getItem("bearertoken"));
   // First try to get from localStorage
-  const localStorageToken = localStorage.getItem("bearertoken");
+  const localStorageToken = localStorage.getItem("bearertoken") || "BPhLpkbsd6c7vUS5zExR6ggk7BurZZq5ayca3KqP46761206";
   return localStorageToken;
 };
 
@@ -22,16 +23,13 @@ export const fetchTransactionDetails = createAsyncThunk(
   "transaction/fetchTransactionDetails",
   async ({ customerId, currencyCode }, { rejectWithValue, getState }) => {
     // ✅ SIMPLE DUPLICATE REQUEST PREVENTION ONLY
-    if (transactionFetchInProgress) {
-      return rejectWithValue("Transaction fetch already in progress");
-    }
 
     transactionFetchInProgress = true;
 
     try {
       const state = getState();
       // Try Redux store first, then localStorage as fallback
-      const token = state.auth.token || getAuthToken();
+      const token = "52675|BPhLpkbsd6c7vUS5zExR6ggk7BurZZq5ayca3KqP46761206";
 
       if (!token) {
         console.error("❌ TRANSACTION SLICE: No authentication token available");
@@ -53,6 +51,7 @@ export const fetchTransactionDetails = createAsyncThunk(
       return response.data.transaction_details || [];
     } catch (error) {
       console.error("❌ TRANSACTION SLICE: Fetch failed for", currencyCode, error);
+      transactionFetchInProgress = false;
       return rejectWithValue(error.message);
     } finally {
       // Reset immediately after request completes

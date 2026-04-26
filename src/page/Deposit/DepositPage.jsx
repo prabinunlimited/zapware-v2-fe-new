@@ -27,6 +27,8 @@ import { useUI } from "./hooks/useUI";
 import Select from "react-select";
 import { FaSearch, FaPlus } from "react-icons/fa";
 
+import ManualDepositUpload from "./components/ManualDepositUpload";
+
 // ✅ CORRECT: Import from depositSlice
 import {
   fetchManualAccountDetails,
@@ -490,13 +492,6 @@ const DebugPanel = () => {
 
   return (
     <div className="fixed bottom-4 left-4 bg-black text-white p-4 rounded-lg text-xs z-50 max-w-md opacity-90 font-sans">
-      <div>
-        <strong>Debug Panel</strong>
-      </div>
-      <div>
-        Route: {params.customerId} / {params.currency}
-      </div>
-      <div>Redux Slices: {Object.keys(fullState).join(", ")}</div>
     </div>
   );
 };
@@ -658,6 +653,9 @@ const DepositPageContent = () => {
   // ✅ TAB STATE
   const [activeTab, setActiveTab] = useState("deposit");
   const [sessionData, setSessionData] = useState(null);
+  const [depositDescription, setDepositDescription] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   // Safe parameter access with debugging
   const customerId = params.customerId;
@@ -673,12 +671,178 @@ const DepositPageContent = () => {
     deposit.selectedCurrency,
     currency.currencies,
   );
+
   const bankAccounts = useSafeBankAccounts(
     deposit.selectedCurrency,
     deposit.paymentMethod,
     customerId,
   );
+
   const ui = useUI();
+
+  // ✅ ADD THESE HANDLER FUNCTIONS HERE
+  const handleFileSelect = (file) => {
+    setUploadedFile(file);
+  };
+
+  const handleUploadSuccess = (file) => {
+    setUploadSuccess(true);
+    toast.success(`File "${file.name}" uploaded successfully!`);
+  };
+
+  const handleUploadError = (error) => {
+    toast.error(`Upload failed: ${error}`);
+    setUploadSuccess(false);
+  };
+
+  // Update the validation in the form submission
+  // Update the validation in the form submission
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+
+    const errors = {};
+
+    // Basic validation
+    if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
+      errors.amount = "Please enter a valid amount";
+    }
+
+    if (!deposit.purpose) {
+      errors.purpose = "Please enter a purpose for this deposit";
+    }
+
+    // Manual deposit validation
+    if (deposit.paymentMethod === "manual_deposit") {
+      if (!depositDescription.trim()) {
+        errors.description = "Please provide a deposit description";
+        toast.error("Please provide a deposit description");
+        return;
+      }
+
+      if (!uploadedFile) {
+        errors.file = "Please upload a deposit receipt or proof";
+        toast.error("Please upload a deposit receipt or proof");
+        return;
+      }
+
+      if (!uploadSuccess) {
+        errors.upload = "Please wait for the file upload to complete";
+        toast.error("Please wait for the file upload to complete");
+        return;
+      }
+    }
+
+    // If there are errors, show them and return
+    if (Object.keys(errors).length > 0) {
+      if (deposit.setFormErrors) {
+        deposit.setFormErrors(errors);
+      }
+      return;
+    }
+
+    // Proceed with deposit submission
+    try {
+      // Get customer UUID from localStorage
+      const customerUuid = localStorage.getItem("authcustomer_id");
+
+      if (!customerUuid) {
+        toast.error("Customer information not found. Please log in again.");
+        return;
+      }
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append("customer_id", customerUuid);
+      formData.append("currency_code", safeSelectedCurrency);
+      formData.append("amount", deposit.amount);
+      formData.append("description", depositDescription);
+      formData.append("author_source", "zap");
+      formData.append("author_type", "customer");
+      formData.append("author_id", customerUuid);
+
+      if (uploadedFile) {
+        formData.append("file", uploadedFile);
+      }
+
+      // Get auth token
+      const token = tokenService.getToken();
+
+      if (!token) {
+        toast.error("Authentication token not found. Please log in again.");
+        return;
+      }
+
+      // Show loading toast
+      const loadingToast = toast.loading("Uploading manual deposit...");
+
+      // Make API call
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/transactions/manual-deposit-upload`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            console.log(`Upload progress: ${percentCompleted}%`);
+            // You can update UI with progress if needed
+          },
+        },
+      );
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+
+      console.log("Manual deposit API response:", response.data);
+
+      if (response.data?.success || response.data?.status === "success") {
+        toast.success(
+          "Manual deposit submitted successfully! It will be processed within 1-3 business days.",
+        );
+
+        // Reset form
+        deposit.resetTransaction();
+        setDepositDescription("");
+        setUploadedFile(null);
+        setUploadSuccess(false);
+
+        // Optional: Navigate to transactions page or show success modal
+        // navigate(`/transactions/${customerUuid}`);
+      } else {
+        throw new Error(
+          response.data?.message || "Failed to submit manual deposit",
+        );
+      }
+    } catch (error) {
+      console.error("Manual deposit submission failed:", error);
+
+      // Handle specific error messages
+      let errorMessage = "Failed to submit manual deposit";
+
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        console.error("Error response data:", error.response.data);
+        console.error("Error response status:", error.response.status);
+
+        errorMessage =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = "No response from server. Please check your connection.";
+      } else {
+        // Something happened in setting up the request
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
+    }
+  };
 
   // ✅ CORRECT: USD Account Selectors from bankAccountSlice
   const allUsdBankAccounts = useSelector(selectUSDBankAccounts);
@@ -1192,13 +1356,7 @@ const DepositPageContent = () => {
                 </h2>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  console.log("🔍 Form onSubmit triggered");
-                  deposit.handleSubmit(e);
-                }}
-                className="px-8 py-8"
-              >
+              <form onSubmit={handleFormSubmit} className="px-8 py-8">
                 {/* ✅ UPDATED: Changed grid layout to use more columns for wider layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Currency Selection */}
@@ -1238,7 +1396,7 @@ const DepositPageContent = () => {
                 </div>
 
                 {/* Amount and Purpose Fields */}
-                {deposit.paymentMethod && !isManualDeposit && (
+                {deposit.paymentMethod && (
                   <div className="mb-8">
                     <DepositDetails
                       amount={deposit.amount}
@@ -1289,6 +1447,33 @@ const DepositPageContent = () => {
                     textColorProps={textColorProps}
                   />
                 </div>
+
+                {/* Manual Deposit Upload Component */}
+                {deposit.paymentMethod === "manual_deposit" && (
+                  <div className="mb-8">
+                    <ManualDepositUpload
+                      selectedCurrency={safeSelectedCurrency}
+                      amount={deposit.amount}
+                      description={depositDescription}
+                      onDescriptionChange={setDepositDescription}
+                      onFileSelect={handleFileSelect}
+                      onUploadSuccess={handleUploadSuccess}
+                      onUploadError={handleUploadError}
+                      isSubmitting={deposit.isSubmitting}
+                      maxFileSize={5 * 1024 * 1024} // 5MB
+                      acceptedFileTypes={[
+                        ".pdf",
+                        ".jpg",
+                        ".jpeg",
+                        ".png",
+                        ".gif",
+                        ".bmp",
+                        ".tiff",
+                        ".webp",
+                      ]}
+                    />
+                  </div>
+                )}
 
                 {/* Info Box */}
                 {deposit.paymentMethod && (

@@ -6,7 +6,7 @@ export const beneficiaryApi = {
   async getBeneficiaryData(beneficiaryId) {
     try {
       const response = await centralizedApi.api.get(
-        `/beneficiaries/fetch-merchant-benef/${beneficiaryId}`
+        `/beneficiaries/fetch-merchant-benef/${beneficiaryId}`,
       );
       return response.data;
     } catch (error) {
@@ -77,7 +77,7 @@ export const beneficiaryApi = {
   async getTransactions(beneficiaryId) {
     try {
       const response = await centralizedApi.api.get(
-        `/beneficiaries/all-transactions/${beneficiaryId}`
+        `/beneficiaries/all-transactions/${beneficiaryId}`,
       );
       const data = response.data;
 
@@ -95,7 +95,7 @@ export const beneficiaryApi = {
       const sortedTransactions = transactionsData.sort(
         (a, b) =>
           new Date(b.transaction_datetime || b.created_at) -
-          new Date(a.transaction_datetime || a.created_at)
+          new Date(a.transaction_datetime || a.created_at),
       );
 
       return sortedTransactions.map((transaction) => ({
@@ -119,7 +119,7 @@ export const beneficiaryApi = {
   async getRequestStatus(beneficiaryId) {
     try {
       const response = await centralizedApi.api.get(
-        `/request-status/${beneficiaryId}`
+        `/request-status/${beneficiaryId}`,
       );
       const data = response.data;
 
@@ -162,7 +162,7 @@ export const beneficiaryApi = {
   async getSenders(beneficiaryId) {
     try {
       const response = await centralizedApi.api.get(
-        `/beneficiaries/senders/${beneficiaryId}`
+        `/beneficiaries/senders/${beneficiaryId}`,
       );
       const data = response.data;
 
@@ -198,9 +198,24 @@ export const beneficiaryApi = {
 
   async submitRemittanceRequest(requestData) {
     try {
+      // Transform the request data to match the new API payload structure
+      const apiPayload = {
+        senders: requestData.senders || [],
+        beneficiary_id: requestData.beneficiary_id,
+        beneficiary_bank_id: requestData.beneficiary_bank_id,
+        amount: requestData.amount,
+        currency: requestData.currency,
+        purpose: requestData.purpose || "remittance",
+        is_recurring: requestData.is_recurring || "N",
+        recurring_frequency: requestData.recurring_frequency || "",
+        custom_days: requestData.custom_days || "",
+      };
+
+      console.log("📤 Submitting remittance request with payload:", apiPayload);
+
       const response = await centralizedApi.api.post(
-        "/request-remit",
-        requestData
+        "/transactions/request-remit",
+        apiPayload,
       );
       return response.data;
     } catch (error) {
