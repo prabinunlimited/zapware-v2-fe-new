@@ -284,7 +284,6 @@ export const fetchExchangeRate = createAsyncThunk(
 
         const responseData = response.data;
 
-        // ✅ FIX: Use the fxRate directly from API response
         const fxRate =
           responseData.fxRate ||
           responseData.converted_value / parseFloat(amount) ||
@@ -306,7 +305,6 @@ export const fetchExchangeRate = createAsyncThunk(
         status: error.response?.status,
       });
 
-      // Always return something (don't reject for now)
       const fallbackData = {
         fxRate: 115,
         fee: 0,
@@ -331,31 +329,13 @@ export const fetchBankAccounts = createAsyncThunk(
       console.log("🔍 DEBUG - Starting fetchBankAccounts");
       console.log("Customer ID:", customerId);
 
-      console.log("🔍 Checking localStorage:");
-      console.log(
-        "- isRemittanceOnlyCustomer:",
-        localStorage.getItem("isRemittanceOnlyCustomer"),
-      );
-      console.log("- All localStorage keys:", Object.keys(localStorage));
-
       const token = localStorage.getItem("bearertoken");
       if (!token) {
         console.error("No auth token found");
         return rejectWithValue("Authentication required");
       }
 
-      const isRemittanceOnlyCustomer = localStorage.getItem(
-        "isRemittanceOnlyCustomer",
-      );
-      console.log(
-        "🔍 isRemittanceOnlyCustomer flag:",
-        isRemittanceOnlyCustomer,
-      );
-
-      // REMOVED: The remit-from-currencies API call
-      // All customers now use the standard bank-account-details API
-
-      console.log("✅ Using bank-account-details API for all customers");
+      console.log("✅ Using bank-account-details API");
 
       const response = await axios.get(
         `${API_URL}/bank-account-details/${customerId}`,
@@ -375,14 +355,13 @@ export const fetchBankAccounts = createAsyncThunk(
     } catch (error) {
       console.error("❌ Error fetching bank accounts:", error);
 
-      // Fallback for when API fails
       console.warn("Using fallback bank accounts");
       return [
         {
           id: "fallback-usd",
           currency_code: "USD",
           currency_name: "US Dollar",
-          icon: "💵",
+          icon: "$",
           bank_name: "Chase Bank",
           account_number: "518366536",
           account_name: "Unlimited Cloud LLC",
@@ -392,7 +371,7 @@ export const fetchBankAccounts = createAsyncThunk(
           id: "fallback-gbp",
           currency_code: "GBP",
           currency_name: "British Pound",
-          icon: "💷",
+          icon: "£",
           bank_name: "Barclays Bank",
           account_number: "GBP-ACCT-001",
           account_name: "Unlimited Cloud LLC",
@@ -402,7 +381,7 @@ export const fetchBankAccounts = createAsyncThunk(
           id: "fallback-eur",
           currency_code: "EUR",
           currency_name: "Euro",
-          icon: "💶",
+          icon: "€",
           bank_name: "Deutsche Bank",
           account_number: "EUR-ACCT-001",
           account_name: "Unlimited Cloud LLC",
@@ -417,32 +396,82 @@ export const fetchPayoutCurrencies = createAsyncThunk(
   "remittance/fetchPayoutCurrencies",
   async (_, { rejectWithValue }) => {
     try {
-      const isWhiteLabelledPartnerCustomer = localStorage.getItem(
-        "iswhitelabelledpartner",
-      );
-
-      let response;
-
-      if (isWhiteLabelledPartnerCustomer === "Y") {
-        const whiteLabellePartnerId = localStorage.getItem(
-          "whitelabelledpartnerid",
-        );
-
-        if (whiteLabellePartnerId && whiteLabellePartnerId !== "0") {
-          response = await axios.get(
-            `${API_URL}/partner-payout-currencies/${whiteLabellePartnerId}`,
-          );
-        } else {
-          response = await axios.get(`${API_URL}/payout-currencies`);
-        }
-      } else {
-        response = await axios.get(`${API_URL}/payout-currencies`);
+      const token = localStorage.getItem("bearertoken");
+      
+      // Try multiple possible keys for the partner ID
+      const partnerId = localStorage.getItem("partner_id") || 
+                       localStorage.getItem("whitelabelledpartnerid") ||
+                       localStorage.getItem("whitelabelled_partner_id");
+      
+      const isWhitelabelled = localStorage.getItem("iswhitelabelledpartner") === "Y" ||
+                              localStorage.getItem("whitelabelled_customer_partnername") !== null;
+      
+      console.log("🔍 FetchPayoutCurrencies called");
+      console.log("📦 partner_id from localStorage:", partnerId);
+      console.log("🏷️ isWhitelabelled:", isWhitelabelled);
+      console.log("🔑 Token exists:", !!token);
+      
+      if (!token) {
+        console.error("❌ No auth token found!");
+        return rejectWithValue("Authentication required");
       }
-
-      // Return the exact API response data
+      
+      let response;
+      
+      // Use the partner ID if available
+      if (partnerId && partnerId !== "null" && partnerId !== "undefined") {
+        console.log(`🎯 Calling partner-payout-currencies endpoint for partner_id: ${partnerId}`);
+        console.log(`📍 URL: ${API_URL}/partner-payout-currencies/${partnerId}`);
+        
+        response = await axios.get(
+          `${API_URL}/partner-payout-currencies/${partnerId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      } else {
+        console.log("📦 No partner_id found, using default payout-currencies endpoint");
+        response = await axios.get(
+          `${API_URL}/payout-currencies`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      }
+      
+      console.log("✅ Payout currencies response:", response.data);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      console.error("❌ Error fetching payout currencies:", error);
+      console.log("📦 Returning fallback payout currencies data");
+      
+      // Return fallback data with the 3 currencies we expect
+      return {
+        data: [
+          {
+            payout_currency_id: 105,
+            currency_code: "NPR",
+            icon: "₹",
+            default_remittance: "N"
+          },
+          {
+            payout_currency_id: 64,
+            currency_code: "INR",
+            icon: "₹",
+            default_remittance: "Y"
+          },
+          {
+            payout_currency_id: 49,
+            currency_code: "GBP",
+            icon: "£",
+            default_remittance: "N"
+          }
+        ]
+      };
     }
   },
 );
@@ -537,11 +566,11 @@ export const submitTransaction = createAsyncThunk(
 
         ...(transactionData.isRecurring ||
         transactionData.frequency ||
-        transactionData.custom_days // ✅ Change from recurring_custom_days
+        transactionData.custom_days
           ? {
               isRecurring: transactionData.isRecurring || "0",
               frequency: transactionData.frequency || "",
-              custom_days: transactionData.custom_days || "", // ✅ Match the field name
+              custom_days: transactionData.custom_days || "",
             }
           : {}),
 
@@ -623,8 +652,6 @@ export const submitTransaction = createAsyncThunk(
       }
 
       console.log(`📞 Calling API: ${endpoint}`);
-      console.log(`🔗 Endpoint: ${endpoint}`);
-      console.log("FormData all Payload", formData);
       const response = await axios.post(endpoint, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -660,19 +687,12 @@ export const submitTransaction = createAsyncThunk(
       }
 
       console.log("🎉 Transaction submitted successfully!");
-      console.log("📊 Final response:", finalResponse);
-
       return finalResponse;
     } catch (error) {
       console.error("❌ Transaction submission error:", {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        headers: error.response?.headers,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-        },
       });
 
       const errorDetails = {
@@ -685,14 +705,6 @@ export const submitTransaction = createAsyncThunk(
         data: error.response?.data,
         timestamp: new Date().toISOString(),
       };
-
-      if (error.response?.data?.errors) {
-        errorDetails.validation_errors = error.response.data.errors;
-      }
-
-      if (error.response?.data?.error) {
-        errorDetails.field_errors = error.response.data.error;
-      }
 
       return rejectWithValue(errorDetails);
     }
@@ -724,6 +736,7 @@ const initialState = {
   currencies: {
     sendOptions: [],
     receiveOptions: [],
+    payoutCurrencies: null,
     loading: false,
   },
   bankAccounts: [],
@@ -796,7 +809,6 @@ const remittanceSlice = createSlice({
         ...action.payload,
       };
     },
-
     setRemittanceOnly: (state, action) => {
       state.customerType.isRemittanceOnly = action.payload;
       localStorage.setItem(
@@ -804,15 +816,12 @@ const remittanceSlice = createSlice({
         action.payload ? "Y" : "N",
       );
     },
-
     setCustomerTypeLoading: (state, action) => {
       state.customerType.isLoading = action.payload;
     },
-
     setCustomerTypeError: (state, action) => {
       state.customerType.error = action.payload;
     },
-
     clearVerification: (state) => {
       state.verification = initialState.verification;
     },
@@ -822,19 +831,6 @@ const remittanceSlice = createSlice({
     setAgreeToTerms: (state, action) => {
       state.formData.agreeToTerms = action.payload;
     },
-
-    handleBeneficiaryCodeLookup: (state, action) => {
-      // This is a placeholder - actual implementation would be in the component
-    },
-
-    handleBeneficiarySelect: (state, action) => {
-      // This is a placeholder - actual implementation would be in the component
-    },
-
-    handleBankSelect: (state, action) => {
-      // This is a placeholder - actual implementation would be in the component
-    },
-
     resetForm: (state) => {
       state.step = 1;
       state.formData = {
@@ -855,7 +851,6 @@ const remittanceSlice = createSlice({
     clearPromoCodeValidation: (state) => {
       state.promoCodeValidation = null;
     },
-
     forceSetCustomerType: (state, action) => {
       const customerType = action.payload;
       state.customerType.isRemittanceOnly = customerType === "remittance";
@@ -883,7 +878,6 @@ const remittanceSlice = createSlice({
         state.formData.fee = parseFloat(action.payload.fee) || 0;
         state.formData.conversionId = action.payload.conversion_id;
 
-        // ✅ Store the complete exchange rate data
         state.exchangeRateData = {
           fxRate: parseFloat(action.payload.fxRate),
           fee: parseFloat(action.payload.fee) || 0,
@@ -905,15 +899,12 @@ const remittanceSlice = createSlice({
         state.loading = false;
         state.error = action.payload || "Failed to fetch exchange rate";
       })
-
       .addCase(fetchBankAccounts.pending, (state) => {
         state.currencies.loading = true;
       })
       .addCase(fetchBankAccounts.fulfilled, (state, action) => {
         state.bankAccounts = action.payload;
         state.currencies.loading = false;
-
-        // All accounts are now regular accounts (no remittance-only accounts)
         state.customerType.isRemittanceOnly = false;
 
         if (action.payload.length > 0 && !state.formData.sendCurrency) {
@@ -932,7 +923,6 @@ const remittanceSlice = createSlice({
         state.currencies.loading = false;
         state.error = action.payload || "Failed to fetch bank accounts";
       })
-
       .addCase(fetchManualAccountDetails.pending, (state) => {
         state.loading = true;
       })
@@ -946,7 +936,6 @@ const remittanceSlice = createSlice({
         state.error =
           action.payload || "Failed to fetch manual account details";
       })
-
       .addCase(validatePromoCode.pending, (state) => {
         state.loading = true;
       })
@@ -959,7 +948,6 @@ const remittanceSlice = createSlice({
         state.promoCodeValidation = null;
         state.error = action.payload || "Invalid promo code";
       })
-
       .addCase(sendVerificationCode.pending, (state) => {
         state.verification.loading = true;
         state.verification.error = null;
@@ -973,7 +961,6 @@ const remittanceSlice = createSlice({
         state.verification.error =
           action.payload || "Failed to send verification code";
       })
-
       .addCase(verifyPasscode.pending, (state) => {
         state.verification.loading = true;
         state.verification.error = null;
@@ -988,26 +975,54 @@ const remittanceSlice = createSlice({
         state.verification.loading = false;
         state.verification.error = action.payload || "Verification failed";
       })
-
+      .addCase(fetchPayoutCurrencies.pending, (state) => {
+        state.currencies.loading = true;
+      })
       .addCase(fetchPayoutCurrencies.fulfilled, (state, action) => {
-        // Store the exact API response data
         const apiData = action.payload;
         const currencies = apiData?.data || [];
-
-        // Store the raw currencies data
+        
+        console.log("📊 Processing payout currencies:", currencies);
+        
         state.currencies.receiveOptions = currencies;
-
+        state.currencies.payoutCurrencies = apiData;
+        state.currencies.loading = false;
+        
         // Find default currency (where default_remittance is "Y")
         const defaultCurrency = currencies.find(
-          (currency) => currency.default_remittance === "Y",
+          (currency) => currency.default_remittance === "Y"
         );
-
+        
+        console.log("🎯 Default currency found:", defaultCurrency);
+        
         // Set default currency if exists and no currency is selected
         if (defaultCurrency && !state.formData.receiveCurrency) {
-          state.formData.receiveCurrency = defaultCurrency;
+          state.formData.receiveCurrency = {
+            value: defaultCurrency.currency_code,
+            label: defaultCurrency.currency_code,
+            icon: defaultCurrency.icon,
+            default_remittance: defaultCurrency.default_remittance,
+            currency_code: defaultCurrency.currency_code,
+            payout_currency_id: defaultCurrency.payout_currency_id,
+          };
+          console.log("✅ Default receive currency set to:", state.formData.receiveCurrency);
+        } else if (currencies.length > 0 && !state.formData.receiveCurrency) {
+          const firstCurrency = currencies[0];
+          state.formData.receiveCurrency = {
+            value: firstCurrency.currency_code,
+            label: firstCurrency.currency_code,
+            icon: firstCurrency.icon,
+            default_remittance: firstCurrency.default_remittance,
+            currency_code: firstCurrency.currency_code,
+            payout_currency_id: firstCurrency.payout_currency_id,
+          };
+          console.log("📌 First currency set as default:", state.formData.receiveCurrency);
         }
       })
-
+      .addCase(fetchPayoutCurrencies.rejected, (state, action) => {
+        state.currencies.loading = false;
+        state.error = action.payload || "Failed to fetch payout currencies";
+      })
       .addCase(submitTransaction.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1048,252 +1063,39 @@ export const {
   setRemittanceOnly,
   setCustomerTypeLoading,
   setCustomerTypeError,
-  handleBeneficiaryCodeLookup,
-  handleBeneficiarySelect,
-  handleBankSelect,
   forceSetCustomerType,
-  setExchangeRateData, // ✅ Add this
+  setExchangeRateData,
   clearExchangeRateData,
 } = remittanceSlice.actions;
 
+// Selectors
 export const selectFormData = (state) => state.remittance.formData;
 export const selectSendAmount = (state) => state.remittance.formData.sendAmount;
-export const selectReceiveAmount = (state) =>
-  state.remittance.formData.receiveAmount;
-export const selectSendCurrency = (state) =>
-  state.remittance.formData.sendCurrency;
-export const selectReceiveCurrency = (state) =>
-  state.remittance.formData.receiveCurrency;
-export const selectPaymentMethod = (state) =>
-  state.remittance.formData.paymentMethod;
-export const selectExchangeRate = (state) =>
-  state.remittance.formData.exchangeRate;
+export const selectReceiveAmount = (state) => state.remittance.formData.receiveAmount;
+export const selectSendCurrency = (state) => state.remittance.formData.sendCurrency;
+export const selectReceiveCurrency = (state) => state.remittance.formData.receiveCurrency;
+export const selectPaymentMethod = (state) => state.remittance.formData.paymentMethod;
+export const selectExchangeRate = (state) => state.remittance.formData.exchangeRate;
 export const selectFee = (state) => state.remittance.formData.fee;
-export const selectConversionId = (state) =>
-  state.remittance.formData.conversionId;
+export const selectConversionId = (state) => state.remittance.formData.conversionId;
 export const selectPurpose = (state) => state.remittance.formData.purpose;
-export const selectIncomeSource = (state) =>
-  state.remittance.formData.income_source;
+export const selectIncomeSource = (state) => state.remittance.formData.income_source;
 export const selectOccupation = (state) => state.remittance.formData.occupation;
 export const selectRelation = (state) => state.remittance.formData.relation;
-export const selectPayoutMethod = (state) =>
-  state.remittance.formData.payout_method;
+export const selectPayoutMethod = (state) => state.remittance.formData.payout_method;
 export const selectDocument = (state) => state.remittance.formData.document;
-export const selectAgreeToTerms = (state) =>
-  state.remittance.formData.agreeToTerms;
+export const selectAgreeToTerms = (state) => state.remittance.formData.agreeToTerms;
 export const selectPromoCode = (state) => state.remittance.formData.promocode;
-export const selectDescription = (state) =>
-  state.remittance.formData.description;
+export const selectDescription = (state) => state.remittance.formData.description;
 export const selectSenderBank = (state) => state.remittance.formData.senderBank;
-export const selectIsRemittanceOnly = (state) =>
-  state.remittance.customerType.isRemittanceOnly;
-
+export const selectIsRemittanceOnly = (state) => state.remittance.customerType.isRemittanceOnly;
 export const selectCustomerType = (state) => state.remittance.customerType;
-
-export const selectCustomerTypeLoading = (state) =>
-  state.remittance.customerType.isLoading;
-
-export const selectKYCStatus = (state) =>
-  state.remittance.customerType.kycStatus;
-
-export const selectTransactionWithType = (state) => {
-  const transaction = state.remittance.transactionResult;
-  if (!transaction) return null;
-
-  return {
-    ...transaction,
-    is_remittance_only: state.remittance.customerType.isRemittanceOnly,
-  };
-};
-
 export const selectStep = (state) => state.remittance.step;
 export const selectCurrencies = (state) => state.remittance.currencies;
-export const selectSendOptions = (state) =>
-  state.remittance.currencies.sendOptions;
-export const selectReceiveOptions = (state) =>
-  state.remittance.currencies.receiveOptions;
 export const selectBankAccounts = (state) => state.remittance.bankAccounts;
-export const selectManualAccountDetails = (state) =>
-  state.remittance.manualAccountDetails;
-export const selectPromoCodeValidation = (state) =>
-  state.remittance.promoCodeValidation;
-export const selectVerification = (state) => state.remittance.verification;
+export const selectManualAccountDetails = (state) => state.remittance.manualAccountDetails;
 export const selectLoading = (state) => state.remittance.loading;
 export const selectError = (state) => state.remittance.error;
-export const selectTransactionResult = (state) =>
-  state.remittance.transactionResult;
-export const selectExchangeRateCache = (state) =>
-  state.remittance.exchangeRateCache;
-
-export const selectIsFormValid = (state) => {
-  const form = state.remittance.formData;
-  return Boolean(
-    form.sendAmount &&
-    form.receiveAmount &&
-    form.sendCurrency &&
-    form.receiveCurrency &&
-    form.purpose &&
-    form.income_source &&
-    form.payout_method &&
-    form.agreeToTerms,
-  );
-};
-
-export const selectTotalAmount = (state) => {
-  const form = state.remittance.formData;
-  const sendAmount = parseFloat(form.sendAmount) || 0;
-  const fee = parseFloat(form.fee) || 0;
-  return sendAmount + fee;
-};
-
-export const selectFormattedAmounts = (state) => {
-  const form = state.remittance.formData;
-  const formatNumber = (num) => {
-    if (num === null || num === undefined || num === "") return "";
-    const str = typeof num === "string" ? num.replace(/,/g, "") : String(num);
-    const cleaned = str.replace(/[^0-9.]/g, "");
-    const number = parseFloat(cleaned);
-    return isNaN(number) ? "" : number.toLocaleString("en-US");
-  };
-
-  return {
-    formattedSendAmount: formatNumber(form.sendAmount),
-    formattedReceiveAmount: formatNumber(form.receiveAmount),
-  };
-};
-
-export const selectIsEuropeUKTransfer = (state) => {
-  const sendCurrency = state.remittance.formData.sendCurrency;
-  return sendCurrency?.value === "GBP" || sendCurrency?.value === "EUR";
-};
-
-export const selectSendCurrencySymbol = (state) => {
-  const sendCurrency = state.remittance.formData.sendCurrency;
-  if (!sendCurrency) return "";
-
-  const symbols = {
-    USD: "$",
-    EUR: "€",
-    GBP: "£",
-    JPY: "¥",
-    NPR: "₨",
-    KES: "KSh",
-    INR: "₹",
-    AED: "د.إ",
-    NGN: "₦",
-    BDT: "৳",
-    LKR: "රු",
-    AUD: "A$",
-    PKR: "₨",
-    DKK: "kr",
-  };
-
-  return symbols[sendCurrency.value] || sendCurrency.value;
-};
-
-export const selectReceiveCurrencySymbol = (state) => {
-  const receiveCurrency = state.remittance.formData.receiveCurrency;
-  if (!receiveCurrency) return "";
-
-  const symbols = {
-    USD: "$",
-    EUR: "€",
-    GBP: "£",
-    JPY: "¥",
-    NPR: "₨",
-    KES: "KSh",
-    INR: "₹",
-    AED: "د.إ",
-    NGN: "₦",
-    BDT: "৳",
-    LKR: "රු",
-    AUD: "A$",
-    PKR: "₨",
-    DKK: "kr",
-  };
-
-  return symbols[receiveCurrency.value] || receiveCurrency.value;
-};
-
-export const selectExchangeRateDisplay = (state) => {
-  const form = state.remittance.formData;
-  if (!form.sendCurrency || !form.receiveCurrency || !form.exchangeRate) {
-    return "Loading...";
-  }
-
-  return `${form.sendCurrency.value} 1 = ${
-    form.receiveCurrency.value
-  } ${form.exchangeRate.toFixed(4)}`;
-};
-
-export const selectIsLoadingExchangeRate = (state) =>
-  state.remittance.currencies.loading || state.remittance.loading;
-
-export const selectIsSubmitting = (state) => state.remittance.loading;
-
-export const selectIsVerifying = (state) =>
-  state.remittance.verification.loading;
-
-export const selectIsVerificationSent = (state) =>
-  state.remittance.verification.sent;
-
-export const selectIsVerificationVerified = (state) =>
-  state.remittance.verification.verified;
-
-export const selectVerificationError = (state) =>
-  state.remittance.verification.error;
-
-export const selectInitialDataLoading = (state) =>
-  state.remittance.currencies.loading || state.remittance.loading;
-
-export const selectTransactionSummary = (state) => {
-  const form = state.remittance.formData;
-  return {
-    sendAmount: form.sendAmount,
-    receiveAmount: form.receiveAmount,
-    sendCurrency: form.sendCurrency?.value,
-    receiveCurrency: form.receiveCurrency?.value,
-    exchangeRate: form.exchangeRate,
-    fee: form.fee,
-    totalAmount:
-      (parseFloat(form.sendAmount) || 0) + (parseFloat(form.fee) || 0),
-    paymentMethod: form.paymentMethod,
-    purpose: form.purpose?.label,
-    incomeSource: form.income_source?.label,
-  };
-};
-
-export const selectCanProceedToNextStep = (state) => {
-  const step = state.remittance.step;
-  const form = state.remittance.formData;
-
-  switch (step) {
-    case 1:
-      return Boolean(
-        form.sendAmount &&
-        form.receiveAmount &&
-        form.sendCurrency &&
-        form.receiveCurrency,
-      );
-    case 2:
-      return Boolean(form.purpose && form.income_source && form.payout_method);
-    case 3:
-      return form.agreeToTerms;
-    default:
-      return false;
-  }
-};
-
-export const selectCurrencyDisplay = (state) => {
-  const send = state.remittance.formData.sendCurrency;
-  const receive = state.remittance.formData.receiveCurrency;
-
-  return {
-    send: send ? `${selectSendCurrencySymbol(state)} ${send.label}` : "",
-    receive: receive
-      ? `${selectReceiveCurrencySymbol(state)} ${receive.label}`
-      : "",
-  };
-};
+export const selectTransactionResult = (state) => state.remittance.transactionResult;
 
 export default remittanceSlice.reducer;

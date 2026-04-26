@@ -1,4 +1,4 @@
-// src/page/Remittance/Remittance.jsx - COMPLETE UI OVERHAUL (Preserving all logic)
+// src/page/Remittance/Remittance.jsx - COMPLETE UI OVERHAUL (Preserving all logic) 
 
 import React, {
   useState,
@@ -193,18 +193,18 @@ const Remittance = () => {
     () =>
       Array.isArray(purposes)
         ? purposes.map((purpose) => ({
-            value: purpose.value,
-            label: purpose.label,
-            description: purpose.description,
-          }))
+          value: purpose.value,
+          label: purpose.label,
+          description: purpose.description,
+        }))
         : [
-            { value: "family_support", label: "Family Support" },
-            { value: "education", label: "Education Fees" },
-            { value: "medical", label: "Medical Expenses" },
-            { value: "business", label: "Business Investment" },
-            { value: "savings", label: "Savings" },
-            { value: "other", label: "Other" },
-          ],
+          { value: "family_support", label: "Family Support" },
+          { value: "education", label: "Education Fees" },
+          { value: "medical", label: "Medical Expenses" },
+          { value: "business", label: "Business Investment" },
+          { value: "savings", label: "Savings" },
+          { value: "other", label: "Other" },
+        ],
     [purposes],
   );
 
@@ -212,17 +212,17 @@ const Remittance = () => {
     () =>
       Array.isArray(incomeSources)
         ? incomeSources.map((source) => ({
-            value: source.value,
-            label: source.label,
-          }))
+          value: source.value,
+          label: source.label,
+        }))
         : [
-            { value: "salary", label: "Salary" },
-            { value: "business", label: "Business Income" },
-            { value: "investment", label: "Investment Income" },
-            { value: "gift", label: "Gift" },
-            { value: "inheritance", label: "Inheritance" },
-            { value: "other", label: "Other" },
-          ],
+          { value: "salary", label: "Salary" },
+          { value: "business", label: "Business Income" },
+          { value: "investment", label: "Investment Income" },
+          { value: "gift", label: "Gift" },
+          { value: "inheritance", label: "Inheritance" },
+          { value: "other", label: "Other" },
+        ],
     [incomeSources],
   );
 
@@ -253,10 +253,20 @@ const Remittance = () => {
     [bankAccounts],
   );
 
+  // FIXED: receiveCurrencyOptions - Only shows currencies from the API endpoint
   const receiveCurrencyOptions = useMemo(() => {
-    const currencyData = currencies?.receiveOptions || [];
+    // Get the payout currencies from the API response
+    const payoutData = currencies?.payoutCurrencies;
 
-    return currencyData.map((currency) => ({
+    if (!payoutData) return [];
+
+    // Handle both formats (with or without .data wrapper)
+    const currencyList = payoutData.data || (Array.isArray(payoutData) ? payoutData : []);
+
+    if (!currencyList.length) return [];
+
+    // Map the currencies to the format needed by the Select component
+    return currencyList.map((currency) => ({
       value: currency.currency_code,
       label: currency.currency_code,
       icon: currency.icon,
@@ -264,7 +274,7 @@ const Remittance = () => {
       currency_code: currency.currency_code,
       payout_currency_id: currency.payout_currency_id,
     }));
-  }, [currencies?.receiveOptions]);
+  }, [currencies?.payoutCurrencies]);
 
   useEffect(() => {
     if (!receiveCurrencyOptions.length) return;
@@ -274,14 +284,14 @@ const Remittance = () => {
     );
 
     if (defaultOption) {
-      console.log("defaultOption", defaultOption);
+      console.log("Setting default receive currency:", defaultOption);
       dispatch(setReceiveCurrency(defaultOption));
       activeInput.current = "receive";
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
-        if (key.includes(`-${option?.value}-`)) {
+        if (key.includes(`-${defaultOption?.value}-`)) {
           delete exchangeRateCache.current[key];
         }
       });
@@ -314,9 +324,12 @@ const Remittance = () => {
     const initializeData = async () => {
       if (customerId) {
         try {
+          console.log("🔍 Initializing with customerId:", customerId);
+          console.log("🔍 partner_id from localStorage:", localStorage.getItem("partner_id"));
+
           await Promise.all([
             dispatch(fetchBankAccounts(customerId)),
-            dispatch(fetchPayoutCurrencies()),
+            dispatch(fetchPayoutCurrencies()), // No need to pass customerId, it will use partner_id from localStorage
             dispatch(fetchAllStaticData()),
           ]);
         } catch (error) {
@@ -553,9 +566,8 @@ const Remittance = () => {
         !isTyping.current
       ) {
         const timer = setTimeout(() => {
-          const cacheKey = `${formData.sendCurrency?.value}-${
-            formData.receiveCurrency?.value
-          }-${parseFloat(formData.sendAmount) || 5}`;
+          const cacheKey = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value
+            }-${parseFloat(formData.sendAmount) || 5}`;
 
           if (exchangeRateCache.current[cacheKey]) {
             delete exchangeRateCache.current[cacheKey];
@@ -755,31 +767,6 @@ const Remittance = () => {
   }, [formData.paymentMethod, formData]);
 
   useEffect(() => {
-    console.log("🔍 PARENT VALIDATION CHECK:", {
-      step,
-      selectedBeneficiary: !!selectedBeneficiary,
-      beneficiaryId: selectedBeneficiary?.id,
-      purpose: formData.purpose,
-      purposeType: formData.purpose ? typeof formData.purpose : "undefined",
-      purposeValue: formData.purpose?.value,
-      incomeSource: formData.incomeSource,
-      incomeSourceValue: formData.incomeSource?.value,
-      selectedBank: !!selectedBank,
-      bankId: selectedBank?.id,
-      sendCurrency: formData.sendCurrency?.value,
-      isUSD: formData.sendCurrency?.value === "USD",
-      hasSilaAccount: !!selectedSilaBankAccount,
-      allFormDataKeys: Object.keys(formData),
-    });
-  }, [
-    step,
-    selectedBeneficiary,
-    formData,
-    selectedBank,
-    selectedSilaBankAccount,
-  ]);
-
-  useEffect(() => {
     window.scrollTo({
       top: 0,
       behavior: "smooth",
@@ -794,26 +781,6 @@ const Remittance = () => {
       isInitialMount.current = false;
     }
   }, [dispatch]);
-
-  useEffect(() => {
-  // Set default receive currency when options are loaded and no currency is selected
-  console.log("receiveCurrencyOptions",receiveCurrencyOptions);
-  console.log("formData.receiveCurrency",formData.receiveCurrency);
-  if (receiveCurrencyOptions.length > 0 && !formData.receiveCurrency) {
-    // Find the currency with default_remittance = "Y"
-    const defaultCurrency = receiveCurrencyOptions.find(
-      (currency) => currency.default_remittance === "Y"
-    );
-    
-    // If found, set it as default, otherwise use the first option
-    const currencyToSet = defaultCurrency || receiveCurrencyOptions[0];
-    
-    if (currencyToSet) {
-      console.log("Setting default receive currency:", currencyToSet);
-      dispatch(setReceiveCurrency(currencyToSet));
-    }
-  }
-}, [receiveCurrencyOptions, formData.receiveCurrency, dispatch]);
 
   const formatAmountInput = (value) => {
     if (value === "" || value === null || value === undefined) return "";
@@ -833,9 +800,8 @@ const Remittance = () => {
       return;
     }
 
-    const cacheKey = `${formData.sendCurrency.value}-${
-      formData.receiveCurrency.value
-    }-${parseFloat(formData.sendAmount) || 5}`;
+    const cacheKey = `${formData.sendCurrency.value}-${formData.receiveCurrency.value
+      }-${parseFloat(formData.sendAmount) || 5}`;
     delete exchangeRateCache.current[cacheKey];
 
     try {
@@ -1199,17 +1165,17 @@ const Remittance = () => {
       to_currency: formData.receiveCurrency?.value,
 
       ...(selectedSilaBankAccount &&
-      formData.paymentMethod === "bank" &&
-      formData.sendCurrency?.value === "USD"
+        formData.paymentMethod === "bank" &&
+        formData.sendCurrency?.value === "USD"
         ? {
-            sila_account_id: selectedSilaBankAccount.id,
-            sila_payment_instrument_id:
-              selectedSilaBankAccount.payment_instrument_id,
-            sila_account_name: selectedSilaBankAccount.account_name,
-            sila_routing_number: selectedSilaBankAccount.routing_number,
-            sila_account_number_hash: selectedSilaBankAccount.accountNumberHash,
-            sila_account_type: selectedSilaBankAccount.account_type,
-          }
+          sila_account_id: selectedSilaBankAccount.id,
+          sila_payment_instrument_id:
+            selectedSilaBankAccount.payment_instrument_id,
+          sila_account_name: selectedSilaBankAccount.account_name,
+          sila_routing_number: selectedSilaBankAccount.routing_number,
+          sila_account_number_hash: selectedSilaBankAccount.accountNumberHash,
+          sila_account_type: selectedSilaBankAccount.account_type,
+        }
         : {}),
 
       send_amount: parseFloat(formData.sendAmount) || 0,
@@ -1259,20 +1225,20 @@ const Remittance = () => {
 
       ...(recurringData && recurringData.isRecurring === "1"
         ? {
-            isRecurring: recurringData.isRecurring,
-            frequency: recurringData.frequency || "",
-            custom_days: recurringData.custom_days || "",
-            is_recurring: "Y",
-            recurring_type:
-              recurringData.frequency === "specific_day"
-                ? "custom"
-                : recurringData.frequency,
-            recurring_status: "active",
-          }
+          isRecurring: recurringData.isRecurring,
+          frequency: recurringData.frequency || "",
+          custom_days: recurringData.custom_days || "",
+          is_recurring: "Y",
+          recurring_type:
+            recurringData.frequency === "specific_day"
+              ? "custom"
+              : recurringData.frequency,
+          recurring_status: "active",
+        }
         : {
-            isRecurring: "0",
-            is_recurring: "N",
-          }),
+          isRecurring: "0",
+          is_recurring: "N",
+        }),
 
       transaction_source: "web_app",
       platform: "web",
@@ -1664,8 +1630,8 @@ const Remittance = () => {
         boxShadow:
           "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
         overflow: "hidden",
-        zIndex: 9999, // ✅ Add high z-index
-        position: "absolute", // ✅ Ensure absolute positioning
+        zIndex: 9999,
+        position: "absolute",
       }),
       menuList: (base) => ({
         ...base,
@@ -1762,13 +1728,12 @@ const Remittance = () => {
                   scale: step === stepItem.number ? 1.1 : 1,
                 }}
                 transition={{ duration: 0.3 }}
-                className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all duration-300 ${
-                  step > stepItem.number
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all duration-300 ${step > stepItem.number
                     ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200"
                     : step === stepItem.number
                       ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
                       : "bg-white text-slate-400 border-2 border-slate-200"
-                }`}
+                  }`}
               >
                 {step > stepItem.number ? (
                   <FiCheck className="w-5 h-5" />
@@ -1780,11 +1745,10 @@ const Remittance = () => {
               </motion.div>
               <div className="mt-3 text-center hidden sm:block">
                 <span
-                  className={`text-xs font-medium ${
-                    step >= stepItem.number
+                  className={`text-xs font-medium ${step >= stepItem.number
                       ? "text-slate-700"
                       : "text-slate-400"
-                  }`}
+                    }`}
                 >
                   {stepItem.label}
                 </span>
@@ -1936,8 +1900,6 @@ const Remittance = () => {
                     </p>
                   </div>
                   <div className="sm:w-48 relative">
-                    {" "}
-                    {/* ✅ Add relative positioning */}
                     <Select
                       options={sendCurrencyOptions}
                       value={formData.sendCurrency}
@@ -1947,8 +1909,8 @@ const Remittance = () => {
                       isSearchable
                       className="text-sm"
                       classNamePrefix="select"
-                      menuPortalTarget={document.body} // ✅ Portal to body for better z-index
-                      menuPosition="fixed" // ✅ Fixed position to avoid clipping
+                      menuPortalTarget={document.body}
+                      menuPosition="fixed"
                       formatOptionLabel={({ label, balance }) => (
                         <div className="flex justify-between items-center">
                           <span>{label}</span>
@@ -1965,43 +1927,56 @@ const Remittance = () => {
               </div>
 
               {/* Exchange Rate - Centered */}
+              {/* Exchange Rate - With Spinning Icon */}
               {exchangeRateData?.fxRate && (
-                <div className="relative py-3 bg-indigo-50/30 border-y border-indigo-100">
-                  <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 20,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                      className="w-8 h-8 bg-white rounded-full shadow-sm flex items-center justify-center"
-                    >
-                      <FaExchangeAlt className="w-3 h-3 text-indigo-500" />
-                    </motion.div>
-                  </div>
-                  <div className="flex justify-between items-center px-6">
-                    <div className="text-center">
-                      <p className="text-xs text-slate-500">
+                <div className="py-3 bg-indigo-50/30 border-y border-indigo-100">
+                  <div className="flex items-center justify-between px-6 gap-4">
+                    {/* Left side - Send currency */}
+                    <div className="text-left min-w-[80px]">
+                      {/* <p className="text-xs text-slate-500">You send</p> */}
+                      <p className="text-sm font-semibold text-slate-700">
                         1 {formData.sendCurrency?.value}
                       </p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-indigo-600">
-                        = {exchangeRateData.fxRate.toFixed(4)}{" "}
-                        {formData.receiveCurrency?.value}
+
+                    {/* Center - Spinning icon and rate */}
+                    <div className="flex-1 flex flex-col items-center">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 20,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="w-8 h-8 bg-white rounded-full shadow-sm flex items-center justify-center mb-1"
+                      >
+                        <FaExchangeAlt className="w-3 h-3 text-indigo-500" />
+                      </motion.div>
+                      <p className="text-sm font-bold text-indigo-600">
+                        = {exchangeRateData.fxRate.toFixed(4)} {formData.receiveCurrency?.value}
                       </p>
                     </div>
-                    <button
-                      onClick={fetchExchangeRateManual}
-                      className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1"
-                      disabled={loading}
-                    >
-                      <FaSpinner
-                        className={`w-3 h-3 ${loading ? "animate-spin" : ""}`}
-                      />
-                      Refresh
-                    </button>
+
+                    {/* Right side - Refresh button */}
+                    <div className="text-right min-w-[80px]">
+                      <button
+                        onClick={fetchExchangeRateManual}
+                        className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 justify-end w-full"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <FaSpinner className="w-3 h-3 animate-spin" />
+                            <span>...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FaExchangeAlt className="w-3 h-3" />
+                            <span>Refresh</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2038,12 +2013,12 @@ const Remittance = () => {
                     </div>
                   </div>
                   <div className="sm:w-48 relative">
-                    {" "}
-                    {/* ✅ Add relative positioning */}
                     <Select
                       options={receiveCurrencyOptions}
                       value={receiveCurrencyOptions.find(
-                        (opt) => opt.value === formData.receiveCurrency?.currency_code
+                        (opt) =>
+                          opt.value === formData.receiveCurrency?.currency_code ||
+                          opt.value === formData.receiveCurrency?.value
                       )}
                       onChange={handleReceiveCurrencyChange}
                       placeholder="Currency"
@@ -2057,12 +2032,14 @@ const Remittance = () => {
                       }}
                       className="text-sm"
                       classNamePrefix="select"
-                      menuPortalTarget={document.body} // ✅ Portal to body
-                      menuPosition="fixed" // ✅ Fixed position
-                      formatOptionLabel={({ label, icon }) => (
-                        <div className="flex items-center gap-2">
-                          <span>{icon}</span>
-                          <span>{label}</span>
+                      menuPortalTarget={document.body}
+                      menuPosition="fixed"
+                      formatOptionLabel={({ label, icon, default_remittance }) => (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            <span>{icon}</span>
+                            <span>{label}</span>
+                          </div>
                         </div>
                       )}
                     />
@@ -2093,19 +2070,17 @@ const Remittance = () => {
                       onClick={() => handlePaymentMethodChange(option.value)}
                       onMouseEnter={() => setActiveCard(option.value)}
                       onMouseLeave={() => setActiveCard(null)}
-                      className={`p-5 rounded-xl border-2 transition-all duration-200 text-left ${
-                        isSelected
+                      className={`p-5 rounded-xl border-2 transition-all duration-200 text-left ${isSelected
                           ? `border-indigo-500 bg-indigo-50/30 shadow-md`
                           : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start gap-4">
                         <div
-                          className={`p-2.5 rounded-xl transition-all duration-200 ${
-                            isSelected
+                          className={`p-2.5 rounded-xl transition-all duration-200 ${isSelected
                               ? "bg-indigo-500 text-white shadow-md"
                               : "bg-slate-100 text-slate-600"
-                          }`}
+                            }`}
                         >
                           {option.icon}
                         </div>
@@ -2374,7 +2349,7 @@ const Remittance = () => {
             {step === 3 && (
               <>
                 {formData.paymentMethod === "bank" &&
-                isOpenBankingAvailable() ? (
+                  isOpenBankingAvailable() ? (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
