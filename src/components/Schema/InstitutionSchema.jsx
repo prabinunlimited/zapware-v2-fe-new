@@ -395,8 +395,11 @@ const institutionSchema = (currentStep, options = {}) => {
   const step4Schema = Yup.object().shape({
     // Completely empty - no validation for now
   });
-
   const step5Schema = Yup.object().shape({
+    // Completely empty - no validation for now
+  });
+
+  const step6Schema = Yup.object().shape({
     terms_agreement: Yup.boolean()
       .oneOf(
         [true],
@@ -417,6 +420,8 @@ const institutionSchema = (currentStep, options = {}) => {
       return step4Schema;
     case 5:
       return step5Schema;
+    case 6:
+      return step6Schema;
     default:
       return Yup.object().shape({});
   }

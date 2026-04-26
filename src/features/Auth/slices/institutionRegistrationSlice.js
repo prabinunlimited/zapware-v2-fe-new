@@ -71,7 +71,7 @@ export const validateOwnerSSN = (ssn, isNamedAccount, country) => {
 export const validateOwnerDocuments = (owner, isNamedAccount, countries) => {
   const errors = {};
   const ownerCountry = countries.find(
-    (c) => c.id === owner.owner_country_id
+    (c) => c.id === owner.owner_country_id,
   )?.name;
   const isUSOwner = ownerCountry === "United States";
 
@@ -110,7 +110,7 @@ export const validateBusinessAlias = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Validation failed");
     }
-  }
+  },
 );
 
 export const fetchIndustryTypesWithNAICS = createAsyncThunk(
@@ -122,7 +122,7 @@ export const fetchIndustryTypesWithNAICS = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch industry types");
     }
-  }
+  },
 );
 
 export const fetchGenders = createAsyncThunk(
@@ -142,7 +142,7 @@ export const fetchGenders = createAsyncThunk(
     } catch (error) {
       throw error;
     }
-  }
+  },
 );
 
 export const fetchNationalities = createAsyncThunk(
@@ -162,7 +162,7 @@ export const fetchNationalities = createAsyncThunk(
     } catch (error) {
       throw error;
     }
-  }
+  },
 );
 
 export const fetchCountries = createAsyncThunk(
@@ -174,7 +174,7 @@ export const fetchCountries = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch countries");
     }
-  }
+  },
 );
 
 export const fetchInstitutionData = createAsyncThunk(
@@ -202,7 +202,7 @@ export const fetchInstitutionData = createAsyncThunk(
       ]);
 
       const failedRequests = results.filter(
-        (result) => result.status === "rejected"
+        (result) => result.status === "rejected",
       );
 
       if (failedRequests.length > 0) {
@@ -213,12 +213,12 @@ export const fetchInstitutionData = createAsyncThunk(
       return { success: true };
     } catch (error) {
       return rejectWithValue(
-        error.message || "Failed to fetch institution data"
+        error.message || "Failed to fetch institution data",
       );
     } finally {
       dispatch(setFetching(false));
     }
-  }
+  },
 );
 
 export const validateInstitutionStep = createAsyncThunk(
@@ -227,7 +227,7 @@ export const validateInstitutionStep = createAsyncThunk(
     try {
       const response = await api.post(
         "/customers/validate-institution-onboarding",
-        data
+        data,
       );
       return response.data;
     } catch (error) {
@@ -249,7 +249,7 @@ export const validateInstitutionStep = createAsyncThunk(
 
       return rejectWithValue(error.message || "Validation failed");
     }
-  }
+  },
 );
 
 export const submitInstitutionForm = createAsyncThunk(
@@ -265,7 +265,7 @@ export const submitInstitutionForm = createAsyncThunk(
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
 
       if (!response.data || Object.keys(response.data).length === 0) {
@@ -280,13 +280,13 @@ export const submitInstitutionForm = createAsyncThunk(
       // Enhanced error handling
       if (error.response?.data) {
         return rejectWithValue(
-          error.response.data.message || "Registration failed"
+          error.response.data.message || "Registration failed",
         );
       }
 
       return rejectWithValue(error.message || "Submission failed");
     }
-  }
+  },
 );
 
 export const fetchNAICSCodes = createAsyncThunk(
@@ -308,7 +308,7 @@ export const fetchNAICSCodes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch NAICS codes");
     }
-  }
+  },
 );
 
 export const fetchBusinessTypes = createAsyncThunk(
@@ -327,7 +327,7 @@ export const fetchBusinessTypes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch business types");
     }
-  }
+  },
 );
 
 export const fetchIndustryTypes = createAsyncThunk(
@@ -356,7 +356,28 @@ export const fetchIndustryTypes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch industry types");
     }
-  }
+  },
+);
+
+export const fetchInstitutionTypes = createAsyncThunk(
+  "institutionRegistration/fetchInstitutionTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/institution-types");
+
+      if (!Array.isArray(response.data)) {
+        throw new Error("Invalid response format");
+      }
+
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to fetch institution types",
+      );
+    }
+  },
 );
 
 export const fetchOwnerRoles = createAsyncThunk(
@@ -368,7 +389,7 @@ export const fetchOwnerRoles = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch owner roles");
     }
-  }
+  },
 );
 
 export const fetchDocumentTypes = createAsyncThunk(
@@ -380,7 +401,7 @@ export const fetchDocumentTypes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Failed to fetch document types");
     }
-  }
+  },
 );
 
 export const fetchIdDocumentTypes = createAsyncThunk(
@@ -391,10 +412,10 @@ export const fetchIdDocumentTypes = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(
-        error.message || "Failed to fetch ID document types"
+        error.message || "Failed to fetch ID document types",
       );
     }
-  }
+  },
 );
 
 export const fetchTermsAndConditions = createAsyncThunk(
@@ -402,10 +423,10 @@ export const fetchTermsAndConditions = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const isWhiteLabelledPartner = localStorage.getItem(
-        "iswhitelabelledpartner"
+        "iswhitelabelledpartner",
       );
       const whiteLabelledPartnerId = localStorage.getItem(
-        "whitelabelledpartnerid"
+        "whitelabelledpartnerid",
       );
 
       const partnerId =
@@ -430,7 +451,7 @@ export const fetchTermsAndConditions = createAsyncThunk(
       // Don't block registration if terms fail to load
       return [];
     }
-  }
+  },
 );
 
 export const syncControllerDataForm = createAsyncThunk(
@@ -469,7 +490,7 @@ export const syncControllerDataForm = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const uploadFile = createAsyncThunk(
@@ -497,10 +518,10 @@ export const uploadFile = createAsyncThunk(
       };
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "File upload failed"
+        error.response?.data?.message || "File upload failed",
       );
     }
-  }
+  },
 );
 
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
@@ -608,6 +629,7 @@ const initialState = {
     documentNumber: "",
     idIssuedDate: "",
     is_controller: "",
+    institutionTypes: [],
   },
 
   // UI state
@@ -779,7 +801,7 @@ const institutionRegistrationSlice = createSlice({
       // Process service provider IDs to determine account type
       if (locationState.service_provide_ids) {
         const isNamed = locationState.service_provide_ids.some(
-          (id) => typeof id === "string" && id.includes("named")
+          (id) => typeof id === "string" && id.includes("named"),
         );
         state.isNamedAccount = isNamed;
         state.accountType = isNamed ? "named" : "pooled";
@@ -811,7 +833,7 @@ const institutionRegistrationSlice = createSlice({
       const hasUSD = serviceProvideIds.some((idWithType) => {
         const id = parseInt(idWithType.split("-")[0]);
         const account = accountOptions.find(
-          (opt) => opt.service_provide_id === id
+          (opt) => opt.service_provide_id === id,
         );
         return account && account.currency === "USD";
       });
@@ -928,7 +950,7 @@ const institutionRegistrationSlice = createSlice({
     validateOwnershipPercentage: (state) => {
       const total = state.formData.owner_details.reduce(
         (sum, owner) => sum + (parseFloat(owner.ownership_percentage) || 0),
-        0
+        0,
       );
 
       state.totalOwnershipPercentage = total;
@@ -937,14 +959,14 @@ const institutionRegistrationSlice = createSlice({
       state.ownershipValidation = {
         totalPercentage: total,
         meetsMinimum: state.formData.owner_details.some(
-          (owner) => (parseFloat(owner.ownership_percentage) || 0) >= 25
+          (owner) => (parseFloat(owner.ownership_percentage) || 0) >= 25,
         ),
         isValid: Math.abs(total - 100) < 0.01,
         hasValidOwners: state.formData.owner_details.every(
           (owner) =>
             owner.ownership_percentage > 0 &&
             owner.owner_first_name &&
-            owner.owner_last_name
+            owner.owner_last_name,
         ),
       };
     },
@@ -1153,12 +1175,15 @@ const institutionRegistrationSlice = createSlice({
     setSelectedIndustry: (state, action) => {
       state.selectedIndustry = action.payload;
     },
+    setInstitutionTypes: (state, action) => {
+      state.institutionTypes = action.payload;
+    },
 
     // Ownership
     updateTotalOwnership: (state) => {
       state.totalOwnershipPercentage = state.formData.owner_details.reduce(
         (total, owner) => total + (owner.ownership_percentage || 0),
-        0
+        0,
       );
     },
 
@@ -1469,6 +1494,18 @@ const institutionRegistrationSlice = createSlice({
         state.industryTypes = [];
       })
 
+      // Institution Types
+      .addCase(fetchInstitutionTypes.pending, (state) => {
+        // optional loading state
+      })
+      .addCase(fetchInstitutionTypes.fulfilled, (state, action) => {
+        state.institutionTypes = action.payload;
+      })
+      .addCase(fetchInstitutionTypes.rejected, (state, action) => {
+        state.institutionTypes = [];
+        state.error = action.payload;
+      })
+
       // Owner Roles
       .addCase(fetchOwnerRoles.pending, (state) => {
         // Optional: Add loading state if needed
@@ -1625,6 +1662,9 @@ export const selectBusinessTypes = (state) =>
 
 export const selectIndustryTypes = (state) =>
   state.institutionRegistration.industryTypes;
+
+export const selectInstitutionTypes = (state) =>
+  state.institutionRegistration.institutionTypes;
 
 export const selectGenders = (state) => state.institutionRegistration.genders;
 
