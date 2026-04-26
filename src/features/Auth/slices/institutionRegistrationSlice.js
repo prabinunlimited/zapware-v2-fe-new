@@ -125,6 +125,26 @@ export const fetchIndustryTypesWithNAICS = createAsyncThunk(
   },
 );
 
+export const fetchDirectorsRoles = createAsyncThunk(
+  "institutionRegistration/fetchDirectorsRoles",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/directors-roles");
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      return rejectWithValue(
+        error.message || "Failed to fetch directors roles",
+      );
+    }
+  },
+);
+
 export const fetchGenders = createAsyncThunk(
   "institutionRegistration/fetchGenders",
   async () => {
@@ -630,6 +650,7 @@ const initialState = {
     idIssuedDate: "",
     is_controller: "",
     institutionTypes: [],
+    directorsRoles: [],
   },
 
   // UI state
@@ -791,6 +812,9 @@ const institutionRegistrationSlice = createSlice({
     // Step management
     setCurrentStep: (state, action) => {
       state.currentStep = action.payload;
+    },
+    setDirectorsRoles: (state, action) => {
+      state.directorsRoles = action.payload;
     },
 
     // Location state processing
@@ -1314,6 +1338,17 @@ const institutionRegistrationSlice = createSlice({
         state.termsConditions = [];
       })
 
+      .addCase(fetchDirectorsRoles.pending, (state) => {
+        state.directorsRoles = null;
+      })
+      .addCase(fetchDirectorsRoles.fulfilled, (state, action) => {
+        state.directorsRoles = action.payload;
+      })
+      .addCase(fetchDirectorsRoles.rejected, (state, action) => {
+        state.directorsRoles = [];
+        state.error = action.payload;
+      })
+
       // Business Alias Validation
       .addCase(validateBusinessAlias.pending, (state) => {
         state.businessAliasValid = null;
@@ -1778,5 +1813,8 @@ export const selectCanAddOwner = (state) => {
   const total = state.institutionRegistration.totalOwnershipPercentage;
   return total < 100 && state.institutionRegistration.ownerAdd === "Y";
 };
+
+export const selectDirectorsRoles = (state) =>
+  state.institutionRegistration.directorsRoles;
 
 export default institutionRegistrationSlice.reducer;

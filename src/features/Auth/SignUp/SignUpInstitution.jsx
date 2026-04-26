@@ -101,6 +101,8 @@ import {
   fetchIdDocumentTypes,
   setBusinessAlias,
   setOwnerAdd,
+  fetchDirectorsRoles,
+  selectDirectorsRoles,
 } from "../slices/institutionRegistrationSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
@@ -369,6 +371,9 @@ const Institution = () => {
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
 
+  const directorsRoles = useSelector(selectDirectorsRoles);
+  const [directorsRolesLoading, setDirectorsRolesLoading] = useState(false);
+
   // Replace the single states and statesLoading with separate ones
   const [primaryStates, setPrimaryStates] = useState([]);
   const [primaryStatesLoading, setPrimaryStatesLoading] = useState(false);
@@ -379,7 +384,14 @@ const Institution = () => {
   const [registeredStatesLoading, setRegisteredStatesLoading] = useState(false);
   const [isManualRegisteredStateInput, setIsManualRegisteredStateInput] =
     useState(false);
+
   const [isManualStateInput, setIsManualStateInput] = useState(false);
+
+  const [controllerStates, setControllerStates] = useState([]);
+  const [controllerStatesLoading, setControllerStatesLoading] = useState(false);
+  const [isManualControllerStateInput, setIsManualControllerStateInput] =
+    useState(false);
+
   const states = useSelector(selectStates);
   const statesLoading = useSelector(selectStatesLoading);
   const zipLookup = useSelector(selectZipLookup);
@@ -422,6 +434,15 @@ const Institution = () => {
   useEffect(() => {
     // Fetch currencies for service provider ID 59 (transfermate)
     dispatch(fetchServiceProviderCurrencies(59));
+  }, [dispatch]);
+
+  useEffect(() => {
+    const loadDirectorsRoles = async () => {
+      setDirectorsRolesLoading(true);
+      await dispatch(fetchDirectorsRoles());
+      setDirectorsRolesLoading(false);
+    };
+    loadDirectorsRoles();
   }, [dispatch]);
 
   const payoutCurrencyOptions = useMemo(() => {
@@ -539,11 +560,16 @@ const Institution = () => {
       controller_city: "",
       controller_street_address_1: "",
       controller_street_address_2: "",
+      controller_relevant_individual_apartment_unit:"",
       controller_zip_code: "",
       controller_gender: "",
       controller_dob: "",
       controller_designation: "",
       controller_ssn: "",
+      controller_document_issue_country: "",
+      controller_document_number: "",
+      controller_document_type: "",
+      controller_relevant_individual_percentage_of_shares: "",
       is_controller: "",
 
       // Add dob_error state
@@ -581,6 +607,9 @@ const Institution = () => {
       principal_business_address_city: "",
       principal_business_address_post_code: "",
       same_as_business_address: 0,
+      nominees: 0, // 0 = No, 1 = Yes
+      specify_nominees: [],
+      relevant_individual_role: "",
 
       ...mergedData,
     };
@@ -694,6 +723,17 @@ const Institution = () => {
       name: state.name,
     }));
   }, [states]);
+  const controllerStateOptions = useMemo(() => {
+    if (!controllerStates || controllerStates.length === 0) {
+      return [];
+    }
+    return controllerStates.map((state) => ({
+      value: state.state_code,
+      label: `${state.name} (${state.state_code})`,
+      code: state.state_code,
+      name: state.name,
+    }));
+  }, [controllerStates]);
 
   useEffect(() => {
     return () => {
@@ -1860,6 +1900,7 @@ const Institution = () => {
           controllerResidentCountry: findCountryId(
             finalFormData.controller_resident_country,
           ),
+
           controllerCountry: findCountryId(finalFormData.controller_country),
           principal_business_address_state:
             finalFormData.principal_business_address_state,
@@ -1908,6 +1949,16 @@ const Institution = () => {
           idIssuedDate: finalFormData.idIssuedDate,
           ownerAdd: ownerAdd,
           same_as_business_address: finalFormData.same_as_business_address,
+          nominees: finalFormData.nominees,
+          specify_nominees: finalFormData.specify_nominees,
+          relevant_individual_role: finalFormData.relevant_individual_role,
+          controller_document_issue_country:
+            finalFormData.controller_document_issue_country,
+          controller_document_type: finalFormData.controller_document_type,
+          controller_document_number: finalFormData.controller_document_number,
+          controller_relevant_individual_percentage_of_shares:
+            finalFormData.controller_relevant_individual_percentage_of_shares,
+          controller_relevant_individual_apartment_unit:finalFormData.controller_relevant_individual_apartment_unit,
 
           owner_details: finalFormData.owner_details?.map((owner) => {
             const processedOwner = {
@@ -2183,6 +2234,19 @@ const Institution = () => {
     () => roles.map((role) => ({ value: role.id, label: role.name })),
     [roles],
   );
+
+  const directorsRoleOptions = useMemo(() => {
+    if (!directorsRoles || directorsRoles.length === 0) {
+      return [];
+    }
+    return directorsRoles.map((role) => ({
+      value: role.name,
+      label: role.name
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (l) => l.toUpperCase()),
+    }));
+  }, [directorsRoles]);
+
   const idDocumentTypeOptions = useMemo(
     () => idDocumentTypes.map((doc) => ({ value: doc.id, label: doc.name })),
     [idDocumentTypes],
@@ -2348,6 +2412,238 @@ const Institution = () => {
             }`}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Nominees Radio Buttons */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nominees <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center space-x-4">
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="nominees"
+                      value="1"
+                      checked={values.nominees === 1}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setFieldValue("nominees", value);
+                        setLocalFormData((prev) => ({
+                          ...prev,
+                          nominees: value,
+                          // Reset specify_nominees count and array when Yes is selected
+                          no_of_nominees:
+                            value === 1 ? prev.no_of_nominees || 1 : 0,
+                          specify_nominees:
+                            value === 1 ? prev.specify_nominees || [""] : [],
+                        }));
+                        dispatch(setFormField({ field: "nominees", value }));
+                        if (value === 1) {
+                          dispatch(
+                            setFormField({
+                              field: "no_of_nominees",
+                              value: values.no_of_nominees || 1,
+                            }),
+                          );
+                          dispatch(
+                            setFormField({
+                              field: "specify_nominees",
+                              value: values.specify_nominees || [""],
+                            }),
+                          );
+                        } else {
+                          dispatch(
+                            setFormField({ field: "no_of_nominees", value: 0 }),
+                          );
+                          dispatch(
+                            setFormField({
+                              field: "specify_nominees",
+                              value: [],
+                            }),
+                          );
+                        }
+                      }}
+                      className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      disabled={values.is_controller === "yes"}
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Yes</span>
+                  </label>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="nominees"
+                      value="0"
+                      checked={values.nominees === 0}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setFieldValue("nominees", value);
+                        setFieldValue("no_of_nominees", 0);
+                        setFieldValue("specify_nominees", []); // Clear the array when No
+                        setLocalFormData((prev) => ({
+                          ...prev,
+                          nominees: value,
+                          no_of_nominees: 0,
+                          specify_nominees: [],
+                        }));
+                        dispatch(setFormField({ field: "nominees", value }));
+                        dispatch(
+                          setFormField({ field: "no_of_nominees", value: 0 }),
+                        );
+                        dispatch(
+                          setFormField({
+                            field: "specify_nominees",
+                            value: [],
+                          }),
+                        );
+                      }}
+                      className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      disabled={values.is_controller === "yes"}
+                    />
+                    <span className="ml-2 text-sm text-gray-700">No</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Number of Nominees Dropdown - only show if nominees is Yes */}
+              {values.nominees === 1 && (
+                <div className="md:col-span-2">
+                  <CustomSelect
+                    id="no_of_nominees"
+                    label="Number of Nominees"
+                    options={[
+                      { value: "1", label: "1" },
+                      { value: "2", label: "2" },
+                      { value: "3", label: "3" },
+                      { value: "4", label: "4" },
+                      { value: "5", label: "5" },
+                    ]}
+                    onChange={(option) => {
+                      const count = option ? parseInt(option.value) : 0;
+                      setFieldValue("no_of_nominees", count);
+
+                      // Reset specify_nominees array based on count
+                      const newNominees = [];
+                      for (let i = 0; i < count; i++) {
+                        newNominees.push(values.specify_nominees[i] || "");
+                      }
+                      setFieldValue("specify_nominees", newNominees);
+
+                      setLocalFormData((prev) => ({
+                        ...prev,
+                        no_of_nominees: count,
+                        specify_nominees: newNominees,
+                      }));
+                      dispatch(
+                        setFormField({ field: "no_of_nominees", value: count }),
+                      );
+                      dispatch(
+                        setFormField({
+                          field: "specify_nominees",
+                          value: newNominees,
+                        }),
+                      );
+                    }}
+                    value={[
+                      { value: "1", label: "1" },
+                      { value: "2", label: "2" },
+                      { value: "3", label: "3" },
+                      { value: "4", label: "4" },
+                      { value: "5", label: "5" },
+                    ].find(
+                      (opt) => parseInt(opt.value) === values.no_of_nominees,
+                    )}
+                    touched={touched.no_of_nominees}
+                    error={errors.no_of_nominees}
+                    placeholder="Select number of nominees"
+                    isDisabled={values.is_controller === "yes"}
+                    required={values.nominees === 1}
+                  />
+                </div>
+              )}
+
+              {/* Dynamic Nominee Name Input Fields */}
+              {values.nominees === 1 && values.no_of_nominees > 0 && (
+                <div className="md:col-span-2">
+                  <div className="space-y-3">
+                    {Array.from({ length: values.no_of_nominees }).map(
+                      (_, index) => (
+                        <FormField
+                          key={index}
+                          id={`specify_nominees_${index}`}
+                          label={`Nominee ${index + 1}`}
+                          name={`specify_nominees[${index}]`}
+                          value={values.specify_nominees[index] || ""}
+                          onChange={(e) => {
+                            const newNominees = [...values.specify_nominees];
+                            newNominees[index] = e.target.value;
+                            setFieldValue("specify_nominees", newNominees);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              specify_nominees: newNominees,
+                            }));
+                            dispatch(
+                              setFormField({
+                                field: "specify_nominees",
+                                value: newNominees,
+                              }),
+                            );
+                          }}
+                          onBlur={handleBlur}
+                          onFocus={() =>
+                            setActiveField(`specify_nominees_${index}`)
+                          }
+                          touched={touched.specify_nominees?.[index]}
+                          error={errors.specify_nominees?.[index]}
+                          required={true}
+                          placeholder={`Enter nominee ${index + 1} name`}
+                          disabled={values.is_controller === "yes"}
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      ),
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Enter the full names of the nominees (Latin alphanumeric A-Z
+                    a-z hyphen ( - ) period ( . ) space)
+                  </p>
+                </div>
+              )}
+
+              {/* Relevant Individual Role Dropdown */}
+              <div className="md:col-span-2">
+                <CustomSelect
+                  id="relevant_individual_role"
+                  label="Relevant Individual Role"
+                  options={directorsRoleOptions}
+                  onChange={(option) => {
+                    if (option) {
+                      setFieldValue("relevant_individual_role", option.value);
+                      setLocalFormData((prev) => ({
+                        ...prev,
+                        relevant_individual_role: option.value,
+                      }));
+                      dispatch(
+                        setFormField({
+                          field: "relevant_individual_role",
+                          value: option.value,
+                        }),
+                      );
+                    }
+                  }}
+                  value={directorsRoleOptions.find(
+                    (opt) => opt.value === values.relevant_individual_role,
+                  )}
+                  touched={touched.relevant_individual_role}
+                  error={errors.relevant_individual_role}
+                  placeholder="Select relevant individual role"
+                  isLoading={directorsRolesLoading}
+                  isDisabled={values.is_controller === "yes"}
+                  required={true}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Select the role of the relevant individual
+                </p>
+              </div>
               {/* Row 1: First Name & Middle Name */}
               <FormField
                 id="controller_first_name"
@@ -2581,6 +2877,61 @@ const Institution = () => {
               </div>
 
               {/* Row 6: Country & Zip */}
+              {/* <CustomSelect
+                id="controller_country"
+                label="Country"
+                options={countryOptions}
+                onChange={(option) => {
+                  if (option) {
+                    setFieldValue("controller_country", option.value);
+                    dispatch(
+                      setFormField({
+                        field: "controller_country",
+                        value: option.value,
+                      }),
+                    );
+                  }
+                }}
+                value={countryOptions.find(
+                  (opt) => opt.value === values.controller_country,
+                )}
+                touched={touched.controller_country}
+                error={errors.controller_country}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                isLoading={countriesLoading}
+                isCountryField={true}
+                showPhoneCode={false}
+              /> */}
+              {/* 
+<CustomSelect
+  id="controller_country"
+  label="Country"
+  options={countryOptions || []}
+  onChange={(option) => {
+    if (option) {
+      setFieldValue("controller_country", option.value);
+      dispatch(
+        setFormField({
+          field: "controller_country",
+          value: option.value,
+        }),
+      );
+    }
+  }}
+  value={(countryOptions || []).find(
+    (opt) => opt.value === values.controller_country,
+  )}
+  touched={touched.controller_country}
+  error={errors.controller_country}
+  required={values.is_controller === "no"}
+  disabled={values.is_controller === "yes"}
+  isLoading={countriesLoading || countryOptions.length === 0}
+  isCountryField={true}
+  showPhoneCode={false}
+/> */}
+
+              {/* Controller Country - Add this before the state field */}
               <CustomSelect
                 id="controller_country"
                 label="Country"
@@ -2607,6 +2958,65 @@ const Institution = () => {
                 isCountryField={true}
                 showPhoneCode={false}
               />
+
+              {/* Controller State/Province - With dropdown or input */}
+              {!isManualControllerStateInput &&
+              controllerStates &&
+              controllerStates.length > 0 ? (
+                <CustomSelect
+                  id="controller_state"
+                  label="State/Province"
+                  options={controllerStateOptions}
+                  onChange={(option) => {
+                    if (option) {
+                      setFieldValue("controller_state", option.value);
+                      setLocalFormData((prev) => ({
+                        ...prev,
+                        controller_state: option.value,
+                      }));
+                      dispatch(
+                        setFormField({
+                          field: "controller_state",
+                          value: option.value,
+                        }),
+                      );
+                    }
+                  }}
+                  value={controllerStateOptions.find(
+                    (opt) => opt.value === values.controller_state,
+                  )}
+                  touched={touched.controller_state}
+                  error={errors.controller_state}
+                  placeholder="Select State/Province"
+                  isLoading={controllerStatesLoading}
+                  isDisabled={
+                    values.is_controller === "yes" || !values.controller_country
+                  }
+                  required={values.is_controller === "no"}
+                />
+              ) : (
+                <FormField
+                  id="controller_state"
+                  label="State/Province"
+                  name="controller_state"
+                  value={values.controller_state || ""}
+                  onChange={enhancedHandleChange(
+                    "controller_state",
+                    setFieldValue,
+                  )}
+                  onBlur={handleBlur}
+                  onFocus={() => setActiveField("controller_state")}
+                  touched={touched.controller_state}
+                  error={errors.controller_state}
+                  required={values.is_controller === "no"}
+                  placeholder="Enter State/Province"
+                  disabled={
+                    values.is_controller === "yes" || !values.controller_country
+                  }
+                  activeField={activeField}
+                  fieldStyles={FIELD_STYLES}
+                />
+              )}
 
               {/* ZIP/Postal Code - With lookup */}
               <div className="relative">
@@ -2657,7 +3067,7 @@ const Institution = () => {
               </div>
 
               {/* State */}
-              <FormField
+              {/* <FormField
                 id="controller_state"
                 label="State/Province"
                 name="controller_state"
@@ -2673,7 +3083,7 @@ const Institution = () => {
                 required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
-              />
+              /> */}
 
               {/* City & Street Address 1 */}
               <FormField
@@ -2728,6 +3138,25 @@ const Institution = () => {
                 disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
+
+              <FormField
+                id="controller_relevant_individual_apartment_unit"
+                label="Apartment Unit"
+                name="controller_relevant_individual_apartment_unit"
+                value={values.controller_relevant_individual_apartment_unit|| ""}
+                onChange={enhancedHandleChange(
+                  "controller_relevant_individual_apartment_unit",
+                  setFieldValue,
+                )}
+                onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_relevant_individual_apartment_unit")}
+                touched={touched.controller_relevant_individual_apartment_unit}
+                error={errors.controller_relevant_individual_apartment_unit}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                fieldStyles={FIELD_STYLES}
+              />
+
 
               {/* Row 9: Gender */}
 
@@ -2784,6 +3213,99 @@ const Institution = () => {
                 error={errors.controller_designation}
                 required={values.is_controller === "no"}
                 disabled={values.is_controller === "yes"}
+                fieldStyles={FIELD_STYLES}
+              />
+
+              <CustomSelect
+                id="controller_document_issue_country"
+                label="Document Issued Country"
+                options={countryOptions || []}
+                onChange={(option) => {
+                  if (option) {
+                    setFieldValue(
+                      "controller_document_issue_country",
+                      option.value,
+                    );
+                    dispatch(
+                      setFormField({
+                        field: "controller_document_issue_country",
+                        value: option.value,
+                      }),
+                    );
+                  }
+                }}
+                value={(countryOptions || []).find(
+                  (opt) =>
+                    opt.value === values.controller_document_issue_country,
+                )}
+                touched={touched.controller_document_issue_country}
+                error={errors.controller_document_issue_country}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                isLoading={countriesLoading || countryOptions.length === 0}
+                isCountryField={true}
+                showPhoneCode={false}
+              />
+
+              {/* ID Document Type and ID Document Number on same row */}
+              <CustomSelect
+                id="controller_document_type"
+                label="ID Document Type"
+                options={idDocumentTypeOptions}
+                onChange={enhancedSelectChange(
+                  "controller_document_type",
+                  setFieldValue,
+                )}
+                value={idDocumentTypeOptions.find(
+                  (opt) => opt.value === values.controller_document_type,
+                )}
+                touched={touched.controller_document_type}
+                error={errors.controller_document_type}
+                required
+              />
+              <FormField
+                id="controller_document_number"
+                label="Controller Document Number"
+                name="controller_document_number"
+                value={values.controller_document_number || ""}
+                onChange={enhancedHandleChange(
+                  "controller_document_number",
+                  setFieldValue,
+                )}
+                onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_document_number")}
+                touched={touched.controller_document_number}
+                error={errors.controller_document_number}
+                required
+                activeField={activeField}
+                fieldStyles={FIELD_STYLES}
+              />
+              <FormField
+                id="controller_relevant_individual_percentage_of_shares"
+                label="Individual Percentage Of Shares"
+                name="controller_relevant_individual_percentage_of_shares"
+                value={
+                  values.controller_relevant_individual_percentage_of_shares ||
+                  ""
+                }
+                onChange={enhancedHandleChange(
+                  "controller_relevant_individual_percentage_of_shares",
+                  setFieldValue,
+                )}
+                onBlur={handleBlur}
+                onFocus={() =>
+                  setActiveField(
+                    "controller_relevant_individual_percentage_of_shares",
+                  )
+                }
+                touched={
+                  touched.controller_relevant_individual_percentage_of_shares
+                }
+                error={
+                  errors.controller_relevant_individual_percentage_of_shares
+                }
+                required
+                activeField={activeField}
                 fieldStyles={FIELD_STYLES}
               />
 
@@ -3253,6 +3775,37 @@ const Institution = () => {
             }
           }, [
             values.registered_address_street_country,
+            dispatch,
+            countryOptions,
+            setFieldValue,
+          ]);
+
+          useEffect(() => {
+            if (values.controller_country) {
+              const selectedCountry = countryOptions.find(
+                (opt) => opt.value === values.controller_country,
+              );
+              if (selectedCountry && selectedCountry.id) {
+                setControllerStatesLoading(true);
+                dispatch(fetchStatesByCountry(selectedCountry.id)).then(
+                  (result) => {
+                    if (result.payload && result.payload) {
+                      setControllerStates(result.payload);
+                      setIsManualControllerStateInput(
+                        result.payload.length === 0,
+                      );
+                    }
+                    setControllerStatesLoading(false);
+                  },
+                );
+              }
+            } else {
+              setControllerStates([]);
+              setIsManualControllerStateInput(false);
+              setFieldValue("controller_state", "");
+            }
+          }, [
+            values.controller_country,
             dispatch,
             countryOptions,
             setFieldValue,

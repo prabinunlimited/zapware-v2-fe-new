@@ -240,9 +240,9 @@ const institutionSchema = (currentStep, options = {}) => {
         (value) => value && value.toString().trim().length > 0,
       ),
 
-    country_of_registration: Yup.string().required(
-      "Country of registration is required",
-    ),
+    // country_of_registration: Yup.string().required(
+    //   "Country of registration is required",
+    // ),
 
     // Conditional fields
     ...(showEINField && {
