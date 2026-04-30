@@ -338,8 +338,31 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         bankCountry: bank.bank_country || "",
       }));
     }
-    // For create mode - start with EMPTY array (NOT with a default bank account)
-    return [];
+
+    return [
+      {
+        rails: "",
+        iban: "",
+        swift: "",
+        intermediarySwift: "",
+        routingNumber: "",
+        accountNumber: "",
+        bankName: "",
+        ifsc: "",
+        bankCode: "",
+        paymentMethod: paymentMethod,
+        bankState: "",
+        branchCode: "",
+        accountName: "",
+        accountTitle: "",
+        walletProvider: "",
+        mobileNumber: "",
+        otherProvider: "",
+        accountType: "",
+        sortCode: "",
+        bankCountry: "",
+      },
+    ];
   });
 
   const customStyles = {
@@ -840,38 +863,38 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         formik.setValues(formValues);
 
         // Set bank accounts if available
-        // if (beneficiaryData.banks && beneficiaryData.banks.length > 0) {
-        //   console.log("🏦 Setting bank accounts:", beneficiaryData.banks);
-        //   const mappedBanks = beneficiaryData.banks.map((bank) => ({
-        //     rails: bank.rails || "",
-        //     iban: bank.benef_iban || "",
-        //     swift: bank.swift_code || "",
-        //     intermediarySwift: bank.intermediary_bank_swift || "",
-        //     routingNumber: bank.routing_number || "",
-        //     accountNumber: bank.bank_acc_no || "",
-        //     bankName: bank.bank_name || "",
-        //     ifsc: bank.ifsc || "",
-        //     bankCode: bank.bankCode || "",
-        //     paymentMethod: bank.payment_method || paymentMethod,
-        //     bankState: bank.bankState || "",
-        //     branchCode: bank.branchCode || "",
-        //     accountName: bank.account_name || "",
-        //     accountTitle: bank.account_title || "",
-        //     walletProvider: bank.wallet_provider || "",
-        //     mobileNumber: bank.mobile_number || "",
-        //     otherProvider: bank.other_provider || "",
-        //     accountType: bank.account_type || "",
-        //     sortCode: bank.sort_code || "",
-        //     bankCountry: bank.bank_country || "",
-        //     currency: bank.currency_code || currency,
-        //   }));
-        //   setBankAccounts(mappedBanks);
+        if (beneficiaryData.banks && beneficiaryData.banks.length > 0) {
+          console.log("🏦 Setting bank accounts:", beneficiaryData.banks);
+          const mappedBanks = beneficiaryData.banks.map((bank) => ({
+            rails: bank.rails || "",
+            iban: bank.benef_iban || "",
+            swift: bank.swift_code || "",
+            intermediarySwift: bank.intermediary_bank_swift || "",
+            routingNumber: bank.routing_number || "",
+            accountNumber: bank.bank_acc_no || "",
+            bankName: bank.bank_name || "",
+            ifsc: bank.ifsc || "",
+            bankCode: bank.bankCode || "",
+            paymentMethod: bank.payment_method || paymentMethod,
+            bankState: bank.bankState || "",
+            branchCode: bank.branchCode || "",
+            accountName: bank.account_name || "",
+            accountTitle: bank.account_title || "",
+            walletProvider: bank.wallet_provider || "",
+            mobileNumber: bank.mobile_number || "",
+            otherProvider: bank.other_provider || "",
+            accountType: bank.account_type || "",
+            sortCode: bank.sort_code || "",
+            bankCountry: bank.bank_country || "",
+            currency: bank.currency_code || currency,
+          }));
+          setBankAccounts(mappedBanks);
 
-        //   // Update currency if available
-        //   if (mappedBanks[0]?.currency) {
-        //     setCurrency(mappedBanks[0].currency);
-        //   }
-        // }
+          // Update currency if available
+          if (mappedBanks[0]?.currency) {
+            setCurrency(mappedBanks[0].currency);
+          }
+        }
 
         // Set usingExistingBeneficiary to true to lock the form fields
         setUsingExistingBeneficiary(true);
@@ -968,16 +991,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleUseFoundBeneficiary = () => {
     console.log("🔄 Using existing beneficiary:", foundBeneficiary || phoneSearch.data);
-    
+
     const beneficiaryToUse = foundBeneficiary || phoneSearch.data;
-    
+
     if (beneficiaryToUse) {
       // Map nationality if needed
       let nationalityId = beneficiaryToUse.nationality_id;
       if (!nationalityId && beneficiaryToUse.nationality && nationalities.length > 0) {
         nationalityId = mapNationalityToId(beneficiaryToUse.nationality, nationalities);
       }
-  
+
       // Map relationship if needed
       let relationshipValue = beneficiaryToUse.relationtobenef;
       const relationshipMap = {
@@ -992,7 +1015,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       if (relationshipValue && relationshipMap[relationshipValue]) {
         relationshipValue = relationshipMap[relationshipValue];
       }
-  
+
       // Set all form values
       const formValues = {
         name: beneficiaryToUse.name || "",
@@ -1013,103 +1036,71 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         beneficiary_id_type: beneficiaryToUse.beneficiary_id_type || "",
         beneficiary_id_number: beneficiaryToUse.beneficiary_id_number || "",
       };
-  
+
       console.log("📝 Setting form values:", formValues);
       formik.setValues(formValues);
-  
-      // CRITICAL: Use a Map to store unique banks
-      const uniqueBanksMap = new Map();
-      
+
+      // Set bank accounts if available
       if (beneficiaryToUse.banks && beneficiaryToUse.banks.length > 0) {
-        console.log("🏦 Processing banks from API:", beneficiaryToUse.banks.length);
-        
-        beneficiaryToUse.banks.forEach(bank => {
-          // Create a unique key using identifying fields
-          const uniqueKey = `${bank.bank_name || ''}|${bank.bank_acc_no || ''}|${bank.currency_code || ''}|${bank.rails || ''}`;
-          
-          // Only add if this key doesn't exist in the map
-          if (!uniqueBanksMap.has(uniqueKey)) {
-            uniqueBanksMap.set(uniqueKey, {
-              rails: bank.rails || "",
-              iban: bank.benef_iban || "",
-              swift: bank.swift_code || "",
-              intermediarySwift: bank.intermediary_bank_swift || "",
-              routingNumber: bank.routing_number || "",
-              accountNumber: bank.bank_acc_no || "",
-              bankName: bank.bank_name || "",
-              ifsc: bank.ifsc || "",
-              bankCode: bank.bankCode || "",
-              paymentMethod: bank.payment_method || paymentMethod,
-              bankState: bank.bankState || "",
-              branchCode: bank.branchCode || "",
-              accountName: bank.account_name || "",
-              accountTitle: bank.account_title || "",
-              walletProvider: bank.wallet_provider || "",
-              mobileNumber: bank.mobile_number || "",
-              otherProvider: bank.other_provider || "",
-              accountType: bank.account_type || "",
-              sortCode: bank.sort_code || "",
-              bankCountry: bank.bank_country || "",
-              currency: bank.currency_code || currency,
-            });
-          } else {
-            console.log(`⚠️ Skipping duplicate bank: ${uniqueKey}`);
-          }
-        });
+        console.log("🏦 Setting bank accounts:", beneficiaryToUse.banks);
+        const mappedBanks = beneficiaryToUse.banks.map((bank) => ({
+          rails: bank.rails || "",
+          iban: bank.benef_iban || "",
+          swift: bank.swift_code || "",
+          intermediarySwift: bank.intermediary_bank_swift || "",
+          routingNumber: bank.routing_number || "",
+          accountNumber: bank.bank_acc_no || "",
+          bankName: bank.bank_name || "",
+          ifsc: bank.ifsc || "",
+          bankCode: bank.bankCode || "",
+          paymentMethod: bank.payment_method || paymentMethod,
+          bankState: bank.bankState || "",
+          branchCode: bank.branchCode || "",
+          accountName: bank.account_name || "",
+          accountTitle: bank.account_title || "",
+          walletProvider: bank.wallet_provider || "",
+          mobileNumber: bank.mobile_number || "",
+          otherProvider: bank.other_provider || "",
+          accountType: bank.account_type || "",
+          sortCode: bank.sort_code || "",
+          bankCountry: bank.bank_country || "",
+          currency: bank.currency_code || currency,
+        }));
+        setBankAccounts(mappedBanks);
+
+        // Update currency if available
+        if (mappedBanks[0]?.currency) {
+          setCurrency(mappedBanks[0].currency);
+        }
       }
-      
-      // Convert map values to array
-      const uniqueBanks = Array.from(uniqueBanksMap.values());
-      
-      console.log(`✅ Setting ${uniqueBanks.length} unique banks (filtered from ${beneficiaryToUse.banks?.length || 0})`);
-      
-      // IMPORTANT: Completely replace the bank accounts array
-      setBankAccounts(uniqueBanks);
-      
-      if (uniqueBanks[0]?.currency) {
-        setCurrency(uniqueBanks[0].currency);
-      }
-  
+
+      // Set the relationship dropdown state
       if (relationshipValue === "other") {
         setShowOtherRelationship(true);
       } else {
         setShowOtherRelationship(false);
       }
     }
-  
+
+    // Set states
     setUsingExistingBeneficiary(true);
     setShowSearchResults(false);
-    
-    // Move to next step
-    setStep(1);
+
+    // Small delay to ensure form values are set before validation
+    setTimeout(() => {
+      setStep(1);
+    }, 100);
   };
+
   const handleCreateNewBeneficiary = () => {
     setUsingExistingBeneficiary(false);
     setFoundBeneficiary(null);
     setShowSearchResults(false);
-    setBankAccounts([]); // Clear any existing bank accounts
     setPhoneInput("");
     dispatch(clearPhoneSearch());
-    // Clear form values
-    formik.setValues({
-      name: "",
-      country_id: "",
-      country_phone_code: countryCodeInput,
-      phone_number: phoneInput,
-      email: "",
-      beneftype: "",
-      state: "",
-      city: "",
-      street: "",
-      postalcode: "",
-      relationtobenef: "",
-      otherRelationship: "",
-      nationality_id: "",
-      status: "1",
-      nic_bcc_code: "",
-      beneficiary_id_type: "",
-      beneficiary_id_number: "",
-    });
+    // Keep the phone in formik for new beneficiary
+    formik.setFieldValue("phone_number", phoneInput);
+    formik.setFieldValue("country_phone_code", countryCodeInput);
     setStep(1);
   };
 
@@ -1208,43 +1199,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (step === 1) {
       // When moving from step 1 to step 2
-      if (step === 1) {
-        const invalidSwiftAccounts = bankAccounts.filter(
-          (account) =>
-            account.rails === "Swift" &&
-            !isSwiftSupportedForCurrency(account.currency || currency)
+      const invalidSwiftAccounts = bankAccounts.filter(
+        (account) =>
+          account.rails === "Swift" &&
+          !isSwiftSupportedForCurrency(account.currency || currency)
+      );
+
+      if (invalidSwiftAccounts.length > 0) {
+        toast.error(
+          "SWIFT is not available for the selected currency(s). Please fix before proceeding."
         );
-        if (invalidSwiftAccounts.length > 0) {
-          toast.error("SWIFT is not available for the selected currency(s). Please fix before proceeding.");
-          return false;
-        }
-        
-        // Only add an empty bank account for NEW beneficiaries (not when using existing)
-        if (bankAccounts.length === 0 && !usingExistingBeneficiary && mode === "create") {
-          setBankAccounts([{
-            rails: "",
-            iban: "",
-            swift: "",
-            intermediarySwift: "",
-            routingNumber: "",
-            accountNumber: "",
-            bankName: "",
-            ifsc: "",
-            bankCode: "",
-            paymentMethod: paymentMethod,
-            bankState: "",
-            branchCode: "",
-            accountName: "",
-            accountTitle: "",
-            walletProvider: "",
-            mobileNumber: "",
-            otherProvider: "",
-            accountType: "",
-            sortCode: "",
-            bankCountry: "",
-            currency: currency,
-          }]);
-        }
+        return false;
       }
     }
 
@@ -4248,7 +4213,7 @@ BeneficiaryForm.propTypes = {
 
 BeneficiaryForm.defaultProps = {
   mode: "create",
-  initialData: null,
+  initialData: null,	
 };
 
 export default BeneficiaryForm;
