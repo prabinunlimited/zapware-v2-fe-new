@@ -131,7 +131,14 @@ const Remittance = () => {
   const hasSilaAccounts = useSelector(selectHasSilaAccounts);
   const silaAccountsLoading = useSelector(selectUSDAccountsLoading);
   const silaAccountsError = useSelector(selectUSDAccountsError);
-  const selectedSilaBankAccount = useSelector(selectSelectedBankAccount);
+  const reduxSelectedSilaBankAccount = useSelector(selectSelectedBankAccount);
+  
+  // Local state for selected bank account to ensure proper synchronization
+  const [localSelectedBankAccount, setLocalSelectedBankAccount] = useState(null);
+  
+  // Use local state if available, otherwise use Redux state
+  const selectedSilaBankAccount = localSelectedBankAccount || reduxSelectedSilaBankAccount;
+  
   const exchangeRateData = reduxExchangeRateData;
 
   // Local state for UI
@@ -168,8 +175,10 @@ const Remittance = () => {
   const isUserEditing = useRef(false);
 
   const [isInitializing, setIsInitializing] = useState(true)
-  const defaultCurrencySet = useRef(false)
+  const [defaultCurrencySet, setDefaultCurrencySet] = useState(false)
   const isFirstLoad = useRef(true)
+  const hasFetchedSilaAccounts = useRef(false);
+  const isInitialMount = useRef(true);
 
   // Professional payment method options
   const paymentOptions = useMemo(
@@ -184,7 +193,7 @@ const Remittance = () => {
       },
       {
         value: "manual",
-        label: "Cash Deposit",
+        label: "Manual",
         description: "Bank branch deposit",
         icon: <HiOutlineBanknotes className="w-5 h-5" />,
         color: "emerald",
@@ -281,8 +290,126 @@ const Remittance = () => {
     }));
   }, [currencies?.payoutCurrencies]);
 
+  // Calculate if continue button should be disabled for step 2
+  const isStep2ButtonDisabled = useMemo(() => {
+    if (step !== 2) return false;
+    
+    // Basic validations
+    if (!selectedBeneficiary) return true;
+    if (!formData.purpose || !formData.purpose.value) return true;
+    if (!formData.incomeSource || !formData.incomeSource.value) return true;
+    
+    // Manual payment method validation
+    if (formData.paymentMethod === "manual") {
+      if (!formData.document) return true;
+    }
+    
+    // Bank transfer validations
+    if (formData.paymentMethod === "bank") {
+      // For USD transfers, need Sila bank account
+      if (formData.sendCurrency?.value === "USD") {
+        if (!hasSilaAccounts || silaBankAccounts.length === 0) return true;
+        if (!selectedSilaBankAccount) return true;
+        if (!selectedSilaBankAccount.web_debit_verified) return true;
+      }
+      
+      // For all bank transfers, need beneficiary bank selected
+      if (!selectedBank) return true;
+    }
+    
+    return false;
+  }, [step, selectedBeneficiary, formData, selectedSilaBankAccount, selectedBank, hasSilaAccounts, silaBankAccounts]);
+
+  const selectStyles = useMemo(
+    () => ({
+      control: (base, state) => ({
+        ...base,
+        minHeight: "52px",
+        borderRadius: "12px",
+        borderColor: state.isFocused ? "#6366f1" : "#e2e8f0",
+        borderWidth: "1px",
+        fontSize: "0.95rem",
+        backgroundColor: "#ffffff",
+        boxShadow: state.isFocused
+          ? "0 0 0 3px rgba(99, 102, 241, 0.1)"
+          : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        "&:hover": { borderColor: "#6366f1" },
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      }),
+      option: (base, { isSelected, isFocused }) => ({
+        ...base,
+        fontSize: "0.95rem",
+        padding: "12px 16px",
+        backgroundColor: isSelected
+          ? "#eef2ff"
+          : isFocused
+            ? "#f8fafc"
+            : "white",
+        color: isSelected ? "#4f46e5" : "#334155",
+        fontWeight: isSelected ? "600" : "500",
+        "&:hover": {
+          backgroundColor: "#f8fafc",
+        },
+        transition: "all 0.2s ease",
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: "12px",
+        fontSize: "0.95rem",
+        border: "1px solid #e2e8f0",
+        boxShadow:
+          "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+        overflow: "hidden",
+        zIndex: 9999,
+        position: "absolute",
+      }),
+      menuList: (base) => ({
+        ...base,
+        maxHeight: "300px",
+        overflowY: "auto",
+        padding: "4px 0",
+      }),
+      placeholder: (base) => ({
+        ...base,
+        color: "#94a3b8",
+        fontWeight: "500",
+      }),
+      singleValue: (base) => ({
+        ...base,
+        color: "#1e293b",
+        fontWeight: "600",
+      }),
+      dropdownIndicator: (base) => ({
+        ...base,
+        color: "#64748b",
+        padding: "8px",
+        "&:hover": {
+          color: "#475569",
+        },
+      }),
+      indicatorSeparator: (base) => ({
+        ...base,
+        backgroundColor: "#e2e8f0",
+      }),
+    }),
+    [],
+  );
+
+  const stepVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, x: -20 },
+      visible: { opacity: 1, x: 0 },
+      exit: { opacity: 0, x: 20 },
+    }),
+    [],
+  );
+
+  const totalToPay = parseFloat(formData.sendAmount || 0);
+  const fee = 0;
+
+  // ALL useEffects must be at top level
   useEffect(() => {
-    if (!receiveCurrencyOptions.length || defaultCurrencySet.current || isInitializing) return;
+    if (!receiveCurrencyOptions.length || defaultCurrencySet || isInitializing) return;
 
     const defaultOption = receiveCurrencyOptions.find(
       (opt) => opt.default_remittance === "Y"
@@ -292,7 +419,7 @@ const Remittance = () => {
       console.log("Setting default receive currency:", defaultOption);
       dispatch(setReceiveCurrency(defaultOption));
       activeInput.current = "receive";
-      defaultCurrencySet.current = true
+      setDefaultCurrencySet(true);
       setShowRecipientDetails(false);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
@@ -307,7 +434,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     }
-  }, [receiveCurrencyOptions, dispatch, formData.receiveCurrency, formData.sendAmount, isInitializing]);
+  }, [receiveCurrencyOptions, dispatch, formData.receiveCurrency, formData.sendAmount, isInitializing, defaultCurrencySet]);
 
   // Copy to clipboard function
   const copyToClipboard = useCallback((text, fieldName) => {
@@ -340,29 +467,27 @@ const Remittance = () => {
 
           //Mark initialization as complete after a short delay
           setTimeout(() => {
-            setIsInitializing(false)
-            isFirstLoad.current = false
-          },500);
+            setIsInitializing(false);
+            isFirstLoad.current = false;
+          }, 500);
 
         } catch (error) {
           console.error("Failed to initialize data:", error);
-          setIsInitializing(false)
-          isFirstLoad.current = false
+          setIsInitializing(false);
+          isFirstLoad.current = false;
         } finally {
           setInitialLoading(false);
         }
       } else {
         setInitialLoading(false);
-        setIsInitializing(false)
-        isFirstLoad.current = false
+        setIsInitializing(false);
+        isFirstLoad.current = false;
         navigate("/login");
       }
     };
 
     initializeData();
   }, [customerId, dispatch, navigate]);
-
-  const hasFetchedSilaAccounts = useRef(false);
 
   useEffect(() => {
     const customerIdToUse =
@@ -392,7 +517,7 @@ const Remittance = () => {
       dispatch(setSendAmount("5"));
       activeInput.current = "send";
     }
-  }, [initialLoading, dispatch, step]);
+  }, [initialLoading, dispatch, step, formData.sendAmount]);
 
   // Reset exchange rate data when currencies change
   useEffect(() => {
@@ -405,15 +530,15 @@ const Remittance = () => {
       : null;
 
       if (cachedPair && cachedPair !== currentPair) {
-        console.log('Currency pair changed, clearing exchange rate')
-        dispatch(setExchangeRateData(null))
+        console.log('Currency pair changed, clearing exchange rate');
+        dispatch(setExchangeRateData(null));
         isManualUpdate.current = false;
-        dispatch(setReceiveAmount(""))
+        dispatch(setReceiveAmount(""));
       }
    }
   },[formData.sendCurrency, formData.receiveCurrency, dispatch, exchangeRateData, isInitializing]);
 
-  // Fetch exchange rate with deduplication and caching
+  // Fetch exchange rate with deduplication and caching - FULL IMPLEMENTATION
   useEffect(() => {
     let isMounted = true;
     let debounceTimer;
@@ -790,14 +915,39 @@ const Remittance = () => {
     });
   }, [step]);
 
-  const isInitialMount = useRef(true);
-
   useEffect(() => {
     if (isInitialMount.current) {
       dispatch(resetForm());
       isInitialMount.current = false;
     }
   }, [dispatch]);
+
+  // Debug validation state
+  useEffect(() => {
+    if (step === 2) {
+      console.log("🔍 Step 2 Validation State:", {
+        selectedBeneficiary: selectedBeneficiary?.id,
+        formDataPurpose: formData.purpose?.value,
+        formDataIncomeSource: formData.incomeSource?.value,
+        paymentMethod: formData.paymentMethod,
+        sendCurrency: formData.sendCurrency?.value,
+        selectedSilaBankAccount: selectedSilaBankAccount?.id,
+        selectedBank: selectedBank?.id,
+        hasSilaAccounts,
+        silaBankAccountsCount: silaBankAccounts?.length,
+        isUSDBankTransfer: formData.paymentMethod === "bank" && formData.sendCurrency?.value === "USD",
+        isNonUSDBankTransfer: formData.paymentMethod === "bank" && formData.sendCurrency?.value !== "USD",
+        isStep2ButtonDisabled,
+        allConditions: {
+          hasBeneficiary: !!selectedBeneficiary,
+          hasPurpose: !!formData.purpose,
+          hasIncomeSource: !!formData.incomeSource,
+          hasSilaAccountForUSD: !(formData.paymentMethod === "bank" && formData.sendCurrency?.value === "USD") || !!selectedSilaBankAccount,
+          hasSelectedBank: !(formData.paymentMethod === "bank") || !!selectedBank,
+        }
+      });
+    }
+  }, [step, selectedBeneficiary, formData, selectedSilaBankAccount, selectedBank, hasSilaAccounts, silaBankAccounts, isStep2ButtonDisabled]);
 
   const formatAmountInput = (value) => {
     if (value === "" || value === null || value === undefined) return "";
@@ -1097,6 +1247,7 @@ const Remittance = () => {
 
   const handleBankSelect = useCallback(
     (bank) => {
+      console.log("🏦 Bank selected in parent:", bank);
       dispatch(setSelectedBank(bank));
     },
     [dispatch],
@@ -1104,7 +1255,12 @@ const Remittance = () => {
 
   const handleBankAccountSelect = useCallback(
     (account) => {
+      console.log("✅ Bank account selected in parent:", account);
+      setLocalSelectedBankAccount(account);
       dispatch(setSelectedBankAccount(account));
+      setTimeout(() => {
+        console.log("✅ Selected bank account confirmed:", account?.id);
+      }, 100);
     },
     [dispatch],
   );
@@ -1360,43 +1516,62 @@ const Remittance = () => {
 
       dispatch(setStep(2));
     } else if (step === 2) {
+      // Basic validations
       if (!selectedBeneficiary) {
+        console.log("Validation failed: No beneficiary selected");
         return;
       }
 
-      if (!formData.purpose || !formData.incomeSource) {
+      if (!formData.purpose || !formData.purpose.value) {
+        console.log("Validation failed: No purpose selected");
         return;
       }
 
+      if (!formData.incomeSource || !formData.incomeSource.value) {
+        console.log("Validation failed: No income source selected");
+        return;
+      }
+
+      // Manual payment method validation
       if (formData.paymentMethod === "manual") {
         if (!formData.document) {
+          console.log("Validation failed: No document uploaded for manual payment");
           return;
         }
       }
 
+      // Bank transfer validations
       if (formData.paymentMethod === "bank") {
+        // For USD transfers, need Sila bank account
         if (formData.sendCurrency?.value === "USD") {
           if (!hasSilaAccounts || silaBankAccounts.length === 0) {
+            console.log("Validation failed: No Sila accounts available for USD");
             return;
           }
 
           if (!selectedSilaBankAccount) {
+            console.log("Validation failed: No Sila bank account selected for USD");
             return;
           }
 
           if (!selectedSilaBankAccount.web_debit_verified) {
+            console.log("Validation failed: Selected Sila account not verified");
             return;
           }
         }
 
+        // For all bank transfers, need beneficiary bank selected
         if (!selectedBank) {
+          console.log("Validation failed: No beneficiary bank selected");
           return;
         }
       }
 
+      console.log("✅ All validations passed, moving to step 3");
       dispatch(setStep(3));
     } else if (step === 3) {
       if (!formData.agreeToTerms) {
+        console.log("Validation failed: Terms not agreed");
         return;
       }
 
@@ -1405,6 +1580,7 @@ const Remittance = () => {
         formData.sendCurrency?.value === "USD" &&
         !selectedSilaBankAccount
       ) {
+        console.log("Validation failed: No Sila bank account for USD transfer");
         return;
       }
 
@@ -1422,9 +1598,6 @@ const Remittance = () => {
     hasSilaAccounts,
     silaBankAccounts,
     dispatch,
-    handleInitiateOpenBanking,
-    handleSubmitTransaction,
-    isOpenBankingAvailable,
   ]);
 
   const handlePreviousStep = useCallback(() => {
@@ -1436,6 +1609,7 @@ const Remittance = () => {
   const handleReset = useCallback(() => {
     dispatch(resetForm());
     dispatch(setSelectedBankAccount(null));
+    setLocalSelectedBankAccount(null);
   }, [dispatch]);
 
   const handleGoBack = useCallback(() => {
@@ -1579,12 +1753,12 @@ const Remittance = () => {
         pageHeight - 20,
       );
       doc.text(
-        "For any inquiries, please contact our support team",
+        "For any inquiries, please contact our support team +1-888-226-0712",
         15,
         pageHeight - 15,
       );
       doc.text(
-        `© ${new Date().getFullYear()} Your Company Name. All rights reserved.`,
+        `© ${new Date().getFullYear()} Xchangely. All rights reserved.`,
         15,
         pageHeight - 10,
       );
@@ -1606,90 +1780,6 @@ const Remittance = () => {
   const handleRecurringDataChange = useCallback((data) => {
     setRecurringData(data);
   }, []);
-
-  const selectStyles = useMemo(
-    () => ({
-      control: (base, state) => ({
-        ...base,
-        minHeight: "52px",
-        borderRadius: "12px",
-        borderColor: state.isFocused ? "#6366f1" : "#e2e8f0",
-        borderWidth: "1px",
-        fontSize: "0.95rem",
-        backgroundColor: "#ffffff",
-        boxShadow: state.isFocused
-          ? "0 0 0 3px rgba(99, 102, 241, 0.1)"
-          : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-        "&:hover": { borderColor: "#6366f1" },
-        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-      }),
-      option: (base, { isSelected, isFocused }) => ({
-        ...base,
-        fontSize: "0.95rem",
-        padding: "12px 16px",
-        backgroundColor: isSelected
-          ? "#eef2ff"
-          : isFocused
-            ? "#f8fafc"
-            : "white",
-        color: isSelected ? "#4f46e5" : "#334155",
-        fontWeight: isSelected ? "600" : "500",
-        "&:hover": {
-          backgroundColor: "#f8fafc",
-        },
-        transition: "all 0.2s ease",
-      }),
-      menu: (base) => ({
-        ...base,
-        borderRadius: "12px",
-        fontSize: "0.95rem",
-        border: "1px solid #e2e8f0",
-        boxShadow:
-          "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
-        overflow: "hidden",
-        zIndex: 9999,
-        position: "absolute",
-      }),
-      menuList: (base) => ({
-        ...base,
-        maxHeight: "300px",
-        overflowY: "auto",
-        padding: "4px 0",
-      }),
-      placeholder: (base) => ({
-        ...base,
-        color: "#94a3b8",
-        fontWeight: "500",
-      }),
-      singleValue: (base) => ({
-        ...base,
-        color: "#1e293b",
-        fontWeight: "600",
-      }),
-      dropdownIndicator: (base) => ({
-        ...base,
-        color: "#64748b",
-        padding: "8px",
-        "&:hover": {
-          color: "#475569",
-        },
-      }),
-      indicatorSeparator: (base) => ({
-        ...base,
-        backgroundColor: "#e2e8f0",
-      }),
-    }),
-    [],
-  );
-
-  const stepVariants = useMemo(
-    () => ({
-      hidden: { opacity: 0, x: -20 },
-      visible: { opacity: 1, x: 0 },
-      exit: { opacity: 0, x: 20 },
-    }),
-    [],
-  );
 
   if (initialLoading) {
     return (
@@ -1714,9 +1804,6 @@ const Remittance = () => {
       </div>
     );
   }
-
-  const totalToPay = parseFloat(formData.sendAmount || 0);
-  const fee = 0;
 
   const ProgressSteps = () => {
     const steps = [
@@ -1827,7 +1914,6 @@ const Remittance = () => {
             incomeSourceOptions={incomeSourceOptions}
             relationOptions={relationOptions}
             paymentOptions={paymentOptions}
-            onFileUpload={handleFileUpload}
             selectedCurrency={formData.sendCurrency?.value}
             silaBankAccounts={silaBankAccounts}
             hasSilaAccounts={hasSilaAccounts}
@@ -1943,20 +2029,16 @@ const Remittance = () => {
                 </div>
               </div>
 
-              {/* Exchange Rate - Centered */}
               {/* Exchange Rate - With Spinning Icon */}
               {exchangeRateData?.fxRate && (
                 <div className="py-3 bg-indigo-50/30 border-y border-indigo-100">
                   <div className="flex items-center justify-between px-6 gap-4">
-                    {/* Left side - Send currency */}
                     <div className="text-left min-w-[80px]">
-                      {/* <p className="text-xs text-slate-500">You send</p> */}
                       <p className="text-sm font-semibold text-slate-700">
                         1 {formData.sendCurrency?.value}
                       </p>
                     </div>
 
-                    {/* Center - Spinning icon and rate */}
                     <div className="flex-1 flex flex-col items-center">
                       <motion.div
                         animate={{ rotate: 360 }}
@@ -1974,7 +2056,6 @@ const Remittance = () => {
                       </p>
                     </div>
 
-                    {/* Right side - Refresh button */}
                     <div className="text-right min-w-[80px]">
                       <button
                         onClick={fetchExchangeRateManual}
@@ -2009,9 +2090,9 @@ const Remittance = () => {
                       Recipient Receives
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400">
+                  {/* <span className="text-xs text-slate-400">
                     Estimated amount
-                  </span>
+                  </span> */}
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -2327,16 +2408,7 @@ const Remittance = () => {
                       !exchangeRateData?.fxRate ||
                       (formData.paymentMethod === "manual" &&
                         (!manualAccountDetails || manualAccountError)))) ||
-                  (step === 2 &&
-                    (!selectedBeneficiary ||
-                      !formData.purpose ||
-                      !formData.incomeSource ||
-                      (formData.paymentMethod === "manual" &&
-                        !formData.document) ||
-                      (formData.paymentMethod === "bank" &&
-                        formData.sendCurrency?.value === "USD" &&
-                        !selectedSilaBankAccount) ||
-                      (formData.paymentMethod === "bank" && !selectedBank))) ||
+                  (step === 2 && isStep2ButtonDisabled) ||
                   loading ||
                   manualDetailsLoading ||
                   beneficiaryLoading ||

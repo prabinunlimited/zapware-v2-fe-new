@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams , useNavigate} from "react-router-dom";
 import {
   FaUniversity,
   FaFileUpload,
@@ -77,9 +77,14 @@ const BankTransfer = ({
   silaAccountsError = null,
   selectedBankAccount = null,
   onBankAccountSelect,
+  customerId: propCustomerId, 
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { customerId: paramCustomerId } = useParams();
+
+   // Get customer ID from props or params or localStorage
+   const customerId = propCustomerId || paramCustomerId || localStorage.getItem("customerId") || localStorage.getItem("authcustomer_id")
 
   // Get Sila bank accounts from Redux store
   const reduxSilaBankAccounts = useSelector(selectSilaBankAccounts);
@@ -552,8 +557,16 @@ const BankTransfer = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    toast.info("Redirecting to add new beneficiary...");
-    // You can implement navigation to beneficiary creation page
+    console.log("➕ Adding new beneficiary, customerId:", customerId);
+    
+    if (!customerId) {
+      toast.error("Customer ID not found. Please login again.");
+      return;
+    }
+    
+    // Navigate to add beneficiary page
+    navigate(`/addbeneficiary/${customerId}`);
+    toast.info("Redirecting to add beneficiary page...");
   };
 
   // Bank Detail Item component (for consistency with ManualDeposit)

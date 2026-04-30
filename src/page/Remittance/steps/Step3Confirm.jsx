@@ -297,7 +297,7 @@ const Step3Confirm = ({
                     <h4 className="font-semibold text-gray-900">
                       Recipient Receives
                     </h4>
-                    <p className="text-sm text-gray-500">Estimated amount</p>
+                    {/* <p className="text-sm text-gray-500">Estimated amount</p> */}
                   </div>
                 </div>
 
