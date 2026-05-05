@@ -56,10 +56,22 @@ import {
   resetCreateState,
   clearUpdateState,
   updateBeneficiaryBank,
-  selectBankLoading,
-  selectBankSuccess,
-  selectBankError,
-  clearBankError,
+  selectBankUpdateLoading,
+  selectBankUpdateError,
+  selectBankUpdateSuccess,
+  selectBankDeleteLoading,
+  selectBankDeleteError,
+  selectBankDeleteSuccess,
+  // selectBankAddLoading,
+  // selectBankAddError,
+  // selectBankAddSuccess,
+  // selectBankOperation,
+  // selectBankId,
+  // selectBankLoading,
+  // selectBankSuccess,
+  // selectBankError,
+  // clearBankError,
+  deleteBeneficiaryBank,
 } from "../AddBeneficiary/addBeneficiarySlice";
 
 // Import from beneficiarySlice for phone search
@@ -182,11 +194,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   }));
 
   // Add these after your existing useSelector
-  const bankUpdateLoading = useSelector(selectBankLoading);
-  const bankUpdateSuccess = useSelector(selectBankSuccess);
-  const bankUpdateError = useSelector(selectBankError);
+  const bankUpdateLoading = useSelector(selectBankUpdateLoading);
+  const bankUpdateSuccess = useSelector(selectBankUpdateSuccess);
+  const bankUpdateError = useSelector(selectBankUpdateError);
+  const bankDeleteLoading = useSelector(selectBankDeleteLoading);
+  const bankDeleteError = useSelector(selectBankDeleteError);
+  const bankDeleteSuccess = useSelector(selectBankDeleteSuccess);
   // ADD THESE LINES:
   const beneficiaries = useSelector(selectBeneficiaries);
+
+  // const bankDeleteLoading = useSelector(selectBankLoading); // Same loading state
+  // const bankDeleteError = useSelector(selectBankError);
+  // const bankDeleteSuccess = useSelector(selectBankSuccess);
 
   // Phone search selectors from beneficiarySlice
   const phoneSearch = useSelector(selectPhoneSearch);
@@ -225,6 +244,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   });
   const [beneficiariesLoaded, setBeneficiariesLoaded] = useState(false);
   const [usingExistingBeneficiary, setUsingExistingBeneficiary] = useState(false);
+  const [existingBeneficiaryId, setExistingBeneficiaryId] = useState(null); // NEW: Store the existing beneficiary ID
 
   // Phone search state
   const [phoneInput, setPhoneInput] = useState("");
@@ -252,7 +272,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   // Define steps array - ADD STEP 0 FOR PHONE SEARCH
-  // Define steps array - For edit mode, only show step 1 (no bank step)
   const steps =
     mode === "create"
       ? [
@@ -282,8 +301,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           icon: <FaUser className="mr-2" />,
           description: "Personal & Contact Information",
         },
-        // NO STEP 2 FOR EDIT MODE
       ];
+
   const relationshipOptions = [
     { value: "father", label: "Father" },
     { value: "mother", label: "Mother" },
@@ -316,6 +335,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [bankAccounts, setBankAccounts] = useState(() => {
     if (mode === "edit" && initialData?.banks) {
       return initialData.banks.map((bank) => ({
+        id: bank.id,
         rails: bank.rails || "",
         iban: bank.benef_iban || "",
         swift: bank.swift_code || "",
@@ -341,6 +361,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     return [
       {
+        id: null,
         rails: "",
         iban: "",
         swift: "",
@@ -555,6 +576,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         setCurrency(firstBank.currency_code || firstBank.currency || "USD");
         setBankAccounts(
           beneficiaryDetails.banks.map((bank) => ({
+            id: bank.id,
             rails: bank.rails || "",
             currency: bank.currency_code || currency,
             iban: bank.benef_iban || "",
@@ -734,7 +756,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       dispatch(fetchIdTypesByCurrency(newCurrency));
     }
 
-    // UPDATE THIS SECTION - Add CAD to the special handling
     if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
       dispatch(
         fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
@@ -862,38 +883,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         // Set the form values
         formik.setValues(formValues);
 
-        // Set bank accounts if available
-        if (beneficiaryData.banks && beneficiaryData.banks.length > 0) {
-          console.log("🏦 Setting bank accounts:", beneficiaryData.banks);
-          const mappedBanks = beneficiaryData.banks.map((bank) => ({
-            rails: bank.rails || "",
-            iban: bank.benef_iban || "",
-            swift: bank.swift_code || "",
-            intermediarySwift: bank.intermediary_bank_swift || "",
-            routingNumber: bank.routing_number || "",
-            accountNumber: bank.bank_acc_no || "",
-            bankName: bank.bank_name || "",
-            ifsc: bank.ifsc || "",
-            bankCode: bank.bankCode || "",
-            paymentMethod: bank.payment_method || paymentMethod,
-            bankState: bank.bankState || "",
-            branchCode: bank.branchCode || "",
-            accountName: bank.account_name || "",
-            accountTitle: bank.account_title || "",
-            walletProvider: bank.wallet_provider || "",
-            mobileNumber: bank.mobile_number || "",
-            otherProvider: bank.other_provider || "",
-            accountType: bank.account_type || "",
-            sortCode: bank.sort_code || "",
-            bankCountry: bank.bank_country || "",
-            currency: bank.currency_code || currency,
-          }));
-          setBankAccounts(mappedBanks);
-
-          // Update currency if available
-          if (mappedBanks[0]?.currency) {
-            setCurrency(mappedBanks[0].currency);
-          }
+        // Store beneficiary ID for later use
+        if (beneficiaryData.id) {
+          setExistingBeneficiaryId(beneficiaryData.id);
         }
 
         // Set usingExistingBeneficiary to true to lock the form fields
@@ -922,6 +914,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         formik.setFieldValue("country_phone_code", countryCodeInput);
         setFoundBeneficiary(null);
         setUsingExistingBeneficiary(false);
+        setExistingBeneficiaryId(null);
         setShowSearchResults(true);
       }
     }
@@ -969,6 +962,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       // Show toast and let user continue
       toast.info("No existing beneficiaries found. You can create a new one.");
       setUsingExistingBeneficiary(false);
+      setExistingBeneficiaryId(null);
       setShowSearchResults(true);
       return;
     }
@@ -989,12 +983,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
+  // UPDATED: When using existing beneficiary, reset bank accounts to empty
   const handleUseFoundBeneficiary = () => {
     console.log("🔄 Using existing beneficiary:", foundBeneficiary || phoneSearch.data);
 
     const beneficiaryToUse = foundBeneficiary || phoneSearch.data;
 
     if (beneficiaryToUse) {
+      // Store the existing beneficiary ID
+      if (beneficiaryToUse.id) {
+        setExistingBeneficiaryId(beneficiaryToUse.id);
+        console.log("📌 Stored existing beneficiary ID:", beneficiaryToUse.id);
+      }
+
       // Map nationality if needed
       let nationalityId = beneficiaryToUse.nationality_id;
       if (!nationalityId && beneficiaryToUse.nationality && nationalities.length > 0) {
@@ -1016,7 +1017,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         relationshipValue = relationshipMap[relationshipValue];
       }
 
-      // Set all form values
+      // Set all form values (personal details only)
       const formValues = {
         name: beneficiaryToUse.name || "",
         country_id: beneficiaryToUse.country_id?.toString() || "",
@@ -1037,42 +1038,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         beneficiary_id_number: beneficiaryToUse.beneficiary_id_number || "",
       };
 
-      console.log("📝 Setting form values:", formValues);
+      console.log("📝 Setting personal form values:", formValues);
       formik.setValues(formValues);
 
-      // Set bank accounts if available
-      if (beneficiaryToUse.banks && beneficiaryToUse.banks.length > 0) {
-        console.log("🏦 Setting bank accounts:", beneficiaryToUse.banks);
-        const mappedBanks = beneficiaryToUse.banks.map((bank) => ({
-          rails: bank.rails || "",
-          iban: bank.benef_iban || "",
-          swift: bank.swift_code || "",
-          intermediarySwift: bank.intermediary_bank_swift || "",
-          routingNumber: bank.routing_number || "",
-          accountNumber: bank.bank_acc_no || "",
-          bankName: bank.bank_name || "",
-          ifsc: bank.ifsc || "",
-          bankCode: bank.bankCode || "",
-          paymentMethod: bank.payment_method || paymentMethod,
-          bankState: bank.bankState || "",
-          branchCode: bank.branchCode || "",
-          accountName: bank.account_name || "",
-          accountTitle: bank.account_title || "",
-          walletProvider: bank.wallet_provider || "",
-          mobileNumber: bank.mobile_number || "",
-          otherProvider: bank.other_provider || "",
-          accountType: bank.account_type || "",
-          sortCode: bank.sort_code || "",
-          bankCountry: bank.bank_country || "",
-          currency: bank.currency_code || currency,
-        }));
-        setBankAccounts(mappedBanks);
+      // CRITICAL CHANGE: Reset bank accounts to empty/default state instead of using existing ones
+      // This gives the user a fresh bank form to fill out for the existing beneficiary
+      console.log("🏦 Resetting bank accounts to empty state (not using existing bank info)");
+      setBankAccounts([
+        {
+          rails: "",
+          iban: "",
+          swift: "",
+          intermediarySwift: "",
+          routingNumber: "",
+          accountNumber: "",
+          bankName: "",
+          ifsc: "",
+          bankCode: "",
+          paymentMethod: paymentMethod,
+          bankState: "",
+          branchCode: "",
+          accountName: "",
+          accountTitle: "",
+          walletProvider: "",
+          mobileNumber: "",
+          otherProvider: "",
+          accountType: "",
+          sortCode: "",
+          bankCountry: "",
+          currency: currency,
+        },
+      ]);
 
-        // Update currency if available
-        if (mappedBanks[0]?.currency) {
-          setCurrency(mappedBanks[0].currency);
-        }
-      }
+      // Reset ID type fields (they'll be re-selected based on new bank info)
+      formik.setFieldValue("beneficiary_id_type", "");
+      formik.setFieldValue("beneficiary_id_number", "");
 
       // Set the relationship dropdown state
       if (relationshipValue === "other") {
@@ -1094,6 +1094,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleCreateNewBeneficiary = () => {
     setUsingExistingBeneficiary(false);
+    setExistingBeneficiaryId(null);
     setFoundBeneficiary(null);
     setShowSearchResults(false);
     setPhoneInput("");
@@ -1246,10 +1247,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ]);
   };
 
+  // UPDATED: Handle submit for both new and existing beneficiaries
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("🔴 DEBUG - handleSubmit FUNCTION CALLED!");
     console.log(`🔄 Starting beneficiary ${mode}...`);
+    console.log("Using existing beneficiary:", usingExistingBeneficiary);
+    console.log("Existing beneficiary ID:", existingBeneficiaryId);
 
     setLoading(true);
 
@@ -1332,27 +1336,55 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     try {
       if (mode === "create") {
-        // CREATE MODE - unchanged
-        const result = await dispatch(
-          createAndAddBeneficiary({
-            customerId,
-            beneficiaryData: {
-              ...beneficiaryData,
-              country_phone_code: cleanedCountryCode,
-            },
-            bankAccounts: bankAccountsWithCurrency,
-            currency: currency,
-            country_code: cleanedCountryCode,
-          })
-        ).unwrap();
+        // CHECK IF WE'RE USING AN EXISTING BENEFICIARY OR CREATING A NEW ONE
+        if (usingExistingBeneficiary && existingBeneficiaryId) {
+          // STILL CREATE A NEW BENEFICIARY (don't update existing one)
+          console.log("✨ Creating new beneficiary with phone:", phoneInput);
+          console.log("Note: Phone number matches existing beneficiary, but creating new record anyway");
 
-        if (result?.success) {
-          toast.success("Beneficiary created successfully!");
-          setTimeout(() => {
-            navigate(-1);
-          }, 1500);
+          const result = await dispatch(
+            createAndAddBeneficiary({
+              customerId,
+              beneficiaryData: {
+                ...beneficiaryData,
+                country_phone_code: cleanedCountryCode,
+              },
+              bankAccounts: bankAccountsWithCurrency,
+              currency: currency,
+              country_code: cleanedCountryCode,
+            })
+          ).unwrap();
+
+          if (result?.success) {
+            toast.success("Beneficiary created successfully!");
+            setTimeout(() => {
+              navigate(-1);
+            }, 1500);
+          }
+        } else {
+          // CREATE NEW BENEFICIARY (original flow)
+          console.log("✨ Creating new beneficiary");
+
+          const result = await dispatch(
+            createAndAddBeneficiary({
+              customerId,
+              beneficiaryData: {
+                ...beneficiaryData,
+                country_phone_code: cleanedCountryCode,
+              },
+              bankAccounts: bankAccountsWithCurrency,
+              currency: currency,
+              country_code: cleanedCountryCode,
+            })
+          ).unwrap();
+
+          if (result?.success) {
+            toast.success("Beneficiary created successfully!");
+            setTimeout(() => {
+              navigate(-1);
+            }, 1500);
+          }
         }
-
       } else if (mode === "edit") {
         // CHECK IF THIS IS BANK-ONLY EDIT MODE
         const isBankOnlyEdit = editBankOnlyMode || location.state?.editBankOnly;
@@ -1460,6 +1492,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setBankAccounts([
       ...bankAccounts,
       {
+        id: null,
         rails: "",
         iban: "",
         swift: "",
@@ -1483,14 +1516,68 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ]);
   };
 
-  const removeBankAccount = (index) => {
+  const removeBankAccount = async (index) => {
+    console.log("🗑️ Remove bank account called at index:", index);
+    console.log("Current bankAccounts:", bankAccounts);
+
     if (bankAccounts.length === 1) {
       toast.error("At least one bank account is required");
       return;
     }
 
-    const newBankAccounts = bankAccounts.filter((_, i) => i !== index);
-    setBankAccounts(newBankAccounts);
+    const accountToRemove = bankAccounts[index];
+    console.log("Account to remove:", accountToRemove);
+    console.log("Account ID:", accountToRemove.id);
+    console.log("Mode:", mode);
+
+    // Check if this is an existing bank account (has an ID) or a new unsaved account
+    if (mode === "edit" && accountToRemove.id) {
+      console.log("✅ This is an existing bank account with ID:", accountToRemove.id);
+      console.log("Will call delete API");
+
+      try {
+        setLoading(true);
+        console.log("📤 Calling deleteBeneficiaryBank API with:", {
+          beneficiaryId: beneficiaryId,
+          bankId: accountToRemove.id
+        });
+
+        // Call API to delete the bank account from server
+        await dispatch(deleteBeneficiaryBank({
+          beneficiaryId: beneficiaryId,
+          bankId: accountToRemove.id,
+          customerId: customerId
+        })).unwrap();
+
+        console.log("✅ Delete API successful");
+
+        // Remove from local state after successful deletion
+        const newBankAccounts = bankAccounts.filter((_, i) => i !== index);
+        setBankAccounts(newBankAccounts);
+
+        toast.success("Bank account removed successfully!");
+
+        // If we're in editBankOnlyMode and we deleted the only bank account,
+        // navigate back to beneficiaries list
+        if (editBankOnlyMode && newBankAccounts.length === 0) {
+          setTimeout(() => {
+            navigate(-1);
+          }, 1500);
+        }
+      } catch (error) {
+        console.error("❌ Failed to delete bank account:", error);
+        toast.error(error.message || "Failed to remove bank account");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      console.log("🆕 This is a new unsaved account (no ID) or not in edit mode");
+      console.log("Removing from local state only");
+      // For new unsaved accounts, just remove from local state
+      const newBankAccounts = bankAccounts.filter((_, i) => i !== index);
+      setBankAccounts(newBankAccounts);
+      toast.info("Bank account removed from form");
+    }
   };
 
   const handleBankAccountChange = (index, field, value) => {
@@ -1530,7 +1617,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   const getBanksForCurrency = useMemo(() => {
-    // UPDATE THIS: Add CAD to the list
     if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(currency)) {
       return banks[`${currency}_int`] || [];
     }
@@ -1667,12 +1753,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   );
 
   // Render bank account fields
+  // Render bank account fields - UPDATED to not disable fields when usingExistingBeneficiary
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
     const currentBanks = getBanksForCurrency;
     const currentIdTypes = getIdTypesForCurrency;
     const currentBankBranches = getBankBranches;
+
+    // For existing beneficiary, bank fields should be EDITABLE (we're adding new bank account)
+    const isBankDisabled = false; // Bank fields are always editable when adding new bank account
 
     return (
       <div
@@ -1688,19 +1778,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <h3 className="text-lg font-semibold text-gray-800">
                 Bank Account {index + 1}
                 {usingExistingBeneficiary && (
-                  <span className="ml-2 text-xs font-normal text-gray-500">
-                    (Pre-filled)
+                  <span className="ml-2 text-xs font-normal text-green-600">
+                    (New Bank Account)
                   </span>
                 )}
               </h3>
               <p className="text-sm text-gray-500">
                 Fill in the banking details
                 {usingExistingBeneficiary &&
-                  " - Using existing bank information"}
+                  " - Adding new bank account for existing beneficiary"}
               </p>
             </div>
           </div>
-          {index > 0 && !usingExistingBeneficiary && (
+          {(mode === "edit" || index > 0) && (
             <button
               type="button"
               onClick={() => removeBankAccount(index)}
@@ -1710,11 +1800,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               Remove
             </button>
           )}
-          {index > 0 && usingExistingBeneficiary && (
-            <span className="text-sm text-gray-500 italic">
-              Cannot remove existing account
-            </span>
-          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1723,18 +1808,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             <FieldLabel required>
               Select Rails
               {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-gray-500">(Pre-filled)</span>
+                <span className="ml-1 text-xs text-green-600">(Required for new account)</span>
               )}
             </FieldLabel>
             <select
-              className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary ? "bg-gray-100 cursor-not-allowed" : ""
-                }`}
+              className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
               value={account.rails}
               onChange={(e) =>
                 handleBankAccountChange(index, "rails", e.target.value)
               }
               required
-              disabled={usingExistingBeneficiary}
             >
               <option value="">Select Rails</option>
               <option value="Local">
@@ -1772,22 +1855,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <FieldLabel required>
                 Select Currency
                 {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
+                  <span className="ml-1 text-xs text-green-600">(Select for this account)</span>
                 )}
               </FieldLabel>
               <select
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                  ? "bg-gray-100 cursor-not-allowed"
-                  : ""
-                  }`}
+                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                 value={accountCurrency}
                 onChange={(e) => {
                   handleCurrencyChange(e);
                 }}
                 required
-                disabled={usingExistingBeneficiary}
               >
                 <option value="">Select Currency</option>
                 {localCurrencies.map((cur, i) => (
@@ -1800,7 +1877,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           )}
         </div>
 
-        {/* Currency-Specific ID Fields */}
+        {/* Currency-Specific ID Fields - These should be EDITABLE for new bank account */}
         {(accountCurrency === "BDT" ||
           accountCurrency === "INR" ||
           accountCurrency === "PKR") && (
@@ -1809,21 +1886,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <FieldLabel required info="Required for regulatory compliance">
                   Beneficiary ID Type
                   {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
+                    <span className="ml-1 text-xs text-green-600">(Fill for this account)</span>
                   )}
                 </FieldLabel>
                 <select
-                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                    }`}
+                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                   value={formik.values.beneficiary_id_type}
                   onChange={formik.handleChange}
                   name="beneficiary_id_type"
                   required
-                  disabled={usingExistingBeneficiary}
                 >
                   <option value="">Select ID Type</option>
                   {currentIdTypes.map((idType) => (
@@ -1841,24 +1912,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 >
                   Beneficiary ID Number
                   {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
+                    <span className="ml-1 text-xs text-green-600">(Fill for this account)</span>
                   )}
                 </FieldLabel>
                 <input
                   type="text"
-                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                    }`}
+                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                   placeholder="Enter ID Number"
                   value={formik.values.beneficiary_id_number}
                   onChange={formik.handleChange}
                   name="beneficiary_id_number"
                   required
-                  disabled={usingExistingBeneficiary}
-                  readOnly={usingExistingBeneficiary}
                 />
               </div>
             </div>
@@ -1873,17 +1937,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Country
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     value={account.bankCountry}
                     onChange={(e) =>
                       handleBankAccountChange(
@@ -1893,7 +1949,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
                   >
                     <option value="">-- Select Bank Country --</option>
                     {countries.map((country) => (
@@ -1911,46 +1966,31 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter SWIFT/BIC code"
                     value={account.swift}
                     onChange={(e) =>
                       handleBankAccountChange(index, "swift", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
-
-                {/* CURRENCY-SPECIFIC FIELDS */}
 
                 {/* For EUR and GBP: IBAN */}
                 {(accountCurrency === "EUR" || accountCurrency === "GBP") && (
                   <div className="mb-4">
-                    <FieldLabel
-                      required
-                      info="International Bank Account Number"
-                    >
+                    <FieldLabel required info="International Bank Account Number">
                       IBAN Number
                     </FieldLabel>
                     <input
                       type="text"
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter IBAN number"
                       value={account.iban}
                       onChange={(e) =>
                         handleBankAccountChange(index, "iban", e.target.value)
                       }
                       required
-                      disabled={usingExistingBeneficiary}
-                      readOnly={usingExistingBeneficiary}
                     />
                   </div>
                 )}
@@ -1961,10 +2001,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     <FieldLabel required>Bank Account Number</FieldLabel>
                     <input
                       type="text"
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
                       value={account.accountNumber}
                       onChange={(e) =>
@@ -1975,8 +2012,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         )
                       }
                       required
-                      disabled={usingExistingBeneficiary}
-                      readOnly={usingExistingBeneficiary}
                     />
                   </div>
                 )}
@@ -1988,10 +2023,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter intermediary bank SWIFT"
                     value={account.intermediarySwift}
                     onChange={(e) =>
@@ -2001,13 +2033,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         e.target.value
                       )
                     }
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
               </div>
             ) : (
-              /* SHOW WARNING FOR UNSUPPORTED CURRENCIES */
               <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-xl mb-6">
                 <div className="flex items-center text-yellow-700">
                   <FaExclamationTriangle className="mr-3" size={24} />
@@ -2023,7 +2052,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           </div>
         )}
 
-        {/* LOCAL TRANSFERS */}
+        {/* LOCAL TRANSFERS - REMOVE ALL disabled/readOnly attributes */}
         {account.rails === "Local" && (
           <div className="space-y-6">
             {/* USD Local Transfer */}
@@ -2032,17 +2061,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     Payment Method
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     value={account.paymentMethod}
                     onChange={(e) =>
                       handleBankAccountChange(
@@ -2052,7 +2073,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
                   >
                     <option value="">Select Payment Method</option>
                     <option value="ACH">ACH</option>
@@ -2063,18 +2083,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required info="9-digit routing number">
                     Routing Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter routing number"
                     value={account.routingNumber}
                     onChange={(e) =>
@@ -2085,26 +2097,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Account Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter account number"
                     value={account.accountNumber}
                     onChange={(e) =>
@@ -2115,25 +2117,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Country
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     value={account.bankCountry || ""}
                     onChange={(e) => {
                       handleBankAccountChange(
@@ -2143,7 +2135,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       );
                     }}
                     required
-                    disabled={usingExistingBeneficiary}
                   >
                     <option value="">-- Select Bank Country --</option>
                     {countries.map((country) => (
@@ -2158,17 +2149,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div className="mb-4">
                     <FieldLabel required>
                       Account Type
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       value={account.accountType}
                       onChange={(e) =>
                         handleBankAccountChange(
@@ -2178,7 +2161,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         )
                       }
                       required
-                      disabled={usingExistingBeneficiary}
                     >
                       <option value="">Select Account Type</option>
                       <option value="Business Savings">Business Savings</option>
@@ -2201,44 +2183,26 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Name
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Bank Name"
                     value={account.bankName}
                     onChange={(e) =>
                       handleBankAccountChange(index, "bankName", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Account Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Account Number"
                     value={account.accountNumber}
                     onChange={(e) =>
@@ -2249,51 +2213,31 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required info="Indian Financial System Code">
                     IFSC Code
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IFSC Code"
                     value={account.ifsc}
                     onChange={(e) =>
                       handleBankAccountChange(index, "ifsc", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Country
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     value={account.bankCountry || ""}
                     onChange={(e) => {
                       handleBankAccountChange(
@@ -2303,7 +2247,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       );
                     }}
                     required
-                    disabled={usingExistingBeneficiary}
                   >
                     <option value="">-- Select Bank Country --</option>
                     {countries.map((country) => (
@@ -2322,43 +2265,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     IBAN Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IBAN number"
                     value={account.iban}
                     onChange={(e) =>
                       handleBankAccountChange(index, "iban", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Bank Country
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     value={account.bankCountry || ""}
                     onChange={(e) => {
                       handleBankAccountChange(
@@ -2368,7 +2293,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       );
                     }}
                     required
-                    disabled={usingExistingBeneficiary}
                   >
                     <option value="">-- Select Bank Country --</option>
                     {countries.map((country) => (
@@ -2387,52 +2311,32 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     IBAN Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IBAN number"
                     value={account.iban}
                     onChange={(e) =>
                       handleBankAccountChange(index, "iban", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     SWIFT/BIC Code
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter SWIFT/BIC code"
                     value={account.swift}
                     onChange={(e) =>
                       handleBankAccountChange(index, "swift", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
               </div>
@@ -2446,17 +2350,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Name
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       value={account.bankCode}
                       onChange={(e) => {
                         handleBankAccountChange(
@@ -2478,7 +2374,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         }
                       }}
                       required
-                      disabled={usingExistingBeneficiary}
                     >
                       <option value="">Select Bank</option>
                       {currentBanks.map((bank) => (
@@ -2495,18 +2390,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div className="mb-4">
                     <FieldLabel required>
                       Account Number
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <input
                       type="text"
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
                       value={account.accountNumber}
                       onChange={(e) =>
@@ -2517,8 +2404,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         )
                       }
                       required
-                      disabled={usingExistingBeneficiary}
-                      readOnly={usingExistingBeneficiary}
                     />
                   </div>
 
@@ -2526,18 +2411,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     <div className="mb-4">
                       <FieldLabel>
                         Account Name
-                        {usingExistingBeneficiary && (
-                          <span className="ml-1 text-xs text-gray-500">
-                            (Pre-filled)
-                          </span>
-                        )}
                       </FieldLabel>
                       <input
                         type="text"
-                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                          }`}
+                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                         placeholder="Enter account name"
                         value={account.accountName}
                         onChange={(e) =>
@@ -2547,87 +2424,96 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             e.target.value
                           )
                         }
-                        disabled={usingExistingBeneficiary}
-                        readOnly={usingExistingBeneficiary}
                       />
                     </div>
                   )}
                 </div>
               )}
 
-            {/* BDT/LKR/AUD/PKR Local Transfer */}
+            {/* BDT/LKR/AUD/PKR/CAD Local Transfer */}
             {(accountCurrency === "BDT" ||
               accountCurrency === "LKR" ||
               accountCurrency === "AUD" ||
               accountCurrency === "PKR" ||
               accountCurrency === "CAD") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bank Name Field - Conditional for CAD when no banks available */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Name
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
-                    <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
-                      value={account.bankCode}
-                      onChange={(e) => {
-                        if (
-                          accountCurrency === "BDT" ||
-                          accountCurrency === "LKR" ||
-                          accountCurrency === "AUD"
-                        ) {
-                          handleBdtBankAccountChange(index, "bankCode", e.target.value);
-                        } else if (accountCurrency === "CAD") {
-                          handleCADBankAccountChange(index, "bankCode", e.target.value);
-                        } else {
-                          handlePkrBankAccountChange(index, "bankCode", e.target.value);
-                        }
 
-                        const selectedBank = currentBanks.find(
-                          (bank) => bank.bank_code === e.target.value
-                        );
-                        if (selectedBank) {
-                          handleBankAccountChange(
-                            index,
-                            "bankName",
-                            selectedBank.bank_name || selectedBank.name
+                    {/* Check if banks exist AND (currency is not CAD OR CAD has banks) */}
+                    {currentBanks && currentBanks.length > 0 ? (
+                      // Show dropdown when banks are available
+                      <select
+                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
+                        value={account.bankCode}
+                        onChange={(e) => {
+                          if (
+                            accountCurrency === "BDT" ||
+                            accountCurrency === "LKR" ||
+                            accountCurrency === "AUD"
+                          ) {
+                            handleBdtBankAccountChange(index, "bankCode", e.target.value);
+                          } else if (accountCurrency === "CAD") {
+                            handleCADBankAccountChange(index, "bankCode", e.target.value);
+                          } else {
+                            handlePkrBankAccountChange(index, "bankCode", e.target.value);
+                          }
+
+                          const selectedBank = currentBanks.find(
+                            (bank) => bank.bank_code === e.target.value
                           );
-                        }
-                      }}
-                      required
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Bank</option>
-                      {currentBanks.map((bank) => (
-                        <option key={bank.bank_code} value={bank.bank_code}>
-                          {bank.bank_name}
-                        </option>
-                      ))}
-                    </select>
+                          if (selectedBank) {
+                            handleBankAccountChange(
+                              index,
+                              "bankName",
+                              selectedBank.bank_name || selectedBank.name
+                            );
+                          }
+                        }}
+                        required
+                      >
+                        <option value="">Select Bank</option>
+                        {currentBanks.map((bank) => (
+                          <option key={bank.bank_code} value={bank.bank_code}>
+                            {bank.bank_name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      // Show text input when no banks available (handles API returning empty array for CAD)
+                      <div>
+                        <input
+                          type="text"
+                          className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
+                          placeholder="Enter Bank Name"
+                          value={account.bankName}
+                          onChange={(e) =>
+                            handleBankAccountChange(index, "bankName", e.target.value)
+                          }
+                          required
+                        />
+                        {/* Show helpful message when no bank list is available */}
+                        {accountCurrency === "CAD" && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            <FaExclamationTriangle className="inline mr-1" size={10} />
+                            No bank list available. Please enter the bank name manually.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Account Number */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Account Number
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <input
                       type="text"
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
                       value={account.accountNumber}
                       onChange={(e) =>
@@ -2638,29 +2524,20 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         )
                       }
                       required
-                      disabled={usingExistingBeneficiary}
-                      readOnly={usingExistingBeneficiary}
                     />
                   </div>
 
+                  {/* Branch Code */}
                   <div className="mb-4">
                     <FieldLabel>
                       Branch Code
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     {(accountCurrency === "BDT" ||
                       accountCurrency === "LKR" ||
                       accountCurrency === "AUD" ||
                       accountCurrency === "CAD") ? (
                       <select
-                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                          }`}
+                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                         value={account.branchCode}
                         onChange={(e) =>
                           handleBankAccountChange(
@@ -2669,7 +2546,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             e.target.value
                           )
                         }
-                        disabled={usingExistingBeneficiary}
                       >
                         <option value="">Select Branch</option>
                         {currentBankBranches.map((branch) => (
@@ -2684,10 +2560,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     ) : (
                       <input
                         type="text"
-                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : ""
-                          }`}
+                        className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                         placeholder="Enter branch code"
                         value={account.branchCode}
                         onChange={(e) =>
@@ -2697,27 +2570,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             e.target.value
                           )
                         }
-                        disabled={usingExistingBeneficiary}
-                        readOnly={usingExistingBeneficiary}
                       />
                     )}
                   </div>
 
+                  {/* Bank State */}
                   <div className="mb-4">
                     <FieldLabel>
                       Bank State
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <input
                       type="text"
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter bank state"
                       value={account.bankState}
                       onChange={(e) =>
@@ -2727,52 +2591,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           e.target.value
                         )
                       }
-                      disabled={usingExistingBeneficiary}
-                      readOnly={usingExistingBeneficiary}
                     />
                   </div>
 
+                  {/* Additional fields for PKR and CAD */}
                   {(accountCurrency === "PKR" || accountCurrency === "CAD") && (
                     <>
                       <div className="mb-4">
                         <FieldLabel>
                           IBAN Number
-                          {usingExistingBeneficiary && (
-                            <span className="ml-1 text-xs text-gray-500">
-                              (Pre-filled)
-                            </span>
-                          )}
                         </FieldLabel>
                         <input
                           type="text"
-                          className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
-                            : ""
-                            }`}
+                          className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                           placeholder="Enter IBAN number"
                           value={account.iban}
                           onChange={(e) =>
                             handleBankAccountChange(index, "iban", e.target.value)
                           }
-                          disabled={usingExistingBeneficiary}
-                          readOnly={usingExistingBeneficiary}
                         />
                       </div>
                       <div className="mb-4">
                         <FieldLabel>
                           Account Title
-                          {usingExistingBeneficiary && (
-                            <span className="ml-1 text-xs text-gray-500">
-                              (Pre-filled)
-                            </span>
-                          )}
                         </FieldLabel>
                         <input
                           type="text"
-                          className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
-                            : ""
-                            }`}
+                          className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                           placeholder="Enter account title"
                           value={account.accountTitle}
                           onChange={(e) =>
@@ -2782,8 +2627,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                               e.target.value
                             )
                           }
-                          disabled={usingExistingBeneficiary}
-                          readOnly={usingExistingBeneficiary}
                         />
                       </div>
                     </>
@@ -2797,18 +2640,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <div className="mb-4">
                   <FieldLabel required>
                     Account Number
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Account Number"
                     value={account.accountNumber}
                     onChange={(e) =>
@@ -2819,34 +2654,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       )
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
                 <div className="mb-4">
                   <FieldLabel required>
                     Sort Code
-                    {usingExistingBeneficiary && (
-                      <span className="ml-1 text-xs text-gray-500">
-                        (Pre-filled)
-                      </span>
-                    )}
                   </FieldLabel>
                   <input
                     type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                      }`}
+                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Sort Code"
                     value={account.sortCode}
                     onChange={(e) =>
                       handleBankAccountChange(index, "sortCode", e.target.value)
                     }
                     required
-                    disabled={usingExistingBeneficiary}
-                    readOnly={usingExistingBeneficiary}
                   />
                 </div>
 
@@ -2854,17 +2677,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Country
-                      {usingExistingBeneficiary && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          (Pre-filled)
-                        </span>
-                      )}
                     </FieldLabel>
                     <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                        }`}
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       value={account.bankCountry || ""}
                       onChange={(e) => {
                         handleBankAccountChange(
@@ -2874,7 +2689,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         );
                       }}
                       required
-                      disabled={usingExistingBeneficiary}
                     >
                       <option value="">-- Select Bank Country --</option>
                       {countries.map((country) => (
@@ -2896,17 +2710,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             <div className="mb-4">
               <FieldLabel required info="Mobile wallet service provider">
                 Mobile Wallet Provider
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
               </FieldLabel>
               <select
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                  ? "bg-gray-100 cursor-not-allowed"
-                  : ""
-                  }`}
+                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                 value={account.walletProvider}
                 onChange={(e) =>
                   handleBankAccountChange(
@@ -2916,7 +2722,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   )
                 }
                 required
-                disabled={usingExistingBeneficiary}
               >
                 <option value="">Select Provider</option>
                 <option value="M-Pesa">M-Pesa (Kenya)</option>
@@ -2929,26 +2734,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             <div className="mb-4">
               <FieldLabel required>
                 Mobile Number
-                {usingExistingBeneficiary && (
-                  <span className="ml-1 text-xs text-gray-500">
-                    (Pre-filled)
-                  </span>
-                )}
               </FieldLabel>
               <input
                 type="text"
-                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                  ? "bg-gray-100 cursor-not-allowed"
-                  : ""
-                  }`}
+                className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                 placeholder="Enter mobile number"
                 value={account.mobileNumber}
                 onChange={(e) =>
                   handleBankAccountChange(index, "mobileNumber", e.target.value)
                 }
                 required
-                disabled={usingExistingBeneficiary}
-                readOnly={usingExistingBeneficiary}
               />
             </div>
 
@@ -2956,18 +2751,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <div className="mb-4 md:col-span-2">
                 <FieldLabel required>
                   Provider Name
-                  {usingExistingBeneficiary && (
-                    <span className="ml-1 text-xs text-gray-500">
-                      (Pre-filled)
-                    </span>
-                  )}
                 </FieldLabel>
                 <input
                   type="text"
-                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                    ? "bg-gray-100 cursor-not-allowed"
-                    : ""
-                    }`}
+                  className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                   placeholder="Enter provider name"
                   value={account.otherProvider}
                   onChange={(e) =>
@@ -2978,8 +2765,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     )
                   }
                   required
-                  disabled={usingExistingBeneficiary}
-                  readOnly={usingExistingBeneficiary}
                 />
               </div>
             )}
@@ -3064,6 +2849,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     setShowSearchResults(false);
                     setFoundBeneficiary(null);
                     setUsingExistingBeneficiary(false);
+                    setExistingBeneficiaryId(null);
                   }
                 }}
                 className="flex-1 px-4 py-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400"
@@ -3270,12 +3056,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       {(isLoading ||
         createLoading ||
         updateLoading ||
-        beneficiariesCreateLoading) && (
+        beneficiariesCreateLoading ||
+        bankUpdateLoading ||
+        bankDeleteLoading) && (
           <div className="fixed inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-50 backdrop-blur-sm">
             <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center transform transition-all duration-300 scale-105">
               <RingLoader size={60} color="#3B82F6" />
               <p className="mt-6 text-gray-700 font-medium">
-                Processing your request...
+                {bankUpdateLoading ? "Updating bank details..." :
+                  bankDeleteLoading ? "Removing bank account..." :
+                    "Processing your request..."}
               </p>
               <p className="text-gray-500 text-sm mt-2">
                 This may take a few moments
@@ -3292,14 +3082,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <h1 className="text-2xl font-bold text-white flex items-center">
                 <FaMoneyBillWave className="mr-3" size={28} />
                 {mode === "create"
-                  ? "Add New Beneficiary"
+                  ? usingExistingBeneficiary
+                    ? "Add Bank Account to Existing Beneficiary"
+                    : "Add New Beneficiary"
                   : editBankOnlyMode
                     ? "Edit Bank Details"
                     : "Edit Beneficiary"}
               </h1>
               <p className="text-blue-100 mt-1">
                 {mode === "create"
-                  ? "Fill in the details to add a new beneficiary"
+                  ? usingExistingBeneficiary
+                    ? "Add a new bank account to an existing beneficiary"
+                    : "Fill in the details to add a new beneficiary"
                   : editBankOnlyMode
                     ? "Update the bank account information for this beneficiary"
                     : "Update beneficiary information"}
@@ -3377,10 +3171,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">
-                    {steps[step]?.title || steps[1]?.title}
+                    {usingExistingBeneficiary && step === 2
+                      ? "Add New Bank Account"
+                      : steps[step]?.title || steps[1]?.title}
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {steps[step]?.description || steps[1]?.description}
+                    {usingExistingBeneficiary && step === 2
+                      ? "Fill in the bank account details for the existing beneficiary"
+                      : steps[step]?.description || steps[1]?.description}
                   </p>
                 </div>
               </div>
@@ -3444,7 +3242,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             Individual
                             {usingExistingBeneficiary && (
                               <span className="ml-2 text-xs text-gray-500">
-                                (Pre-filled)
+                                (Pre-filled - Cannot Edit)
                               </span>
                             )}
                           </div>
@@ -3485,7 +3283,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             Institution
                             {usingExistingBeneficiary && (
                               <span className="ml-2 text-xs text-gray-500">
-                                (Pre-filled)
+                                (Pre-filled - Cannot Edit)
                               </span>
                             )}
                           </div>
@@ -3499,14 +3297,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {usingExistingBeneficiary && (
                     <p className="text-sm text-yellow-600 mt-2">
                       <FaInfoCircle className="inline mr-1" />
-                      Using existing beneficiary information. Fields are
-                      pre-filled and cannot be edited.
+                      Using existing beneficiary information. Personal details cannot be edited.
                     </p>
                   )}
                 </div>
 
                 {/* Currency Selection */}
-                {mode === "create" && (
+                {mode === "create" && !usingExistingBeneficiary && (
                   <div className="md:col-span-2">
                     <FieldLabel required>
                       Select Currency
@@ -3543,7 +3340,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Name
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3570,7 +3367,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Email
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3602,7 +3399,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Phone Number
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3675,7 +3472,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Nationality
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3709,7 +3506,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Country
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3757,7 +3554,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         City
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
-                            (Pre-filled)
+                            (Pre-filled - Cannot Edit)
                           </span>
                         )}
                       </FieldLabel>
@@ -3792,7 +3589,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         City
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
-                            (Pre-filled)
+                            (Pre-filled - Cannot Edit)
                           </span>
                         )}
                       </FieldLabel>
@@ -3819,7 +3616,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       State / Province
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3845,7 +3642,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Street Address
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3871,7 +3668,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       Zip Code / Postal Code
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled)
+                          (Pre-filled - Cannot Edit)
                         </span>
                       )}
                     </FieldLabel>
@@ -3898,20 +3695,20 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         Beneficiary ID Type
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
-                            (Pre-filled)
+                            (New - Fill for this bank account)
                           </span>
                         )}
                       </FieldLabel>
                       <div className="relative">
                         <select
                           className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
+                            ? "bg-gray-100"
                             : "bg-white"
                             }`}
                           value={formik.values.beneficiary_id_type}
                           onChange={formik.handleChange}
                           name="beneficiary_id_type"
-                          disabled={usingExistingBeneficiary}
+                          required
                         >
                           <option value="">Select ID Type</option>
                           {getIdTypesForCurrency.map((idType) => {
@@ -3939,22 +3736,21 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         Beneficiary ID Number
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
-                            (Pre-filled)
+                            (New - Fill for this bank account)
                           </span>
                         )}
                       </FieldLabel>
                       <input
                         type="text"
                         className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
+                          ? "bg-gray-100"
                           : "bg-white"
                           }`}
                         placeholder="Enter ID Number"
                         value={formik.values.beneficiary_id_number}
                         onChange={formik.handleChange}
                         name="beneficiary_id_number"
-                        disabled={usingExistingBeneficiary}
-                        readOnly={usingExistingBeneficiary}
+                        required
                       />
                     </div>
                   )}
@@ -3966,7 +3762,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         Relation to Beneficiary
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
-                            (Pre-filled)
+                            (Pre-filled - Cannot Edit)
                           </span>
                         )}
                       </FieldLabel>
@@ -4031,9 +3827,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               {/* Buttons */}
               <div className="flex flex-col-reverse md:flex-row justify-between pt-8 gap-4 border-t border-gray-200">
                 <button
-                  type="button"  // ADD THIS - explicitly set type to button
+                  type="button"
                   onClick={() => {
-                    console.log("🔙 Back button clicked in edit mode - navigating back");
+                    console.log("🔙 Back button clicked");
                     navigate(-1);
                   }}
                   className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 md:flex-none flex items-center justify-center font-medium"
@@ -4089,7 +3885,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           {/* Step 2 - Bank Information - Shows for editBankOnlyMode as well */}
           {((mode === "create" && step === 2) || editBankOnlyMode) && (
             <div className="space-y-8">
-              {/* Info banner for bank-only edit mode */}
+              {/* Info banner for bank-only edit mode or existing beneficiary */}
               {editBankOnlyMode && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
                   <div className="flex">
@@ -4105,12 +3901,29 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 </div>
               )}
 
+              {usingExistingBeneficiary && !editBankOnlyMode && (
+                <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <FaCheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-green-700">
+                        You are adding a new bank account to an existing beneficiary.
+                        Fill in the bank details below to add a new account for this beneficiary.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-8">
                 {bankAccounts.map((account, index) =>
                   renderBankAccountFields(index)
                 )}
 
-                {/* Add Bank Account Button */}
+                {/* Add Bank Account Button - Only show for create mode */}
+
                 <button
                   type="button"
                   onClick={addBankAccount}
@@ -4138,7 +3951,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       }`}
                   >
                     {usingExistingBeneficiary
-                      ? "Cannot add accounts to existing beneficiary"
+                      ? "Cannot add multiple accounts at once for existing beneficiary"
                       : "Add multiple accounts for different currencies or payment methods"}
                   </p>
                 </button>
@@ -4173,10 +3986,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         Processing...
                       </>
                     ) : mode === "create" ? (
-                      <>
-                        <FaCheckCircle className="mr-2" />
-                        Create Beneficiary
-                      </>
+                      usingExistingBeneficiary ? (
+                        <>
+                          <FaCheckCircle className="mr-2" />
+                          Save
+                        </>
+                      ) : (
+                        <>
+                          <FaCheckCircle className="mr-2" />
+                          Create Beneficiary
+                        </>
+                      )
                     ) : (
                       <>
                         <FaCheckCircle className="mr-2" />
@@ -4213,7 +4033,7 @@ BeneficiaryForm.propTypes = {
 
 BeneficiaryForm.defaultProps = {
   mode: "create",
-  initialData: null,	
+  initialData: null,
 };
 
 export default BeneficiaryForm;
