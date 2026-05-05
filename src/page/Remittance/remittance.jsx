@@ -2691,7 +2691,7 @@ const ManualDepositSection = ({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5">
+      {/* <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-xl">
@@ -2707,7 +2707,7 @@ const ManualDepositSection = ({
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
