@@ -606,6 +606,13 @@ const BankLink = () => {
     }
   }, [customerId, dispatch]);
 
+  useEffect(()=>{
+    if(customerId && !showPlaidLink && !isAddingAccount) {
+      dispatch(setShowPlaidLink(true));
+      setShowPlaidButton(false);
+1    }
+  }, [customerId, showPlaidLink, isAddingAccount, dispatch])
+
   // Event handlers - ALL DEFINED BEFORE EMPTY STATE
   const handleRefresh = useCallback(() => {
     if (customerId && !isRefreshing) {
@@ -888,7 +895,7 @@ const BankLink = () => {
                 />
               </motion.button>
 
-              {showPlaidButton && (
+              {/* {showPlaidButton && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -903,7 +910,7 @@ const BankLink = () => {
                   <FaPlus className="mr-2.5" />
                   Link New Account
                 </motion.button>
-              )}
+              )} */}
             </div>
           </div>
         </motion.header>
@@ -942,7 +949,8 @@ const BankLink = () => {
             <ZapPlaidLink
               onSuccess={handleBankLinkSuccessCallback}
               onClose={handleClosePlaidModal}
-              showButton={!showPlaidButton}
+              showButton={true}
+              autoInitialize={false}
             />
           )}
 
