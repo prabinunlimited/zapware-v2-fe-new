@@ -242,7 +242,6 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 );
 
 // ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
-// ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
 export const updateBeneficiaryBank = createAsyncThunk(
   "beneficiaries/updateBeneficiaryBank",
   async ({ bankId, bankData }, { rejectWithValue }) => {
@@ -250,9 +249,9 @@ export const updateBeneficiaryBank = createAsyncThunk(
       console.log("🏦 Updating bank details...");
       console.log("🏦 Bank ID:", bankId);
       console.log("🏦 Bank Data:", bankData);
-      
+
       const authtoken = localStorage.getItem("authtoken");
-      
+
       const response = await fetch(
         `${API_URL}/beneficiaries/update-benef-bank/${bankId}`,
         {
@@ -275,7 +274,7 @@ export const updateBeneficiaryBank = createAsyncThunk(
 
       const result = await response.json();
       console.log("✅ Bank update successful:", result);
-      
+
       return { bankId, data: result };
     } catch (error) {
       console.error("❌ updateBeneficiaryBank error:", error);
@@ -316,26 +315,45 @@ export const addBeneficiaryBank = createAsyncThunk(
 // ===================== DELETE BENEFICIARY BANK ASYNC THUNKS =====================
 export const deleteBeneficiaryBank = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryBank",
-  async ({ beneficiaryId, bankId }, { rejectWithValue }) => {
+  async ({ beneficiaryId, bankId, customerId }, { rejectWithValue }) => {
     try {
+      console.log("🗑️ Deleting bank account...");
+      console.log("🗑️ Customer ID:", customerId);
+      console.log("🗑️ Beneficiary ID:", beneficiaryId);
+      console.log("🗑️ Bank ID:", bankId);
+
       const authtoken = localStorage.getItem("authtoken");
+
       const response = await fetch(
-        `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
+        `${API_URL}/beneficiaries/delete-benef-bank/${bankId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
+          body: JSON.stringify({
+            customer_id: customerId,
+            // beneficiary_id: beneficiaryId,
+            // bank_id: bankId 
+          }),
         }
       );
 
+      console.log("📡 Delete API Response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Delete API Error:", errorText);
         throw new Error("Failed to delete bank");
       }
 
-      return { beneficiaryId, bankId };
+      const result = await response.json();
+      console.log("✅ Bank deleted successfully:", result);
+
+      return { beneficiaryId, bankId, customerId, data: result };
     } catch (error) {
+      console.error("❌ deleteBeneficiaryBank error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -458,8 +476,8 @@ export const updateBeneficiary = createAsyncThunk(
         console.error("❌ Update API Error:", errorResult);
         throw new Error(
           errorResult.message ||
-            errorResult.error ||
-            "Failed to update beneficiary"
+          errorResult.error ||
+          "Failed to update beneficiary"
         );
       }
 
@@ -952,6 +970,15 @@ const initialState = {
   bankLoading: false,
   bankError: null,
   bankSuccess: false,
+
+  bankDeleteLoading: false,    // Separate state for deletes
+  bankDeleteError: null,
+  bankDeleteSuccess: false,
+
+  bankAddLoading: false,       // Separate state for adds
+  bankAddError: null,
+  bankAddSuccess: false,
+
   bankOperation: null, // 'add', 'update', or 'delete'
   bankId: null,
 
@@ -988,8 +1015,12 @@ const addBeneficiarySlice = createSlice({
     },
 
     clearBankError: (state) => {
-      state.bankError = null;
-      state.bankSuccess = false;
+      state.bankUpdateError = null;
+      state.bankUpdateSuccess = false;
+      state.bankDeleteError = null;
+      state.bankDeleteSuccess = false;
+      state.bankAddError = null;
+      state.bankAddSuccess = false;
       state.bankOperation = null;
       state.bankId = null;
     },
@@ -1194,47 +1225,19 @@ const addBeneficiarySlice = createSlice({
         state.fetchError = action.payload;
       })
 
-      // ===================== UPDATE BENEFICIARY =====================
-      .addCase(updateBeneficiary.pending, (state) => {
-        console.log("⏳ updateBeneficiary PENDING");
-        state.updateLoading = true;
-        state.updateError = null;
-        state.updateSuccess = false;
-      })
-      .addCase(updateBeneficiary.fulfilled, (state, action) => {
-        console.log("✅ updateBeneficiary FULFILLED");
-        state.updateLoading = false;
-        state.updateSuccess = true;
-        state.updateError = null;
-
-        // Update beneficiary data if it exists
-        if (state.beneficiaryData) {
-          state.beneficiaryData = {
-            ...state.beneficiaryData,
-            ...action.payload.beneficiary,
-          };
-        }
-      })
-      .addCase(updateBeneficiary.rejected, (state, action) => {
-        console.error("❌ updateBeneficiary REJECTED:", action.payload);
-        state.updateLoading = false;
-        state.updateError = action.payload;
-        state.updateSuccess = false;
-      })
-
       // ===================== UPDATE BENEFICIARY BANK =====================
       .addCase(updateBeneficiaryBank.pending, (state) => {
         console.log("⏳ updateBeneficiaryBank PENDING");
-        state.bankLoading = true;
-        state.bankError = null;
-        state.bankSuccess = false;
+        state.bankUpdateLoading = true;  // Use separate state
+        state.bankUpdateError = null;
+        state.bankUpdateSuccess = false;
         state.bankOperation = "update";
       })
       .addCase(updateBeneficiaryBank.fulfilled, (state, action) => {
         console.log("✅ updateBeneficiaryBank FULFILLED");
-        state.bankLoading = false;
-        state.bankSuccess = true;
-        state.bankError = null;
+        state.bankUpdateLoading = false;  // Use separate state
+        state.bankUpdateSuccess = true;
+        state.bankUpdateError = null;
         state.bankId = action.payload.bankId || null;
 
         // Update beneficiary data if it exists
@@ -1252,24 +1255,24 @@ const addBeneficiarySlice = createSlice({
       })
       .addCase(updateBeneficiaryBank.rejected, (state, action) => {
         console.error("❌ updateBeneficiaryBank REJECTED:", action.payload);
-        state.bankLoading = false;
-        state.bankError = action.payload;
-        state.bankSuccess = false;
+        state.bankUpdateLoading = false;  // Use separate state
+        state.bankUpdateError = action.payload;
+        state.bankUpdateSuccess = false;
       })
 
       // ===================== ADD BENEFICIARY BANK =====================
       .addCase(addBeneficiaryBank.pending, (state) => {
         console.log("⏳ addBeneficiaryBank PENDING");
-        state.bankLoading = true;
-        state.bankError = null;
-        state.bankSuccess = false;
+        state.bankAddLoading = true;  // Use separate state
+        state.bankAddError = null;
+        state.bankAddSuccess = false;
         state.bankOperation = "add";
       })
       .addCase(addBeneficiaryBank.fulfilled, (state, action) => {
         console.log("✅ addBeneficiaryBank FULFILLED");
-        state.bankLoading = false;
-        state.bankSuccess = true;
-        state.bankError = null;
+        state.bankAddLoading = false;  // Use separate state
+        state.bankAddSuccess = true;
+        state.bankAddError = null;
         state.bankId = action.payload.bankId || null;
 
         // Add bank to beneficiary data if it exists
@@ -1279,24 +1282,24 @@ const addBeneficiarySlice = createSlice({
       })
       .addCase(addBeneficiaryBank.rejected, (state, action) => {
         console.error("❌ addBeneficiaryBank REJECTED:", action.payload);
-        state.bankLoading = false;
-        state.bankError = action.payload;
-        state.bankSuccess = false;
+        state.bankAddLoading = false;  // Use separate state
+        state.bankAddError = action.payload;
+        state.bankAddSuccess = false;
       })
 
       // ===================== DELETE BENEFICIARY BANK =====================
       .addCase(deleteBeneficiaryBank.pending, (state) => {
         console.log("⏳ deleteBeneficiaryBank PENDING");
-        state.bankLoading = true;
-        state.bankError = null;
-        state.bankSuccess = false;
+        state.bankDeleteLoading = true;  // Use separate state
+        state.bankDeleteError = null;
+        state.bankDeleteSuccess = false;
         state.bankOperation = "delete";
       })
       .addCase(deleteBeneficiaryBank.fulfilled, (state, action) => {
         console.log("✅ deleteBeneficiaryBank FULFILLED");
-        state.bankLoading = false;
-        state.bankSuccess = true;
-        state.bankError = null;
+        state.bankDeleteLoading = false;  // Use separate state
+        state.bankDeleteSuccess = true;
+        state.bankDeleteError = null;
         state.bankId = action.payload.bankId;
 
         // Remove bank from beneficiary data if it exists
@@ -1308,9 +1311,9 @@ const addBeneficiarySlice = createSlice({
       })
       .addCase(deleteBeneficiaryBank.rejected, (state, action) => {
         console.error("❌ deleteBeneficiaryBank REJECTED:", action.payload);
-        state.bankLoading = false;
-        state.bankError = action.payload;
-        state.bankSuccess = false;
+        state.bankDeleteLoading = false;  // Use separate state
+        state.bankDeleteError = action.payload;
+        state.bankDeleteSuccess = false;
       });
   },
 });
@@ -1390,12 +1393,34 @@ export const selectUpdateSuccess = (state) =>
   state.addBeneficiary.updateSuccess;
 
 // Bank operations selectors
-export const selectBankLoading = (state) => state.addBeneficiary.bankLoading;
-export const selectBankError = (state) => state.addBeneficiary.bankError;
-export const selectBankSuccess = (state) => state.addBeneficiary.bankSuccess;
+export const selectBankUpdateLoading = (state) => state.addBeneficiary.bankUpdateLoading;
+export const selectBankUpdateError = (state) => state.addBeneficiary.bankUpdateError;
+export const selectBankUpdateSuccess = (state) => state.addBeneficiary.bankUpdateSuccess;
+
+export const selectBankDeleteLoading = (state) => state.addBeneficiary.bankDeleteLoading;
+export const selectBankDeleteError = (state) => state.addBeneficiary.bankDeleteError;
+export const selectBankDeleteSuccess = (state) => state.addBeneficiary.bankDeleteSuccess;
+
+export const selectBankAddLoading = (state) => state.addBeneficiary.bankAddLoading;
+export const selectBankAddError = (state) => state.addBeneficiary.bankAddError;
+export const selectBankAddSuccess = (state) => state.addBeneficiary.bankAddSuccess;
 export const selectBankOperation = (state) =>
   state.addBeneficiary.bankOperation;
 export const selectBankId = (state) => state.addBeneficiary.bankId;
+
+// Keep these for backward compatibility (but mark as deprecated)
+export const selectBankLoading = (state) => 
+  state.addBeneficiary.bankUpdateLoading || 
+  state.addBeneficiary.bankDeleteLoading || 
+  state.addBeneficiary.bankAddLoading;
+export const selectBankError = (state) => 
+  state.addBeneficiary.bankUpdateError || 
+  state.addBeneficiary.bankDeleteError || 
+  state.addBeneficiary.bankAddError;
+export const selectBankSuccess = (state) => 
+  state.addBeneficiary.bankUpdateSuccess || 
+  state.addBeneficiary.bankDeleteSuccess || 
+  state.addBeneficiary.bankAddSuccess;
 
 // Helper to get specific bank by ID
 export const selectBankById = (bankId) => (state) => {
