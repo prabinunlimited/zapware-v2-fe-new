@@ -242,15 +242,21 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 );
 
 // ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
+// ===================== UPDATE BENEFICIARY BANK ASYNC THUNKS =====================
 export const updateBeneficiaryBank = createAsyncThunk(
   "beneficiaries/updateBeneficiaryBank",
-  async ({ beneficiaryId, bankId, bankData }, { rejectWithValue }) => {
+  async ({ bankId, bankData }, { rejectWithValue }) => {
     try {
+      console.log("🏦 Updating bank details...");
+      console.log("🏦 Bank ID:", bankId);
+      console.log("🏦 Bank Data:", bankData);
+      
       const authtoken = localStorage.getItem("authtoken");
+      
       const response = await fetch(
-        `${API_URL}/beneficiaries/${beneficiaryId}/banks/${bankId}`,
+        `${API_URL}/beneficiaries/update-benef-bank/${bankId}`,
         {
-          method: "PUT",
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
@@ -259,12 +265,20 @@ export const updateBeneficiaryBank = createAsyncThunk(
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ API Error Response:", errorText);
         throw new Error("Failed to update bank");
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log("✅ Bank update successful:", result);
+      
+      return { bankId, data: result };
     } catch (error) {
+      console.error("❌ updateBeneficiaryBank error:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -387,6 +401,7 @@ export const fetchBeneficiaryById = createAsyncThunk(
   }
 );
 
+
 // ===================== UPDATE BENEFICIARY ASYNC THUNK =====================
 export const updateBeneficiary = createAsyncThunk(
   "beneficiaries/updateBeneficiary",
@@ -463,6 +478,8 @@ export const updateBeneficiary = createAsyncThunk(
     }
   }
 );
+
+
 
 // ===================== DROPDOWN DATA ASYNC THUNKS =====================
 export const fetchNationalities = createAsyncThunk(

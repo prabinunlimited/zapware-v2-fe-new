@@ -139,7 +139,6 @@ const getSectionFields = (sectionIndex, values) => {
         "nationality",
         "gender",
       ];
-      // Add middle_name if filled but not required
       if (values.middle_name && values.middle_name.trim() !== "") {
         fields.push("middle_name");
       }
@@ -167,15 +166,11 @@ const getSectionFields = (sectionIndex, values) => {
         idFields.push("idDocumentTypeOther");
       }
 
-      // Add SSN if required
-      const hasUSDNamedAccount = values.isNamedAccount;
-      const isRemittanceOnly =
-        values.remit_customer === true || values.remit_customer === "true";
-      const isUSCountry =
-        values.country === "United States" || values.country === 186;
-      const shouldShowSSNField =
-        (hasUSDNamedAccount && isUSCountry) ||
-        (isRemittanceOnly && isUSCountry);
+      // Only add SSN to required fields if it should be shown
+      const hasUSDNamedAccount = true; // You'll need to pass this from props/state
+      const isRemittanceOnly = true; // You'll need to pass this from props/state
+      const isUSCountry = values.country === "United States" || values.country === 186;
+      const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
 
       if (shouldShowSSNField) {
         idFields.push("ssn");
@@ -290,13 +285,28 @@ const createValidationSchema = () => {
 
     mobilenumber_countrycode: Yup.string().required("Country code is required"),
 
+    // Update the SSN validation in createValidationSchema()
     ssn: Yup.string().test(
       "ssn-validation",
-      "SSN must be in format XXX-XX-XXXX",
+      "SSN is required and must be in format XXX-XX-XXXX",
       function (value) {
-        if (!value) return true; // Not required unless specific conditions
-        const cleanSSN = value.replace(/-/g, "");
-        return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
+        // Check if SSN is required based on the current values
+        const { isNamedAccount, remit_customer, country } = this.parent;
+
+        const hasUSDNamedAccount = isNamedAccount;
+        const isRemittanceOnly = remit_customer === true || remit_customer === "true";
+        const isUSCountry = country === "United States" || country === 186;
+        const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
+
+        // If SSN field should be shown, it becomes required
+        if (shouldShowSSNField) {
+          if (!value) return false;
+          const cleanSSN = value.replace(/-/g, "");
+          return cleanSSN.length === 9 && /^\d+$/.test(cleanSSN);
+        }
+
+        // If SSN field is not required, always return true
+        return true;
       },
     ),
 
@@ -660,11 +670,24 @@ function SignUpIndividualContent() {
   ]);
 
   // Function to validate a section
+  // Update validateCurrentSection to check conditional requirements
   const validateCurrentSection = (sectionIndex) => {
     const sectionFields = getSectionFields(sectionIndex, formik.values);
     const errors = {};
 
-    // Use Formik's validation results
+    // Special handling for section 2 (Identity Verification) to check SSN requirement
+    if (sectionIndex === 2) {
+      const hasUSDNamedAccount = isNamedAccount;
+      const isRemittanceOnly = Boolean(isRemit);
+      const isUSCountry = formik.values.country === "United States" || formik.values.country === 186;
+      const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
+
+      if (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9)) {
+        errors.ssn = "SSN is required and must be 9 digits in format XXX-XX-XXXX";
+      }
+    }
+
+    // Use Formik's validation results for other fields
     sectionFields.forEach((field) => {
       if (formik.errors[field]) {
         errors[field] = formik.errors[field];
@@ -673,59 +696,83 @@ function SignUpIndividualContent() {
 
     return errors;
   };
-
   // Handle navigation between sections with validation - UPDATED
-  const handleNextSection = async (currentSection) => {
-    // Mark all fields in current section as touched
-    const sectionFields = getSectionFields(currentSection, formik.values);
-    sectionFields.forEach((field) => {
-      formik.setFieldTouched(field, true);
-    });
+  // Handle navigation between sections with validation - UPDATED with SSN check
+const handleNextSection = async (currentSection) => {
+  // Mark all fields in current section as touched
+  const sectionFields = getSectionFields(currentSection, formik.values, isNamedAccount, isRemit);
+  sectionFields.forEach((field) => {
+    formik.setFieldTouched(field, true);
+  });
 
-    // Trigger Formik validation for current section
-    await formik.validateForm();
-
-    // Get errors from Formik instead of re-validating with Yup
-    const sectionErrors = validateCurrentSection(currentSection);
-
-    if (Object.keys(sectionErrors).length === 0) {
-      // Clear any existing errors for this section
-      setSectionErrors((prev) => ({
-        ...prev,
-        [currentSection]: [],
-      }));
-
-      // Move to next section
-      if (currentSection < formSections.length - 1) {
-        setActiveSection(currentSection + 1);
+  // Special validation for SSN in section 2 (Identity Verification)
+  if (currentSection === 2) {
+    const hasUSDNamedAccount = isNamedAccount;
+    const isRemittanceOnly = Boolean(isRemit);
+    const isUSCountry = formik.values.country === "United States" || formik.values.country === 186;
+    const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
+    
+    if (shouldShowSSNField) {
+      const cleanSSN = formik.values.ssn?.replace(/-/g, "");
+      if (!formik.values.ssn || formik.values.ssn.trim() === "") {
+        toast.error("SSN is required. Please enter your Social Security Number.");
+        formik.setFieldError("ssn", "SSN is required for this account type with United States as registered country");
+        formik.setFieldTouched("ssn", true);
+        return; // Stop navigation - prevents moving to next section
       }
-    } else {
-      // Show errors from Formik
-      setSectionErrors((prev) => ({
-        ...prev,
-        [currentSection]: Object.entries(sectionErrors).map(
-          ([field, error]) => ({
-            field,
-            error,
-          }),
-        ),
-      }));
-
-      // Show error message
-      const errorCount = Object.keys(sectionErrors).length;
-      toast.error(`Please fix ${errorCount} error(s) before proceeding`);
-
-      // Scroll to first error
-      const firstErrorField = Object.keys(sectionErrors)[0];
-      if (firstErrorField) {
-        const element = document.getElementById(firstErrorField);
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "center" });
-          element.focus();
-        }
+      if (cleanSSN?.length !== 9 || !/^\d+$/.test(cleanSSN)) {
+        toast.error("SSN must be 9 digits in format XXX-XX-XXXX");
+        formik.setFieldError("ssn", "SSN must be 9 digits in format XXX-XX-XXXX");
+        formik.setFieldTouched("ssn", true);
+        return; // Stop navigation - prevents moving to next section
       }
     }
-  };
+  }
+
+  // Trigger Formik validation for current section
+  await formik.validateForm();
+
+  // Get errors from Formik instead of re-validating with Yup
+  const sectionErrors = validateCurrentSection(currentSection);
+
+  if (Object.keys(sectionErrors).length === 0) {
+    // Clear any existing errors for this section
+    setSectionErrors((prev) => ({
+      ...prev,
+      [currentSection]: [],
+    }));
+
+    // Move to next section
+    if (currentSection < formSections.length - 1) {
+      setActiveSection(currentSection + 1);
+    }
+  } else {
+    // Show errors from Formik
+    setSectionErrors((prev) => ({
+      ...prev,
+      [currentSection]: Object.entries(sectionErrors).map(
+        ([field, error]) => ({
+          field,
+          error,
+        }),
+      ),
+    }));
+
+    // Show error message
+    const errorCount = Object.keys(sectionErrors).length;
+    toast.error(`Please fix ${errorCount} error(s) before proceeding`);
+
+    // Scroll to first error
+    const firstErrorField = Object.keys(sectionErrors)[0];
+    if (firstErrorField) {
+      const element = document.getElementById(firstErrorField);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        element.focus();
+      }
+    }
+  }
+};
 
   const handlePreviousSection = (currentSection) => {
     if (currentSection > 0) {
@@ -1255,20 +1302,18 @@ function SignUpIndividualContent() {
             );
             if (locationResponse.ok) {
               const locationData = await locationResponse.json();
-              location = `${locationData.city || "Unknown"}, ${
-                locationData.region || "Unknown"
-              }, ${locationData.country_name || "Unknown"}`;
+              location = `${locationData.city || "Unknown"}, ${locationData.region || "Unknown"
+                }, ${locationData.country_name || "Unknown"}`;
             }
           }
 
           if (typeof UAParser !== "undefined") {
             const parser = new UAParser();
             const deviceInfo = parser.getResult();
-            device = `${deviceInfo.os.name || "Unknown"} on ${
-              deviceInfo.device.model || "Unknown Device"
-            }`;
+            device = `${deviceInfo.os.name || "Unknown"} on ${deviceInfo.device.model || "Unknown Device"
+              }`;
           }
-        } catch (deviceError) {}
+        } catch (deviceError) { }
 
         const termData = {
           accepted_at: currentDateTimeLocal,
@@ -1686,11 +1731,10 @@ function SignUpIndividualContent() {
                         setActiveSection(idx);
                       }
                     }}
-                    className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 relative ${
-                      activeSection === idx
-                        ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                        : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
-                    } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
+                    className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 relative ${activeSection === idx
+                      ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                      : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                      } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
                   >
                     {section}
                     {activeSection === idx && (
@@ -1781,11 +1825,10 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values[id]}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched[id] && formik.errors[id]
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched[id] && formik.errors[id]
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                       />
                       {formik.touched[id] && formik.errors[id] ? (
                         <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -1840,7 +1883,7 @@ function SignUpIndividualContent() {
                             borderRadius: "12px",
                             borderColor:
                               formik.touched.nationality &&
-                              formik.errors.nationality
+                                formik.errors.nationality
                                 ? "#f87171"
                                 : "#e5e7eb",
                             boxShadow: state.isFocused
@@ -1852,7 +1895,7 @@ function SignUpIndividualContent() {
                             "&:hover": {
                               borderColor:
                                 formik.touched.nationality &&
-                                formik.errors.nationality
+                                  formik.errors.nationality
                                   ? "#ef4444"
                                   : "#3b82f6",
                             },
@@ -2052,11 +2095,10 @@ function SignUpIndividualContent() {
                         onChange={handleZipCodeChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.zip_code}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                          formik.touched.zip_code && formik.errors.zip_code
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${formik.touched.zip_code && formik.errors.zip_code
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                       />
 
                       {/* Loading indicator for ZIP lookup */}
@@ -2134,15 +2176,14 @@ function SignUpIndividualContent() {
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
                       value={formik.values.street_address_1}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        formik.touched.street_address_1 &&
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.street_address_1 &&
                         formik.errors.street_address_1
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                     />
                     {formik.touched.street_address_1 &&
-                    formik.errors.street_address_1 ? (
+                      formik.errors.street_address_1 ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2201,11 +2242,10 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.city}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.city && formik.errors.city
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.city && formik.errors.city
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                         placeholder="Will auto-fill from ZIP code"
                         readOnly={false}
                       />
@@ -2255,11 +2295,10 @@ function SignUpIndividualContent() {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.state}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          formik.touched.state && formik.errors.state
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.state && formik.errors.state
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                         placeholder="Will auto-fill from ZIP code"
                         readOnly={false}
                       />
@@ -2319,7 +2358,7 @@ function SignUpIndividualContent() {
                           )}
                         />
                         {formik.touched.mobilenumber_countrycode &&
-                        formik.errors.mobilenumber_countrycode ? (
+                          formik.errors.mobilenumber_countrycode ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
                             <svg
                               className="w-3.5 h-3.5 mr-1"
@@ -2345,17 +2384,16 @@ function SignUpIndividualContent() {
                           onKeyPress={handlePhoneKeyPress}
                           onBlur={formik.handleBlur}
                           value={formik.values.mobile_number}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                            formik.touched.mobile_number &&
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.mobile_number &&
                             formik.errors.mobile_number
-                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                          } shadow-sm`}
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            } shadow-sm`}
                           placeholder="9813017273"
                           maxLength={10}
                         />
                         {formik.touched.mobile_number &&
-                        formik.errors.mobile_number ? (
+                          formik.errors.mobile_number ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
                             <svg
                               className="w-3.5 h-3.5 mr-1"
@@ -2485,12 +2523,11 @@ function SignUpIndividualContent() {
                             onChange={handleSSNChange}
                             onBlur={formik.handleBlur}
                             value={formik.values.ssn}
-                            className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                              (formik.touched.ssn && formik.errors.ssn) ||
+                            className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${(formik.touched.ssn && formik.errors.ssn) ||
                               ssnError
-                                ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                                : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                            } shadow-sm`}
+                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                              } shadow-sm`}
                             placeholder="XXX-XX-XXXX"
                             maxLength={11}
                           />
@@ -2510,7 +2547,7 @@ function SignUpIndividualContent() {
                         </div>
 
                         {(formik.touched.ssn && formik.errors.ssn) ||
-                        ssnError ? (
+                          ssnError ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
                             <svg
                               className="w-3.5 h-3.5 mr-1"
@@ -2555,12 +2592,11 @@ function SignUpIndividualContent() {
                         value={formik.values.idDocumentType}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                          !formik.values.idDocumentType &&
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!formik.values.idDocumentType &&
                           formik.touched.idDocumentType
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                       >
                         <option value="">-- Select ID Document Type --</option>
                         {idDocumentTypes.map((docType) => (
@@ -2572,7 +2608,7 @@ function SignUpIndividualContent() {
                       </select>
                     )}
                     {formik.touched.idDocumentType &&
-                    formik.errors.idDocumentType ? (
+                      formik.errors.idDocumentType ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2630,16 +2666,15 @@ function SignUpIndividualContent() {
                       value={formik.values.idDocumentNumber}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !formik.values.idDocumentNumber &&
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!formik.values.idDocumentNumber &&
                         formik.touched.idDocumentNumber
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                       placeholder="Enter document number"
                     />
                     {formik.touched.idDocumentNumber &&
-                    formik.errors.idDocumentNumber ? (
+                      formik.errors.idDocumentNumber ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2700,7 +2735,7 @@ function SignUpIndividualContent() {
                           borderRadius: "12px",
                           borderColor:
                             formik.touched.idIssuedCountryCode &&
-                            formik.errors.idIssuedCountryCode
+                              formik.errors.idIssuedCountryCode
                               ? "#f87171"
                               : "#e5e7eb",
                           boxShadow: state.isFocused
@@ -2712,7 +2747,7 @@ function SignUpIndividualContent() {
                           "&:hover": {
                             borderColor:
                               formik.touched.idIssuedCountryCode &&
-                              formik.errors.idIssuedCountryCode
+                                formik.errors.idIssuedCountryCode
                                 ? "#ef4444"
                                 : "#3b82f6",
                           },
@@ -2750,12 +2785,11 @@ function SignUpIndividualContent() {
                       value={formik.values.idIssuedDate}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${
-                        !formik.values.idIssuedDate &&
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${!formik.values.idIssuedDate &&
                         formik.touched.idIssuedDate
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                      } shadow-sm`}
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
                     />
                     {formik.touched.idIssuedDate &&
                       formik.errors.idIssuedDate && (
@@ -2839,11 +2873,10 @@ function SignUpIndividualContent() {
                         onChange={handlePasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.password}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                          formik.touched.password && formik.errors.password
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${formik.touched.password && formik.errors.password
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                         placeholder="Create a strong password"
                       />
                       <button
@@ -2883,11 +2916,10 @@ function SignUpIndividualContent() {
                         {validationRules.map((rule, idx) => (
                           <li
                             key={idx}
-                            className={`flex items-center ${
-                              isRuleMet(rule.regex)
-                                ? "text-green-600"
-                                : "text-gray-500"
-                            }`}
+                            className={`flex items-center ${isRuleMet(rule.regex)
+                              ? "text-green-600"
+                              : "text-gray-500"
+                              }`}
                           >
                             {isRuleMet(rule.regex) ? (
                               <FontAwesomeIcon
@@ -2932,16 +2964,15 @@ function SignUpIndividualContent() {
                         onChange={handleConfirmPasswordChange}
                         onBlur={formik.handleBlur}
                         value={formik.values.confirmPassword}
-                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${
-                          formik.touched.confirmPassword &&
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${formik.touched.confirmPassword &&
                           formik.errors.confirmPassword
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : formik.values.confirmPassword &&
-                                formik.values.password ===
-                                  formik.values.confirmPassword
-                              ? "border-green-400 focus:ring-green-500/30 focus:border-green-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : formik.values.confirmPassword &&
+                            formik.values.password ===
+                            formik.values.confirmPassword
+                            ? "border-green-400 focus:ring-green-500/30 focus:border-green-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
                         placeholder="Confirm your password"
                       />
                       <button
@@ -2962,7 +2993,7 @@ function SignUpIndividualContent() {
                         formik.values.confirmPassword &&
                         !formik.errors.confirmPassword &&
                         formik.values.password ===
-                          formik.values.confirmPassword && (
+                        formik.values.confirmPassword && (
                           <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-green-500">
                             <FontAwesomeIcon icon={faCheckCircle} />
                           </div>
@@ -2971,7 +3002,7 @@ function SignUpIndividualContent() {
 
                     {/* Only show errors when passwords don't match */}
                     {formik.touched.confirmPassword &&
-                    formik.errors.confirmPassword ? (
+                      formik.errors.confirmPassword ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2994,7 +3025,7 @@ function SignUpIndividualContent() {
                       formik.values.confirmPassword &&
                       !formik.errors.confirmPassword &&
                       formik.values.password ===
-                        formik.values.confirmPassword && (
+                      formik.values.confirmPassword && (
                         <p className="text-green-600 text-xs mt-2 flex items-center">
                           <FontAwesomeIcon
                             icon={faCheckCircle}
@@ -3219,7 +3250,8 @@ function SignUpIndividualContent() {
                         isSubmitting ||
                         progress < 100 ||
                         (termsConditions.length > 0 &&
-                          acceptedTerms.length === 0)
+                        acceptedTerms.length === 0) ||
+                          (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
