@@ -186,7 +186,7 @@ const Remittance = () => {
       {
         value: "bank",
         label: "Bank Transfer",
-        description: "Direct wire transfer",
+        // description: "Direct wire transfer",
         icon: <MdAccountBalance className="w-5 h-5" />,
         color: "blue",
         gradient: "from-blue-500 to-blue-600",
@@ -194,7 +194,7 @@ const Remittance = () => {
       {
         value: "manual",
         label: "Manual",
-        description: "Bank branch deposit",
+        // description: "Bank branch deposit",
         icon: <HiOutlineBanknotes className="w-5 h-5" />,
         color: "emerald",
         gradient: "from-emerald-500 to-emerald-600",
