@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -647,6 +647,14 @@ function SignUpIndividualContent() {
     },
   });
 
+  // Calculate if SSN field should be shown - defined after formik
+  const shouldShowSSNField = useMemo(() => {
+    const hasUSDNamedAccount = isNamedAccount;
+    const isRemittanceOnly = Boolean(isRemit);
+    const isUSCountry = formik.values.country === "United States" || formik.values.country === 186;
+    return (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
+  }, [formik.values.country, isNamedAccount, isRemit]);
+
   // DEBUG: Add useEffect to monitor password values and errors
   useEffect(() => {
     console.log("🔍 DEBUG - Formik state:", {
@@ -698,81 +706,81 @@ function SignUpIndividualContent() {
   };
   // Handle navigation between sections with validation - UPDATED
   // Handle navigation between sections with validation - UPDATED with SSN check
-const handleNextSection = async (currentSection) => {
-  // Mark all fields in current section as touched
-  const sectionFields = getSectionFields(currentSection, formik.values, isNamedAccount, isRemit);
-  sectionFields.forEach((field) => {
-    formik.setFieldTouched(field, true);
-  });
+  const handleNextSection = async (currentSection) => {
+    // Mark all fields in current section as touched
+    const sectionFields = getSectionFields(currentSection, formik.values, isNamedAccount, isRemit);
+    sectionFields.forEach((field) => {
+      formik.setFieldTouched(field, true);
+    });
 
-  // Special validation for SSN in section 2 (Identity Verification)
-  if (currentSection === 2) {
-    const hasUSDNamedAccount = isNamedAccount;
-    const isRemittanceOnly = Boolean(isRemit);
-    const isUSCountry = formik.values.country === "United States" || formik.values.country === 186;
-    const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
-    
-    if (shouldShowSSNField) {
-      const cleanSSN = formik.values.ssn?.replace(/-/g, "");
-      if (!formik.values.ssn || formik.values.ssn.trim() === "") {
-        toast.error("SSN is required. Please enter your Social Security Number.");
-        formik.setFieldError("ssn", "SSN is required for this account type with United States as registered country");
-        formik.setFieldTouched("ssn", true);
-        return; // Stop navigation - prevents moving to next section
-      }
-      if (cleanSSN?.length !== 9 || !/^\d+$/.test(cleanSSN)) {
-        toast.error("SSN must be 9 digits in format XXX-XX-XXXX");
-        formik.setFieldError("ssn", "SSN must be 9 digits in format XXX-XX-XXXX");
-        formik.setFieldTouched("ssn", true);
-        return; // Stop navigation - prevents moving to next section
-      }
-    }
-  }
+    // Special validation for SSN in section 2 (Identity Verification)
+    if (currentSection === 2) {
+      const hasUSDNamedAccount = isNamedAccount;
+      const isRemittanceOnly = Boolean(isRemit);
+      const isUSCountry = formik.values.country === "United States" || formik.values.country === 186;
+      const shouldShowSSNField = (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
 
-  // Trigger Formik validation for current section
-  await formik.validateForm();
-
-  // Get errors from Formik instead of re-validating with Yup
-  const sectionErrors = validateCurrentSection(currentSection);
-
-  if (Object.keys(sectionErrors).length === 0) {
-    // Clear any existing errors for this section
-    setSectionErrors((prev) => ({
-      ...prev,
-      [currentSection]: [],
-    }));
-
-    // Move to next section
-    if (currentSection < formSections.length - 1) {
-      setActiveSection(currentSection + 1);
-    }
-  } else {
-    // Show errors from Formik
-    setSectionErrors((prev) => ({
-      ...prev,
-      [currentSection]: Object.entries(sectionErrors).map(
-        ([field, error]) => ({
-          field,
-          error,
-        }),
-      ),
-    }));
-
-    // Show error message
-    const errorCount = Object.keys(sectionErrors).length;
-    toast.error(`Please fix ${errorCount} error(s) before proceeding`);
-
-    // Scroll to first error
-    const firstErrorField = Object.keys(sectionErrors)[0];
-    if (firstErrorField) {
-      const element = document.getElementById(firstErrorField);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        element.focus();
+      if (shouldShowSSNField) {
+        const cleanSSN = formik.values.ssn?.replace(/-/g, "");
+        if (!formik.values.ssn || formik.values.ssn.trim() === "") {
+          toast.error("SSN is required. Please enter your Social Security Number.");
+          formik.setFieldError("ssn", "SSN is required for this account type with United States as registered country");
+          formik.setFieldTouched("ssn", true);
+          return; // Stop navigation - prevents moving to next section
+        }
+        if (cleanSSN?.length !== 9 || !/^\d+$/.test(cleanSSN)) {
+          toast.error("SSN must be 9 digits in format XXX-XX-XXXX");
+          formik.setFieldError("ssn", "SSN must be 9 digits in format XXX-XX-XXXX");
+          formik.setFieldTouched("ssn", true);
+          return; // Stop navigation - prevents moving to next section
+        }
       }
     }
-  }
-};
+
+    // Trigger Formik validation for current section
+    await formik.validateForm();
+
+    // Get errors from Formik instead of re-validating with Yup
+    const sectionErrors = validateCurrentSection(currentSection);
+
+    if (Object.keys(sectionErrors).length === 0) {
+      // Clear any existing errors for this section
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: [],
+      }));
+
+      // Move to next section
+      if (currentSection < formSections.length - 1) {
+        setActiveSection(currentSection + 1);
+      }
+    } else {
+      // Show errors from Formik
+      setSectionErrors((prev) => ({
+        ...prev,
+        [currentSection]: Object.entries(sectionErrors).map(
+          ([field, error]) => ({
+            field,
+            error,
+          }),
+        ),
+      }));
+
+      // Show error message
+      const errorCount = Object.keys(sectionErrors).length;
+      toast.error(`Please fix ${errorCount} error(s) before proceeding`);
+
+      // Scroll to first error
+      const firstErrorField = Object.keys(sectionErrors)[0];
+      if (firstErrorField) {
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.focus();
+        }
+      }
+    }
+  };
 
   const handlePreviousSection = (currentSection) => {
     if (currentSection > 0) {
@@ -2470,109 +2478,72 @@ const handleNextSection = async (currentSection) => {
                 {renderSectionErrors(2)}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {(function () {
-                    // Condition 1: Check if user has USD named account OR if it's remittance only
-                    const hasUSDNamedAccount = isNamedAccount;
-                    const isRemittanceOnly = Boolean(isRemit); // Get from location state
+                  {shouldShowSSNField && (
+                    <div className="md:col-span-2">
+                      <label
+                        htmlFor="ssn"
+                        className="block text-sm font-medium text-gray-700 mb-2.5"
+                      >
+                        Social Security Number (SSN) *
+                        <span className="text-gray-500 text-xs ml-2">
+                          {isNamedAccount
+                            ? "(Required for USD Named Accounts with US registration)"
+                            : "(Required for Remittance Services with US registration)"}
+                        </span>
+                      </label>
 
-                    // Condition 2: Check if user's country is United States
-                    const selectedCountryOption = countryOptions.find(
-                      (opt) => opt.value === formik.values.country,
-                    );
-                    const isUSCountry =
-                      formik.values.country === "United States" ||
-                      formik.values.country === 186 ||
-                      selectedCountryOption?.label === "United States";
+                      <div className="relative">
+                        <input
+                          type={showSSN ? "text" : "password"}
+                          id="ssn"
+                          name="ssn"
+                          onChange={handleSSNChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.ssn}
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${(formik.touched.ssn && formik.errors.ssn) || ssnError
+                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            } shadow-sm`}
+                          placeholder="XXX-XX-XXXX"
+                          maxLength={11}
+                        />
 
-                    // Render SSN field if EITHER:
-                    // 1. Has USD named account AND is US country
-                    // 2. OR is remittance only AND is US country
-                    const shouldShowSSNField =
-                      (hasUSDNamedAccount && isUSCountry) ||
-                      (isRemittanceOnly && isUSCountry);
-
-                    console.log("🔍 Individual SSN Field Conditions Check:", {
-                      hasUSDNamedAccount,
-                      isRemittanceOnly,
-                      isUSCountry,
-                      shouldShowSSNField,
-                      countryValue: formik.values.country,
-                      selectedCountryLabel: selectedCountryOption?.label,
-                      isNamedAccount,
-                    });
-
-                    return shouldShowSSNField ? (
-                      <div className="md:col-span-2">
-                        <label
-                          htmlFor="ssn"
-                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
+                          onClick={() => setShowSSN(!showSSN)}
+                          tabIndex={-1}
+                          aria-label={showSSN ? "Hide SSN" : "Show SSN"}
                         >
-                          Social Security Number (SSN) *
-                          <span className="text-gray-500 text-xs ml-2">
-                            {hasUSDNamedAccount
-                              ? "(Required for USD Named Accounts with US registration)"
-                              : "(Required for Remittance Services with US registration)"}
-                          </span>
-                        </label>
-
-                        <div className="relative">
-                          <input
-                            type={showSSN ? "text" : "password"}
-                            id="ssn"
-                            name="ssn"
-                            onChange={handleSSNChange}
-                            onBlur={formik.handleBlur}
-                            value={formik.values.ssn}
-                            className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 pr-12 ${(formik.touched.ssn && formik.errors.ssn) ||
-                              ssnError
-                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                              } shadow-sm`}
-                            placeholder="XXX-XX-XXXX"
-                            maxLength={11}
-                          />
-
-                          {/* Eye toggle button */}
-                          <button
-                            type="button"
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-700 transition-colors"
-                            onClick={() => setShowSSN(!showSSN)}
-                            tabIndex={-1}
-                            aria-label={showSSN ? "Hide SSN" : "Show SSN"}
-                          >
-                            <FontAwesomeIcon
-                              icon={showSSN ? faEyeSlash : faEye}
-                            />
-                          </button>
-                        </div>
-
-                        {(formik.touched.ssn && formik.errors.ssn) ||
-                          ssnError ? (
-                          <p className="text-red-500 text-xs mt-2 flex items-center">
-                            <svg
-                              className="w-3.5 h-3.5 mr-1"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                            {formik.errors.ssn || ssnError}
-                          </p>
-                        ) : null}
-
-                        <p className="text-xs text-gray-500 mt-1">
-                          {hasUSDNamedAccount
-                            ? "Social Security Number is required for USD Named Accounts with United States as registered country."
-                            : "Social Security Number is required for Remittance Services with United States as registered country."}
-                        </p>
+                          <FontAwesomeIcon icon={showSSN ? faEyeSlash : faEye} />
+                        </button>
                       </div>
-                    ) : null;
-                  })()}
+
+                      {(formik.touched.ssn && formik.errors.ssn) || ssnError ? (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.ssn || ssnError}
+                        </p>
+                      ) : null}
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        {isNamedAccount
+                          ? "Social Security Number is required for USD Named Accounts with United States as registered country."
+                          : "Social Security Number is required for Remittance Services with United States as registered country."}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3250,8 +3221,8 @@ const handleNextSection = async (currentSection) => {
                         isSubmitting ||
                         progress < 100 ||
                         (termsConditions.length > 0 &&
-                        acceptedTerms.length === 0) ||
-                          (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
+                          acceptedTerms.length === 0) ||
+                        (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                     >
