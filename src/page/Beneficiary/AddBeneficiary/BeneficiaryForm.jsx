@@ -62,15 +62,6 @@ import {
   selectBankDeleteLoading,
   selectBankDeleteError,
   selectBankDeleteSuccess,
-  // selectBankAddLoading,
-  // selectBankAddError,
-  // selectBankAddSuccess,
-  // selectBankOperation,
-  // selectBankId,
-  // selectBankLoading,
-  // selectBankSuccess,
-  // selectBankError,
-  // clearBankError,
   deleteBeneficiaryBank,
 } from "../AddBeneficiary/addBeneficiarySlice";
 
@@ -200,12 +191,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const bankDeleteLoading = useSelector(selectBankDeleteLoading);
   const bankDeleteError = useSelector(selectBankDeleteError);
   const bankDeleteSuccess = useSelector(selectBankDeleteSuccess);
-  // ADD THESE LINES:
   const beneficiaries = useSelector(selectBeneficiaries);
-
-  // const bankDeleteLoading = useSelector(selectBankLoading); // Same loading state
-  // const bankDeleteError = useSelector(selectBankError);
-  // const bankDeleteSuccess = useSelector(selectBankSuccess);
 
   // Phone search selectors from beneficiarySlice
   const phoneSearch = useSelector(selectPhoneSearch);
@@ -244,7 +230,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   });
   const [beneficiariesLoaded, setBeneficiariesLoaded] = useState(false);
   const [usingExistingBeneficiary, setUsingExistingBeneficiary] = useState(false);
-  const [existingBeneficiaryId, setExistingBeneficiaryId] = useState(null); // NEW: Store the existing beneficiary ID
+  const [existingBeneficiaryId, setExistingBeneficiaryId] = useState(null);
 
   // Phone search state
   const [phoneInput, setPhoneInput] = useState("");
@@ -386,6 +372,30 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ];
   });
 
+  // Debug monitoring for NPR/KES/NGN currencies
+  useEffect(() => {
+    if (bankAccounts.length > 0 && ["NPR", "KES", "NGN"].includes(currency)) {
+      console.log("🔍 Current bank account state:", {
+        bankName: bankAccounts[0]?.bankName,
+        bankCode: bankAccounts[0]?.bankCode,
+        currency: currency,
+        rails: bankAccounts[0]?.rails
+      });
+    }
+  }, [bankAccounts, currency]);
+
+  // Debug banks for NPR/KES/NGN
+  useEffect(() => {
+    if (["NPR", "KES", "NGN"].includes(currency)) {
+      console.log(`🔍 Debugging ${currency} banks:`, {
+        currency,
+        banks: banks[currency],
+        banksInt: banks[`${currency}_int`],
+        allBanks: banks
+      });
+    }
+  }, [currency, banks]);
+
   const customStyles = {
     control: (provided, state) => ({
       ...provided,
@@ -501,7 +511,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       };
       fetchData();
     }
-  }, [dispatch, customerId, mode, beneficiaries.length]);
+  }, [dispatch, customerId, mode]);
 
   // Sync countryCodeInput with formik value in edit mode
   useEffect(() => {
@@ -617,6 +627,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   useEffect(() => {
     if (step > 0 && isMounted.current && mode === "create") {
       console.log("🏦 Fetching banks and ID types for step:", step);
+      console.log("🏦 Current currency:", currency);
 
       // Fetch banks based on currency
       if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(currency)) {
@@ -627,6 +638,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           })
         );
       } else {
+        // This includes NPR, KES, NGN, USD, EUR, GBP, etc.
         dispatch(
           fetchBanksByCurrency({
             currency: currency,
@@ -756,7 +768,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       dispatch(fetchIdTypesByCurrency(newCurrency));
     }
 
-    if (["BDT", "LKR", "AUD", "PKR"].includes(newCurrency)) {
+    if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(newCurrency)) {
       dispatch(
         fetchBanksByCurrency({ currency: newCurrency, bankType: "int-banks" })
       );
@@ -793,7 +805,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return found ? found.id.toString() : "";
   };
 
-  // Phone search results handler - FIXED VERSION
+  // Phone search results handler
   useEffect(() => {
     // Only run if we have searched AND we haven't already processed this data
     if (
@@ -983,7 +995,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
-  // UPDATED: When using existing beneficiary, reset bank accounts to empty
   const handleUseFoundBeneficiary = () => {
     console.log("🔄 Using existing beneficiary:", foundBeneficiary || phoneSearch.data);
 
@@ -1041,9 +1052,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       console.log("📝 Setting personal form values:", formValues);
       formik.setValues(formValues);
 
-      // CRITICAL CHANGE: Reset bank accounts to empty/default state instead of using existing ones
-      // This gives the user a fresh bank form to fill out for the existing beneficiary
-      console.log("🏦 Resetting bank accounts to empty state (not using existing bank info)");
+      // Reset bank accounts to empty/default state
+      console.log("🏦 Resetting bank accounts to empty state");
       setBankAccounts([
         {
           rails: "",
@@ -1070,7 +1080,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         },
       ]);
 
-      // Reset ID type fields (they'll be re-selected based on new bank info)
+      // Reset ID type fields
       formik.setFieldValue("beneficiary_id_type", "");
       formik.setFieldValue("beneficiary_id_number", "");
 
@@ -1247,6 +1257,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     ]);
   };
 
+  const handleBankAccountChange = (index, field, value) => {
+    const newBankAccounts = [...bankAccounts];
+    newBankAccounts[index][field] = value;
+    
+    // Debug logging for bank name changes
+    if (field === "bankName") {
+      console.log(`🔄 Bank name updated for account ${index}:`, value);
+      console.log("Updated bank account object:", newBankAccounts[index]);
+    }
+    
+    setBankAccounts(newBankAccounts);
+    if (field === "branchCode") {
+      setBranchCode(value);
+    }
+  };
+
   // UPDATED: Handle submit for both new and existing beneficiaries
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1404,12 +1430,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             return;
           }
 
-          // Prepare payload for bank update
-          const bankData = {
+          // Get the current currency
+          const currentCurrency = bankAccounts[0]?.currency || currency;
+
+          // Prepare base payload for bank update
+          let bankData = {
             benef_id: beneficiaryId,
             benef_iban: bankAccounts[0]?.iban || "",
             bic_code: bankAccounts[0]?.swift || "",
-            bank_name: bankAccounts[0]?.bankName || "",
+            bank_name: bankAccounts[0]?.bankName || bankAccounts[0]?.bank_name || "",
             bank_branch: bankAccounts[0]?.branchCode || "",
             bank_address: bankAccounts[0]?.bankState || "",
             bank_city: bankAccounts[0]?.bankCity || "",
@@ -1419,16 +1448,50 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             sort_code: bankAccounts[0]?.sortCode || "",
             account_number: bankAccounts[0]?.accountNumber || "",
             account_type: bankAccounts[0]?.accountType || "",
-            payment_method: bankAccounts[0]?.paymentMethod || "",
+            payment_method: bankAccounts[0]?.paymentMethod || "Local",
             routing_number: bankAccounts[0]?.routingNumber || "",
             bank_acc_no: bankAccounts[0]?.accountNumber || "",
             description: "",
             beneficiary_wallet: bankAccounts[0]?.walletProvider || "",
             swift: bankAccounts[0]?.swift || "",
             intermediary_bank_swift: bankAccounts[0]?.intermediarySwift || "",
-            rails: bankAccounts[0]?.rails || "",
-            currency_code: bankAccounts[0]?.currency || currency,
+            rails: bankAccounts[0]?.rails || "Local",
+            currency_code: currentCurrency,
           };
+
+          // Special handling for NPR, KES, NGN currencies
+          if (["NPR", "KES", "NGN"].includes(currentCurrency)) {
+            console.log(`💰 Processing ${currentCurrency} bank update`);
+            
+            // Ensure bank_name is properly set from bankName field
+            if (!bankData.bank_name && bankAccounts[0]?.bankName) {
+              bankData.bank_name = bankAccounts[0].bankName;
+            }
+            
+            // Add bank_code for these currencies (required by API)
+            if (bankAccounts[0]?.bankCode) {
+              bankData.bank_code = bankAccounts[0].bankCode;
+            }
+            
+            // These currencies might also need branch_code
+            if (bankAccounts[0]?.branchCode) {
+              bankData.branch_code = bankAccounts[0].branchCode;
+            }
+            
+            // Additional fields that might be required
+            if (bankAccounts[0]?.accountName) {
+              bankData.account_name = bankAccounts[0].accountName;
+            }
+            
+            // Log what we're sending
+            console.log(`📤 ${currentCurrency} Bank Data:`, {
+              bank_name: bankData.bank_name,
+              bank_code: bankData.bank_code,
+              account_number: bankData.account_number,
+              branch_code: bankData.branch_code,
+              currency_code: bankData.currency_code
+            });
+          }
 
           // Remove empty values
           Object.keys(bankData).forEach(key => {
@@ -1580,15 +1643,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
-  const handleBankAccountChange = (index, field, value) => {
-    const newBankAccounts = [...bankAccounts];
-    newBankAccounts[index][field] = value;
-    setBankAccounts(newBankAccounts);
-    if (field === "branchCode") {
-      setBranchCode(value);
-    }
-  };
-
   const handleBdtBankAccountChange = async (index, field, value) => {
     const newBankAccounts = [...bankAccounts];
     newBankAccounts[index][field] = value;
@@ -1617,9 +1671,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   const getBanksForCurrency = useMemo(() => {
+    // NPR, KES, NGN should use regular currency-payout-banks
     if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(currency)) {
       return banks[`${currency}_int`] || [];
     }
+    // NPR, KES, NGN, USD, EUR, GBP, etc. will fall through to this
     return banks[currency] || [];
   }, [banks, currency]);
 
@@ -1672,7 +1728,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           );
         }}
         value={phoneCodeOptions.find(
-          (option) => option.value === formik.values.country_phone_code // Use formik value
+          (option) => option.value === formik.values.country_phone_code
         )}
         formatOptionLabel={({ country, label }) => (
           <div className="flex items-center">
@@ -1753,16 +1809,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   );
 
   // Render bank account fields
-  // Render bank account fields - UPDATED to not disable fields when usingExistingBeneficiary
   const renderBankAccountFields = (index) => {
     const account = bankAccounts[index];
     const accountCurrency = account.currency || currency;
     const currentBanks = getBanksForCurrency;
     const currentIdTypes = getIdTypesForCurrency;
     const currentBankBranches = getBankBranches;
-
-    // For existing beneficiary, bank fields should be EDITABLE (we're adding new bank account)
-    const isBankDisabled = false; // Bank fields are always editable when adding new bank account
 
     return (
       <div
@@ -1813,7 +1865,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             </FieldLabel>
             <select
               className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-              value={account.rails}
+              value={account.rails || ""}
               onChange={(e) =>
                 handleBankAccountChange(index, "rails", e.target.value)
               }
@@ -1877,7 +1929,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           )}
         </div>
 
-        {/* Currency-Specific ID Fields - These should be EDITABLE for new bank account */}
+        {/* Currency-Specific ID Fields */}
         {(accountCurrency === "BDT" ||
           accountCurrency === "INR" ||
           accountCurrency === "PKR") && (
@@ -1940,7 +1992,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </FieldLabel>
                   <select
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    value={account.bankCountry}
+                    value={account.bankCountry || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -1968,7 +2020,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter SWIFT/BIC code"
-                    value={account.swift}
+                    value={account.swift || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "swift", e.target.value)
                     }
@@ -1986,7 +2038,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       type="text"
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter IBAN number"
-                      value={account.iban}
+                      value={account.iban || ""}
                       onChange={(e) =>
                         handleBankAccountChange(index, "iban", e.target.value)
                       }
@@ -2003,7 +2055,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       type="text"
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
-                      value={account.accountNumber}
+                      value={account.accountNumber || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
@@ -2025,7 +2077,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter intermediary bank SWIFT"
-                    value={account.intermediarySwift}
+                    value={account.intermediarySwift || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2052,7 +2104,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           </div>
         )}
 
-        {/* LOCAL TRANSFERS - REMOVE ALL disabled/readOnly attributes */}
+        {/* LOCAL TRANSFERS */}
         {account.rails === "Local" && (
           <div className="space-y-6">
             {/* USD Local Transfer */}
@@ -2064,7 +2116,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </FieldLabel>
                   <select
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    value={account.paymentMethod}
+                    value={account.paymentMethod || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2088,7 +2140,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter routing number"
-                    value={account.routingNumber}
+                    value={account.routingNumber || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2108,7 +2160,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter account number"
-                    value={account.accountNumber}
+                    value={account.accountNumber || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2152,7 +2204,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     </FieldLabel>
                     <select
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                      value={account.accountType}
+                      value={account.accountType || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
@@ -2188,7 +2240,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Bank Name"
-                    value={account.bankName}
+                    value={account.bankName || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "bankName", e.target.value)
                     }
@@ -2204,7 +2256,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Account Number"
-                    value={account.accountNumber}
+                    value={account.accountNumber || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2224,7 +2276,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IFSC Code"
-                    value={account.ifsc}
+                    value={account.ifsc || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "ifsc", e.target.value)
                     }
@@ -2270,7 +2322,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IBAN number"
-                    value={account.iban}
+                    value={account.iban || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "iban", e.target.value)
                     }
@@ -2316,7 +2368,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter IBAN number"
-                    value={account.iban}
+                    value={account.iban || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "iban", e.target.value)
                     }
@@ -2332,7 +2384,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter SWIFT/BIC code"
-                    value={account.swift}
+                    value={account.swift || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "swift", e.target.value)
                     }
@@ -2342,7 +2394,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </div>
             )}
 
-            {/* NPR/KES/NGN Local Transfer */}
+            {/* NPR/KES/NGN Local Transfer - FIXED VERSION */}
             {(accountCurrency === "NPR" ||
               accountCurrency === "KES" ||
               accountCurrency === "NGN") && (
@@ -2353,37 +2405,48 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     </FieldLabel>
                     <select
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                      value={account.bankCode}
+                      value={account.bankCode || ""}
                       onChange={(e) => {
-                        handleBankAccountChange(
-                          index,
-                          "bankCode",
-                          e.target.value
-                        );
+                        const selectedBankCode = e.target.value;
+                        console.log("Selected bank code:", selectedBankCode);
+                        console.log("Available banks:", currentBanks);
+                        
+                        // Find the selected bank by matching the value
                         const selectedBank = currentBanks.find(
-                          (bank) =>
-                            bank.id === e.target.value ||
-                            bank.bank_code === e.target.value
+                          (bank) => {
+                            const bankValue = bank.id || bank.bank_code;
+                            console.log("Comparing:", bankValue, "with:", selectedBankCode);
+                            return String(bankValue) === String(selectedBankCode);
+                          }
                         );
+                        
                         if (selectedBank) {
-                          handleBankAccountChange(
-                            index,
-                            "bankName",
-                            selectedBank.name || selectedBank.bank_name
-                          );
+                          const bankNameValue = selectedBank.name || selectedBank.bank_name;
+                          console.log(`🏦 Bank selected - Code: ${selectedBankCode}, Name: ${bankNameValue}`);
+                          
+                          // Update both bankCode and bankName
+                          handleBankAccountChange(index, "bankCode", selectedBankCode);
+                          handleBankAccountChange(index, "bankName", bankNameValue);
+                        } else {
+                          console.error("Bank not found for code:", selectedBankCode);
                         }
                       }}
                       required
                     >
                       <option value="">Select Bank</option>
-                      {currentBanks.map((bank) => (
-                        <option
-                          key={bank.id || bank.bank_code}
-                          value={bank.id || bank.bank_code}
-                        >
-                          {bank.name || bank.bank_name}
-                        </option>
-                      ))}
+                      {currentBanks && currentBanks.length > 0 ? (
+                        currentBanks.map((bank) => {
+                          const bankValue = bank.id || bank.bank_code;
+                          const bankLabel = bank.name || bank.bank_name;
+                          return (
+                            <option key={bankValue} value={bankValue}>
+                              {bankLabel}
+                            </option>
+                          );
+                        })
+                      ) : (
+                        <option value="" disabled>No banks available</option>
+                      )}
                     </select>
                   </div>
 
@@ -2395,7 +2458,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       type="text"
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
-                      value={account.accountNumber}
+                      value={account.accountNumber || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
@@ -2416,7 +2479,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         type="text"
                         className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                         placeholder="Enter account name"
-                        value={account.accountName}
+                        value={account.accountName || ""}
                         onChange={(e) =>
                           handleBankAccountChange(
                             index,
@@ -2437,18 +2500,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               accountCurrency === "PKR" ||
               accountCurrency === "CAD") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Bank Name Field - Conditional for CAD when no banks available */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Name
                     </FieldLabel>
 
-                    {/* Check if banks exist AND (currency is not CAD OR CAD has banks) */}
                     {currentBanks && currentBanks.length > 0 ? (
-                      // Show dropdown when banks are available
                       <select
                         className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                        value={account.bankCode}
+                        value={account.bankCode || ""}
                         onChange={(e) => {
                           if (
                             accountCurrency === "BDT" ||
@@ -2483,19 +2543,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         ))}
                       </select>
                     ) : (
-                      // Show text input when no banks available (handles API returning empty array for CAD)
                       <div>
                         <input
                           type="text"
                           className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                           placeholder="Enter Bank Name"
-                          value={account.bankName}
+                          value={account.bankName || ""}
                           onChange={(e) =>
                             handleBankAccountChange(index, "bankName", e.target.value)
                           }
                           required
                         />
-                        {/* Show helpful message when no bank list is available */}
                         {accountCurrency === "CAD" && (
                           <p className="text-xs text-amber-600 mt-1">
                             <FaExclamationTriangle className="inline mr-1" size={10} />
@@ -2506,7 +2564,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     )}
                   </div>
 
-                  {/* Account Number */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Account Number
@@ -2515,7 +2572,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       type="text"
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter account number"
-                      value={account.accountNumber}
+                      value={account.accountNumber || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
@@ -2527,7 +2584,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     />
                   </div>
 
-                  {/* Branch Code */}
                   <div className="mb-4">
                     <FieldLabel>
                       Branch Code
@@ -2538,7 +2594,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       accountCurrency === "CAD") ? (
                       <select
                         className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                        value={account.branchCode}
+                        value={account.branchCode || ""}
                         onChange={(e) =>
                           handleBankAccountChange(
                             index,
@@ -2562,7 +2618,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         type="text"
                         className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                         placeholder="Enter branch code"
-                        value={account.branchCode}
+                        value={account.branchCode || ""}
                         onChange={(e) =>
                           handleBankAccountChange(
                             index,
@@ -2574,7 +2630,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     )}
                   </div>
 
-                  {/* Bank State */}
                   <div className="mb-4">
                     <FieldLabel>
                       Bank State
@@ -2583,7 +2638,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       type="text"
                       className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                       placeholder="Enter bank state"
-                      value={account.bankState}
+                      value={account.bankState || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
@@ -2594,7 +2649,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     />
                   </div>
 
-                  {/* Additional fields for PKR and CAD */}
                   {(accountCurrency === "PKR" || accountCurrency === "CAD") && (
                     <>
                       <div className="mb-4">
@@ -2605,7 +2659,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           type="text"
                           className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                           placeholder="Enter IBAN number"
-                          value={account.iban}
+                          value={account.iban || ""}
                           onChange={(e) =>
                             handleBankAccountChange(index, "iban", e.target.value)
                           }
@@ -2619,7 +2673,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           type="text"
                           className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                           placeholder="Enter account title"
-                          value={account.accountTitle}
+                          value={account.accountTitle || ""}
                           onChange={(e) =>
                             handleBankAccountChange(
                               index,
@@ -2645,7 +2699,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Account Number"
-                    value={account.accountNumber}
+                    value={account.accountNumber || ""}
                     onChange={(e) =>
                       handleBankAccountChange(
                         index,
@@ -2665,7 +2719,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     type="text"
                     className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                     placeholder="Enter Sort Code"
-                    value={account.sortCode}
+                    value={account.sortCode || ""}
                     onChange={(e) =>
                       handleBankAccountChange(index, "sortCode", e.target.value)
                     }
@@ -2713,7 +2767,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </FieldLabel>
               <select
                 className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                value={account.walletProvider}
+                value={account.walletProvider || ""}
                 onChange={(e) =>
                   handleBankAccountChange(
                     index,
@@ -2739,7 +2793,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 type="text"
                 className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                 placeholder="Enter mobile number"
-                value={account.mobileNumber}
+                value={account.mobileNumber || ""}
                 onChange={(e) =>
                   handleBankAccountChange(index, "mobileNumber", e.target.value)
                 }
@@ -2756,7 +2810,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   type="text"
                   className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
                   placeholder="Enter provider name"
-                  value={account.otherProvider}
+                  value={account.otherProvider || ""}
                   onChange={(e) =>
                     handleBankAccountChange(
                       index,
@@ -2814,7 +2868,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 isSearchable
                 onChange={(selectedOption) => {
                   setCountryCodeInput(selectedOption?.value || "+1");
-                  // Also store the country code in a state variable to include in the payload
                   setSelectedCountryCode(selectedOption?.value || "+1");
                 }}
                 value={phoneCodeOptions.find(
@@ -2843,7 +2896,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 value={phoneInput}
                 onChange={(e) => {
                   setPhoneInput(e.target.value);
-                  // Clear search results when phone changes
                   if (phoneSearch.searched) {
                     dispatch(clearPhoneSearch());
                     setShowSearchResults(false);
@@ -3408,7 +3460,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         className={`w-full md:w-1/3 ${usingExistingBeneficiary ? "opacity-70" : ""
                           }`}
                       >
-                        {/* Phone Number section - update the Select component value */}
                         <Select
                           className="text-sm"
                           classNamePrefix="select"
@@ -3424,7 +3475,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             }
                           }}
                           value={phoneCodeOptions.find(
-                            (option) => option.value === countryCodeInput  // Use countryCodeInput, not formik value
+                            (option) => option.value === countryCodeInput
                           )}
                           formatOptionLabel={({ country, label }) => (
                             <div className="flex items-center">
@@ -3922,39 +3973,40 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   renderBankAccountFields(index)
                 )}
 
-                {/* Add Bank Account Button - Only show for create mode */}
-
-                <button
-                  type="button"
-                  onClick={addBankAccount}
-                  disabled={usingExistingBeneficiary}
-                  className={`w-full p-6 border-2 border-dashed border-gray-300 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center ${usingExistingBeneficiary
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:border-blue-400 hover:bg-blue-50"
-                    }`}
-                >
-                  <div
-                    className={`flex items-center ${usingExistingBeneficiary
-                      ? "text-gray-400"
-                      : "text-blue-600"
+                {/* Add Bank Account Button */}
+                {mode === "create" && (
+                  <button
+                    type="button"
+                    onClick={addBankAccount}
+                    disabled={usingExistingBeneficiary}
+                    className={`w-full p-6 border-2 border-dashed border-gray-300 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center ${usingExistingBeneficiary
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:border-blue-400 hover:bg-blue-50"
                       }`}
                   >
-                    <FaPlus className="mr-3" size={20} />
-                    <span className="font-medium">
-                      Add Another Bank Account
-                    </span>
-                  </div>
-                  <p
-                    className={`text-sm mt-2 ${usingExistingBeneficiary
-                      ? "text-gray-400"
-                      : "text-gray-500"
-                      }`}
-                  >
-                    {usingExistingBeneficiary
-                      ? "Cannot add multiple accounts at once for existing beneficiary"
-                      : "Add multiple accounts for different currencies or payment methods"}
-                  </p>
-                </button>
+                    <div
+                      className={`flex items-center ${usingExistingBeneficiary
+                        ? "text-gray-400"
+                        : "text-blue-600"
+                        }`}
+                    >
+                      <FaPlus className="mr-3" size={20} />
+                      <span className="font-medium">
+                        Add Another Bank Account
+                      </span>
+                    </div>
+                    <p
+                      className={`text-sm mt-2 ${usingExistingBeneficiary
+                        ? "text-gray-400"
+                        : "text-gray-500"
+                        }`}
+                    >
+                      {usingExistingBeneficiary
+                        ? "Cannot add multiple accounts at once for existing beneficiary"
+                        : "Add multiple accounts for different currencies or payment methods"}
+                    </p>
+                  </button>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex flex-col md:flex-row gap-4 pt-8 border-t border-gray-200">
