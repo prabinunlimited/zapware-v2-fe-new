@@ -27,20 +27,65 @@ const AccountType = () => {
   const [tappedAccount, setTappedAccount] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const hostName = window.location.hostname;
   const currentStep = useCurrentStep(); // Get current step from hook
 
-  const handleSelectAccount = (type) => {
+  const handleSelectAccount = async (type) => {
     setSelectedAccount(type);
-    // Simulate selection before navigation
-    setTimeout(() => {
-      if (type === "partner") {
-        navigate("/selectcountry");
-      } else {
-        navigate("/selectcountry", { state: { accountType: type } });
+    
+    try {
+      // Call the API for partner account selection
+      const response = await fetch('http://10.1.5.120:8000/api/partner-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: "HK6V7709",
+          client_secret: "057d433a-2d02-437b-a265-56114567aa44",
+          hostname: hostName,
+          account_type: type,
+        }),
+      });
+
+      const data = await response.json();
+      
+      // Get partner_id from response
+      let partnerId = null;
+      if (data.partner_id) {
+        partnerId = data.partner_id;
+      } else if (data.data && data.data.partner_id) {
+        partnerId = data.data.partner_id;
       }
-    }, 300);
+      
+      // ✅ Store partner_id as whitelabelledpartnerid in localStorage
+      if (partnerId) {
+        localStorage.setItem('whitelabelledpartnerid', partnerId);
+        localStorage.setItem('iswhitelabelledpartner', 'Y');
+        console.log('✅ Saved whitelabelledpartnerid:', localStorage.getItem('whitelabelledpartnerid'));
+      }
+      
+      // Navigate immediately after API call
+      setTimeout(() => {
+        if (type === "partner") {
+          navigate("/selectcountry");
+        } else {
+          navigate("/selectcountry", { state: { accountType: type } });
+        }
+      }, 300);
+      
+    } catch (error) {
+      console.error('API call failed:', error);
+      // Still navigate even if API fails
+      setTimeout(() => {
+        if (type === "partner") {
+          navigate("/selectcountry");
+        } else {
+          navigate("/selectcountry", { state: { accountType: type } });
+        }
+      }, 300);
+    }
   };
 
   const handleCancel = () => {
