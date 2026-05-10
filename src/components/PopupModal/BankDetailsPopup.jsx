@@ -32,7 +32,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
 
   const handleEditBeneficiary = () => {
     const currentCustomerId = customerId || localStorage.getItem("currentCustomerId");
-    
+
     navigate(`/editbeneficiary/${beneficiaryId}`, {
       state: {
         customerId: currentCustomerId,
@@ -40,7 +40,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
         beneficiaryName: beneficiaryName
       }
     });
-    
+
     onClose();
   };
 
@@ -136,11 +136,10 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                           Bank Account #{index + 1}
                         </h3>
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            bank.status === 1
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${bank.status === 1
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                            }`}
                         >
                           {bank.status === 1 ? "Active" : "Inactive"}
                         </span>
@@ -152,7 +151,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-gray-500">
                           Bank Name
@@ -333,7 +332,62 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                           <p className="text-gray-900">{bank.remarks}</p>
                         </div>
                       )}
-                    </div>
+                    </div> */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Bank Name */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">
+                          Bank Name
+                        </label>
+
+                        <p className="text-gray-900 font-medium">
+                          {["AED", "DKK", "EUR", "GBP", "USD"].includes(
+                            bank.currency_code
+                          )
+                            ? "N/A"
+                            : bank.bank_name || "N/A"}
+                        </p>
+                      </div>
+
+                      {/* Currency */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">
+                          Currency
+                        </label>
+
+                        <p className="text-gray-900">
+                          {bank.currency_code || "N/A"}
+                        </p>
+                      </div>
+
+                      {/* Account Number - Hide for AED */}
+                      {bank.currency_code !== "AED" && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">
+                            Account Number
+                          </label>
+
+                          <p className="text-gray-900 font-medium">
+                            {bank.bank_acc_no ||
+                              bank.account_number ||
+                              "N/A"}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* IBAN - Show only for AED */}
+                      {bank.currency_code === "AED" && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">
+                            IBAN
+                          </label>
+
+                          <p className="text-gray-900 font-mono">
+                            {bank.benef_iban || "N/A"}
+                          </p>
+                        </div>
+                      )}
+                    </div>  
 
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
