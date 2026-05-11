@@ -970,7 +970,7 @@ const Login = () => {
     if (isVerifyingPasscode) {
       return;
     }
-
+  
     if (passcode.join("").length !== 6) {
       dispatch(
         openModal({
@@ -981,12 +981,12 @@ const Login = () => {
       );
       return;
     }
-
+  
     try {
       if (!values.email) {
         throw new Error("Email is required for verification");
       }
-
+  
       const verifyPayload = {
         email: values.email.trim().toLowerCase(),
         passcode: passcode,
@@ -994,18 +994,19 @@ const Login = () => {
         sign_in_option: inputType,
         context: "login_verification",
       };
-
+  
       if (showCustomerType === "Y" && values.customerType) {
         verifyPayload.customer_type = values.customerType;
       }
-
+  
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
-
+  
+      // ✅ NEW: Check for owner login
       if (result.is_owner_login === true || result.is_owner_login === "1") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-
+  
         dispatch(
           setOwnerDetails({
             is_owner_login: true,
@@ -1017,27 +1018,72 @@ const Login = () => {
         navigate(`/signupowner/${result.owner_id}`);
         return;
       }
-
+  
+      // ✅ NEW: Case 1 - Remittance Only Customer with Pending KYC (Show message, NO redirect)
+      if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+        
+        dispatch(
+          openModal({
+            title: "KYC Verification Pending",
+            message: result.plaid_message ,
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+  
+      // ✅ NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
+      if (result.requiresPlaidRedirect && result.plaidUrl) {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+        
+ 
+        window.location.href = result.plaidUrl;
+        
+        // Optional: Show notification
+        dispatch(
+          openModal({
+            title: "Verification Required",
+            message: "Redirecting to verification page...",
+            type: "info",
+            modalProps: {
+              showSpinner: true,
+              autoClose: true,
+              autoCloseDelay: 3000,
+            },
+          })
+        );
+        return;
+      }
+  
+      // Keep existing code for Plaid redirect (if any)
       if (result.requiresPlaidRedirect) {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-
+  
         const processedData = await handleKycVerification(result, values);
         return;
       }
-
+  
       const processedData = await handleKycVerification(result, values);
-
+  
       if (processedData === null) {
         return;
       }
-
+  
       if (processedData && processedData.token && processedData.customer_id) {
         const customerId = processedData.customer_id;
-
+  
         await new Promise((resolve) => setTimeout(resolve, 100));
-
+  
         dispatch(
           setAuthState({
             token: processedData.token,
@@ -1050,11 +1096,11 @@ const Login = () => {
             },
           })
         );
-
+  
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
-
+  
         dispatch(
           openModal({
             title: "Login Successful",
@@ -1069,7 +1115,7 @@ const Login = () => {
             disableEscapeKey: true,
           })
         );
-
+  
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
@@ -1086,12 +1132,12 @@ const Login = () => {
       if (firstInput) {
         setTimeout(() => firstInput.focus(), 100);
       }
-
+  
       dispatch(setPasscode(new Array(6).fill("")));
-
+  
       let displayMessage =
         error.message || "Verification failed. Please try again.";
-
+  
       if (
         error.message &&
         !error.message.includes("KYC") &&
