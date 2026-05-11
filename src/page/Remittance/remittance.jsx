@@ -136,6 +136,9 @@ const Remittance = () => {
   // Local state for selected bank account to ensure proper synchronization
   const [localSelectedBankAccount, setLocalSelectedBankAccount] = useState(null);
   
+  // Local state for amount validation
+  const [amountError, setAmountError] = useState(null);
+  
   // Use local state if available, otherwise use Redux state
   const selectedSilaBankAccount = localSelectedBankAccount || reduxSelectedSilaBankAccount;
   
@@ -428,13 +431,10 @@ const Remittance = () => {
         }
       });
 
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        dispatch(setSendAmount("5"));
-      }
-
+      // Don't auto-set send amount to 5 anymore
       dispatch(setReceiveAmount(""));
     }
-  }, [receiveCurrencyOptions, dispatch, formData.receiveCurrency, formData.sendAmount, isInitializing, defaultCurrencySet]);
+  }, [receiveCurrencyOptions, dispatch, formData.receiveCurrency, isInitializing, defaultCurrencySet]);
 
   // Copy to clipboard function
   const copyToClipboard = useCallback((text, fieldName) => {
@@ -461,11 +461,10 @@ const Remittance = () => {
 
           await Promise.all([
             dispatch(fetchBankAccounts(customerId)),
-            dispatch(fetchPayoutCurrencies()), // No need to pass customerId, it will use partner_id from localStorage
+            dispatch(fetchPayoutCurrencies()),
             dispatch(fetchAllStaticData()),
           ]);
 
-          //Mark initialization as complete after a short delay
           setTimeout(() => {
             setIsInitializing(false);
             isFirstLoad.current = false;
@@ -512,12 +511,7 @@ const Remittance = () => {
     }
   }, [dispatch, customerId, silaAccountsLoading]);
 
-  useEffect(() => {
-    if (!initialLoading && !formData.sendAmount && step === 1) {
-      dispatch(setSendAmount("5"));
-      activeInput.current = "send";
-    }
-  }, [initialLoading, dispatch, step, formData.sendAmount]);
+  // Removed auto-set to 5 useEffect
 
   // Reset exchange rate data when currencies change
   useEffect(() => {
@@ -1037,10 +1031,15 @@ const Remittance = () => {
         delete window.autoSetTimeout;
       }
 
+      // Clear previous amount error
+      setAmountError(null);
+
+      // Allow empty string for user to clear the field
       if (value === "") {
         dispatch(setSendAmount(""));
         activeInput.current = "send";
         dispatch(setReceiveAmount(""));
+        setAmountError(null);
 
         if (typingTimeout.current) {
           clearTimeout(typingTimeout.current);
@@ -1054,15 +1053,16 @@ const Remittance = () => {
       }
 
       const cleaned = value.replace(/[^0-9.]/g, "");
-
-      const parts = cleaned.split(".");
-      const formattedValue =
-        parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
-
-      if (formattedValue === "." || formattedValue === "") {
+      
+      // Handle decimal point edge case
+      if (cleaned === ".") {
         return;
       }
 
+      const parts = cleaned.split(".");
+      const formattedValue = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+
+      // Allow any value to be typed, including below 5
       if (formattedValue !== formData.sendAmount) {
         dispatch(setSendAmount(formattedValue));
       } else {
@@ -1080,16 +1080,30 @@ const Remittance = () => {
         isTyping.current = false;
 
         const sendNum = parseFloat(formattedValue);
-        if (!isNaN(sendNum) && sendNum > 0 && exchangeRateData?.fxRate) {
+        
+        // Validate minimum amount
+        if (!isNaN(sendNum) && sendNum > 0 && sendNum < 5) {
+          setAmountError(`Minimum send amount is ${formData.sendCurrency?.value || 'USD'} 5.00`);
+          dispatch(setReceiveAmount(""));
+        } else if (!isNaN(sendNum) && sendNum >= 5 && exchangeRateData?.fxRate) {
+          // Only calculate receive amount if amount is valid (>=5)
+          setAmountError(null);
           const calculatedReceive = roundToDecimals(
             sendNum * exchangeRateData.fxRate,
             2,
           );
           dispatch(setReceiveAmount(calculatedReceive.toString()));
+        } else if (!isNaN(sendNum) && sendNum > 0 && !exchangeRateData?.fxRate) {
+          // Amount entered but no exchange rate yet
+          setAmountError(null);
+        } else if (sendNum === 0 || isNaN(sendNum)) {
+          // Clear receive amount if send amount is 0 or invalid
+          setAmountError(null);
+          dispatch(setReceiveAmount(""));
         }
       }, 600);
     },
-    [dispatch, formData.sendAmount, exchangeRateData],
+    [dispatch, formData.sendAmount, exchangeRateData, formData.sendCurrency],
   );
 
   const handleReceiveAmountChange = useCallback(
@@ -1097,6 +1111,7 @@ const Remittance = () => {
       if (rawValue === "") {
         dispatch(setReceiveAmount(""));
         dispatch(setSendAmount(""));
+        setAmountError(null);
         return;
       }
 
@@ -1123,16 +1138,18 @@ const Remittance = () => {
             2,
           );
 
+          // Check if calculated send amount is below minimum
           if (calculatedSend < 5) {
+            setAmountError(`Minimum send amount is ${formData.sendCurrency?.value || 'USD'} 5.00`);
             const minSend = 5;
             const minReceive = roundToDecimals(
               minSend * exchangeRateData.fxRate,
               2,
             );
-
             dispatch(setSendAmount(minSend.toString()));
             dispatch(setReceiveAmount(minReceive.toString()));
           } else {
+            setAmountError(null);
             dispatch(setSendAmount(calculatedSend.toString()));
           }
         }
@@ -1152,6 +1169,7 @@ const Remittance = () => {
       activeInput.current = "send";
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
+      setAmountError(null); // Clear amount error when currency changes
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.startsWith(option?.value)) {
@@ -1159,13 +1177,9 @@ const Remittance = () => {
         }
       });
 
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        dispatch(setSendAmount("5"));
-      }
-
       dispatch(setReceiveAmount(""));
     },
-    [dispatch, formData.sendAmount],
+    [dispatch],
   );
 
   const handleReceiveCurrencyChange = useCallback(
@@ -1174,6 +1188,7 @@ const Remittance = () => {
       activeInput.current = "receive";
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
+      setAmountError(null); // Clear amount error when currency changes
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.includes(`-${option?.value}-`)) {
@@ -1181,13 +1196,9 @@ const Remittance = () => {
         }
       });
 
-      if (!formData.sendAmount || parseFloat(formData.sendAmount) < 5) {
-        dispatch(setSendAmount("5"));
-      }
-
       dispatch(setReceiveAmount(""));
     },
-    [dispatch, formData.sendAmount],
+    [dispatch],
   );
 
   const handlePaymentMethodChange = useCallback(
@@ -1497,6 +1508,7 @@ const Remittance = () => {
     if (step === 1) {
       const sendNum = parseFloat(formData.sendAmount || 0);
       if (isNaN(sendNum) || sendNum < 5) {
+        setAmountError(`Minimum send amount is ${formData.sendCurrency?.value || 'USD'} 5.00`);
         return;
       }
 
@@ -1610,6 +1622,7 @@ const Remittance = () => {
     dispatch(resetForm());
     dispatch(setSelectedBankAccount(null));
     setLocalSelectedBankAccount(null);
+    setAmountError(null);
   }, [dispatch]);
 
   const handleGoBack = useCallback(() => {
@@ -1994,13 +2007,33 @@ const Remittance = () => {
                         value={formData.sendAmount || ""}
                         onChange={(e) => handleSendAmountChange(e.target.value)}
                         placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all duration-200"
+                        className={`w-full pl-10 pr-4 py-4 text-3xl font-bold bg-slate-50 border rounded-xl focus:outline-none transition-all duration-200 ${
+                          amountError 
+                            ? "border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200" 
+                            : "border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                        }`}
                         inputMode="decimal"
                       />
                     </div>
-                    <p className="text-xs text-slate-400 mt-2">
-                      Min: {formData.sendCurrency?.value || "USD"} 5.00
-                    </p>
+                    
+                    {/* Show error message if amount is below minimum */}
+                    {amountError && (
+                      <motion.p 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                      >
+                        <FaExclamationTriangle className="w-3 h-3" />
+                        {amountError}
+                      </motion.p>
+                    )}
+                    
+                    {/* Show regular hint when no error */}
+                    {!amountError && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        Min: {formData.sendCurrency?.value || "USD"} 5.00
+                      </p>
+                    )}
                   </div>
                   <div className="sm:w-48 relative">
                     <Select
@@ -2212,7 +2245,7 @@ const Remittance = () => {
             </div>
 
             {/* Transfer Summary - Minimal */}
-            {exchangeRateData?.fxRate && formData.sendAmount && (
+            {exchangeRateData?.fxRate && formData.sendAmount && parseFloat(formData.sendAmount) >= 5 && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2405,6 +2438,7 @@ const Remittance = () => {
                   (step === 1 &&
                     (!formData.sendAmount ||
                       parseFloat(formData.sendAmount) < 5 ||
+                      amountError || // Check if there's an amount error
                       !exchangeRateData?.fxRate ||
                       (formData.paymentMethod === "manual" &&
                         (!manualAccountDetails || manualAccountError)))) ||
@@ -2691,24 +2725,6 @@ const ManualDepositSection = ({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      {/* <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-xl">
-              <FaMoneyCheckAlt className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-white font-semibold">
-                Cash Deposit Instructions
-              </h3>
-              <p className="text-emerald-100 text-sm">
-                Deposit funds at any bank branch
-              </p>
-            </div>
-          </div>
-        </div>
-      </div> */}
-
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Bank Details */}
