@@ -622,12 +622,9 @@ export const verifyOTP = createAsyncThunk(
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
-      // Clean inputs
-      const cleanPhoneCode = phone_code.replace(/\D/g, "");
       const cleanMobileNumber = mobile_number.replace(/\D/g, "");
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
 
-      // Validate inputs
       if (!phone_code || !cleanMobileNumber || !formattedOTP || !password) {
         throw new Error("All fields are required");
       }
@@ -657,122 +654,61 @@ export const verifyOTP = createAsyncThunk(
         },
       });
 
-      // Handle successful response
       if (response.data.status === "success") {
         const responseData = response.data.data;
 
-        // Handle Plaid redirect directly from login response
-        if (
-          response.data?.plaid_status === "success" &&
-          response.data?.plaid_url
-        ) {
-          sessionStorage.setItem(
-            "pending_mobile_auth",
-            JSON.stringify({
-              phone_code: phone_code,
-              mobile_number: cleanMobileNumber,
-              customer_id: responseData.customer_id,
-              timestamp: Date.now(),
-            })
-          );
-
+        // ✅ CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer === "Y") {
+          
+          // Return ONLY the message, NO token, NO customer_id for authentication
           return {
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "Y",
+            plaid_message: responseData.plaid_message,
+            showKycMessage: true,
+            requiresRedirect: false,
+            // ❌ DO NOT include token or customer_id here
+          };
+        }
+
+        // ✅ CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer !== "Y") {
+          
+          return {
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "N",
             requiresPlaidRedirect: true,
-            plaidUrl: response.data.plaid_url,
-            customerData: responseData,
-            message: "Redirecting to bank verification...",
+            plaidUrl: responseData.plaid_url,
+            customer_id: responseData.customer_id,
+            plaid_message: responseData.plaid_message,
+            // ❌ DO NOT include token here
           };
         }
 
-        // Handle KYC verification required
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          sessionStorage.setItem(
-            "pending_mobile_auth",
-            JSON.stringify({
-              phone_code: phone_code,
-              mobile_number: cleanMobileNumber,
-              customer_id: responseData.customer_id,
-              timestamp: Date.now(),
-            })
-          );
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return {
-                requiresPlaidRedirect: true,
-                plaidUrl: plaidResponse.url,
-                customerData: responseData,
-                message: "Redirecting to bank verification...",
-              };
-            }
-          } catch (plaidError) {
-            return {
-              requiresKycVerification: true,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              customerData: responseData,
-              message:
-                "Bank verification required but setup failed. Please contact support.",
-            };
-          }
-        }
-
-        // Handle bank approval
-        if (responseData.bank_approve_status !== "1") {
+        // ✅ CASE 3: KYC Completed - Normal login
+        if (responseData.token && responseData.customer_id) {
           return {
-            requiresBankApproval: true,
+            status: "success",
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            kyc_status: responseData.kyc_status,
             bank_approve_status: responseData.bank_approve_status,
-            customerData: responseData,
-            message: "Bank account approval pending. Please contact support.",
+            isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
+            customer_type: responseData.customer_type || "individual",
+            message: "Login successful",
           };
         }
 
-        // Handle owner login
-        if (responseData.is_owner_login === "1") {
-          return {
-            is_owner_login: true,
-            owner_id: responseData.owner_id,
-            owner_role_name: responseData.owner_role_name,
-            customerData: responseData,
-            message: "Owner login successful",
-          };
-        }
-
-        // ✅ SAVE customerUuid to localStorage
-        if (responseData.customerUuid) {
-          localStorage.setItem('customerUuid', responseData.customerUuid);
-          console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
-        }
-
-        // Successful login
-        return {
-          status: "success",
-          token: responseData.token,
-          customer_id: responseData.customer_id,
-          kyc_status: responseData.kyc_status,
-          bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
-          customer_type: responseData.customer_type || "individual",
-          message: response.data.message || "Login successful",
-          data: responseData,
-        };
+        throw new Error("Invalid response from server");
       } else {
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
       console.log("❌ Verify OTP Error:", error);
-      console.log("❌ Error response:", error.response);
-      console.log("❌ Error response data:", error.response?.data);
       
       let errorMessage = "";
-      let errorStatus = error.response?.status || 500;
       
       if (error.response?.data) {
         const responseData = error.response.data;
@@ -780,21 +716,8 @@ export const verifyOTP = createAsyncThunk(
           errorMessage = responseData;
         } else if (responseData.message) {
           errorMessage = responseData.message;
-        } else if (responseData.error) {
-          errorMessage = responseData.error;
-        } else if (responseData.detail) {
-          errorMessage = responseData.detail;
         } else {
-          switch (errorStatus) {
-            case 401:
-              errorMessage = "Invalid OTP. Please check and try again.";
-              break;
-            case 400:
-              errorMessage = "Invalid OTP format.";
-              break;
-            default:
-              errorMessage = "OTP verification failed. Please try again.";
-          }
+          errorMessage = "OTP verification failed. Please try again.";
         }
       } else if (error.message) {
         errorMessage = error.message;
@@ -805,7 +728,6 @@ export const verifyOTP = createAsyncThunk(
       dispatch({ type: "auth/setError", payload: errorMessage });
       return rejectWithValue({
         message: errorMessage,
-        status: errorStatus
       });
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });

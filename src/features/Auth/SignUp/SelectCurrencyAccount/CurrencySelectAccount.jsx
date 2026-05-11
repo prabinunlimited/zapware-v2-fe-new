@@ -57,6 +57,7 @@ const OpenCurrencyAccount = () => {
   const [expandedDetails, setExpandedDetails] = useState({});
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Storage variables
   const bearertoken = localStorage.getItem("bearertoken");
@@ -112,59 +113,62 @@ const OpenCurrencyAccount = () => {
     }
   }, [API_URL]);
 
-  // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
+  // 1. INITIALIZATION - ALWAYS fetch account options first for all partners
   useEffect(() => {
     if (!accountType) {
       navigate("/selectaccounttype");
       return;
     }
 
-    // For partner ID 8, we only want remittance services
-    if (isPartnerId8) {
-      // Automatically select remittance only and clear any selections
-      dispatch(actions.setRemittanceOnlyAccepted(true));
-      dispatch(actions.clearSelectedAccounts());
-      dispatch(actions.setSelectedPackageCurrencies([]));
-      return;
-    }
-
-    dispatch(actions.clearAllSelections());
-
-    // ⚠️ FIX: Force USA country ID (186) for partner flows
-    const forceCountryId = 186; // USA
-
-    console.log("🌐 Forcing country ID for partner flow:", {
-      originalCountryId: selectedCountryId,
-      forcedCountryId: forceCountryId,
+    console.log("🌐 INITIALIZATION - Fetching account options:", {
       accountType,
+      partnerId,
       isPartnerPackageModule,
+      timestamp: new Date().toISOString(),
     });
 
+    // Always fetch account options first
+    dispatch(actions.clearAllSelections());
+
+    // Force USA country ID (186) for partner flows
+    const forceCountryId = 186;
+
     if (isPartnerPackageModule === "Y") {
+      console.log("📦 Fetching package options...");
       dispatch(
         actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
       );
     } else {
+      console.log("💰 Fetching account options from API...");
       dispatch(
         actions.fetchAccountOptions({
           accountType,
-          countryId: forceCountryId, // Use forced country ID
+          countryId: forceCountryId,
           API_URL,
         }),
       );
     }
-  }, [
-    accountType,
-    isPartnerId8,
-    // Remove selectedCountryId from dependencies
-    isPartnerPackageModule,
-    dispatch,
-    navigate,
-    partnerId,
-    API_URL,
-  ]);
+  }, [accountType, isPartnerPackageModule, dispatch, navigate, partnerId, API_URL]);
 
-  // 2. PRICE FETCHING - Skip for partner ID 8
+  // 2. Handle partner ID 8 specific logic AFTER data is loaded
+  useEffect(() => {
+    // Wait for loading to complete and data to be available
+    if (loading || packageLoading) return;
+
+    // If data is loaded and partner ID is 8, force remittance only mode
+    if (isPartnerId8 && !loading && !packageLoading && !dataLoaded) {
+      console.log("🎯 Partner ID 8 detected - Setting remittance only mode after API call");
+      dispatch(actions.setRemittanceOnlyAccepted(true));
+      dispatch(actions.clearSelectedAccounts());
+      dispatch(actions.setSelectedPackageCurrencies([]));
+      setDataLoaded(true);
+    } else if (!isPartnerId8 && !loading && !packageLoading && !dataLoaded) {
+      console.log("✅ Non-partner 8 flow - Data loaded successfully");
+      setDataLoaded(true);
+    }
+  }, [isPartnerId8, loading, packageLoading, dispatch, dataLoaded]);
+
+  // 3. PRICE FETCHING - Skip for partner ID 8
   useEffect(() => {
     // Skip price fetching for partner ID 8 since we only offer remittance
     if (isPartnerId8) return;
@@ -203,7 +207,7 @@ const OpenCurrencyAccount = () => {
     isPartnerId8,
   ]);
 
-  // 3. ACTION HANDLERS
+  // 4. ACTION HANDLERS
   const handleToggleStandard = (id) => {
     if (remittanceOnlyAccepted) {
       dispatch(actions.setRemittanceOnlyAccepted(false));
@@ -244,7 +248,7 @@ const OpenCurrencyAccount = () => {
     }
   };
 
-  // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
+  // 5. SUBMIT HANDLER
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
 
@@ -266,12 +270,6 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
       return;
     }
-
-    // if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
-    //   setModalMessage("Please confirm that you agree on the Charges and Fees.");
-    //   setIsModalOpen(true);
-    //   return;
-    // }
 
     if (referralCode) {
       try {
@@ -328,8 +326,6 @@ const OpenCurrencyAccount = () => {
     isPartnerPackageModule,
     selectedAccounts,
     remittanceOnlyAccepted,
-    termsAccepted,
-    hostName,
     referralCode,
     selectedPackageCurrencies,
     dispatch,
@@ -338,11 +334,6 @@ const OpenCurrencyAccount = () => {
     accountType,
     navigate,
   ]);
-
-  const currenciesList = useMemo(
-    () => [...new Set(accountOptions.map((a) => a.currency).filter(Boolean))],
-    [accountOptions],
-  );
 
   const getAccountTypeIcon = () => {
     switch (accountType) {
@@ -375,13 +366,7 @@ const OpenCurrencyAccount = () => {
     return faDollarSign;
   };
 
-  const currencyTabs = [
-    { id: "all", name: "All Currencies" },
-    { id: "USD", name: "US Dollar" },
-    { id: "EUR", name: "Euro" },
-    { id: "GBP", name: "British Pound" },
-  ];
-
+  // Show loading spinner while API is being called
   if (loading || packageLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center">
@@ -391,7 +376,7 @@ const OpenCurrencyAccount = () => {
             Loading account options...
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            This will just take a moment
+            Please wait while we fetch available services
           </p>
         </div>
       </div>
@@ -452,7 +437,7 @@ const OpenCurrencyAccount = () => {
             </h2>
 
             {isPartnerId8 ? (
-              // PARTNER ID 8 - ONLY SHOW REMITTANCE SERVICES
+              // PARTNER ID 8 - ONLY SHOW REMITTANCE SERVICES (but API was already called)
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
@@ -1447,7 +1432,7 @@ const OpenCurrencyAccount = () => {
             {!isPartnerId8 &&
               ((isPartner === "Y" && showRemitOnly === "Y") ||
                 isPartner === "0") &&
-              remittanceOnlyAccepted && ( // Only show when remittance only is selected
+              remittanceOnlyAccepted && (
                 <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div>
                     <input
