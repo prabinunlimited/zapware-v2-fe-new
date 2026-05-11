@@ -573,8 +573,8 @@ const Login = () => {
                 password: values.password,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                    customer_type: values.customerType,
-                  }),
+                  customer_type: values.customerType,
+                }),
               })
             ).unwrap();
             dispatch(setShowPasscodeInput(true));
@@ -587,8 +587,8 @@ const Login = () => {
                 mobile_number: values.mobile_number,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                    customer_type: values.customerType,
-                  }),
+                  customer_type: values.customerType,
+                }),
               })
             ).unwrap();
             dispatch(setShowOtpInput(true));
@@ -692,12 +692,12 @@ const Login = () => {
   const countryOptions = useMemo(() => {
     return Array.isArray(countries)
       ? countries.map((country) => ({
-          value: country.id,
-          label: `${country.name} (${country.phone_code})`,
-          countryName: country.name,
-          phone_code: country.phone_code,
-          flagUrl: country.flag_url,
-        }))
+        value: country.id,
+        label: `${country.name} (${country.phone_code})`,
+        countryName: country.name,
+        phone_code: country.phone_code,
+        flagUrl: country.flag_url,
+      }))
       : [];
   }, [countries]);
 
@@ -706,7 +706,7 @@ const Login = () => {
     if (!values.selected_country_id) {
       return null;
     }
-    
+
     return countryOptions.find(
       (option) => option.value === values.selected_country_id
     ) || null;
@@ -715,10 +715,10 @@ const Login = () => {
   // ✅ Country select handler - defined after setFieldValue is available
   const handleCountrySelect = (selectedOption) => {
     if (!selectedOption) return;
-    
+
     setFieldValue("selected_country_id", selectedOption.value);
     setFieldValue("phone_code", selectedOption.phone_code);
-    
+
     dispatch(
       setSelectedCountry({
         country: selectedOption.countryName,
@@ -845,8 +845,8 @@ const Login = () => {
         password: values.password,
         ...(showCustomerType === "Y" &&
           values.customerType && {
-            customer_type: values.customerType,
-          }),
+          customer_type: values.customerType,
+        }),
       };
 
       const result = await dispatch(generateOTP(payload)).unwrap();
@@ -1124,7 +1124,7 @@ const Login = () => {
                     dispatch(setShowPasscodeInput(false));
                     dispatch(setPasscodeSent(false));
                     dispatch(setPasscode(new Array(6).fill("")));
-                    handleGeneratePasscode({ preventDefault: () => {} });
+                    handleGeneratePasscode({ preventDefault: () => { } });
                   },
                 },
               ],
@@ -1140,9 +1140,19 @@ const Login = () => {
       return;
     }
 
+    // Clear OTP sent state and close any open modals
+    dispatch(setOtpSent(false));
+    dispatch(closeModal());
+
     try {
       if (otp.length !== 6 || otp.some((digit) => !digit)) {
-        dispatch(setError("Please enter a valid 6-digit OTP"));
+        dispatch(
+          openModal({
+            title: "Incomplete Code",
+            message: "Please enter all 6 digits to continue",
+            type: "error",
+          })
+        );
         return;
       }
 
@@ -1160,37 +1170,74 @@ const Login = () => {
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
-      if (result.requiresPlaidRedirect) {
+      // CASE 1: Remittance Only Customer with Pending KYC - Show message modal
+      if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
+        dispatch(
+          openModal({
+            title: "KYC Verification Pending",
+            message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
+      // CASE 2: Non-Remittance Customer with Pending KYC - Show redirect message THEN redirect
+      if (result.requiresPlaidRedirect && result.plaidUrl) {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        // Show redirecting message first
+        dispatch(
+          openModal({
+            title: "Redirecting",
+            message: "Redirecting to verification page...",
+            type: "info",
+            modalProps: {
+              showSpinner: true,
+              autoClose: true,
+              autoCloseDelay: 2000,
+            },
+            disableBackdropClick: true,
+          })
+        );
+
+        // Then redirect after 2 seconds
+        setTimeout(() => {
+          window.location.href = result.plaidUrl;
+        }, 2000);
+
+        return;
+      }
+
+      // CASE 3: Handle KYC verification through existing handler
+      if (result.requiresPlaidRedirect === undefined && result.requiresKycVerification) {
         const processedData = await handleKycVerification(result, values);
-        return;
-      }
-
-      const processedData = await handleKycVerification(result, values);
-
-      if (processedData === null) {
-        return;
-      }
-
-      if (processedData) {
-        if (processedData.is_owner_login) {
+        if (processedData === null) {
           return;
         }
+      }
 
+      // CASE 4: Successful login (KYC completed)
+      if (result.token && result.customer_id) {
         dispatch(
           setAuthState({
-            token: processedData.token,
-            customerId: processedData.customer_id,
+            token: result.token,
+            customerId: result.customer_id,
             isAuthenticated: true,
             user: {
               mobile_number: values.mobile_number,
               phone_code: values.phone_code,
-              isRemittanceOnlyCustomer:
-                processedData.isRemittanceOnlyCustomer || false,
-              customerType: processedData.customer_type || "individual",
+              isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
+              customerType: result.customer_type || "individual",
             },
           })
         );
@@ -1212,23 +1259,57 @@ const Login = () => {
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
-          handleSuccessfulLoginRedirect(processedData);
+          handleSuccessfulLoginRedirect({
+            customer_id: result.customer_id,
+            isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
+          });
         }, 1500);
+        return;
       }
+
+      // If none of the above conditions matched
+      if (!result.requiresPlaidRedirect && !result.token) {
+        throw new Error("Unexpected response from server");
+      }
+
     } catch (error) {
+      console.error("OTP Verification Error:", error);
       dispatch(setOtp(new Array(6).fill("")));
 
-      if (
-        error.message &&
+      // Don't show error for KYC related messages that are already handled
+      if (error.message &&
         !error.message.includes("bank verification") &&
         !error.message.includes("KYC") &&
-        !error.message.includes("Plaid")
-      ) {
+        !error.message.includes("Plaid")) {
         dispatch(
           openModal({
             title: "Verification Error",
-            message: error.message,
+            message: error.message || "OTP verification failed. Please try again.",
             type: "error",
+            modalProps: {
+              actions: [
+                {
+                  label: "Try Again",
+                  primary: true,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(setOtp(new Array(6).fill("")));
+                    dispatch(setShowOtpInput(true));
+                  },
+                },
+                {
+                  label: "Request New OTP",
+                  primary: false,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(setShowOtpInput(false));
+                    dispatch(setOtpSent(false));
+                    dispatch(setOtp(new Array(6).fill("")));
+                    handleGenerateOTP();
+                  },
+                },
+              ],
+            },
           })
         );
       }
@@ -1265,11 +1346,10 @@ const Login = () => {
                 id="email-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
-                  inputType === "email"
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
                     ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
                     : ""
-                }`}
+                  }`}
               ></span>
               <label
                 htmlFor="email-radio"
@@ -1292,11 +1372,10 @@ const Login = () => {
                 id="mobile-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
-                  inputType === "mobile"
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "mobile"
                     ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
                     : ""
-                }`}
+                  }`}
               ></span>
               <label
                 htmlFor="mobile-radio"
