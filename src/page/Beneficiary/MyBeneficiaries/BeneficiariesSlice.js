@@ -8,12 +8,15 @@ import { createBeneficiaryWithBanks } from "../AddBeneficiary/addBeneficiarySlic
 const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
+// ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
 export const createAndAddBeneficiary = createAsyncThunk(
   "beneficiaries/createAndAddBeneficiary",
   async (
     { customerId, beneficiaryData, bankAccounts, currency, country_code },
     { dispatch, rejectWithValue }
   ) => {
+    let newBeneficiaryId = null;
+
     try {
       console.log("🔄 createAndAddBeneficiary: Starting...");
       console.log("📦 Parameters:", {
@@ -24,56 +27,111 @@ export const createAndAddBeneficiary = createAsyncThunk(
         country_code,
       });
 
-      // 1. Create the beneficiary
+      // Ensure bankAccounts is always an array (even if empty)
+      const banksToSend = Array.isArray(bankAccounts) ? bankAccounts : [];
+
+      console.log("📦 Banks to send:", banksToSend);
+      console.log("📦 Banks count:", banksToSend.length);
+
+      // 1. Create the beneficiary - ALWAYS include banks field
       const createResult = await dispatch(
         createBeneficiaryWithBanks({
           customerId,
           beneficiaryData,
-          bankAccounts,
+          bankAccounts: banksToSend, // This will be [] when no bank details
           currency,
           country_code,
         })
       );
 
       console.log("📦 Create result:", createResult);
+      console.log("📦 Create result payload:", createResult.payload);
 
       // Check if creation was successful
       if (createBeneficiaryWithBanks.rejected.match(createResult)) {
         console.error("❌ Creation failed:", createResult.payload);
-        throw new Error(createResult.payload || "Failed to create beneficiary");
+        // Check if the error is about missing banks field
+        if (createResult.payload?.errors?.banks) {
+          throw new Error("Bank information is required. Please add at least one bank account or contact support.");
+        }
+        throw new Error(createResult.payload?.message || createResult.payload || "Failed to create beneficiary");
       }
 
-      // 2. Get the newly created beneficiary ID
+      // 2. Get the newly created beneficiary ID - try multiple possible response formats
       const createPayload = createResult.payload;
-      const newBeneficiaryId =
+
+      // Try different possible response structures
+      newBeneficiaryId =
         createPayload?.beneficiary_id ||
         createPayload?.benef_id ||
-        createPayload?.id;
+        createPayload?.id ||
+        createPayload?.data?.beneficiary_id ||
+        createPayload?.data?.benef_id ||
+        createPayload?.data?.id;
 
       console.log("✅ Beneficiary created, ID:", newBeneficiaryId);
+      console.log("Full response payload:", JSON.stringify(createPayload, null, 2));
 
       if (!newBeneficiaryId) {
         console.error("❌ No beneficiary ID found in response:", createPayload);
-        throw new Error("No beneficiary ID returned from creation");
+
+        // If no ID but creation was successful, try to fetch the beneficiary by phone number
+        console.log("🔄 Trying to find beneficiary by phone number...");
+
+        // Wait a moment for the database to sync
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Try to search for the beneficiary we just created
+        const searchResult = await dispatch(
+          fetchBeneficiaries(customerId)
+        ).unwrap();
+
+        // Look for beneficiary with matching phone number
+        const foundBeneficiary = searchResult?.find(b =>
+          b.phone_number === beneficiaryData.phone_number ||
+          b.full_phone_number === `${beneficiaryData.country_phone_code}${beneficiaryData.phone_number}`
+        );
+
+        if (foundBeneficiary && foundBeneficiary.id) {
+          newBeneficiaryId = foundBeneficiary.id;
+          console.log("✅ Found beneficiary by phone search, ID:", newBeneficiaryId);
+        } else {
+          // Still no ID, but we know creation succeeded, so return success without ID
+          console.warn("⚠️ Beneficiary created but ID not found in response or by search");
+          return {
+            success: true,
+            message: "Beneficiary created successfully",
+            beneficiaryId: null,
+            warning: "Beneficiary created but ID not returned",
+            beneficiaryData: createPayload,
+            timestamp: new Date().toISOString(),
+          };
+        }
       }
 
       // 3. Add delay to allow DB sync (if needed)
       console.log("⏳ Waiting for DB sync...");
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // 4. Fetch the specific beneficiary to ensure it's available
-      console.log("🔄 Fetching newly created beneficiary...");
-      const fetchResult = await dispatch(
-        fetchBeneficiaryById(newBeneficiaryId)
-      );
-
-      // Check if fetch was successful
-      if (fetchBeneficiaryById.rejected.match(fetchResult)) {
-        console.warn(
-          "⚠️ Beneficiary fetch failed, but creation was successful:",
-          fetchResult.payload
+      // 4. Fetch the specific beneficiary to ensure it's available (only if we have an ID)
+      let fetchedData = null;
+      if (newBeneficiaryId) {
+        console.log("🔄 Fetching newly created beneficiary...");
+        const fetchResult = await dispatch(
+          fetchBeneficiaryById(newBeneficiaryId)
         );
-        // Continue anyway since creation was successful
+
+        // Check if fetch was successful
+        if (fetchBeneficiaryById.rejected.match(fetchResult)) {
+          console.warn(
+            "⚠️ Beneficiary fetch failed, but creation was successful:",
+            fetchResult.payload
+          );
+          // Continue anyway since creation was successful
+          fetchedData = createPayload;
+        } else {
+          fetchedData = fetchResult.payload;
+        }
       }
 
       // 5. Refresh the beneficiaries list
@@ -85,7 +143,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
         success: true,
         message: "Beneficiary created and fetched successfully",
         beneficiaryId: newBeneficiaryId,
-        beneficiaryData: fetchResult.payload || createPayload,
+        beneficiaryData: fetchedData || createPayload,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -121,19 +179,19 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
         cleanedCountryCode = `+${cleanedCountryCode}`;
       }
-      
+
       // Prepare payload according to API requirements
       const payload = {
         beneficiary_type: "individual",
         mobile_number_country_code: cleanedCountryCode,
         mobile_number: phoneNumber
       };
-      
+
       console.log('🔍 Searching beneficiary with payload:', payload);
-      
+
       const authtoken = localStorage.getItem("authtoken");
       const API_URL = import.meta.env.VITE_API_URL;
-      
+
       const response = await fetch(
         `${API_URL}/beneficiaries/fetch-by-type-mobile`,
         {
@@ -145,24 +203,24 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
           body: JSON.stringify(payload),
         }
       );
-      
+
       console.log('📡 API Response status:', response.status);
-      
+
       const result = await response.json();
       console.log('✅ API Response data:', result);
-      
+
       // Check if beneficiary exists based on the response structure
       // The API returns data as an array when beneficiary is found
-      if (result.status === "success" && 
-          result.message === "Beneficiary Fetched Successfully!" &&
-          result.data && 
-          Array.isArray(result.data) && 
-          result.data.length > 0) {
-        
+      if (result.status === "success" &&
+        result.message === "Beneficiary Fetched Successfully!" &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0) {
+
         // Extract the first beneficiary from the array
         const beneficiaryData = result.data[0];
         console.log('✅ Beneficiary found:', beneficiaryData);
-        
+
         return {
           exists: true,
           data: beneficiaryData,
@@ -171,14 +229,14 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
           message: 'Beneficiary found'
         };
       }
-      
+
       // Check for "Not Found" case
-      if (result.status === "success" && 
-          (result.message === "Beneficiary Not Found!" || 
-           result.message?.includes("Not Found") ||
-           !result.data || 
-           result.data === "" ||
-           (Array.isArray(result.data) && result.data.length === 0))) {
+      if (result.status === "success" &&
+        (result.message === "Beneficiary Not Found!" ||
+          result.message?.includes("Not Found") ||
+          !result.data ||
+          result.data === "" ||
+          (Array.isArray(result.data) && result.data.length === 0))) {
         console.log('ℹ️ No beneficiary found with this phone number');
         return {
           exists: false,
@@ -188,7 +246,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
           message: 'No beneficiary found with this phone number'
         };
       }
-      
+
       // If response has beneficiary data directly without array wrapper
       if (result.data && !Array.isArray(result.data) && result.data.id) {
         return {
@@ -199,7 +257,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
           message: 'Beneficiary found'
         };
       }
-      
+
       // Default case - no beneficiary found
       console.log('ℹ️ No beneficiary found (default case)');
       return {
@@ -209,7 +267,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
         processed: false,
         message: 'No beneficiary found with this phone number'
       };
-      
+
     } catch (error) {
       console.error('❌ Phone search API error:', error);
       return rejectWithValue(error.message || 'Failed to search for beneficiary');
@@ -330,8 +388,8 @@ export const deleteBeneficiary = createAsyncThunk(
         const errorResult = await response.json();
         throw new Error(
           errorResult.message ||
-            errorResult.error ||
-            "Failed to delete beneficiary"
+          errorResult.error ||
+          "Failed to delete beneficiary"
         );
       }
 
@@ -372,7 +430,7 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
             const errorResult = await response.json();
             throw new Error(
               errorResult.message ||
-                `Failed to delete beneficiary ${beneficiaryId}`
+              `Failed to delete beneficiary ${beneficiaryId}`
             );
           }
           return response.json();
@@ -438,8 +496,8 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
         const errorResult = await response.json();
         throw new Error(
           errorResult.message ||
-            errorResult.error ||
-            "Failed to delete beneficiary"
+          errorResult.error ||
+          "Failed to delete beneficiary"
         );
       }
 
@@ -1061,7 +1119,7 @@ const beneficiarySlice = createSlice({
         state.phoneSearch.data = action.payload.data;
         state.phoneSearch.processed = false;
         state.phoneSearch.error = null;
-        
+
         console.log('✅ Phone search fulfilled:', {
           exists: action.payload.exists,
           hasData: !!action.payload.data
@@ -1074,7 +1132,7 @@ const beneficiarySlice = createSlice({
         state.phoneSearch.data = null;
         state.phoneSearch.error = action.payload;
         state.phoneSearch.processed = false;
-        
+
         console.error('❌ Phone search rejected:', action.payload);
       })
 
@@ -1569,13 +1627,11 @@ export const selectRemittanceReadyBeneficiaries = createSelector(
     return beneficiaries.map((benef) => ({
       ...benef,
       value: benef.id,
-      label: `${benef.name} (${
-        benef.full_phone_number || benef.phone_number || benef.benef_uuid
-      })`,
+      label: `${benef.name} (${benef.full_phone_number || benef.phone_number || benef.benef_uuid
+        })`,
       id: benef.id,
-      formattedName: `${benef.name} (${
-        benef.phone_number || benef.email || benef.benef_uuid
-      })`,
+      formattedName: `${benef.name} (${benef.phone_number || benef.email || benef.benef_uuid
+        })`,
     }));
   }
 );
@@ -1589,14 +1645,12 @@ export const selectBeneficiaryForRemittance = (beneficiaryId) =>
     return {
       ...beneficiary,
       value: beneficiary.id,
-      label: `${beneficiary.name} (${
-        beneficiary.full_phone_number ||
+      label: `${beneficiary.name} (${beneficiary.full_phone_number ||
         beneficiary.phone_number ||
         beneficiary.benef_uuid
-      })`,
-      formattedName: `${beneficiary.name} (${
-        beneficiary.phone_number || beneficiary.email || beneficiary.benef_uuid
-      })`,
+        })`,
+      formattedName: `${beneficiary.name} (${beneficiary.phone_number || beneficiary.email || beneficiary.benef_uuid
+        })`,
     };
   });
 
@@ -1607,12 +1661,10 @@ export const selectRemittanceReadyBanks = createSelector(
     return banks.map((bank) => ({
       ...bank,
       value: bank.id,
-      label: `${bank.bank_name || "Unknown Bank"} - ${
-        bank.bank_acc_no || bank.account_number || "No Account"
-      } (${bank.rails || "Unknown"})`,
-      formattedBank: `${bank.bank_name || "Unknown Bank"} (${
-        bank.bank_acc_no || bank.account_number || "No Account"
-      }) - ${bank.rails || "Unknown"}`,
+      label: `${bank.bank_name || "Unknown Bank"} - ${bank.bank_acc_no || bank.account_number || "No Account"
+        } (${bank.rails || "Unknown"})`,
+      formattedBank: `${bank.bank_name || "Unknown Bank"} (${bank.bank_acc_no || bank.account_number || "No Account"
+        }) - ${bank.rails || "Unknown"}`,
     }));
   }
 );
@@ -1620,9 +1672,9 @@ export const selectRemittanceReadyBanks = createSelector(
 // Add this selector with your other selectors
 export const selectHasFetched = (state) => {
   // Check if beneficiaries have been fetched at least once
-  return state.beneficiaries?.lastUpdated !== null || 
-         state.beneficiaries?.beneficiaries?.length > 0 ||
-         state.beneficiaries?.hasFetched === true;
+  return state.beneficiaries?.lastUpdated !== null ||
+    state.beneficiaries?.beneficiaries?.length > 0 ||
+    state.beneficiaries?.hasFetched === true;
 };
 
 // ===================== DEFAULT EXPORT =====================

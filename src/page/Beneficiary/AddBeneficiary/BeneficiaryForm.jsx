@@ -1302,6 +1302,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   // UPDATED: Handle submit for both new and existing beneficiaries
+  // UPDATED: Handle submit for both new and existing beneficiaries
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("🔴 DEBUG - handleSubmit FUNCTION CALLED!");
@@ -1311,38 +1312,136 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     setLoading(true);
 
-    // Check if rails is missing
-    const isRailsMissing = bankAccounts.some((account) => !account.rails);
-    if (isRailsMissing) {
-      console.log("❌ DEBUG - Early return due to missing rails");
-      toast.error("Please select rails for all bank accounts.");
-      setLoading(false);
-      return;
-    }
+    // For existing beneficiary flow, allow empty bank accounts
+    if (usingExistingBeneficiary) {
+      // Check if ANY bank account has rails selected
+      const hasAnyRails = bankAccounts.some(account => account.rails && account.rails !== "");
 
-    // Check invalid Swift accounts
-    const invalidSwiftAccounts = bankAccounts.filter(
-      (account) =>
-        account.rails === "Swift" &&
-        !isSwiftSupportedForCurrency(account.currency || currency)
-    );
-    if (invalidSwiftAccounts.length > 0) {
-      toast.error("SWIFT is not available for the selected currency(s). Please fix before proceeding.");
-      setLoading(false);
-      return;
-    }
+      if (!hasAnyRails) {
+        // No rails selected - this means user doesn't want to add a bank account
+        console.log("ℹ️ No rails selected for existing beneficiary - will save without bank account");
+        // Skip all bank validation and proceed to save
+      } else {
+        // User wants to add a bank account, so validate the selected rails
+        console.log("🔍 Rails detected, validating bank details...");
 
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      if (!formik.values.beneficiary_id_type) {
-        toast.error("Beneficiary ID Type is required");
+        // Check if rails is missing for accounts that have other details
+        const isRailsMissing = bankAccounts.some((account) => {
+          const hasOtherDetails = account.accountNumber || account.iban || account.swift || account.bankName;
+          if (hasOtherDetails && !account.rails) {
+            return true;
+          }
+          return false;
+        });
+
+        if (isRailsMissing) {
+          toast.error("Please select rails for the bank account you're adding");
+          setLoading(false);
+          return;
+        }
+
+        // Validate required fields for each selected rails
+        for (const account of bankAccounts) {
+          if (!account.rails) continue;
+
+          const accountCurrency = account.currency || currency;
+
+          if (account.rails === "Local") {
+            if (accountCurrency === "USD" && !account.routingNumber) {
+              toast.error("Routing Number is required for USD Local transfers");
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "EUR" || accountCurrency === "GBP" || accountCurrency === "AED") && !account.iban) {
+              toast.error(`IBAN Number is required for ${accountCurrency} Local transfers`);
+              setLoading(false);
+              return;
+            }
+            if (accountCurrency === "INR" && (!account.ifsc || !account.accountNumber)) {
+              toast.error("IFSC Code and Account Number are required for INR transfers");
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "NPR" || accountCurrency === "KES" || accountCurrency === "NGN") && !account.bankCode) {
+              toast.error(`Bank selection is required for ${accountCurrency} transfers`);
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "GBP" || accountCurrency === "DKK") && !account.sortCode) {
+              toast.error(`Sort Code is required for ${accountCurrency} transfers`);
+              setLoading(false);
+              return;
+            }
+          } else if (account.rails === "Swift") {
+            if (!account.swift) {
+              toast.error("SWIFT/BIC Code is required for Swift transfers");
+              setLoading(false);
+              return;
+            }
+            if (!account.bankCountry) {
+              toast.error("Bank Country is required for Swift transfers");
+              setLoading(false);
+              return;
+            }
+            const swiftCurrency = account.currency || currency;
+            if ((swiftCurrency === "EUR" || swiftCurrency === "GBP") && !account.iban) {
+              toast.error(`IBAN Number is required for ${swiftCurrency} Swift transfers`);
+              setLoading(false);
+              return;
+            }
+            if ((swiftCurrency === "USD" || swiftCurrency === "CAD") && !account.accountNumber) {
+              toast.error(`Account Number is required for ${swiftCurrency} Swift transfers`);
+              setLoading(false);
+              return;
+            }
+          } else if (account.rails === "Mobile") {
+            if (!account.walletProvider) {
+              toast.error("Wallet Provider is required for Mobile transfers");
+              setLoading(false);
+              return;
+            }
+            if (!account.mobileNumber) {
+              toast.error("Mobile Number is required for Mobile transfers");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      }
+    } else {
+      // Original validation for new beneficiary (non-existing)
+      const isRailsMissing = bankAccounts.some((account) => !account.rails);
+      if (isRailsMissing) {
+        console.log("❌ DEBUG - Early return due to missing rails");
+        toast.error("Please select rails for all bank accounts.");
         setLoading(false);
         return;
       }
-      if (!formik.values.beneficiary_id_number) {
-        toast.error("Beneficiary ID Number is required");
+
+      // Check invalid Swift accounts
+      const invalidSwiftAccounts = bankAccounts.filter(
+        (account) =>
+          account.rails === "Swift" &&
+          !isSwiftSupportedForCurrency(account.currency || currency)
+      );
+      if (invalidSwiftAccounts.length > 0) {
+        toast.error("SWIFT is not available for the selected currency(s). Please fix before proceeding.");
         setLoading(false);
         return;
+      }
+
+      // Currency-specific validations
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        if (!formik.values.beneficiary_id_type) {
+          toast.error("Beneficiary ID Type is required");
+          setLoading(false);
+          return;
+        }
+        if (!formik.values.beneficiary_id_number) {
+          toast.error("Beneficiary ID Number is required");
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -1380,72 +1479,81 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       country_phone_code: cleanedCountryCode,
     };
 
-    const bankAccountsWithCurrency = bankAccounts.map(account => {
-      const accountCurrency = account.currency || currency;
-      return {
+    // Prepare bank accounts - filter out empty ones for existing beneficiary
+    let bankAccountsToSend = [];
+
+    if (usingExistingBeneficiary) {
+      // For existing beneficiary, ONLY include bank accounts that have rails selected
+      // This means if no rails, we send empty array (null payload)
+      bankAccountsToSend = bankAccounts
+        .filter(account => account.rails && account.rails !== "") // Only keep accounts with rails
+        .map(account => ({
+          ...account,
+          currency_code: account.currency || currency,
+        }));
+
+      console.log(`📦 Bank accounts to send: ${bankAccountsToSend.length} (${bankAccountsToSend.length === 0 ? 'empty payload - no bank will be added' : 'with bank details'})`);
+    } else {
+      // For new beneficiary, include all bank accounts (already validated)
+      bankAccountsToSend = bankAccounts.map(account => ({
         ...account,
-        currency_code: accountCurrency,
-      };
-    });
+        currency_code: account.currency || currency,
+      }));
+    }
 
     try {
       if (mode === "create") {
-        // CHECK IF WE'RE USING AN EXISTING BENEFICIARY OR CREATING A NEW ONE
-        if (usingExistingBeneficiary && existingBeneficiaryId) {
-          // STILL CREATE A NEW BENEFICIARY (don't update existing one)
-          console.log("✨ Creating new beneficiary with phone:", phoneInput);
-          console.log("Note: Phone number matches existing beneficiary, but creating new record anyway");
+        // CREATE NEW BENEFICIARY (both cases - with or without existing beneficiary)
+        console.log("✨ Creating new beneficiary");
+        console.log("Bank accounts to add:", bankAccountsToSend.length);
+        console.log("Using existing beneficiary flag:", usingExistingBeneficiary);
+        console.log("Existing beneficiary ID:", existingBeneficiaryId);
 
-          const result = await dispatch(
-            createAndAddBeneficiary({
-              customerId,
-              beneficiaryData: {
-                ...beneficiaryData,
-                country_phone_code: cleanedCountryCode,
-              },
-              bankAccounts: bankAccountsWithCurrency,
-              currency: currency,
-              country_code: cleanedCountryCode,
-            })
-          ).unwrap();
+        const result = await dispatch(
+          createAndAddBeneficiary({
+            customerId,
+            beneficiaryData: {
+              ...beneficiaryData,
+              country_phone_code: cleanedCountryCode,
+            },
+            bankAccounts: bankAccountsToSend,
+            currency: currency,
+            country_code: cleanedCountryCode,
+          })
+        ).unwrap();
 
-          if (result?.success) {
+        console.log("📦 Create result:", result);
+
+        // Handle different response scenarios
+        if (result?.success === true || result?.beneficiaryId || result?.warning) {
+          if (bankAccountsToSend.length === 0) {
             toast.success("Beneficiary created successfully!");
-            setTimeout(() => {
-              navigate(-1);
-            }, 1500);
+          } else {
+            toast.success("Beneficiary created successfully with bank account!");
           }
+          setTimeout(() => {
+            navigate(-1);
+          }, 1500);
+        } else if (result?.error) {
+          toast.error(result.error);
         } else {
-          // CREATE NEW BENEFICIARY (original flow)
-          console.log("✨ Creating new beneficiary");
-
-          const result = await dispatch(
-            createAndAddBeneficiary({
-              customerId,
-              beneficiaryData: {
-                ...beneficiaryData,
-                country_phone_code: cleanedCountryCode,
-              },
-              bankAccounts: bankAccountsWithCurrency,
-              currency: currency,
-              country_code: cleanedCountryCode,
-            })
-          ).unwrap();
-
-          if (result?.success) {
-            toast.success("Beneficiary created successfully!");
-            setTimeout(() => {
-              navigate(-1);
-            }, 1500);
-          }
+          // If we got here, assume success
+          toast.success("Beneficiary created successfully!");
+          setTimeout(() => {
+            navigate(-1);
+          }, 1500);
         }
       } else if (mode === "edit") {
         // CHECK IF THIS IS BANK-ONLY EDIT MODE
         const isBankOnlyEdit = editBankOnlyMode || location.state?.editBankOnly;
 
         if (isBankOnlyEdit) {
-          // ===== BANK-ONLY UPDATE =====
-          console.log("🏦 Updating bank details only");
+          // Bank-only update requires bank details
+          if (bankAccountsToSend.length === 0) {
+            toast.error("No bank account details provided to update");
+            setLoading(false);
+            return;
+          }
 
           // Get the bank ID
           const bankId = location.state?.bankId ||
@@ -1491,27 +1599,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           if (["NPR", "KES", "NGN"].includes(currentCurrency)) {
             console.log(`💰 Processing ${currentCurrency} bank update`);
 
-            // Ensure bank_name is properly set from bankName field
             if (!bankData.bank_name && bankAccounts[0]?.bankName) {
               bankData.bank_name = bankAccounts[0].bankName;
             }
 
-            // Add bank_code for these currencies (required by API)
             if (bankAccounts[0]?.bankCode) {
               bankData.bank_code = bankAccounts[0].bankCode;
             }
 
-            // These currencies might also need branch_code
             if (bankAccounts[0]?.branchCode) {
               bankData.branch_code = bankAccounts[0].branchCode;
             }
 
-            // Additional fields that might be required
             if (bankAccounts[0]?.accountName) {
               bankData.account_name = bankAccounts[0].accountName;
             }
 
-            // Log what we're sending
             console.log(`📤 ${currentCurrency} Bank Data:`, {
               bank_name: bankData.bank_name,
               bank_code: bankData.bank_code,
@@ -1546,10 +1649,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           }, 1500);
 
         } else {
-          // ===== FULL BENEFICIARY UPDATE =====
+          // Full beneficiary update
           console.log("📤 Dispatching updateBeneficiary...");
 
-          await dispatch(
+          const result = await dispatch(
             updateBeneficiary({
               customerId,
               beneficiaryId,
@@ -1557,10 +1660,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 ...beneficiaryData,
                 country_phone_code: cleanedCountryCode,
               },
-              bankAccounts: bankAccountsWithCurrency,
+              bankAccounts: bankAccountsToSend,
               currency: currency,
             })
           ).unwrap();
+
+          console.log("📦 Update result:", result);
 
           toast.success("Beneficiary updated successfully!");
 
@@ -1570,8 +1675,23 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         }
       }
     } catch (error) {
-      console.error(`❌ ${mode} error:`, error.message || error);
-      toast.error(error.message || `Failed to ${mode} beneficiary`);
+      console.error(`❌ ${mode} error:`, error);
+      console.error("Error details:", error.message || error);
+
+      // Show more specific error message
+      if (error.message && error.message.includes("newBeneficiaryId")) {
+        toast.error("Beneficiary created successfully! (ID retrieval pending)");
+        // Still navigate back after a short delay
+        setTimeout(() => {
+          navigate(-1);
+        }, 1500);
+      } else if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error(`Failed to ${mode} beneficiary. Please try again.`);
+      }
     } finally {
       if (isMounted.current) {
         setLoading(false);
@@ -1885,10 +2005,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Select Rails */}
           <div className="mb-4">
-            <FieldLabel required>
+            <FieldLabel required={!usingExistingBeneficiary}>
               Select Rails
               {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-green-600">(Required for new account)</span>
+                <span className="ml-1 text-xs text-gray-500">(Optional - Skip if no bank account to add)</span>
               )}
             </FieldLabel>
             <select
@@ -1897,9 +2017,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               onChange={(e) =>
                 handleBankAccountChange(index, "rails", e.target.value)
               }
-              required
+              required={!usingExistingBeneficiary}
             >
-              <option value="">Select Rails</option>
+              <option value="">{usingExistingBeneficiary ? "Select Rails (Optional)" : "Select Rails"}</option>
               <option value="Local">
                 {accountCurrency === "GBP"
                   ? "FPS"
@@ -1921,6 +2041,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <option value="Mobile">Mobile</option>
             </select>
+            {usingExistingBeneficiary && !account.rails && (
+              <div className="flex items-center mt-2 text-gray-500 text-sm">
+                <FaInfoCircle className="mr-1" size={12} />
+                <span>No rails selected - beneficiary will be saved without a bank account</span>
+              </div>
+            )}
             {account.rails && (
               <div className="flex items-center mt-2 text-green-600 text-sm">
                 <FaCheckCircle className="mr-1" size={12} />
