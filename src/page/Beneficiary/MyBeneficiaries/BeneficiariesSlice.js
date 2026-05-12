@@ -8,12 +8,15 @@ import { createBeneficiaryWithBanks } from "../AddBeneficiary/addBeneficiarySlic
 const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
+// ===================== CREATE AND ADD BENEFICIARY (SIMPLIFIED VERSION) =====================
 export const createAndAddBeneficiary = createAsyncThunk(
   "beneficiaries/createAndAddBeneficiary",
   async (
     { customerId, beneficiaryData, bankAccounts, currency, country_code },
     { dispatch, rejectWithValue }
   ) => {
+    let newBeneficiaryId = null;
+
     try {
       console.log("🔄 createAndAddBeneficiary: Starting...");
       console.log("📦 Parameters:", {
@@ -24,56 +27,111 @@ export const createAndAddBeneficiary = createAsyncThunk(
         country_code,
       });
 
-      // 1. Create the beneficiary
+      // Ensure bankAccounts is always an array (even if empty)
+      const banksToSend = Array.isArray(bankAccounts) ? bankAccounts : [];
+
+      console.log("📦 Banks to send:", banksToSend);
+      console.log("📦 Banks count:", banksToSend.length);
+
+      // 1. Create the beneficiary - ALWAYS include banks field
       const createResult = await dispatch(
         createBeneficiaryWithBanks({
           customerId,
           beneficiaryData,
-          bankAccounts,
+          bankAccounts: banksToSend, // This will be [] when no bank details
           currency,
           country_code,
         })
       );
 
       console.log("📦 Create result:", createResult);
+      console.log("📦 Create result payload:", createResult.payload);
 
       // Check if creation was successful
       if (createBeneficiaryWithBanks.rejected.match(createResult)) {
         console.error("❌ Creation failed:", createResult.payload);
-        throw new Error(createResult.payload || "Failed to create beneficiary");
+        // Check if the error is about missing banks field
+        if (createResult.payload?.errors?.banks) {
+          throw new Error("Bank information is required. Please add at least one bank account or contact support.");
+        }
+        throw new Error(createResult.payload?.message || createResult.payload || "Failed to create beneficiary");
       }
 
-      // 2. Get the newly created beneficiary ID
+      // 2. Get the newly created beneficiary ID - try multiple possible response formats
       const createPayload = createResult.payload;
-      const newBeneficiaryId =
+
+      // Try different possible response structures
+      newBeneficiaryId =
         createPayload?.beneficiary_id ||
         createPayload?.benef_id ||
-        createPayload?.id;
+        createPayload?.id ||
+        createPayload?.data?.beneficiary_id ||
+        createPayload?.data?.benef_id ||
+        createPayload?.data?.id;
 
       console.log("✅ Beneficiary created, ID:", newBeneficiaryId);
+      console.log("Full response payload:", JSON.stringify(createPayload, null, 2));
 
       if (!newBeneficiaryId) {
         console.error("❌ No beneficiary ID found in response:", createPayload);
-        throw new Error("No beneficiary ID returned from creation");
+
+        // If no ID but creation was successful, try to fetch the beneficiary by phone number
+        console.log("🔄 Trying to find beneficiary by phone number...");
+
+        // Wait a moment for the database to sync
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Try to search for the beneficiary we just created
+        const searchResult = await dispatch(
+          fetchBeneficiaries(customerId)
+        ).unwrap();
+
+        // Look for beneficiary with matching phone number
+        const foundBeneficiary = searchResult?.find(b =>
+          b.phone_number === beneficiaryData.phone_number ||
+          b.full_phone_number === `${beneficiaryData.country_phone_code}${beneficiaryData.phone_number}`
+        );
+
+        if (foundBeneficiary && foundBeneficiary.id) {
+          newBeneficiaryId = foundBeneficiary.id;
+          console.log("✅ Found beneficiary by phone search, ID:", newBeneficiaryId);
+        } else {
+          // Still no ID, but we know creation succeeded, so return success without ID
+          console.warn("⚠️ Beneficiary created but ID not found in response or by search");
+          return {
+            success: true,
+            message: "Beneficiary created successfully",
+            beneficiaryId: null,
+            warning: "Beneficiary created but ID not returned",
+            beneficiaryData: createPayload,
+            timestamp: new Date().toISOString(),
+          };
+        }
       }
 
       // 3. Add delay to allow DB sync (if needed)
       console.log("⏳ Waiting for DB sync...");
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1000ms to 500ms
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // 4. Fetch the specific beneficiary to ensure it's available
-      console.log("🔄 Fetching newly created beneficiary...");
-      const fetchResult = await dispatch(
-        fetchBeneficiaryById(newBeneficiaryId)
-      );
-
-      // Check if fetch was successful
-      if (fetchBeneficiaryById.rejected.match(fetchResult)) {
-        console.warn(
-          "⚠️ Beneficiary fetch failed, but creation was successful:",
-          fetchResult.payload
+      // 4. Fetch the specific beneficiary to ensure it's available (only if we have an ID)
+      let fetchedData = null;
+      if (newBeneficiaryId) {
+        console.log("🔄 Fetching newly created beneficiary...");
+        const fetchResult = await dispatch(
+          fetchBeneficiaryById(newBeneficiaryId)
         );
-        // Continue anyway since creation was successful
+
+        // Check if fetch was successful
+        if (fetchBeneficiaryById.rejected.match(fetchResult)) {
+          console.warn(
+            "⚠️ Beneficiary fetch failed, but creation was successful:",
+            fetchResult.payload
+          );
+          // Continue anyway since creation was successful
+          fetchedData = createPayload;
+        } else {
+          fetchedData = fetchResult.payload;
+        }
       }
 
       // 5. Refresh the beneficiaries list
@@ -85,7 +143,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
         success: true,
         message: "Beneficiary created and fetched successfully",
         beneficiaryId: newBeneficiaryId,
-        beneficiaryData: fetchResult.payload || createPayload,
+        beneficiaryData: fetchedData || createPayload,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -107,6 +165,112 @@ export const createAndAddBeneficiary = createAsyncThunk(
       }
 
       return rejectWithValue(error.message || "Failed to create beneficiary");
+    }
+  }
+);
+
+// ===================== SEARCH BENEFICIARY BY PHONE (API CALL) =====================
+export const searchBeneficiaryByPhone = createAsyncThunk(
+  "beneficiaries/searchBeneficiaryByPhone",
+  async ({ phoneNumber, countryPhoneCode }, { rejectWithValue }) => {
+    try {
+      // Clean the country code - ensure it has + prefix
+      let cleanedCountryCode = countryPhoneCode;
+      if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
+        cleanedCountryCode = `+${cleanedCountryCode}`;
+      }
+
+      // Prepare payload according to API requirements
+      const payload = {
+        beneficiary_type: "individual",
+        mobile_number_country_code: cleanedCountryCode,
+        mobile_number: phoneNumber
+      };
+
+      console.log('🔍 Searching beneficiary with payload:', payload);
+
+      const authtoken = localStorage.getItem("authtoken");
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/fetch-by-type-mobile`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      console.log('📡 API Response status:', response.status);
+
+      const result = await response.json();
+      console.log('✅ API Response data:', result);
+
+      // Check if beneficiary exists based on the response structure
+      // The API returns data as an array when beneficiary is found
+      if (result.status === "success" &&
+        result.message === "Beneficiary Fetched Successfully!" &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0) {
+
+        // Extract the first beneficiary from the array
+        const beneficiaryData = result.data[0];
+        console.log('✅ Beneficiary found:', beneficiaryData);
+
+        return {
+          exists: true,
+          data: beneficiaryData,
+          searched: true,
+          processed: false,
+          message: 'Beneficiary found'
+        };
+      }
+
+      // Check for "Not Found" case
+      if (result.status === "success" &&
+        (result.message === "Beneficiary Not Found!" ||
+          result.message?.includes("Not Found") ||
+          !result.data ||
+          result.data === "" ||
+          (Array.isArray(result.data) && result.data.length === 0))) {
+        console.log('ℹ️ No beneficiary found with this phone number');
+        return {
+          exists: false,
+          data: null,
+          searched: true,
+          processed: false,
+          message: 'No beneficiary found with this phone number'
+        };
+      }
+
+      // If response has beneficiary data directly without array wrapper
+      if (result.data && !Array.isArray(result.data) && result.data.id) {
+        return {
+          exists: true,
+          data: result.data,
+          searched: true,
+          processed: false,
+          message: 'Beneficiary found'
+        };
+      }
+
+      // Default case - no beneficiary found
+      console.log('ℹ️ No beneficiary found (default case)');
+      return {
+        exists: false,
+        data: null,
+        searched: true,
+        processed: false,
+        message: 'No beneficiary found with this phone number'
+      };
+
+    } catch (error) {
+      console.error('❌ Phone search API error:', error);
+      return rejectWithValue(error.message || 'Failed to search for beneficiary');
     }
   }
 );
@@ -224,8 +388,8 @@ export const deleteBeneficiary = createAsyncThunk(
         const errorResult = await response.json();
         throw new Error(
           errorResult.message ||
-            errorResult.error ||
-            "Failed to delete beneficiary"
+          errorResult.error ||
+          "Failed to delete beneficiary"
         );
       }
 
@@ -266,7 +430,7 @@ export const bulkDeleteBeneficiaries = createAsyncThunk(
             const errorResult = await response.json();
             throw new Error(
               errorResult.message ||
-                `Failed to delete beneficiary ${beneficiaryId}`
+              `Failed to delete beneficiary ${beneficiaryId}`
             );
           }
           return response.json();
@@ -332,8 +496,8 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
         const errorResult = await response.json();
         throw new Error(
           errorResult.message ||
-            errorResult.error ||
-            "Failed to delete beneficiary"
+          errorResult.error ||
+          "Failed to delete beneficiary"
         );
       }
 
@@ -350,7 +514,6 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
   }
 );
 
-// ===================== UNDO DELETE THUNK =====================
 export const undoDeleteBeneficiary = createAsyncThunk(
   "beneficiaries/undoDeleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
@@ -449,7 +612,6 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
   }
 );
 
-// ===================== REMITTANCE-SPECIFIC ASYNC THUNKS =====================
 export const fetchBeneficiaryByCode = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryByCode",
   async (beneficiaryCode, { rejectWithValue }) => {
@@ -545,7 +707,7 @@ const initialState = {
     bulkDeleteTotal: 0,
   },
 
-  // Create state - UPDATED FOR CLARITY
+  // Create state
   createState: {
     loading: false,
     error: null,
@@ -582,230 +744,6 @@ const beneficiarySlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
-    // Phone search reducer
-    searchBeneficiaryByPhone: (state, action) => {
-      const { phoneNumber, countryPhoneCode } = action.payload;
-      console.log(
-        "🔍 Searching for phone in store:",
-        phoneNumber,
-        "with code:",
-        countryPhoneCode
-      );
-
-      if (!phoneNumber) {
-        state.phoneSearch = initialState.phoneSearch;
-        return;
-      }
-
-      // Format phone number for comparison (remove non-digit characters)
-      const cleanSearchPhone = phoneNumber.replace(/\D/g, "");
-      const searchFullPhone = countryPhoneCode
-        ? `${countryPhoneCode.replace(/\D/g, "")}${cleanSearchPhone}`
-        : cleanSearchPhone;
-
-      console.log("🔍 Clean search phone:", cleanSearchPhone);
-      console.log("🔍 Full search phone:", searchFullPhone);
-
-      const foundBeneficiary = state.beneficiaries.find((beneficiary) => {
-        // Check if beneficiary has any phone number field
-        if (!beneficiary.phone_number && !beneficiary.full_phone_number) {
-          return false;
-        }
-
-        // Clean beneficiary phone numbers
-        const beneficiaryPhone =
-          beneficiary.phone_number?.replace(/\D/g, "") || "";
-        const beneficiaryFullPhone =
-          beneficiary.full_phone_number?.replace(/\D/g, "") || "";
-
-        // Check if phone number matches (with or without country code)
-        const exactMatches =
-          beneficiaryPhone === cleanSearchPhone ||
-          beneficiaryFullPhone === cleanSearchPhone ||
-          beneficiaryFullPhone === searchFullPhone ||
-          beneficiaryPhone === searchFullPhone ||
-          beneficiary.phone_number === phoneNumber ||
-          beneficiary.full_phone_number === phoneNumber;
-
-        // Also check for partial matches (in case numbers are stored with different formatting)
-        const partialMatches =
-          beneficiaryPhone.includes(cleanSearchPhone) ||
-          beneficiaryFullPhone.includes(cleanSearchPhone) ||
-          beneficiaryFullPhone.includes(searchFullPhone) ||
-          beneficiaryPhone.includes(searchFullPhone);
-
-        // Return true if either exact or partial match
-        return exactMatches || partialMatches;
-      });
-
-      console.log("📊 Found beneficiary by phone:", foundBeneficiary);
-
-      if (foundBeneficiary) {
-        // Extract phone code from full_phone_number if available
-        let phoneCode = foundBeneficiary.country_phone_code;
-        let phoneNumber = foundBeneficiary.phone_number;
-
-        if (!phoneCode && foundBeneficiary.full_phone_number) {
-          const fullPhone = foundBeneficiary.full_phone_number;
-          if (fullPhone.startsWith("+")) {
-            if (fullPhone.startsWith("+1")) {
-              phoneCode = "+1";
-              phoneNumber = fullPhone.substring(2);
-            } else if (fullPhone.startsWith("+44")) {
-              phoneCode = "+44";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+91")) {
-              phoneCode = "+91";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+92")) {
-              phoneCode = "+92";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+880")) {
-              phoneCode = "+880";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+977")) {
-              phoneCode = "+977";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+254")) {
-              phoneCode = "+254";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+234")) {
-              phoneCode = "+234";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+971")) {
-              phoneCode = "+971";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+61")) {
-              phoneCode = "+61";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+45")) {
-              phoneCode = "+45";
-              phoneNumber = fullPhone.substring(3);
-            }
-          }
-        }
-
-        // Try to infer country_id from city/state if possible
-        let countryId = foundBeneficiary.country_id;
-        if (!countryId) {
-          if (
-            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
-            foundBeneficiary.state?.toUpperCase() === "TX"
-          ) {
-            countryId = "186"; // USA country ID
-            if (!phoneCode) phoneCode = "+1";
-          } else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
-            countryId = "185"; // UK country ID
-            if (!phoneCode) phoneCode = "+44";
-          } else if (
-            foundBeneficiary.city?.toUpperCase() === "MUMBAI" ||
-            foundBeneficiary.city?.toUpperCase() === "DELHI"
-          ) {
-            countryId = "88"; // India country ID
-            if (!phoneCode) phoneCode = "+91";
-          }
-        }
-
-        // Try to infer nationality if not set
-        let nationalityId = foundBeneficiary.nationality_id;
-        if (!nationalityId) {
-          if (countryId === "186") {
-            nationalityId = "186"; // American nationality
-          } else if (countryId === "185") {
-            nationalityId = "185"; // British nationality
-          } else if (countryId === "88") {
-            nationalityId = "88"; // Indian nationality
-          }
-        }
-
-        // Map relationship values
-        let relationValue = foundBeneficiary.relationtobenef;
-        const relationshipMap = {
-          Father: "father",
-          Mother: "mother",
-          Sister: "sister",
-          Brother: "brother",
-          Cousin: "cousin",
-          Friend: "friend",
-          Other: "other",
-          father: "father",
-          mother: "mother",
-          sister: "sister",
-          brother: "brother",
-          cousin: "cousin",
-          friend: "friend",
-          other: "other",
-          "Father/Mother": "father",
-          "Brother/Sister": "brother",
-          "Friend/Relative": "friend",
-        };
-
-        if (relationValue && relationshipMap[relationValue]) {
-          relationValue = relationshipMap[relationValue];
-        } else if (relationValue && typeof relationValue === "string") {
-          const lowerRelation = relationValue.toLowerCase();
-          if (
-            lowerRelation.includes("father") ||
-            lowerRelation.includes("mother")
-          ) {
-            relationValue = "father";
-          } else if (
-            lowerRelation.includes("sister") ||
-            lowerRelation.includes("brother")
-          ) {
-            relationValue = "brother";
-          } else if (lowerRelation.includes("friend")) {
-            relationValue = "friend";
-          } else if (lowerRelation.includes("cousin")) {
-            relationValue = "cousin";
-          }
-        }
-
-        const cleanData = {
-          id: foundBeneficiary.id || "",
-          name: foundBeneficiary.name || "",
-          email: foundBeneficiary.email || "",
-          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
-          country_id: countryId?.toString() || "",
-          country_phone_code: phoneCode || countryPhoneCode || "+1",
-          beneftype: foundBeneficiary.beneftype || "individual",
-          state: foundBeneficiary.state || "",
-          city: foundBeneficiary.city || "",
-          street: foundBeneficiary.street || foundBeneficiary.address || "",
-          postalcode: foundBeneficiary.postalcode || "",
-          relationtobenef: relationValue || "",
-          otherRelationship: foundBeneficiary.otherRelationship || "",
-          nationality_id: nationalityId?.toString() || "",
-          status: foundBeneficiary.status || 1,
-          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
-          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
-          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
-          currency: foundBeneficiary.currency || "USD",
-          banks: foundBeneficiary.banks || [],
-          _source: "phone_search",
-          _matchedPhone: cleanSearchPhone,
-        };
-
-        console.log(
-          "📋 Clean beneficiary data with inferred values:",
-          cleanData
-        );
-
-        state.phoneSearch.data = cleanData;
-        state.phoneSearch.exists = true;
-        state.phoneSearch.searched = true;
-      } else {
-        state.phoneSearch = {
-          ...initialState.phoneSearch,
-          searched: true,
-          exists: false,
-        };
-      }
-
-      state.phoneSearch.loading = false;
-      state.phoneSearch.error = null;
-    },
-
     // Keep email search for backward compatibility
     searchBeneficiaryByEmail: (state, action) => {
       const { email } = action.payload;
@@ -825,7 +763,6 @@ const beneficiarySlice = createSlice({
       console.log("📊 Found beneficiary:", foundBeneficiary);
 
       if (foundBeneficiary) {
-        // Extract phone code from full_phone_number if available
         let phoneCode = foundBeneficiary.country_phone_code;
         let phoneNumber = foundBeneficiary.phone_number;
 
@@ -1166,6 +1103,39 @@ const beneficiarySlice = createSlice({
         state.createState.lastCreatedId = null;
       })
 
+      // ===================== SEARCH BENEFICIARY BY PHONE (API) =====================
+      .addCase(searchBeneficiaryByPhone.pending, (state) => {
+        state.phoneSearch.loading = true;
+        state.phoneSearch.error = null;
+        state.phoneSearch.searched = false;
+        state.phoneSearch.exists = false;
+        state.phoneSearch.data = null;
+        state.phoneSearch.processed = false;
+      })
+      .addCase(searchBeneficiaryByPhone.fulfilled, (state, action) => {
+        state.phoneSearch.loading = false;
+        state.phoneSearch.searched = true;
+        state.phoneSearch.exists = action.payload.exists;
+        state.phoneSearch.data = action.payload.data;
+        state.phoneSearch.processed = false;
+        state.phoneSearch.error = null;
+
+        console.log('✅ Phone search fulfilled:', {
+          exists: action.payload.exists,
+          hasData: !!action.payload.data
+        });
+      })
+      .addCase(searchBeneficiaryByPhone.rejected, (state, action) => {
+        state.phoneSearch.loading = false;
+        state.phoneSearch.searched = true;
+        state.phoneSearch.exists = false;
+        state.phoneSearch.data = null;
+        state.phoneSearch.error = action.payload;
+        state.phoneSearch.processed = false;
+
+        console.error('❌ Phone search rejected:', action.payload);
+      })
+
       // ===================== FETCH BENEFICIARIES =====================
       .addCase(fetchBeneficiaries.pending, (state) => {
         state.loading = true;
@@ -1174,7 +1144,6 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
         state.loading = false;
 
-        // Handle various response formats
         let beneficiariesData = [];
 
         if (Array.isArray(action.payload)) {
@@ -1182,10 +1151,10 @@ const beneficiarySlice = createSlice({
         } else if (action.payload && Array.isArray(action.payload.data)) {
           beneficiariesData = action.payload.data;
         } else if (action.payload && action.payload.data === null) {
-          beneficiariesData = []; // Explicitly handle null data
+          beneficiariesData = [];
         }
 
-        state.beneficiaries = beneficiariesData || []; // Ensure it's always an array
+        state.beneficiaries = beneficiariesData || [];
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
@@ -1450,7 +1419,6 @@ export const {
   searchBeneficiaryByEmail,
   clearEmailSearch,
   setEmailSearchProcessed,
-  searchBeneficiaryByPhone,
   clearPhoneSearch,
   setPhoneSearchProcessed,
 } = beneficiarySlice.actions;
@@ -1659,13 +1627,11 @@ export const selectRemittanceReadyBeneficiaries = createSelector(
     return beneficiaries.map((benef) => ({
       ...benef,
       value: benef.id,
-      label: `${benef.name} (${
-        benef.full_phone_number || benef.phone_number || benef.benef_uuid
-      })`,
+      label: `${benef.name} (${benef.full_phone_number || benef.phone_number || benef.benef_uuid
+        })`,
       id: benef.id,
-      formattedName: `${benef.name} (${
-        benef.phone_number || benef.email || benef.benef_uuid
-      })`,
+      formattedName: `${benef.name} (${benef.phone_number || benef.email || benef.benef_uuid
+        })`,
     }));
   }
 );
@@ -1679,14 +1645,12 @@ export const selectBeneficiaryForRemittance = (beneficiaryId) =>
     return {
       ...beneficiary,
       value: beneficiary.id,
-      label: `${beneficiary.name} (${
-        beneficiary.full_phone_number ||
+      label: `${beneficiary.name} (${beneficiary.full_phone_number ||
         beneficiary.phone_number ||
         beneficiary.benef_uuid
-      })`,
-      formattedName: `${beneficiary.name} (${
-        beneficiary.phone_number || beneficiary.email || beneficiary.benef_uuid
-      })`,
+        })`,
+      formattedName: `${beneficiary.name} (${beneficiary.phone_number || beneficiary.email || beneficiary.benef_uuid
+        })`,
     };
   });
 
@@ -1697,12 +1661,10 @@ export const selectRemittanceReadyBanks = createSelector(
     return banks.map((bank) => ({
       ...bank,
       value: bank.id,
-      label: `${bank.bank_name || "Unknown Bank"} - ${
-        bank.bank_acc_no || bank.account_number || "No Account"
-      } (${bank.rails || "Unknown"})`,
-      formattedBank: `${bank.bank_name || "Unknown Bank"} (${
-        bank.bank_acc_no || bank.account_number || "No Account"
-      }) - ${bank.rails || "Unknown"}`,
+      label: `${bank.bank_name || "Unknown Bank"} - ${bank.bank_acc_no || bank.account_number || "No Account"
+        } (${bank.rails || "Unknown"})`,
+      formattedBank: `${bank.bank_name || "Unknown Bank"} (${bank.bank_acc_no || bank.account_number || "No Account"
+        }) - ${bank.rails || "Unknown"}`,
     }));
   }
 );
@@ -1710,9 +1672,9 @@ export const selectRemittanceReadyBanks = createSelector(
 // Add this selector with your other selectors
 export const selectHasFetched = (state) => {
   // Check if beneficiaries have been fetched at least once
-  return state.beneficiaries?.lastUpdated !== null || 
-         state.beneficiaries?.beneficiaries?.length > 0 ||
-         state.beneficiaries?.hasFetched === true;
+  return state.beneficiaries?.lastUpdated !== null ||
+    state.beneficiaries?.beneficiaries?.length > 0 ||
+    state.beneficiaries?.hasFetched === true;
 };
 
 // ===================== DEFAULT EXPORT =====================

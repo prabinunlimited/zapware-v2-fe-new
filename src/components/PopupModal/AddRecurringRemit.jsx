@@ -452,7 +452,7 @@ const AddRecurringRemitPopup = ({ isOpen, onClose, onSave, customerId }) => {
         `${API_URL}/recurring-remittance/add-detail`,
         {
           method: "POST",
-          headers: {
+          headers: {  
             Accept: "application/json",
             "Content-Type": "application/json",
             Authorization: `Bearer ${bearerToken}`,
