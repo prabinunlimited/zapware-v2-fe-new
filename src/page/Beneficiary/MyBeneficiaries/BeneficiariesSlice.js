@@ -59,7 +59,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
 
       // 3. Add delay to allow DB sync (if needed)
       console.log("⏳ Waiting for DB sync...");
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1000ms to 500ms
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // 4. Fetch the specific beneficiary to ensure it's available
       console.log("🔄 Fetching newly created beneficiary...");
@@ -107,6 +107,112 @@ export const createAndAddBeneficiary = createAsyncThunk(
       }
 
       return rejectWithValue(error.message || "Failed to create beneficiary");
+    }
+  }
+);
+
+// ===================== SEARCH BENEFICIARY BY PHONE (API CALL) =====================
+export const searchBeneficiaryByPhone = createAsyncThunk(
+  "beneficiaries/searchBeneficiaryByPhone",
+  async ({ phoneNumber, countryPhoneCode }, { rejectWithValue }) => {
+    try {
+      // Clean the country code - ensure it has + prefix
+      let cleanedCountryCode = countryPhoneCode;
+      if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
+        cleanedCountryCode = `+${cleanedCountryCode}`;
+      }
+      
+      // Prepare payload according to API requirements
+      const payload = {
+        beneficiary_type: "individual",
+        mobile_number_country_code: cleanedCountryCode,
+        mobile_number: phoneNumber
+      };
+      
+      console.log('🔍 Searching beneficiary with payload:', payload);
+      
+      const authtoken = localStorage.getItem("authtoken");
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(
+        `${API_URL}/beneficiaries/fetch-by-type-mobile`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+      
+      console.log('📡 API Response status:', response.status);
+      
+      const result = await response.json();
+      console.log('✅ API Response data:', result);
+      
+      // Check if beneficiary exists based on the response structure
+      // The API returns data as an array when beneficiary is found
+      if (result.status === "success" && 
+          result.message === "Beneficiary Fetched Successfully!" &&
+          result.data && 
+          Array.isArray(result.data) && 
+          result.data.length > 0) {
+        
+        // Extract the first beneficiary from the array
+        const beneficiaryData = result.data[0];
+        console.log('✅ Beneficiary found:', beneficiaryData);
+        
+        return {
+          exists: true,
+          data: beneficiaryData,
+          searched: true,
+          processed: false,
+          message: 'Beneficiary found'
+        };
+      }
+      
+      // Check for "Not Found" case
+      if (result.status === "success" && 
+          (result.message === "Beneficiary Not Found!" || 
+           result.message?.includes("Not Found") ||
+           !result.data || 
+           result.data === "" ||
+           (Array.isArray(result.data) && result.data.length === 0))) {
+        console.log('ℹ️ No beneficiary found with this phone number');
+        return {
+          exists: false,
+          data: null,
+          searched: true,
+          processed: false,
+          message: 'No beneficiary found with this phone number'
+        };
+      }
+      
+      // If response has beneficiary data directly without array wrapper
+      if (result.data && !Array.isArray(result.data) && result.data.id) {
+        return {
+          exists: true,
+          data: result.data,
+          searched: true,
+          processed: false,
+          message: 'Beneficiary found'
+        };
+      }
+      
+      // Default case - no beneficiary found
+      console.log('ℹ️ No beneficiary found (default case)');
+      return {
+        exists: false,
+        data: null,
+        searched: true,
+        processed: false,
+        message: 'No beneficiary found with this phone number'
+      };
+      
+    } catch (error) {
+      console.error('❌ Phone search API error:', error);
+      return rejectWithValue(error.message || 'Failed to search for beneficiary');
     }
   }
 );
@@ -350,7 +456,6 @@ export const deleteBeneficiaryWithUndo = createAsyncThunk(
   }
 );
 
-// ===================== UNDO DELETE THUNK =====================
 export const undoDeleteBeneficiary = createAsyncThunk(
   "beneficiaries/undoDeleteBeneficiary",
   async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
@@ -449,7 +554,6 @@ export const toggleBeneficiaryVisibility = createAsyncThunk(
   }
 );
 
-// ===================== REMITTANCE-SPECIFIC ASYNC THUNKS =====================
 export const fetchBeneficiaryByCode = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryByCode",
   async (beneficiaryCode, { rejectWithValue }) => {
@@ -545,7 +649,7 @@ const initialState = {
     bulkDeleteTotal: 0,
   },
 
-  // Create state - UPDATED FOR CLARITY
+  // Create state
   createState: {
     loading: false,
     error: null,
@@ -582,230 +686,6 @@ const beneficiarySlice = createSlice({
   name: "beneficiaries",
   initialState,
   reducers: {
-    // Phone search reducer
-    searchBeneficiaryByPhone: (state, action) => {
-      const { phoneNumber, countryPhoneCode } = action.payload;
-      console.log(
-        "🔍 Searching for phone in store:",
-        phoneNumber,
-        "with code:",
-        countryPhoneCode
-      );
-
-      if (!phoneNumber) {
-        state.phoneSearch = initialState.phoneSearch;
-        return;
-      }
-
-      // Format phone number for comparison (remove non-digit characters)
-      const cleanSearchPhone = phoneNumber.replace(/\D/g, "");
-      const searchFullPhone = countryPhoneCode
-        ? `${countryPhoneCode.replace(/\D/g, "")}${cleanSearchPhone}`
-        : cleanSearchPhone;
-
-      console.log("🔍 Clean search phone:", cleanSearchPhone);
-      console.log("🔍 Full search phone:", searchFullPhone);
-
-      const foundBeneficiary = state.beneficiaries.find((beneficiary) => {
-        // Check if beneficiary has any phone number field
-        if (!beneficiary.phone_number && !beneficiary.full_phone_number) {
-          return false;
-        }
-
-        // Clean beneficiary phone numbers
-        const beneficiaryPhone =
-          beneficiary.phone_number?.replace(/\D/g, "") || "";
-        const beneficiaryFullPhone =
-          beneficiary.full_phone_number?.replace(/\D/g, "") || "";
-
-        // Check if phone number matches (with or without country code)
-        const exactMatches =
-          beneficiaryPhone === cleanSearchPhone ||
-          beneficiaryFullPhone === cleanSearchPhone ||
-          beneficiaryFullPhone === searchFullPhone ||
-          beneficiaryPhone === searchFullPhone ||
-          beneficiary.phone_number === phoneNumber ||
-          beneficiary.full_phone_number === phoneNumber;
-
-        // Also check for partial matches (in case numbers are stored with different formatting)
-        const partialMatches =
-          beneficiaryPhone.includes(cleanSearchPhone) ||
-          beneficiaryFullPhone.includes(cleanSearchPhone) ||
-          beneficiaryFullPhone.includes(searchFullPhone) ||
-          beneficiaryPhone.includes(searchFullPhone);
-
-        // Return true if either exact or partial match
-        return exactMatches || partialMatches;
-      });
-
-      console.log("📊 Found beneficiary by phone:", foundBeneficiary);
-
-      if (foundBeneficiary) {
-        // Extract phone code from full_phone_number if available
-        let phoneCode = foundBeneficiary.country_phone_code;
-        let phoneNumber = foundBeneficiary.phone_number;
-
-        if (!phoneCode && foundBeneficiary.full_phone_number) {
-          const fullPhone = foundBeneficiary.full_phone_number;
-          if (fullPhone.startsWith("+")) {
-            if (fullPhone.startsWith("+1")) {
-              phoneCode = "+1";
-              phoneNumber = fullPhone.substring(2);
-            } else if (fullPhone.startsWith("+44")) {
-              phoneCode = "+44";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+91")) {
-              phoneCode = "+91";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+92")) {
-              phoneCode = "+92";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+880")) {
-              phoneCode = "+880";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+977")) {
-              phoneCode = "+977";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+254")) {
-              phoneCode = "+254";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+234")) {
-              phoneCode = "+234";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+971")) {
-              phoneCode = "+971";
-              phoneNumber = fullPhone.substring(4);
-            } else if (fullPhone.startsWith("+61")) {
-              phoneCode = "+61";
-              phoneNumber = fullPhone.substring(3);
-            } else if (fullPhone.startsWith("+45")) {
-              phoneCode = "+45";
-              phoneNumber = fullPhone.substring(3);
-            }
-          }
-        }
-
-        // Try to infer country_id from city/state if possible
-        let countryId = foundBeneficiary.country_id;
-        if (!countryId) {
-          if (
-            foundBeneficiary.city?.toUpperCase() === "HOUSTON" &&
-            foundBeneficiary.state?.toUpperCase() === "TX"
-          ) {
-            countryId = "186"; // USA country ID
-            if (!phoneCode) phoneCode = "+1";
-          } else if (foundBeneficiary.city?.toUpperCase() === "LONDON") {
-            countryId = "185"; // UK country ID
-            if (!phoneCode) phoneCode = "+44";
-          } else if (
-            foundBeneficiary.city?.toUpperCase() === "MUMBAI" ||
-            foundBeneficiary.city?.toUpperCase() === "DELHI"
-          ) {
-            countryId = "88"; // India country ID
-            if (!phoneCode) phoneCode = "+91";
-          }
-        }
-
-        // Try to infer nationality if not set
-        let nationalityId = foundBeneficiary.nationality_id;
-        if (!nationalityId) {
-          if (countryId === "186") {
-            nationalityId = "186"; // American nationality
-          } else if (countryId === "185") {
-            nationalityId = "185"; // British nationality
-          } else if (countryId === "88") {
-            nationalityId = "88"; // Indian nationality
-          }
-        }
-
-        // Map relationship values
-        let relationValue = foundBeneficiary.relationtobenef;
-        const relationshipMap = {
-          Father: "father",
-          Mother: "mother",
-          Sister: "sister",
-          Brother: "brother",
-          Cousin: "cousin",
-          Friend: "friend",
-          Other: "other",
-          father: "father",
-          mother: "mother",
-          sister: "sister",
-          brother: "brother",
-          cousin: "cousin",
-          friend: "friend",
-          other: "other",
-          "Father/Mother": "father",
-          "Brother/Sister": "brother",
-          "Friend/Relative": "friend",
-        };
-
-        if (relationValue && relationshipMap[relationValue]) {
-          relationValue = relationshipMap[relationValue];
-        } else if (relationValue && typeof relationValue === "string") {
-          const lowerRelation = relationValue.toLowerCase();
-          if (
-            lowerRelation.includes("father") ||
-            lowerRelation.includes("mother")
-          ) {
-            relationValue = "father";
-          } else if (
-            lowerRelation.includes("sister") ||
-            lowerRelation.includes("brother")
-          ) {
-            relationValue = "brother";
-          } else if (lowerRelation.includes("friend")) {
-            relationValue = "friend";
-          } else if (lowerRelation.includes("cousin")) {
-            relationValue = "cousin";
-          }
-        }
-
-        const cleanData = {
-          id: foundBeneficiary.id || "",
-          name: foundBeneficiary.name || "",
-          email: foundBeneficiary.email || "",
-          phone_number: phoneNumber || foundBeneficiary.phone_number || "",
-          country_id: countryId?.toString() || "",
-          country_phone_code: phoneCode || countryPhoneCode || "+1",
-          beneftype: foundBeneficiary.beneftype || "individual",
-          state: foundBeneficiary.state || "",
-          city: foundBeneficiary.city || "",
-          street: foundBeneficiary.street || foundBeneficiary.address || "",
-          postalcode: foundBeneficiary.postalcode || "",
-          relationtobenef: relationValue || "",
-          otherRelationship: foundBeneficiary.otherRelationship || "",
-          nationality_id: nationalityId?.toString() || "",
-          status: foundBeneficiary.status || 1,
-          nic_bcc_code: foundBeneficiary.nic_bcc_code || "",
-          beneficiary_id_type: foundBeneficiary.beneficiary_id_type || "",
-          beneficiary_id_number: foundBeneficiary.beneficiary_id_number || "",
-          currency: foundBeneficiary.currency || "USD",
-          banks: foundBeneficiary.banks || [],
-          _source: "phone_search",
-          _matchedPhone: cleanSearchPhone,
-        };
-
-        console.log(
-          "📋 Clean beneficiary data with inferred values:",
-          cleanData
-        );
-
-        state.phoneSearch.data = cleanData;
-        state.phoneSearch.exists = true;
-        state.phoneSearch.searched = true;
-      } else {
-        state.phoneSearch = {
-          ...initialState.phoneSearch,
-          searched: true,
-          exists: false,
-        };
-      }
-
-      state.phoneSearch.loading = false;
-      state.phoneSearch.error = null;
-    },
-
     // Keep email search for backward compatibility
     searchBeneficiaryByEmail: (state, action) => {
       const { email } = action.payload;
@@ -825,7 +705,6 @@ const beneficiarySlice = createSlice({
       console.log("📊 Found beneficiary:", foundBeneficiary);
 
       if (foundBeneficiary) {
-        // Extract phone code from full_phone_number if available
         let phoneCode = foundBeneficiary.country_phone_code;
         let phoneNumber = foundBeneficiary.phone_number;
 
@@ -1166,6 +1045,39 @@ const beneficiarySlice = createSlice({
         state.createState.lastCreatedId = null;
       })
 
+      // ===================== SEARCH BENEFICIARY BY PHONE (API) =====================
+      .addCase(searchBeneficiaryByPhone.pending, (state) => {
+        state.phoneSearch.loading = true;
+        state.phoneSearch.error = null;
+        state.phoneSearch.searched = false;
+        state.phoneSearch.exists = false;
+        state.phoneSearch.data = null;
+        state.phoneSearch.processed = false;
+      })
+      .addCase(searchBeneficiaryByPhone.fulfilled, (state, action) => {
+        state.phoneSearch.loading = false;
+        state.phoneSearch.searched = true;
+        state.phoneSearch.exists = action.payload.exists;
+        state.phoneSearch.data = action.payload.data;
+        state.phoneSearch.processed = false;
+        state.phoneSearch.error = null;
+        
+        console.log('✅ Phone search fulfilled:', {
+          exists: action.payload.exists,
+          hasData: !!action.payload.data
+        });
+      })
+      .addCase(searchBeneficiaryByPhone.rejected, (state, action) => {
+        state.phoneSearch.loading = false;
+        state.phoneSearch.searched = true;
+        state.phoneSearch.exists = false;
+        state.phoneSearch.data = null;
+        state.phoneSearch.error = action.payload;
+        state.phoneSearch.processed = false;
+        
+        console.error('❌ Phone search rejected:', action.payload);
+      })
+
       // ===================== FETCH BENEFICIARIES =====================
       .addCase(fetchBeneficiaries.pending, (state) => {
         state.loading = true;
@@ -1174,7 +1086,6 @@ const beneficiarySlice = createSlice({
       .addCase(fetchBeneficiaries.fulfilled, (state, action) => {
         state.loading = false;
 
-        // Handle various response formats
         let beneficiariesData = [];
 
         if (Array.isArray(action.payload)) {
@@ -1182,10 +1093,10 @@ const beneficiarySlice = createSlice({
         } else if (action.payload && Array.isArray(action.payload.data)) {
           beneficiariesData = action.payload.data;
         } else if (action.payload && action.payload.data === null) {
-          beneficiariesData = []; // Explicitly handle null data
+          beneficiariesData = [];
         }
 
-        state.beneficiaries = beneficiariesData || []; // Ensure it's always an array
+        state.beneficiaries = beneficiariesData || [];
         state.error = null;
         state.lastUpdated = new Date().toISOString();
 
@@ -1450,7 +1361,6 @@ export const {
   searchBeneficiaryByEmail,
   clearEmailSearch,
   setEmailSearchProcessed,
-  searchBeneficiaryByPhone,
   clearPhoneSearch,
   setPhoneSearchProcessed,
 } = beneficiarySlice.actions;

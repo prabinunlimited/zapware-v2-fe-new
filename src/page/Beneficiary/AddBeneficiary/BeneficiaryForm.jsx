@@ -726,7 +726,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (
       formik.values.name === "" ||
-      formik.values.country_id === "" ||
+      // formik.values.country_id === "" ||
       formik.values.country_phone_code === "" ||
       formik.values.phone_number === "" ||
       formik.values.city === "" ||
@@ -734,9 +734,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     )
       return false;
 
-    if (formik.values.beneftype === "individual") {
-      if (formik.values.relationtobenef === "") return false;
-    }
+    // if (formik.values.beneftype === "individual") {
+    //   if (formik.values.relationtobenef === "") return false;
+    // }
 
     if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (
@@ -805,7 +805,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return found ? found.id.toString() : "";
   };
 
-  // Phone search results handler
+  // Update the phone search results useEffect
   useEffect(() => {
     // Only run if we have searched AND we haven't already processed this data
     if (
@@ -869,6 +869,29 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           );
         }
 
+        // Get the first active bank to display currency
+        const activeBanks = beneficiaryData.banks?.filter(bank => bank.deleted_at === null) || [];
+        const firstBank = activeBanks.length > 0 ? activeBanks[0] : null;
+        const displayCurrency = firstBank?.currency_code || beneficiaryData.currency || "N/A";
+
+        // Get country name from countries list
+        const countryName = countries.find(
+          (c) => c.id === parseInt(beneficiaryData.country_id)
+        )?.name || "N/A";
+
+        // Prepare display data for the UI
+        const displayData = {
+          name: beneficiaryData.name || "N/A",
+          email: beneficiaryData.email || "N/A",
+          phone: beneficiaryData.full_phone_number || beneficiaryData.phone_number || phoneInput,
+          country: countryName,
+          currency: displayCurrency,
+          id: beneficiaryData.id,
+          banks: beneficiaryData.banks || []
+        };
+
+        console.log("📋 Display data for UI:", displayData);
+
         const formValues = {
           name: beneficiaryData.name || "",
           country_id: beneficiaryData.country_id?.toString() || "",
@@ -898,18 +921,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         // Store beneficiary ID for later use
         if (beneficiaryData.id) {
           setExistingBeneficiaryId(beneficiaryData.id);
+
+          // Also store in localStorage or state for display
+          setFoundBeneficiary({
+            ...beneficiaryData,
+            displayName: displayData.name,
+            displayEmail: displayData.email,
+            displayPhone: displayData.phone,
+            displayCountry: displayData.country,
+            displayCurrency: displayData.currency
+          });
         }
 
         // Set usingExistingBeneficiary to true to lock the form fields
         setUsingExistingBeneficiary(true);
 
-        // Store the found beneficiary data
-        setFoundBeneficiary(beneficiaryData);
-
         // Important: Set showSearchResults to true to show the "Beneficiary Found" UI
         setShowSearchResults(true);
 
-        toast.success("Beneficiary found! Form has been pre-filled.");
+        toast.success(`Beneficiary found: ${displayData.name}`);
 
         // Don't automatically move to next step - let user choose
 
@@ -918,15 +948,24 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         !phoneSearch.exists &&
         isMounted.current
       ) {
+        // BENEFICIARY NOT FOUND - Show the "Create New" UI
+        console.log("ℹ️ No beneficiary found, showing create new UI");
+
+        // Don't show error toast, just info
         toast.info(
           "No existing beneficiary found with this phone number. You can create a new one."
         );
+
         // Set phone in formik for new beneficiary
         formik.setFieldValue("phone_number", phoneInput);
         formik.setFieldValue("country_phone_code", countryCodeInput);
+
+        // Reset states for new beneficiary
         setFoundBeneficiary(null);
         setUsingExistingBeneficiary(false);
         setExistingBeneficiaryId(null);
+
+        // Show the search results container with the "Create New" option
         setShowSearchResults(true);
       }
     }
@@ -939,9 +978,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     dispatch,
     countryCodeInput,
     currency,
+    countries, // Add countries to dependencies
   ]);
 
   // PHONE SEARCH FUNCTIONS
+
   const handlePhoneSearch = () => {
     if (!phoneInput.trim()) {
       toast.error("Please enter a phone number to search");
@@ -959,28 +1000,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     dispatch(clearPhoneSearch());
     setShowSearchResults(false);
     setFoundBeneficiary(null);
-
-    // Reset the processed flag
-    dispatch(setPhoneSearchProcessed(false));
-
-    // Check if beneficiaries are loaded
-    if (beneficiaries.length === 0) {
-      console.log("No beneficiaries to search through");
-
-      // Set phone in formik for new beneficiary
-      formik.setFieldValue("phone_number", phoneInput);
-      formik.setFieldValue("country_phone_code", countryCodeInput);
-
-      // Show toast and let user continue
-      toast.info("No existing beneficiaries found. You can create a new one.");
-      setUsingExistingBeneficiary(false);
-      setExistingBeneficiaryId(null);
-      setShowSearchResults(true);
-      return;
-    }
+    setUsingExistingBeneficiary(false);
+    setExistingBeneficiaryId(null);
 
     try {
-      console.log("🔍 Searching for phone:", phoneInput, "with code:", countryCodeInput);
+      console.log("🔍 Dispatching phone search with:", {
+        phoneNumber: phoneInput,
+        countryPhoneCode: countryCodeInput
+      });
+
       dispatch(
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
@@ -1260,13 +1288,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const handleBankAccountChange = (index, field, value) => {
     const newBankAccounts = [...bankAccounts];
     newBankAccounts[index][field] = value;
-    
+
     // Debug logging for bank name changes
     if (field === "bankName") {
       console.log(`🔄 Bank name updated for account ${index}:`, value);
       console.log("Updated bank account object:", newBankAccounts[index]);
     }
-    
+
     setBankAccounts(newBankAccounts);
     if (field === "branchCode") {
       setBranchCode(value);
@@ -1462,27 +1490,27 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           // Special handling for NPR, KES, NGN currencies
           if (["NPR", "KES", "NGN"].includes(currentCurrency)) {
             console.log(`💰 Processing ${currentCurrency} bank update`);
-            
+
             // Ensure bank_name is properly set from bankName field
             if (!bankData.bank_name && bankAccounts[0]?.bankName) {
               bankData.bank_name = bankAccounts[0].bankName;
             }
-            
+
             // Add bank_code for these currencies (required by API)
             if (bankAccounts[0]?.bankCode) {
               bankData.bank_code = bankAccounts[0].bankCode;
             }
-            
+
             // These currencies might also need branch_code
             if (bankAccounts[0]?.branchCode) {
               bankData.branch_code = bankAccounts[0].branchCode;
             }
-            
+
             // Additional fields that might be required
             if (bankAccounts[0]?.accountName) {
               bankData.account_name = bankAccounts[0].accountName;
             }
-            
+
             // Log what we're sending
             console.log(`📤 ${currentCurrency} Bank Data:`, {
               bank_name: bankData.bank_name,
@@ -2410,7 +2438,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         const selectedBankCode = e.target.value;
                         console.log("Selected bank code:", selectedBankCode);
                         console.log("Available banks:", currentBanks);
-                        
+
                         // Find the selected bank by matching the value
                         const selectedBank = currentBanks.find(
                           (bank) => {
@@ -2419,11 +2447,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             return String(bankValue) === String(selectedBankCode);
                           }
                         );
-                        
+
                         if (selectedBank) {
                           const bankNameValue = selectedBank.name || selectedBank.bank_name;
                           console.log(`🏦 Bank selected - Code: ${selectedBankCode}, Name: ${bankNameValue}`);
-                          
+
                           // Update both bankCode and bankName
                           handleBankAccountChange(index, "bankCode", selectedBankCode);
                           handleBankAccountChange(index, "bankName", bankNameValue);
@@ -2958,6 +2986,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
                 </div>
 
+                {/* Inside renderPhoneSearchStep function, update the beneficiary details display */}
                 <div className="mb-6 p-4 bg-white rounded-lg border border-yellow-100">
                   <h4 className="font-semibold text-gray-800 mb-2">
                     Existing Beneficiary Details:
@@ -2966,37 +2995,45 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     <div>
                       <span className="text-sm text-gray-500">Name:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
+                        {foundBeneficiary?.displayName || foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Email:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
+                        {foundBeneficiary?.displayEmail || foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Phone:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.phone_number || phoneSearch.data?.phone_number || "N/A"}
+                        {foundBeneficiary?.displayPhone || foundBeneficiary?.full_phone_number || foundBeneficiary?.phone_number || phoneSearch.data?.full_phone_number || phoneSearch.data?.phone_number || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Country:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.country_id || phoneSearch.data?.country_id
-                          ? countries.find(
-                            (c) =>
-                              c.id === parseInt(foundBeneficiary?.country_id || phoneSearch.data?.country_id)
-                          )?.name || "N/A"
-                          : "N/A"}
+                        {foundBeneficiary?.displayCountry || (() => {
+                          const countryId = foundBeneficiary?.country_id || phoneSearch.data?.country_id;
+                          if (countryId) {
+                            const country = countries.find(c => c.id === parseInt(countryId));
+                            return country?.name || "N/A";
+                          }
+                          return "N/A";
+                        })()}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Currency:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.banks?.[0]?.currency_code ||
-                          phoneSearch.data?.banks?.[0]?.currency_code || "N/A"}
+                        {foundBeneficiary?.displayCurrency || (() => {
+                          const banks = foundBeneficiary?.banks || phoneSearch.data?.banks;
+                          if (banks && banks.length > 0) {
+                            const activeBank = banks.find(bank => bank.deleted_at === null);
+                            return activeBank?.currency_code || "N/A";
+                          }
+                          return "N/A";
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -3553,7 +3590,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
                   {/* Country */}
                   <div>
-                    <FieldLabel required>
+                    <FieldLabel >
                       Country
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
@@ -3809,7 +3846,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {/* Relation to Beneficiary (only for individual) */}
                   {formik.values.beneftype === "individual" && (
                     <div className="md:col-span-2">
-                      <FieldLabel required>
+                      <FieldLabel>
                         Relation to Beneficiary
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
