@@ -662,6 +662,15 @@ export const verifyOTP = createAsyncThunk(
 
         // ✅ CASE 3: KYC Completed - Normal login
         if (responseData.token && responseData.customer_id) {
+          if (responseData.customerUuid) {
+            localStorage.setItem('customerUuid', responseData.customerUuid);
+            console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
+          }
+          
+          // Save other auth data
+          localStorage.setItem('authcustomer_id', responseData.customer_id);
+          localStorage.setItem('authtoken', responseData.token);
+
           return {
             status: "success",
             token: responseData.token,
@@ -670,6 +679,7 @@ export const verifyOTP = createAsyncThunk(
             bank_approve_status: responseData.bank_approve_status,
             isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
             customer_type: responseData.customer_type || "individual",
+            customerUuid: responseData.customerUuid || null,
             message: "Login successful",
           };
         }
