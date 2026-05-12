@@ -544,12 +544,12 @@ export const fetchBanksByCurrency = createAsyncThunk(
 
 export const fetchIdTypesByCurrency = createAsyncThunk(
   "beneficiaries/fetchIdTypesByCurrency",
-  async (currency, { rejectWithValue }) => {
+  async ({ currency, benefType }, { rejectWithValue }) => {
     try {
-      console.log(`API: Fetching ID types for currency: ${currency}`);
+      console.log(`API: Fetching ID types for currency: ${currency} and benefType: ${benefType}`);
 
       const authtoken = localStorage.getItem("authtoken");
-      const response = await fetch(`${API_URL}/currency-id-type/${currency}`, {
+      const response = await fetch(`${API_URL}/benef-type-currency-id-type/${currency}/${benefType}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${authtoken}`,
@@ -563,16 +563,20 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
       }
 
       const result = await response.json();
-      console.log("API Response data:", result);
+      console.log("API Response:", result);
 
-      return { currency, data: result.data || result || [] };
+      // Extract data from the response
+      const extractedData = result.data || [];
+      
+      console.log("Extracted ID types:", extractedData);
+
+      return { currency, benefType, data: extractedData };
     } catch (error) {
       console.error("API Error:", error);
       return rejectWithValue(error.message);
     }
   }
-);
-
+);  
 export const fetchCitiesByCountry = createAsyncThunk(
   "beneficiaries/fetchCitiesByCountry",
   async (countryId, { rejectWithValue }) => {
@@ -1116,9 +1120,19 @@ const addBeneficiarySlice = createSlice({
         state.dropdownError = null;
       })
       .addCase(fetchIdTypesByCurrency.fulfilled, (state, action) => {
+        console.log("✅ fetchIdTypesByCurrency FULFILLED");
         state.dropdownLoading = false;
-        const { currency, data } = action.payload;
-        state.idTypes[currency] = data;
+        const { currency, benefType, data } = action.payload;
+        
+        // Store with compound key to support different benefTypes
+        const key = `${currency}_${benefType}`;
+        state.idTypes[key] = data;
+        
+        // Also store with just currency for backward compatibility
+        if (!state.idTypes[currency]) {
+          state.idTypes[currency] = data;
+        }
+        console.log(`Stored ID types for ${key}:`, data);
       })
       .addCase(fetchIdTypesByCurrency.rejected, (state, action) => {
         state.dropdownLoading = false;

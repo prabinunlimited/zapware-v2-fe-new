@@ -649,7 +649,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       // Fetch ID types if needed
       if (["BDT", "INR", "PKR"].includes(currency)) {
-        dispatch(fetchIdTypesByCurrency(currency));
+        const benefType = formik.values.beneftype || "individual";
+        console.log(`Fetching ID types for ${currency} with benefType: ${benefType}`);
+        dispatch(fetchIdTypesByCurrency({
+          currency: currency,
+          benefType: benefType
+        }));
       }
     }
   }, [step, dispatch, currency, mode]);
@@ -765,7 +770,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (["BDT", "INR", "PKR"].includes(newCurrency)) {
       console.log(`Dispatching fetchIdTypesByCurrency for ${newCurrency}...`);
-      dispatch(fetchIdTypesByCurrency(newCurrency));
+      dispatch(fetchIdTypesByCurrency({
+        currency: newCurrency,
+        benefType: formik.values.beneftype || "individual"
+      }));
     }
 
     if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(newCurrency)) {
@@ -804,6 +812,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     return found ? found.id.toString() : "";
   };
+
+  // Refetch ID types when beneficiary type changes for BDT/INR/PKR currencies
+  useEffect(() => {
+    if (formik.values.beneftype && ["BDT", "INR", "PKR"].includes(currency)) {
+      console.log("Beneficiary type changed, refetching ID types...");
+      dispatch(fetchIdTypesByCurrency({
+        currency: currency,
+        benefType: formik.values.beneftype
+      }));
+    }
+  }, [formik.values.beneftype, currency, dispatch]);
 
   // Update the phone search results useEffect
   useEffect(() => {
@@ -1828,29 +1847,26 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   }, [banks, currency]);
 
   const getIdTypesForCurrency = useMemo(() => {
-    if (Object.keys(idTypes).length === 0) {
+    const currentBenefType = formik.values.beneftype || "individual";
+
+    // Try to get from compound key first (new way)
+    const compoundKey = `${currency}_${currentBenefType}`;
+    let types = idTypes[compoundKey];
+
+    // If not found, try with just currency (old way for backward compatibility)
+    if (!types || types.length === 0) {
+      types = idTypes[currency];
+    }
+
+    console.log(`Getting ID types for ${compoundKey}:`, types);
+
+    if (!types || types.length === 0) {
       return [];
     }
 
-    const types = idTypes[currency];
-    if (!types) {
-      return [];
-    }
-
-    if (Array.isArray(types)) {
-      return types;
-    }
-
-    if (types && types.data && Array.isArray(types.data)) {
-      return types.data;
-    }
-
-    if (types && typeof types === "object") {
-      return Object.values(types);
-    }
-
-    return [];
-  }, [idTypes, currency]);
+    // Return the array of ID types
+    return types;
+  }, [idTypes, currency, formik.values.beneftype]);
 
   // Get bank branches for selected bank
   const getBankBranches = useMemo(() => {
@@ -3681,38 +3697,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Nationality */}
-                  <div>
-                    <FieldLabel>
-                      Nationality
-                      {usingExistingBeneficiary && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled - Cannot Edit)
-                        </span>
-                      )}
-                    </FieldLabel>
-                    <div className="relative">
-                      <select
-                        className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : "bg-white"
-                          }`}
-                        onChange={formik.handleChange}
-                        value={formik.values.nationality_id}
-                        name="nationality_id"
-                        disabled={usingExistingBeneficiary}
-                      >
-                        <option value="">Select Nationality</option>
-                        {nationalities.map((nationality) => (
-                          <option key={nationality.id} value={nationality.id}>
-                            {nationality.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                        <FaChevronRight className="text-gray-400 rotate-90" />
+                  {/* Nationality - Only show for individuals, not institutions */}
+                  {formik.values.beneftype === "individual" && (
+                    <div>
+                      <FieldLabel>
+                        Nationality
+                        {usingExistingBeneficiary && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (Pre-filled - Cannot Edit)
+                          </span>
+                        )}
+                      </FieldLabel>
+                      <div className="relative">
+                        <select
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
+                            ? "bg-gray-100 cursor-not-allowed"
+                            : "bg-white"
+                            }`}
+                          onChange={formik.handleChange}
+                          value={formik.values.nationality_id}
+                          name="nationality_id"
+                          disabled={usingExistingBeneficiary}
+                        >
+                          <option value="">Select Nationality</option>
+                          {nationalities.map((nationality) => (
+                            <option key={nationality.id} value={nationality.id}>
+                              {nationality.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                          <FaChevronRight className="text-gray-400 rotate-90" />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Country */}
                   <div>
@@ -3915,26 +3934,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </FieldLabel>
                       <div className="relative">
                         <select
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                            ? "bg-gray-100"
-                            : "bg-white"
-                            }`}
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
                           value={formik.values.beneficiary_id_type}
                           onChange={formik.handleChange}
                           name="beneficiary_id_type"
                           required
                         >
                           <option value="">Select ID Type</option>
-                          {getIdTypesForCurrency.map((idType) => {
-                            const value = idType.name || idType.id || idType;
-                            const label = idType.name || idType.id || idType;
-
-                            return (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            );
-                          })}
+                          {getIdTypesForCurrency.map((idType) => (
+                            <option key={idType.id} value={idType.name}>
+                              {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
+                            </option>
+                          ))}
                         </select>
                         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
                           <FaChevronRight className="text-gray-400 rotate-90" />
