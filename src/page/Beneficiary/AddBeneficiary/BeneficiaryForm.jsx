@@ -649,7 +649,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       // Fetch ID types if needed
       if (["BDT", "INR", "PKR"].includes(currency)) {
-        dispatch(fetchIdTypesByCurrency(currency));
+        const benefType = formik.values.beneftype || "individual";
+        console.log(`Fetching ID types for ${currency} with benefType: ${benefType}`);
+        dispatch(fetchIdTypesByCurrency({
+          currency: currency,
+          benefType: benefType
+        }));
       }
     }
   }, [step, dispatch, currency, mode]);
@@ -726,7 +731,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (
       formik.values.name === "" ||
-      formik.values.country_id === "" ||
+      // formik.values.country_id === "" ||
       formik.values.country_phone_code === "" ||
       formik.values.phone_number === "" ||
       formik.values.city === "" ||
@@ -734,9 +739,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     )
       return false;
 
-    if (formik.values.beneftype === "individual") {
-      if (formik.values.relationtobenef === "") return false;
-    }
+    // if (formik.values.beneftype === "individual") {
+    //   if (formik.values.relationtobenef === "") return false;
+    // }
 
     if (currency === "BDT" || currency === "INR" || currency === "PKR") {
       if (
@@ -765,7 +770,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     if (["BDT", "INR", "PKR"].includes(newCurrency)) {
       console.log(`Dispatching fetchIdTypesByCurrency for ${newCurrency}...`);
-      dispatch(fetchIdTypesByCurrency(newCurrency));
+      dispatch(fetchIdTypesByCurrency({
+        currency: newCurrency,
+        benefType: formik.values.beneftype || "individual"
+      }));
     }
 
     if (["BDT", "LKR", "AUD", "PKR", "CAD"].includes(newCurrency)) {
@@ -805,7 +813,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return found ? found.id.toString() : "";
   };
 
-  // Phone search results handler
+  // Refetch ID types when beneficiary type changes for BDT/INR/PKR currencies
+  useEffect(() => {
+    if (formik.values.beneftype && ["BDT", "INR", "PKR"].includes(currency)) {
+      console.log("Beneficiary type changed, refetching ID types...");
+      dispatch(fetchIdTypesByCurrency({
+        currency: currency,
+        benefType: formik.values.beneftype
+      }));
+    }
+  }, [formik.values.beneftype, currency, dispatch]);
+
+  // Update the phone search results useEffect
   useEffect(() => {
     // Only run if we have searched AND we haven't already processed this data
     if (
@@ -869,6 +888,29 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           );
         }
 
+        // Get the first active bank to display currency
+        const activeBanks = beneficiaryData.banks?.filter(bank => bank.deleted_at === null) || [];
+        const firstBank = activeBanks.length > 0 ? activeBanks[0] : null;
+        const displayCurrency = firstBank?.currency_code || beneficiaryData.currency || "N/A";
+
+        // Get country name from countries list
+        const countryName = countries.find(
+          (c) => c.id === parseInt(beneficiaryData.country_id)
+        )?.name || "N/A";
+
+        // Prepare display data for the UI
+        const displayData = {
+          name: beneficiaryData.name || "N/A",
+          email: beneficiaryData.email || "N/A",
+          phone: beneficiaryData.full_phone_number || beneficiaryData.phone_number || phoneInput,
+          country: countryName,
+          currency: displayCurrency,
+          id: beneficiaryData.id,
+          banks: beneficiaryData.banks || []
+        };
+
+        console.log("📋 Display data for UI:", displayData);
+
         const formValues = {
           name: beneficiaryData.name || "",
           country_id: beneficiaryData.country_id?.toString() || "",
@@ -898,18 +940,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         // Store beneficiary ID for later use
         if (beneficiaryData.id) {
           setExistingBeneficiaryId(beneficiaryData.id);
+
+          // Also store in localStorage or state for display
+          setFoundBeneficiary({
+            ...beneficiaryData,
+            displayName: displayData.name,
+            displayEmail: displayData.email,
+            displayPhone: displayData.phone,
+            displayCountry: displayData.country,
+            displayCurrency: displayData.currency
+          });
         }
 
         // Set usingExistingBeneficiary to true to lock the form fields
         setUsingExistingBeneficiary(true);
 
-        // Store the found beneficiary data
-        setFoundBeneficiary(beneficiaryData);
-
         // Important: Set showSearchResults to true to show the "Beneficiary Found" UI
         setShowSearchResults(true);
 
-        toast.success("Beneficiary found! Form has been pre-filled.");
+        toast.success(`Beneficiary found: ${displayData.name}`);
 
         // Don't automatically move to next step - let user choose
 
@@ -918,15 +967,24 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         !phoneSearch.exists &&
         isMounted.current
       ) {
+        // BENEFICIARY NOT FOUND - Show the "Create New" UI
+        console.log("ℹ️ No beneficiary found, showing create new UI");
+
+        // Don't show error toast, just info
         toast.info(
           "No existing beneficiary found with this phone number. You can create a new one."
         );
+
         // Set phone in formik for new beneficiary
         formik.setFieldValue("phone_number", phoneInput);
         formik.setFieldValue("country_phone_code", countryCodeInput);
+
+        // Reset states for new beneficiary
         setFoundBeneficiary(null);
         setUsingExistingBeneficiary(false);
         setExistingBeneficiaryId(null);
+
+        // Show the search results container with the "Create New" option
         setShowSearchResults(true);
       }
     }
@@ -939,9 +997,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     dispatch,
     countryCodeInput,
     currency,
+    countries, // Add countries to dependencies
   ]);
 
   // PHONE SEARCH FUNCTIONS
+
   const handlePhoneSearch = () => {
     if (!phoneInput.trim()) {
       toast.error("Please enter a phone number to search");
@@ -959,28 +1019,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     dispatch(clearPhoneSearch());
     setShowSearchResults(false);
     setFoundBeneficiary(null);
-
-    // Reset the processed flag
-    dispatch(setPhoneSearchProcessed(false));
-
-    // Check if beneficiaries are loaded
-    if (beneficiaries.length === 0) {
-      console.log("No beneficiaries to search through");
-
-      // Set phone in formik for new beneficiary
-      formik.setFieldValue("phone_number", phoneInput);
-      formik.setFieldValue("country_phone_code", countryCodeInput);
-
-      // Show toast and let user continue
-      toast.info("No existing beneficiaries found. You can create a new one.");
-      setUsingExistingBeneficiary(false);
-      setExistingBeneficiaryId(null);
-      setShowSearchResults(true);
-      return;
-    }
+    setUsingExistingBeneficiary(false);
+    setExistingBeneficiaryId(null);
 
     try {
-      console.log("🔍 Searching for phone:", phoneInput, "with code:", countryCodeInput);
+      console.log("🔍 Dispatching phone search with:", {
+        phoneNumber: phoneInput,
+        countryPhoneCode: countryCodeInput
+      });
+
       dispatch(
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
@@ -1260,19 +1307,20 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const handleBankAccountChange = (index, field, value) => {
     const newBankAccounts = [...bankAccounts];
     newBankAccounts[index][field] = value;
-    
+
     // Debug logging for bank name changes
     if (field === "bankName") {
       console.log(`🔄 Bank name updated for account ${index}:`, value);
       console.log("Updated bank account object:", newBankAccounts[index]);
     }
-    
+
     setBankAccounts(newBankAccounts);
     if (field === "branchCode") {
       setBranchCode(value);
     }
   };
 
+  // UPDATED: Handle submit for both new and existing beneficiaries
   // UPDATED: Handle submit for both new and existing beneficiaries
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1283,38 +1331,136 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
     setLoading(true);
 
-    // Check if rails is missing
-    const isRailsMissing = bankAccounts.some((account) => !account.rails);
-    if (isRailsMissing) {
-      console.log("❌ DEBUG - Early return due to missing rails");
-      toast.error("Please select rails for all bank accounts.");
-      setLoading(false);
-      return;
-    }
+    // For existing beneficiary flow, allow empty bank accounts
+    if (usingExistingBeneficiary) {
+      // Check if ANY bank account has rails selected
+      const hasAnyRails = bankAccounts.some(account => account.rails && account.rails !== "");
 
-    // Check invalid Swift accounts
-    const invalidSwiftAccounts = bankAccounts.filter(
-      (account) =>
-        account.rails === "Swift" &&
-        !isSwiftSupportedForCurrency(account.currency || currency)
-    );
-    if (invalidSwiftAccounts.length > 0) {
-      toast.error("SWIFT is not available for the selected currency(s). Please fix before proceeding.");
-      setLoading(false);
-      return;
-    }
+      if (!hasAnyRails) {
+        // No rails selected - this means user doesn't want to add a bank account
+        console.log("ℹ️ No rails selected for existing beneficiary - will save without bank account");
+        // Skip all bank validation and proceed to save
+      } else {
+        // User wants to add a bank account, so validate the selected rails
+        console.log("🔍 Rails detected, validating bank details...");
 
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      if (!formik.values.beneficiary_id_type) {
-        toast.error("Beneficiary ID Type is required");
+        // Check if rails is missing for accounts that have other details
+        const isRailsMissing = bankAccounts.some((account) => {
+          const hasOtherDetails = account.accountNumber || account.iban || account.swift || account.bankName;
+          if (hasOtherDetails && !account.rails) {
+            return true;
+          }
+          return false;
+        });
+
+        if (isRailsMissing) {
+          toast.error("Please select rails for the bank account you're adding");
+          setLoading(false);
+          return;
+        }
+
+        // Validate required fields for each selected rails
+        for (const account of bankAccounts) {
+          if (!account.rails) continue;
+
+          const accountCurrency = account.currency || currency;
+
+          if (account.rails === "Local") {
+            if (accountCurrency === "USD" && !account.routingNumber) {
+              toast.error("Routing Number is required for USD Local transfers");
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "EUR" || accountCurrency === "GBP" || accountCurrency === "AED") && !account.iban) {
+              toast.error(`IBAN Number is required for ${accountCurrency} Local transfers`);
+              setLoading(false);
+              return;
+            }
+            if (accountCurrency === "INR" && (!account.ifsc || !account.accountNumber)) {
+              toast.error("IFSC Code and Account Number are required for INR transfers");
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "NPR" || accountCurrency === "KES" || accountCurrency === "NGN") && !account.bankCode) {
+              toast.error(`Bank selection is required for ${accountCurrency} transfers`);
+              setLoading(false);
+              return;
+            }
+            if ((accountCurrency === "GBP" || accountCurrency === "DKK") && !account.sortCode) {
+              toast.error(`Sort Code is required for ${accountCurrency} transfers`);
+              setLoading(false);
+              return;
+            }
+          } else if (account.rails === "Swift") {
+            if (!account.swift) {
+              toast.error("SWIFT/BIC Code is required for Swift transfers");
+              setLoading(false);
+              return;
+            }
+            if (!account.bankCountry) {
+              toast.error("Bank Country is required for Swift transfers");
+              setLoading(false);
+              return;
+            }
+            const swiftCurrency = account.currency || currency;
+            if ((swiftCurrency === "EUR" || swiftCurrency === "GBP") && !account.iban) {
+              toast.error(`IBAN Number is required for ${swiftCurrency} Swift transfers`);
+              setLoading(false);
+              return;
+            }
+            if ((swiftCurrency === "USD" || swiftCurrency === "CAD") && !account.accountNumber) {
+              toast.error(`Account Number is required for ${swiftCurrency} Swift transfers`);
+              setLoading(false);
+              return;
+            }
+          } else if (account.rails === "Mobile") {
+            if (!account.walletProvider) {
+              toast.error("Wallet Provider is required for Mobile transfers");
+              setLoading(false);
+              return;
+            }
+            if (!account.mobileNumber) {
+              toast.error("Mobile Number is required for Mobile transfers");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      }
+    } else {
+      // Original validation for new beneficiary (non-existing)
+      const isRailsMissing = bankAccounts.some((account) => !account.rails);
+      if (isRailsMissing) {
+        console.log("❌ DEBUG - Early return due to missing rails");
+        toast.error("Please select rails for all bank accounts.");
         setLoading(false);
         return;
       }
-      if (!formik.values.beneficiary_id_number) {
-        toast.error("Beneficiary ID Number is required");
+
+      // Check invalid Swift accounts
+      const invalidSwiftAccounts = bankAccounts.filter(
+        (account) =>
+          account.rails === "Swift" &&
+          !isSwiftSupportedForCurrency(account.currency || currency)
+      );
+      if (invalidSwiftAccounts.length > 0) {
+        toast.error("SWIFT is not available for the selected currency(s). Please fix before proceeding.");
         setLoading(false);
         return;
+      }
+
+      // Currency-specific validations
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        if (!formik.values.beneficiary_id_type) {
+          toast.error("Beneficiary ID Type is required");
+          setLoading(false);
+          return;
+        }
+        if (!formik.values.beneficiary_id_number) {
+          toast.error("Beneficiary ID Number is required");
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -1352,72 +1498,81 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       country_phone_code: cleanedCountryCode,
     };
 
-    const bankAccountsWithCurrency = bankAccounts.map(account => {
-      const accountCurrency = account.currency || currency;
-      return {
+    // Prepare bank accounts - filter out empty ones for existing beneficiary
+    let bankAccountsToSend = [];
+
+    if (usingExistingBeneficiary) {
+      // For existing beneficiary, ONLY include bank accounts that have rails selected
+      // This means if no rails, we send empty array (null payload)
+      bankAccountsToSend = bankAccounts
+        .filter(account => account.rails && account.rails !== "") // Only keep accounts with rails
+        .map(account => ({
+          ...account,
+          currency_code: account.currency || currency,
+        }));
+
+      console.log(`📦 Bank accounts to send: ${bankAccountsToSend.length} (${bankAccountsToSend.length === 0 ? 'empty payload - no bank will be added' : 'with bank details'})`);
+    } else {
+      // For new beneficiary, include all bank accounts (already validated)
+      bankAccountsToSend = bankAccounts.map(account => ({
         ...account,
-        currency_code: accountCurrency,
-      };
-    });
+        currency_code: account.currency || currency,
+      }));
+    }
 
     try {
       if (mode === "create") {
-        // CHECK IF WE'RE USING AN EXISTING BENEFICIARY OR CREATING A NEW ONE
-        if (usingExistingBeneficiary && existingBeneficiaryId) {
-          // STILL CREATE A NEW BENEFICIARY (don't update existing one)
-          console.log("✨ Creating new beneficiary with phone:", phoneInput);
-          console.log("Note: Phone number matches existing beneficiary, but creating new record anyway");
+        // CREATE NEW BENEFICIARY (both cases - with or without existing beneficiary)
+        console.log("✨ Creating new beneficiary");
+        console.log("Bank accounts to add:", bankAccountsToSend.length);
+        console.log("Using existing beneficiary flag:", usingExistingBeneficiary);
+        console.log("Existing beneficiary ID:", existingBeneficiaryId);
 
-          const result = await dispatch(
-            createAndAddBeneficiary({
-              customerId,
-              beneficiaryData: {
-                ...beneficiaryData,
-                country_phone_code: cleanedCountryCode,
-              },
-              bankAccounts: bankAccountsWithCurrency,
-              currency: currency,
-              country_code: cleanedCountryCode,
-            })
-          ).unwrap();
+        const result = await dispatch(
+          createAndAddBeneficiary({
+            customerId,
+            beneficiaryData: {
+              ...beneficiaryData,
+              country_phone_code: cleanedCountryCode,
+            },
+            bankAccounts: bankAccountsToSend,
+            currency: currency,
+            country_code: cleanedCountryCode,
+          })
+        ).unwrap();
 
-          if (result?.success) {
+        console.log("📦 Create result:", result);
+
+        // Handle different response scenarios
+        if (result?.success === true || result?.beneficiaryId || result?.warning) {
+          if (bankAccountsToSend.length === 0) {
             toast.success("Beneficiary created successfully!");
-            setTimeout(() => {
-              navigate(-1);
-            }, 1500);
+          } else {
+            toast.success("Beneficiary created successfully with bank account!");
           }
+          setTimeout(() => {
+            navigate(-1);
+          }, 1500);
+        } else if (result?.error) {
+          toast.error(result.error);
         } else {
-          // CREATE NEW BENEFICIARY (original flow)
-          console.log("✨ Creating new beneficiary");
-
-          const result = await dispatch(
-            createAndAddBeneficiary({
-              customerId,
-              beneficiaryData: {
-                ...beneficiaryData,
-                country_phone_code: cleanedCountryCode,
-              },
-              bankAccounts: bankAccountsWithCurrency,
-              currency: currency,
-              country_code: cleanedCountryCode,
-            })
-          ).unwrap();
-
-          if (result?.success) {
-            toast.success("Beneficiary created successfully!");
-            setTimeout(() => {
-              navigate(-1);
-            }, 1500);
-          }
+          // If we got here, assume success
+          toast.success("Beneficiary created successfully!");
+          setTimeout(() => {
+            navigate(-1);
+          }, 1500);
         }
       } else if (mode === "edit") {
         // CHECK IF THIS IS BANK-ONLY EDIT MODE
         const isBankOnlyEdit = editBankOnlyMode || location.state?.editBankOnly;
 
         if (isBankOnlyEdit) {
-          // ===== BANK-ONLY UPDATE =====
-          console.log("🏦 Updating bank details only");
+          // Bank-only update requires bank details
+          if (bankAccountsToSend.length === 0) {
+            toast.error("No bank account details provided to update");
+            setLoading(false);
+            return;
+          }
 
           // Get the bank ID
           const bankId = location.state?.bankId ||
@@ -1462,28 +1617,23 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           // Special handling for NPR, KES, NGN currencies
           if (["NPR", "KES", "NGN"].includes(currentCurrency)) {
             console.log(`💰 Processing ${currentCurrency} bank update`);
-            
-            // Ensure bank_name is properly set from bankName field
+
             if (!bankData.bank_name && bankAccounts[0]?.bankName) {
               bankData.bank_name = bankAccounts[0].bankName;
             }
-            
-            // Add bank_code for these currencies (required by API)
+
             if (bankAccounts[0]?.bankCode) {
               bankData.bank_code = bankAccounts[0].bankCode;
             }
-            
-            // These currencies might also need branch_code
+
             if (bankAccounts[0]?.branchCode) {
               bankData.branch_code = bankAccounts[0].branchCode;
             }
-            
-            // Additional fields that might be required
+
             if (bankAccounts[0]?.accountName) {
               bankData.account_name = bankAccounts[0].accountName;
             }
-            
-            // Log what we're sending
+
             console.log(`📤 ${currentCurrency} Bank Data:`, {
               bank_name: bankData.bank_name,
               bank_code: bankData.bank_code,
@@ -1518,10 +1668,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           }, 1500);
 
         } else {
-          // ===== FULL BENEFICIARY UPDATE =====
+          // Full beneficiary update
           console.log("📤 Dispatching updateBeneficiary...");
 
-          await dispatch(
+          const result = await dispatch(
             updateBeneficiary({
               customerId,
               beneficiaryId,
@@ -1529,10 +1679,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 ...beneficiaryData,
                 country_phone_code: cleanedCountryCode,
               },
-              bankAccounts: bankAccountsWithCurrency,
+              bankAccounts: bankAccountsToSend,
               currency: currency,
             })
           ).unwrap();
+
+          console.log("📦 Update result:", result);
 
           toast.success("Beneficiary updated successfully!");
 
@@ -1542,8 +1694,23 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         }
       }
     } catch (error) {
-      console.error(`❌ ${mode} error:`, error.message || error);
-      toast.error(error.message || `Failed to ${mode} beneficiary`);
+      console.error(`❌ ${mode} error:`, error);
+      console.error("Error details:", error.message || error);
+
+      // Show more specific error message
+      if (error.message && error.message.includes("newBeneficiaryId")) {
+        toast.error("Beneficiary created successfully! (ID retrieval pending)");
+        // Still navigate back after a short delay
+        setTimeout(() => {
+          navigate(-1);
+        }, 1500);
+      } else if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error(`Failed to ${mode} beneficiary. Please try again.`);
+      }
     } finally {
       if (isMounted.current) {
         setLoading(false);
@@ -1680,29 +1847,26 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   }, [banks, currency]);
 
   const getIdTypesForCurrency = useMemo(() => {
-    if (Object.keys(idTypes).length === 0) {
+    const currentBenefType = formik.values.beneftype || "individual";
+
+    // Try to get from compound key first (new way)
+    const compoundKey = `${currency}_${currentBenefType}`;
+    let types = idTypes[compoundKey];
+
+    // If not found, try with just currency (old way for backward compatibility)
+    if (!types || types.length === 0) {
+      types = idTypes[currency];
+    }
+
+    console.log(`Getting ID types for ${compoundKey}:`, types);
+
+    if (!types || types.length === 0) {
       return [];
     }
 
-    const types = idTypes[currency];
-    if (!types) {
-      return [];
-    }
-
-    if (Array.isArray(types)) {
-      return types;
-    }
-
-    if (types && types.data && Array.isArray(types.data)) {
-      return types.data;
-    }
-
-    if (types && typeof types === "object") {
-      return Object.values(types);
-    }
-
-    return [];
-  }, [idTypes, currency]);
+    // Return the array of ID types
+    return types;
+  }, [idTypes, currency, formik.values.beneftype]);
 
   // Get bank branches for selected bank
   const getBankBranches = useMemo(() => {
@@ -1857,10 +2021,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Select Rails */}
           <div className="mb-4">
-            <FieldLabel required>
+            <FieldLabel required={!usingExistingBeneficiary}>
               Select Rails
               {usingExistingBeneficiary && (
-                <span className="ml-1 text-xs text-green-600">(Required for new account)</span>
+                <span className="ml-1 text-xs text-gray-500">(Optional - Skip if no bank account to add)</span>
               )}
             </FieldLabel>
             <select
@@ -1869,9 +2033,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               onChange={(e) =>
                 handleBankAccountChange(index, "rails", e.target.value)
               }
-              required
+              required={!usingExistingBeneficiary}
             >
-              <option value="">Select Rails</option>
+              <option value="">{usingExistingBeneficiary ? "Select Rails (Optional)" : "Select Rails"}</option>
               <option value="Local">
                 {accountCurrency === "GBP"
                   ? "FPS"
@@ -1893,6 +2057,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <option value="Mobile">Mobile</option>
             </select>
+            {usingExistingBeneficiary && !account.rails && (
+              <div className="flex items-center mt-2 text-gray-500 text-sm">
+                <FaInfoCircle className="mr-1" size={12} />
+                <span>No rails selected - beneficiary will be saved without a bank account</span>
+              </div>
+            )}
             {account.rails && (
               <div className="flex items-center mt-2 text-green-600 text-sm">
                 <FaCheckCircle className="mr-1" size={12} />
@@ -2410,7 +2580,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         const selectedBankCode = e.target.value;
                         console.log("Selected bank code:", selectedBankCode);
                         console.log("Available banks:", currentBanks);
-                        
+
                         // Find the selected bank by matching the value
                         const selectedBank = currentBanks.find(
                           (bank) => {
@@ -2419,11 +2589,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             return String(bankValue) === String(selectedBankCode);
                           }
                         );
-                        
+
                         if (selectedBank) {
                           const bankNameValue = selectedBank.name || selectedBank.bank_name;
                           console.log(`🏦 Bank selected - Code: ${selectedBankCode}, Name: ${bankNameValue}`);
-                          
+
                           // Update both bankCode and bankName
                           handleBankAccountChange(index, "bankCode", selectedBankCode);
                           handleBankAccountChange(index, "bankName", bankNameValue);
@@ -2958,6 +3128,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
                 </div>
 
+                {/* Inside renderPhoneSearchStep function, update the beneficiary details display */}
                 <div className="mb-6 p-4 bg-white rounded-lg border border-yellow-100">
                   <h4 className="font-semibold text-gray-800 mb-2">
                     Existing Beneficiary Details:
@@ -2966,37 +3137,45 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     <div>
                       <span className="text-sm text-gray-500">Name:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
+                        {foundBeneficiary?.displayName || foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Email:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
+                        {foundBeneficiary?.displayEmail || foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Phone:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.phone_number || phoneSearch.data?.phone_number || "N/A"}
+                        {foundBeneficiary?.displayPhone || foundBeneficiary?.full_phone_number || foundBeneficiary?.phone_number || phoneSearch.data?.full_phone_number || phoneSearch.data?.phone_number || "N/A"}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Country:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.country_id || phoneSearch.data?.country_id
-                          ? countries.find(
-                            (c) =>
-                              c.id === parseInt(foundBeneficiary?.country_id || phoneSearch.data?.country_id)
-                          )?.name || "N/A"
-                          : "N/A"}
+                        {foundBeneficiary?.displayCountry || (() => {
+                          const countryId = foundBeneficiary?.country_id || phoneSearch.data?.country_id;
+                          if (countryId) {
+                            const country = countries.find(c => c.id === parseInt(countryId));
+                            return country?.name || "N/A";
+                          }
+                          return "N/A";
+                        })()}
                       </p>
                     </div>
                     <div>
                       <span className="text-sm text-gray-500">Currency:</span>
                       <p className="font-medium">
-                        {foundBeneficiary?.banks?.[0]?.currency_code ||
-                          phoneSearch.data?.banks?.[0]?.currency_code || "N/A"}
+                        {foundBeneficiary?.displayCurrency || (() => {
+                          const banks = foundBeneficiary?.banks || phoneSearch.data?.banks;
+                          if (banks && banks.length > 0) {
+                            const activeBank = banks.find(bank => bank.deleted_at === null);
+                            return activeBank?.currency_code || "N/A";
+                          }
+                          return "N/A";
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -3518,42 +3697,45 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Nationality */}
-                  <div>
-                    <FieldLabel>
-                      Nationality
-                      {usingExistingBeneficiary && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          (Pre-filled - Cannot Edit)
-                        </span>
-                      )}
-                    </FieldLabel>
-                    <div className="relative">
-                      <select
-                        className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                          ? "bg-gray-100 cursor-not-allowed"
-                          : "bg-white"
-                          }`}
-                        onChange={formik.handleChange}
-                        value={formik.values.nationality_id}
-                        name="nationality_id"
-                        disabled={usingExistingBeneficiary}
-                      >
-                        <option value="">Select Nationality</option>
-                        {nationalities.map((nationality) => (
-                          <option key={nationality.id} value={nationality.id}>
-                            {nationality.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                        <FaChevronRight className="text-gray-400 rotate-90" />
+                  {/* Nationality - Only show for individuals, not institutions */}
+                  {formik.values.beneftype === "individual" && (
+                    <div>
+                      <FieldLabel>
+                        Nationality
+                        {usingExistingBeneficiary && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (Pre-filled - Cannot Edit)
+                          </span>
+                        )}
+                      </FieldLabel>
+                      <div className="relative">
+                        <select
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
+                            ? "bg-gray-100 cursor-not-allowed"
+                            : "bg-white"
+                            }`}
+                          onChange={formik.handleChange}
+                          value={formik.values.nationality_id}
+                          name="nationality_id"
+                          disabled={usingExistingBeneficiary}
+                        >
+                          <option value="">Select Nationality</option>
+                          {nationalities.map((nationality) => (
+                            <option key={nationality.id} value={nationality.id}>
+                              {nationality.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                          <FaChevronRight className="text-gray-400 rotate-90" />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Country */}
                   <div>
-                    <FieldLabel required>
+                    <FieldLabel >
                       Country
                       {usingExistingBeneficiary && (
                         <span className="ml-2 text-xs text-gray-500">
@@ -3752,26 +3934,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </FieldLabel>
                       <div className="relative">
                         <select
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                            ? "bg-gray-100"
-                            : "bg-white"
-                            }`}
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
                           value={formik.values.beneficiary_id_type}
                           onChange={formik.handleChange}
                           name="beneficiary_id_type"
                           required
                         >
                           <option value="">Select ID Type</option>
-                          {getIdTypesForCurrency.map((idType) => {
-                            const value = idType.name || idType.id || idType;
-                            const label = idType.name || idType.id || idType;
-
-                            return (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            );
-                          })}
+                          {getIdTypesForCurrency.map((idType) => (
+                            <option key={idType.id} value={idType.name}>
+                              {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
+                            </option>
+                          ))}
                         </select>
                         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
                           <FaChevronRight className="text-gray-400 rotate-90" />
@@ -3809,7 +3983,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {/* Relation to Beneficiary (only for individual) */}
                   {formik.values.beneftype === "individual" && (
                     <div className="md:col-span-2">
-                      <FieldLabel required>
+                      <FieldLabel>
                         Relation to Beneficiary
                         {usingExistingBeneficiary && (
                           <span className="ml-2 text-xs text-gray-500">
