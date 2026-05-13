@@ -3922,7 +3922,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Beneficiary ID Type (for specific currencies) */}
-                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
+                  {/* {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Type
@@ -3952,32 +3952,62 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </div>
                       </div>
                     </div>
-                  )}
+                  )} */}
 
                   {/* Beneficiary ID Number (for specific currencies) */}
+                  {/* Beneficiary ID Fields - Conditional based on beneficiary type */}
                   {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
-                    <div>
-                      <FieldLabel required>
-                        Beneficiary ID Number
-                        {usingExistingBeneficiary && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            (New - Fill for this bank account)
-                          </span>
-                        )}
-                      </FieldLabel>
-                      <input
-                        type="text"
-                        className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100"
-                          : "bg-white"
-                          }`}
-                        placeholder="Enter ID Number"
-                        value={formik.values.beneficiary_id_number}
-                        onChange={formik.handleChange}
-                        name="beneficiary_id_number"
-                        required
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <FieldLabel required>
+                          {formik.values.beneftype === "institution" ? "Company ID Type" : "Beneficiary ID Type"}
+                          {usingExistingBeneficiary && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              (New - Fill for this bank account)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <div className="relative">
+                          <select
+                            className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
+                            value={formik.values.beneficiary_id_type}
+                            onChange={formik.handleChange}
+                            name="beneficiary_id_type"
+                            required
+                          >
+                            <option value="">Select ID Type</option>
+                            {getIdTypesForCurrency.map((idType) => (
+                              <option key={idType.id} value={idType.name}>
+                                {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                            <FaChevronRight className="text-gray-400 rotate-90" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel required>
+                          {formik.values.beneftype === "institution" ? "Company ID Number" : "Beneficiary ID Number"}
+                          {usingExistingBeneficiary && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              (New - Fill for this bank account)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <input
+                          type="text"
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
+                          placeholder={formik.values.beneftype === "institution" ? "Enter Company Registration Number" : "Enter ID Number"}
+                          value={formik.values.beneficiary_id_number}
+                          onChange={formik.handleChange}
+                          name="beneficiary_id_number"
+                          required
+                        />
+                      </div>
+                    </>
                   )}
 
                   {/* Relation to Beneficiary (only for individual) */}
