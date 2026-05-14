@@ -51,6 +51,7 @@ const ManualDeposit = ({
   incomeSourceOptions = [],
   relationOptions = [],
   paymentOptions = [],
+  onSaveRemittanceState,
 }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -69,12 +70,10 @@ const ManualDeposit = ({
       .map((benef) => ({
         ...benef,
         value: benef.id,
-        label: `${benef.name} (${
-          benef.full_phone_number || benef.phone_number || benef.benef_uuid
-        })`,
-        formattedName: `${benef.name} (${
-          benef.phone_number || benef.email || benef.benef_uuid
-        })`,
+        label: `${benef.name} (${benef.full_phone_number || benef.phone_number || benef.benef_uuid
+          })`,
+        formattedName: `${benef.name} (${benef.phone_number || benef.email || benef.benef_uuid
+          })`,
       }));
   }, [allBeneficiaries]);
 
@@ -114,6 +113,8 @@ const ManualDeposit = ({
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [occupations, setOccupations] = useState([]);
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
+
+  const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
 
   // Default payout options
   const defaultPayoutOptions = useMemo(
@@ -423,9 +424,26 @@ const ManualDeposit = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    const customerId =
-      paramCustomerId || localStorage.getItem("authcustomer_id");
-    navigate(`/addbeneficiary/${customerId}`);
+    const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+    console.log("➕ Navigating to add beneficiary from ManualDeposit");
+    
+    setIsNavigatingToAdd(true);
+
+    // ✅ ADD THIS - Save state before navigating
+  if (onSaveRemittanceState) {
+    onSaveRemittanceState();
+  }
+  
+    
+    navigate(`/addbeneficiary/${customerId}`, {
+      state: {
+        returnTo: `/remittance/${customerId}`,
+        returnStep: 2,
+        returnToStep: 2,
+        preserveRemittanceState: true,
+        from: "remittance"  // ADD THIS FLAG
+      }
+    });
   };
 
   return (
@@ -446,10 +464,20 @@ const ManualDeposit = ({
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                disabled={isNavigatingToAdd}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FaPlus className="w-3 h-3" />
-                Add New Beneficiary
+                {isNavigatingToAdd ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaPlus className="w-3 h-3" />
+                    Add New Beneficiary
+                  </>
+                )}
               </button>
             </div>
             <Select
@@ -464,8 +492,8 @@ const ManualDeposit = ({
                 beneficiariesLoading
                   ? "Loading beneficiaries..."
                   : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
+                    ? "Disabled - Using beneficiary code"
+                    : "Select beneficiary..."
               }
               isSearchable
               getOptionLabel={(option) =>
@@ -612,10 +640,10 @@ const ManualDeposit = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option.bank_name || "Unknown Bank";

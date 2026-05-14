@@ -8,7 +8,7 @@ import React, {
   useRef,
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaArrowRight,
@@ -100,6 +100,7 @@ import { RingLoader } from "react-spinners";
 const Remittance = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { customerId } = useParams();
 
   // Select state from Redux store
@@ -132,16 +133,16 @@ const Remittance = () => {
   const silaAccountsLoading = useSelector(selectUSDAccountsLoading);
   const silaAccountsError = useSelector(selectUSDAccountsError);
   const reduxSelectedSilaBankAccount = useSelector(selectSelectedBankAccount);
-  
+
   // Local state for selected bank account to ensure proper synchronization
   const [localSelectedBankAccount, setLocalSelectedBankAccount] = useState(null);
-  
+
   // Local state for amount validation
   const [amountError, setAmountError] = useState(null);
-  
+
   // Use local state if available, otherwise use Redux state
   const selectedSilaBankAccount = localSelectedBankAccount || reduxSelectedSilaBankAccount;
-  
+
   const exchangeRateData = reduxExchangeRateData;
 
   // Local state for UI
@@ -296,17 +297,17 @@ const Remittance = () => {
   // Calculate if continue button should be disabled for step 2
   const isStep2ButtonDisabled = useMemo(() => {
     if (step !== 2) return false;
-    
+
     // Basic validations
     if (!selectedBeneficiary) return true;
     if (!formData.purpose || !formData.purpose.value) return true;
     if (!formData.incomeSource || !formData.incomeSource.value) return true;
-    
+
     // Manual payment method validation
     if (formData.paymentMethod === "manual") {
       if (!formData.document) return true;
     }
-    
+
     // Bank transfer validations
     if (formData.paymentMethod === "bank") {
       // For USD transfers, need Sila bank account
@@ -315,11 +316,11 @@ const Remittance = () => {
         if (!selectedSilaBankAccount) return true;
         if (!selectedSilaBankAccount.web_debit_verified) return true;
       }
-      
+
       // For all bank transfers, need beneficiary bank selected
       if (!selectedBank) return true;
     }
-    
+
     return false;
   }, [step, selectedBeneficiary, formData, selectedSilaBankAccount, selectedBank, hasSilaAccounts, silaBankAccounts]);
 
@@ -515,13 +516,13 @@ const Remittance = () => {
 
   // Reset exchange rate data when currencies change
   useEffect(() => {
-   if (isInitializing || isFirstLoad.current) return;
+    if (isInitializing || isFirstLoad.current) return;
 
-   if(formData.sendCurrency?.value && formData.receiveCurrency?.value) {
-    const currentPair = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value}`;
-    const cachedPair = exchangeRateData
-      ? `${exchangeRateData.fromCurrency}-${exchangeRateData.toCurrency}`
-      : null;
+    if (formData.sendCurrency?.value && formData.receiveCurrency?.value) {
+      const currentPair = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value}`;
+      const cachedPair = exchangeRateData
+        ? `${exchangeRateData.fromCurrency}-${exchangeRateData.toCurrency}`
+        : null;
 
       if (cachedPair && cachedPair !== currentPair) {
         console.log('Currency pair changed, clearing exchange rate');
@@ -529,8 +530,8 @@ const Remittance = () => {
         isManualUpdate.current = false;
         dispatch(setReceiveAmount(""));
       }
-   }
-  },[formData.sendCurrency, formData.receiveCurrency, dispatch, exchangeRateData, isInitializing]);
+    }
+  }, [formData.sendCurrency, formData.receiveCurrency, dispatch, exchangeRateData, isInitializing]);
 
   // Fetch exchange rate with deduplication and caching - FULL IMPLEMENTATION
   useEffect(() => {
@@ -728,7 +729,7 @@ const Remittance = () => {
       formData.sendAmount &&
       parseFloat(formData.sendAmount) >= 5 &&
       !isManualUpdate.current &&
-      !isTyping.current && 
+      !isTyping.current &&
       !isInitializing
     ) {
       const sendNum = parseFloat(formData.sendAmount);
@@ -1053,7 +1054,7 @@ const Remittance = () => {
       }
 
       const cleaned = value.replace(/[^0-9.]/g, "");
-      
+
       // Handle decimal point edge case
       if (cleaned === ".") {
         return;
@@ -1080,7 +1081,7 @@ const Remittance = () => {
         isTyping.current = false;
 
         const sendNum = parseFloat(formattedValue);
-        
+
         // Validate minimum amount
         if (!isNaN(sendNum) && sendNum > 0 && sendNum < 5) {
           setAmountError(`Minimum send amount is ${formData.sendCurrency?.value || 'USD'} 5.00`);
@@ -1793,6 +1794,109 @@ const Remittance = () => {
   const handleRecurringDataChange = useCallback((data) => {
     setRecurringData(data);
   }, []);
+  // Save current remittance state to sessionStorage before navigating to add beneficiary
+  const saveRemittanceState = useCallback(() => {
+    const stateToSave = {
+      step,
+      sendAmount: formData.sendAmount,
+      receiveAmount: formData.receiveAmount,
+      sendCurrency: formData.sendCurrency,
+      receiveCurrency: formData.receiveCurrency,
+      paymentMethod: formData.paymentMethod,
+      purpose: formData.purpose,
+      incomeSource: formData.incomeSource,
+      relation: formData.relation,
+      occupation: formData.occupation,
+      payout_method: formData.payout_method,
+      agreeToTerms: formData.agreeToTerms,
+      document: formData.document,
+      timestamp: Date.now()
+    };
+    sessionStorage.setItem('remittance_temp_state', JSON.stringify(stateToSave));
+    console.log("💾 Saved remittance state:", stateToSave);
+  }, [step, formData]);
+
+  // Restore remittance state from sessionStorage
+  const restoreRemittanceState = useCallback(() => {
+    const savedState = sessionStorage.getItem('remittance_temp_state');
+    if (savedState) {
+      try {
+        const restoredState = JSON.parse(savedState);
+        console.log("🔄 Restoring remittance state:", restoredState);
+
+        // Only restore if state is not too old (within 30 minutes)
+        if (Date.now() - (restoredState.timestamp || 0) < 30 * 60 * 1000) {
+          if (restoredState.sendCurrency) dispatch(setSendCurrency(restoredState.sendCurrency));
+          if (restoredState.receiveCurrency) dispatch(setReceiveCurrency(restoredState.receiveCurrency));
+          if (restoredState.sendAmount) dispatch(setSendAmount(restoredState.sendAmount));
+          if (restoredState.receiveAmount) dispatch(setReceiveAmount(restoredState.receiveAmount));
+          if (restoredState.paymentMethod) dispatch(setPaymentMethod(restoredState.paymentMethod));
+          if (restoredState.purpose) dispatch(setFormField({ field: "purpose", value: restoredState.purpose }));
+          if (restoredState.incomeSource) dispatch(setFormField({ field: "incomeSource", value: restoredState.incomeSource }));
+          if (restoredState.relation) dispatch(setFormField({ field: "relation", value: restoredState.relation }));
+          if (restoredState.occupation) dispatch(setFormField({ field: "occupation", value: restoredState.occupation }));
+          if (restoredState.payout_method) dispatch(setFormField({ field: "payout_method", value: restoredState.payout_method }));
+          if (restoredState.agreeToTerms) dispatch(setFormField({ field: "agreeToTerms", value: restoredState.agreeToTerms }));
+
+          // Clear the saved state after restoring
+          sessionStorage.removeItem('remittance_temp_state');
+          return true;
+        }
+      } catch (error) {
+        console.error("Failed to restore state:", error);
+      }
+    }
+    return false;
+  }, [dispatch]);
+
+  // Handle navigation back from Add Beneficiary page
+  useEffect(() => {
+    console.log("📍 Remittance location state:", location.state);
+
+    // Check if we're returning from adding a beneficiary
+    if (location.state?.newBeneficiary && location.state?.returnToStep === 2) {
+      console.log("🔄 Returning from Add Beneficiary with new beneficiary:", location.state.newBeneficiary);
+
+      // First, restore the saved remittance state
+      const wasRestored = restoreRemittanceState();
+      console.log("📊 State restored:", wasRestored);
+
+      const newBeneficiary = location.state.newBeneficiary;
+
+      // Auto-select the new beneficiary
+      if (newBeneficiary && newBeneficiary.id) {
+        // First, ensure we're on step 2
+        if (step !== 2) {
+          console.log("📌 Setting step to 2");
+          dispatch(setStep(2));
+        }
+
+        // Small delay to ensure state is restored and step is set
+        setTimeout(() => {
+          // Select the beneficiary
+          console.log("👤 Selecting beneficiary:", newBeneficiary);
+          handleBeneficiarySelect(newBeneficiary);
+
+          // If there are banks, select the first one
+          if (newBeneficiary.benef_banks && newBeneficiary.benef_banks.length > 0) {
+            console.log("🏦 Selecting first bank:", newBeneficiary.benef_banks[0]);
+            setTimeout(() => {
+              handleBankSelect(newBeneficiary.benef_banks[0]);
+            }, 500);
+          } else {
+            // Try to fetch banks for the new beneficiary
+            console.log("🔍 Fetching banks for new beneficiary");
+            dispatch(fetchBeneficiaryBanks(newBeneficiary.id)).then(() => {
+              // Bank selection will happen in the useEffect that watches beneficiaryBanks
+            });
+          }
+        }, 500); // Increased delay to ensure state restoration completes
+
+        // Clear the location state to prevent re-selection on refresh
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [location.state, dispatch, navigate, handleBeneficiarySelect, handleBankSelect, step, restoreRemittanceState]);
 
   if (initialLoading) {
     return (
@@ -1846,10 +1950,10 @@ const Remittance = () => {
                 }}
                 transition={{ duration: 0.3 }}
                 className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all duration-300 ${step > stepItem.number
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200"
-                    : step === stepItem.number
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
-                      : "bg-white text-slate-400 border-2 border-slate-200"
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200"
+                  : step === stepItem.number
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                    : "bg-white text-slate-400 border-2 border-slate-200"
                   }`}
               >
                 {step > stepItem.number ? (
@@ -1863,8 +1967,8 @@ const Remittance = () => {
               <div className="mt-3 text-center hidden sm:block">
                 <span
                   className={`text-xs font-medium ${step >= stepItem.number
-                      ? "text-slate-700"
-                      : "text-slate-400"
+                    ? "text-slate-700"
+                    : "text-slate-400"
                     }`}
                 >
                   {stepItem.label}
@@ -1909,6 +2013,7 @@ const Remittance = () => {
             onFieldChange={handleFieldChange}
             copyToClipboard={copyToClipboard}
             copiedField={copiedField}
+            onSaveRemittanceState={saveRemittanceState} 
           />
         );
       case "bank":
@@ -1935,6 +2040,7 @@ const Remittance = () => {
             selectedBankAccount={selectedSilaBankAccount}
             onBankAccountSelect={handleBankAccountSelect}
             customerId={customerId}
+            onSaveRemittanceState={saveRemittanceState}
           />
         );
       default:
@@ -2007,18 +2113,17 @@ const Remittance = () => {
                         value={formData.sendAmount || ""}
                         onChange={(e) => handleSendAmountChange(e.target.value)}
                         placeholder="0.00"
-                        className={`w-full pl-10 pr-4 py-4 text-3xl font-bold bg-slate-50 border rounded-xl focus:outline-none transition-all duration-200 ${
-                          amountError 
-                            ? "border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200" 
-                            : "border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                        }`}
+                        className={`w-full pl-10 pr-4 py-4 text-3xl font-bold bg-slate-50 border rounded-xl focus:outline-none transition-all duration-200 ${amountError
+                          ? "border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                          : "border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          }`}
                         inputMode="decimal"
                       />
                     </div>
-                    
+
                     {/* Show error message if amount is below minimum */}
                     {amountError && (
-                      <motion.p 
+                      <motion.p
                         initial={{ opacity: 0, y: -5 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="text-xs text-red-500 mt-2 flex items-center gap-1"
@@ -2027,7 +2132,7 @@ const Remittance = () => {
                         {amountError}
                       </motion.p>
                     )}
-                    
+
                     {/* Show regular hint when no error */}
                     {!amountError && (
                       <p className="text-xs text-slate-400 mt-2">
@@ -2202,15 +2307,15 @@ const Remittance = () => {
                       onMouseEnter={() => setActiveCard(option.value)}
                       onMouseLeave={() => setActiveCard(null)}
                       className={`p-5 rounded-xl border-2 transition-all duration-200 text-left ${isSelected
-                          ? `border-indigo-500 bg-indigo-50/30 shadow-md`
-                          : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                        ? `border-indigo-500 bg-indigo-50/30 shadow-md`
+                        : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
                         }`}
                     >
                       <div className="flex items-start gap-4">
                         <div
                           className={`p-2.5 rounded-xl transition-all duration-200 ${isSelected
-                              ? "bg-indigo-500 text-white shadow-md"
-                              : "bg-slate-100 text-slate-600"
+                            ? "bg-indigo-500 text-white shadow-md"
+                            : "bg-slate-100 text-slate-600"
                             }`}
                         >
                           {option.icon}
