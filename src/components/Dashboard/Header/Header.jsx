@@ -203,6 +203,15 @@ const Header = ({ customerId }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dispatch]);
 
+  // Add this useEffect right after your other useEffects (around line 150-160)
+useEffect(() => {
+  // Save customer_type to localStorage whenever profileData loads
+  if (profileData?.customer_type) {
+    console.log("💾 Header: Saving customer_type to localStorage:", profileData.customer_type);
+    localStorage.setItem('customer_type', profileData.customer_type);
+  }
+}, [profileData]);
+
   // Profile fetch — skips when navigating
   useEffect(() => {
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
@@ -307,7 +316,21 @@ const Header = ({ customerId }) => {
   }, []);
 
   // Get customer type from profile data
-  const customerType = profileData?.customer_type;
+  const customerType = useMemo(() => {
+    // First try Redux
+    if (profileData?.customer_type) {
+      return profileData.customer_type;
+    }
+    
+    // Then try localStorage (cached from previous fetch)
+    const cachedType = localStorage.getItem('customer_type');
+    if (cachedType) {
+      return cachedType;
+    }
+    
+    // Default to null while loading
+    return null;
+  }, [profileData])
 
   // Filter dropdown items based on customer type
   const dropdownItems = useMemo(() => {
