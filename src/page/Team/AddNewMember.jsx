@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { 
-  FaEye, 
-  FaEyeSlash, 
-  FaTimes, 
-  FaUsers, 
+import {
+  FaEye,
+  FaEyeSlash,
+  FaTimes,
+  FaUsers,
   FaUserPlus,
   FaPhone,
   FaEnvelope,
@@ -119,10 +119,10 @@ const AddTeamMember = () => {
     onSubmit: async (values) => {
       // Prevent double submission
       if (isSubmittingRef.current) return;
-      
+
       setIsSubmitting(true);
       isSubmittingRef.current = true;
-      
+
       try {
         await createTeamMember(customerId, values, authtoken, API_URL);
       } catch (error) {
@@ -146,10 +146,10 @@ const AddTeamMember = () => {
   useEffect(() => {
     if (success) {
       toast.success("🎉 Team member added successfully!");
-      
+
       // Reset success state immediately to prevent re-triggering
       resetSuccess();
-      
+
       // Reset form values
       formik.resetForm();
       // Reset country selection
@@ -157,7 +157,7 @@ const AddTeamMember = () => {
       setSearchTerm("");
       setIsDropdownOpen(false);
       setPasswordVisible(false);
-      
+
       // Navigate back to team list after a short delay
       setTimeout(() => {
         navigate(`/team/${customerId}`);
@@ -189,19 +189,19 @@ const AddTeamMember = () => {
   };
 
   // Safe countries filtering
-  const filteredCountries = Array.isArray(countriesData) 
+  const filteredCountries = Array.isArray(countriesData)
     ? countriesData.filter((country) => {
-        if (!country || typeof country !== 'object') return false;
-        
-        const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-        const normalizedCountryName = (country.name || '').trim().toLowerCase();
-        const normalizedPhoneCode = (country.phone_code || '').trim().toLowerCase();
+      if (!country || typeof country !== 'object') return false;
 
-        return (
-          normalizedCountryName.includes(normalizedSearchTerm) ||
-          normalizedPhoneCode.includes(normalizedSearchTerm)
-        );
-      }).slice(0, 100) // Limit results for performance
+      const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+      const normalizedCountryName = (country.name || '').trim().toLowerCase();
+      const normalizedPhoneCode = (country.phone_code || '').trim().toLowerCase();
+
+      return (
+        normalizedCountryName.includes(normalizedSearchTerm) ||
+        normalizedPhoneCode.includes(normalizedSearchTerm)
+      );
+    }).slice(0, 100) // Limit results for performance
     : [];
 
   // Toggle password visibility
@@ -256,7 +256,7 @@ const AddTeamMember = () => {
     >
       <div className="max-w-6xl mx-auto">
         {/* Header Section */}
-        <motion.div 
+        <motion.div
           variants={itemVariants}
           className="text-center mb-12"
         >
@@ -274,7 +274,7 @@ const AddTeamMember = () => {
                 </p>
               </div>
             </div>
-            
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -313,7 +313,7 @@ const AddTeamMember = () => {
         {/* Main Form Card */}
         <motion.div
           variants={itemVariants}
-          className="bg-white rounded-2xl shadow-xl overflow-hidden"
+          className="bg-white rounded-2xl shadow-xl"
         >
           <div className={`px-8 py-6 ${headerColorProps.className}`}>
             <h2 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -341,11 +341,10 @@ const AddTeamMember = () => {
                     value={formik.values.first_name}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${
-                      formik.errors.first_name && formik.touched.first_name
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.first_name && formik.touched.first_name
                         ? "border-red-300 focus:ring-red-200"
                         : "border-gray-300 focus:ring-blue-200"
-                    }`}
+                      }`}
                     placeholder="Enter first name"
                   />
                   {formik.values.first_name && !formik.errors.first_name && (
@@ -395,11 +394,10 @@ const AddTeamMember = () => {
                     value={formik.values.last_name}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${
-                      formik.errors.last_name && formik.touched.last_name
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.last_name && formik.touched.last_name
                         ? "border-red-300 focus:ring-red-200"
                         : "border-gray-300 focus:ring-blue-200"
-                    }`}
+                      }`}
                     placeholder="Enter last name"
                   />
                   {formik.values.last_name && !formik.errors.last_name && (
@@ -431,11 +429,10 @@ const AddTeamMember = () => {
                     value={formik.values.email}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${
-                      formik.errors.email && formik.touched.email
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.email && formik.touched.email
                         ? "border-red-300 focus:ring-red-200"
                         : "border-gray-300 focus:ring-blue-200"
-                    }`}
+                      }`}
                     placeholder="Enter email address"
                   />
                   {formik.values.email && !formik.errors.email && (
@@ -467,11 +464,10 @@ const AddTeamMember = () => {
                     value={formik.values.password}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 pr-12 ${
-                      formik.errors.password && formik.touched.password
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 pr-12 ${formik.errors.password && formik.touched.password
                         ? "border-red-300 focus:ring-red-200"
                         : "border-gray-300 focus:ring-blue-200"
-                    }`}
+                      }`}
                     placeholder="Create a strong password"
                   />
                   <button
@@ -545,7 +541,7 @@ const AddTeamMember = () => {
                   <FaPhone className="text-blue-500" />
                   Phone Number *
                 </label>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Country Code Selector */}
                   <div className="relative">
@@ -553,41 +549,65 @@ const AddTeamMember = () => {
                       Country Code
                     </label>
                     <div className="relative">
-                      <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className={`w-full px-4 py-3 border rounded-xl text-left flex items-center justify-between transition-all duration-200 ${
-                          formik.errors.mobilenumber_countrycode && formik.touched.mobilenumber_countrycode
+                      <div
+                        className={`w-full px-4 py-3 border rounded-xl transition-all duration-200 ${formik.errors.mobilenumber_countrycode &&
+                            formik.touched.mobilenumber_countrycode
                             ? "border-red-300"
                             : "border-gray-300"
-                        }`}
+                          }`}
                       >
-                        <div className="flex items-center gap-3">
-                          {selectedCountry ? (
-                            <>
-                              <img
-                                src={selectedCountry.flag_url}
-                                alt={`${selectedCountry.name} flag`}
-                                className="w-6 h-4 rounded object-cover"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                }}
-                              />
-                              <span className="font-medium">{selectedCountry.phone_code}</span>
-                            </>
-                          ) : (
-                            <span className="text-gray-500">Select country</span>
-                          )}
-                        </div>
-                        <FaChevronDown 
-                          className={`text-gray-400 transition-transform duration-200 ${
-                            isDropdownOpen ? "rotate-180" : ""
-                          }`} 
-                        />
-                      </motion.button>
+                        {isDropdownOpen ? (
+                          <div className="flex items-center gap-2">
+                            <FaSearch className="text-gray-400" />
 
+                            <input
+                              type="text"
+                              autoFocus
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Search countries..."
+                              className="w-full outline-none bg-transparent"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                setSearchTerm("");
+                              }}
+                            >
+                              <FaTimes className="text-gray-400" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsDropdownOpen(true)}
+                            className="w-full flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              {selectedCountry ? (
+                                <>
+                                  <img
+                                    src={selectedCountry.flag_url}
+                                    alt={`${selectedCountry.name} flag`}
+                                    className="w-6 h-4 rounded object-cover"
+                                  />
+                                  <span className="font-medium">
+                                    {selectedCountry.phone_code}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-gray-500">
+                                  Select country
+                                </span>
+                              )}
+                            </div>
+
+                            <FaChevronDown className="text-gray-400" />
+                          </button>
+                        )}
+                      </div>
                       <AnimatePresence>
                         {isDropdownOpen && (
                           <motion.div
@@ -597,7 +617,7 @@ const AddTeamMember = () => {
                             className="absolute z-20 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-2xl overflow-hidden"
                           >
                             {/* Search */}
-                            <div className="p-3 border-b border-gray-200">
+                            {/* <div className="p-3 border-b border-gray-200">
                               <div className="relative">
                                 <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                                 <input
@@ -608,7 +628,7 @@ const AddTeamMember = () => {
                                   onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                               </div>
-                            </div>
+                            </div> */}
 
                             {/* Countries List */}
                             <div className="max-h-60 overflow-y-auto">
@@ -675,11 +695,10 @@ const AddTeamMember = () => {
                         value={formik.values.mobile_number}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
-                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${
-                          formik.errors.mobile_number && formik.touched.mobile_number
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.mobile_number && formik.touched.mobile_number
                             ? "border-red-300 focus:ring-red-200"
                             : "border-gray-300 focus:ring-blue-200"
-                        }`}
+                          }`}
                         placeholder="Enter phone number"
                       />
                       {formik.values.mobile_number && !formik.errors.mobile_number && (
@@ -701,7 +720,7 @@ const AddTeamMember = () => {
             </div>
 
             {/* Action Buttons */}
-            <motion.div 
+            <motion.div
               variants={itemVariants}
               className="flex flex-col sm:flex-row gap-4 justify-end mt-12 pt-6 border-t border-gray-200"
             >
@@ -716,17 +735,16 @@ const AddTeamMember = () => {
                 <FaTimes />
                 Cancel
               </motion.button>
-              
+
               <motion.button
                 type="submit"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 disabled={loading || isSubmitting || !formik.isValid}
-                className={`px-8 py-4 text-white rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-200 ${
-                  loading || isSubmitting || !formik.isValid
+                className={`px-8 py-4 text-white rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-200 ${loading || isSubmitting || !formik.isValid
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:shadow-lg"
-                } ${headerColorProps.className}`}
+                  } ${headerColorProps.className}`}
               >
                 <FaUserPlus />
                 {isSubmitting ? "Creating..." : "Create Team Member"}
