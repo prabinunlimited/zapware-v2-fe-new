@@ -237,6 +237,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [countryCodeInput, setCountryCodeInput] = useState("+1");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [foundBeneficiary, setFoundBeneficiary] = useState(null);
+  const [selectedBeneficiaryType, setSelectedBeneficiaryType] = useState("");
 
   // Beneficiary Bank States
   const [currency, setCurrency] = useState(
@@ -1003,6 +1004,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   // PHONE SEARCH FUNCTIONS
 
   const handlePhoneSearch = () => {
+    if (!selectedBeneficiaryType) {
+      toast.error("Please select beneficiary type (Individual or Institution)");
+      return;
+    }
+  
     if (!phoneInput.trim()) {
       toast.error("Please enter a phone number to search");
       return;
@@ -1025,13 +1031,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     try {
       console.log("🔍 Dispatching phone search with:", {
         phoneNumber: phoneInput,
-        countryPhoneCode: countryCodeInput
+        countryPhoneCode: countryCodeInput,
+        beneficiaryType: selectedBeneficiaryType,
       });
 
       dispatch(
         searchBeneficiaryByPhone({
           phoneNumber: phoneInput,
           countryPhoneCode: countryCodeInput,
+          beneficiaryType: selectedBeneficiaryType,
         })
       );
     } catch (error) {
@@ -1165,6 +1173,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const nextStep = () => {
     // If in phone search step (step 0), handle differently
     if (step === 0) {
+      if(!selectedBeneficiaryType){
+        toast.error("Please select beneficiary type")
+        return false
+      }
       if (!phoneInput.trim()) {
         toast.error("Please enter a phone number to search");
         return false;
@@ -3019,6 +3031,42 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       </div>
 
       <div className="space-y-6">
+        {/* ✅ ADD THIS BENEFICIARY TYPE SELECTOR HERE */}
+        <div>
+          <FieldLabel required info="Select whether you're searching for an individual or institution">
+            Select Beneficiary Type
+          </FieldLabel>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedBeneficiaryType("individual");
+                formik.setFieldValue("beneftype", "individual");
+              }}
+              className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedBeneficiaryType === "individual"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-200 hover:border-gray-300 bg-white"
+                }`}
+            >
+              <div className="font-medium">Individual</div>
+              <div className="text-sm text-gray-500">Personal beneficiary</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedBeneficiaryType("institution");
+                formik.setFieldValue("beneftype", "institution");
+              }}
+              className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedBeneficiaryType === "institution"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-200 hover:border-gray-300 bg-white"
+                }`}
+            >
+              <div className="font-medium">Institution</div>
+              <div className="text-sm text-gray-500">Company or organization</div>
+            </button>
+          </div>
+        </div>
         {/* Phone Input */}
         <div>
           <FieldLabel
@@ -3081,10 +3129,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <button
                 type="button"
                 onClick={handlePhoneSearch}
-                disabled={!phoneInput.trim() || phoneSearchLoading}
+                disabled={!phoneInput.trim() || phoneSearchLoading || !selectedBeneficiaryType}
                 className={`px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap flex items-center ${phoneSearchLoading
                   ? "bg-gray-300 cursor-not-allowed"
-                  : !phoneInput.trim()
+                  : !phoneInput.trim() || !selectedBeneficiaryType
                     ? "bg-gray-300 cursor-not-allowed"
                     : "bg-blue-500 hover:bg-blue-600 text-white"
                   }`}
@@ -3196,7 +3244,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center justify-center font-medium"
                   >
                     <FaUser className="mr-2" />
-                    Create New Instead
+                    Create New {selectedBeneficiaryType === "individual" ? "Individual" :"Institution"} Beneficiary
                   </button>
                 </div>
               </div>
@@ -3248,8 +3296,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           <button
             type="button"
             onClick={nextStep}
-            disabled={phoneSearchLoading || !phoneInput.trim()}
-            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium ${phoneSearchLoading || !phoneInput.trim()
+            disabled={phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType}
+            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium ${phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType
               ? "bg-gray-300 cursor-not-allowed text-gray-500"
               : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
               }`}
@@ -3922,7 +3970,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
 
                   {/* Beneficiary ID Type (for specific currencies) */}
-                  {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
+                  {/* {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <div>
                       <FieldLabel required>
                         Beneficiary ID Type
@@ -3952,32 +4000,62 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </div>
                       </div>
                     </div>
-                  )}
+                  )} */}
 
                   {/* Beneficiary ID Number (for specific currencies) */}
+                  {/* Beneficiary ID Fields - Conditional based on beneficiary type */}
                   {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
-                    <div>
-                      <FieldLabel required>
-                        Beneficiary ID Number
-                        {usingExistingBeneficiary && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            (New - Fill for this bank account)
-                          </span>
-                        )}
-                      </FieldLabel>
-                      <input
-                        type="text"
-                        className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                          ? "bg-gray-100"
-                          : "bg-white"
-                          }`}
-                        placeholder="Enter ID Number"
-                        value={formik.values.beneficiary_id_number}
-                        onChange={formik.handleChange}
-                        name="beneficiary_id_number"
-                        required
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <FieldLabel required>
+                          {formik.values.beneftype === "institution" ? "Company ID Type" : "Beneficiary ID Type"}
+                          {usingExistingBeneficiary && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              (New - Fill for this bank account)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <div className="relative">
+                          <select
+                            className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
+                            value={formik.values.beneficiary_id_type}
+                            onChange={formik.handleChange}
+                            name="beneficiary_id_type"
+                            required
+                          >
+                            <option value="">Select ID Type</option>
+                            {getIdTypesForCurrency.map((idType) => (
+                              <option key={idType.id} value={idType.name}>
+                                {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                            <FaChevronRight className="text-gray-400 rotate-90" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel required>
+                          {formik.values.beneftype === "institution" ? "Company ID Number" : "Beneficiary ID Number"}
+                          {usingExistingBeneficiary && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              (New - Fill for this bank account)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <input
+                          type="text"
+                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary ? "bg-gray-100" : "bg-white"}`}
+                          placeholder={formik.values.beneftype === "institution" ? "Enter Company Registration Number" : "Enter ID Number"}
+                          value={formik.values.beneficiary_id_number}
+                          onChange={formik.handleChange}
+                          name="beneficiary_id_number"
+                          required
+                        />
+                      </div>
+                    </>
                   )}
 
                   {/* Relation to Beneficiary (only for individual) */}

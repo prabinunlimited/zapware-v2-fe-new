@@ -203,6 +203,15 @@ const Header = ({ customerId }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dispatch]);
 
+  // Add this useEffect right after your other useEffects (around line 150-160)
+useEffect(() => {
+  // Save customer_type to localStorage whenever profileData loads
+  if (profileData?.customer_type) {
+    console.log("💾 Header: Saving customer_type to localStorage:", profileData.customer_type);
+    localStorage.setItem('customer_type', profileData.customer_type);
+  }
+}, [profileData]);
+
   // Profile fetch — skips when navigating
   useEffect(() => {
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
@@ -306,41 +315,67 @@ const Header = ({ customerId }) => {
     };
   }, []);
 
-  const dropdownItems = [
-    {
-      id: 1,
-      label: "My Profile",
-      icon: FaIdCard,
-      color: "text-blue-600",
-      bgColor: "bg-blue-500/10",
-      borderColor: "border-blue-200",
-      onClick: handleProfileClick,
-      delay: 0.1,
-      description: "Manage your personal information",
-    },
-    {
-      id: 2,
-      label: "My Beneficiaries",
-      icon: FaUsers,
-      color: "text-green-600",
-      bgColor: "bg-green-500/10",
-      borderColor: "border-green-200",
-      onClick: handleBeneficiariesClick,
-      delay: 0.2,
-      description: "View and manage beneficiaries",
-    },
-    {
-      id: 3,
-      label: "Team Members",
-      icon: FaUserTie,
-      color: "text-purple-600",
-      bgColor: "bg-purple-500/10",
-      borderColor: "border-purple-200",
-      onClick: handleTeamClick,
-      delay: 0.3,
-      description: "Manage team access and permissions",
-    },
-  ];
+  // Get customer type from profile data
+  const customerType = useMemo(() => {
+    // First try Redux
+    if (profileData?.customer_type) {
+      return profileData.customer_type;
+    }
+    
+    // Then try localStorage (cached from previous fetch)
+    const cachedType = localStorage.getItem('customer_type');
+    if (cachedType) {
+      return cachedType;
+    }
+    
+    // Default to null while loading
+    return null;
+  }, [profileData])
+
+  // Filter dropdown items based on customer type
+  const dropdownItems = useMemo(() => {
+    const baseItems = [
+      {
+        id: 1,
+        label: "My Profile",
+        icon: FaIdCard,
+        color: "text-blue-600",
+        bgColor: "bg-blue-500/10",
+        borderColor: "border-blue-200",
+        onClick: handleProfileClick,
+        delay: 0.1,
+        description: "Manage your personal information",
+      },
+      {
+        id: 2,
+        label: "My Beneficiaries",
+        icon: FaUsers,
+        color: "text-green-600",
+        bgColor: "bg-green-500/10",
+        borderColor: "border-green-200",
+        onClick: handleBeneficiariesClick,
+        delay: 0.2,
+        description: "View and manage beneficiaries",
+      },
+    ];
+
+    // Only add Team Members for institution customers
+    if (customerType === "institution") {
+      baseItems.push({
+        id: 3,
+        label: "Team Members",
+        icon: FaUserTie,
+        color: "text-purple-600",
+        bgColor: "bg-purple-500/10",
+        borderColor: "border-purple-200",
+        onClick: handleTeamClick,
+        delay: 0.3,
+        description: "Manage team access and permissions",
+      });
+    }
+
+    return baseItems;
+  }, [customerType, handleProfileClick, handleBeneficiariesClick, handleTeamClick]);
 
   const ProfileSection = useMemo(() => {
     if (profileLoading && !profileData) {
@@ -587,10 +622,8 @@ const Header = ({ customerId }) => {
     staffRole,
     ownerRoleName,
     customerId,
-    handleProfileClick,
-    handleBeneficiariesClick,
-    handleTeamClick,
-    handleChangePasswordStaff,
+    customerType,
+    dropdownItems,
     handleLogout,
     handleMouseEnter,
     handleMouseLeave,

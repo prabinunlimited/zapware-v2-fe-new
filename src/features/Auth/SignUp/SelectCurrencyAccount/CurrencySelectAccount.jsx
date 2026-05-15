@@ -57,7 +57,8 @@ const OpenCurrencyAccount = () => {
   const [expandedDetails, setExpandedDetails] = useState({});
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [forceRemittanceOnly, setForceRemittanceOnly] = useState(null); // ✅ ADD THIS LINE
+  const [isLoadingSpinner, setIsLoadingSpinner] = useState(true);
 
   // Storage variables
   const bearertoken = localStorage.getItem("bearertoken");
@@ -103,6 +104,18 @@ const OpenCurrencyAccount = () => {
   const referralSuccessMessage = useSelector(
     selectors.selectReferralSuccessMessage,
   );
+  const hasCurrencyAccounts = useSelector(selectors.selectHasCurrencyAccounts); // ✅ ADD THIS LINE
+
+  useEffect(() => {
+    // Show loading for at least 1.5 seconds
+    const timer = setTimeout(() => {
+      if (!loading && !packageLoading && forceRemittanceOnly !== null) {
+        setIsLoadingSpinner(false);
+      }
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, [loading, packageLoading, forceRemittanceOnly]);
 
   // Validate environment
   useEffect(() => {
@@ -113,62 +126,59 @@ const OpenCurrencyAccount = () => {
     }
   }, [API_URL]);
 
-  // 1. INITIALIZATION - ALWAYS fetch account options first for all partners
+  // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
   useEffect(() => {
     if (!accountType) {
       navigate("/selectaccounttype");
       return;
     }
 
-    console.log("🌐 INITIALIZATION - Fetching account options:", {
-      accountType,
-      partnerId,
-      isPartnerPackageModule,
-      timestamp: new Date().toISOString(),
-    });
+    // For partner ID 8, we only want remittance services
+    // if (isPartnerId8) {
+    //   // Automatically select remittance only and clear any selections
+    //   dispatch(actions.setRemittanceOnlyAccepted(true));
+    //   dispatch(actions.clearSelectedAccounts());
+    //   dispatch(actions.setSelectedPackageCurrencies([]));
+    //   return;
+    // }
 
-    // Always fetch account options first
     dispatch(actions.clearAllSelections());
 
-    // Force USA country ID (186) for partner flows
-    const forceCountryId = 186;
+    // ⚠️ FIX: Force USA country ID (186) for partner flows
+    const forceCountryId = 186; // USA
+
+    console.log("🌐 Forcing country ID for partner flow:", {
+      originalCountryId: selectedCountryId,
+      forcedCountryId: forceCountryId,
+      accountType,
+      isPartnerPackageModule,
+    });
 
     if (isPartnerPackageModule === "Y") {
-      console.log("📦 Fetching package options...");
       dispatch(
         actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
       );
     } else {
-      console.log("💰 Fetching account options from API...");
       dispatch(
         actions.fetchAccountOptions({
           accountType,
-          countryId: forceCountryId,
+          countryId: forceCountryId, // Use forced country ID
           API_URL,
         }),
       );
     }
-  }, [accountType, isPartnerPackageModule, dispatch, navigate, partnerId, API_URL]);
+  }, [
+    accountType,
+    isPartnerId8,
+    // Remove selectedCountryId from dependencies
+    isPartnerPackageModule,
+    dispatch,
+    navigate,
+    partnerId,
+    API_URL,
+  ]);
 
-  // 2. Handle partner ID 8 specific logic AFTER data is loaded
-  useEffect(() => {
-    // Wait for loading to complete and data to be available
-    if (loading || packageLoading) return;
-
-    // If data is loaded and partner ID is 8, force remittance only mode
-    if (isPartnerId8 && !loading && !packageLoading && !dataLoaded) {
-      console.log("🎯 Partner ID 8 detected - Setting remittance only mode after API call");
-      dispatch(actions.setRemittanceOnlyAccepted(true));
-      dispatch(actions.clearSelectedAccounts());
-      dispatch(actions.setSelectedPackageCurrencies([]));
-      setDataLoaded(true);
-    } else if (!isPartnerId8 && !loading && !packageLoading && !dataLoaded) {
-      console.log("✅ Non-partner 8 flow - Data loaded successfully");
-      setDataLoaded(true);
-    }
-  }, [isPartnerId8, loading, packageLoading, dispatch, dataLoaded]);
-
-  // 3. PRICE FETCHING - Skip for partner ID 8
+  // 2. PRICE FETCHING - Skip for partner ID 8
   useEffect(() => {
     // Skip price fetching for partner ID 8 since we only offer remittance
     if (isPartnerId8) return;
@@ -207,7 +217,7 @@ const OpenCurrencyAccount = () => {
     isPartnerId8,
   ]);
 
-  // 4. ACTION HANDLERS
+  // 3. ACTION HANDLERS
   const handleToggleStandard = (id) => {
     if (remittanceOnlyAccepted) {
       dispatch(actions.setRemittanceOnlyAccepted(false));
@@ -220,6 +230,20 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
     }
   };
+
+  // Check if API returned empty data - then force remittance only mode
+  useEffect(() => {
+    if (!loading && !packageLoading) {
+      // If no currency accounts available, force remittance only
+      if (!hasCurrencyAccounts && accountOptions.length === 0) {
+        console.log("⚠️ No currency accounts available - Forcing remittance only mode");
+        setForceRemittanceOnly(true);
+        dispatch(actions.setRemittanceOnlyAccepted(true));
+      } else {
+        setForceRemittanceOnly(false);
+      }
+    }
+  }, [loading, packageLoading, hasCurrencyAccounts, accountOptions.length, dispatch]);
 
   const handleTogglePackage = (id) => {
     if (id)
@@ -248,7 +272,7 @@ const OpenCurrencyAccount = () => {
     }
   };
 
-  // 5. SUBMIT HANDLER
+  // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
 
@@ -270,6 +294,12 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
       return;
     }
+
+    // if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
+    //   setModalMessage("Please confirm that you agree on the Charges and Fees.");
+    //   setIsModalOpen(true);
+    //   return;
+    // }
 
     if (referralCode) {
       try {
@@ -326,6 +356,8 @@ const OpenCurrencyAccount = () => {
     isPartnerPackageModule,
     selectedAccounts,
     remittanceOnlyAccepted,
+    termsAccepted,
+    hostName,
     referralCode,
     selectedPackageCurrencies,
     dispatch,
@@ -334,6 +366,11 @@ const OpenCurrencyAccount = () => {
     accountType,
     navigate,
   ]);
+
+  const currenciesList = useMemo(
+    () => [...new Set(accountOptions.map((a) => a.currency).filter(Boolean))],
+    [accountOptions],
+  );
 
   const getAccountTypeIcon = () => {
     switch (accountType) {
@@ -366,8 +403,14 @@ const OpenCurrencyAccount = () => {
     return faDollarSign;
   };
 
-  // Show loading spinner while API is being called
-  if (loading || packageLoading) {
+  const currencyTabs = [
+    { id: "all", name: "All Currencies" },
+    { id: "USD", name: "US Dollar" },
+    { id: "EUR", name: "Euro" },
+    { id: "GBP", name: "British Pound" },
+  ];
+
+  if (loading || packageLoading || forceRemittanceOnly === null || isLoadingSpinner) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center">
         <div className="text-center flex flex-col items-center">
@@ -428,154 +471,30 @@ const OpenCurrencyAccount = () => {
         </div>
 
         <div className="p-6">
+
           {/* Service Type Selection */}
           <div className="mb-8">
             <h2 className="text-xl font-bold text-gray-800 mb-4 text-center">
-              {isPartnerId8
-                ? "Remittance Services Only"
-                : "Choose Your Service Type"}
+              Choose Your Service Type
             </h2>
 
-            {isPartnerId8 ? (
-              // PARTNER ID 8 - ONLY SHOW REMITTANCE SERVICES (but API was already called)
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
-                <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
-                    <FontAwesomeIcon
-                      icon={faExchangeAlt}
-                      className="text-green-600 text-3xl"
-                    />
-                  </div>
-
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                    Remittance Services
-                  </h3>
-
-                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-lg">
-                    Send and receive money internationally with fast, secure,
-                    and cost-effective transfers. No need for multiple currency
-                    accounts.
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-green-100 p-3 rounded-lg mr-4">
-                          <FontAwesomeIcon
-                            icon={faClock}
-                            className="text-green-600 text-xl"
-                          />
-                        </div>
-                        <h4 className="font-bold text-gray-900 text-lg">
-                          Fast Transfers
-                        </h4>
-                      </div>
-                      <p className="text-gray-600 text-sm">
-                        Send money internationally in 1-2 business days with
-                        real-time tracking
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-green-100 p-3 rounded-lg mr-4">
-                          <FontAwesomeIcon
-                            icon={faPercent}
-                            className="text-green-600 text-xl"
-                          />
-                        </div>
-                        <h4 className="font-bold text-gray-900 text-lg">
-                          Best Rates
-                        </h4>
-                      </div>
-                      <p className="text-gray-600 text-sm">
-                        Competitive exchange rates with no hidden fees or
-                        markups
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-green-100 p-3 rounded-lg mr-4">
-                          <FontAwesomeIcon
-                            icon={faShieldAlt}
-                            className="text-green-600 text-xl"
-                          />
-                        </div>
-                        <h4 className="font-bold text-gray-900 text-lg">
-                          Secure & Compliant
-                        </h4>
-                      </div>
-                      <p className="text-gray-600 text-sm">
-                        Bank-level security with full regulatory compliance and
-                        data protection
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
-                      <div className="flex items-center mb-3">
-                        <div className="bg-green-100 p-3 rounded-lg mr-4">
-                          <FontAwesomeIcon
-                            icon={faGlobe}
-                            className="text-green-600 text-xl"
-                          />
-                        </div>
-                        <h4 className="font-bold text-gray-900 text-lg">
-                          Global Coverage
-                        </h4>
-                      </div>
-                      <p className="text-gray-600 text-sm">
-                        Send to over 150 countries with multiple payout options
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-6">
-                    <div className="flex items-center justify-center gap-3">
-                      <FontAwesomeIcon
-                        icon={faInfoCircle}
-                        className="text-green-600 text-xl"
-                      />
-                      <div>
-                        <h5 className="font-bold text-green-800 text-lg">
-                          Pay-As-You-Go
-                        </h5>
-                        <p className="text-green-700">
-                          No monthly fees - Pay only for the transactions you
-                          make
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="inline-flex items-center bg-green-100 text-green-800 px-6 py-3 rounded-full text-lg font-bold">
-                    <FontAwesomeIcon
-                      icon={faCheckCircle}
-                      className="mr-3 text-xl"
-                    />
-                    Remittance Services Selected
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // ORIGINAL SERVICE SELECTION FOR OTHER PARTNERS
+            {/* ALWAYS show both options when data exists (not forced remittance only) */}
+            {!forceRemittanceOnly ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Currency Accounts Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
-                    !remittanceOnlyAccepted
-                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
-                      : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
-                  }`}
+                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${!remittanceOnlyAccepted
+                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
+                    : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
+                    }`}
                   onClick={() => handleServiceTypeSelect("currency")}
                 >
                   <div className="flex items-start">
                     <div
-                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
-                        !remittanceOnlyAccepted
-                          ? "bg-blue-600 border-blue-700"
-                          : "bg-white border-gray-300"
-                      }`}
+                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${!remittanceOnlyAccepted
+                        ? "bg-blue-600 border-blue-700"
+                        : "bg-white border-gray-300"
+                        }`}
                     >
                       {!remittanceOnlyAccepted && (
                         <FontAwesomeIcon
@@ -602,24 +521,15 @@ const OpenCurrencyAccount = () => {
                         rates.
                       </p>
                       <div className="flex items-center text-sm text-blue-600">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>Hold multiple currencies</span>
                       </div>
                       <div className="flex items-center text-sm text-blue-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>Better exchange rates</span>
                       </div>
                       <div className="flex items-center text-sm text-blue-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>Send & receive internationally</span>
                       </div>
                     </div>
@@ -628,20 +538,18 @@ const OpenCurrencyAccount = () => {
 
                 {/* Remittance Only Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${
-                    remittanceOnlyAccepted
-                      ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
-                      : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
-                  }`}
+                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${remittanceOnlyAccepted
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
+                    : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
+                    }`}
                   onClick={() => handleServiceTypeSelect("remittance")}
                 >
                   <div className="flex items-start">
                     <div
-                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${
-                        remittanceOnlyAccepted
-                          ? "bg-green-600 border-green-700"
-                          : "bg-white border-gray-300"
-                      }`}
+                      className={`flex items-center justify-center h-6 w-6 rounded-full border mr-4 mt-1 ${remittanceOnlyAccepted
+                        ? "bg-green-600 border-green-700"
+                        : "bg-white border-gray-300"
+                        }`}
                     >
                       {remittanceOnlyAccepted && (
                         <FontAwesomeIcon
@@ -668,34 +576,112 @@ const OpenCurrencyAccount = () => {
                         transfers.
                       </p>
                       <div className="flex items-center text-sm text-green-600">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>No account maintenance</span>
                       </div>
                       <div className="flex items-center text-sm text-green-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>Fast international transfers</span>
                       </div>
                       <div className="flex items-center text-sm text-green-600 mt-1">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="mr-2"
-                        />
+                        <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
                         <span>Simple and straightforward</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            ) : (
+              // ONLY when API returns empty data - Show only Remittance (no option to switch)
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+                    <FontAwesomeIcon
+                      icon={faExchangeAlt}
+                      className="text-green-600 text-3xl"
+                    />
+                  </div>
+
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                    Remittance Services
+                  </h3>
+
+                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-lg">
+                    Send and receive money internationally with fast, secure,
+                    and cost-effective transfers. No need for multiple currency
+                    accounts.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <div className="bg-green-100 p-3 rounded-lg mr-4">
+                          <FontAwesomeIcon icon={faClock} className="text-green-600 text-xl" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-lg">Fast Transfers</h4>
+                      </div>
+                      <p className="text-gray-600 text-sm">
+                        Send money internationally in 1-2 business days with real-time tracking
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <div className="bg-green-100 p-3 rounded-lg mr-4">
+                          <FontAwesomeIcon icon={faPercent} className="text-green-600 text-xl" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-lg">Best Rates</h4>
+                      </div>
+                      <p className="text-gray-600 text-sm">
+                        Competitive exchange rates with no hidden fees or markups
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <div className="bg-green-100 p-3 rounded-lg mr-4">
+                          <FontAwesomeIcon icon={faShieldAlt} className="text-green-600 text-xl" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-lg">Secure & Compliant</h4>
+                      </div>
+                      <p className="text-gray-600 text-sm">
+                        Bank-level security with full regulatory compliance and data protection
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <div className="bg-green-100 p-3 rounded-lg mr-4">
+                          <FontAwesomeIcon icon={faGlobe} className="text-green-600 text-xl" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-lg">Global Coverage</h4>
+                      </div>
+                      <p className="text-gray-600 text-sm">
+                        Send to over 150 countries with multiple payout options
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-6">
+                    <div className="flex items-center justify-center gap-3">
+                      <FontAwesomeIcon icon={faInfoCircle} className="text-green-600 text-xl" />
+                      <div>
+                        <h5 className="font-bold text-green-800 text-lg">Pay-As-You-Go</h5>
+                        <p className="text-green-700">No monthly fees - Pay only for the transactions you make</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="inline-flex items-center bg-green-100 text-green-800 px-6 py-3 rounded-full text-lg font-bold">
+                    <FontAwesomeIcon icon={faCheckCircle} className="mr-3 text-xl" />
+                    Remittance Services Selected
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Selection Status */}
-            {!isPartnerId8 && (
+            {!forceRemittanceOnly && (
               <div className="mt-4 text-center">
                 {!remittanceOnlyAccepted && selectedAccounts.length > 0 && (
                   <div className="inline-flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
@@ -751,41 +737,37 @@ const OpenCurrencyAccount = () => {
                 <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
                   <button
                     onClick={() => dispatch(actions.setActiveTab("all"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                      activeTab === "all"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "all"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                   >
                     All Currencies
                   </button>
                   <button
                     onClick={() => dispatch(actions.setActiveTab("USD"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                      activeTab === "USD"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "USD"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                   >
                     US Dollar
                   </button>
                   <button
                     onClick={() => dispatch(actions.setActiveTab("EUR"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                      activeTab === "EUR"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "EUR"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                   >
                     Euro
                   </button>
                   <button
                     onClick={() => dispatch(actions.setActiveTab("GBP"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                      activeTab === "GBP"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "GBP"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                   >
                     British Pound
                   </button>
@@ -1008,8 +990,8 @@ const OpenCurrencyAccount = () => {
 
           {/* Package View (if enabled) - Hide for partner ID 8 */}
           {!isPartnerId8 &&
-          isPartnerPackageModule === "Y" &&
-          !remittanceOnlyAccepted ? (
+            isPartnerPackageModule === "Y" &&
+            !remittanceOnlyAccepted ? (
             <div className="mb-8">
               <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
@@ -1032,15 +1014,13 @@ const OpenCurrencyAccount = () => {
                   return (
                     <div
                       key={pkg.package_id}
-                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-6 transition-all hover:shadow-md ${
-                        isActivePackage
-                          ? "border-blue-500 ring-2 ring-blue-100 shadow-sm"
-                          : "border-slate-200"
-                      } ${
-                        !isPackageCompatible && selectedCount > 0
+                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-6 transition-all hover:shadow-md ${isActivePackage
+                        ? "border-blue-500 ring-2 ring-blue-100 shadow-sm"
+                        : "border-slate-200"
+                        } ${!isPackageCompatible && selectedCount > 0
                           ? "opacity-60 cursor-not-allowed"
                           : "cursor-pointer hover:border-blue-300"
-                      }`}
+                        }`}
                       onClick={() => {
                         if (isPackageCompatible || selectedCount === 0) {
                           // Allow interaction if compatible or no selections
@@ -1055,11 +1035,10 @@ const OpenCurrencyAccount = () => {
                               {pkg.package_name}
                             </h4>
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                pkg.account_type === "named"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-indigo-100 text-indigo-800"
-                              }`}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${pkg.account_type === "named"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-indigo-100 text-indigo-800"
+                                }`}
                             >
                               {pkg.account_type === "named"
                                 ? "Named Account"
@@ -1094,11 +1073,10 @@ const OpenCurrencyAccount = () => {
 
                             {selectedCount > 0 && (
                               <div
-                                className={`text-sm px-3 py-1 rounded-full ${
-                                  isPackageCompatible
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-red-100 text-red-800"
-                                }`}
+                                className={`text-sm px-3 py-1 rounded-full ${isPackageCompatible
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                                  }`}
                               >
                                 {isPackageCompatible
                                   ? `${remainingAccounts} account${remainingAccounts !== 1 ? "s" : ""} remaining`
@@ -1154,20 +1132,18 @@ const OpenCurrencyAccount = () => {
                                     handleTogglePackage(curr.currency_id);
                                   }
                                 }}
-                                className={`p-3 rounded-lg border-2 flex items-center gap-3 transition-all ${
-                                  isSel
-                                    ? "border-blue-500 bg-blue-50 shadow-sm"
-                                    : isDisabled
-                                      ? "border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed"
-                                      : "border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
-                                }`}
+                                className={`p-3 rounded-lg border-2 flex items-center gap-3 transition-all ${isSel
+                                  ? "border-blue-500 bg-blue-50 shadow-sm"
+                                  : isDisabled
+                                    ? "border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed"
+                                    : "border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
+                                  }`}
                               >
                                 <div
-                                  className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${
-                                    isSel
-                                      ? "bg-blue-500 border-blue-500"
-                                      : "bg-white border-gray-300"
-                                  } ${isDisabled ? "opacity-50" : ""}`}
+                                  className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSel
+                                    ? "bg-blue-500 border-blue-500"
+                                    : "bg-white border-gray-300"
+                                    } ${isDisabled ? "opacity-50" : ""}`}
                                 >
                                   {isSel && (
                                     <FontAwesomeIcon
@@ -1432,7 +1408,7 @@ const OpenCurrencyAccount = () => {
             {!isPartnerId8 &&
               ((isPartner === "Y" && showRemitOnly === "Y") ||
                 isPartner === "0") &&
-              remittanceOnlyAccepted && (
+              remittanceOnlyAccepted && ( // Only show when remittance only is selected
                 <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div>
                     <input
@@ -1672,20 +1648,18 @@ const AccountOptionCard = ({
 
   return (
     <div
-      className={`border rounded-xl p-4 cursor-pointer transition-all duration-300 ${
-        isSelected
-          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-md"
-          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 hover:shadow-md"
-      }`}
+      className={`border rounded-xl p-4 cursor-pointer transition-all duration-300 ${isSelected
+        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-md"
+        : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 hover:shadow-md"
+        }`}
       onClick={onSelect}
     >
       <div className="flex items-start">
         <div
-          className={`flex items-center justify-center h-5 w-5 mt-1 rounded border ${
-            isSelected
-              ? "bg-blue-600 border-blue-700"
-              : "bg-white border-gray-300"
-          }`}
+          className={`flex items-center justify-center h-5 w-5 mt-1 rounded border ${isSelected
+            ? "bg-blue-600 border-blue-700"
+            : "bg-white border-gray-300"
+            }`}
         >
           {isSelected && (
             <FontAwesomeIcon

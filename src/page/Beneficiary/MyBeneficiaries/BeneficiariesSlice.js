@@ -172,7 +172,7 @@ export const createAndAddBeneficiary = createAsyncThunk(
 // ===================== SEARCH BENEFICIARY BY PHONE (API CALL) =====================
 export const searchBeneficiaryByPhone = createAsyncThunk(
   "beneficiaries/searchBeneficiaryByPhone",
-  async ({ phoneNumber, countryPhoneCode }, { rejectWithValue }) => {
+  async ({ phoneNumber, countryPhoneCode,beneficiaryType }, { rejectWithValue }) => {
     try {
       // Clean the country code - ensure it has + prefix
       let cleanedCountryCode = countryPhoneCode;
@@ -182,7 +182,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
 
       // Prepare payload according to API requirements
       const payload = {
-        beneficiary_type: "individual",
+        beneficiary_type: beneficiaryType,
         mobile_number_country_code: cleanedCountryCode,
         mobile_number: phoneNumber
       };
