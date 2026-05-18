@@ -1,13 +1,13 @@
-// src/components/Dashboard/Account/AccountSummary/AccountSlice.js - FIXED VERSION
+// src/components/Dashboard/Account/AccountSummary/AccountSlice.js - COMPLETELY FIXED VERSION
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../../../utils/errorHandling";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// ✅ FIXED: Enhanced request coordination with proper cleanup
+// Request coordination
 let globalFetchInProgress = false;
-const GLOBAL_FETCH_COOLDOWN = 10000;
+const GLOBAL_FETCH_COOLDOWN = 1000;
 const pendingRequests = new Map();
 const successfulFetches = new Map();
 
@@ -15,42 +15,78 @@ const getRequestKey = (customerId, isRefresh = false) => {
   return `account-${customerId}-${isRefresh ? "refresh" : "initial"}`;
 };
 
-const hasSuccessfulFetch = (customerId) => {
-  return successfulFetches.has(customerId);
+export const resetAllFetchFlags = () => {
+  globalFetchInProgress = false;
+  pendingRequests.clear();
+  for (const [key, value] of successfulFetches.entries()) {
+    successfulFetches.set(key, { ...value, stale: true });
+  }
 };
 
-// ✅ FIXED: Optimized thunk with better state management
+// FIXED: Handle "no accounts" as success with empty array, not as error
 export const fetchAccountDetails = createAsyncThunk(
   "account/fetchAccountDetails",
   async (
     { customerId, authtoken, isRefresh = false },
-    { getState, rejectWithValue, signal }
+    { getState, rejectWithValue, signal, dispatch }
   ) => {
     const requestKey = getRequestKey(customerId, isRefresh);
 
-    // ✅ FIXED: Only skip if we have recent successful data
+    // Skip if we have recent successful data (5 minutes)
     if (!isRefresh && hasSuccessfulFetch(customerId)) {
       const successData = successfulFetches.get(customerId);
       const now = Date.now();
-      const TEN_MINUTES = 10 * 60 * 1000;
+      const FIVE_MINUTES = 5 * 60 * 1000;
 
-      // Only skip if data is less than 10 minutes old
-      if (now - successData.timestamp < TEN_MINUTES) {
-        return rejectWithValue("Already have recent data");
+      if (now - successData.timestamp < FIVE_MINUTES && !successData.stale) {
+        console.log("📦 Using cached account data");
+        return successData.data;
+      }
+    }
+
+    // Check if request is in progress
+    if (pendingRequests.has(requestKey)) {
+      const requestTime = pendingRequests.get(requestKey);
+      const now = Date.now();
+      if (now - requestTime < 10000) {
+        console.log("⚠️ Request already in progress, skipping");
+        return new Promise((resolve, reject) => {
+          const checkInterval = setInterval(() => {
+            if (!pendingRequests.has(requestKey)) {
+              clearInterval(checkInterval);
+              const cached = successfulFetches.get(customerId);
+              if (cached) {
+                resolve(cached.data);
+              } else {
+                reject(new Error("Request completed but no data"));
+              }
+            }
+          }, 100);
+        });
+      } else {
+        pendingRequests.delete(requestKey);
+        globalFetchInProgress = false;
       }
     }
 
     // Prevent duplicate requests
-    if (pendingRequests.has(requestKey) || globalFetchInProgress) {
-      return rejectWithValue("Request already in progress");
+    if (globalFetchInProgress && !isRefresh) {
+      console.log("⚠️ Global fetch already in progress, skipping");
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!globalFetchInProgress) {
+            clearInterval(checkInterval);
+            const cached = successfulFetches.get(customerId);
+            resolve(cached ? cached.data : []);
+          }
+        }, 100);
+      });
     }
 
-    // Track this request
     pendingRequests.set(requestKey, Date.now());
     globalFetchInProgress = true;
 
     try {
-      // Add AbortController for cleanup
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -64,28 +100,37 @@ export const fetchAccountDetails = createAsyncThunk(
 
       clearTimeout(timeoutId);
 
-      // ✅ FIXED: Handle empty response gracefully
-      if (response.data?.count_account_details > 0) {
-        successfulFetches.set(customerId, {
-          timestamp: Date.now(),
-          count: response.data.count_account_details,
-          data: response.data.account_details,
-        });
-        return response.data.account_details;
+      // Handle both cases - with accounts and without accounts
+      let accountsData = [];
+      
+      if (response.data?.count_account_details > 0 && 
+          Array.isArray(response.data.account_details)) {
+        accountsData = response.data.account_details;
+        console.log(`✅ Found ${accountsData.length} accounts`);
       } else {
-        // Clear successful fetch if no data
-        successfulFetches.delete(customerId);
-        return rejectWithValue("No accounts found");
+        // No accounts found - this is a valid state, not an error
+        console.log("ℹ️ No accounts found for this customer");
+        accountsData = [];
       }
+
+      // Cache the result (even empty array)
+      successfulFetches.set(customerId, {
+        timestamp: Date.now(),
+        count: accountsData.length,
+        data: accountsData,
+        stale: false,
+      });
+      
+      return accountsData;
+      
     } catch (error) {
-      // Don't log aborted requests
+      // Only reject on actual errors (network, auth, etc.)
       if (error.name !== "AbortError" && error.code !== "ECONNABORTED") {
         console.error("❌ Error fetching account details:", error);
       }
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     } finally {
-      // Clean up
       setTimeout(() => {
         pendingRequests.delete(requestKey);
         globalFetchInProgress = false;
@@ -93,6 +138,10 @@ export const fetchAccountDetails = createAsyncThunk(
     }
   }
 );
+
+const hasSuccessfulFetch = (customerId) => {
+  return successfulFetches.has(customerId) && !successfulFetches.get(customerId).stale;
+};
 
 export const updateAccountBalance = createAsyncThunk(
   "account/updateAccountBalance",
@@ -113,17 +162,28 @@ export const updateAccountBalance = createAsyncThunk(
         }
       );
 
-      if (balanceResponse.data?.count_account_details > 0) {
+      let accountsData = [];
+      if (balanceResponse.data?.count_account_details > 0 && 
+          Array.isArray(balanceResponse.data.account_details)) {
+        accountsData = balanceResponse.data.account_details;
         successfulFetches.set(customerId, {
           timestamp: Date.now(),
-          count: balanceResponse.data.count_account_details,
-          data: balanceResponse.data.account_details,
+          count: accountsData.length,
+          data: accountsData,
+          stale: false,
         });
-        return balanceResponse.data.account_details;
       } else {
-        successfulFetches.delete(customerId);
-        throw new Error("No account details found after updating balance");
+        // No accounts after update - still a valid state
+        accountsData = [];
+        successfulFetches.set(customerId, {
+          timestamp: Date.now(),
+          count: 0,
+          data: [],
+          stale: false,
+        });
       }
+      
+      return accountsData;
     } catch (error) {
       console.error("❌ Error updating account balance:", error);
       const errorMessage = extractErrorMessage(error);
@@ -132,7 +192,7 @@ export const updateAccountBalance = createAsyncThunk(
   }
 );
 
-// Enhanced initial state with proper defaults
+// Enhanced initial state
 const initialState = {
   accounts: [],
   selectedAccount: null,
@@ -143,7 +203,7 @@ const initialState = {
   lastUpdated: null,
   accountDropdownOpen: false,
   hasFetchedAccount: false,
-  fetchAttempted: false, // ✅ ADDED: Track if we've attempted fetch
+  fetchAttempted: false,
   _debug: {
     sliceName: "account",
     storePath: "state.account",
@@ -203,7 +263,6 @@ const accountSlice = createSlice({
     setFetchAttempted: (state, action) => {
       state.fetchAttempted = action.payload;
     },
-    // ✅ FIXED: Reset coordination properly
     resetFetchCoordination: () => {
       globalFetchInProgress = false;
       pendingRequests.clear();
@@ -218,6 +277,8 @@ const accountSlice = createSlice({
       }
       state.hasFetchedAccount = false;
       state.fetchAttempted = false;
+      state.accountError = null;
+      state.accountLoading = false;
     },
     forceRefreshAccounts: (state, action) => {
       const customerId = action.payload;
@@ -226,6 +287,8 @@ const accountSlice = createSlice({
       }
       state.hasFetchedAccount = false;
       state.fetchAttempted = false;
+      state.accountError = null;
+      state.accountLoading = false;
     },
     debugAccountState: (state) => {
       console.log("🔍 Account State:", {
@@ -243,32 +306,28 @@ const accountSlice = createSlice({
         state.accountLoading = true;
         state.accountError = null;
         state.fetchAttempted = true;
+        console.log("🔄 Fetch pending...");
       })
       .addCase(fetchAccountDetails.fulfilled, (state, action) => {
         console.log("✅ ACCOUNT SLICE: fetchAccountDetails FULFILLED", {
           payloadCount: Array.isArray(action.payload)
             ? action.payload.length
             : 0,
-          hasFetchedAccount: state.hasFetchedAccount,
-          accountsLength: state.accounts.length,
         });
+        
         state.accountLoading = false;
+        // Always set accounts, even if empty array
         state.accounts = Array.isArray(action.payload) ? action.payload : [];
         state.lastUpdated = new Date().toISOString();
-        state.hasFetchedAccount = true;
+        state.hasFetchedAccount = true; // CRITICAL: Always set to true after fetch completes
         state.accountError = null;
 
-        console.log(
-          "📊 ACCOUNT SLICE: Accounts after fetch:",
-          state.accounts.length
-        );
-
-        // Set selected account if not set or if current selection is invalid
+        // Handle selection logic
         if (state.accounts.length > 0) {
           const needsNewSelection =
             !state.selectedAccount ||
             !state.accounts.some(
-              (acc) => acc.currency === state.selectedAccount.currency
+              (acc) => acc.currency === state.selectedAccount?.currency
             );
 
           if (needsNewSelection) {
@@ -277,39 +336,34 @@ const accountSlice = createSlice({
               available_balance: state.accounts[0].available_balance || 0,
             };
             state.selectedCurrency = state.accounts[0].currency || "all";
-            console.log(
-              "🎯 ACCOUNT SLICE: Set selected account:",
-              state.selectedAccount.currency
-            );
           }
         } else {
+          // Clear selection when no accounts exist
           state.selectedAccount = null;
           state.selectedCurrency = "all";
-          console.log("⚠️ ACCOUNT SLICE: No accounts found in response");
         }
       })
       .addCase(fetchAccountDetails.rejected, (state, action) => {
-        console.error(
-          "❌ ACCOUNT SLICE: fetchAccountDetails REJECTED",
-          action.payload
-        );
-
-        const isAlreadyHaveData = action.payload === "Already have recent data";
-
-        if (!isAlreadyHaveData) {
-          state.accountError =
-            typeof action.payload === "string"
-              ? action.payload
-              : extractErrorMessage(action.payload);
+        // Only treat as error for actual failures (network, auth, etc.)
+        const isNetworkError = action.payload?.includes("Network") ||
+                               action.payload?.includes("Failed to fetch");
+        const isAuthError = action.payload?.includes("401") ||
+                           action.payload?.includes("unauthorized");
+        
+        console.log("❌ Fetch rejected:", action.payload);
+        
+        if (isNetworkError || isAuthError) {
+          // Real error - show error state
+          state.accountError = typeof action.payload === "string"
+            ? action.payload
+            : extractErrorMessage(action.payload);
           state.hasFetchedAccount = false;
         } else {
-          // Keep existing data if we have it
-          state.hasFetchedAccount = state.accounts.length > 0;
-          console.log(
-            "ℹ️ ACCOUNT SLICE: Already have recent data, keeping existing"
-          );
+          // For other "errors" like request coordination, maintain existing state
+          state.hasFetchedAccount = state.accounts.length >= 0;
+          state.accountError = null;
         }
-
+        
         state.accountLoading = false;
       })
       .addCase(updateAccountBalance.pending, (state) => {
@@ -319,13 +373,16 @@ const accountSlice = createSlice({
       .addCase(updateAccountBalance.fulfilled, (state, action) => {
         state.balanceLoading = false;
         const newAccounts = Array.isArray(action.payload) ? action.payload : [];
-
-        // Preserve selected account if possible
+        
+        state.accounts = newAccounts;
+        state.lastUpdated = new Date().toISOString();
+        state.hasFetchedAccount = true;
+        
         if (state.selectedAccount && newAccounts.length > 0) {
           const updatedAccount = newAccounts.find(
-            (account) => account.currency === state.selectedAccount.currency
+            (account) => account.currency === state.selectedAccount?.currency
           );
-
+          
           if (updatedAccount) {
             state.selectedAccount = {
               ...state.selectedAccount,
@@ -333,17 +390,18 @@ const accountSlice = createSlice({
               available_balance: updatedAccount.available_balance || 0,
             };
           }
+        } else if (newAccounts.length === 0) {
+          state.selectedAccount = null;
+          state.selectedCurrency = "all";
         }
-
-        state.accounts = newAccounts;
-        state.lastUpdated = new Date().toISOString();
       })
       .addCase(updateAccountBalance.rejected, (state, action) => {
         state.balanceLoading = false;
-        state.accountError =
-          typeof action.payload === "string"
+        if (action.payload && !action.payload.includes("Request already")) {
+          state.accountError = typeof action.payload === "string"
             ? action.payload
             : extractErrorMessage(action.payload);
+        }
       });
   },
 });
@@ -380,7 +438,6 @@ export const selectAccountDropdown = (state) => ({
   isOpen: state.account?.accountDropdownOpen || false,
 });
 
-// Memoized utility selectors
 export const selectCurrencyOptions = (state) => {
   const accounts = selectAccounts(state);
   return [...new Set(accounts.map((account) => account.currency))].filter(

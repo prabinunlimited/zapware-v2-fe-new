@@ -43,6 +43,7 @@ import RecurringRemit from "../src/page/Remittance/RecurringRemit/RecurringRemit
 import RecurringRemitDetail from "../src/page/Remittance/RecurringRemit/RecurringRemitDetail";
 import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
+import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
 
 const ProtectedLayout = () => {
@@ -111,6 +112,10 @@ const router = createBrowserRouter([
       {
         path: "monthlytransactions/:customerId",
         element: <MonthlyTransactions />,
+      },
+      {
+        path: "alltransactions/:customerId/:selectedCurrencyCode?",
+        element: <AllTransactions />,
       },
       {
         path: "transfer/:customerId",
