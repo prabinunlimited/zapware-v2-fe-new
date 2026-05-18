@@ -29,6 +29,7 @@ import PublicRoute from "./PublicRoute";
 
 import URLDebugger from "./URLDebugger";
 import Profile from "../src/page/Profile/Profile";
+import ChangePassword from "../src/page/Changepassword/ChangePassword";
 import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
 import DepositPage from "../src/page/Deposit/DepositPage";
 import BankLink from "../src/page/Deposit/components/BankLink";
@@ -173,6 +174,10 @@ const router = createBrowserRouter([
       {
         path: "profile/:customerId",
         element: <Profile />,
+      },
+      {
+        path: "change-password/:customerId",  
+        element: <ChangePassword />,
       },
       {
         path: "payout/:customerId",
