@@ -16,6 +16,7 @@ import {
 } from "react-icons/fa";
 import { RingLoader } from "react-spinners";
 import { motion, AnimatePresence } from "framer-motion";
+import { FaKey, FaLock } from "react-icons/fa";
 
 import {
   fetchUserProfile,
@@ -184,6 +185,11 @@ const Header = ({ customerId }) => {
       window.location.href = "/";
     }
   }, [authtoken, dispatch]);
+
+  const handleChangePassword = useCallback(() => {
+    clearAndNavigate(`/change-password/${customerId}`);
+  }, [customerId, clearAndNavigate]);
+  
 
   // Listen for header color changes
   useEffect(() => {
@@ -357,17 +363,28 @@ useEffect(() => {
         delay: 0.2,
         description: "View and manage beneficiaries",
       },
+      {
+        id: 3,
+        label: "Change Password",
+        icon: FaKey,
+        color: "text-violet-600",      
+        bgColor: "bg-violet-500/10",
+        borderColor: "border-violet-200",
+        onClick: handleChangePassword,
+        delay: 0.25,
+        description: "Update your account password",
+      },
     ];
 
     // Only add Team Members for institution customers
     if (customerType === "institution") {
       baseItems.push({
-        id: 3,
+        id: 4,
         label: "Team Members",
         icon: FaUserTie,
-        color: "text-purple-600",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-200",
+        color: "text-teal-600",
+        bgColor: "bg-teal-500/10",
+        borderColor: "border-teal-200",
         onClick: handleTeamClick,
         delay: 0.3,
         description: "Manage team access and permissions",
