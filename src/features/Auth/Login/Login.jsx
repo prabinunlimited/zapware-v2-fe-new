@@ -1245,8 +1245,8 @@ const Login = () => {
 
         dispatch(
           openModal({
-            title: "KYC Verification Pending",
-            message: result.plaid_message,
+            title: "Account Application Pending",
+            message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
             type: "warning",
             modalProps: {
               showCloseButton: true,
