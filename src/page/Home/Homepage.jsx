@@ -480,9 +480,7 @@ const HomepageContent = React.memo(() => {
                 initial={{ x: 100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className={`w-full relative ${
-                  shouldShowNavigation ? "lg:w-[72%]" : "lg:w-full"
-                }`}
+                className={"w-full relative lg:w-full" }
                 style={{
                   isolation: "auto",
                   zIndex: "auto",

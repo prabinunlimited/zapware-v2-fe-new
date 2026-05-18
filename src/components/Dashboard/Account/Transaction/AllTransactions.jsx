@@ -10,6 +10,7 @@ import {
   FaFilter,
   FaSearch,
   FaDownload,
+  FaChevronDown,
 } from "react-icons/fa";
 import { ClipLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
@@ -20,6 +21,7 @@ import * as XLSX from "xlsx";
 import autoTable from "jspdf-autotable";
 import logoPath from "../../../../assets/images/Logo/unlimited remit logo.png";
 import TransactionDetailsPopup from "../../../PopupModal/TransactionDetailsPopup";
+import { selectSelectedCurrency } from "../../Account/AccountSummary/AccountSlice";
 
 // Redux imports
 import {
@@ -34,7 +36,9 @@ import {
 
 const AllTransactions = () => {
   const { customerId, selectedCurrencyCode } = useParams();
-  
+  const reduxSelectedCurrency = useSelector(selectSelectedCurrency);
+  const currentCurrency = selectedCurrencyCode || reduxSelectedCurrency || 'all';
+
   // Redux hooks
   const dispatch = useDispatch();
   const transactions = useSelector(selectTransactions);
@@ -53,6 +57,13 @@ const AllTransactions = () => {
   const [popupMessage, setPopupMessage] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
+  // New state for currency dropdown
+  const [availableCurrencies, setAvailableCurrencies] = useState([]);
+  const [selectedCurrency, setSelectedCurrency] = useState(currentCurrency);
+  const [currencyLoading, setCurrencyLoading] = useState(false);
+  const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+  const [hasFetchedCurrencies, setHasFetchedCurrencies] = useState(false);
+
   const API_URL = import.meta.env.VITE_API_URL;
   const apiClient = axios.create({
     baseURL: API_URL,
@@ -61,28 +72,88 @@ const AllTransactions = () => {
   const navigate = useNavigate();
   const transactionsPerPage = 10;
 
-  // Fetch transactions on mount
-  useEffect(() => {
-    if (customerId && selectedCurrencyCode) {
-      dispatch(
-        fetchTransactionDetails({ 
-          customerId, 
-          currencyCode: selectedCurrencyCode 
-        })
-      ).then((result) => {
-        if (result.payload) {
-          toast.success("Transactions have been successfully imported.");
-        }
-      }).catch(() => {
-        toast.error("There was an error importing transactions.");
-      });
-    }
+  // Fetch available currencies from the API - only called when dropdown is clicked
+  const fetchAvailableCurrencies = useCallback(async () => {
+    if (!customerId) return;
 
-    // Cleanup on unmount
-    return () => {
+    setCurrencyLoading(true);
+    try {
+      const response = await apiClient.get(
+        `/active-approved-bank-accounts/${customerId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${bearertoken}`,
+          },
+        }
+      );
+
+      // Handle the response structure
+      if (response.data && response.data.account_details && Array.isArray(response.data.account_details)) {
+        // Extract unique currencies from the account_details
+        const currencies = response.data.account_details.map(account => ({
+          code: account.currency_code,
+          name: account.service_provider_name,
+          icon: account.icon,
+          id: account.id,
+          currency_id: account.currency_id
+        }));
+
+        // Remove duplicates based on currency code
+        const uniqueCurrencies = Array.from(
+          new Map(currencies.map(curr => [curr.code, curr])).values()
+        );
+
+        setAvailableCurrencies(uniqueCurrencies);
+        setHasFetchedCurrencies(true);
+
+        console.log("Currencies loaded:", uniqueCurrencies);
+      } else {
+        console.error("Unexpected API response structure:", response.data);
+        toast.error("Invalid response format from server");
+      }
+    } catch (error) {
+      console.error("Error fetching currencies:", error);
+      toast.error("Failed to load available currencies");
+    } finally {
+      setCurrencyLoading(false);
+    }
+  }, [customerId, bearertoken]);
+
+  // Handle dropdown toggle - fetch currencies only when opening
+  const handleDropdownToggle = () => {
+    if (!showCurrencyDropdown && !hasFetchedCurrencies) {
+      fetchAvailableCurrencies();
+    }
+    setShowCurrencyDropdown(!showCurrencyDropdown);
+  };
+
+  // Fetch transactions when currency changes
+  useEffect(() => {
+    if (customerId && selectedCurrency) {
+      console.log("🔄 Fetching transactions for:", { customerId, currency: selectedCurrency });
+
+      // Clear existing transactions first to prevent showing stale data
       dispatch(clearTransactions());
-    };
-  }, [customerId, selectedCurrencyCode, dispatch]);
+      setFilteredTransactions([]);
+
+      dispatch(
+        fetchTransactionDetails({
+          customerId,
+          currencyCode: selectedCurrency === 'all' ? 'all' : selectedCurrency
+        })
+      );
+    }
+  }, [customerId, selectedCurrency, dispatch]);
+
+  // Reset filtered transactions when currency changes to prevent showing stale data
+  useEffect(() => {
+    setFilteredTransactions([]);
+    setCurrentPage(1);
+    setFilterDirection("");
+    setFilterTransactionId("");
+    setFilterStartDate("");
+    setFilterEndDate("");
+  }, [selectedCurrency]);
 
   // Handle errors from Redux
   useEffect(() => {
@@ -118,7 +189,7 @@ const AllTransactions = () => {
         return transactionDate >= startDate && transactionDate <= endDate;
       });
     }
-    
+
     setCurrentPage(1);
     setFilteredTransactions(filtered);
   }, [
@@ -155,27 +226,48 @@ const AllTransactions = () => {
     setIsPopupOpen(false);
   };
 
+  // Handle currency selection
+  const handleCurrencySelect = (currencyCode) => {
+    setSelectedCurrency(currencyCode);
+    setShowCurrencyDropdown(false);
+  };
+
+  // Manual refresh handler
+  const handleRefresh = useCallback(() => {
+    if (customerId && selectedCurrency) {
+      dispatch(clearTransactions());
+      setFilteredTransactions([]);
+      setCurrentPage(1);
+      dispatch(
+        fetchTransactionDetails({
+          customerId,
+          currencyCode: selectedCurrency === 'all' ? 'all' : selectedCurrency
+        })
+      );
+    }
+  }, [customerId, selectedCurrency, dispatch]);
+
   // ===== COMPLETED EXPORT FUNCTIONS =====
 
   const exportTransactionPDF = async (transaction) => {
     try {
       setExportLoading(true);
-      
+
       const doc = new jsPDF();
-      
+
       // Add logo
       const logoWidth = 40;
       const logoHeight = 20;
       doc.addImage(logoPath, 'PNG', 10, 10, logoWidth, logoHeight);
-      
+
       // Title
       doc.setFontSize(18);
       doc.text("Transaction Receipt", 105, 20, { align: "center" });
-      
+
       // Transaction Details
       doc.setFontSize(12);
       let yPosition = 40;
-      
+
       const details = [
         { label: "Transaction ID:", value: transaction.transaction_id || "N/A" },
         { label: "Date:", value: new Date(transaction.transaction_datetime).toLocaleString() },
@@ -190,20 +282,20 @@ const AllTransactions = () => {
         { label: "Beneficiary:", value: transaction.beneficiary_name || "N/A" },
         { label: "Service Provider Fee:", value: transaction.service_provider_fee || "N/A" },
       ];
-      
+
       details.forEach(detail => {
         doc.text(`${detail.label} ${detail.value}`, 14, yPosition);
         yPosition += 10;
       });
-      
+
       // Footer
       doc.setFontSize(10);
       doc.text("Generated by Unlimited Remit", 105, 280, { align: "center" });
       doc.text(new Date().toLocaleDateString(), 105, 285, { align: "center" });
-      
+
       // Save PDF
       doc.save(`transaction_${transaction.transaction_id || transaction.id}.pdf`);
-      
+
       toast.success("PDF exported successfully!");
     } catch (error) {
       console.error("Error exporting PDF:", error);
@@ -216,7 +308,7 @@ const AllTransactions = () => {
   const exportTransactionReceiptPDF = async (transactionId) => {
     try {
       setExportLoading(true);
-      
+
       // Generate receipt using backend API
       const response = await apiClient.get(
         `/transactions/generate-receipt/${transactionId}`,
@@ -226,7 +318,7 @@ const AllTransactions = () => {
           },
         }
       );
-      
+
       // Create PDF from response
       const doc = new jsPDF();
       autoTable(doc, {
@@ -236,7 +328,7 @@ const AllTransactions = () => {
           value
         ]),
       });
-      
+
       doc.save(`receipt_${transactionId}.pdf`);
       toast.success("Receipt PDF exported successfully!");
     } catch (error) {
@@ -269,7 +361,7 @@ const AllTransactions = () => {
       // Create a temporary download link
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = `receipt_${transactionId}.pdf`; // 👈 Forces download
+      link.download = `receipt_${transactionId}.pdf`;
       document.body.appendChild(link);
       link.click();
 
@@ -289,7 +381,7 @@ const AllTransactions = () => {
   const exportTransactionExcel = (transaction) => {
     try {
       setExportLoading(true);
-      
+
       // Create worksheet
       const worksheet = XLSX.utils.json_to_sheet([{
         "Transaction ID": transaction.transaction_id || "N/A",
@@ -305,14 +397,14 @@ const AllTransactions = () => {
         "Beneficiary": transaction.beneficiary_name || "N/A",
         "Service Provider Fee": transaction.service_provider_fee || "N/A",
       }]);
-      
+
       // Create workbook
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Transaction");
-      
+
       // Generate Excel file
       XLSX.writeFile(workbook, `transaction_${transaction.transaction_id || transaction.id}.xlsx`);
-      
+
       toast.success("Excel file exported successfully!");
     } catch (error) {
       console.error("Error exporting Excel:", error);
@@ -326,12 +418,12 @@ const AllTransactions = () => {
   const exportAllFilteredToExcel = () => {
     try {
       setExportLoading(true);
-      
+
       if (filteredTransactions.length === 0) {
         toast.warning("No transactions to export");
         return;
       }
-      
+
       // Prepare data
       const data = filteredTransactions.map((transaction) => ({
         "Transaction ID": transaction.transaction_id || "N/A",
@@ -347,17 +439,17 @@ const AllTransactions = () => {
         "Beneficiary": transaction.beneficiary_name || "N/A",
         "Service Provider Fee": transaction.service_provider_fee || "N/A",
       }));
-      
+
       // Create worksheet
       const worksheet = XLSX.utils.json_to_sheet(data);
-      
+
       // Create workbook
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
-      
+
       // Generate Excel file
-      XLSX.writeFile(workbook, `all_transactions_${selectedCurrencyCode}.xlsx`);
-      
+      XLSX.writeFile(workbook, `all_transactions_${selectedCurrency}.xlsx`);
+
       toast.success(`${filteredTransactions.length} transactions exported to Excel!`);
     } catch (error) {
       console.error("Error exporting all transactions:", error);
@@ -396,16 +488,6 @@ const AllTransactions = () => {
         <span className="hidden sm:inline">Receipt</span>
       </button>
 
-      {/* <button
-        className="flex items-center justify-center p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-300 text-xs sm:text-sm"
-        onClick={() => exportTransactionPDF(transaction)}
-        title="Export Details as PDF"
-        disabled={exportLoading}
-      >
-        <FaFilePdf size={14} className="sm:mr-1" />
-        <span className="hidden sm:inline">PDF</span>
-      </button> */}
-
       <button
         className="flex items-center justify-center p-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition-all duration-300 text-xs sm:text-sm"
         title="View Details"
@@ -434,11 +516,10 @@ const AllTransactions = () => {
         <div>
           <span className="font-semibold text-gray-600">Direction:</span>
           <span
-            className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white ${
-              transaction.direction === "Inbound"
-                ? "bg-green-500"
-                : "bg-sky-600"
-            }`}
+            className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white ${transaction.direction === "Inbound"
+              ? "bg-green-500"
+              : "bg-sky-600"
+              }`}
           >
             {transaction.direction}
           </span>
@@ -478,12 +559,64 @@ const AllTransactions = () => {
     </div>
   );
 
+  // Currency Dropdown Component
+  const CurrencyDropdown = () => (
+    <div className="relative">
+      <button
+        onClick={handleDropdownToggle}
+        className="flex items-center justify-between gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 transition-colors duration-200 min-w-[150px] text-sm"
+        disabled={currencyLoading}
+      >
+        {currencyLoading ? (
+          <ClipLoader size={16} color="#4C94B0" />
+        ) : (
+          <>
+            <span className="font-medium">
+              {selectedCurrency === 'all' ? 'Select Currency' : selectedCurrency}
+            </span>
+            <FaChevronDown className={`transition-transform duration-200 ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
+          </>
+        )}
+      </button>
+
+      {showCurrencyDropdown && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowCurrencyDropdown(false)}
+          />
+          <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20 max-h-60 overflow-y-auto">
+            {availableCurrencies.length > 0 ? (
+              availableCurrencies.map((currency) => (
+                <button
+                  key={currency.code}
+                  onClick={() => handleCurrencySelect(currency.code)}
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors duration-200 text-sm flex items-center justify-between ${selectedCurrency === currency.code ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                    }`}
+                >
+                  <span>{currency.code}</span>
+                  {selectedCurrency === currency.code && (
+                    <span className="text-blue-600 text-xs">✓</span>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-sm text-gray-500 text-center">
+                Loading Currencies
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   // Export All Button Component
   const ExportAllButton = () => (
     <button
       onClick={exportAllFilteredToExcel}
       disabled={exportLoading || filteredTransactions.length === 0}
-      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
     >
       {exportLoading ? (
         <ClipLoader size={16} color="white" />
@@ -505,12 +638,22 @@ const AllTransactions = () => {
             Transaction Details
           </h2>
           <p className="text-gray-600 mt-1">
-            Currency: <span className="font-bold">{selectedCurrencyCode}</span> | 
             Customer ID: <span className="font-bold">{customerId}</span>
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <ExportAllButton />
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-green-600 border border-green-600 hover:bg-green-50 transition-colors duration-200 text-sm sm:text-base disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{loading ? "Loading..." : "Refresh"}</span>
+          </button>
+
           <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-blue-600 border border-blue-600 hover:bg-blue-50 transition-colors duration-200 text-sm sm:text-base"
@@ -560,11 +703,18 @@ const AllTransactions = () => {
 
       {/* Filter Section */}
       <div
-        className={`bg-white p-4 shadow-md rounded-lg mb-6 ${
-          showFilters ? "block" : "hidden sm:block"
-        }`}
+        className={`bg-white p-4 shadow-md rounded-lg mb-6 ${showFilters ? "block" : "hidden sm:block"
+          }`}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_1fr_auto] gap-2 items-end">
+          {/* Currency Dropdown - Now positioned to the left of Direction */}
+          <div className="flex flex-col">
+            <label className="text-gray-600 text-sm mb-1 font-medium">
+              Select Currency
+            </label>
+            <CurrencyDropdown />
+          </div>
+
           {/* Transaction Direction Filter */}
           <div className="flex flex-col">
             <label className="text-gray-600 text-sm mb-1 font-medium">
@@ -603,7 +753,7 @@ const AllTransactions = () => {
           </div>
 
           {/* Transaction ID Search */}
-          <div className="flex flex-col sm:col-span-2 lg:col-span-1">
+          <div className="flex flex-col lg:col-span-1">
             <label className="text-gray-600 text-sm mb-1 font-medium">
               Search Transaction ID
             </label>
@@ -695,11 +845,10 @@ const AllTransactions = () => {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white ${
-                              transaction.direction === "Inbound"
-                                ? "bg-green-500"
-                                : "bg-red-600"
-                            }`}
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white ${transaction.direction === "Inbound"
+                              ? "bg-green-500"
+                              : "bg-red-600"
+                              }`}
                           >
                             {transaction.direction}
                           </span>
@@ -744,7 +893,6 @@ const AllTransactions = () => {
                         <td className="px-4 py-3 text-sm">
                           {Number(transaction.balance).toFixed(2)}
                         </td>
-
                         <td className="px-4 py-3">
                           <ActionButtons transaction={transaction} />
                         </td>
@@ -777,11 +925,10 @@ const AllTransactions = () => {
           {/* Pagination Controls */}
           <div className="flex flex-col sm:flex-row items-center justify-between mt-6 bg-gray-100 p-3 rounded-lg shadow gap-3">
             <button
-              className={`px-4 py-2 rounded-lg transition-all duration-300 w-full sm:w-auto text-sm ${
-                currentPage === 1
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-slate-600 text-white hover:bg-slate-400"
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all duration-300 w-full sm:w-auto text-sm ${currentPage === 1
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-slate-600 text-white hover:bg-slate-400"
+                }`}
               onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
             >
@@ -796,11 +943,10 @@ const AllTransactions = () => {
             </span>
 
             <button
-              className={`px-4 py-2 rounded-lg transition-all duration-300 w-full sm:w-auto text-sm ${
-                currentPage === totalPages
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-sky-700 text-white hover:bg-sky-600"
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all duration-300 w-full sm:w-auto text-sm ${currentPage === totalPages
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-sky-700 text-white hover:bg-sky-600"
+                }`}
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === totalPages}
             >

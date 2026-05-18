@@ -631,6 +631,16 @@ const Login = () => {
             },
           };
 
+          // ✅ ADD THIS CODE RIGHT AFTER the authState definition (before dispatch(setAuthState))
+          localStorage.setItem('authcustomer_id', processedData.customer_id);
+          localStorage.setItem('bearertoken', processedData.token);
+          if (processedData.isRemittanceOnlyCustomer) {
+            localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
+          }
+          if (processedData.customer_type) {
+            localStorage.setItem('customer_type', processedData.customer_type);
+          }
+
           dispatch(setAuthState(authState));
 
           dispatch(
@@ -970,7 +980,7 @@ const Login = () => {
     if (isVerifyingPasscode) {
       return;
     }
-  
+
     if (passcode.join("").length !== 6) {
       dispatch(
         openModal({
@@ -981,12 +991,12 @@ const Login = () => {
       );
       return;
     }
-  
+
     try {
       if (!values.email) {
         throw new Error("Email is required for verification");
       }
-  
+
       const verifyPayload = {
         email: values.email.trim().toLowerCase(),
         passcode: passcode,
@@ -994,19 +1004,19 @@ const Login = () => {
         sign_in_option: inputType,
         context: "login_verification",
       };
-  
+
       if (showCustomerType === "Y" && values.customerType) {
         verifyPayload.customer_type = values.customerType;
       }
-  
+
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
-  
+
       // ✅ NEW: Check for owner login
       if (result.is_owner_login === true || result.is_owner_login === "1") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-  
+
         dispatch(
           setOwnerDetails({
             is_owner_login: true,
@@ -1018,17 +1028,17 @@ const Login = () => {
         navigate(`/signupowner/${result.owner_id}`);
         return;
       }
-  
+
       // ✅ NEW: Case 1 - Remittance Only Customer with Pending KYC (Show message, NO redirect)
       if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-        
+
         dispatch(
           openModal({
             title: "KYC Verification Pending",
-            message: result.plaid_message ,
+            message: result.plaid_message,
             type: "warning",
             modalProps: {
               showCloseButton: true,
@@ -1037,16 +1047,16 @@ const Login = () => {
         );
         return;
       }
-  
+
       // ✅ NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
       if (result.requiresPlaidRedirect && result.plaidUrl) {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-        
- 
+
+
         window.location.href = result.plaidUrl;
-        
+
         // Optional: Show notification
         dispatch(
           openModal({
@@ -1062,28 +1072,28 @@ const Login = () => {
         );
         return;
       }
-  
+
       // Keep existing code for Plaid redirect (if any)
       if (result.requiresPlaidRedirect) {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
-  
+
         const processedData = await handleKycVerification(result, values);
         return;
       }
-  
+
       const processedData = await handleKycVerification(result, values);
-  
+
       if (processedData === null) {
         return;
       }
-  
+
       if (processedData && processedData.token && processedData.customer_id) {
         const customerId = processedData.customer_id;
-  
+
         await new Promise((resolve) => setTimeout(resolve, 100));
-  
+
         dispatch(
           setAuthState({
             token: processedData.token,
@@ -1096,11 +1106,22 @@ const Login = () => {
             },
           })
         );
-  
+
+        // ✅ ADD THIS CODE RIGHT HERE (after setAuthState but before dispatch(setPasscode))
+        localStorage.setItem('authcustomer_id', customerId);
+        localStorage.setItem('bearertoken', processedData.token);
+        if (processedData.isRemittanceOnlyCustomer) {
+          localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
+        }
+        if (processedData.customer_type) {
+          localStorage.setItem('customer_type', processedData.customer_type);
+        }
+
+
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
-  
+
         dispatch(
           openModal({
             title: "Login Successful",
@@ -1115,7 +1136,7 @@ const Login = () => {
             disableEscapeKey: true,
           })
         );
-  
+
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
@@ -1132,12 +1153,12 @@ const Login = () => {
       if (firstInput) {
         setTimeout(() => firstInput.focus(), 100);
       }
-  
+
       dispatch(setPasscode(new Array(6).fill("")));
-  
+
       let displayMessage =
         error.message || "Verification failed. Please try again.";
-  
+
       if (
         error.message &&
         !error.message.includes("KYC") &&
@@ -1225,7 +1246,7 @@ const Login = () => {
         dispatch(
           openModal({
             title: "KYC Verification Pending",
-            message: result.plaid_message ,
+            message: result.plaid_message,
             type: "warning",
             modalProps: {
               showCloseButton: true,
@@ -1287,6 +1308,17 @@ const Login = () => {
             },
           })
         );
+        
+        localStorage.setItem('authcustomer_id', result.customer_id);
+        localStorage.setItem('bearertoken', result.token);
+        if (result.isRemittanceOnlyCustomer) {
+          localStorage.setItem('isRemittanceOnlyCustomer', result.isRemittanceOnlyCustomer);
+        }
+        if (result.customer_type) {
+          localStorage.setItem('customer_type', result.customer_type);
+        }
+
+
 
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
@@ -1393,8 +1425,8 @@ const Login = () => {
               />
               <span
                 className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
-                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                    : ""
+                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                  : ""
                   }`}
               ></span>
               <label
@@ -1419,8 +1451,8 @@ const Login = () => {
               />
               <span
                 className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "mobile"
-                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                    : ""
+                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                  : ""
                   }`}
               ></span>
               <label
