@@ -20,6 +20,8 @@ const institutionIcon =
 const partnerIcon =
   "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80";
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
 const AccountType = () => {
   const navigate = useNavigate();
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -35,7 +37,7 @@ const AccountType = () => {
     
     try {
       // Call the API for partner account selection
-      const response = await fetch('http://10.1.5.120:8000/api/partner-login', {
+      const response = await fetch(`${API_URL}/partner-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

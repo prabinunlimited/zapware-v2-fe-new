@@ -9,7 +9,7 @@ import {
   setSelectedCountry,
 } from "../slices/countrySlice";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://10.1.5.120:8000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 function SelectCountry() {
   const dispatch = useDispatch();
