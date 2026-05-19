@@ -15,12 +15,13 @@ import {
   FaGlobe,
   FaChevronDown,
   FaCheck,
-  FaSearch
+  FaSearch,
+  FaEdit
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import InstitutionPopup from "../../components/PopupModal/InstitutionPopup.jsx";
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 import { countries } from "../../features/Auth/slices/countrySlice.js";
@@ -43,12 +44,15 @@ const AddTeamMember = () => {
   const bearertoken = localStorage.getItem("bearertoken");
   const authtoken = localStorage.getItem("authtoken");
   const API_URL = import.meta.env.VITE_API_URL;
-  const { customerId } = useParams();
+  const { customerId, staffId } = useParams();
+  const location = useLocation();
+  const isEditMode = !!staffId;
+  const [fetchingMember, setFetchingMember] = useState(false);
 
   // Redux state and actions
   const { roles, loading, error, success, showPopup } = useTeamMemberState();
-  const { loadRoles, createTeamMember, resetError, resetSuccess, updateShowPopup } =
-    useTeamMemberActions();
+  const { loadRoles, createTeamMember, updateTeamMember, resetError, resetSuccess, updateShowPopup } =
+  useTeamMemberActions();
 
   // Use the partner config hook
   const config = usePartnerConfig(authtoken);
@@ -93,41 +97,37 @@ const AddTeamMember = () => {
       flag_url: "",
       role_id: "3",
     },
-    validationSchema: Yup.object({
-      first_name: Yup.string()
-        .required("First Name is required")
-        .min(2, "First name must be at least 2 characters"),
-      last_name: Yup.string()
-        .required("Last Name is required")
-        .min(2, "Last name must be at least 2 characters"),
-      email: Yup.string()
-        .email("Invalid email address")
-        .required("Email is required"),
-      password: Yup.string()
-        .min(8, "Password must be at least 8 characters")
-        .matches(/[a-zA-Z]/, "Password must contain at least one letter")
-        .matches(/[0-9]/, "Password must contain at least one number")
-        .required("Password is required"),
-      mobilenumber_countrycode: Yup.string().required(
-        "Country code is required"
-      ),
-      mobile_number: Yup.string()
-        .required("Mobile number is required")
-        .matches(/^[0-9]+$/, "Mobile number must contain only numbers")
-        .min(6, "Mobile number must be at least 6 digits"),
-    }),
+    validationSchema: isEditMode
+      ? Yup.object({
+        first_name: Yup.string().required("First Name is required").min(2, "First name must be at least 2 characters"),
+        last_name: Yup.string().required("Last Name is required").min(2, "Last name must be at least 2 characters"),
+        email: Yup.string().email("Invalid email address").required("Email is required"),
+        password: Yup.string().min(8, "Password must be at least 8 characters").matches(/[a-zA-Z]/, "Password must contain at least one letter").matches(/[0-9]/, "Password must contain at least one number").required("Password is required"),
+        mobilenumber_countrycode: Yup.string().required("Country code is required"),
+        mobile_number: Yup.string().required("Mobile number is required").matches(/^[0-9]+$/, "Mobile number must contain only numbers").min(6, "Mobile number must be at least 6 digits"),
+      })
+      : Yup.object({
+        first_name: Yup.string().required("First Name is required").min(2, "First name must be at least 2 characters"),
+        last_name: Yup.string().required("Last Name is required").min(2, "Last name must be at least 2 characters"),
+        email: Yup.string().email("Invalid email address").required("Email is required"),
+        password: Yup.string().min(8, "Password must be at least 8 characters").matches(/[a-zA-Z]/, "Password must contain at least one letter").matches(/[0-9]/, "Password must contain at least one number").required("Password is required"),
+        mobilenumber_countrycode: Yup.string().required("Country code is required"),
+        mobile_number: Yup.string().required("Mobile number is required").matches(/^[0-9]+$/, "Mobile number must contain only numbers").min(6, "Mobile number must be at least 6 digits"),
+      }),
     onSubmit: async (values) => {
-      // Prevent double submission
       if (isSubmittingRef.current) return;
-
       setIsSubmitting(true);
       isSubmittingRef.current = true;
-
       try {
-        await createTeamMember(customerId, values, authtoken, API_URL);
+        if (isEditMode) {
+          const updateData = { ...values };
+          await updateTeamMember(customerId, staffId, updateData, authtoken, API_URL);
+        } else {
+          await createTeamMember(customerId, values, authtoken, API_URL);
+        }
       } catch (error) {
         console.error("Submission error:", error);
-        toast.error("Failed to create team member. Please try again.");
+        toast.error(isEditMode ? "Failed to update team member" : "Failed to create team member");
       } finally {
         setIsSubmitting(false);
         isSubmittingRef.current = false;
@@ -145,25 +145,27 @@ const AddTeamMember = () => {
   // Handle success and error states
   useEffect(() => {
     if (success) {
-      toast.success("🎉 Team member added successfully!");
+      toast.success(isEditMode ? "🎉 Team member updated successfully!" : "🎉 Team member added successfully!");
 
       // Reset success state immediately to prevent re-triggering
       resetSuccess();
 
-      // Reset form values
-      formik.resetForm();
-      // Reset country selection
-      setSelectedCountry(null);
-      setSearchTerm("");
-      setIsDropdownOpen(false);
-      setPasswordVisible(false);
+      if (!isEditMode) {
+        // Reset form values (only for add mode, not for edit)
+        formik.resetForm();
+        // Reset country selection
+        setSelectedCountry(null);
+        setSearchTerm("");
+        setIsDropdownOpen(false);
+        setPasswordVisible(false);
+      }
 
       // Navigate back to team list after a short delay
       setTimeout(() => {
         navigate(`/team/${customerId}`);
       }, 1500);
     }
-  }, [success, navigate, customerId, formik, resetSuccess]);
+  }, [success, navigate, customerId, formik, resetSuccess, isEditMode]); // Added isEditMode to depend
 
   useEffect(() => {
     if (error && !showPopup) {
@@ -180,12 +182,55 @@ const AddTeamMember = () => {
     };
   }, [resetError, resetSuccess]);
 
+  // ADD THIS useEffect after your other useEffects:
+  useEffect(() => {
+    if (isEditMode && staffId && authtoken && API_URL) {
+      fetchMemberData();
+    }
+  }, [isEditMode, staffId, authtoken, API_URL]);
+
   const handleCountryChange = (country) => {
     setSelectedCountry(country);
     formik.setFieldValue("mobilenumber_countrycode", country.phone_code);
     formik.setFieldValue("flag_url", country.flag_url);
     setIsDropdownOpen(false);
     setSearchTerm("");
+  };
+
+  // ADD THIS FUNCTION after handleCountryChange (around line 200):
+  const fetchMemberData = async () => {
+    setFetchingMember(true);
+    try {
+      const response = await fetch(`${API_URL}/customers/staff-user-detail/${staffId}`, {
+        headers: { "Authorization": `Bearer ${authtoken}`, "Content-Type": "application/json" }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const country = countriesData?.find(c => c.phone_code === (data.phone_number_country_code || data.mobilenumber_countrycode));
+        if (country) setSelectedCountry(country);
+        formik.setValues({
+          first_name: data.first_name || "",
+          middle_name: data.middle_name || "",
+          last_name: data.last_name || "",
+          email: data.email || "",
+          password: "",
+          phone_no: data.phone_no || "",
+          mobilenumber_countrycode: data.phone_number_country_code || data.mobilenumber_countrycode || "",
+          mobile_number: data.phone_no || data.mobile_number || "",
+          flag_url: country?.flag_url || "",
+          role_id: data.role_id || "3",
+        });
+      } else {
+        toast.error("Failed to fetch member details");
+        navigate(`/team/${customerId}`);
+      }
+    } catch (error) {
+      console.error("Error fetching member:", error);
+      toast.error("Error loading member data");
+      navigate(`/team/${customerId}`);
+    } finally {
+      setFetchingMember(false);
+    }
   };
 
   // Safe countries filtering
@@ -263,14 +308,14 @@ const AddTeamMember = () => {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-6 mb-8">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-2xl bg-white shadow-lg">
-                <FaUserPlus className="text-3xl text-blue-600" />
+                {isEditMode ? <FaEdit className="text-3xl text-blue-600" /> : <FaUserPlus className="text-3xl text-blue-600" />}
               </div>
               <div className="text-left">
                 <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
-                  Add Team Member
+                  {isEditMode ? "Edit Team Member" : "Add Team Member"}
                 </h1>
                 <p className="text-gray-600 mt-2">
-                  Create a new team member account with specific permissions
+                  {isEditMode ? "Update team member information and permissions" : "Create a new team member account with specific permissions"}
                 </p>
               </div>
             </div>
@@ -303,8 +348,30 @@ const AddTeamMember = () => {
               >
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-gray-700 font-medium">
-                  {isSubmitting ? "Adding team member..." : "Loading..."}
+                  {isSubmitting ? (isEditMode ? "Updating team member..." :"Adding team member...")
+                   :  "Loading..."}
                 </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Loading Overlay for fetching member data in edit mode */}
+        <AnimatePresence>
+          {fetchingMember && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4"
+              >
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-gray-700 font-medium">Loading member data...</p>
               </motion.div>
             </motion.div>
           )}
@@ -321,7 +388,7 @@ const AddTeamMember = () => {
               Member Information
             </h2>
             <p className="text-blue-100 mt-1">
-              Fill in the details below to create a new team member
+             {isEditMode ? "Fill in details below to edit a team member" : "Fill in the details below to create a new team member"}
             </p>
           </div>
 
@@ -342,8 +409,8 @@ const AddTeamMember = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.first_name && formik.touched.first_name
-                        ? "border-red-300 focus:ring-red-200"
-                        : "border-gray-300 focus:ring-blue-200"
+                      ? "border-red-300 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200"
                       }`}
                     placeholder="Enter first name"
                   />
@@ -395,8 +462,8 @@ const AddTeamMember = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.last_name && formik.touched.last_name
-                        ? "border-red-300 focus:ring-red-200"
-                        : "border-gray-300 focus:ring-blue-200"
+                      ? "border-red-300 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200"
                       }`}
                     placeholder="Enter last name"
                   />
@@ -430,8 +497,8 @@ const AddTeamMember = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.email && formik.touched.email
-                        ? "border-red-300 focus:ring-red-200"
-                        : "border-gray-300 focus:ring-blue-200"
+                      ? "border-red-300 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200"
                       }`}
                     placeholder="Enter email address"
                   />
@@ -465,10 +532,10 @@ const AddTeamMember = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 pr-12 ${formik.errors.password && formik.touched.password
-                        ? "border-red-300 focus:ring-red-200"
-                        : "border-gray-300 focus:ring-blue-200"
+                      ? "border-red-300 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200"
                       }`}
-                    placeholder="Create a strong password"
+                    placeholder="Enter password"
                   />
                   <button
                     type="button"
@@ -551,9 +618,9 @@ const AddTeamMember = () => {
                     <div className="relative">
                       <div
                         className={`w-full px-4 py-3 border rounded-xl transition-all duration-200 ${formik.errors.mobilenumber_countrycode &&
-                            formik.touched.mobilenumber_countrycode
-                            ? "border-red-300"
-                            : "border-gray-300"
+                          formik.touched.mobilenumber_countrycode
+                          ? "border-red-300"
+                          : "border-gray-300"
                           }`}
                       >
                         {isDropdownOpen ? (
@@ -696,8 +763,8 @@ const AddTeamMember = () => {
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all duration-200 ${formik.errors.mobile_number && formik.touched.mobile_number
-                            ? "border-red-300 focus:ring-red-200"
-                            : "border-gray-300 focus:ring-blue-200"
+                          ? "border-red-300 focus:ring-red-200"
+                          : "border-gray-300 focus:ring-blue-200"
                           }`}
                         placeholder="Enter phone number"
                       />
@@ -740,14 +807,16 @@ const AddTeamMember = () => {
                 type="submit"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                disabled={loading || isSubmitting || !formik.isValid}
-                className={`px-8 py-4 text-white rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-200 ${loading || isSubmitting || !formik.isValid
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:shadow-lg"
+                disabled={loading || isSubmitting}
+                className={`px-8 py-4 text-white rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-200 ${loading || isSubmitting
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:shadow-lg"
                   } ${headerColorProps.className}`}
               >
-                <FaUserPlus />
-                {isSubmitting ? "Creating..." : "Create Team Member"}
+                {isEditMode ? <FaEdit /> : <FaUserPlus />}
+                {isSubmitting
+                  ? (isEditMode ? "Updating..." : "Creating...")
+                  : (isEditMode ? "Update Team Member" : "Create Team Member")}
               </motion.button>
             </motion.div>
           </form>
