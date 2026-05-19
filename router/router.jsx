@@ -154,7 +154,14 @@ const router = createBrowserRouter([
         path: "team/:customerId",
         element: <Team />,
       },
-      { path: "addteam/:customerId", element: <AddTeamMember /> },
+      { 
+        path: "addteam/:customerId", 
+        element: <AddTeamMember />
+      },
+      { 
+        path: "editmember/:customerId/:staffId", 
+        element: <AddTeamMember />  
+      },
       {
         path: "homeremit/:customerId",
         element: <HomeRemit />,
