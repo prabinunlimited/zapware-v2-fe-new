@@ -143,10 +143,23 @@ const Profile = () => {
     countryCode: "",
     mobileNumber: "",
     countryId: "",
+    customerUuid: "",
   });
   const [otpRequestLoading, setOtpRequestLoading] = useState(false);
   const [otpResendTimer, setOtpResendTimer] = useState(0);
   const [canResendOtp, setCanResendOtp] = useState(true);
+
+  // Passcode verification states for email
+  const [showEmailPasscodeModal, setShowEmailPasscodeModal] = useState(false);
+  const [emailPasscode, setEmailPasscode] = useState("");
+  const [emailPasscodeLoading, setEmailPasscodeLoading] = useState(false);
+  const [tempEmailData, setTempEmailData] = useState({
+    email: "",
+    customerUuid: "",
+  });
+  const [emailPasscodeRequestLoading, setEmailPasscodeRequestLoading] = useState(false);
+  const [emailPasscodeResendTimer, setEmailPasscodeResendTimer] = useState(0);
+  const [canResendEmailPasscode, setCanResendEmailPasscode] = useState(true);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -189,6 +202,23 @@ const Profile = () => {
     }
     return () => clearInterval(interval);
   }, [otpResendTimer]);
+
+  // Email Passcode Resend timer
+  useEffect(() => {
+    let interval;
+    if (emailPasscodeResendTimer > 0) {
+      interval = setInterval(() => {
+        setEmailPasscodeResendTimer((prev) => {
+          if (prev <= 1) {
+            setCanResendEmailPasscode(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [emailPasscodeResendTimer]);
 
   // =============== FIX: Fetch profile data if missing in Redux ===============
   useEffect(() => {
@@ -462,6 +492,18 @@ const Profile = () => {
     return `${ssn.slice(0, 3)}-${ssn.slice(3, 5)}-${ssn.slice(5, 9)}`;
   };
 
+  // Validate email format
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Validate mobile number format
+  const isValidMobileNumber = (number) => {
+    const mobileRegex = /^\d{6,15}$/;
+    return mobileRegex.test(number);
+  };
+
   const handleEditToggle = () => {
     if (isEditing) {
       // Reset to original data from Redux
@@ -535,6 +577,40 @@ const Profile = () => {
 
   // Request OTP for mobile change
   const requestMobileChangeOtp = async () => {
+    if (!changeModalData.selectedCountryId) {
+      setModalData({
+        isOpen: true,
+        title: "Validation Error",
+        message: "Please select a country code.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    if (!changeModalData.newMobileNumber || !changeModalData.newMobileNumber.trim()) {
+      setModalData({
+        isOpen: true,
+        title: "Validation Error",
+        message: "Please enter a mobile number.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    const mobileRegex = /^\d{6,15}$/;
+    if (!mobileRegex.test(changeModalData.newMobileNumber)) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid Mobile Number",
+        message: "Please enter a valid mobile number (6-15 digits, numbers only).",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
     setOtpRequestLoading(true);
 
     try {
@@ -750,6 +826,223 @@ const Profile = () => {
       setIsModalOpen(true);
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  // Request Passcode for email change
+  const requestEmailChangePasscode = async () => {
+    if (!changeModalData.newEmail) {
+      setModalData({
+        isOpen: true,
+        title: "Validation Error",
+        message: "Please enter a valid email address.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(changeModalData.newEmail)) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid Email",
+        message: "Please enter a valid email address (e.g., name@example.com).",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setEmailPasscodeRequestLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid,
+        email: changeModalData.newEmail,
+      };
+
+      console.log("📧 Requesting passcode for email change:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/send-passcode-profile-email-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        setTempEmailData({
+          email: changeModalData.newEmail,
+          customerUuid: customerUuid,
+        });
+
+        setIsChangeModalOpen(false);
+        setShowEmailPasscodeModal(true);
+        setEmailPasscode("");
+
+        setCanResendEmailPasscode(false);
+        setEmailPasscodeResendTimer(60);
+
+        setModalData({
+          isOpen: true,
+          title: "Passcode Sent",
+          message: "A verification passcode has been sent to your new email address.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to send passcode");
+      }
+    } catch (err) {
+      console.error("❌ Failed to send email passcode:", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to send passcode. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setEmailPasscodeRequestLoading(false);
+    }
+  };
+
+  // Resend Email Passcode
+  const handleResendEmailPasscode = async () => {
+    if (!canResendEmailPasscode) {
+      setModalData({
+        isOpen: true,
+        title: "Please Wait",
+        message: `Please wait ${emailPasscodeResendTimer} seconds before requesting a new passcode.`,
+        type: "warning",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setEmailPasscodeRequestLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid,
+        email: tempEmailData.email, 
+      };
+
+      console.log("📧 Resending email passcode:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/send-passcode-profile-email-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        setCanResendEmailPasscode(false);
+        setEmailPasscodeResendTimer(60);
+
+        setModalData({
+          isOpen: true,
+          title: "Passcode Resent",
+          message: "A new verification passcode has been sent to your email address.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to resend passcode");
+      }
+    } catch (err) {
+      console.error("❌ Failed to resend email passcode:", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to resend passcode. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setEmailPasscodeRequestLoading(false);
+    }
+  };
+
+  // Verify Email Passcode and update email
+  const handleVerifyEmailPasscode = async () => {
+    if (!emailPasscode || emailPasscode.length !== 6) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid Passcode",
+        message: "Please enter a valid 6-digit passcode.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setEmailPasscodeLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid,
+        email: tempEmailData.email,
+        passcode: emailPasscode,
+      };
+
+      console.log("🔐 Verifying email passcode:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/validate-passcode-profile-email-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        console.log("✅ Email changed successfully");
+
+        if (bearertoken) {
+          dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+
+        setShowEmailPasscodeModal(false);
+        setEmailPasscode("");
+
+        setModalData({
+          isOpen: true,
+          title: "Success",
+          message: "Email address updated successfully.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to verify passcode");
+      }
+    } catch (err) {
+      console.error("❌ Failed to verify email passcode:", err);
+      setModalData({
+        isOpen: true,
+        title: "Verification Failed",
+        message: err.response?.data?.message || "Invalid passcode. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setEmailPasscodeLoading(false);
     }
   };
 
@@ -1160,8 +1453,8 @@ const Profile = () => {
                           {item.status ? (
                             <span
                               className={`text-sm px-2 py-1 rounded-full ${item.status === "success"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-gray-100 text-gray-800"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
                                 }`}
                             >
                               {item.value || "N/A"}
@@ -1702,8 +1995,16 @@ const Profile = () => {
                       value={changeModalData.newEmail}
                       onChange={handleChangeModalInput}
                       placeholder="Enter new email address"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${changeModalData.newEmail && !isValidEmail(changeModalData.newEmail)
+                        ? "border-red-500 bg-red-50"
+                        : "border-gray-300"
+                        }`}
                     />
+                    {changeModalData.newEmail && !isValidEmail(changeModalData.newEmail) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Please enter a valid email address (e.g., name@example.com)
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
@@ -1734,12 +2035,12 @@ const Profile = () => {
                       classNamePrefix="react-select"
                       isLoading={countriesLoading}
                       styles={{
-                        control: (provided) => ({
+                        control: (provided, state) => ({
                           ...provided,
                           minHeight: "42px",
-                          borderColor: "#d1d5db",
+                          borderColor: !changeModalData.selectedCountryId && changeModalData.newMobileNumber ? "#ef4444" : "#d1d5db",
                           "&:hover": {
-                            borderColor: "#9ca3af",
+                            borderColor: !changeModalData.selectedCountryId && changeModalData.newMobileNumber ? "#ef4444" : "#9ca3af",
                           },
                         }),
                         option: (provided) => ({
@@ -1765,6 +2066,11 @@ const Profile = () => {
                         </div>
                       )}
                     />
+                    {!changeModalData.selectedCountryId && changeModalData.newMobileNumber && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Please select a country code
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1777,8 +2083,16 @@ const Profile = () => {
                       value={changeModalData.newMobileNumber}
                       onChange={handleChangeModalInput}
                       placeholder="Enter new mobile number"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${changeModalData.newMobileNumber && !isValidMobileNumber(changeModalData.newMobileNumber)
+                          ? "border-red-500 bg-red-50"
+                          : "border-gray-300"
+                        }`}
                     />
+                    {changeModalData.newMobileNumber && !isValidMobileNumber(changeModalData.newMobileNumber) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Enter 6-15 digits only (numbers only, no spaces or symbols)
+                      </p>
+                    )}
                   </div>
                 </>
               )}
@@ -1792,18 +2106,27 @@ const Profile = () => {
                 Cancel
               </button>
               <button
-                onClick={changeModalType === "email" ? handleChangeEmailSubmit : requestMobileChangeOtp}
-                disabled={changeModalLoading || otpRequestLoading}
-                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                onClick={changeModalType === "email" ? requestEmailChangePasscode : requestMobileChangeOtp}
+                disabled={
+                  changeModalType === "email"
+                    ? (!changeModalData.newEmail || !isValidEmail(changeModalData.newEmail))
+                    : (!changeModalData.selectedCountryId || !changeModalData.newMobileNumber || !isValidMobileNumber(changeModalData.newMobileNumber))
+                }
+                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${(changeModalType === "email"
+                  ? (!changeModalData.newEmail || !isValidEmail(changeModalData.newEmail))
+                  : (!changeModalData.selectedCountryId || !changeModalData.newMobileNumber || !isValidMobileNumber(changeModalData.newMobileNumber)))
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:opacity-90"
+                  } ${headerColorProps.className}`}
                 style={headerColorProps.style}
               >
-                {(changeModalLoading || otpRequestLoading) ? (
+                {(changeModalType === "email" ? emailPasscodeRequestLoading : otpRequestLoading) ? (
                   <>
                     <RingLoader size={16} color="#ffffff" />
-                    <span>{changeModalType === "email" ? "Updating..." : "Sending OTP..."}</span>
+                    <span>Sending...</span>
                   </>
                 ) : (
-                  changeModalType === "email" ? "Update Email" : "Send OTP"
+                  "Send"
                 )}
               </button>
             </div>
@@ -1854,6 +2177,7 @@ const Profile = () => {
                   {[...Array(6)].map((_, index) => (
                     <input
                       key={index}
+                      id={`otp-input-${index}`}
                       type="text"
                       inputMode="numeric"
                       maxLength={1}
@@ -1934,6 +2258,139 @@ const Profile = () => {
                 style={headerColorProps.style}
               >
                 {otpLoading ? (
+                  <>
+                    <RingLoader size={16} color="#ffffff" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  "Verify & Update"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Email Passcode Verification Modal */}
+      {showEmailPasscodeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                Verify Email Address
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEmailPasscodeModal(false);
+                  setEmailPasscode("");
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimesCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-gray-600 mb-2">
+                  Please enter the 6-digit passcode sent to
+                </p>
+                <p className="text-lg font-semibold text-gray-800 break-words">
+                  {tempEmailData.email}
+                </p>
+              </div>
+
+              {/* 6-digit passcode input boxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
+                  Enter Passcode *
+                </label>
+                <div className="flex justify-center gap-3 mb-6">
+                  {[...Array(6)].map((_, index) => (
+                    <input
+                      key={index}
+                      id={`email-passcode-input-${index}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={emailPasscode[index] || ""}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        if (value.length <= 1) {
+                          const newPasscode = emailPasscode.split("");
+                          newPasscode[index] = value;
+                          const newPasscodeString = newPasscode.join("");
+                          setEmailPasscode(newPasscodeString);
+
+                          if (value && index < 5) {
+                            const nextInput = document.getElementById(`email-passcode-input-${index + 1}`);
+                            if (nextInput) nextInput.focus();
+                          }
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Backspace" && !emailPasscode[index] && index > 0) {
+                          const prevInput = document.getElementById(`email-passcode-input-${index - 1}`);
+                          if (prevInput) {
+                            prevInput.focus();
+                            const newPasscode = emailPasscode.split("");
+                            newPasscode[index - 1] = "";
+                            setEmailPasscode(newPasscode.join(""));
+                          }
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pastedData = e.clipboardData.getData("text/plain").replace(/\D/g, "").slice(0, 6);
+                        if (pastedData.length === 6) {
+                          setEmailPasscode(pastedData);
+                          setTimeout(() => {
+                            const lastInput = document.getElementById(`email-passcode-input-5`);
+                            if (lastInput) lastInput.focus();
+                          }, 10);
+                        }
+                      }}
+                      className="w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+                      autoFocus={index === 0}
+                      disabled={emailPasscodeLoading}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-center">
+                <button
+                  onClick={handleResendEmailPasscode}
+                  disabled={!canResendEmailPasscode || emailPasscodeLoading}
+                  className={`text-sm ${canResendEmailPasscode ? 'text-blue-600 hover:text-blue-800' : 'text-gray-400 cursor-not-allowed'}`}
+                >
+                  {!canResendEmailPasscode ? `Resend Passcode in ${emailPasscodeResendTimer}s` : "Resend Passcode"}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEmailPasscodeModal(false);
+                  setEmailPasscode("");
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleVerifyEmailPasscode}
+                disabled={emailPasscodeLoading || emailPasscode.length !== 6}
+                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                style={headerColorProps.style}
+              >
+                {emailPasscodeLoading ? (
                   <>
                     <RingLoader size={16} color="#ffffff" />
                     <span>Verifying...</span>
@@ -2284,8 +2741,8 @@ const Profile = () => {
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                              ? "border-blue-500 text-blue-600"
-                              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                            ? "border-blue-500 text-blue-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                             }`}
                           onClick={() => setActiveTab(tab)}
                         >
@@ -2339,8 +2796,8 @@ const Profile = () => {
                       <span className="text-sm text-gray-600">KYC Status:</span>
                       <span
                         className={`text-xs font-medium px-2 py-1 rounded-full ${displayProfileData.kyc_status === "Pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-green-100 text-green-800"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
                           }`}
                       >
                         {displayProfileData.kyc_status || "N/A"}
