@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import axios from "axios";
 import { RingLoader } from "react-spinners";
+import Select from "react-select";
 import {
   FaUser,
   FaEnvelope,
@@ -39,6 +40,9 @@ import {
   fetchUserProfile,
 } from "../../components/Dashboard/Header/headerSlice";
 
+// Import countries selectors
+import { selectCountries, selectCountriesLoading } from "../../features/Auth/slices/countrySlice";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 const defaultProfileData = {
@@ -72,6 +76,10 @@ const Profile = () => {
   const uuid = localStorage.getItem("UUID");
   const countries = JSON.parse(localStorage.getItem("allcountries") || "[]");
   const bearertoken = localStorage.getItem("bearertoken");
+
+  // Get countries from Redux (already fetched by Login/App initialization)
+  const reduxCountries = useSelector(selectCountries);
+  const countriesLoading = useSelector(selectCountriesLoading);
 
   const config = usePartnerConfig(authtoken);
   const headerColor =
@@ -115,6 +123,31 @@ const Profile = () => {
   const [uploadedDocuments, setUploadedDocuments] = useState([]);
   const [tabLoading, setTabLoading] = useState(false);
 
+  // Modal state for email/mobile change
+  const [isChangeModalOpen, setIsChangeModalOpen] = useState(false);
+  const [changeModalType, setChangeModalType] = useState(""); // "email" or "mobile"
+  const [changeModalData, setChangeModalData] = useState({
+    email: "",
+    newEmail: "",
+    mobileNumber: "",
+    selectedCountryId: "",
+    newMobileNumber: "",
+  });
+  const [changeModalLoading, setChangeModalLoading] = useState(false);
+
+  // OTP verification states
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [tempMobileData, setTempMobileData] = useState({
+    countryCode: "",
+    mobileNumber: "",
+    countryId: "",
+  });
+  const [otpRequestLoading, setOtpRequestLoading] = useState(false);
+  const [otpResendTimer, setOtpResendTimer] = useState(0);
+  const [canResendOtp, setCanResendOtp] = useState(true);
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({
@@ -139,6 +172,23 @@ const Profile = () => {
       return () => clearTimeout(timer);
     }
   }, [isModalOpen]);
+
+  // Resend OTP timer
+  useEffect(() => {
+    let interval;
+    if (otpResendTimer > 0) {
+      interval = setInterval(() => {
+        setOtpResendTimer((prev) => {
+          if (prev <= 1) {
+            setCanResendOtp(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [otpResendTimer]);
 
   // =============== FIX: Fetch profile data if missing in Redux ===============
   useEffect(() => {
@@ -351,6 +401,34 @@ const Profile = () => {
     fetchData();
   }, [bearertoken]);
 
+  // Memoize country options from Redux countries data
+  const countryCodeOptions = useMemo(() => {
+    if (!reduxCountries || !Array.isArray(reduxCountries)) {
+      return [];
+    }
+
+    return reduxCountries
+      .filter(country => country.phone_code) // Only include countries with phone codes
+      .map((country) => ({
+        value: country.id,
+        label: `${country.name} (${country.phone_code})`,
+        countryName: country.name,
+        phone_code: country.phone_code,
+        flagUrl: country.flag_url,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically
+  }, [reduxCountries]);
+
+  // Find current selected country option
+  const currentSelectedCountry = useMemo(() => {
+    if (!changeModalData.selectedCountryId) {
+      return null;
+    }
+    return countryCodeOptions.find(
+      (option) => option.value === parseInt(changeModalData.selectedCountryId)
+    ) || null;
+  }, [countryCodeOptions, changeModalData.selectedCountryId]);
+
   // Function to handle text color style
   const getTextColorStyle = () => {
     if (textColor && textColor.startsWith("text-")) {
@@ -408,6 +486,345 @@ const Profile = () => {
       ...prev,
       [name]: value,
     }));
+  };
+
+  // Open change email modal
+  const handleChangeEmailClick = () => {
+    setChangeModalData({
+      email: profileData?.email || "",
+      newEmail: "",
+      mobileNumber: "",
+      selectedCountryId: "",
+      newMobileNumber: "",
+    });
+    setChangeModalType("email");
+    setIsChangeModalOpen(true);
+  };
+
+  // Open change mobile modal
+  const handleChangeMobileClick = () => {
+    setChangeModalData({
+      email: "",
+      newEmail: "",
+      mobileNumber: profileData?.mobile_number || "",
+      selectedCountryId: "",
+      newMobileNumber: "",
+    });
+    setChangeModalType("mobile");
+    setIsChangeModalOpen(true);
+  };
+
+  // Handle change modal input
+  const handleChangeModalInput = (e) => {
+    const { name, value } = e.target;
+    setChangeModalData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Handle country selection
+  const handleCountryCodeSelect = (selectedOption) => {
+    if (!selectedOption) return;
+
+    setChangeModalData((prev) => ({
+      ...prev,
+      selectedCountryId: selectedOption.value,
+    }));
+  };
+
+  // Request OTP for mobile change
+  const requestMobileChangeOtp = async () => {
+    setOtpRequestLoading(true);
+
+    try {
+      // Get the selected country's phone code
+      const selectedCountry = countryCodeOptions.find(
+        (c) => c.value === parseInt(changeModalData.selectedCountryId)
+      );
+      const phoneCode = selectedCountry?.phone_code || "";
+
+      // Get the customer UUID from localStorage (THIS IS THE CORRECT ONE)
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      console.log("🔍 Debug - Customer ID sources:", {
+        customerUuid: customerUuid,
+        authcustomer_id: localStorage.getItem("authcustomer_id"),
+        customerIdParam: customerId,
+      });
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid, // This will be "2b6a2034-7f88-4fa4-a1e8-918f1fb80e51"
+        mobile_number_country_code: phoneCode,
+        mobile_number: changeModalData.newMobileNumber,
+      };
+
+      console.log("📱 Requesting OTP for mobile change:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/send-otp-profile-mobile-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        // Store temporary mobile data for OTP verification
+        setTempMobileData({
+          countryCode: phoneCode,
+          mobileNumber: changeModalData.newMobileNumber,
+          countryId: changeModalData.selectedCountryId,
+          customerUuid: customerUuid,
+        });
+
+        // Close the change modal and open OTP modal
+        setIsChangeModalOpen(false);
+        setShowOtpModal(true);
+        setOtpCode("");
+
+        // Start resend timer
+        setCanResendOtp(false);
+        setOtpResendTimer(60);
+
+        setModalData({
+          isOpen: true,
+          title: "OTP Sent",
+          message: "A verification code has been sent to your new mobile number.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to send OTP");
+      }
+    } catch (err) {
+      console.error("❌ Failed to send OTP:", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to send OTP. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setOtpRequestLoading(false);
+    }
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    if (!canResendOtp) {
+      setModalData({
+        isOpen: true,
+        title: "Please Wait",
+        message: `Please wait ${otpResendTimer} seconds before requesting a new OTP.`,
+        type: "warning",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setOtpRequestLoading(true);
+
+    try {
+      // Get the customer UUID from localStorage
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid,
+        mobile_number_country_code: tempMobileData.countryCode,
+        mobile_number: tempMobileData.mobileNumber,
+      };
+
+      console.log("📱 Resending OTP:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/send-otp-profile-mobile-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        setCanResendOtp(false);
+        setOtpResendTimer(60);
+
+        setModalData({
+          isOpen: true,
+          title: "OTP Resent",
+          message: "A new verification code has been sent to your mobile number.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to resend OTP");
+      }
+    } catch (err) {
+      console.error("❌ Failed to resend OTP:", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to resend OTP. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setOtpRequestLoading(false);
+    }
+  };
+
+
+  // Verify OTP and update mobile number
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid OTP",
+        message: "Please enter a valid 6-digit OTP code.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setOtpLoading(true);
+
+    try {
+      // Get the customer UUID from localStorage
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const payload = {
+        customer_id: customerUuid,
+        mobile_number_country_code: tempMobileData.countryCode,
+        mobile_number: tempMobileData.mobileNumber,
+        otp: otpCode,
+      };
+
+      console.log("🔐 Verifying OTP for mobile change:", payload);
+
+      const response = await axios.post(
+        `${API_URL}/customers/validate-otp-profile-mobile-change`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        console.log("✅ Mobile number changed successfully");
+
+        // Refresh profile data
+        if (bearertoken) {
+          dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+
+        // Close OTP modal
+        setShowOtpModal(false);
+        setOtpCode("");
+
+        setModalData({
+          isOpen: true,
+          title: "Success",
+          message: "Mobile number updated successfully.",
+          type: "success",
+        });
+        setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to verify OTP");
+      }
+    } catch (err) {
+      console.error("❌ Failed to verify OTP:", err);
+      setModalData({
+        isOpen: true,
+        title: "Verification Failed",
+        message: err.response?.data?.message || "Invalid OTP. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // Submit change email (no OTP for email)
+  const handleChangeEmailSubmit = async () => {
+    setChangeModalLoading(true);
+
+    try {
+      if (!changeModalData.newEmail) {
+        setModalData({
+          isOpen: true,
+          title: "Error",
+          message: "Please enter new email address",
+          type: "error",
+        });
+        setIsModalOpen(true);
+        setChangeModalLoading(false);
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(changeModalData.newEmail)) {
+        setModalData({
+          isOpen: true,
+          title: "Error",
+          message: "Please enter a valid email address",
+          type: "error",
+        });
+        setIsModalOpen(true);
+        setChangeModalLoading(false);
+        return;
+      }
+
+      console.log("📧 Profile: Changing email", changeModalData.newEmail);
+
+      const response = await axios.post(
+        `${API_URL}/customers/change-email`,
+        {
+          customer_id: customerId,
+          new_email: changeModalData.newEmail,
+        },
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        console.log("✅ Profile: Email changed successfully");
+
+        // Refresh profile data
+        if (bearertoken) {
+          dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+
+        setModalData({
+          isOpen: true,
+          title: "Success",
+          message: "Email address updated successfully",
+          type: "success",
+        });
+        setIsModalOpen(true);
+        setIsChangeModalOpen(false);
+      } else {
+        throw new Error(response.data.message || "Failed to update email");
+      }
+    } catch (err) {
+      console.error("❌ Profile: Failed to change email", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to update email. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setChangeModalLoading(false);
+    }
   };
 
   const handleSaveChanges = async () => {
@@ -507,10 +924,6 @@ const Profile = () => {
 
   const handleChangePassword = () => {
     navigate(`/changepassword/${customerId}`);
-  };
-
-  const handleChangeMobile = () => {
-    navigate(`/changephonenumber/${customerId}`);
   };
 
   const handleBackClick = () => {
@@ -669,9 +1082,8 @@ const Profile = () => {
                       {
                         label: "Phone",
                         value: businessInfo.data.company_phone_number
-                          ? `${
-                              businessInfo.data.companyphone_countrycode || ""
-                            } ${businessInfo.data.company_phone_number}`
+                          ? `${businessInfo.data.companyphone_countrycode || ""
+                          } ${businessInfo.data.company_phone_number}`
                           : null,
                       },
                       { label: "EIN", value: businessInfo.data.ein },
@@ -747,11 +1159,10 @@ const Profile = () => {
                           </span>
                           {item.status ? (
                             <span
-                              className={`text-sm px-2 py-1 rounded-full ${
-                                item.status === "success"
+                              className={`text-sm px-2 py-1 rounded-full ${item.status === "success"
                                   ? "bg-green-100 text-green-800"
                                   : "bg-gray-100 text-gray-800"
-                              }`}
+                                }`}
                             >
                               {item.value || "N/A"}
                             </span>
@@ -808,9 +1219,8 @@ const Profile = () => {
                     items: [
                       {
                         label: "Name",
-                        value: `${responsiblePerson.data.first_name} ${
-                          responsiblePerson.data.middle_name || ""
-                        } ${responsiblePerson.data.last_name}`.trim(),
+                        value: `${responsiblePerson.data.first_name} ${responsiblePerson.data.middle_name || ""
+                          } ${responsiblePerson.data.last_name}`.trim(),
                       },
                       {
                         label: "Date of Birth",
@@ -834,10 +1244,9 @@ const Profile = () => {
                       {
                         label: "Phone",
                         value: responsiblePerson.data.mobile_number
-                          ? `${
-                              responsiblePerson.data
-                                .mobile_number_country_code || ""
-                            } ${responsiblePerson.data.mobile_number}`
+                          ? `${responsiblePerson.data
+                            .mobile_number_country_code || ""
+                          } ${responsiblePerson.data.mobile_number}`
                           : null,
                       },
                       {
@@ -1248,6 +1657,296 @@ const Profile = () => {
         />
       )}
 
+      {/* Change Email/Mobile Modal */}
+      {isChangeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                {changeModalType === "email" ? "Change Email Address" : "Change Mobile Number"}
+              </h3>
+              <button
+                onClick={() => setIsChangeModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimesCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {changeModalType === "email" ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Current Email
+                    </label>
+                    <input
+                      type="email"
+                      value={changeModalData.email}
+                      disabled
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      New Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      name="newEmail"
+                      value={changeModalData.newEmail}
+                      onChange={handleChangeModalInput}
+                      placeholder="Enter new email address"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Current Mobile Number
+                    </label>
+                    <input
+                      type="text"
+                      value={changeModalData.mobileNumber}
+                      disabled
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-500"
+                    />
+                  </div>
+
+                  {/* Country Code Dropdown - Using React-Select with Redux countries data */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country Code *
+                    </label>
+                    <Select
+                      options={countryCodeOptions}
+                      value={currentSelectedCountry}
+                      onChange={handleCountryCodeSelect}
+                      placeholder="Select country code"
+                      isSearchable
+                      classNamePrefix="react-select"
+                      isLoading={countriesLoading}
+                      styles={{
+                        control: (provided) => ({
+                          ...provided,
+                          minHeight: "42px",
+                          borderColor: "#d1d5db",
+                          "&:hover": {
+                            borderColor: "#9ca3af",
+                          },
+                        }),
+                        option: (provided) => ({
+                          ...provided,
+                          padding: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                        }),
+                      }}
+                      formatOptionLabel={(option) => (
+                        <div className="flex items-center">
+                          {option.flagUrl && (
+                            <img
+                              src={option.flagUrl}
+                              alt={option.label}
+                              className="w-5 h-4 object-cover mr-2"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          )}
+                          <span>{option.label}</span>
+                        </div>
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      New Mobile Number *
+                    </label>
+                    <input
+                      type="tel"
+                      name="newMobileNumber"
+                      value={changeModalData.newMobileNumber}
+                      onChange={handleChangeModalInput}
+                      placeholder="Enter new mobile number"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setIsChangeModalOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={changeModalType === "email" ? handleChangeEmailSubmit : requestMobileChangeOtp}
+                disabled={changeModalLoading || otpRequestLoading}
+                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                style={headerColorProps.style}
+              >
+                {(changeModalLoading || otpRequestLoading) ? (
+                  <>
+                    <RingLoader size={16} color="#ffffff" />
+                    <span>{changeModalType === "email" ? "Updating..." : "Sending OTP..."}</span>
+                  </>
+                ) : (
+                  changeModalType === "email" ? "Update Email" : "Send OTP"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* OTP Verification Modal for Mobile Change */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                Verify Mobile Number
+              </h3>
+              <button
+                onClick={() => {
+                  setShowOtpModal(false);
+                  setOtpCode("");
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimesCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-gray-600 mb-2">
+                  Please enter the 6-digit OTP sent to
+                </p>
+                <p className="text-lg font-semibold text-gray-800">
+                  {tempMobileData.countryCode} {tempMobileData.mobileNumber}
+                </p>
+              </div>
+
+              {/* 6-digit OTP input boxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
+                  Enter OTP *
+                </label>
+                <div className="flex justify-center gap-3 mb-6">
+                  {[...Array(6)].map((_, index) => (
+                    <input
+                      key={index}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={otpCode[index] || ""}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        if (value.length <= 1) {
+                          const newOtp = otpCode.split("");
+                          newOtp[index] = value;
+                          const newOtpString = newOtp.join("");
+                          setOtpCode(newOtpString);
+
+                          // Auto-focus next input
+                          if (value && index < 5) {
+                            const nextInput = document.getElementById(`otp-input-${index + 1}`);
+                            if (nextInput) nextInput.focus();
+                          }
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        // Handle backspace to go to previous input
+                        if (e.key === "Backspace" && !otpCode[index] && index > 0) {
+                          const prevInput = document.getElementById(`otp-input-${index - 1}`);
+                          if (prevInput) {
+                            prevInput.focus();
+                            // Clear the previous digit
+                            const newOtp = otpCode.split("");
+                            newOtp[index - 1] = "";
+                            setOtpCode(newOtp.join(""));
+                          }
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pastedData = e.clipboardData.getData("text/plain").replace(/\D/g, "").slice(0, 6);
+                        if (pastedData.length === 6) {
+                          setOtpCode(pastedData);
+                          // Focus the last input after paste
+                          setTimeout(() => {
+                            const lastInput = document.getElementById(`otp-input-5`);
+                            if (lastInput) lastInput.focus();
+                          }, 10);
+                        }
+                      }}
+                      className="w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+                      autoFocus={index === 0}
+                      disabled={otpLoading}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-center">
+                <button
+                  onClick={handleResendOtp}
+                  disabled={!canResendOtp || otpLoading}
+                  className={`text-sm ${canResendOtp ? 'text-blue-600 hover:text-blue-800' : 'text-gray-400 cursor-not-allowed'}`}
+                >
+                  {!canResendOtp ? `Resend OTP in ${otpResendTimer}s` : "Resend OTP"}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowOtpModal(false);
+                  setOtpCode("");
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleVerifyOtp}
+                disabled={otpLoading || otpCode.length !== 6}
+                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                style={headerColorProps.style}
+              >
+                {otpLoading ? (
+                  <>
+                    <RingLoader size={16} color="#ffffff" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  "Verify & Update"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Enhanced ViewChargesPopup */}
       <ViewChargesPopup
         isOpen={isChargesPopupOpen}
@@ -1371,7 +2070,7 @@ const Profile = () => {
                         {displayProfileData.mobile_number || "Not available"}
                       </span>
                       <motion.button
-                        onClick={handleChangeMobile}
+                        onClick={handleChangeMobileClick}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className={`text-xs text-white py-1.5 px-3 rounded-md transition-colors ${headerColorProps.className}`}
@@ -1391,7 +2090,7 @@ const Profile = () => {
                         {displayProfileData.email || "Not Available"}
                       </span>
                       <motion.button
-                        onClick={handleChangePassword}
+                        onClick={handleChangeEmailClick}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className={`text-xs text-white py-1.5 px-3 rounded-md transition-colors ${headerColorProps.className}`}
@@ -1584,11 +2283,10 @@ const Profile = () => {
                           key={tab}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === tab
+                          className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
                               ? "border-blue-500 text-blue-600"
                               : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                          }`}
+                            }`}
                           onClick={() => setActiveTab(tab)}
                         >
                           {tab}
@@ -1640,11 +2338,10 @@ const Profile = () => {
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-sm text-gray-600">KYC Status:</span>
                       <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          displayProfileData.kyc_status === "Pending"
+                        className={`text-xs font-medium px-2 py-1 rounded-full ${displayProfileData.kyc_status === "Pending"
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-green-100 text-green-800"
-                        }`}
+                          }`}
                       >
                         {displayProfileData.kyc_status || "N/A"}
                       </span>
