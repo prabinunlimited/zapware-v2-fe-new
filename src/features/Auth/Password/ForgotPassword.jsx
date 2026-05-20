@@ -10,6 +10,9 @@ import {
   FaEye,
   FaEyeSlash,
   FaChevronLeft,
+  FaPhone,
+  FaBuilding,
+  FaUser,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -19,11 +22,13 @@ import {
   resetPassword,
   handlePasscodeChange,
   handlePasscodePaste,
-  setEmail,
+  setUsername,
   setNewPassword,
   setConfirmPassword,
   setShowPassword,
-  selectEmail,
+  setAccountType,
+  setShowAccountTypeDropdown,
+  selectUsername,
   selectPasscode,
   selectNewPassword,
   selectConfirmPassword,
@@ -33,6 +38,9 @@ import {
   selectIsLoading,
   selectShowPassword,
   selectProgressBarWidth,
+  selectAccountType,
+  selectShowAccountTypeDropdown,
+  selectApiResponse
 } from "./forgotPasswordActions";
 
 const ForgotPassword = () => {
@@ -42,7 +50,7 @@ const ForgotPassword = () => {
   const [passwordStrength, setPasswordStrength] = useState(0);
 
   // Selectors
-  const email = useSelector(selectEmail);
+  const username = useSelector(selectUsername);
   const passcode = useSelector(selectPasscode);
   const newPassword = useSelector(selectNewPassword);
   const confirmPassword = useSelector(selectConfirmPassword);
@@ -52,6 +60,9 @@ const ForgotPassword = () => {
   const isLoading = useSelector(selectIsLoading);
   const showPassword = useSelector(selectShowPassword);
   const progressBarWidth = useSelector(selectProgressBarWidth);
+  const accountType = useSelector(selectAccountType);
+  const showAccountTypeDropdown = useSelector(selectShowAccountTypeDropdown);
+  const apiResponse = useSelector(selectApiResponse);
 
   const bearertoken = localStorage.getItem("bearertoken");
 
@@ -114,6 +125,14 @@ const ForgotPassword = () => {
     return errorMsg && errorMsg.toLowerCase().includes("last three");
   };
 
+  const isValidUsername = (value) => {
+    // Check if it's a valid email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Check if it's a valid phone number (adjust regex as needed)
+    const phoneRegex = /^\+?[0-9]{10,15}$/;
+    return emailRegex.test(value) || phoneRegex.test(value);
+  };
+
   return (
     <div className="min-h-screen p-4 sm:p-6 md:p-8 w-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="max-w-md w-full mx-auto px-3 sm:px-4">
@@ -126,13 +145,12 @@ const ForgotPassword = () => {
           {/* Progress bar */}
           <div className="absolute top-0 left-0 w-full h-1 sm:h-1.5 bg-gray-100">
             <motion.div
-              className={`h-full ${
-                step === 1
-                  ? "bg-blue-500"
-                  : step === 2
-                    ? "bg-indigo-500"
-                    : "bg-green-500"
-              }`}
+              className={`h-full ${step === 1
+                ? "bg-blue-500"
+                : step === 2
+                  ? "bg-indigo-500"
+                  : "bg-green-500"
+                }`}
               initial={{ width: 0 }}
               animate={{ width: `${progressBarWidth}%` }}
               transition={{ duration: 0.5, ease: "easeInOut" }}
@@ -155,9 +173,9 @@ const ForgotPassword = () => {
             </motion.h1>
             <motion.p className="text-gray-500 mt-1 sm:mt-2 text-xs sm:text-sm">
               {step === 1
-                ? "Enter your email to receive a verification code"
+                ? "Enter your email or phone number to receive a verification code"
                 : step === 2
-                  ? "We sent a 6-digit code to your email"
+                  ? "We sent a 6-digit code to your email or phone"
                   : "Your new password must be different from previous ones"}
             </motion.p>
           </div>
@@ -204,15 +222,26 @@ const ForgotPassword = () => {
           {/* Success Message */}
           {successMessage && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mb-3 sm:mb-4 p-2 sm:p-3 rounded-lg bg-green-50 border-l-4 border-green-500"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mb-3 sm:mb-4 p-3 sm:p-4 rounded-lg bg-green-50 border-l-4 border-green-500 shadow-sm"
             >
-              <div className="flex items-center">
-                <FaCheckCircle className="flex-shrink-0 h-4 w-4 sm:h-5 sm:w-5 text-green-500 mr-2 sm:mr-3" />
-                <p className="text-xs sm:text-sm font-medium text-green-800">
-                  {successMessage}
-                </p>
+              <div className="flex items-start">
+                <FaCheckCircle className="flex-shrink-0 h-5 w-5 sm:h-6 sm:w-6 text-green-500 mr-2 sm:mr-3 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm sm:text-base font-semibold text-green-800">
+                    Success!
+                  </p>
+                  <p className="text-xs sm:text-sm text-green-700 mt-1">
+                    {successMessage}
+                  </p>
+                  {successMessage.includes("successfully") && (
+                    <p className="text-xs text-green-600 mt-2 animate-pulse">
+                      Redirecting to login page...
+                    </p>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}
@@ -222,36 +251,71 @@ const ForgotPassword = () => {
               <motion.div key="step1" variants={containerVariants}>
                 <motion.div variants={itemVariants} className="mb-4 sm:mb-5">
                   <label
-                    htmlFor="email"
+                    htmlFor="username"
                     className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
                   >
-                    Email Address
+                    Email Address or Mobile Number
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <FaEnvelope className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                     </div>
                     <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => dispatch(setEmail(e.target.value))}
+                      id="username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => dispatch(setUsername(e.target.value))}
                       className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-lg border border-gray-300 bg-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-sm sm:text-base"
-                      placeholder="your.email@example.com"
+                      placeholder="Email address or mobile number"
                       autoFocus
                     />
                   </div>
                 </motion.div>
 
+                {/* Account Type Dropdown */}
+                {showAccountTypeDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mb-4 sm:mb-5"
+                  >
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                      Select Account Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => dispatch(setAccountType("individual"))}
+                        className={`p-3 rounded-lg border-2 transition-all ${accountType === "individual"
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-300 hover:border-blue-300 text-gray-600"
+                          }`}
+                      >
+                        <FaUser className="h-5 w-5 mx-auto mb-1" />
+                        <span className="text-sm font-medium">Individual</span>
+                      </button>
+                      <button
+                        onClick={() => dispatch(setAccountType("institution"))}
+                        className={`p-3 rounded-lg border-2 transition-all ${accountType === "institution"
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-300 hover:border-blue-300 text-gray-600"
+                          }`}
+                      >
+                        <FaBuilding className="h-5 w-5 mx-auto mb-1" />
+                        <span className="text-sm font-medium">Institution</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
                 <motion.button
                   variants={itemVariants}
-                  onClick={() => dispatch(requestPasscode(email))}
-                  disabled={isLoading || !email}
-                  className={`w-full ${
-                    email
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
+                  onClick={() => dispatch(requestPasscode(username, accountType, setShowAccountTypeDropdown))}
+                  disabled={isLoading || !username || !isValidUsername(username) || (showAccountTypeDropdown && !accountType)}
+                  className={`w-full ${username && isValidUsername(username) && (!showAccountTypeDropdown || accountType)
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                    } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
@@ -298,10 +362,23 @@ const ForgotPassword = () => {
                       Verification Code
                     </label>
                     <span className="text-xs text-gray-500 truncate">
-                      Sent to {email}
+                      Sent to {username}
                     </span>
                   </div>
-                  <div className="flex space-x-2 sm:space-x-3 justify-center">
+                  <div
+                    className="flex space-x-2 sm:space-x-3 justify-center"
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasteData = e.clipboardData.getData('text');
+                      dispatch(handlePasscodePaste(pasteData));
+                      // Focus on the last input after paste
+                      setTimeout(() => {
+                        if (inputRefs.current[5]) {
+                          inputRefs.current[5].focus();
+                        }
+                      }, 10);
+                    }}
+                  >
                     {passcode.map((digit, index) => (
                       <input
                         key={index}
@@ -309,9 +386,7 @@ const ForgotPassword = () => {
                         type="text"
                         maxLength={1}
                         value={digit}
-                        onChange={(e) =>
-                          handlePasscodeChangeLocal(index, e.target.value)
-                        }
+                        onChange={(e) => handlePasscodeChangeLocal(index, e.target.value)}
                         onKeyDown={(e) => handleKeyDown(index, e)}
                         className="w-10 h-10 sm:w-12 sm:h-12 text-center text-lg sm:text-xl font-medium border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         autoFocus={index === 0}
@@ -322,13 +397,12 @@ const ForgotPassword = () => {
 
                 <motion.button
                   variants={itemVariants}
-                  onClick={() => dispatch(validatePasscode(email, passcode))}
+                  onClick={() => dispatch(validatePasscode(username, passcode, accountType))}
                   disabled={isLoading || passcode.some((d) => !d)}
-                  className={`w-full ${
-                    passcode.every((d) => d)
-                      ? "bg-indigo-600 hover:bg-indigo-700"
-                      : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center mb-2 sm:mb-3 text-sm sm:text-base`}
+                  className={`w-full ${passcode.every((d) => d)
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                    } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center mb-2 sm:mb-3 text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
@@ -368,7 +442,7 @@ const ForgotPassword = () => {
                 >
                   Didn't receive the code?{" "}
                   <button
-                    onClick={() => dispatch(requestPasscode(email))}
+                    onClick={() => dispatch(requestPasscode(username, accountType, setShowAccountTypeDropdown))}
                     className="text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none text-xs sm:text-sm"
                     disabled={isLoading}
                   >
@@ -420,13 +494,12 @@ const ForgotPassword = () => {
                           Password Strength:
                         </span>
                         <span
-                          className={`font-medium ${
-                            passwordStrength < 30
-                              ? "text-red-500"
-                              : passwordStrength < 70
-                                ? "text-yellow-500"
-                                : "text-green-500"
-                          }`}
+                          className={`font-medium ${passwordStrength < 30
+                            ? "text-red-500"
+                            : passwordStrength < 70
+                              ? "text-yellow-500"
+                              : "text-green-500"
+                            }`}
                         >
                           {passwordStrength < 30
                             ? "Weak"
@@ -437,13 +510,12 @@ const ForgotPassword = () => {
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1 sm:h-1.5">
                         <div
-                          className={`h-1 sm:h-1.5 rounded-full ${
-                            passwordStrength < 30
-                              ? "bg-red-500"
-                              : passwordStrength < 70
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                          }`}
+                          className={`h-1 sm:h-1.5 rounded-full ${passwordStrength < 30
+                            ? "bg-red-500"
+                            : passwordStrength < 70
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
+                            }`}
                           style={{ width: `${passwordStrength}%` }}
                         ></div>
                       </div>
@@ -488,11 +560,10 @@ const ForgotPassword = () => {
                   {confirmPassword && (
                     <div className="mt-1 sm:mt-2 text-xs">
                       <div
-                        className={`flex items-center ${
-                          newPassword === confirmPassword && newPassword
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
+                        className={`flex items-center ${newPassword === confirmPassword && newPassword
+                          ? "text-green-500"
+                          : "text-red-500"
+                          }`}
                       >
                         {newPassword === confirmPassword && newPassword ? (
                           <>
@@ -509,33 +580,36 @@ const ForgotPassword = () => {
                     </div>
                   )}
                 </motion.div>
-
                 <motion.button
                   variants={itemVariants}
-                  onClick={() =>
+                  onClick={() => {
+                    console.log("Update Password button clicked");
+                    console.log("apiResponse:", apiResponse);
+                    console.log("customerId:", apiResponse?.customerId);
+
                     dispatch(
                       resetPassword(
-                        email,
+                        username,
                         newPassword,
                         confirmPassword,
                         bearertoken,
                         navigate,
-                      ),
-                    )
-                  }
+                        apiResponse?.customerId // Now apiResponse is defined
+                      )
+                    );
+                  }}
                   disabled={
                     isLoading ||
                     !newPassword ||
                     !confirmPassword ||
                     newPassword !== confirmPassword
                   }
-                  className={`w-full ${
-                    newPassword &&
+                  className={`w-full ${newPassword &&
                     confirmPassword &&
                     newPassword === confirmPassword
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gray-300 cursor-not-allowed"
-                  } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                    } text-white py-2.5 sm:py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base`}
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
