@@ -367,8 +367,8 @@ function NavigateSectionContent({
   // Navigation items configuration
   const navigationItems = [
     {
-      id: "dashboard",
-      label: "Dashboard",
+      id: "home",
+      label: "Home",
       icon: <MdDashboard className="w-5 h-5" />,
       iconColor: "text-blue-600",
       bgColor: "bg-blue-50",
