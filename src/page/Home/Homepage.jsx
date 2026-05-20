@@ -41,6 +41,9 @@ import {
   SafeErrorDisplay,
 } from "../../utils/errorHandling";
 
+// ✅ API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL;
+
 // ✅ LOADING CONTEXT
 const LoadingContext = React.createContext();
 
@@ -115,6 +118,13 @@ const HomepageContent = React.memo(() => {
   const bearertoken = localStorage.getItem("bearertoken");
   const authtoken = useSelector(selectAuthToken);
 
+  // ✅ Check if user is a remittance-only customer
+  const isRemittanceOnlyCustomer = useMemo(() => {
+    const value = localStorage.getItem("isRemittanceOnlyCustomer");
+    console.log("🔍 Checking isRemittanceOnlyCustomer from localStorage:", value);
+    return value === "Y";
+  }, []);
+
   // Redux Selectors
   const accounts = useSelector(selectAccounts);
   const selectedCurrency = useSelector(selectSelectedCurrency);
@@ -139,10 +149,17 @@ const HomepageContent = React.memo(() => {
   const [componentError, setComponentError] = useState(null);
   const [emergencyStop, setEmergencyStop] = useState(false);
 
+  // ✅ State for transaction data
+  const [transactionData, setTransactionData] = useState(null);
+  const [transactionLoading, setTransactionLoading] = useState(false);
+  const [hasFetchedTransactions, setHasFetchedTransactions] = useState(false);
+  const [transactionError, setTransactionError] = useState(null);
+
   // Refs for tracking
   const fetchCountRef = useRef(0);
   const initialFetchDoneRef = useRef(false);
   const apiCallsCoordinatedRef = useRef(false);
+  const transactionsFetchedRef = useRef(false);
 
   // Use the LoadingContext
   const { isLoading: contextLoading } = useLoading();
@@ -166,64 +183,241 @@ const HomepageContent = React.memo(() => {
     );
   }, [accounts]);
 
+  // ✅ FUNCTION TO FETCH TRANSACTION DETAILS (ONLY FOR REMITTANCE-ONLY CUSTOMERS)
+  const fetchTransactionDetails = useCallback(async () => {
+    console.log("🔍 fetchTransactionDetails called - Checking conditions...");
+
+    // ✅ Only proceed if user is a remittance-only customer
+    if (!isRemittanceOnlyCustomer) {
+      console.log("❌ Skipping transaction fetch - Not a remittance-only customer. Value:", localStorage.getItem("isRemittanceOnlyCustomer"));
+      return;
+    }
+
+    // Prevent duplicate calls
+    if (transactionsFetchedRef.current) {
+      console.log("❌ Skipping - Already fetched (transactionsFetchedRef.current = true)");
+      return;
+    }
+
+    if (transactionLoading) {
+      console.log("❌ Skipping - Already loading (transactionLoading = true)");
+      return;
+    }
+
+    if (hasFetchedTransactions) {
+      console.log("❌ Skipping - Already fetched (hasFetchedTransactions = true)");
+      return;
+    }
+
+    // Check if we have required data
+    if (!customerId) {
+      console.log("❌ Missing customerId:", customerId);
+      return;
+    }
+
+    if (!authtoken) {
+      console.log("❌ Missing authtoken:", authtoken);
+      return;
+    }
+
+    if (!bearertoken) {
+      console.log("❌ Missing bearertoken:", bearertoken);
+      return;
+    }
+
+    const transactionEndpoint = `/transactions/currency-transaction-details/${customerId}/all`;
+    const fullUrl = `${API_URL}${transactionEndpoint}`;
+    const transactionSig = `GET-${fullUrl}-{}`;
+
+    console.log("💰 ALL CONDITIONS MET! Fetching transaction details...");
+    console.log("📍 Full URL:", fullUrl);
+    console.log("🔑 Using bearertoken:", bearertoken.substring(0, 20) + "...");
+    console.log("👤 Customer ID:", customerId);
+
+    // Check if already fetching or has recent data
+    if (apiCoordinator.isFetching(transactionSig)) {
+      console.log("❌ API Coordinator says this request is already fetching");
+      return;
+    }
+
+    if (apiCoordinator.hasRecentData(transactionSig)) {
+      console.log("✅ API Coordinator has recent data, using cached version");
+      const cachedData = apiCoordinator.getCache(transactionSig);
+      if (cachedData) {
+        setTransactionData(cachedData);
+        setHasFetchedTransactions(true);
+        transactionsFetchedRef.current = true;
+        return;
+      }
+    }
+
+    try {
+      transactionsFetchedRef.current = true;
+      setTransactionLoading(true);
+      setTransactionError(null);
+
+      console.log("🚀 Making API call to:", fullUrl);
+
+      // Using fetch API with the environment variable
+      const response = await fetch(fullUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${bearertoken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("📡 Response status:", response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("📦 Response data:", data);
+
+      if (data && (data.status === "success" || data.status === "Success")) {
+        console.log("✅ Transaction details fetched successfully");
+        setTransactionData(data);
+        setHasFetchedTransactions(true);
+
+        // Store in apiCoordinator cache
+        // apiCoordinator.setCache(transactionSig, data);
+
+        // Optional: Show success toast
+        toast.success("Transaction data loaded successfully");
+      } else {
+        console.warn("⚠️ Transaction API returned unexpected response:", data);
+        setTransactionError(data?.message || "Failed to fetch transaction details");
+        transactionsFetchedRef.current = false; // Reset on error to allow retry
+      }
+
+    } catch (error) {
+      console.error("❌ Error fetching transaction details:", error);
+      // Don't mark as fetched on error to allow retry
+      transactionsFetchedRef.current = false;
+      setTransactionError(error.message);
+      toast.error(`Failed to load transactions: ${error.message}`);
+    } finally {
+      setTransactionLoading(false);
+    }
+  }, [isRemittanceOnlyCustomer, customerId, authtoken, bearertoken, transactionLoading, hasFetchedTransactions]);
+
+  // ✅ Separate useEffect specifically for transaction fetch with all dependencies logged
+  useEffect(() => {
+    console.log("🔍 Transaction useEffect triggered");
+    console.log("  - isRemittanceOnlyCustomer:", isRemittanceOnlyCustomer);
+    console.log("  - hasFetchedAccount:", hasFetchedAccount);
+    console.log("  - hasFetchedTransactions:", hasFetchedTransactions);
+    console.log("  - transactionsFetchedRef.current:", transactionsFetchedRef.current);
+    console.log("  - transactionLoading:", transactionLoading);
+    console.log("  - customerId:", customerId);
+    console.log("  - bearertoken exists:", !!bearertoken);
+    console.log("  - authtoken exists:", !!authtoken);
+
+    if (isRemittanceOnlyCustomer && hasFetchedAccount && !hasFetchedTransactions && !transactionsFetchedRef.current && !transactionLoading) {
+      console.log("✅✅✅ TRIGGERING TRANSACTION FETCH - All conditions met! ✅✅✅");
+      fetchTransactionDetails();
+    } else {
+      console.log("❌ Conditions not met for transaction fetch");
+      if (!isRemittanceOnlyCustomer) console.log("  - Reason: Not a remittance-only customer");
+      if (!hasFetchedAccount) console.log("  - Reason: Account not fetched yet");
+      if (hasFetchedTransactions) console.log("  - Reason: Already fetched transactions");
+      if (transactionsFetchedRef.current) console.log("  - Reason: transactionsFetchedRef is true");
+      if (transactionLoading) console.log("  - Reason: Already loading");
+    }
+  }, [isRemittanceOnlyCustomer, hasFetchedAccount, hasFetchedTransactions, transactionLoading, customerId, bearertoken, authtoken, fetchTransactionDetails]);
+
   // ✅ FIXED: SINGLE COORDINATED API CALL
   useEffect(() => {
-    if (!customerId || !authtoken || !bearertoken || apiCallsCoordinatedRef.current) {
+    if (!customerId || !authtoken || !bearertoken) {
+      console.log("⏭️ Missing auth data - cannot start API calls");
+      return;
+    }
+
+    if (apiCallsCoordinatedRef.current) {
+      console.log("⏭️ API calls already coordinated");
       return;
     }
 
     console.log("🚀 Homepage: Starting coordinated API calls");
+    console.log("🔍 Remittance-only customer:", isRemittanceOnlyCustomer ? "YES" : "NO");
+    console.log("🔧 API URL:", API_URL);
+    console.log("👤 Customer ID:", customerId);
+    console.log("🔑 Auth token exists:", !!authtoken);
+    console.log("🔑 Bearer token exists:", !!bearertoken);
+
     apiCallsCoordinatedRef.current = true;
     fetchCountRef.current += 1;
 
-    // Generate signatures for coordination
-    const accountsSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/active-account-details/${customerId}-{}`;
-    const profileSig = `GET-https://sandbox-zapware.unlimitedremit.com/api/customers/${customerId}/profile-{}`;
-    const fxSig = `POST-https://sandbox-zapware.unlimitedremit.com/api/partner-fxcurrencies-{"partner_id":"9"}`;
+    // Generate signatures for coordination (using API_URL)
+    const accountsSig = `GET-${API_URL}/api/active-account-details/${customerId}-{}`;
+    const profileSig = `GET-${API_URL}/api/customers/${customerId}/profile-{}`;
+    const fxSig = `POST-${API_URL}/api/partner-fxcurrencies-{"partner_id":"9"}`;
 
     // Check if we need to fetch accounts
-    const shouldFetchAccounts = 
-      !hasFetchedAccount && 
-      !accountLoading && 
+    const shouldFetchAccounts =
+      !hasFetchedAccount &&
+      !accountLoading &&
       !apiCoordinator.isFetching(accountsSig) &&
       !apiCoordinator.hasRecentData(accountsSig);
 
     if (shouldFetchAccounts) {
       console.log("📊 Homepage: Fetching account details");
       dispatch(fetchAccountDetails({ customerId, authtoken }));
+    } else {
+      console.log("📊 Skipping account fetch - already have data or in progress");
     }
 
     // Check if we need to fetch profile
     const hasProfileData = profileData?.first_name || localStorage.getItem("firstName");
-    const shouldFetchProfile = 
-      !hasFetchedProfile && 
-      !profileLoading && 
-      !hasProfileData && 
+    const shouldFetchProfile =
+      !hasFetchedProfile &&
+      !profileLoading &&
+      !hasProfileData &&
       !apiCoordinator.isFetching(profileSig) &&
       !apiCoordinator.hasRecentData(profileSig);
 
     if (shouldFetchProfile) {
       console.log("👤 Homepage: Fetching user profile");
       dispatch(fetchUserProfile({ customerId, bearertoken }));
+    } else {
+      console.log("👤 Skipping profile fetch - already have data or in progress");
     }
 
     // Check if we need to fetch FX data
-    const shouldFetchFX = 
-      !hasFxData && 
+    const shouldFetchFX =
+      !hasFxData &&
       !apiCoordinator.isFetching(fxSig) &&
       !apiCoordinator.hasRecentData(fxSig);
 
     if (shouldFetchFX) {
       console.log("💱 Homepage: Fetching FX currencies");
       dispatch(fetchPartnerFxCurrencies(bearertoken));
+    } else {
+      console.log("💱 Skipping FX fetch - already have data or in progress");
     }
 
   }, [
-    customerId, authtoken, bearertoken, 
+    customerId, authtoken, bearertoken,
     hasFetchedAccount, accountLoading,
     hasFetchedProfile, profileLoading,
-    hasFxData, profileData, dispatch
+    hasFxData, profileData, dispatch,
+    isRemittanceOnlyCustomer
   ]);
+
+  // Optional: Retry transaction fetch if it failed
+  useEffect(() => {
+    if (isRemittanceOnlyCustomer && hasFetchedAccount && transactionError && !transactionLoading && !transactionsFetchedRef.current && !hasFetchedTransactions) {
+      console.log("🔄 Scheduling retry for transaction fetch in 5 seconds...");
+      const timer = setTimeout(() => {
+        console.log("🔄 Retrying transaction fetch...");
+        fetchTransactionDetails();
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isRemittanceOnlyCustomer, hasFetchedAccount, transactionError, transactionLoading, fetchTransactionDetails, hasFetchedTransactions]);
 
   // Setup background and text color - optimized
   useEffect(() => {
@@ -301,6 +495,7 @@ const HomepageContent = React.memo(() => {
       fetchCountRef.current = 0;
       initialFetchDoneRef.current = false;
       apiCallsCoordinatedRef.current = false;
+      transactionsFetchedRef.current = false;
     }
   }, [authtoken, customerId]);
 
@@ -363,6 +558,10 @@ const HomepageContent = React.memo(() => {
     fetchCountRef.current = 0;
     initialFetchDoneRef.current = false;
     apiCallsCoordinatedRef.current = false;
+    transactionsFetchedRef.current = false;
+    setHasFetchedTransactions(false);
+    setTransactionData(null);
+    setTransactionError(null);
 
     // Clear API cache
     apiCoordinator.clear();
@@ -421,6 +620,14 @@ const HomepageContent = React.memo(() => {
               <br />
               FX Data: {hasFxData ? "Yes" : "No"}
               <br />
+              Remittance-Only Customer: {isRemittanceOnlyCustomer ? "Yes" : "No"}
+              <br />
+              isRemittanceOnlyCustomer Raw: {localStorage.getItem("isRemittanceOnlyCustomer")}
+              <br />
+              Transactions Fetched: {hasFetchedTransactions ? "Yes" : "No"}
+              <br />
+              Transaction Error: {transactionError || "None"}
+              <br />
               Fetch Attempts: {fetchCountRef.current}
               <br />
               API Coordinated: {apiCallsCoordinatedRef.current ? "Yes" : "No"}
@@ -455,13 +662,12 @@ const HomepageContent = React.memo(() => {
             </div>
           )}
 
-          {/* API Coordination Debug Panel */}
 
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
             <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
               {/* Navigation Section - Conditionally rendered */}
-               {/* {shouldShowNavigation && (
+              {/* {shouldShowNavigation && (
                 <motion.div
                   initial={{ x: -100, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
@@ -480,7 +686,7 @@ const HomepageContent = React.memo(() => {
                 initial={{ x: 100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5 }}
-                className={"w-full relative lg:w-full" }
+                className={"w-full relative lg:w-full"}
                 style={{
                   isolation: "auto",
                   zIndex: "auto",
@@ -489,13 +695,14 @@ const HomepageContent = React.memo(() => {
                 <AccountSummary
                   textColor={textColor}
                   onCurrencyChange={handleCurrencyChange}
+                  externalTransactions={isRemittanceOnlyCustomer ? (transactionData?.transaction_details || []) : undefined}
+                  externalLoading={isRemittanceOnlyCustomer ? transactionLoading : undefined}
+                  externalError={isRemittanceOnlyCustomer ? transactionError : undefined}
+                  isRemittanceOnlyCustomer={isRemittanceOnlyCustomer}
                 />
               </motion.div>
             </div>
           </div>
-
-          {/* Debug information - only in development */}
-        
         </motion.div>
       </div>
     </>

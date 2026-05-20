@@ -33,12 +33,16 @@ import * as XLSX from "xlsx";
 import { useTransactionData } from "../../../../hooks/transactionHooks";
 
 const TransactionDetails = React.memo(
-  ({ customerId, selectedCurrencyCode, onTransactionComplete }) => {
+  ({ customerId, selectedCurrencyCode, onTransactionComplete, externalTransactions, externalLoading,externalError }) => {
     const navigate = useNavigate();
 
     // ✅ USE TRANSACTION HOOK (working as before)
     const { transactions, loading, error, fetchTransactions, forceRefresh } =
       useTransactionData();
+
+    const finalTransactions = externalTransactions || transactions;
+    const finalLoading = externalLoading !== undefined ? externalLoading : loading;
+    const finalError = externalError || error;
 
     // Track if initial load has been done
     const initialLoadDoneRef = useRef(false);
@@ -86,7 +90,7 @@ const TransactionDetails = React.memo(
       if (
         initialLoadDoneRef.current &&
         lastCurrencyRef.current === selectedCurrencyCode &&
-        transactions.length > 0
+        finalTransactions.length > 0
       ) {
         console.log(
           "📊 TransactionDetails: Using cached transaction data for",
@@ -96,13 +100,13 @@ const TransactionDetails = React.memo(
       }
 
       // Skip if already loading
-      if (loading) {
+      if (finalLoading) {
         console.log("⏳ TransactionDetails: Already loading transactions");
         return;
       }
 
       // Fetch transactions
-      if (!loading && transactions.length === 0) {
+      if (!finalLoading && finalTransactions.length === 0) {
         console.log(
           "🚀 TransactionDetails: Fetching transactions for",
           selectedCurrencyCode,
@@ -115,8 +119,8 @@ const TransactionDetails = React.memo(
     }, [
       customerId,
       selectedCurrencyCode,
-      loading,
-      transactions.length,
+      finalLoading,
+      finalTransactions.length,
       fetchTransactions,
     ]);
 
@@ -172,45 +176,45 @@ const TransactionDetails = React.memo(
 
     // Memoized transaction data
     const currentTransactions = useMemo(() => {
-      const safeTransactions = Array.isArray(transactions) ? transactions : [];
+      const safeTransactions = Array.isArray(finalTransactions) ? finalTransactions : [];
       const indexOfLastItem = currentPage * itemsPerPage;
       const indexOfFirstItem = indexOfLastItem - itemsPerPage;
       return safeTransactions.slice(indexOfFirstItem, indexOfLastItem);
-    }, [transactions, currentPage, itemsPerPage]);
+    }, [finalTransactions, currentPage, itemsPerPage]);
 
     const totalPages = useMemo(
       () =>
         Math.ceil(
-          (Array.isArray(transactions) ? transactions.length : 0) /
-            itemsPerPage,
+          (Array.isArray(finalTransactions) ? finalTransactions.length : 0) /
+          itemsPerPage,
         ),
-      [transactions, itemsPerPage],
+      [finalTransactions, itemsPerPage],
     );
 
     // Safe transactions array
     const safeTransactions = useMemo(
-      () => (Array.isArray(transactions) ? transactions : []),
-      [transactions],
+      () => (Array.isArray(finalTransactions) ? finalTransactions : []),
+      [finalTransactions],
     );
 
     // Handle transaction completion notification
     useEffect(() => {
       if (
         onTransactionComplete &&
-        transactions.length > 0 &&
-        !loading &&
+        finalTransactions.length > 0 &&
+        !finalLoading &&
         !transactionCompletionNotified &&
         initialLoadDoneRef.current
       ) {
         setTransactionCompletionNotified(true);
         onTransactionComplete(false);
       }
-    }, [
-      transactions,
-      onTransactionComplete,
-      loading,
-      transactionCompletionNotified,
-    ]);
+      }, [
+        finalTransactions,
+        onTransactionComplete,
+        finalLoading,
+        transactionCompletionNotified,
+      ]);
 
     // Utility functions
     const formatDate = useCallback((dateString) => {
@@ -492,7 +496,7 @@ const TransactionDetails = React.memo(
 
     // BULK EXPORT FUNCTIONS
     const exportBulkPDF = useCallback(async () => {
-      if (!transactions.length) return;
+      if (!finalTransactions.length) return;
 
       setExportLoading(true);
       setExportType("pdf");
@@ -593,7 +597,7 @@ const TransactionDetails = React.memo(
     ]);
 
     const exportBulkExcel = useCallback(() => {
-      if (!transactions.length) return;
+      if (!finalTransactions.length) return;
 
       setExportLoading(true);
       setExportType("excel");
@@ -614,7 +618,7 @@ const TransactionDetails = React.memo(
         const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
 
         // Detailed sheet
-        const detailedData = transactions.map((tx) => ({
+        const detailedData = finalTransactions.map((tx) => ({
           Date: formatDate(tx.transaction_datetime),
           "Transaction ID": tx.transaction_id || "N/A",
           Description: tx.beneficiary_name || tx.sender_name || "N/A",
@@ -665,16 +669,16 @@ const TransactionDetails = React.memo(
         setExportType(null);
         setShowExportMenu(false);
       }
-    }, [transactions, selectedCurrencyCode, formatDate, generateBulkFileName]);
+    }, [finalTransactions, selectedCurrencyCode, formatDate, generateBulkFileName]);
 
     const exportBulkCSV = useCallback(() => {
-      if (!transactions.length) return;
+      if (!finalTransactions.length) return;
 
       setExportLoading(true);
       setExportType("csv");
 
       try {
-        const exportData = transactions.map((transaction) => ({
+        const exportData = finalTransactions.map((transaction) => ({
           "Date & Time": formatDate(transaction.transaction_datetime),
           "Transaction ID": transaction.transaction_id || "N/A",
           Description:
@@ -720,10 +724,10 @@ const TransactionDetails = React.memo(
         setExportType(null);
         setShowExportMenu(false);
       }
-    }, [transactions, selectedCurrencyCode, formatDate, generateBulkFileName]);
+    }, [finalTransactions, selectedCurrencyCode, formatDate, generateBulkFileName]);
 
     const printBulkTransactions = useCallback(() => {
-      if (!transactions.length) return;
+      if (!finalTransactions.length) return;
 
       const printContent = `
         <!DOCTYPE html>
@@ -754,9 +758,8 @@ const TransactionDetails = React.memo(
         <body>
           <div class="header">
             <h1 class="title">Transaction History Report</h1>
-            <p class="subtitle">Currency: ${
-              selectedCurrencyCode || "All"
-            } | Generated: ${new Date().toLocaleString()}</p>
+            <p class="subtitle">Currency: ${selectedCurrencyCode || "All"
+        } | Generated: ${new Date().toLocaleString()}</p>
           </div>
           
           <table>
@@ -772,28 +775,26 @@ const TransactionDetails = React.memo(
             </thead>
             <tbody>
               ${transactions
-                .map(
-                  (transaction) => `
+          .map(
+            (transaction) => `
                 <tr>
                   <td>${formatDate(transaction.transaction_datetime)}</td>
                   <td>${transaction.transaction_id || "N/A"}</td>
                   <td>${transaction.direction || "N/A"}</td>
-                  <td>${transaction.instructed_amount || "0"} ${
-                    transaction.currency_code
-                  }</td>
+                  <td>${transaction.instructed_amount || "0"} ${transaction.currency_code
+              }</td>
                   <td>${transaction.balance || "0"}</td>
                   <td>${transaction.status || "Unknown"}</td>
                 </tr>
               `,
-                )
-                .join("")}
+          )
+          .join("")}
             </tbody>
           </table>
           
           <div class="footer">
-            <p>Generated by Your App • ${new Date().toLocaleString()} • ${
-              transactions.length
-            } transactions</p>
+            <p>Generated by Your App • ${new Date().toLocaleString()} • ${transactions.length
+        } transactions</p>
           </div>
           
           <div class="no-print" style="margin-top: 30px; text-align: center;">
@@ -1240,7 +1241,7 @@ const TransactionDetails = React.memo(
     }, []);
 
     // ✅ Enhanced loading state with cache awareness
-    if (loading && safeTransactions.length === 0) {
+    if (finalLoading) {
       return (
         <div className="flex justify-center items-center h-32">
           <div className="w-full h-32 flex flex-col items-center justify-center">
@@ -1251,14 +1252,14 @@ const TransactionDetails = React.memo(
       );
     }
 
-    if (error && safeTransactions.length === 0) {
+    if (finalError && safeTransactions.length === 0) {
       return (
         <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
           <div className="text-red-600 font-medium mb-2">
             Error loading transactions
           </div>
           <div className="text-red-500 text-sm mb-4">
-            {error?.message || "Please try again later"}
+            {finalError?.message || "Please try again later"}
           </div>
           <button
             onClick={handleManualRefresh}
@@ -1456,7 +1457,7 @@ const TransactionDetails = React.memo(
               <button
                 onClick={handleManualRefresh}
                 className="hidden md:inline text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-2 hover:bg-blue-50 rounded-lg transition-colors"
-                disabled={loading}
+                disabled={finalLoading}
               >
                 Refresh
               </button>
@@ -1515,11 +1516,10 @@ const TransactionDetails = React.memo(
                       <div>
                         <p className="text-xs text-gray-500">Direction</p>
                         <p
-                          className={`text-sm font-medium ${
-                            transaction.direction?.toLowerCase().includes("in")
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
+                          className={`text-sm font-medium ${transaction.direction?.toLowerCase().includes("in")
+                            ? "text-green-600"
+                            : "text-red-600"
+                            }`}
                         >
                           {transaction.direction || "N/A"}
                         </p>
@@ -1619,11 +1619,10 @@ const TransactionDetails = React.memo(
                       </td>
                       <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm">
                         <span
-                          className={`font-medium ${
-                            transaction.direction?.toLowerCase().includes("in")
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
+                          className={`font-medium ${transaction.direction?.toLowerCase().includes("in")
+                            ? "text-green-600"
+                            : "text-red-600"
+                            }`}
                         >
                           {transaction.direction || "N/A"}
                         </span>
@@ -1692,11 +1691,10 @@ const TransactionDetails = React.memo(
                       <button
                         key={pageNumber}
                         onClick={() => handlePageClick(pageNumber)}
-                        className={`px-2 sm:px-3 py-2 text-xs sm:text-sm border rounded-md transition-colors ${
-                          currentPage === pageNumber
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                        }`}
+                        className={`px-2 sm:px-3 py-2 text-xs sm:text-sm border rounded-md transition-colors ${currentPage === pageNumber
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                          }`}
                       >
                         {pageNumber}
                       </button>
@@ -1732,7 +1730,7 @@ TransactionDetails.propTypes = {
 
 TransactionDetails.defaultProps = {
   selectedCurrencyCode: "all",
-  onTransactionComplete: () => {},
+  onTransactionComplete: () => { },
 };
 
 TransactionDetails.displayName = "TransactionDetails";

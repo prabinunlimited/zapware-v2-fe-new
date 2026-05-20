@@ -74,42 +74,77 @@ const AllTransactions = () => {
 
   // Fetch available currencies from the API - only called when dropdown is clicked
   const fetchAvailableCurrencies = useCallback(async () => {
-    if (!customerId) return;
-
     setCurrencyLoading(true);
+
     try {
-      const response = await apiClient.get(
-        `/active-approved-bank-accounts/${customerId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${bearertoken}`,
-          },
-        }
-      );
+      const isRemittanceOnly =
+        localStorage.getItem("isRemittanceOnly") ||
+        localStorage.getItem("isRemittanceOnlyCustomer");
 
-      // Handle the response structure
-      if (response.data && response.data.account_details && Array.isArray(response.data.account_details)) {
-        // Extract unique currencies from the account_details
-        const currencies = response.data.account_details.map(account => ({
-          code: account.currency_code,
-          name: account.service_provider_name,
-          icon: account.icon,
-          id: account.id,
-          currency_id: account.currency_id
-        }));
+      const customerUuid = localStorage.getItem("customerUuid");
 
-        // Remove duplicates based on currency code
-        const uniqueCurrencies = Array.from(
-          new Map(currencies.map(curr => [curr.code, curr])).values()
+      let response;
+
+      // ✅ If remittance only customer
+      if (isRemittanceOnly === "Y" && customerUuid) {
+        response = await apiClient.get(
+          `/customers/transaction-currencies/${customerUuid}`,
+          {
+            headers: {
+              Authorization: `Bearer ${bearertoken}`,
+            },
+          }
         );
 
-        setAvailableCurrencies(uniqueCurrencies);
-        setHasFetchedCurrencies(true);
-
-        console.log("Currencies loaded:", uniqueCurrencies);
+        // Expected response:
+        // [{ currency_code: "USD" }, { currency_code: "AED" }]
+        if (Array.isArray(response.data.data)) {
+          const currencies = response.data.data.map((item) => ({
+            code: item.currency_code,
+          }));
+        
+          setAvailableCurrencies(currencies);
+          setHasFetchedCurrencies(true);
+        
+          console.log("Remittance currencies loaded:", currencies);
+        }
       } else {
-        console.error("Unexpected API response structure:", response.data);
-        toast.error("Invalid response format from server");
+        // ✅ Existing API for normal customers
+        response = await apiClient.get(
+          `/active-approved-bank-accounts/${customerId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${bearertoken}`,
+            },
+          }
+        );
+
+        if (
+          response.data &&
+          response.data.account_details &&
+          Array.isArray(response.data.account_details)
+        ) {
+          const currencies = response.data.account_details.map((account) => ({
+            code: account.currency_code,
+            name: account.service_provider_name,
+            icon: account.icon,
+            id: account.id,
+            currency_id: account.currency_id,
+          }));
+
+          // Remove duplicates
+          const uniqueCurrencies = Array.from(
+            new Map(currencies.map((curr) => [curr.code, curr])).values()
+          );
+
+          setAvailableCurrencies(uniqueCurrencies);
+          setHasFetchedCurrencies(true);
+
+          console.log("Currencies loaded:", uniqueCurrencies);
+        } else {
+          console.error("Unexpected API response structure:", response.data);
+          toast.error("Invalid response format from server");
+        }
       }
     } catch (error) {
       console.error("Error fetching currencies:", error);
