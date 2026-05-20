@@ -96,7 +96,7 @@ const useAutoFetchAccounts = (customerId, authtoken) => {
     if (accountLoading) return false;
     if (!customerId || !authtoken) return false;
     if (hasFetchedAccount && !fetchTrigger) return false;
-    
+
     const now = Date.now();
     if (now - fetchRef.current.lastFetchTime < fetchRef.current.cooldown) {
       return false;
@@ -252,7 +252,7 @@ const balanceVariants = {
 };
 
 // Main Component
-const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
+const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransactions, externalLoading, externalError, isRemittanceOnlyCustomer }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { customerId } = useParams();
@@ -293,9 +293,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   const { formatCurrency, getFullFormattedAmount, getCurrencyName } =
     useCurrencyUtils();
   const config = usePartnerConfig(authtoken);
-
-  const isRemittanceOnlyCustomer =
-    localStorage.getItem("isRemittanceOnlyCustomer") === "Y";
 
   const safeAccounts = useMemo(() => {
     return Array.isArray(accounts) ? accounts : [];
@@ -393,16 +390,16 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
   }, [customerId, authtoken, dispatch]);
 
   // Loading, Empty, and Error States
-  
+
   // Check if we're currently loading
   const isLoading = accountLoading || (!hasFetchedAccount && !accountError);
-  
+
   // Check if fetch is complete but no accounts
   const isEmpty = !accountLoading && hasFetchedAccount && !hasAccounts;
-  
+
   // Check if there's an error
   const hasError = !accountLoading && accountError && !hasFetchedAccount;
-  
+
   // Check if we should show account section (has accounts AND not remittance-only)
   const shouldShowAccountSection = hasAccounts && !isRemittanceOnlyCustomer;
 
@@ -455,7 +452,6 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
         animate="visible"
         className="flex flex-col justify-center items-center w-full space-y-6"
       >
-        {/* No account banner - just show transaction history */}
         <motion.div
           variants={itemVariants}
           className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
@@ -464,11 +460,23 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
           transition={{ duration: 0.5 }}
         >
           <div className="p-6">
-            <TransactionDetails
-              customerId={customerId}
-              selectedCurrencyCode="all"
-              onTransactionComplete={handleTransactionComplete}
-            />
+            {/* ✅ Show loading spinner for remittance customers while fetching */}
+            {isRemittanceOnlyCustomer && (!externalTransactions || externalTransactions.length === 0) ? (
+              <div className="flex flex-col justify-center items-center py-12">
+                <RingLoader color="#3B82F6" size={50} />
+                <p className="text-gray-500 mt-4 font-medium">Loading your transactions...</p>
+                <p className="text-gray-400 text-sm mt-2">Please wait while we fetch your transaction history</p>
+              </div>
+            ) : (
+              <TransactionDetails
+                customerId={customerId}
+                selectedCurrencyCode="all"
+                onTransactionComplete={handleTransactionComplete}
+                externalTransactions={externalTransactions}
+                externalLoading={externalLoading}
+                externalError={externalError}
+              />
+            )}
           </div>
         </motion.div>
       </motion.div>
@@ -569,8 +577,8 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
                                 }-${index}`}
                               onClick={() => handleAccountChange(account)}
                               className={`w-full p-3 hover:bg-blue-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 rounded-lg ${selectedAccount?.currency === account.currency
-                                  ? "bg-blue-50 border-blue-200"
-                                  : ""
+                                ? "bg-blue-50 border-blue-200"
+                                : ""
                                 }`}
                               whileHover={{
                                 x: 4,
@@ -758,6 +766,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
       )}
 
       {/* Transaction Details Section - Always shown when fetch is complete */}
+      {/* Transaction Details Section */}
       <motion.div
         variants={itemVariants}
         className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
@@ -766,11 +775,23 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange }) => {
         transition={{ duration: 0.5, delay: hasAccounts ? 0.2 : 0 }}
       >
         <div className="p-6">
-          <TransactionDetails
-            customerId={customerId}
-            selectedCurrencyCode={selectedCurrency || "all"}
-            onTransactionComplete={handleTransactionComplete}
-          />
+          {/* ✅ Show loading spinner for remittance customers while fetching */}
+          {isRemittanceOnlyCustomer && (!externalTransactions || externalTransactions.length === 0) ? (
+            <div className="flex flex-col justify-center items-center py-12">
+              <RingLoader color="#3B82F6" size={50} />
+              <p className="text-gray-500 mt-4 font-medium">Loading your transactions...</p>
+              <p className="text-gray-400 text-sm mt-2">Please wait while we fetch your transaction history</p>
+            </div>
+          ) : (
+            <TransactionDetails
+              customerId={customerId}
+              selectedCurrencyCode={selectedCurrency || "all"}
+              onTransactionComplete={handleTransactionComplete}
+              externalTransactions={externalTransactions}
+              externalLoading={externalLoading}
+              externalError={externalError}
+            />
+          )}
         </div>
       </motion.div>
 
