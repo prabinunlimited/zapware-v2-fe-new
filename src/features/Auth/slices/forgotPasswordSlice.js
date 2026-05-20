@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
+  username: "", // New: for email/phone input
   email: "",
   passcode: Array(6).fill(""),
   newPassword: "",
@@ -14,6 +15,8 @@ const initialState = {
   newPasswordError: "",
   confirmPasswordError: "",
   apiResponse: null,
+  accountType: null, // New: for storing selected account type (individual/institution)
+  showAccountTypeDropdown: false, // New: to control dropdown visibility
 };
 
 const forgotPasswordSlice = createSlice({
@@ -22,6 +25,10 @@ const forgotPasswordSlice = createSlice({
   reducers: {
     setEmail: (state, action) => {
       state.email = action.payload;
+      state.error = null;
+    },
+    setUsername: (state, action) => {
+      state.username = action.payload;
       state.error = null;
     },
     setPasscode: (state, action) => {
@@ -65,11 +72,29 @@ const forgotPasswordSlice = createSlice({
       state.passcode[index] = value;
       state.error = null;
     },
+    // New reducers
+    setAccountType: (state, action) => {
+      state.accountType = action.payload;
+      state.error = null;
+    },
+    setShowAccountTypeDropdown: (state, action) => {
+      state.showAccountTypeDropdown = action.payload;
+    },
+    setCurrentPasswordError: (state, action) => {
+      state.currentPasswordError = action.payload;
+    },
+    setNewPasswordError: (state, action) => {
+      state.newPasswordError = action.payload;
+    },
+    setConfirmPasswordError: (state, action) => {
+      state.confirmPasswordError = action.payload;
+    },
   },
 });
 
 export const {
   setEmail,
+  setUsername,
   setPasscode,
   setNewPassword,
   setConfirmPassword,
@@ -82,6 +107,11 @@ export const {
   setApiResponse,
   resetForgotPassword,
   updatePasscodeDigit,
+  setAccountType,
+  setShowAccountTypeDropdown,
+  setCurrentPasswordError,
+  setNewPasswordError,
+  setConfirmPasswordError,
 } = forgotPasswordSlice.actions;
 
 export default forgotPasswordSlice.reducer;
