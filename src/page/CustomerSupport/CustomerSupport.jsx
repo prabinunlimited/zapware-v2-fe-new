@@ -28,7 +28,7 @@ import {
   Loader,
   X,
   Edit2,
-  Trash2, Globe
+  Trash2, Globe, Building2Icon
 } from "lucide-react";
 import RingLoader from "react-spinners/RingLoader";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,11 +46,14 @@ import {
   fetchTicketCategories,
   fetchStatusList,
   updateTicketStatus,
+  fetchStatusLogs,
   selectTicketCategories,
   selectFetchingCategories,
   selectStatusList,
   selectFetchingStatusList,
-  selectUpdatingStatus
+  selectUpdatingStatus,
+  selectStatusLogs,
+  selectFetchingStatusLogs
 } from "../CustomerSupport/CustomerSupportSlice";
 
 function CustomerSupport() {
@@ -73,6 +76,8 @@ function CustomerSupport() {
   const statusList = useSelector(selectStatusList);
   const fetchingStatusList = useSelector(selectFetchingStatusList);
   const updatingStatus = useSelector(selectUpdatingStatus);
+  const statusLogs = useSelector(selectStatusLogs);
+  const fetchingStatusLogs = useSelector(selectFetchingStatusLogs);
 
   const [partnerInfo, setPartnerInfo] = useState({
     partner_name: "",
@@ -106,6 +111,7 @@ function CustomerSupport() {
     category: ""
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStatusLogs, setShowStatusLogs] = useState(false);
 
   // Load partner info from localStorage
   useEffect(() => {
@@ -450,6 +456,14 @@ function CustomerSupport() {
     { value: "critical", label: "Critical" }
   ];
 
+  const handleViewStatusLogs = async (ticketId) => {
+    setShowStatusLogs(true);  // Open modal first
+    // Clear previous logs immediately
+    // The fetchingStatusLogs will be true from the slice
+    await dispatch(fetchStatusLogs(ticketId));
+  };
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-50">
       {/* Animated Background */}
@@ -643,7 +657,7 @@ function CustomerSupport() {
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center space-x-4">
                         <div className="p-3 bg-blue-100 rounded-2xl">
-                          <Headphones className="w-8 h-8 text-blue-600" />
+                          <Building2Icon className="w-8 h-8 text-blue-600" />
                         </div>
                         <div>
                           <h2 className="text-2xl font-bold text-gray-800">{partnerInfo.partner_name}</h2>
@@ -1033,6 +1047,17 @@ function CustomerSupport() {
                       </div>
                     )}
 
+                    {/* Status Logs Button */}
+                    <div className="pt-2">
+                      <button
+                        onClick={() => handleViewStatusLogs(currentTicket.id)}
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        <Clock className="w-4 h-4" />
+                        <span>View Status Logs</span>
+                      </button>
+                    </div>
+
                     {/* Action Buttons at bottom right */}
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-4">
                       <button
@@ -1190,6 +1215,68 @@ function CustomerSupport() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Status Logs Modal */}
+      {showStatusLogs && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowStatusLogs(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-3xl max-w-lg w-full max-h-[70vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Status History</h3>
+                </div>
+                <button
+                  onClick={() => setShowStatusLogs(false)}
+                  className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition-all"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(70vh-100px)]">
+              {fetchingStatusLogs ? (
+                // Loading State - THIS SHOULD SHOW WHEN API IS FETCHING
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+                  <p className="mt-3 text-gray-500 text-sm">Loading status history...</p>
+                </div>
+              ) : statusLogs.length > 0 ? (
+                <div className="space-y-3">
+                  {statusLogs.map((log, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${getStatusColor(log.status)}`}>
+                          {log.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <Calendar className="w-3 h-3" />
+                        <span>{formatDate(log.status_date)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No status history available</p>
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

@@ -505,7 +505,7 @@ function NavigateSectionContent({
       label: "Customer Support",
       icon: <Headphones className="w-5 h-5 text-blue-600" />,
       iconColor: "text-blue-600",
-      bgColor: "bg-orange-50",
+      bgColor: "bg-blue-50",
       onClick: handleCustomerSupportClick,
       visible: true, // Always visible
       description: "Get help and support",
