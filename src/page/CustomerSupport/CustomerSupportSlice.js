@@ -226,9 +226,9 @@ export const updateTicketStatus = createAsyncThunk(
         throw new Error("Authentication token not found. Please login again.");
       }
 
-      console.log("📤 Updating ticket status:", { 
-        status: statusId, 
-        ticket_id: ticketUuid 
+      console.log("📤 Updating ticket status:", {
+        status: statusId,
+        ticket_id: ticketUuid
       });
 
       const response = await api.post("/update-ticket-status", {
@@ -341,12 +341,51 @@ export const deleteTicket = createAsyncThunk(
   }
 );
 
+// ✅ Async thunk to fetch status logs
+export const fetchStatusLogs = createAsyncThunk(
+  "customerSupport/fetchStatusLogs",
+  async (ticketId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('bearertoken') || localStorage.getItem('authtoken');
+
+      if (!token) {
+        throw new Error("Authentication token not found. Please login again.");
+      }
+
+      console.log("📤 Fetching status logs for ticket:", ticketId);
+
+      const response = await api.get(`/status-logs/${ticketId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data.status === "success") {
+        console.log("✅ Status logs fetched successfully:", response.data.data);
+        return {
+          success: true,
+          statusLogs: response.data.data || [],
+          message: response.data.message
+        };
+      } else {
+        throw new Error(response.data.message || "Failed to fetch status logs");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching status logs:", error);
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 // Initial state
 const initialState = {
   tickets: [],
   currentTicket: null,
   categories: [],
   statusList: [],
+  statusLogs: [],
   loading: false,
   error: null,
   success: false,
@@ -358,7 +397,8 @@ const initialState = {
   deletingTicket: false,
   fetchingCategories: false,
   fetchingStatusList: false,
-  updatingStatus: false
+  updatingStatus: false,
+  fetchingStatusLogs: false 
 };
 
 // Create slice
@@ -515,6 +555,21 @@ const customerSupportSlice = createSlice({
         state.error = action.payload || "Failed to update ticket";
       })
 
+      // Fetch Status Logs
+      .addCase(fetchStatusLogs.pending, (state) => {
+        state.fetchingStatusLogs = true;
+        state.error = null;
+      })
+      .addCase(fetchStatusLogs.fulfilled, (state, action) => {
+        state.fetchingStatusLogs = false;
+        state.statusLogs = action.payload.statusLogs;
+        state.error = null;
+      })
+      .addCase(fetchStatusLogs.rejected, (state, action) => {
+        state.fetchingStatusLogs = false;
+        state.error = action.payload || "Failed to fetch status logs";
+      })
+
       // Delete Ticket
       .addCase(deleteTicket.pending, (state) => {
         state.deletingTicket = true;
@@ -553,6 +608,8 @@ export const selectFetchingCategories = (state) => state.customerSupport?.fetchi
 export const selectStatusList = (state) => state.customerSupport?.statusList || [];
 export const selectFetchingStatusList = (state) => state.customerSupport?.fetchingStatusList || false;
 export const selectUpdatingStatus = (state) => state.customerSupport?.updatingStatus || false;
+export const selectStatusLogs = (state) => state.customerSupport?.statusLogs || [];
+export const selectFetchingStatusLogs = (state) => state.customerSupport?.fetchingStatusLogs || false;
 
 // Actions
 export const { clearError, clearSuccess, resetForm, clearLastSubmitted, clearCurrentTicket } = customerSupportSlice.actions;
