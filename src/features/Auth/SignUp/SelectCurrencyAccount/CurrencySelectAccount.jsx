@@ -113,7 +113,7 @@ const OpenCurrencyAccount = () => {
         setIsLoadingSpinner(false);
       }
     }, 1500);
-    
+
     return () => clearTimeout(timer);
   }, [loading, packageLoading, forceRemittanceOnly]);
 
@@ -403,12 +403,12 @@ const OpenCurrencyAccount = () => {
     return faDollarSign;
   };
 
-  const currencyTabs = [
-    { id: "all", name: "All Currencies" },
-    { id: "USD", name: "US Dollar" },
-    { id: "EUR", name: "Euro" },
-    { id: "GBP", name: "British Pound" },
-  ];
+  // const currencyTabs = [
+  //   { id: "all", name: "All Currencies" },
+  //   { id: "USD", name: "US Dollar" },
+  //   { id: "EUR", name: "Euro" },
+  //   { id: "GBP", name: "British Pound" },
+  // ];
 
   if (loading || packageLoading || forceRemittanceOnly === null || isLoadingSpinner) {
     return (
@@ -733,46 +733,6 @@ const OpenCurrencyAccount = () => {
                   </div>
                 </div>
 
-                {/* Currency Tabs */}
-                <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-                  <button
-                    onClick={() => dispatch(actions.setActiveTab("all"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "all"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    All Currencies
-                  </button>
-                  <button
-                    onClick={() => dispatch(actions.setActiveTab("USD"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "USD"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    US Dollar
-                  </button>
-                  <button
-                    onClick={() => dispatch(actions.setActiveTab("EUR"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "EUR"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    Euro
-                  </button>
-                  <button
-                    onClick={() => dispatch(actions.setActiveTab("GBP"))}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === "GBP"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                  >
-                    British Pound
-                  </button>
-                </div>
-
                 {/* Named Accounts Section */}
                 {filteredNamedAccounts.length > 0 && (
                   <div className="mb-8">
@@ -815,17 +775,19 @@ const OpenCurrencyAccount = () => {
 
                     {expandedSections.named && (
                       <div className="grid grid-cols-1 gap-3">
-                        {filteredNamedAccounts.map((account) => {
-                          const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "named"}`;
-                          const isSelected =
-                            selectedAccounts.includes(accountId);
+                        {filteredNamedAccounts.map((account, index) => {
+                          // FIX: Create a truly unique ID using multiple properties
+                          const uniqueId = `named_${account.service_provide_id}_${account.currency || account.currency_code || 'unknown'}_${account.id || index}`;
+                          const isSelected = selectedAccounts.includes(uniqueId);
+
+                          console.log('Named Account - ID:', uniqueId, 'Currency:', account.currency); // Debug log
 
                           return (
                             <AccountOptionCard
-                              key={accountId}
+                              key={uniqueId}
                               account={account}
                               isSelected={isSelected}
-                              onSelect={() => handleToggleStandard(accountId)}
+                              onSelect={() => handleToggleStandard(uniqueId)}
                               getCurrencyIcon={getCurrencyIcon}
                             />
                           );
@@ -877,17 +839,19 @@ const OpenCurrencyAccount = () => {
 
                     {expandedSections.pooled && (
                       <div className="grid grid-cols-1 gap-3">
-                        {filteredPooledAccounts.map((account) => {
-                          const accountId = `${account.service_provide_id}-${account.accountType?.toLowerCase() || "pooled"}`;
-                          const isSelected =
-                            selectedAccounts.includes(accountId);
+                        {filteredPooledAccounts.map((account, index) => {
+                          // FIX: Create a truly unique ID using multiple properties
+                          const uniqueId = `pooled_${account.service_provide_id}_${account.currency || account.currency_code || 'unknown'}_${account.id || index}`;
+                          const isSelected = selectedAccounts.includes(uniqueId);
+
+                          console.log('Pooled Account - ID:', uniqueId, 'Currency:', account.currency); // Debug log
 
                           return (
                             <AccountOptionCard
-                              key={accountId}
+                              key={uniqueId}
                               account={account}
                               isSelected={isSelected}
-                              onSelect={() => handleToggleStandard(accountId)}
+                              onSelect={() => handleToggleStandard(uniqueId)}
                               getCurrencyIcon={getCurrencyIcon}
                             />
                           );
@@ -951,11 +915,19 @@ const OpenCurrencyAccount = () => {
                     {/* Selected Account Details */}
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {selectedAccounts.map((accountId) => {
+                        // Parse the account ID to find the matching account
+                        const parts = accountId.split('_');
+                        const accountType = parts[0]; // 'named' or 'pooled'
+                        const serviceProvideId = parts[1];
+                        const currency = parts[2];
+
                         const account = accountOptions.find(
                           (acc) =>
-                            `${acc.service_provide_id}-${acc.accountType?.toLowerCase()}` ===
-                            accountId,
+                            acc.service_provide_id === parseInt(serviceProvideId) &&
+                            (acc.currency === currency || acc.currency_code === currency) &&
+                            acc.accountType?.toLowerCase() === accountType
                         );
+
                         if (!account) return null;
 
                         return (
@@ -965,16 +937,16 @@ const OpenCurrencyAccount = () => {
                           >
                             <div className="bg-blue-100 p-2 rounded-lg mr-3">
                               <FontAwesomeIcon
-                                icon={getCurrencyIcon(account.currency)}
+                                icon={getCurrencyIcon(account.currency || account.currency_code)}
                                 className="text-blue-600"
                               />
                             </div>
                             <div className="flex-1">
                               <div className="font-medium text-gray-800">
-                                {account.currency} - {account.name}
+                                {account.currency || account.currency_code} - {account.name}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {account.accountType === "named"
+                                {account.accountType === "named" || accountType === "named"
                                   ? "Named Account"
                                   : "Pooled Account"}
                               </div>
@@ -1492,7 +1464,7 @@ const OpenCurrencyAccount = () => {
                 </div>
               ) : (
                 <>
-                  <span>Continue to Verification</span>
+                  <span>Next</span>
                   <FontAwesomeIcon icon={faArrowRight} className="ml-2" />
                 </>
               )}
