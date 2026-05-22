@@ -46,6 +46,7 @@ import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentS
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
 import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
+import CustomerSupport from "../src/page/CustomerSupport/CustomerSupport";
 
 const ProtectedLayout = () => {
   return (
@@ -205,6 +206,10 @@ const router = createBrowserRouter([
        {
         path: "/bankletter/:accountId",
         element: <BankLetter />,
+      },
+      {
+        path: "customer-support/:customerId", 
+        element: <CustomerSupport />,
       },
       
     ],

@@ -181,7 +181,7 @@ export const tokenService = {
         console.warn("No partner data provided to setPartnerData");
         return;
       }
-
+  
       // Store partner_id
       if (
         partnerData.partner_id !== undefined &&
@@ -191,7 +191,7 @@ export const tokenService = {
         localStorage.setItem("whitelabelledpartnerid", partnerId);
         console.log("✅ Partner ID stored:", partnerId);
       }
-
+  
       // Store beneficiary portal title
       if (partnerData.beneficiary_portal_title) {
         localStorage.setItem(
@@ -203,21 +203,203 @@ export const tokenService = {
           partnerData.beneficiary_portal_title
         );
       }
-
-      // Store any other partner data that might be useful
+  
+      // Store partner name
       if (partnerData.partner_name) {
-        localStorage.setItem("partner_name", partnerData.partner_name);
+        localStorage.setItem("support_partner_name", partnerData.partner_name);
+        console.log("✅ Support partner name saved:", partnerData.partner_name);
       }
-
+  
+      // Store support email
+      if (partnerData.support_email) {
+        localStorage.setItem("partner_support_email", partnerData.support_email);
+        console.log("✅ Support email stored:", partnerData.support_email);
+      }
+  
+      // Store support phone number
+      if (partnerData.support_phoneno) {
+        localStorage.setItem("partner_support_phone", partnerData.support_phoneno);
+        console.log("✅ Support phone stored:", partnerData.support_phoneno);
+      }
+  
+      // Store partner address
+      if (partnerData.partner_address) {
+        localStorage.setItem("partner_address", partnerData.partner_address);
+        console.log("✅ Partner address stored:", partnerData.partner_address);
+      }
+  
+      // Store white labelled partner flag
       if (partnerData.is_white_labelled_partner) {
         localStorage.setItem(
           "iswhitelabelledpartner",
           partnerData.is_white_labelled_partner
         );
       }
+  
+      // Store show_estimated_time_delivery flag
+      if (partnerData.show_estimated_time_delivery) {
+        localStorage.setItem(
+          "show_estimated_time_delivery",
+          partnerData.show_estimated_time_delivery
+        );
+        console.log(
+          "✅ Show estimated time delivery stored:",
+          partnerData.show_estimated_time_delivery
+        );
+      }
+  
     } catch (error) {
       console.error("❌ Error storing partner data:", error);
     }
+  },
+  
+  // Get partner ID
+  getPartnerId: () => {
+    try {
+      return localStorage.getItem("whitelabelledpartnerid");
+    } catch (error) {
+      console.error("Error getting partner ID:", error);
+      return null;
+    }
+  },
+  
+  // Get beneficiary portal title
+  getBeneficiaryPortalTitle: () => {
+    try {
+      return localStorage.getItem("beneficiary_portal_title");
+    } catch (error) {
+      console.error("Error getting beneficiary portal title:", error);
+      return null;
+    }
+  },
+  
+  // Get partner name
+  getPartnerName: () => {
+    try {
+      return localStorage.getItem("partner_name");
+    } catch (error) {
+      console.error("Error getting partner name:", error);
+      return null;
+    }
+  },
+  
+  // Get support email
+  getSupportEmail: () => {
+    try {
+      return localStorage.getItem("partner_support_email");
+    } catch (error) {
+      console.error("Error getting support email:", error);
+      return null;
+    }
+  },
+  
+  // Get support phone number
+  getSupportPhone: () => {
+    try {
+      return localStorage.getItem("partner_support_phone");
+    } catch (error) {
+      console.error("Error getting support phone:", error);
+      return null;
+    }
+  },
+  
+  // Get partner address
+  getPartnerAddress: () => {
+    try {
+      return localStorage.getItem("partner_address");
+    } catch (error) {
+      console.error("Error getting partner address:", error);
+      return null;
+    }
+  },
+  
+  // Get show estimated time delivery flag
+  getShowEstimatedTimeDelivery: () => {
+    try {
+      return localStorage.getItem("show_estimated_time_delivery");
+    } catch (error) {
+      console.error("Error getting show estimated time delivery:", error);
+      return null;
+    }
+  },
+  
+  // Check if white labelled partner
+  isWhiteLabelledPartner: () => {
+    try {
+      return localStorage.getItem("iswhitelabelledpartner") === "Y";
+    } catch (error) {
+      console.error("Error checking white labelled partner status:", error);
+      return false;
+    }
+  },
+  
+  // Clear all partner data
+  clearPartnerData: () => {
+    try {
+      localStorage.removeItem("whitelabelledpartnerid");
+      localStorage.removeItem("beneficiary_portal_title");
+      localStorage.removeItem("partner_name");
+      localStorage.removeItem("partner_support_email");
+      localStorage.removeItem("partner_support_phone");
+      localStorage.removeItem("partner_address");
+      localStorage.removeItem("iswhitelabelledpartner");
+      localStorage.removeItem("show_estimated_time_delivery");
+      console.log("✅ Partner data cleared from localStorage");
+    } catch (error) {
+      console.error("Error clearing partner data:", error);
+    }
+  },
+  
+  // Clear all authentication and partner data (complete logout)
+  clearAll: () => {
+    tokenService.clearToken();
+    tokenService.clearPartnerData();
+    console.log("✅ All authentication and partner data cleared");
+  },
+  
+  // Debug partner data info
+  debugPartnerData: () => {
+    try {
+      const partnerId = tokenService.getPartnerId();
+      const portalTitle = tokenService.getBeneficiaryPortalTitle();
+      const partnerName = tokenService.getPartnerName();
+      const supportEmail = tokenService.getSupportEmail();
+      const supportPhone = tokenService.getSupportPhone();
+      const partnerAddress = tokenService.getPartnerAddress();
+      const isWhiteLabelled = tokenService.isWhiteLabelledPartner();
+      const showEstimatedTimeDelivery = tokenService.getShowEstimatedTimeDelivery();
+  
+      return {
+        partnerId: partnerId,
+        beneficiaryPortalTitle: portalTitle,
+        partnerName: partnerName,
+        supportEmail: supportEmail,
+        supportPhone: supportPhone,
+        partnerAddress: partnerAddress,
+        isWhiteLabelledPartner: isWhiteLabelled,
+        showEstimatedTimeDelivery: showEstimatedTimeDelivery,
+        exists: !!(partnerId || portalTitle || partnerName || supportEmail || supportPhone || partnerAddress),
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        error: error.message,
+      };
+    }
+  },
+  
+  // Get all partner data as an object
+  getAllPartnerData: () => {
+    return {
+      partnerId: tokenService.getPartnerId(),
+      beneficiaryPortalTitle: tokenService.getBeneficiaryPortalTitle(),
+      partnerName: tokenService.getPartnerName(),
+      supportEmail: tokenService.getSupportEmail(),
+      supportPhone: tokenService.getSupportPhone(),
+      partnerAddress: tokenService.getPartnerAddress(),
+      isWhiteLabelledPartner: tokenService.isWhiteLabelledPartner(),
+      showEstimatedTimeDelivery: tokenService.getShowEstimatedTimeDelivery(),
+    };
   },
 
   // Get partner ID
@@ -398,6 +580,23 @@ export const partnerLogin = async () => {
     if (response.data.status === "success" && response.data.data?.token) {
       const token = response.data.data.token;
       const partnerData = response.data.data;
+
+      if (partnerData.partner_name) {
+        localStorage.setItem("support_partner_name", partnerData.partner_name);
+        console.log("✅ Support partner name saved:", partnerData.partner_name);
+      }
+      if (partnerData.support_email) {
+        localStorage.setItem("support_email", partnerData.support_email);
+        console.log("✅ Support email saved:", partnerData.support_email);
+      }
+      if (partnerData.support_phoneno) {
+        localStorage.setItem("support_phoneno", partnerData.support_phoneno);
+        console.log("✅ Support phone saved:", partnerData.support_phoneno);
+      }
+      if (partnerData.partner_address) {
+        localStorage.setItem("support_partner_address", partnerData.partner_address);
+        console.log("✅ Support partner address saved:", partnerData.partner_address);
+      }
 
       // ✅ STORE PARTNER DATA USING TOKEN SERVICE
       tokenService.setPartnerData(partnerData);
