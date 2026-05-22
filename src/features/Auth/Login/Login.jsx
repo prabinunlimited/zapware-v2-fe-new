@@ -92,6 +92,7 @@ import {
   selectLastDownloadUrl,
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
+import { partnerLogin } from "../../../services/authService";
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -111,6 +112,8 @@ const Login = () => {
   // State for country selection
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
+  const isPartnerLoggingInRef = useRef(false);
+
   // Select state from Redux
   const auth = useSelector(selectAuth);
   const countries = useSelector(selectCountries);
@@ -126,6 +129,7 @@ const Login = () => {
   const requiresKyc = useSelector(selectRequiresKycVerification);
   const showCustomerType = useSelector(selectShowCustomerType);
   const isRedirecting = useSelector(selectIsRedirecting);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -1308,7 +1312,7 @@ const Login = () => {
             },
           })
         );
-        
+
         localStorage.setItem('authcustomer_id', result.customer_id);
         localStorage.setItem('bearertoken', result.token);
         if (result.isRemittanceOnlyCustomer) {
@@ -1676,11 +1680,46 @@ const Login = () => {
                 Remember Me
               </label>
               <button
-                onClick={() => navigate("/forgotpassword")}
+                onClick={async () => {
+                  // Prevent multiple simultaneous calls
+                  if (isPartnerLoggingInRef.current) {
+                    return;
+                  }
+
+                  setForgotPasswordLoading(true);
+                  isPartnerLoggingInRef.current = true;
+
+                  try {
+                    // Check if we already have the data
+                    const existingToken = localStorage.getItem("bearertoken");
+                    const existingPartnerId = localStorage.getItem("whitelabelledpartnerid");
+
+                    if (!existingToken || !existingPartnerId) {
+                      await partnerLogin();
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    navigate("/forgotpassword");
+                  } catch (error) {
+                    console.error("Partner login error:", error);
+                    navigate("/forgotpassword");
+                  } finally {
+                    setForgotPasswordLoading(false);
+                    isPartnerLoggingInRef.current = false;
+                  }
+                }}
                 type="button"
-                className="text-sm text-red-600 hover:underline"
+                className="text-sm text-red-600 hover:underline flex items-center gap-2"
+                disabled={forgotPasswordLoading}
               >
-                Forgot Password?
+                {forgotPasswordLoading ? (
+                  <>
+                    <RingLoader size={14} color="#dc2626" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  "Forgot Password?"
+                )}
               </button>
             </div>
           </form>
