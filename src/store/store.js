@@ -65,6 +65,8 @@ import locationReducer from "../features/Auth/slices/locationSlice";
 import remittanceReducer from "../page/Remittance/slices/remittanceSlice";
 import remittanceStaticDataReducer from "../page/Remittance/slices/staticDataSlice";
 
+import CustomerSupportSlice from "../page/CustomerSupport/CustomerSupportSlice";
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -225,6 +227,11 @@ const customSerializableCheck = {
     "remittanceStatic/fetchPaymentMethods/pending",
     "remittanceStatic/fetchPaymentMethods/fulfilled",
     "remittanceStatic/fetchPaymentMethods/rejected",
+
+      // ===================== CUSTOMER SUPPORT ACTIONS (NEW) =====================
+      "customerSupport/storeTicket/pending",
+      "customerSupport/storeTicket/fulfilled",
+      "customerSupport/storeTicket/rejected",
   ],
 
   ignoredPaths: [
@@ -302,6 +309,11 @@ const customSerializableCheck = {
     "remittanceStatic.incomeSources",
     "remittanceStatic.occupations",
     "remittanceStatic.paymentMethods",
+
+       // ===================== CUSTOMER SUPPORT PATHS (NEW) =====================
+       "customerSupport.tickets",
+       "customerSupport.currentTicket",
+       "customerSupport.lastSubmitted",
   ],
 };
 
@@ -364,6 +376,9 @@ export const store = configureStore({
     // ===================== REMITTANCE REDUCERS (NEW) =====================
     remittance: remittanceReducer,
     remittanceStatic: remittanceStaticDataReducer,
+
+    // ===================== CUSTOMER SUPPORT REDUCER (NEW) =====================
+     customerSupport: CustomerSupportSlice,
   },
 
   middleware: (getDefaultMiddleware) =>
@@ -461,6 +476,14 @@ export const storeHealthCheck = () => {
     remittanceStatic: {
       purposesCount: state.remittanceStatic?.purposes?.length || 0,
       incomeSourcesCount: state.remittanceStatic?.incomeSources?.length || 0,
+    },
+
+     // ===================== CUSTOMER SUPPORT HEALTH CHECK (NEW) =====================
+     customerSupport: {
+      ticketsCount: state.customerSupport?.tickets?.length || 0,
+      submitting: state.customerSupport?.submitting || false,
+      hasError: !!state.customerSupport?.error,
+      hasSuccess: state.customerSupport?.success || false,
     },
   };
 };
@@ -585,5 +608,13 @@ export const getRemittanceIncomeSources = () =>
   store.getState().remittanceStatic.incomeSources;
 export const getRemittanceOccupations = () =>
   store.getState().remittanceStatic.occupations;
+
+// ===================== CUSTOMER SUPPORT UTILITIES (NEW) =====================
+export const getCustomerSupportState = () => store.getState().customerSupport;
+export const getSupportTickets = () => store.getState().customerSupport?.tickets || [];
+export const getSupportSubmitting = () => store.getState().customerSupport?.submitting || false;
+export const getSupportError = () => store.getState().customerSupport?.error;
+export const getSupportSuccess = () => store.getState().customerSupport?.success;
+export const getLastSubmittedTicket = () => store.getState().customerSupport?.lastSubmitted;
 
 export default store;
