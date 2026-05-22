@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { IoIosArrowForward } from "react-icons/io";
-import { Repeat, Download } from "lucide-react";
+import { Repeat, Download, Headphones } from "lucide-react";
 import depositImg from "../../../assets/images/icon/Deposit-Img.png";
 import convertImg from "../../../assets/images/icon/Convert-Img.png";
 import remitImg from "../../../assets/images/icon/Remit-Img.png";
@@ -327,6 +327,27 @@ function NavigateSectionContent({
     }
   };
 
+  const handleCustomerSupportClick = () => {
+    try {
+      const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
+      
+      console.log("Navigating to customer support with numeric ID:", numericCustomerId);
+      
+      if (!numericCustomerId) {
+        showPopup("Customer ID not found. Please login again.");
+        return;
+      }
+      
+      // Navigate to customer support page
+      navigate(`/customer-support/${numericCustomerId}`);
+    } catch (error) {
+      console.error("Navigation error:", error);
+      showPopup(
+        "Unable to navigate to customer support. Please try again.",
+      );
+    }
+  };
+
   const handleUserManualClick = async () => {
     try {
       const result = await dispatch(
@@ -478,6 +499,16 @@ function NavigateSectionContent({
       onClick: handleRecurringRemitClick,
       visible: isRecurringRemitAllowed, // Show everywhere, not just on remittance page
       description: "Schedule recurring transfers",
+    },
+    {
+      id: "customer-support",
+      label: "Customer Support",
+      icon: <Headphones className="w-5 h-5 text-blue-600" />,
+      iconColor: "text-blue-600",
+      bgColor: "bg-orange-50",
+      onClick: handleCustomerSupportClick,
+      visible: true, // Always visible
+      description: "Get help and support",
     },
   ];
 
