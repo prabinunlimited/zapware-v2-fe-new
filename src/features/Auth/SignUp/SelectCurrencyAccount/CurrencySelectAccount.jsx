@@ -335,14 +335,23 @@ const OpenCurrencyAccount = () => {
       return;
     }
 
-    if (
-      isPartnerPackageModule === "N" &&
-      selectedAccounts.length === 0 &&
-      !remittanceOnlyAccepted
-    ) {
-      setModalMessage("Please select at least one account to proceed.");
-      setIsModalOpen(true);
-      return;
+    if (isPartnerPackageModule === "N") {
+      formattedServiceProviderIds = selectedAccounts.map(accountId => {
+        const parts = accountId.split('_');
+        if (parts.length >= 3) {
+          const accountType = parts[0];
+          const serviceProviderId = parts[1];
+          const currency = parts[2];
+
+          if (!serviceProviderId || serviceProviderId === 'undefined' || isNaN(serviceProviderId)) {
+            return null;
+          }
+
+          // Format as "1-named-AED" or "55-named-USD" or "39-pooled-EUR"
+          return `${serviceProviderId}-${accountType}-${currency}`;
+        }
+        return null;
+      }).filter(Boolean);
     }
 
     if (referralCode) {
@@ -1514,7 +1523,7 @@ const OpenCurrencyAccount = () => {
           </div>
 
           {/* DEBUG PANEL - Update the formattedId to use hyphen */}
-          {selectedAccounts.length > 0 && (
+          {/* {selectedAccounts.length > 0 && (
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
               <details>
                 <summary className="font-mono text-yellow-800 cursor-pointer">
@@ -1527,8 +1536,8 @@ const OpenCurrencyAccount = () => {
                       const accountType = parts[0];
                       const serviceProviderId = parts[1];
                       const currency = parts[2];
-                      // ✅ Use hyphen format
-                      const formattedId = `${serviceProviderId}-${accountType}`;
+                      // ✅ Format with currency code: "1-named-AED"
+                      const formattedId = `${serviceProviderId}-${accountType}-${currency}`;
                       return (
                         <div key={accountId} className="font-mono text-xs">
                           <span className="text-blue-600">{currency}</span>:
@@ -1545,11 +1554,11 @@ const OpenCurrencyAccount = () => {
                       {JSON.stringify({
                         service_provide_ids: [...new Set(selectedAccounts.map(accountId => {
                           const parts = accountId.split('_');
-                          return parts.length >= 3 ? `${parts[1]}-${parts[0]}` : null;
+                          return parts.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
                         }).filter(Boolean))],
                         service_provider_id: (() => {
                           const parts = selectedAccounts[0]?.split('_');
-                          return parts?.length >= 3 ? `${parts[1]}-${parts[0]}` : null;
+                          return parts?.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
                         })()
                       }, null, 2)}
                     </pre>
@@ -1557,7 +1566,7 @@ const OpenCurrencyAccount = () => {
                 </div>
               </details>
             </div>
-          )}
+          )} */}
 
           {/* Referral Code */}
           <div className="mb-6">
