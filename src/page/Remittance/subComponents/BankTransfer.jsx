@@ -106,9 +106,6 @@ const BankTransfer = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // Add local state to track if beneficiaries have been loaded
-  const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
-
   // Transform for dropdown
   const beneficiaries = useMemo(() => {
     return (allBeneficiaries || [])
@@ -136,24 +133,16 @@ const BankTransfer = ({
 
     if (
       customerId &&
-      !beneficiariesFetched &&
+      (!allBeneficiaries || allBeneficiaries.length === 0) &&
       !beneficiariesLoading
     ) {
       console.log(
         "🔄 BankTransfer: Fetching beneficiaries for customer:",
         customerId
       );
-      dispatch(fetchBeneficiaries(customerId))
-        .unwrap()
-        .then(() => {
-          setBeneficiariesFetched(true);
-        })
-        .catch((error) => {
-          console.error("Failed to fetch beneficiaries:", error);
-          setBeneficiariesFetched(true); // Mark as fetched even on error to stop loading
-        });
+      dispatch(fetchBeneficiaries(customerId));
     }
-  }, [dispatch, paramCustomerId, beneficiariesFetched, beneficiariesLoading]);
+  }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
 
   // FETCH SILA BANK ACCOUNTS ON MOUNT
   useEffect(() => {
@@ -228,9 +217,6 @@ const BankTransfer = ({
       silaAccountsCount: displayedSilaBankAccounts?.length || 0,
       hasSilaAccounts: displayedHasSilaAccounts,
       selectedBankAccount: selectedBankAccount,
-      beneficiariesCount: beneficiaries.length,
-      beneficiariesLoading: beneficiariesLoading,
-      beneficiariesFetched: beneficiariesFetched,
     });
   }, [
     onFieldChange,
@@ -242,9 +228,6 @@ const BankTransfer = ({
     displayedSilaBankAccounts,
     displayedHasSilaAccounts,
     selectedBankAccount,
-    beneficiaries.length,
-    beneficiariesLoading,
-    beneficiariesFetched,
   ]);
 
   // Default payout options - fallback if paymentOptions is empty
@@ -595,24 +578,6 @@ const BankTransfer = ({
     });
   };
 
-  // Get placeholder text for beneficiary select
-  const getBeneficiaryPlaceholder = () => {
-    // If still loading and haven't fetched yet
-    if (beneficiariesLoading || (!beneficiariesFetched && beneficiaries.length === 0)) {
-      return "Loading beneficiaries...";
-    }
-    // If fetch is complete and no beneficiaries
-    if (beneficiariesFetched && beneficiaries.length === 0) {
-      return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
-    }
-    // If using beneficiary code
-    if (showCodeInput) {
-      return "Disabled - Using beneficiary code";
-    }
-    // Normal state
-    return "Select beneficiary...";
-  };
-
   // Bank Detail Item component (for consistency with ManualDeposit)
   const BankDetailItem = ({ icon, label, value }) => (
     <div className="flex items-start gap-2">
@@ -837,21 +802,18 @@ const BankTransfer = ({
               options={beneficiaries}
               value={selectedBeneficiary || null}
               onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading && !beneficiariesFetched}
-              isDisabled={showCodeInput}
+              isLoading={beneficiariesLoading}
+              isDisabled={beneficiariesLoading || showCodeInput}
               classNamePrefix="select"
               styles={selectStyles}
-              placeholder={getBeneficiaryPlaceholder()}
+              placeholder={
+                beneficiariesLoading
+                  ? "Loading beneficiaries..."
+                  : showCodeInput
+                    ? "Disabled - Using beneficiary code"
+                    : "Select beneficiary..."
+              }
               isSearchable
-              noOptionsMessage={() => {
-                if (beneficiariesFetched && beneficiaries.length === 0) {
-                  return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
-                }
-                if (beneficiariesLoading) {
-                  return "Loading beneficiaries...";
-                }
-                return "No options available";
-              }}
               getOptionLabel={(option) =>
                 option?.formattedName ||
                 `${option?.name || "Unknown"} (${option?.phone_number || option?.benef_uuid || "No Contact"
