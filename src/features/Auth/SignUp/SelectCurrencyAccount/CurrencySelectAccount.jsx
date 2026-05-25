@@ -325,7 +325,7 @@ const OpenCurrencyAccount = () => {
   // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
-
+  
     // For partner ID 8, we only accept remittance services
     if (isPartnerId8 && !remittanceOnlyAccepted) {
       setModalMessage(
@@ -334,26 +334,17 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
       return;
     }
-
-    if (isPartnerPackageModule === "N") {
-      formattedServiceProviderIds = selectedAccounts.map(accountId => {
-        const parts = accountId.split('_');
-        if (parts.length >= 3) {
-          const accountType = parts[0];
-          const serviceProviderId = parts[1];
-          const currency = parts[2];
-
-          if (!serviceProviderId || serviceProviderId === 'undefined' || isNaN(serviceProviderId)) {
-            return null;
-          }
-
-          // Format as "1-named-AED" or "55-named-USD" or "39-pooled-EUR"
-          return `${serviceProviderId}-${accountType}-${currency}`;
-        }
-        return null;
-      }).filter(Boolean);
+  
+    if (
+      isPartnerPackageModule === "N" &&
+      selectedAccounts.length === 0 &&
+      !remittanceOnlyAccepted
+    ) {
+      setModalMessage("Please select at least one account to proceed.");
+      setIsModalOpen(true);
+      return;
     }
-
+  
     if (referralCode) {
       try {
         await dispatch(actions.validateReferralCode(referralCode)).unwrap();
@@ -363,7 +354,7 @@ const OpenCurrencyAccount = () => {
         return;
       }
     }
-
+  
     if (
       isPartnerPackageModule === "Y" &&
       selectedPackageCurrencies.length > 0
@@ -383,10 +374,10 @@ const OpenCurrencyAccount = () => {
         return;
       }
     }
-
-    // Format service_provider_ids correctly
+  
+    // ✅ DECLARE THE VARIABLE FIRST
     let formattedServiceProviderIds = [];
-
+  
     if (isPartnerPackageModule === "N") {
       formattedServiceProviderIds = selectedAccounts.map(accountId => {
         const parts = accountId.split('_');
@@ -394,12 +385,12 @@ const OpenCurrencyAccount = () => {
           const accountType = parts[0];
           const serviceProviderId = parts[1];
           const currency = parts[2];
-
+  
           if (!serviceProviderId || serviceProviderId === 'undefined' || isNaN(serviceProviderId)) {
             return null;
           }
-
-          return `${serviceProviderId}-${accountType}`;
+  
+          return `${serviceProviderId}-${accountType}-${currency}`;
         }
         return null;
       }).filter(Boolean);
@@ -414,21 +405,22 @@ const OpenCurrencyAccount = () => {
           if (!serviceProviderId) {
             return null;
           }
-          return `${serviceProviderId}-${packageOpt.account_type}`;
+          const currencyCode = currencyData?.currency_code;
+          return `${serviceProviderId}-${packageOpt.account_type}-${currencyCode}`;
         }
         return null;
       }).filter(Boolean);
     }
-
+  
     // Remove duplicates
     const uniqueFormattedIds = [...new Set(formattedServiceProviderIds)];
-
+  
     if (uniqueFormattedIds.length === 0 && !remittanceOnlyAccepted) {
       setModalMessage("Error: Could not process selected accounts. Please try again.");
       setIsModalOpen(true);
       return;
     }
-
+  
     // Prepare navigation state with formatted IDs
     const navState = {
       service_provide_ids: uniqueFormattedIds,
@@ -442,7 +434,12 @@ const OpenCurrencyAccount = () => {
       ssn_required: "Y",
       package_currencies: selectedPackageCurrencies,
     };
-
+  
+    console.log("📤 Sending to signup:", {
+      original: selectedAccounts,
+      formatted: uniqueFormattedIds,
+    });
+  
     navigate(
       accountType === "individual" ? "/signupindividual" : "/signupinstitution",
       {
@@ -1523,7 +1520,7 @@ const OpenCurrencyAccount = () => {
           </div>
 
           {/* DEBUG PANEL - Update the formattedId to use hyphen */}
-          {/* {selectedAccounts.length > 0 && (
+          {selectedAccounts.length > 0 && (
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
               <details>
                 <summary className="font-mono text-yellow-800 cursor-pointer">
@@ -1566,7 +1563,7 @@ const OpenCurrencyAccount = () => {
                 </div>
               </details>
             </div>
-          )} */}
+          )}
 
           {/* Referral Code */}
           <div className="mb-6">
