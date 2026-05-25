@@ -59,6 +59,8 @@ const OpenCurrencyAccount = () => {
   const [infoType, setInfoType] = useState("");
   const [forceRemittanceOnly, setForceRemittanceOnly] = useState(null); // ✅ ADD THIS LINE
   const [isLoadingSpinner, setIsLoadingSpinner] = useState(true);
+  const [selectedCurrencyUrl, setSelectedCurrencyUrl] = useState(null);
+  const [lastSelectedCurrency, setLastSelectedCurrency] = useState("");
 
   // Storage variables
   const bearertoken = localStorage.getItem("bearertoken");
@@ -218,19 +220,67 @@ const OpenCurrencyAccount = () => {
   ]);
 
   // 3. ACTION HANDLERS
-  const handleToggleStandard = (id) => {
+  const handleToggleStandard = (id, accountData) => {
     if (remittanceOnlyAccepted) {
       dispatch(actions.setRemittanceOnlyAccepted(false));
     }
     if (id && typeof actions.toggleAccountSelection === "function") {
       dispatch(actions.toggleAccountSelection(id));
+
+      // Only update URL if the newly selected account has a valid URL
+      if (accountData?.chargesAndFeesUrl &&
+        accountData.chargesAndFeesUrl !== "null" &&
+        accountData.chargesAndFeesUrl.trim() !== "") {
+        // Valid URL found - update to this currency's URL
+        setSelectedCurrencyUrl(accountData.chargesAndFeesUrl);
+        setLastSelectedCurrency(accountData.currency || accountData.currency_code);
+      } else {
+        // If newly selected account has NO valid URL
+        // Check if there are any other selected accounts with valid URLs
+        // We need to find the most recent valid URL from other selected accounts
+
+        // Get current selected accounts (excluding the one being toggled? No, it's already toggled)
+        // We need to find any selected account with valid URL
+        setTimeout(() => {
+          // Use current selectedAccounts after toggle
+          const selectedAccountsList = [...selectedAccounts];
+
+          let foundValidUrl = false;
+          for (const selectedId of selectedAccountsList) {
+            const parts = selectedId.split('_');
+            const accountType = parts[0];
+            const serviceProvideId = parts[1];
+            const currency = parts[2];
+
+            const account = accountOptions.find(
+              (acc) =>
+                acc.service_provide_id === parseInt(serviceProvideId) &&
+                (acc.currency === currency || acc.currency_code === currency) &&
+                acc.accountType?.toLowerCase() === accountType
+            );
+
+            if (account?.chargesAndFeesUrl &&
+              account.chargesAndFeesUrl !== "null" &&
+              account.chargesAndFeesUrl.trim() !== "") {
+              setSelectedCurrencyUrl(account.chargesAndFeesUrl);
+              setLastSelectedCurrency(account.currency || account.currency_code);
+              foundValidUrl = true;
+              break;
+            }
+          }
+
+          if (!foundValidUrl) {
+            setSelectedCurrencyUrl(null);
+            setLastSelectedCurrency("");
+          }
+        }, 0);
+      }
     } else {
       console.error("❌ toggleAccountSelection is not a function!");
       setModalMessage("System error: Action not available");
       setIsModalOpen(true);
     }
   };
-
   // Check if API returned empty data - then force remittance only mode
   useEffect(() => {
     if (!loading && !packageLoading) {
@@ -295,12 +345,6 @@ const OpenCurrencyAccount = () => {
       return;
     }
 
-    // if (!termsAccepted && hostName !== "tumatuma.unlimitedremit.com") {
-    //   setModalMessage("Please confirm that you agree on the Charges and Fees.");
-    //   setIsModalOpen(true);
-    //   return;
-    // }
-
     if (referralCode) {
       try {
         await dispatch(actions.validateReferralCode(referralCode)).unwrap();
@@ -331,9 +375,55 @@ const OpenCurrencyAccount = () => {
       }
     }
 
+    // Format service_provider_ids correctly
+    let formattedServiceProviderIds = [];
+
+    if (isPartnerPackageModule === "N") {
+      formattedServiceProviderIds = selectedAccounts.map(accountId => {
+        const parts = accountId.split('_');
+        if (parts.length >= 3) {
+          const accountType = parts[0];
+          const serviceProviderId = parts[1];
+          const currency = parts[2];
+
+          if (!serviceProviderId || serviceProviderId === 'undefined' || isNaN(serviceProviderId)) {
+            return null;
+          }
+
+          return `${serviceProviderId}-${accountType}`;
+        }
+        return null;
+      }).filter(Boolean);
+    } else {
+      formattedServiceProviderIds = selectedPackageCurrencies.map(currencyId => {
+        const packageOpt = packageOptions.find(pkg =>
+          pkg.currencies?.some(curr => curr.currency_id === currencyId)
+        );
+        if (packageOpt) {
+          const currencyData = packageOpt.currencies?.find(curr => curr.currency_id === currencyId);
+          const serviceProviderId = currencyData?.service_provider_id;
+          if (!serviceProviderId) {
+            return null;
+          }
+          return `${serviceProviderId}-${packageOpt.account_type}`;
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
+    // Remove duplicates
+    const uniqueFormattedIds = [...new Set(formattedServiceProviderIds)];
+
+    if (uniqueFormattedIds.length === 0 && !remittanceOnlyAccepted) {
+      setModalMessage("Error: Could not process selected accounts. Please try again.");
+      setIsModalOpen(true);
+      return;
+    }
+
+    // Prepare navigation state with formatted IDs
     const navState = {
-      service_provide_ids:
-        isPartnerPackageModule === "Y" ? [] : selectedAccounts,
+      service_provide_ids: uniqueFormattedIds,
+      service_provider_id: uniqueFormattedIds[0] || null,
       accountOptions,
       referral_code: referralCode,
       remit_customer: remittanceOnlyAccepted,
@@ -355,16 +445,15 @@ const OpenCurrencyAccount = () => {
     isPartnerId8,
     isPartnerPackageModule,
     selectedAccounts,
-    remittanceOnlyAccepted,
-    termsAccepted,
-    hostName,
-    referralCode,
     selectedPackageCurrencies,
+    remittanceOnlyAccepted,
+    referralCode,
     dispatch,
     partnerId,
     accountOptions,
     accountType,
     navigate,
+    packageOptions,
   ]);
 
   const currenciesList = useMemo(
@@ -776,18 +865,18 @@ const OpenCurrencyAccount = () => {
                     {expandedSections.named && (
                       <div className="grid grid-cols-1 gap-3">
                         {filteredNamedAccounts.map((account, index) => {
-                          // FIX: Create a truly unique ID using multiple properties
-                          const uniqueId = `named_${account.service_provide_id}_${account.currency || account.currency_code || 'unknown'}_${account.id || index}`;
+                          const serviceProviderId = account.service_provider_id;
+                          const currency = account.currency_code;
+                          const accountType = account.account_type;
+                          const uniqueId = `${accountType}_${serviceProviderId}_${currency}`;
                           const isSelected = selectedAccounts.includes(uniqueId);
-
-                          console.log('Named Account - ID:', uniqueId, 'Currency:', account.currency); // Debug log
 
                           return (
                             <AccountOptionCard
                               key={uniqueId}
                               account={account}
                               isSelected={isSelected}
-                              onSelect={() => handleToggleStandard(uniqueId)}
+                              onSelect={() => handleToggleStandard(uniqueId, account)}
                               getCurrencyIcon={getCurrencyIcon}
                             />
                           );
@@ -840,18 +929,18 @@ const OpenCurrencyAccount = () => {
                     {expandedSections.pooled && (
                       <div className="grid grid-cols-1 gap-3">
                         {filteredPooledAccounts.map((account, index) => {
-                          // FIX: Create a truly unique ID using multiple properties
-                          const uniqueId = `pooled_${account.service_provide_id}_${account.currency || account.currency_code || 'unknown'}_${account.id || index}`;
+                          const serviceProviderId = account.service_provider_id;
+                          const currency = account.currency_code;
+                          const accountType = account.account_type;
+                          const uniqueId = `${accountType}_${serviceProviderId}_${currency}`;
                           const isSelected = selectedAccounts.includes(uniqueId);
-
-                          console.log('Pooled Account - ID:', uniqueId, 'Currency:', account.currency); // Debug log
 
                           return (
                             <AccountOptionCard
                               key={uniqueId}
                               account={account}
                               isSelected={isSelected}
-                              onSelect={() => handleToggleStandard(uniqueId)}
+                              onSelect={() => handleToggleStandard(uniqueId, account)}
                               getCurrencyIcon={getCurrencyIcon}
                             />
                           );
@@ -1364,14 +1453,27 @@ const OpenCurrencyAccount = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setModalMessage(
-                        "Terms and conditions would be displayed here. In a real implementation, this would show the actual terms content.",
-                      );
-                      setIsModalOpen(true);
+                      // Open the selected currency URL if it exists
+                      if (selectedCurrencyUrl && selectedCurrencyUrl !== "null" && selectedCurrencyUrl.trim() !== "") {
+                        window.open(selectedCurrencyUrl, "_blank", "noopener,noreferrer");
+                      } else if (selectedAccounts.length > 0) {
+                        // If there are selected accounts but no valid URL
+                        setModalMessage("URL not found");
+                        setIsModalOpen(true);
+                      } else {
+                        // If no currency selected
+                        setModalMessage("Please select a currency account first to view charges and fees.");
+                        setIsModalOpen(true);
+                      }
                     }}
                     className="text-blue-600 hover:text-blue-800 transition-colors flex items-center hover:underline underline-offset-1"
                   >
                     Charges and Fees
+                    {lastSelectedCurrency && selectedCurrencyUrl && (
+                      <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                        {lastSelectedCurrency}
+                      </span>
+                    )}
                   </button>
                 </div>
               </label>
@@ -1410,6 +1512,52 @@ const OpenCurrencyAccount = () => {
                 </div>
               )}
           </div>
+
+          {/* DEBUG PANEL - Update the formattedId to use hyphen */}
+          {selectedAccounts.length > 0 && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
+              <details>
+                <summary className="font-mono text-yellow-800 cursor-pointer">
+                  🔍 Debug: Service Provider IDs (Click to expand)
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {selectedAccounts.map(accountId => {
+                    const parts = accountId.split('_');
+                    if (parts.length >= 3) {
+                      const accountType = parts[0];
+                      const serviceProviderId = parts[1];
+                      const currency = parts[2];
+                      // ✅ Use hyphen format
+                      const formattedId = `${serviceProviderId}-${accountType}`;
+                      return (
+                        <div key={accountId} className="font-mono text-xs">
+                          <span className="text-blue-600">{currency}</span>:
+                          <span className="text-green-600 ml-2">"{formattedId}"</span>
+                          <span className="text-gray-500 ml-2">({accountType})</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                  <div className="mt-2 pt-2 border-t border-yellow-200">
+                    <span className="font-bold">Will send to API:</span>
+                    <pre className="mt-1 bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
+                      {JSON.stringify({
+                        service_provide_ids: [...new Set(selectedAccounts.map(accountId => {
+                          const parts = accountId.split('_');
+                          return parts.length >= 3 ? `${parts[1]}-${parts[0]}` : null;
+                        }).filter(Boolean))],
+                        service_provider_id: (() => {
+                          const parts = selectedAccounts[0]?.split('_');
+                          return parts?.length >= 3 ? `${parts[1]}-${parts[0]}` : null;
+                        })()
+                      }, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
 
           {/* Referral Code */}
           <div className="mb-6">
