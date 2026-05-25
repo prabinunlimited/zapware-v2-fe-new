@@ -30,7 +30,7 @@ import {
   selectRemittanceReadyBeneficiaries,
   selectRemittanceReadyBanks,
   selectBeneficiariesLoading,
-  fetchBeneficiaries, // ADD THIS LINE
+  fetchBeneficiaries,
   selectBeneficiaryBanks,
   selectBanksLoading,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
@@ -63,16 +63,19 @@ const ManualDeposit = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  // Add local state to track if beneficiaries have been loaded
+  const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
+
   // Transform for dropdown
   const beneficiaries = useMemo(() => {
-    return allBeneficiaries
-      .filter((benef) => benef.status === 1 && benef.active_status === 1)
+    return (allBeneficiaries || [])
+      .filter((benef) => benef?.status === 1 && benef?.active_status === 1)
       .map((benef) => ({
         ...benef,
-        value: benef.id,
-        label: `${benef.name} (${benef.full_phone_number || benef.phone_number || benef.benef_uuid
+        value: benef?.id,
+        label: `${benef?.name} (${benef?.full_phone_number || benef?.phone_number || benef?.benef_uuid
           })`,
-        formattedName: `${benef.name} (${benef.phone_number || benef.email || benef.benef_uuid
+        formattedName: `${benef?.name} (${benef?.phone_number || benef?.email || benef?.benef_uuid
           })`,
       }));
   }, [allBeneficiaries]);
@@ -82,30 +85,44 @@ const ManualDeposit = ({
     const customerId =
       paramCustomerId || localStorage.getItem("customerId") || "1720";
 
-    if (customerId && allBeneficiaries.length === 0 && !beneficiariesLoading) {
+    if (
+      customerId &&
+      !beneficiariesFetched &&
+      !beneficiariesLoading
+    ) {
       console.log(
         "🔄 ManualDeposit: Fetching beneficiaries for customer:",
         customerId
       );
-      dispatch(fetchBeneficiaries(customerId));
+      dispatch(fetchBeneficiaries(customerId))
+        .unwrap()
+        .then(() => {
+          setBeneficiariesFetched(true);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch beneficiaries:", error);
+          setBeneficiariesFetched(true); // Mark as fetched even on error to stop loading
+        });
     }
   }, [
     dispatch,
     paramCustomerId,
-    allBeneficiaries.length,
+    beneficiariesFetched,
     beneficiariesLoading,
   ]);
+
   const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
 
-  // ADD THESE LOGS HERE:
+  // Debug logs
   console.log("All beneficiaries from Redux:", allBeneficiaries);
   console.log("Remittance ready beneficiaries:", beneficiaries);
-  console.log("Number of all beneficiaries:", allBeneficiaries.length);
+  console.log("Number of all beneficiaries:", allBeneficiaries?.length || 0);
   console.log(
     "Number of remittance ready beneficiaries:",
     beneficiaries.length
   );
   console.log("Beneficiaries loading state:", beneficiariesLoading);
+  console.log("Beneficiaries fetched state:", beneficiariesFetched);
 
   // Local state
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
@@ -326,70 +343,9 @@ const ManualDeposit = ({
       relationOptions,
       payoutMethodOptions,
       findMatchingOption,
-      beneficiaryBanks, // Keep this dependency
+      beneficiaryBanks,
     ]
   );
-
-  // Handle beneficiary code lookup
-  // const handleBeneficiaryCodeLookupInternal = async () => {
-  //   if (!beneficiaryCode.trim()) {
-  //     toast.error("Please enter a beneficiary code");
-  //     return;
-  //   }
-
-  //   try {
-  //     setIsLoadingCode(true);
-  //     const result = await dispatch(
-  //       fetchBeneficiaryByCode(beneficiaryCode)
-  //     ).unwrap();
-
-  //     if (result.data) {
-  //       const beneficiaryData = result.data;
-
-  //       const transformedBeneficiary = {
-  //         value: beneficiaryData.id,
-  //         id: beneficiaryData.id,
-  //         label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
-  //         name: beneficiaryData.name,
-  //         benef_uuid: beneficiaryData.benef_uuid,
-  //         occupation: beneficiaryData.occupation,
-  //         relationtobenef: beneficiaryData.relationtobenef,
-  //         transfer_purpose: beneficiaryData.transfer_purpose,
-  //         income_source: beneficiaryData.income_source,
-  //         payout_method:
-  //           beneficiaryData.payout_method || beneficiaryData.payment_method,
-  //         ...beneficiaryData,
-  //       };
-
-  //       await handleBeneficiarySelect(transformedBeneficiary);
-  //       toast.success("Beneficiary details loaded successfully!");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching beneficiary by code:", error);
-  //     if (error.response?.status === 404) {
-  //       toast.error("No beneficiary found with this code");
-  //     } else {
-  //       toast.error("Failed to fetch beneficiary details");
-  //     }
-  //   } finally {
-  //     setIsLoadingCode(false);
-  //   }
-  // };
-
-  // Handle beneficiary code input change
-  // const handleBeneficiaryCodeInputChange = useCallback(
-  //   (e) => {
-  //     const value = e.target.value;
-  //     setBeneficiaryCode(value);
-  //     setShowCodeInput(value.trim().length > 0);
-
-  //     // If clearing the code input, enable dropdown
-  //     if (!value.trim() && selectedBeneficiary) {
-  //       handleBeneficiarySelect(selectedBeneficiary);
-  //     }
-  //   },
-  //   [selectedBeneficiary, handleBeneficiarySelect]
-  // );
 
   // Handle file upload
   const handleFileUploadInternal = (e) => {
@@ -403,6 +359,24 @@ const ManualDeposit = ({
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
     onFieldChange("occupation", selectedOption?.value || "");
+  };
+
+  // Get placeholder text for beneficiary select
+  const getBeneficiaryPlaceholder = () => {
+    // If still loading and haven't fetched yet
+    if (beneficiariesLoading || (!beneficiariesFetched && beneficiaries.length === 0)) {
+      return "Loading beneficiaries...";
+    }
+    // If fetch is complete and no beneficiaries
+    if (beneficiariesFetched && beneficiaries.length === 0) {
+      return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+    }
+    // If using beneficiary code
+    if (showCodeInput) {
+      return "Disabled - Using beneficiary code";
+    }
+    // Normal state
+    return "Select beneficiary...";
   };
 
   // Bank Detail Item component
@@ -429,11 +403,10 @@ const ManualDeposit = ({
 
     setIsNavigatingToAdd(true);
 
-    // ✅ ADD THIS - Save state before navigating
+    // Save state before navigating
     if (onSaveRemittanceState) {
       onSaveRemittanceState();
     }
-
 
     navigate(`/addbeneficiary/${customerId}`, {
       state: {
@@ -441,7 +414,7 @@ const ManualDeposit = ({
         returnStep: 2,
         returnToStep: 2,
         preserveRemittanceState: true,
-        from: "remittance"  // ADD THIS FLAG
+        from: "remittance"
       }
     });
   };
@@ -484,18 +457,21 @@ const ManualDeposit = ({
               options={beneficiaries}
               value={selectedBeneficiary}
               onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading} // ✅ Use Redux loading state
-              isDisabled={beneficiariesLoading || showCodeInput}
+              isLoading={beneficiariesLoading && !beneficiariesFetched}
+              isDisabled={showCodeInput}
               classNamePrefix="select"
               styles={selectStyles}
-              placeholder={
-                beneficiariesLoading
-                  ? "Loading beneficiaries..."
-                  : showCodeInput
-                    ? "Disabled - Using beneficiary code"
-                    : "Select beneficiary..."
-              }
+              placeholder={getBeneficiaryPlaceholder()}
               isSearchable
+              noOptionsMessage={() => {
+                if (beneficiariesFetched && beneficiaries.length === 0) {
+                  return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+                }
+                if (beneficiariesLoading) {
+                  return "Loading beneficiaries...";
+                }
+                return "No options available";
+              }}
               getOptionLabel={(option) =>
                 option.formattedName ||
                 `${option.name} (${option.phone_number || option.benef_uuid})`
@@ -504,14 +480,14 @@ const ManualDeposit = ({
             />
           </div>
 
-          {/* OR Separator */}
+          {/* OR Separator - Commented out */}
           {/* <div className="flex items-center my-4">
             <div className="flex-1 border-t border-gray-300"></div>
             <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
             <div className="flex-1 border-t border-gray-300"></div>
           </div> */}
 
-          {/* Enter Beneficiary Code Field */}
+          {/* Enter Beneficiary Code Field - Commented out */}
           {/* <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Enter Beneficiary Code
