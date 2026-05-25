@@ -169,11 +169,11 @@ const Step3Confirm = ({
   // Format the selected date for display
   const formattedSelectedDate = selectedDate
     ? selectedDate.toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
     : null;
 
   const selectedDay = selectedDate ? selectedDate.getDate() : null;
@@ -421,29 +421,29 @@ const Step3Confirm = ({
                 {/* Additional Features */}
                 {(selectedBankAccount.fednow_credit_enabled ||
                   selectedBankAccount.rtp_credit_enabled) && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
-                      Payment Features:
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedBankAccount.fednow_credit_enabled && (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                          FedNow Enabled
-                        </span>
-                      )}
-                      {selectedBankAccount.rtp_credit_enabled && (
-                        <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
-                          RTP Enabled
-                        </span>
-                      )}
-                      {selectedBankAccount.is_default && (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                          Default Account
-                        </span>
-                      )}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Payment Features:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedBankAccount.fednow_credit_enabled && (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                            FedNow Enabled
+                          </span>
+                        )}
+                        {selectedBankAccount.rtp_credit_enabled && (
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                            RTP Enabled
+                          </span>
+                        )}
+                        {selectedBankAccount.is_default && (
+                          <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                            Default Account
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
           )}
@@ -761,8 +761,8 @@ const Step3Confirm = ({
                             calendarClassName="!border-0 !shadow-none"
                             dayClassName={(date) =>
                               date.getDate() === selectedDate?.getDate() &&
-                              date.getMonth() === selectedDate?.getMonth() &&
-                              date.getFullYear() === selectedDate?.getFullYear()
+                                date.getMonth() === selectedDate?.getMonth() &&
+                                date.getFullYear() === selectedDate?.getFullYear()
                                 ? "!bg-blue-500 !text-white !rounded-full"
                                 : "hover:!bg-blue-100 !rounded-full"
                             }
@@ -820,22 +820,34 @@ const Step3Confirm = ({
             Terms & Conditions
           </h3>
           <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="agreeToTerms"
-                checked={formData.agreeToTerms}
-                onChange={(e) => onAgreeToTerms(e.target.checked)}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-1"
-              />
-              <label htmlFor="agreeToTerms" className="text-sm text-gray-700">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <div className="relative flex items-center justify-center mt-0.5">
+                <input
+                  type="checkbox"
+                  id="agreeToTerms"
+                  checked={formData.agreeToTerms}
+                  onChange={(e) => onAgreeToTerms(e.target.checked)}
+                  className="absolute w-5 h-5 cursor-pointer"
+                />
+                <div className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-all ${formData.agreeToTerms
+                    ? 'bg-blue-600 border-blue-600'
+                    : 'bg-white border-gray-300'
+                  }`}>
+                  {formData.agreeToTerms && (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <label htmlFor="agreeToTerms" className="text-sm text-gray-700 flex-1">
                 I agree to the{" "}
                 <a href="#" className="text-blue-600 hover:underline">
                   Terms and Conditions
                 </a>{" "}
                 and confirm that all information provided is accurate.
               </label>
-            </div>
+            </label>
           </div>
         </div>
       </div>
@@ -868,9 +880,9 @@ const Step3Confirm = ({
                     animate={
                       !animationComplete
                         ? {
-                            scale: [1, 1.2, 1],
-                            rotate: [0, 360],
-                          }
+                          scale: [1, 1.2, 1],
+                          rotate: [0, 360],
+                        }
                         : { scale: 1 }
                     }
                     transition={{
@@ -1063,11 +1075,10 @@ const Step3Confirm = ({
                     <button
                       onClick={handleCancelSubmit}
                       disabled={isSubmitting}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
-                        isSubmitting
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 ${isSubmitting
                           ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                           : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                      }`}
+                        }`}
                     >
                       <FaArrowLeft className="text-sm" />
                       No, Go Back
@@ -1075,11 +1086,10 @@ const Step3Confirm = ({
                     <button
                       onClick={handleConfirmSubmit}
                       disabled={isSubmitting}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
-                        isSubmitting
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 ${isSubmitting
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                           : "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg"
-                      }`}
+                        }`}
                     >
                       {isSubmitting ? (
                         <>
