@@ -1716,53 +1716,87 @@ function SignUpIndividualContent() {
               </div>
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="flex overflow-x-auto mb-4 pb-1">
-              {formSections.map((section, idx) => {
-                const isSectionValid = sectionErrors[idx]?.length === 0;
+            {/* Navigation Tabs - WITH CLICKABLE SWIPE HINT */}
+            <div className="mb-4">
+              {/* Swipe hint text - Only shows on mobile */}
+              <div className="flex justify-end mb-2 px-1 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Find the tabs container and scroll to the end
+                    const tabsContainer = document.querySelector('.tabs-scroll-container');
+                    if (tabsContainer) {
+                      tabsContainer.scrollTo({
+                        left: tabsContainer.scrollWidth,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
+                  className="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-700 transition-colors"
+                >
+                  <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Swipe to see more
+                </button>
+              </div>
 
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      // Only allow navigation if previous sections are valid
-                      let canNavigate = true;
-                      for (let i = 0; i < idx; i++) {
-                        if (sectionErrors[i]?.length > 0) {
-                          canNavigate = false;
-                          toast.error(`Please complete section ${i + 1} first`);
-                          break;
+              {/* Scrollable tabs */}
+              <div className="tabs-scroll-container flex overflow-x-auto overflow-y-hidden scroll-smooth gap-1 md:gap-2 pb-2 hide-scrollbar">
+                {formSections.map((section, idx) => {
+                  const isSectionValid = sectionErrors[idx]?.length === 0;
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        // Only allow navigation if previous sections are valid
+                        let canNavigate = true;
+                        for (let i = 0; i < idx; i++) {
+                          if (sectionErrors[i]?.length > 0) {
+                            canNavigate = false;
+                            toast.error(`Please complete section ${i + 1} first`);
+                            break;
+                          }
                         }
-                      }
-                      if (canNavigate) {
-                        setActiveSection(idx);
-                      }
-                    }}
-                    className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-all duration-300 relative ${activeSection === idx
-                      ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                      : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
-                      } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
-                  >
-                    {section}
-                    {activeSection === idx && (
-                      <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">
-                        {idx + 1}
+                        if (canNavigate) {
+                          setActiveSection(idx);
+                        }
+                      }}
+                      className={`flex-shrink-0 whitespace-nowrap px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-medium transition-all duration-300 relative ${activeSection === idx
+                          ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                          : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                        } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
+                    >
+                      {/* Show full text on tablet/desktop, abbreviated on mobile */}
+                      <span className="hidden sm:inline">{section}</span>
+                      <span className="sm:hidden">
+                        {idx === 0 && "Personal"}
+                        {idx === 1 && "Contact"}
+                        {idx === 2 && "Identity"}
+                        {idx === 3 && "Security"}
+                        {idx === 4 && "Terms"}
                       </span>
-                    )}
-                    {!isSectionValid && (
-                      <span className="absolute -top-1 -right-1">
-                        <FontAwesomeIcon
-                          icon={faExclamationCircle}
-                          className="text-red-500 text-xs"
-                        />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
 
+                      {activeSection === idx && (
+                        <span className="ml-1 md:ml-2 bg-blue-100 text-blue-800 text-xs px-1.5 md:px-2 py-0.5 rounded-full">
+                          {idx + 1}
+                        </span>
+                      )}
+                      {!isSectionValid && (
+                        <span className="absolute -top-1 -right-1">
+                          <FontAwesomeIcon
+                            icon={faExclamationCircle}
+                            className="text-red-500 text-xs"
+                          />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {/* Form */}
             <form
               onSubmit={formik.handleSubmit}
