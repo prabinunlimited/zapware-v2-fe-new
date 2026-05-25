@@ -1,4 +1,4 @@
-// src/page/CustomerSupport/CustomerSupport.jsx (Complete updated version)
+// src/page/CustomerSupport/CustomerSupport.jsx (Mobile Responsive - Company & Tickets Only)
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -488,7 +488,7 @@ function CustomerSupport() {
 
         {/* Main Content */}
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left Side - Support Form */}
+          {/* Left Side - Support Form (UNCHANGED) */}
           <div className="lg:w-1/2">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
@@ -580,7 +580,7 @@ function CustomerSupport() {
                     >
                       {priorityOptions.map(option => (
                         <option key={option.value} value={option.value}>
-                          {option.icon} {option.label}
+                          {option.label}
                         </option>
                       ))}
                     </select>
@@ -639,7 +639,7 @@ function CustomerSupport() {
             </motion.div>
           </div>
 
-          {/* Right Side - Contact Information & Tickets */}
+          {/* Right Side - Contact Information & Tickets (MADE RESPONSIVE) */}
           <div className="lg:w-1/2">
             <motion.div
               initial={{ opacity: 0, x: 30 }}
@@ -647,62 +647,62 @@ function CustomerSupport() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="space-y-6"
             >
-              {/* Company Header - Fixed with white background */}
+              {/* Company Header - Made Responsive */}
               <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
                 <div className="relative">
-                  {/* Decorative top bar */}
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
 
-                  <div className="p-8">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-blue-100 rounded-2xl">
-                          <Building2Icon className="w-8 h-8 text-blue-600" />
+                  <div className="p-4 sm:p-6 md:p-8">
+                    {/* Header section - Stack on mobile, row on tablet/desktop */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
+                      <div className="flex items-center space-x-3 sm:space-x-4">
+                        <div className="p-2.5 sm:p-3 bg-blue-100 rounded-xl sm:rounded-2xl">
+                          <Building2Icon className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
                         </div>
                         <div>
-                          <h2 className="text-2xl font-bold text-gray-800">{partnerInfo.partner_name}</h2>
-                          <div className="flex items-center mt-1">
-                            <p className="text-gray-500 text-sm"> Premium Support</p>
+                          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">{partnerInfo.partner_name}</h2>
+                          <div className="flex items-center mt-0.5 sm:mt-1">
+                            <p className="text-gray-500 text-xs sm:text-sm">Premium Support</p>
                           </div>
                         </div>
                       </div>
-                      <div className="bg-blue-50 rounded-full px-3 py-1.5">
+                      <div className="bg-blue-50 rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 self-start sm:self-auto">
                         <div className="flex items-center space-x-1">
-                          <Award className="w-4 h-4 text-blue-600" />
+                          <Award className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" />
                           <span className="text-xs text-blue-700 font-medium">Trusted</span>
                         </div>
                       </div>
                     </div>
 
-                    <p className="text-gray-600 leading-relaxed">
+                    <p className="text-gray-600 text-sm sm:text-base leading-relaxed">
                       We're committed to providing you with exceptional support.
                       Our dedicated team is available to assist you with any questions or concerns.
                     </p>
                   </div>
 
-                  {/* Contact Information Cards */}
-                  <div className="px-8 pb-8">
-                    <div className="grid grid-cols-1 gap-4">
+                  {/* Contact Information Cards - Made Responsive */}
+                  <div className="px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8">
+                    <div className="grid grid-cols-1 gap-3 sm:gap-4">
                       {/* Email Support Card */}
                       <motion.div
                         whileHover={{ scale: 1.02, x: 5 }}
                         transition={{ type: "spring", stiffness: 300 }}
                         onClick={handleEmailClick}
-                        className="group relative overflow-hidden bg-gray-50 rounded-2xl p-4 cursor-pointer hover:bg-gray-100 transition-all duration-300 border border-gray-200"
+                        className="group relative overflow-hidden bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 cursor-pointer hover:bg-gray-100 transition-all duration-300 border border-gray-200"
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-blue-50/50 to-blue-50/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                         <div className="flex items-center justify-between relative z-10">
-                          <div className="flex items-center space-x-4">
-                            <div className="p-2.5 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
-                              <Mail className="w-5 h-5 text-blue-600" />
+                          <div className="flex items-center space-x-3 sm:space-x-4">
+                            <div className="p-2 sm:p-2.5 bg-blue-100 rounded-lg sm:rounded-xl group-hover:bg-blue-200 transition-colors">
+                              <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                             </div>
-                            <div>
-                              <p className="text-gray-700 text-sm font-medium mb-0.5">Email Support</p>
-                              <p className="text-gray-500 text-xs font-mono">{partnerInfo.support_email}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-700 text-xs sm:text-sm font-medium mb-0.5">Email Support</p>
+                              <p className="text-gray-500 text-xs font-mono break-all">{partnerInfo.support_email}</p>
                             </div>
                           </div>
-                          <div className="text-gray-400 group-hover:text-blue-500 transition-colors">
-                            <Send className="w-4 h-4" />
+                          <div className="text-gray-400 group-hover:text-blue-500 transition-colors ml-2">
+                            <Send className="w-3 h-3 sm:w-4 sm:h-4" />
                           </div>
                         </div>
                       </motion.div>
@@ -713,35 +713,35 @@ function CustomerSupport() {
                           whileHover={{ scale: 1.02, x: 5 }}
                           transition={{ type: "spring", stiffness: 300 }}
                           onClick={handlePhoneClick}
-                          className="group relative overflow-hidden bg-gray-50 rounded-2xl p-4 cursor-pointer hover:bg-gray-100 transition-all duration-300 border border-gray-200"
+                          className="group relative overflow-hidden bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 cursor-pointer hover:bg-gray-100 transition-all duration-300 border border-gray-200"
                         >
                           <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-blue-50/50 to-blue-50/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                           <div className="flex items-center justify-between relative z-10">
-                            <div className="flex items-center space-x-4">
-                              <div className="p-2.5 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
-                                <Phone className="w-5 h-5 text-blue-600" />
+                            <div className="flex items-center space-x-3 sm:space-x-4">
+                              <div className="p-2 sm:p-2.5 bg-blue-100 rounded-lg sm:rounded-xl group-hover:bg-blue-200 transition-colors">
+                                <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                               </div>
                               <div>
-                                <p className="text-gray-700 text-sm font-medium mb-0.5">Phone Support</p>
+                                <p className="text-gray-700 text-xs sm:text-sm font-medium mb-0.5">Phone Support</p>
                                 <p className="text-gray-500 text-xs">{partnerInfo.support_phoneno}</p>
                               </div>
                             </div>
                             <div className="text-gray-400 group-hover:text-blue-500 transition-colors">
-                              <Zap className="w-4 h-4" />
+                              <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
                             </div>
                           </div>
                         </motion.div>
                       )}
 
                       {/* Office Address Card */}
-                      <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
-                        <div className="flex items-start space-x-4">
-                          <div className="p-2.5 bg-blue-100 rounded-xl">
-                            <MapPin className="w-5 h-5 text-blue-600" />
+                      <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-200">
+                        <div className="flex items-start space-x-3 sm:space-x-4">
+                          <div className="p-2 sm:p-2.5 bg-blue-100 rounded-lg sm:rounded-xl">
+                            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                           </div>
                           <div className="flex-1">
-                            <p className="text-gray-700 text-sm font-medium mb-0.5">Office Address</p>
-                            <p className="text-gray-500 text-xs leading-relaxed">{partnerInfo.partner_address}</p>
+                            <p className="text-gray-700 text-xs sm:text-sm font-medium mb-0.5">Office Address</p>
+                            <p className="text-gray-500 text-xs leading-relaxed break-words">{partnerInfo.partner_address}</p>
                           </div>
                         </div>
                       </div>
@@ -750,40 +750,37 @@ function CustomerSupport() {
                 </div>
               </div>
 
-              {/* Ticket History Section */}
-              {/* Ticket History Section */}
+              {/* Ticket History Section - Made Responsive */}
               <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 sm:p-5 md:p-6">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-white/20 rounded-xl">
-                        <Ticket className="w-5 h-5 text-white" />
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                      <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg sm:rounded-xl">
+                        <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-white">My Tickets</h3>
-                        <p className="text-blue-100 text-sm">Track your support requests</p>
+                        <h3 className="text-lg sm:text-xl font-bold text-white">My Tickets</h3>
+                        <p className="text-blue-100 text-xs sm:text-sm">Track your support requests</p>
                       </div>
                     </div>
                     <button
                       onClick={() => dispatch(fetchAllTickets())}
                       disabled={fetchingTickets}
-                      className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition-all"
+                      className="p-1.5 sm:p-2 bg-white/20 rounded-lg sm:rounded-xl hover:bg-white/30 transition-all"
                     >
-                      <RefreshCw className={`w-4 h-4 text-white ${fetchingTickets ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 text-white ${fetchingTickets ? 'animate-spin' : ''}`} />
                     </button>
                   </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 sm:p-5 md:p-6">
                   {fetchingTickets ? (
-                    // Loading State
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <RingLoader color="#3b82f6" size={50} />
-                      <p className="mt-4 text-gray-500 text-sm">Loading your tickets...</p>
+                    <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+                      <RingLoader color="#3b82f6" size={40} />
+                      <p className="mt-3 sm:mt-4 text-gray-500 text-xs sm:text-sm">Loading your tickets...</p>
                     </div>
                   ) : tickets.length > 0 ? (
-                    // Tickets List
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                    <div className="space-y-3 max-h-80 sm:max-h-96 overflow-y-auto">
                       {tickets.map((ticket, index) => (
                         <motion.div
                           key={ticket.ticket_uuid || ticket.uuid || ticket.id || index}
@@ -791,40 +788,39 @@ function CustomerSupport() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: index * 0.05 }}
                           onClick={() => handleViewTicket(ticket)}
-                          className="p-4 border border-blue-100 rounded-2xl hover:bg-blue-50 cursor-pointer transition-all group"
+                          className="p-3 sm:p-4 border border-blue-100 rounded-xl sm:rounded-2xl hover:bg-blue-50 cursor-pointer transition-all group"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <h4 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors text-sm sm:text-base break-words flex-1">
                               {ticket.subject}
                             </h4>
-                            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                            <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
                           </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(ticket.priority)}`}>
+                          <div className="flex flex-wrap items-center gap-2 justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`text-xs px-2 py-0.5 sm:px-2 sm:py-1 rounded-full ${getPriorityColor(ticket.priority)}`}>
                                 {ticket.priority || 'Medium'}
                               </span>
-                              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ticket.status)}`}>
+                              <span className={`text-xs px-2 py-0.5 sm:px-2 sm:py-1 rounded-full ${getStatusColor(ticket.status)}`}>
                                 {ticket.status || 'Pending'}
                               </span>
                             </div>
                             <div className="flex items-center text-xs text-gray-400">
-                              <Calendar className="w-3 h-3 mr-1" />
-                              {ticket.created_at ? formatDate(ticket.created_at) : 'Recent'}
+                              <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
+                              <span>{ticket.created_at ? formatDate(ticket.created_at) : 'Recent'}</span>
                             </div>
                           </div>
-                          <div className="mt-2 text-xs text-gray-400 font-mono">
+                          <div className="mt-2 text-xs text-gray-400 font-mono break-all">
                             Ticket ID: {getTicketUuidDisplay(ticket)}
                           </div>
                         </motion.div>
                       ))}
                     </div>
                   ) : (
-                    // Empty State
-                    <div className="text-center py-12">
-                      <Ticket className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500 font-medium">No tickets yet</p>
-                      <p className="text-gray-400 text-sm mt-1">Submit your first support ticket above</p>
+                    <div className="text-center py-8 sm:py-12">
+                      <Ticket className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+                      <p className="text-gray-500 font-medium text-sm sm:text-base">No tickets yet</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-1">Submit your first support ticket above</p>
                     </div>
                   )}
                 </div>
@@ -834,7 +830,7 @@ function CustomerSupport() {
         </div>
       </div>
 
-      {/* Ticket Detail Modal with Edit and Delete */}
+      {/* Ticket Detail Modal with Edit and Delete (UNCHANGED) */}
       {showTicketModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleCloseModal}>
           <motion.div
@@ -881,7 +877,6 @@ function CustomerSupport() {
             ) : currentTicket ? (
               <div className="p-6 space-y-4">
                 {isEditing ? (
-                  // Edit Form
                   <>
                     <div>
                       <label className="text-sm font-semibold text-gray-500">Ticket ID</label>
@@ -918,7 +913,7 @@ function CustomerSupport() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-semibold text-gray-700 mb-2 block">
                           Priority
@@ -929,10 +924,10 @@ function CustomerSupport() {
                           onChange={handleEditInputChange}
                           className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
                         >
-                          <option value="low"> Low</option>
-                          <option value="medium"> Medium</option>
-                          <option value="high"> High</option>
-                          <option value="critical"> Critical</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="critical">Critical</option>
                         </select>
                       </div>
 
@@ -957,7 +952,7 @@ function CustomerSupport() {
                       </div>
                     </div>
 
-                    <div className="flex gap-3 pt-4">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4">
                       <button
                         onClick={handleUpdateTicket}
                         disabled={updatingTicket}
@@ -974,7 +969,6 @@ function CustomerSupport() {
                     </div>
                   </>
                 ) : (
-                  // View Mode
                   <>
                     <div>
                       <label className="text-sm font-semibold text-gray-500">Ticket ID</label>
@@ -993,7 +987,7 @@ function CustomerSupport() {
                       <p className="text-gray-700 whitespace-pre-wrap">{currentTicket.description}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Priority</label>
                         <div className="mt-2">
@@ -1004,7 +998,7 @@ function CustomerSupport() {
                       </div>
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Status</label>
-                        <div className="mt-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <p className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(currentTicket.status)}`}>
                             {currentTicket.status}
                           </p>
@@ -1047,7 +1041,6 @@ function CustomerSupport() {
                       </div>
                     )}
 
-                    {/* Status Logs Button */}
                     <div className="pt-2">
                       <button
                         onClick={() => handleViewStatusLogs(currentTicket.id)}
@@ -1058,12 +1051,11 @@ function CustomerSupport() {
                       </button>
                     </div>
 
-                    {/* Action Buttons at bottom right */}
-                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-4">
+                    <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-100 mt-4">
                       <button
                         onClick={handleEditClick}
                         disabled={updatingTicket}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all disabled:opacity-50"
                       >
                         <Edit2 className="w-4 h-4" />
                         <span>Edit</span>
@@ -1071,7 +1063,7 @@ function CustomerSupport() {
                       <button
                         onClick={handleDeleteClick}
                         disabled={deletingTicket}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />
                         <span>Delete</span>
@@ -1091,7 +1083,7 @@ function CustomerSupport() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (UNCHANGED) */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={handleCancelDelete}>
           <motion.div
@@ -1114,7 +1106,7 @@ function CustomerSupport() {
               <p className="text-gray-700 mb-2">Are you sure you want to delete this ticket?</p>
               <p className="text-gray-500 text-sm mb-6">This action cannot be undone.</p>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleConfirmDelete}
                   disabled={deletingTicket}
@@ -1134,7 +1126,7 @@ function CustomerSupport() {
         </div>
       )}
 
-      {/* Status Change Modal */}
+      {/* Status Change Modal (UNCHANGED) */}
       {showStatusModal && selectedTicketForStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowStatusModal(false)}>
           <motion.div
@@ -1193,7 +1185,7 @@ function CustomerSupport() {
                 </p>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleStatusUpdate}
                   disabled={updatingStatus}
@@ -1220,7 +1212,7 @@ function CustomerSupport() {
         </div>
       )}
 
-      {/* Status Logs Modal */}
+      {/* Status Logs Modal (UNCHANGED) */}
       {showStatusLogs && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowStatusLogs(false)}>
           <motion.div
@@ -1249,7 +1241,6 @@ function CustomerSupport() {
 
             <div className="p-6 overflow-y-auto max-h-[calc(70vh-100px)]">
               {fetchingStatusLogs ? (
-                // Loading State - THIS SHOULD SHOW WHEN API IS FETCHING
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader className="w-8 h-8 text-blue-500 animate-spin" />
                   <p className="mt-3 text-gray-500 text-sm">Loading status history...</p>
@@ -1257,7 +1248,7 @@ function CustomerSupport() {
               ) : statusLogs.length > 0 ? (
                 <div className="space-y-3">
                   {statusLogs.map((log, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all">
+                    <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all gap-2">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                         <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${getStatusColor(log.status)}`}>

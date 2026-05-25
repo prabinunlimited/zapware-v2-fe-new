@@ -559,14 +559,14 @@ const BankTransfer = ({
   const handleAddNewBeneficiary = () => {
     const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
     console.log("➕ Navigating to add beneficiary from ManualDeposit");
-    
+
     setIsNavigatingToAdd(true);
 
     //State before navigating
-    if(onSaveRemittanceState){
+    if (onSaveRemittanceState) {
       onSaveRemittanceState();
     }
-    
+
     navigate(`/addbeneficiary/${customerId}`, {
       state: {
         returnTo: `/remittance/${customerId}`,
@@ -936,31 +936,95 @@ const BankTransfer = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Occupation
             </label>
-            <div className="flex gap-2">
-              <Select
-                options={occupations}
-                value={currentOccupationValue}
-                onChange={handleOccupationChange}
-                isLoading={isLoadingOccupations}
-                classNamePrefix="select"
-                styles={selectStyles}
-                placeholder={
-                  isLoadingOccupations
-                    ? "Loading occupations..."
-                    : "Select occupation..."
-                }
-                className="flex-1"
-                isSearchable
-                isClearable
-              />
-              <input
-                type="text"
-                value={formData?.occupation || ""}
-                onChange={(e) => onFieldChange("occupation", e.target.value)}
-                placeholder="Or enter custom occupation"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1">
+                <Select
+                  options={occupations}
+                  value={currentOccupationValue}
+                  onChange={handleOccupationChange}
+                  isLoading={isLoadingOccupations}
+                  classNamePrefix="select"
+                  styles={{
+                    ...selectStyles,
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "48px",
+                      borderRadius: "0.5rem",
+                      borderColor: "#e5e7eb",
+                      boxShadow: "none",
+                      "&:hover": { borderColor: "#9ca3af" },
+                      fontSize: "0.95rem",
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        minHeight: "44px",
+                      }
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      borderRadius: "0.5rem",
+                      fontSize: "0.95rem",
+                      border: "1px solid #e5e7eb",
+                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                      zIndex: 9999,
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        maxHeight: "300px",
+                        overflowY: "auto",
+                      }
+                    }),
+                    option: (base, { isSelected, isFocused }) => ({
+                      ...base,
+                      backgroundColor: isSelected
+                        ? "#eff6ff"
+                        : isFocused
+                          ? "#f8fafc"
+                          : "white",
+                      color: isSelected ? "#1e40af" : "#374151",
+                      fontWeight: isSelected ? "600" : "500",
+                      padding: "12px 16px",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                      '@media (max-width: 640px)': {
+                        padding: "10px 12px",
+                        fontSize: "0.875rem",
+                      },
+                      "&:hover": {
+                        backgroundColor: "#f8fafc",
+                      },
+                    }),
+                  }}
+                  placeholder={
+                    isLoadingOccupations
+                      ? "Loading occupations..."
+                      : "Select occupation..."
+                  }
+                  className="w-full"
+                  isSearchable
+                  isClearable
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData?.occupation || ""}
+                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  placeholder="Or enter custom occupation"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  style={{
+                    minHeight: "48px",
+                    '@media (max-width: 640px)': {
+                      minHeight: "44px",
+                      fontSize: "0.875rem",
+                    }
+                  }}
+                />
+              </div>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Select from dropdown or type custom occupation
+            </p>
           </div>
 
           {/* Beneficiary Bank */}
