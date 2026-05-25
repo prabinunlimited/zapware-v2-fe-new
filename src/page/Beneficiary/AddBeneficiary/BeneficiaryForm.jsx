@@ -243,7 +243,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [currency, setCurrency] = useState(
     mode === "edit" && initialData?.banks?.[0]?.currency_code
       ? initialData.banks[0].currency_code
-      : "USD"
+      : "INR"
   );
   const [paymentMethod, setPaymentMethod] = useState("ACH");
   const [loading, setLoading] = useState(false);
@@ -349,7 +349,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return [
       {
         id: null,
-        rails: "",
+        rails: "Local",
         iban: "",
         swift: "",
         intermediarySwift: "",
