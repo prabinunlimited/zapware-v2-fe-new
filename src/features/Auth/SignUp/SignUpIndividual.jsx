@@ -531,7 +531,7 @@ function SignUpIndividualContent() {
         if (
           termsFetched &&
           termsConditions.length > 0 &&
-          acceptedTerms.length === 0
+          acceptedTerms.length !== termsConditions.length
         ) {
           setErrorMessage("Please accept the terms and conditions");
           setIsModalOpen(true);
@@ -798,7 +798,7 @@ function SignUpIndividualContent() {
     try {
       setShowFullScreenLoader(true);
       console.log("📝 Formik values before transformation:", values);
-
+  
       // Prepare the data for submission
       const submissionData = {
         customer_type: "individual",
@@ -844,7 +844,7 @@ function SignUpIndividualContent() {
         selected_accounts: selectedAccounts,
         service_provide_ids: service_provide_ids,
       };
-
+  
       // Clean up empty optional fields
       const cleanedData = { ...submissionData };
       Object.keys(cleanedData).forEach((key) => {
@@ -856,24 +856,36 @@ function SignUpIndividualContent() {
           delete cleanedData[key];
         }
       });
-
+  
       console.log("📤 Final payload being sent:", {
         ...cleanedData,
         password: "***HIDDEN***",
         confirm_password: "***HIDDEN***",
       });
-
+  
       // Dispatch the submission action
       const resultAction = await dispatch(submitIndividualSignup(cleanedData));
-
+  
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
         const responseData = resultAction.payload;
         console.log("✅ Submission successful:", responseData);
-
+  
         if (responseData.status === "success") {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
-
+  
+          // Determine navigation based on account type
+          const navigationState = {
+            mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
+            kyc_verify: kyc_verify,
+            customerData: responseData.data || null,
+            hasSSN: !!cleanedData.ssn,
+            isRemittanceOnly: isRemit,
+            isMultiCurrency: !isRemit && selectedAccounts && selectedAccounts.length > 0,
+            selectedAccounts: selectedAccounts,
+            accountType: isRemit ? "remittance_only" : "multi_currency",
+          };
+  
           // Navigate to phone verification
           navigate("/phoneverification", {
             state: {
@@ -881,6 +893,8 @@ function SignUpIndividualContent() {
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
               hasSSN: !!cleanedData.ssn,
+              isRemittanceOnly: isRemit,  // ← ADD THIS
+              selectedAccounts: selectedAccounts,  // ← ADD THIS
             },
           });
         } else {
@@ -890,7 +904,7 @@ function SignUpIndividualContent() {
       } else {
         const error = resultAction.payload || resultAction.error;
         console.error("❌ Submission rejected:", error);
-
+  
         if (error?.message) {
           setErrorMessage(error.message);
           setIsModalOpen(true);
@@ -3249,9 +3263,9 @@ function SignUpIndividualContent() {
                       type="submit"
                       disabled={
                         isSubmitting ||
-                        progress < 100 ||
+                        progress < 95 ||
                         (termsConditions.length > 0 &&
-                          acceptedTerms.length === 0) ||
+                          acceptedTerms.length !== termsConditions.length) ||
                         (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
