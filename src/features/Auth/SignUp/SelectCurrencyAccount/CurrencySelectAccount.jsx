@@ -1520,7 +1520,7 @@ const OpenCurrencyAccount = () => {
           </div>
 
           {/* DEBUG PANEL - Update the formattedId to use hyphen */}
-          {selectedAccounts.length > 0 && (
+          {/* {selectedAccounts.length > 0 && (
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
               <details>
                 <summary className="font-mono text-yellow-800 cursor-pointer">
@@ -1563,7 +1563,7 @@ const OpenCurrencyAccount = () => {
                 </div>
               </details>
             </div>
-          )}
+          )} */}
 
           {/* Referral Code */}
           <div className="mb-6">
