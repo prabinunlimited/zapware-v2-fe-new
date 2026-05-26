@@ -361,6 +361,7 @@ function SignUpIndividualContent() {
   const [initializationError, setInitializationError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [registrationDataLoaded, setRegistrationDataLoaded] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -414,6 +415,75 @@ function SignUpIndividualContent() {
     selectedAccounts,
     accountOptions,
   ]);
+
+  // Add THIS WHOLE BLOCK after your other useEffects
+  useEffect(() => {
+    const loadRegistrationData = () => {
+      // Check navigation state first
+      const navData = location.state || {};
+
+      // Then check session storage
+      const savedData = sessionStorage.getItem('registrationData');
+      let registrationData = {};
+
+      if (savedData) {
+        try {
+          registrationData = JSON.parse(savedData);
+          console.log("Loaded registration data:", registrationData);
+        } catch (error) {
+          console.error("Error parsing registration data:", error);
+        }
+      }
+
+      const finalData = { ...registrationData, ...navData };
+
+      // Populate email
+      if (finalData.email && finalData.emailVerified) {
+        formik.setFieldValue("email", finalData.email);
+      }
+
+      // Populate mobile
+      if (finalData.mobile_number && finalData.mobileVerified) {
+        formik.setFieldValue("mobile_number", finalData.mobile_number);
+
+        if (finalData.phone_code) {
+          formik.setFieldValue("mobilenumber_countrycode", finalData.phone_code);
+          const countryWithCode = countryOptions.find(
+            opt => opt.phoneCode === finalData.phone_code
+          );
+          if (countryWithCode) {
+            setSelectedPhoneCode({
+              value: countryWithCode.value,
+              label: countryWithCode.label,
+              phoneCode: countryWithCode.phoneCode,
+              flag_url: countryWithCode.flag_url
+            });
+          }
+        }
+      }
+
+      // Populate country
+      if (finalData.selectedCountry) {
+        const country = finalData.selectedCountry;
+        const countryOption = {
+          value: country.id || country.value,
+          label: country.label,
+          country_code: country.country_code,
+          flag_url: country.flag_url,
+          phoneCode: country.phoneCode
+        };
+
+        dispatch(setSelectedCountry(countryOption));
+        formik.setFieldValue("country", country.id || country.value);
+      }
+
+      if (finalData.emailVerified && finalData.mobileVerified) {
+        setRegistrationDataLoaded(true);
+      }
+    };
+
+    loadRegistrationData();
+  }, []);
 
   const dispatch = useDispatch();
   const location = useLocation();
@@ -531,7 +601,7 @@ function SignUpIndividualContent() {
         if (
           termsFetched &&
           termsConditions.length > 0 &&
-          acceptedTerms.length !== termsConditions.length
+          acceptedTerms.length === 0
         ) {
           setErrorMessage("Please accept the terms and conditions");
           setIsModalOpen(true);
@@ -798,7 +868,7 @@ function SignUpIndividualContent() {
     try {
       setShowFullScreenLoader(true);
       console.log("📝 Formik values before transformation:", values);
-  
+
       // Prepare the data for submission
       const submissionData = {
         customer_type: "individual",
@@ -844,7 +914,7 @@ function SignUpIndividualContent() {
         selected_accounts: selectedAccounts,
         service_provide_ids: service_provide_ids,
       };
-  
+
       // Clean up empty optional fields
       const cleanedData = { ...submissionData };
       Object.keys(cleanedData).forEach((key) => {
@@ -856,36 +926,24 @@ function SignUpIndividualContent() {
           delete cleanedData[key];
         }
       });
-  
+
       console.log("📤 Final payload being sent:", {
         ...cleanedData,
         password: "***HIDDEN***",
         confirm_password: "***HIDDEN***",
       });
-  
+
       // Dispatch the submission action
       const resultAction = await dispatch(submitIndividualSignup(cleanedData));
-  
+
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
         const responseData = resultAction.payload;
         console.log("✅ Submission successful:", responseData);
-  
+
         if (responseData.status === "success") {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
-  
-          // Determine navigation based on account type
-          const navigationState = {
-            mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
-            kyc_verify: kyc_verify,
-            customerData: responseData.data || null,
-            hasSSN: !!cleanedData.ssn,
-            isRemittanceOnly: isRemit,
-            isMultiCurrency: !isRemit && selectedAccounts && selectedAccounts.length > 0,
-            selectedAccounts: selectedAccounts,
-            accountType: isRemit ? "remittance_only" : "multi_currency",
-          };
-  
+
           // Navigate to phone verification
           navigate("/phoneverification", {
             state: {
@@ -893,8 +951,6 @@ function SignUpIndividualContent() {
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
               hasSSN: !!cleanedData.ssn,
-              isRemittanceOnly: isRemit,  // ← ADD THIS
-              selectedAccounts: selectedAccounts,  // ← ADD THIS
             },
           });
         } else {
@@ -904,7 +960,7 @@ function SignUpIndividualContent() {
       } else {
         const error = resultAction.payload || resultAction.error;
         console.error("❌ Submission rejected:", error);
-  
+
         if (error?.message) {
           setErrorMessage(error.message);
           setIsModalOpen(true);
@@ -1779,8 +1835,8 @@ function SignUpIndividualContent() {
                         }
                       }}
                       className={`flex-shrink-0 whitespace-nowrap px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-medium transition-all duration-300 relative ${activeSection === idx
-                          ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                          : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                        ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                        : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
                         } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
                     >
                       {/* Show full text on tablet/desktop, abbreviated on mobile */}
@@ -1817,6 +1873,38 @@ function SignUpIndividualContent() {
               className="space-y-6"
               noValidate
             >
+              {/* Add verification banners here - after form opening tag */}
+              {registrationDataLoaded && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start">
+                    <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 mt-0.5 mr-3" />
+                    <div>
+                      <h4 className="text-green-800 font-medium">Email & Mobile Verified</h4>
+                      <p className="text-green-700 text-sm">
+                        Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been verified.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedCountry && registrationDataLoaded && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <h4 className="text-blue-800 font-medium">Country Pre-selected</h4>
+                      <p className="text-blue-700 text-sm">
+                        Country: <strong>{selectedCountry.label}</strong> from previous step.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
               {/* Personal Information Section */}
               <section className={`${activeSection !== 0 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -3267,9 +3355,9 @@ function SignUpIndividualContent() {
                       type="submit"
                       disabled={
                         isSubmitting ||
-                        progress < 95 ||
+                        progress < 100 ||
                         (termsConditions.length > 0 &&
-                          acceptedTerms.length !== termsConditions.length) ||
+                          acceptedTerms.length === 0) ||
                         (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
