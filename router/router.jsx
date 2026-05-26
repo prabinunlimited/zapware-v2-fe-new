@@ -12,6 +12,7 @@ import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
 import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
+import KYCVerification from "../src/features/Auth/KYCVerification";
 import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
@@ -90,6 +91,10 @@ const router = createBrowserRouter([
       {
         path: "phoneverification",
         element: <PhoneVerification />,
+      },
+      {
+        path: "kyc-verification",
+        element: <KYCVerification />,
       },
       {
         path: "forgotpassword",
