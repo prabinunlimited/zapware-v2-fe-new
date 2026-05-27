@@ -1,3 +1,4 @@
+import axios from 'axios';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
@@ -153,6 +154,8 @@ const getSectionFields = (sectionIndex, values) => {
         "street_address_1",
         "mobile_number",
         "mobilenumber_countrycode",
+        "customer_sending_countries",
+        "customer_receiving_funds_countries"
       ];
 
     case 2: // Identity Verification
@@ -398,6 +401,16 @@ function SignUpIndividualContent() {
   const ssnError = useSelector(selectSSNError);
   const showSSNConfirmation = useSelector(selectShowSSNConfirmation);
 
+  const [selectedSendingCountries, setSelectedSendingCountries] = useState([]);
+  const [selectedReceivingCountries, setSelectedReceivingCountries] = useState([]);
+
+  const [occupations, setOccupations] = useState([]);
+  const [occupationsLoading, setOccupationsLoading] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+
+  const [purposeOfAccount, setPurposeOfAccount] = useState("");
+  const [monthlyExpectedActivity, setMonthlyExpectedActivity] = useState("");
+
   useEffect(() => {
     console.log("🔍 Selector Debug:", {
       isNamedAccount,
@@ -485,6 +498,48 @@ function SignUpIndividualContent() {
     loadRegistrationData();
   }, []);
 
+  useEffect(() => {
+    const fetchOccupations = async () => {
+      try {
+        setOccupationsLoading(true);
+
+        // Get the bearer token from localStorage
+        const bearertoken = localStorage.getItem("bearertoken");
+
+        console.log("🔄 Fetching occupations from:", `${API_URL}/customers/fetch-occupation`);
+
+        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
+          headers: {
+            'Authorization': `Bearer ${bearertoken}`,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        console.log("✅ API Response:", response.data);
+
+        // Extract the occupations array from response.data.data
+        if (response.data?.data && Array.isArray(response.data.data)) {
+          setOccupations(response.data.data);
+          console.log("✅ Occupations set:", response.data.data);
+        } else if (Array.isArray(response.data)) {
+          setOccupations(response.data);
+        } else {
+          console.warn("Unexpected response structure:", response.data);
+          setOccupations([]);
+        }
+
+      } catch (error) {
+        console.error("❌ Failed to fetch occupations:", error);
+        console.error("Error details:", error.response?.data || error.message);
+        setOccupations([]);
+      } finally {
+        setOccupationsLoading(false);
+      }
+    };
+
+    fetchOccupations();
+  }, []);
+
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -570,6 +625,11 @@ function SignUpIndividualContent() {
       street_address_2: "",
       nationality: "",
       gender: "",
+      customer_sending_countries: [],
+      customer_receiving_funds_countries: [],
+      occupation: "",
+      purpose_of_account: "",
+      monthly_expected_activity: "",
       dob: "",
       ssn: "",
       idDocumentType: "",
@@ -716,6 +776,39 @@ function SignUpIndividualContent() {
       }
     },
   });
+
+  // Handle sending countries selection
+  const handleSendingCountriesChange = (selectedOptions) => {
+    const selectedValues = selectedOptions.map(option => option.value);
+    setSelectedSendingCountries(selectedOptions);
+    formik.setFieldValue("customer_sending_countries", selectedValues);
+  };
+
+  // Handle receiving countries selection
+  const handleReceivingCountriesChange = (selectedOptions) => {
+    const selectedValues = selectedOptions.map(option => option.value);
+    setSelectedReceivingCountries(selectedOptions);
+    formik.setFieldValue("customer_receiving_funds_countries", selectedValues);
+  };
+
+  const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    formik.setFieldValue("occupation", selectedOption?.label || "");
+  };
+
+  // Handle purpose of account change
+  const handlePurposeOfAccountChange = (e) => {
+    const value = e.target.value;
+    setPurposeOfAccount(value);
+    formik.setFieldValue("purpose_of_account", value);
+  };
+
+  // Handle monthly expected activity change
+  const handleMonthlyExpectedActivityChange = (e) => {
+    const value = e.target.value;
+    setMonthlyExpectedActivity(value);
+    formik.setFieldValue("monthly_expected_activity", value);
+  };
 
   // Calculate if SSN field should be shown - defined after formik
   const shouldShowSSNField = useMemo(() => {
@@ -887,6 +980,11 @@ function SignUpIndividualContent() {
         country: values.country,
         nationality: values.nationality,
         gender: values.gender,
+        customer_sending_countries: values.customer_sending_countries,
+        customer_receiving_funds_countries: values.customer_receiving_funds_countries,
+        occupation: values.occupation || "",
+        purpose_of_account: values.purpose_of_account || "", 
+        monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
         idDocumentType: values.idDocumentType,
@@ -1445,10 +1543,17 @@ function SignUpIndividualContent() {
       // Check each section
       for (let i = 0; i < formSections.length - 1; i++) {
         const sectionFields = getSectionFields(i, formik.values);
-        totalFields += sectionFields.length;
 
-        // Check if each field is filled and valid
-        for (const field of sectionFields) {
+        // Filter OUT the optional fields from total calculation
+        const requiredFields = sectionFields.filter(field =>
+          field !== "customer_sending_countries" &&
+          field !== "customer_receiving_funds_countries"
+        );
+
+        totalFields += requiredFields.length;
+
+        // Check if each required field is filled and valid
+        for (const field of requiredFields) {
           const value = formik.values[field];
           const isFilled = value && value.toString().trim() !== "";
           const hasError = formik.errors[field];
@@ -1461,16 +1566,14 @@ function SignUpIndividualContent() {
 
       // Add terms and conditions
       if (termsConditions.length > 0) {
-        totalFields += 1; // Terms section
+        totalFields += 1;
         if (acceptedTerms.length > 0) {
-          filledFields += 1; // Terms accepted
+          filledFields += 1;
         }
       }
 
       // Calculate percentage
-      const percentage =
-        totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
-
+      const percentage = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
       return percentage;
     };
 
@@ -1492,6 +1595,8 @@ function SignUpIndividualContent() {
     phoneCode: country.phone_code,
     country_code: country.country_code,
   }));
+
+  const canadaOnlyOptions = countryOptions.filter(option => option.label === "Canada");
 
   const nationalityOptions = nationalities.map((nat) => ({
     value: nat.id,
@@ -2138,6 +2243,184 @@ function SignUpIndividualContent() {
                       </p>
                     ) : null}
                   </div>
+
+                  {/* Occupation */}
+                  <div>
+                    <label htmlFor="occupation" className="block text-sm font-medium text-gray-700 mb-2.5">
+                      Occupation
+                    </label>
+
+                    {occupationsLoading ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <RingLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">Loading occupations...</span>
+                      </div>
+                    ) : (
+                      <Select
+                        id="occupation"
+                        name="occupation"
+                        options={occupations.map(occ => ({
+                          value: occ.name,
+                          label: occ.name
+                        }))}
+                        onChange={handleOccupationChange}
+                        onBlur={formik.handleBlur}
+                        className="basic-single"
+                        classNamePrefix="select"
+                        placeholder="Select your occupation"
+                        isClearable={true}
+                        styles={customStyles}
+                        value={selectedOccupation}
+                      />
+                    )}
+                  </div>
+
+                  {/* Purpose of Account - Text Field */}
+                  <div>
+                    <label htmlFor="purpose_of_account" className="block text-sm font-medium text-gray-700 mb-2.5">
+                      Purpose of Account 
+                    </label>
+                    <input
+                      id="purpose_of_account"
+                      name="purpose_of_account"
+                      type="text"
+                      placeholder="e.g., Personal savings, Business transactions, Investment"
+                      onChange={handlePurposeOfAccountChange}
+                      onBlur={formik.handleBlur}
+                      value={formik.values.purpose_of_account}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.purpose_of_account && formik.errors.purpose_of_account
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.purpose_of_account && formik.errors.purpose_of_account ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {formik.errors.purpose_of_account}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Monthly Expected Activity - Text Field */}
+                  <div>
+                    <label htmlFor="monthly_expected_activity" className="block text-sm font-medium text-gray-700 mb-2.5">
+                      Monthly Expected Activity 
+                    </label>
+                    <input
+                      id="monthly_expected_activity"
+                      name="monthly_expected_activity"
+                      type="text"
+                      placeholder="e.g., $1,000 - $5,000, 10-20 transactions"
+                      onChange={handleMonthlyExpectedActivityChange}
+                      onBlur={formik.handleBlur}
+                      value={formik.values.monthly_expected_activity}
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.monthly_expected_activity && formik.errors.monthly_expected_activity
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.monthly_expected_activity && formik.errors.monthly_expected_activity ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {formik.errors.monthly_expected_activity}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {/* Multi-select for Sending Countries */}
+                  <div className="md:col-span-2">
+                    <label
+                      htmlFor="customer_sending_countries"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Customer Sending Countries
+                    </label>
+                    <Select
+                      id="customer_sending_countries"
+                      name="customer_sending_countries"
+                      options={countryOptions}
+                      isMulti={true}
+                      onChange={handleSendingCountriesChange}
+                      onBlur={formik.handleBlur}
+                      className="basic-multi-select"
+                      classNamePrefix="select"
+                      placeholder="Select countries you will send from..."
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...provided,
+                          minHeight: "52px",
+                          borderRadius: "12px",
+                          borderColor: formik.touched.customer_sending_countries && formik.errors.customer_sending_countries
+                            ? "#f87171"
+                            : "#e5e7eb",
+                          boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none",
+                        }),
+                      }}
+                      value={selectedSendingCountries}
+                    />
+                    {formik.touched.customer_sending_countries && formik.errors.customer_sending_countries ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {formik.errors.customer_sending_countries}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select all countries from which you will be sending funds
+                    </p>
+                  </div>
+
+                  {/* Multi-select for Receiving Countries */}
+                  <div className="md:col-span-2">
+                    <label
+                      htmlFor="customer_receiving_funds_countries"
+                      className="block text-sm font-medium text-gray-700 mb-2.5"
+                    >
+                      Customer Receiving Funds Countries
+                    </label>
+                    <Select
+                      id="customer_receiving_funds_countries"
+                      name="customer_receiving_funds_countries"
+                      options={countryOptions}
+                      isMulti={true}
+                      onChange={handleReceivingCountriesChange}
+                      onBlur={formik.handleBlur}
+                      className="basic-multi-select"
+                      classNamePrefix="select"
+                      placeholder="Select countries you will receive funds from..."
+                      styles={{
+                        ...customStyles,
+                        control: (provided, state) => ({
+                          ...provided,
+                          minHeight: "52px",
+                          borderRadius: "12px",
+                          borderColor: formik.touched.customer_receiving_funds_countries && formik.errors.customer_receiving_funds_countries
+                            ? "#f87171"
+                            : "#e5e7eb",
+                          boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none",
+                        }),
+                      }}
+                      value={selectedReceivingCountries}
+                    />
+                    {formik.touched.customer_receiving_funds_countries && formik.errors.customer_receiving_funds_countries ? (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {formik.errors.customer_receiving_funds_countries}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select all countries where recipients will receive funds
+                    </p>
+                  </div>
+
                 </div>
 
                 <div className="flex justify-end mt-10">
@@ -2188,7 +2471,7 @@ function SignUpIndividualContent() {
                     <Select
                       id="country"
                       name="country"
-                      options={countryOptions}
+                      options={canadaOnlyOptions}
                       onChange={handleCountrySelect}
                       onBlur={formik.handleBlur}
                       className="basic-single"
@@ -2198,6 +2481,9 @@ function SignUpIndividualContent() {
                       value={selectedCountry}
                       isLoading={loadingCountries}
                     />
+                    <p className="text-amber-600 text-sm mt-2">
+                      ⚠️ Note: Only Canada is allowed 
+                  </p>
                     {formik.touched.country && formik.errors.country ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
@@ -3358,9 +3644,8 @@ function SignUpIndividualContent() {
                       type="submit"
                       disabled={
                         isSubmitting ||
-                        progress < 100 ||
-                        (termsConditions.length > 0 &&
-                          acceptedTerms.length === 0) ||
+                        progress < 95 ||
+                        (termsConditions.length > 0 && acceptedTerms.length !== termsConditions.length) ||
                         (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
