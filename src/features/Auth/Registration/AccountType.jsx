@@ -20,7 +20,7 @@ const institutionIcon =
 const partnerIcon =
   "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80";
 
-  const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 const AccountType = () => {
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ const AccountType = () => {
 
   const handleSelectAccount = async (type) => {
     setSelectedAccount(type);
-    
+
     try {
       // Call the API for partner account selection
       const response = await fetch(`${API_URL}/partner-login`, {
@@ -52,7 +52,7 @@ const AccountType = () => {
       });
 
       const data = await response.json();
-      
+
       // Get partner_id from response
       let partnerId = null;
       if (data.partner_id) {
@@ -60,14 +60,14 @@ const AccountType = () => {
       } else if (data.data && data.data.partner_id) {
         partnerId = data.data.partner_id;
       }
-      
+
       // ✅ Store partner_id as whitelabelledpartnerid in localStorage
       if (partnerId) {
         localStorage.setItem('whitelabelledpartnerid', partnerId);
         localStorage.setItem('iswhitelabelledpartner', 'Y');
         console.log('✅ Saved whitelabelledpartnerid:', localStorage.getItem('whitelabelledpartnerid'));
       }
-      
+
       // Navigate immediately after API call
       setTimeout(() => {
         if (type === "partner") {
@@ -76,7 +76,7 @@ const AccountType = () => {
           navigate("/selectcountry", { state: { accountType: type } });
         }
       }, 300);
-      
+
     } catch (error) {
       console.error('API call failed:', error);
       // Still navigate even if API fails
@@ -191,12 +191,24 @@ const AccountType = () => {
       {/* Close Button */}
       <button
         onClick={handleCancel}
-        className="absolute top-6 right-6 z-10 p-3 rounded-xl bg-white/80 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 group"
+        className="fixed top-4 right-4 sm:absolute sm:top-6 sm:right-6 
+             z-50 p-3 rounded-xl 
+             bg-white/95 backdrop-blur-sm 
+             shadow-lg hover:shadow-xl 
+             transition-all duration-300 
+             hover:bg-white 
+             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 
+             group
+             min-w-[48px] min-h-[48px]
+             flex items-center justify-center
+             active:scale-95
+             touch-manipulation"
         aria-label="Close"
+        style={{ WebkitTapHighlightColor: 'transparent' }}
       >
         <FontAwesomeIcon
           icon={faTimes}
-          className="text-lg text-gray-600 group-hover:text-gray-800 transition-colors"
+          className="text-xl text-gray-600 group-hover:text-gray-800 transition-colors"
         />
       </button>
 
@@ -239,18 +251,16 @@ const AccountType = () => {
         </div>
 
         <div
-          className={`grid grid-cols-1 ${
-            accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
-          } gap-4 sm:gap-6 md:gap-8`}
+          className={`grid grid-cols-1 ${accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
+            } gap-4 sm:gap-6 md:gap-8`}
         >
           {accountTypes.map((account) => (
             <div
               key={account.id}
               className={`relative bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-300 min-h-[380px] sm:min-h-[420px]
-                ${
-                  selectedAccount === account.id
-                    ? "ring-2 ring-offset-2 scale-105"
-                    : ""
+                ${selectedAccount === account.id
+                  ? "ring-2 ring-offset-2 scale-105"
+                  : ""
                 } 
                 ${getBorderColor(account.color)} 
                 ${tappedAccount === account.id ? "scale-[1.02]" : ""}
@@ -337,12 +347,11 @@ const AccountType = () => {
                 className={`absolute inset-0 bg-gradient-to-b ${getGradientColor(
                   account.color
                 )} to-black/95 p-4 sm:p-5 flex flex-col justify-center transition-all duration-500 ease-in-out 
-                ${
-                  expandedAccount === account.id ||
-                  (!isTouchDevice() && expandedAccount === account.id)
+                ${expandedAccount === account.id ||
+                    (!isTouchDevice() && expandedAccount === account.id)
                     ? "opacity-100"
                     : "opacity-0 pointer-events-none"
-                }`}
+                  }`}
               >
                 <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
                   Key Features

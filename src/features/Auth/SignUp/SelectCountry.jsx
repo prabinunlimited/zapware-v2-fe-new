@@ -37,7 +37,7 @@ function SelectCountry() {
   const [showEmailExistsPopup, setShowEmailExistsPopup] = useState(false);
   const [existingAccountType, setExistingAccountType] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
-  const [emailSuccessMessage, setEmailSuccessMessage] = useState(""); // For success messages
+  const [emailSuccessMessage, setEmailSuccessMessage] = useState("");
   
   // Mobile number states
   const [phoneCode, setPhoneCode] = useState("");
@@ -102,7 +102,15 @@ function SelectCountry() {
     };
   }, []);
 
-  // Check Email API call using fetch
+  // Store registration data in session storage (persists across page refresh)
+  const saveRegistrationData = (data) => {
+    const existingData = JSON.parse(sessionStorage.getItem('registrationData') || '{}');
+    const updatedData = { ...existingData, ...data };
+    sessionStorage.setItem('registrationData', JSON.stringify(updatedData));
+    console.log('✅ Registration data saved:', updatedData);
+  };
+
+  // Check Email API call
   const handleCheckEmail = async () => {
     if (!email) {
       setEmailError("Please enter your email address");
@@ -120,7 +128,6 @@ function SelectCountry() {
     
     try {
       const bearertoken = localStorage.getItem("bearertoken");
-      console.log("selectcountry.jsx bearertoken",bearertoken);
       const response = await fetch(`${API_URL}/customers/account-email`, {
         method: "POST",
         headers: {
@@ -149,13 +156,20 @@ function SelectCountry() {
           setEmailMessage(data.message);
           setEmailSuccessMessage("");
         } else {
-          // Email is NEW - show success message below input
+          // Email is NEW - Store in session storage
           setIsEmailValid(true);
           setEmailChecked(true);
           setEmailError("");
           setShowEmailExistsPopup(false);
           setEmailSuccessMessage(data.message || "Email verified successfully");
           setEmailMessage("");
+          
+          // 🔥 STORE EMAIL DATA
+          saveRegistrationData({
+            email: email,
+            emailVerified: true,
+            accountType: accountType
+          });
         }
       } else {
         // Handle other status
@@ -165,6 +179,13 @@ function SelectCountry() {
         setShowEmailExistsPopup(false);
         setEmailSuccessMessage(data.message || "Email verified");
         setEmailMessage("");
+        
+        // 🔥 STORE EMAIL DATA
+        saveRegistrationData({
+          email: email,
+          emailVerified: true,
+          accountType: accountType
+        });
       }
     } catch (error) {
       console.error("Email check error:", error);
@@ -174,6 +195,13 @@ function SelectCountry() {
         setEmailError("");
         setShowEmailExistsPopup(false);
         setEmailSuccessMessage("Email is available for registration");
+        
+        // 🔥 STORE EMAIL DATA
+        saveRegistrationData({
+          email: email,
+          emailVerified: true,
+          accountType: accountType
+        });
       } else {
         console.log("verify email error",error);
         setEmailError("Failed to verify email. Please try again next time.");
@@ -186,7 +214,7 @@ function SelectCountry() {
     }
   };
 
-  // Check Mobile API call using fetch with correct endpoint and payload
+  // Check Mobile API call
   const handleCheckMobile = async () => {
     if (!phoneCode) {
       setMobileError("Please select a country code");
@@ -244,13 +272,21 @@ function SelectCountry() {
           setMobileMessage(data.message);
           setMobileSuccessMessage("");
         } else {
-          // Mobile is NEW - show success message below input
+          // Mobile is NEW - Store in session storage
           setIsMobileValid(true);
           setMobileChecked(true);
           setMobileError("");
           setShowMobileExistsPopup(false);
           setMobileSuccessMessage(data.message || "Mobile number verified successfully");
           setMobileMessage("");
+          
+          // 🔥 STORE MOBILE DATA
+          saveRegistrationData({
+            mobileNumber: mobileNumber,
+            phoneCode: phoneCode,
+            mobileVerified: true,
+            selectedCountryId: selectedCountryId
+          });
         }
       } else {
         // Handle other status
@@ -260,6 +296,14 @@ function SelectCountry() {
         setShowMobileExistsPopup(false);
         setMobileSuccessMessage(data.message || "Mobile number verified");
         setMobileMessage("");
+        
+        // 🔥 STORE MOBILE DATA
+        saveRegistrationData({
+          mobileNumber: mobileNumber,
+          phoneCode: phoneCode,
+          mobileVerified: true,
+          selectedCountryId: selectedCountryId
+        });
       }
     } catch (error) {
       console.error("Mobile verification error:", error);
@@ -269,6 +313,14 @@ function SelectCountry() {
         setMobileError("");
         setShowMobileExistsPopup(false);
         setMobileSuccessMessage("Mobile number is available for registration");
+        
+        // 🔥 STORE MOBILE DATA
+        saveRegistrationData({
+          mobileNumber: mobileNumber,
+          phoneCode: phoneCode,
+          mobileVerified: true,
+          selectedCountryId: selectedCountryId
+        });
       } else {
         setMobileError("Failed to verify mobile number. Please try again.");
         setIsMobileValid(false);
@@ -317,6 +369,19 @@ function SelectCountry() {
     if (selectedCountry?.id !== country.id) {
       setSelectedCountryState(country);
       dispatch(setSelectedCountry(country));
+      
+      // 🔥 STORE COUNTRY DATA
+      saveRegistrationData({
+        selectedCountry: country,
+        selectedCountryId: country.id,
+        phoneCode: country.phoneCode
+      });
+      
+      // Also update the phone code for mobile verification if not already set
+      if (!phoneCode) {
+        setPhoneCode(country.phoneCode);
+        setSelectedCountryId(country.id);
+      }
     }
     setIsDropdownOpen(false);
     setSearchTerm("");
@@ -326,6 +391,12 @@ function SelectCountry() {
     setSelectedCountryState(null);
     dispatch(setSelectedCountry(null));
     setIsDropdownOpen(true);
+    
+    // Clear stored country data
+    const existingData = JSON.parse(sessionStorage.getItem('registrationData') || '{}');
+    delete existingData.selectedCountry;
+    delete existingData.selectedCountryId;
+    sessionStorage.setItem('registrationData', JSON.stringify(existingData));
   };
 
   const handleContinue = () => {
@@ -339,14 +410,34 @@ function SelectCountry() {
         phoneCode: selectedCountry.phoneCode,
       };
 
+      // Get all stored data
+      const storedData = JSON.parse(sessionStorage.getItem('registrationData') || '{}');
+      
+      const registrationData = {
+        selectedCountry: countryData,
+        accountType: accountType,
+        email: email,
+        emailVerified: isEmailValid,
+        phone_code: phoneCode,
+        mobile_number: mobileNumber,
+        mobileVerified: isMobileValid,
+        ...storedData // Include any other stored data
+      };
+
+      delete registrationData.mobile_number; // Remove if it's in storedData
+      registrationData.mobile_number = mobileNumber; // Add the current one
+      
+      delete registrationData.phone_code;
+      registrationData.phone_code = phoneCode;
+      
+      delete registrationData.mobileVerified;
+      registrationData.mobileVerified = isMobileValid;
+
+      // Final save before navigation
+      saveRegistrationData(registrationData);
+
       navigate("/opencurrencyaccount", {
-        state: {
-          selectedCountry: countryData,
-          accountType: accountType,
-          email: email,
-          phone_code: phoneCode,
-          mobile_number: mobileNumber,
-        },
+        state: registrationData,
       });
     }
   };

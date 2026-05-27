@@ -1733,18 +1733,21 @@ const Login = () => {
             <motion.button
               whileHover={{
                 scale: 1.05,
-                boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.5)",
+                boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.5), 0 0 0 2px rgba(245, 158, 11, 0.2)",
               }}
               whileTap={{ scale: 0.95 }}
               onClick={handleNavigation}
-              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 transition-all bg-white overflow-hidden group"
+              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl 
+               bg-gradient-to-r from-amber-500 to-orange-600 
+               text-white font-semibold shadow-lg
+               transition-all duration-300 overflow-hidden group"
             >
               <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100"
+                className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-700 opacity-0 group-hover:opacity-100"
                 initial={{ x: "-100%" }}
                 whileHover={{
                   x: "100%",
-                  transition: { duration: 0.8, ease: "easeInOut" },
+                  transition: { duration: 0.6, ease: "easeInOut" },
                 }}
               />
 
@@ -1752,7 +1755,7 @@ const Login = () => {
                 {[...Array(3)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-1 h-1 bg-blue-400 rounded-full"
+                    className="absolute w-1 h-1 bg-white rounded-full"
                     initial={{
                       x: "-20px",
                       y: Math.random() * 40,
@@ -1774,9 +1777,9 @@ const Login = () => {
               </div>
 
               <motion.div
-                className="absolute inset-0 rounded-xl border-2 border-transparent"
+                className="absolute inset-0 rounded-xl border-2 border-white/30"
                 whileHover={{
-                  borderColor: "rgba(59, 130, 246, 0.3)",
+                  borderColor: "rgba(255, 255, 255, 0.5)",
                   scale: 1.02,
                   transition: {
                     duration: 0.3,
