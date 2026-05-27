@@ -41,11 +41,11 @@ const ProgressBar = ({ currentStep = 1 }) => {
   };
 
   return (
-    <div className="w-full mb-8 px-2">
+    <div className="w-full mb-8 px-2 sm:px-4">
       {/* Header with progress info */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
         <div className="flex items-center">
-          <h2 className="text-xl font-semibold text-gray-800">Registration Progress</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Registration Progress</h2>
           <button 
             className="ml-2 text-gray-400 hover:text-sky-700 focus:outline-none"
             onMouseEnter={() => setTooltipVisible(true)}
@@ -58,9 +58,9 @@ const ProgressBar = ({ currentStep = 1 }) => {
         </div>
         
         <div className="flex items-center">
-          <span className="text-sm font-medium text-gray-600 bg-gray-100 py-1 px-3 rounded-full">
+          <span className="text-xs sm:text-sm font-medium text-gray-600 bg-gray-100 py-1 px-2 sm:px-3 rounded-full whitespace-nowrap">
             Step {currentStep} of {steps.length}
-            <span className="ml-2 font-bold text-sky-800">{Math.round(progressPercentage)}% Complete</span>
+            <span className="ml-1 sm:ml-2 font-bold text-sky-800">{Math.round(progressPercentage)}% Complete</span>
           </span>
         </div>
       </div>
@@ -74,7 +74,7 @@ const ProgressBar = ({ currentStep = 1 }) => {
       )}
 
       {/* Progress Bar */}
-      <div className="w-full bg-gray-100 rounded-full h-3 mb-6 overflow-hidden shadow-inner">
+      <div className="w-full bg-gray-100 rounded-full h-2 sm:h-3 mb-6 overflow-hidden shadow-inner">
         <div 
           className="bg-gradient-to-r from-sky-600 to-sky-800 h-3 rounded-full transition-all duration-700 ease-out"
           style={{ width: `${progressPercentage}%` }}
@@ -88,18 +88,18 @@ const ProgressBar = ({ currentStep = 1 }) => {
       {/* Step Indicators */}
       <div className="relative">
         {/* Connector line */}
-        <div className="absolute top-4 left-4 right-4 h-1 bg-gray-200 -z-10"></div>
+        <div className="absolute top-4 left-4 right-4 h-1 bg-gray-200 -z-10 hidden sm:block"></div>
         
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-5 gap-1 sm:gap-2">
           {steps.map((step) => {
             const isCompleted = step.id < currentStep;
             const isCurrent = step.id === currentStep;
             const isUpcoming = step.id > currentStep;
             
             return (
-              <div key={step.id} className="flex flex-col items-center">
+              <div key={step.id} className="flex flex-col items-center min-w-0">
                 <div 
-                  className={`w-8 h-8 rounded-full flex items-center justify-center relative transition-all duration-300 ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center relative transition-all duration-300 ${
                     isCompleted 
                       ? "bg-gradient-to-br from-sky-700 to-sky-900 text-white shadow cursor-pointer hover:scale-110" 
                       : isCurrent 
@@ -111,11 +111,11 @@ const ProgressBar = ({ currentStep = 1 }) => {
                   title={isCompleted ? `Go to ${step.name}` : isCurrent ? "Current step" : "Step locked"}
                 >
                   {isCompleted ? (
-                    <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                    <FontAwesomeIcon icon={faCheckCircle} className="text-[10px] sm:text-xs" />
                   ) : isUpcoming ? (
-                    <FontAwesomeIcon icon={faLock} className="text-xs" />
+                    <FontAwesomeIcon icon={faLock} className="text-[10px] sm:text-xs" />
                   ) : (
-                    <FontAwesomeIcon icon={faLockOpen} className="text-xs" />
+                    <FontAwesomeIcon icon={faLockOpen} className="text-[10px] sm:text-xs" />
                   )}
                   
                   {/* Current step indicator pulse */}
@@ -125,7 +125,7 @@ const ProgressBar = ({ currentStep = 1 }) => {
                 </div>
                 
                 <span 
-                  className={`text-xs mt-2 text-center font-medium leading-tight cursor-pointer hover:underline underline-offset-1 ${
+                  className={`text-[9px] sm:text-xs mt-2 text-center font-medium leading-tight cursor-pointer hover:underline underline-offset-1 break-words ${
                     isCompleted 
                       ? "text-sky-800 font-semibold cursor-pointer hover:underline" 
                       : isCurrent 
@@ -140,7 +140,7 @@ const ProgressBar = ({ currentStep = 1 }) => {
                 
                 {/* Step connector arrows - hidden on mobile */}
                 {step.id < steps.length && (
-                  <div className="hidden sm:block absolute top-4 right-0 translate-x-1/2 text-gray-300">
+                  <div className="hidden lg:block absolute top-4 right-0 translate-x-1/2 text-gray-300">
                     <FontAwesomeIcon icon={faChevronRight} size="xs" />
                   </div>
                 )}

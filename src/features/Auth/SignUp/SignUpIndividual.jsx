@@ -1752,10 +1752,11 @@ function SignUpIndividualContent() {
           <div className="p-6 md:p-8">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
-              <div className="flex items-center space-x-4">
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl shadow-sm">
+              <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
+                {/* Icon container - responsive sizing */}
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 sm:p-3 rounded-xl shadow-sm flex-shrink-0">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="w-5 h-5 sm:w-6 sm:h-6 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1769,11 +1770,13 @@ function SignUpIndividualContent() {
                     />
                   </svg>
                 </div>
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+
+                {/* Text content - responsive adjustments */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight break-words">
                     Create Your Individual Account
                   </h2>
-                  <p className="text-gray-500 mt-1.5">
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
                     Complete your profile to get started with our platform
                   </p>
                 </div>
@@ -2558,11 +2561,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(1)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2582,7 +2585,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(1)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Identity Verification
                     <svg
@@ -2907,11 +2910,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(2)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2932,7 +2935,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(2)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Security
                     <svg
@@ -3144,11 +3147,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(3)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -3169,7 +3172,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(3)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Terms & Conditions
                     <svg
