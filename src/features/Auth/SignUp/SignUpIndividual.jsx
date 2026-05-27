@@ -1881,7 +1881,7 @@ function SignUpIndividualContent() {
                     <div>
                       <h4 className="text-green-800 font-medium">Email & Mobile Verified</h4>
                       <p className="text-green-700 text-sm">
-                        Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been verified.
+                        Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been populated form previous step.
                       </p>
                     </div>
                   </div>
