@@ -18,7 +18,7 @@ function SelectCountry() {
 
   // Get account type from navigation state (passed from AccountType)
   const accountType = location.state?.accountType || "individual";
-  
+
   // Get email from navigation state (passed from previous step)
   const userEmail = location.state?.email || "";
 
@@ -27,7 +27,7 @@ function SelectCountry() {
   const [selectedCountry, setSelectedCountryState] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
-  
+
   // Email states
   const [email, setEmail] = useState(userEmail);
   const [isEmailValid, setIsEmailValid] = useState(false);
@@ -38,7 +38,7 @@ function SelectCountry() {
   const [existingAccountType, setExistingAccountType] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
   const [emailSuccessMessage, setEmailSuccessMessage] = useState("");
-  
+
   // Mobile number states
   const [phoneCode, setPhoneCode] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -50,7 +50,7 @@ function SelectCountry() {
   const [showMobileExistsPopup, setShowMobileExistsPopup] = useState(false);
   const [mobileMessage, setMobileMessage] = useState("");
   const [mobileSuccessMessage, setMobileSuccessMessage] = useState("");
-  
+
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -125,7 +125,7 @@ function SelectCountry() {
     setIsCheckingEmail(true);
     setEmailError("");
     setEmailSuccessMessage("");
-    
+
     try {
       const bearertoken = localStorage.getItem("bearertoken");
       const response = await fetch(`${API_URL}/customers/account-email`, {
@@ -134,7 +134,7 @@ function SelectCountry() {
           "Content-Type": "application/json",
           ...(bearertoken && { Authorization: `Bearer ${bearertoken}` }),
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email: email,
           customer_type: accountType
         }),
@@ -145,7 +145,7 @@ function SelectCountry() {
 
       if (data.status === "success") {
         const hasAccount = data.data?.has_account === "Y";
-        
+
         if (hasAccount) {
           // Email EXISTS
           const customerType = data.message?.match(/customer type (\w+)/)?.[1] || "unknown";
@@ -163,7 +163,7 @@ function SelectCountry() {
           setShowEmailExistsPopup(false);
           setEmailSuccessMessage(data.message || "Email verified successfully");
           setEmailMessage("");
-          
+
           // 🔥 STORE EMAIL DATA
           saveRegistrationData({
             email: email,
@@ -179,7 +179,7 @@ function SelectCountry() {
         setShowEmailExistsPopup(false);
         setEmailSuccessMessage(data.message || "Email verified");
         setEmailMessage("");
-        
+
         // 🔥 STORE EMAIL DATA
         saveRegistrationData({
           email: email,
@@ -195,7 +195,7 @@ function SelectCountry() {
         setEmailError("");
         setShowEmailExistsPopup(false);
         setEmailSuccessMessage("Email is available for registration");
-        
+
         // 🔥 STORE EMAIL DATA
         saveRegistrationData({
           email: email,
@@ -203,7 +203,7 @@ function SelectCountry() {
           accountType: accountType
         });
       } else {
-        console.log("verify email error",error);
+        console.log("verify email error", error);
         setEmailError("Failed to verify email. Please try again next time.");
         setIsEmailValid(false);
         setEmailChecked(false);
@@ -239,17 +239,17 @@ function SelectCountry() {
     setIsCheckingMobile(true);
     setMobileError("");
     setMobileSuccessMessage("");
-    
+
     try {
       const bearertoken = localStorage.getItem("bearertoken");
-      
+
       const response = await fetch(`${API_URL}/customers/account-mobile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(bearertoken && { Authorization: `Bearer ${bearertoken}` }),
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           mobile_number_country_code: phoneCode,
           mobile_number: mobileNumber,
           customer_type: accountType
@@ -261,7 +261,7 @@ function SelectCountry() {
 
       if (data.status === "success") {
         const hasAccount = data.data?.has_account === "Y";
-        
+
         if (hasAccount) {
           // Mobile EXISTS
           const customerType = data.message?.match(/customer type (\w+)/)?.[1] || "unknown";
@@ -279,7 +279,7 @@ function SelectCountry() {
           setShowMobileExistsPopup(false);
           setMobileSuccessMessage(data.message || "Mobile number verified successfully");
           setMobileMessage("");
-          
+
           // 🔥 STORE MOBILE DATA
           saveRegistrationData({
             mobileNumber: mobileNumber,
@@ -296,7 +296,7 @@ function SelectCountry() {
         setShowMobileExistsPopup(false);
         setMobileSuccessMessage(data.message || "Mobile number verified");
         setMobileMessage("");
-        
+
         // 🔥 STORE MOBILE DATA
         saveRegistrationData({
           mobileNumber: mobileNumber,
@@ -313,7 +313,7 @@ function SelectCountry() {
         setMobileError("");
         setShowMobileExistsPopup(false);
         setMobileSuccessMessage("Mobile number is available for registration");
-        
+
         // 🔥 STORE MOBILE DATA
         saveRegistrationData({
           mobileNumber: mobileNumber,
@@ -365,18 +365,18 @@ function SelectCountry() {
       flag_url: countryOption.flagUrl,
       phoneCode: countryOption.phoneCode,
     };
-    
+
     if (selectedCountry?.id !== country.id) {
       setSelectedCountryState(country);
       dispatch(setSelectedCountry(country));
-      
+
       // 🔥 STORE COUNTRY DATA
       saveRegistrationData({
         selectedCountry: country,
         selectedCountryId: country.id,
         phoneCode: country.phoneCode
       });
-      
+
       // Also update the phone code for mobile verification if not already set
       if (!phoneCode) {
         setPhoneCode(country.phoneCode);
@@ -391,7 +391,7 @@ function SelectCountry() {
     setSelectedCountryState(null);
     dispatch(setSelectedCountry(null));
     setIsDropdownOpen(true);
-    
+
     // Clear stored country data
     const existingData = JSON.parse(sessionStorage.getItem('registrationData') || '{}');
     delete existingData.selectedCountry;
@@ -412,7 +412,7 @@ function SelectCountry() {
 
       // Get all stored data
       const storedData = JSON.parse(sessionStorage.getItem('registrationData') || '{}');
-      
+
       const registrationData = {
         selectedCountry: countryData,
         accountType: accountType,
@@ -426,10 +426,10 @@ function SelectCountry() {
 
       delete registrationData.mobile_number; // Remove if it's in storedData
       registrationData.mobile_number = mobileNumber; // Add the current one
-      
+
       delete registrationData.phone_code;
       registrationData.phone_code = phoneCode;
-      
+
       delete registrationData.mobileVerified;
       registrationData.mobileVerified = isMobileValid;
 
@@ -478,20 +478,6 @@ function SelectCountry() {
           <div className="text-xs sm:text-sm text-gray-400">Step 2 of 4</div>
         </div>
 
-        {/* Content Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
-            Select your country
-          </h1>
-          <p className="text-sm sm:text-base text-gray-500">
-            {accountType === "individual"
-              ? "Choose where you reside"
-              : accountType === "institution"
-                ? "Choose where your institution is registered"
-                : "Choose your country"}
-          </p>
-        </div>
-
         {/* Email Check Section */}
         <div className="mb-6 md:mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex items-center mb-3">
@@ -500,7 +486,7 @@ function SelectCountry() {
             </svg>
             <h3 className="text-base sm:text-lg font-medium text-gray-900">Verify your email</h3>
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -548,7 +534,7 @@ function SelectCountry() {
             </svg>
             <h3 className="text-base sm:text-lg font-medium text-gray-900">Verify your mobile number</h3>
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
             <div className="flex flex-col gap-3">
@@ -590,7 +576,7 @@ function SelectCountry() {
                     )}
                   />
                 </div>
-                
+
                 {/* Mobile Number Input */}
                 <div className="w-full sm:w-1/2">
                   <input
@@ -646,7 +632,7 @@ function SelectCountry() {
               <p className="text-sm sm:text-base text-gray-600 text-center mb-4">
                 {emailMessage || `The email address ${email} is already registered.`}
               </p>
-              
+
               {existingAccountType && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
                   <p className="text-sm text-center text-blue-800">
@@ -654,7 +640,7 @@ function SelectCountry() {
                   </p>
                 </div>
               )}
-              
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => {
@@ -701,7 +687,7 @@ function SelectCountry() {
               <p className="text-sm sm:text-base text-gray-600 text-center mb-4">
                 {mobileMessage || `The mobile number ${phoneCode} ${mobileNumber} is already registered.`}
               </p>
-              
+
               {existingAccountType && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
                   <p className="text-sm text-center text-blue-800">
@@ -709,7 +695,7 @@ function SelectCountry() {
                   </p>
                 </div>
               )}
-              
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => {
@@ -746,6 +732,19 @@ function SelectCountry() {
         {/* Country Selection Section - Only shown when both verifications are complete */}
         {isVerificationComplete && (
           <>
+            {/* Content Header */}
+            <div className="mb-6 md:mb-8">
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
+                Select your country
+              </h1>
+              <p className="text-sm sm:text-base text-gray-500">
+                {accountType === "individual"
+                  ? "Choose where you reside"
+                  : accountType === "institution"
+                    ? "Choose where your institution is registered"
+                    : "Choose your country"}
+              </p>
+            </div>
             {/* Country Search Input */}
             <div className="mb-4">
               <input
