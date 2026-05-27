@@ -79,27 +79,24 @@ const StepIndicator = ({ activeStep }) => {
           <React.Fragment key={step.number}>
             <div className="flex flex-col items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold font-sans ${
-                  activeStep >= step.number
-                    ? "bg-blue-600 border-blue-600 text-white"
-                    : "border-gray-300 text-gray-500 bg-white"
-                }`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold font-sans ${activeStep >= step.number
+                  ? "bg-blue-600 border-blue-600 text-white"
+                  : "border-gray-300 text-gray-500 bg-white"
+                  }`}
               >
                 {step.number}
               </div>
               <span
-                className={`mt-2 text-sm font-medium font-sans ${
-                  activeStep >= step.number ? "text-blue-600" : "text-gray-500"
-                }`}
+                className={`mt-2 text-sm font-medium font-sans ${activeStep >= step.number ? "text-blue-600" : "text-gray-500"
+                  }`}
               >
                 {step.label}
               </span>
             </div>
             {index < steps.length - 1 && (
               <div
-                className={`w-24 h-1 mx-4 ${
-                  activeStep > step.number ? "bg-blue-600" : "bg-gray-300"
-                }`}
+                className={`w-24 h-1 mx-4 ${activeStep > step.number ? "bg-blue-600" : "bg-gray-300"
+                  }`}
               />
             )}
           </React.Fragment>
@@ -351,6 +348,10 @@ const PayoutPage = () => {
   };
 
   const handleConvert = async () => {
+    if (!formValues.benef_bank_account) {
+      toast.error("Please select a beneficiary bank account");
+      return;
+    }
     // Use safeArray to ensure we're working with an array
     const safeCustomerAccounts = safeArray(customerBankAccounts);
     const selectedAccount = safeCustomerAccounts.find(
@@ -373,8 +374,20 @@ const PayoutPage = () => {
         : {}),
     };
 
-    dispatch(convertCurrency(payload));
-    setActiveStep(3);
+    try {
+      const result = await dispatch(convertCurrency(payload)).unwrap();
+
+      // Check if result has an error
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Success - proceed to step 3
+      setActiveStep(3);
+    } catch (error) {
+      // Error is already handled in the thunk, but we can add additional handling here
+      console.error("Conversion failed:", error);
+    }
   };
 
   const handleSendPasscode = async () => {
@@ -466,11 +479,42 @@ const PayoutPage = () => {
       }
     } catch (err) {
       console.error("Payout passcode verification error:", err);
-      dispatch(
-        setModalMessage(
-          err.response?.data?.message || err.message || "Verification failed"
-        )
-      );
+
+      // Parse error to extract validation errors
+      let errorMessage = "Verification failed";
+
+      if (err.response?.data) {
+        const errorData = err.response.data;
+
+        // Check for Laravel-style validation errors (errors object)
+        if (errorData.errors) {
+          const validationErrors = [];
+          Object.keys(errorData.errors).forEach(field => {
+            const messages = errorData.errors[field];
+            if (Array.isArray(messages)) {
+              messages.forEach(msg => {
+                validationErrors.push(`${field}: ${msg}`);
+              });
+            } else {
+              validationErrors.push(`${field}: ${messages}`);
+            }
+          });
+          errorMessage = validationErrors.join("\n");
+        }
+        // Check for message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Check for error field
+        else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      // Show error in modal (not toast)
+      dispatch(setModalMessage(errorMessage));
       dispatch(setShowErrorModal(true));
     }
   };
@@ -558,7 +602,7 @@ const PayoutPage = () => {
   // Helper functions
   const getAvailableTransactionTypes = (currency, providerId) => {
     if (currency === "KES") {
-      if (providerId === 33) return ["mobile","bank"];
+      if (providerId === 33) return ["mobile", "bank"];
       if (providerId === 41) return ["bank"];
     }
 
@@ -654,7 +698,7 @@ const PayoutPage = () => {
   };
 
   const showTransferPurposeField = () => {
-    console.log("toServiceProviderInr remitpayout",toServiceProviderInr);
+    console.log("toServiceProviderInr remitpayout", toServiceProviderInr);
     if (
       (["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
         toServiceProviderInr === 27) ||
@@ -694,15 +738,15 @@ const PayoutPage = () => {
                 {loading
                   ? "Processing Transaction..."
                   : initialLoading
-                  ? "Loading Data..."
-                  : "Loading Beneficiaries..."}
+                    ? "Loading Data..."
+                    : "Loading Beneficiaries..."}
               </h3>
               <p className="text-sm text-gray-600 font-sans">
                 {loading
                   ? "Your transaction is being processed"
                   : initialLoading
-                  ? "Please wait while we load your data"
-                  : "Loading beneficiary information..."}
+                    ? "Please wait while we load your data"
+                    : "Loading beneficiary information..."}
               </p>
             </div>
           </div>
@@ -874,295 +918,295 @@ const PayoutPage = () => {
               showIncomeSourceField() ||
               showTransferPurposeField() ||
               formValues.to === "NPR") && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                {/* SWIFT Specific Fields */}
-                {formValues.transaction_type === "swift" && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-sans">
-                        Select Destination Country
-                      </label>
-                      <Select
-                        options={destinationcountryOptions}
-                        onChange={(selectedOption) =>
-                          handleChange({
-                            target: {
-                              name: "country_id",
-                              value: selectedOption?.value,
-                            },
-                          })
-                        }
-                        value={destinationcountryOptions.find(
-                          (option) => option.value === formValues.country_id
-                        )}
-                        classNamePrefix="react-select"
-                        placeholder="Select Destination Country"
-                        styles={customStyles}
-                      />
-                    </div>
-
-                    {safeCurrencies.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                  {/* SWIFT Specific Fields */}
+                  {formValues.transaction_type === "swift" && (
+                    <>
                       <div>
-                        <label
-                          htmlFor="to"
-                          className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                        >
-                          Select Destination Currency
+                        <label className="block text-sm font-medium text-gray-700 mb-2 font-sans">
+                          Select Destination Country
                         </label>
-                        <select
-                          name="to"
-                          value={formValues.to}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                        >
-                          <option value="" disabled>
-                            Select Currency
-                          </option>
-                          {safeCurrencies.map((currency) => (
-                            <option
-                              key={currency.currency_id}
-                              value={currency.currency?.currency_code}
-                            >
-                              {currency.currency?.currency_code}
-                            </option>
-                          ))}
-                        </select>
+                        <Select
+                          options={destinationcountryOptions}
+                          onChange={(selectedOption) =>
+                            handleChange({
+                              target: {
+                                name: "country_id",
+                                value: selectedOption?.value,
+                              },
+                            })
+                          }
+                          value={destinationcountryOptions.find(
+                            (option) => option.value === formValues.country_id
+                          )}
+                          classNamePrefix="react-select"
+                          placeholder="Select Destination Country"
+                          styles={customStyles}
+                        />
                       </div>
-                    )}
-                  </>
-                )}
 
-                {/* AED Purpose Code */}
-                {formValues.to === "AED" && (
-                  <div>
-                    <label
-                      htmlFor="purpose"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Purpose Code
-                    </label>
-                    <select
-                      name="purpose"
-                      value={formValues.purpose}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    >
-                      <option value="">Select a Purpose</option>
-                      {aedPurpose.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Promocode */}
-                {["AED", "KES"].includes(formValues.to) && (
-                  <div>
-                    <label
-                      htmlFor="promo_code"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Promocode (optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="promo_code"
-                      value={formValues.promo_code}
-                      onChange={handleChange}
-                      placeholder="Enter Promocode"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    />
-                  </div>
-                )}
-
-                {/* INR Specific Fields */}
-                {formValues.to === "INR" && toServiceProvider === 25 && (
-                  <div>
-                    <label
-                      htmlFor="pay_mode"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      PayMode
-                    </label>
-                    <select
-                      name="pay_mode"
-                      value={formValues.pay_mode}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    >
-                      <option value="" disabled>
-                        Select PayMode
-                      </option>
-                      <option value="IM">IMPS</option>
-                    </select>
-                  </div>
-                )}
-
-                {formValues.to === "INR" && (
-                  <div>
-                    <label
-                      htmlFor="remarks"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Remarks
-                    </label>
-                    <input
-                      type="text"
-                      name="remarks"
-                      value={formValues.remarks}
-                      onChange={handleChange}
-                      placeholder="Enter Remarks"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    />
-                  </div>
-                )}
-
-                {/* Income Source */}
-                {showIncomeSourceField() && (
-                  <div>
-                    <label
-                      htmlFor="income_source"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Income Source
-                    </label>
-                    <select
-                      name="income_source"
-                      value={formValues.income_source}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    >
-                      <option value="" disabled>
-                        Select Income Source
-                      </option>
-                      {toServiceProviderInr === 41 ? (
-                        <>
-                          <option value="1">PERSONAL SAVINGS</option>
-                          <option value="2">SALARY</option>
-                          <option value="3">END OF SERVICE FUNDS</option>
-                          <option value="4">
-                            LOAN FROM FINANCIAL INSTITUTION
-                          </option>
-                          <option value="5">BUSINESS</option>
-                          <option value="6">OTHERS</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="SAL">SALARIED</option>
-                          <option value="PIE">PERSONAL INCOME</option>
-                          <option value="BUS">BUSINESS</option>
-                          <option value="LON">LOAN</option>
-                        </>
+                      {safeCurrencies.length > 0 && (
+                        <div>
+                          <label
+                            htmlFor="to"
+                            className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                          >
+                            Select Destination Currency
+                          </label>
+                          <select
+                            name="to"
+                            value={formValues.to}
+                            onChange={handleChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                          >
+                            <option value="" disabled>
+                              Select Currency
+                            </option>
+                            {safeCurrencies.map((currency) => (
+                              <option
+                                key={currency.currency_id}
+                                value={currency.currency?.currency_code}
+                              >
+                                {currency.currency?.currency_code}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       )}
-                    </select>
-                  </div>
-                )}
+                    </>
+                  )}
 
-                {/* Transfer Purpose */}
-                {showTransferPurposeField() && (
-                  <div>
-                    <label
-                      htmlFor="transfer_purpose"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Transfer Purpose
-                    </label>
-                    <select
-                      name="transfer_purpose"
-                      value={formValues.transfer_purpose}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    >
-                      <option value="" disabled>
-                        Select Transfer Purpose
-                      </option>
-                      {toServiceProviderInr === 49 ? (
-                        <>
-                          <option value="1">FAMILY MAINTENANCE</option>
-                          <option value="2">EDUCATION</option>
-                          <option value="3">MEDICAL</option>
-                          <option value="4">INVESTMENT</option>
-                          <option value="5">TOURISM</option>
-                        </>
-                      ) : toServiceProviderInr === 41 ? (
-                        <>
-                          <option value="1">FAMILY MAINTENANCE</option>
-                          <option value="2">MEDICAL</option>
-                          <option value="3">TRAVEL AND TOURISM</option>
-                          <option value="4">EDUCATION</option>
-                          <option value="5">ACCOUNT OPENING</option>
-                          <option value="6">SAVINGS</option>
-                          <option value="7">INSURANCE</option>
-                          <option value="8">
-                            INVESTMENT IN MUTUAL FUNDS/SHARES
-                          </option>
-                          <option value="9">LOAN PAYMENT</option>
-                          <option value="10">SALARY</option>
-                          <option value="11">TAX PAYMENT</option>
-                        </>
-                      ) : toServiceProviderInr === 27 ||
-                        toServiceProviderInr === 24 ? (
-                        <>
-                          <option value="FAM">Family Maintenance</option>
-                          <option value="SAV">SAVINGS</option>
-                          <option value="TRE">TRADE REMITTANCE</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="FAM">FAMILY</option>
-                          <option value="SAV">SAVINGS</option>
-                          <option value="RE">REMITTANCE</option>
-                          <option value="GIFT">GIFT</option>
-                          <option value="TRE">TRADE REMITTANCE</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                )}
-
-                {/* Occupation */}
-                {formValues.to === "NPR" && (
-                  <div>
-                    <label
-                      htmlFor="occupation"
-                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
-                    >
-                      Occupation
-                    </label>
-                    <input
-                      type="text"
-                      name="occupation"
-                      value={formValues.occupation}
-                      onChange={handleChange}
-                      placeholder="Enter Occupation"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                    />
-                  </div>
-                )}
-
-                {/* USD Invoice Upload */}
-                {formValues.to === "USD" &&
-                  formValues.from !== "GBP" &&
-                  formValues.transaction_type !== "swift" && (
+                  {/* AED Purpose Code */}
+                  {formValues.to === "AED" && (
                     <div>
                       <label
-                        htmlFor="invoice_file"
+                        htmlFor="purpose"
                         className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                       >
-                        Invoice Upload (optional)
+                        Purpose Code
+                      </label>
+                      <select
+                        name="purpose"
+                        value={formValues.purpose}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      >
+                        <option value="">Select a Purpose</option>
+                        {aedPurpose.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Promocode */}
+                  {["AED", "KES"].includes(formValues.to) && (
+                    <div>
+                      <label
+                        htmlFor="promo_code"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Promocode (optional)
                       </label>
                       <input
-                        type="file"
-                        name="invoice_file"
-                        onChange={handleFileChange}
+                        type="text"
+                        name="promo_code"
+                        value={formValues.promo_code}
+                        onChange={handleChange}
+                        placeholder="Enter Promocode"
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
                       />
                     </div>
                   )}
-              </div>
-            )}
+
+                  {/* INR Specific Fields */}
+                  {formValues.to === "INR" && toServiceProvider === 25 && (
+                    <div>
+                      <label
+                        htmlFor="pay_mode"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        PayMode
+                      </label>
+                      <select
+                        name="pay_mode"
+                        value={formValues.pay_mode}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      >
+                        <option value="" disabled>
+                          Select PayMode
+                        </option>
+                        <option value="IM">IMPS</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {formValues.to === "INR" && (
+                    <div>
+                      <label
+                        htmlFor="remarks"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Remarks
+                      </label>
+                      <input
+                        type="text"
+                        name="remarks"
+                        value={formValues.remarks}
+                        onChange={handleChange}
+                        placeholder="Enter Remarks"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      />
+                    </div>
+                  )}
+
+                  {/* Income Source */}
+                  {showIncomeSourceField() && (
+                    <div>
+                      <label
+                        htmlFor="income_source"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Income Source
+                      </label>
+                      <select
+                        name="income_source"
+                        value={formValues.income_source}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      >
+                        <option value="" disabled>
+                          Select Income Source
+                        </option>
+                        {toServiceProviderInr === 41 ? (
+                          <>
+                            <option value="1">PERSONAL SAVINGS</option>
+                            <option value="2">SALARY</option>
+                            <option value="3">END OF SERVICE FUNDS</option>
+                            <option value="4">
+                              LOAN FROM FINANCIAL INSTITUTION
+                            </option>
+                            <option value="5">BUSINESS</option>
+                            <option value="6">OTHERS</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="SAL">SALARIED</option>
+                            <option value="PIE">PERSONAL INCOME</option>
+                            <option value="BUS">BUSINESS</option>
+                            <option value="LON">LOAN</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Transfer Purpose */}
+                  {showTransferPurposeField() && (
+                    <div>
+                      <label
+                        htmlFor="transfer_purpose"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Transfer Purpose
+                      </label>
+                      <select
+                        name="transfer_purpose"
+                        value={formValues.transfer_purpose}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      >
+                        <option value="" disabled>
+                          Select Transfer Purpose
+                        </option>
+                        {toServiceProviderInr === 49 ? (
+                          <>
+                            <option value="1">FAMILY MAINTENANCE</option>
+                            <option value="2">EDUCATION</option>
+                            <option value="3">MEDICAL</option>
+                            <option value="4">INVESTMENT</option>
+                            <option value="5">TOURISM</option>
+                          </>
+                        ) : toServiceProviderInr === 41 ? (
+                          <>
+                            <option value="1">FAMILY MAINTENANCE</option>
+                            <option value="2">MEDICAL</option>
+                            <option value="3">TRAVEL AND TOURISM</option>
+                            <option value="4">EDUCATION</option>
+                            <option value="5">ACCOUNT OPENING</option>
+                            <option value="6">SAVINGS</option>
+                            <option value="7">INSURANCE</option>
+                            <option value="8">
+                              INVESTMENT IN MUTUAL FUNDS/SHARES
+                            </option>
+                            <option value="9">LOAN PAYMENT</option>
+                            <option value="10">SALARY</option>
+                            <option value="11">TAX PAYMENT</option>
+                          </>
+                        ) : toServiceProviderInr === 27 ||
+                          toServiceProviderInr === 24 ? (
+                          <>
+                            <option value="FAM">Family Maintenance</option>
+                            <option value="SAV">SAVINGS</option>
+                            <option value="TRE">TRADE REMITTANCE</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="FAM">FAMILY</option>
+                            <option value="SAV">SAVINGS</option>
+                            <option value="RE">REMITTANCE</option>
+                            <option value="GIFT">GIFT</option>
+                            <option value="TRE">TRADE REMITTANCE</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Occupation */}
+                  {formValues.to === "NPR" && (
+                    <div>
+                      <label
+                        htmlFor="occupation"
+                        className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                      >
+                        Occupation
+                      </label>
+                      <input
+                        type="text"
+                        name="occupation"
+                        value={formValues.occupation}
+                        onChange={handleChange}
+                        placeholder="Enter Occupation"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      />
+                    </div>
+                  )}
+
+                  {/* USD Invoice Upload */}
+                  {formValues.to === "USD" &&
+                    formValues.from !== "GBP" &&
+                    formValues.transaction_type !== "swift" && (
+                      <div>
+                        <label
+                          htmlFor="invoice_file"
+                          className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                        >
+                          Invoice Upload (optional)
+                        </label>
+                        <input
+                          type="file"
+                          name="invoice_file"
+                          onChange={handleFileChange}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                        />
+                      </div>
+                    )}
+                </div>
+              )}
 
             {/* Beneficiary Selection */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -1207,13 +1251,14 @@ const PayoutPage = () => {
                     htmlFor="benef_bank_account"
                     className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                   >
-                    Select Beneficiary Bank Account
+                    Select Beneficiary Bank Account <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="benef_bank_account"
                     value={formValues.benef_bank_account}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                    required
                   >
                     <option value="">Select a bank account</option>
                     {safeBeneficiaryBanks.map((bank) => (
@@ -1221,16 +1266,14 @@ const PayoutPage = () => {
                         {bank.payment_method === "swift"
                           ? formValues.to === "USD" || formValues.to === "CAD"
                             ? `[Swift] ${bank.bank_acc_no || "N/A"}` // Display bank_acc_no for USD and CAD
-                            : `[Swift] ${bank.benef_iban || "N/A"} - ${
-                                bank.swift || "N/A"
-                              }` // For other currencies, display IBAN and Swift code
+                            : `[Swift] ${bank.benef_iban || "N/A"} - ${bank.swift || "N/A"
+                            }` // For other currencies, display IBAN and Swift code
                           : bank.rails === "Card"
-                          ? `[Card] (${bank.rails}) ${bank.bank_name} - ${
-                              bank.card_number || "N/A"
+                            ? `[Card] (${bank.rails}) ${bank.bank_name} - ${bank.card_number || "N/A"
                             }`
-                          : bank.bank_acc_no
-                          ? `[Local] ${bank.bank_acc_no}`
-                          : `${bank.benef_iban || "N/A"}`}
+                            : bank.bank_acc_no
+                              ? `[Local] ${bank.bank_acc_no}`
+                              : `${bank.benef_iban || "N/A"}`}
                       </option>
                     ))}
                   </select>
@@ -1300,6 +1343,7 @@ const PayoutPage = () => {
                   !formValues.to ||
                   !formValues.transaction_type ||
                   !formValues.benef_account
+                  // !formValues.benef_bank_account
                 }
                 whileHover={{ scale: loading ? 1 : 1.02 }}
                 whileTap={{ scale: loading ? 1 : 0.98 }}
@@ -1508,9 +1552,16 @@ const PayoutPage = () => {
                   <FaTimes className="w-8 h-8 text-red-600" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2 font-sans">
-                  Error
+                  Failed
                 </h3>
-                <p className="text-gray-600 mb-6 font-sans">{modalMessage}</p>
+                <div className="text-gray-600 mb-6 font-sans text-left max-h-60 overflow-y-auto whitespace-pre-wrap">
+                  {modalMessage.split('\n').map((line, index) => (
+                    <React.Fragment key={index}>
+                      {line}
+                      {index < modalMessage.split('\n').length - 1 && <br />}
+                    </React.Fragment>
+                  ))}
+                </div>
                 <button
                   onClick={() => dispatch(setShowErrorModal(false))}
                   className="w-full py-3 px-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium font-sans"
