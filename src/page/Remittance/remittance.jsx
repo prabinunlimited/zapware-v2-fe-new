@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useCallback,
   useRef,
 } from "react";
@@ -183,6 +184,7 @@ const Remittance = () => {
   const isFirstLoad = useRef(true)
   const hasFetchedSilaAccounts = useRef(false);
   const isInitialMount = useRef(true);
+  const pageTopRef = useRef(null);
 
   // Professional payment method options
   const paymentOptions = useMemo(
@@ -903,11 +905,18 @@ const Remittance = () => {
     console.log("🔄 Remittance - Full formData:", formData);
   }, [formData.paymentMethod, formData]);
 
-  useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+  useLayoutEffect(() => {
+    const timer = setTimeout(() => {
+      pageTopRef.current?.scrollIntoView({
+        behavior: "instant",
+        block: "start",
+      });
+
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [step]);
 
   useEffect(() => {
@@ -1528,6 +1537,13 @@ const Remittance = () => {
       }
 
       dispatch(setStep(2));
+
+      setTimeout(() => {
+        pageTopRef.current?.scrollIntoView({
+          behavior: "instant",
+          block: "start",
+        });
+      }, 0);
     } else if (step === 2) {
       // Basic validations
       if (!selectedBeneficiary) {
@@ -1582,6 +1598,13 @@ const Remittance = () => {
 
       console.log("✅ All validations passed, moving to step 3");
       dispatch(setStep(3));
+
+      setTimeout(() => {
+        pageTopRef.current?.scrollIntoView({
+          behavior: "instant",
+          block: "start",
+        });
+      }, 0);
     } else if (step === 3) {
       if (!formData.agreeToTerms) {
         console.log("Validation failed: Terms not agreed");
@@ -2013,7 +2036,7 @@ const Remittance = () => {
             onFieldChange={handleFieldChange}
             copyToClipboard={copyToClipboard}
             copiedField={copiedField}
-            onSaveRemittanceState={saveRemittanceState} 
+            onSaveRemittanceState={saveRemittanceState}
           />
         );
       case "bank":
@@ -2487,205 +2510,208 @@ const Remittance = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
-        <ProgressSteps />
+    <>
+      <div ref={pageTopRef}></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+        <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
+          <ProgressSteps />
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            variants={stepVariants}
-            transition={{ duration: 0.3 }}
-            className="mb-8"
-          >
-            {renderStep()}
-          </motion.div>
-        </AnimatePresence>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={stepVariants}
+              transition={{ duration: 0.3 }}
+              className="mb-8"
+            >
+              {renderStep()}
+            </motion.div>
+          </AnimatePresence>
 
-        {step < 4 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-4"
-          >
-            {step > 1 ? (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handlePreviousStep}
-                className="flex-1 px-6 py-3.5 text-base border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2"
-              >
-                <FaArrowLeft className="w-4 h-4" />
-                Back
-              </motion.button>
-            ) : (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleGoBack}
-                className="flex-1 px-6 py-3.5 text-base border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2"
-              >
-                <FaArrowLeft className="w-4 h-4" />
-                Cancel
-              </motion.button>
-            )}
+          {step < 4 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="flex flex-col sm:flex-row gap-4"
+            >
+              {step > 1 ? (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handlePreviousStep}
+                  className="flex-1 px-6 py-3.5 text-base border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <FaArrowLeft className="w-4 h-4" />
+                  Back
+                </motion.button>
+              ) : (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleGoBack}
+                  className="flex-1 px-6 py-3.5 text-base border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <FaArrowLeft className="w-4 h-4" />
+                  Cancel
+                </motion.button>
+              )}
 
-            {step < 3 && (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleNextStep}
-                disabled={
-                  (step === 1 &&
-                    (!formData.sendAmount ||
-                      parseFloat(formData.sendAmount) < 5 ||
-                      amountError || // Check if there's an amount error
-                      !exchangeRateData?.fxRate ||
-                      (formData.paymentMethod === "manual" &&
-                        (!manualAccountDetails || manualAccountError)))) ||
-                  (step === 2 && isStep2ButtonDisabled) ||
-                  loading ||
-                  manualDetailsLoading ||
-                  beneficiaryLoading ||
-                  openBankingProcessing ||
-                  isInitializing
-                }
-                className="flex-[2] px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <RingLoader size={18} color="#ffffff" />
-                    <span>Processing...</span>
-                  </>
-                ) : manualDetailsLoading ? (
-                  <>
-                    <RingLoader size={18} color="#ffffff" />
-                    <span>Loading details...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Continue</span>
-                    <FaArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </motion.button>
-            )}
+              {step < 3 && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleNextStep}
+                  disabled={
+                    (step === 1 &&
+                      (!formData.sendAmount ||
+                        parseFloat(formData.sendAmount) < 5 ||
+                        amountError || // Check if there's an amount error
+                        !exchangeRateData?.fxRate ||
+                        (formData.paymentMethod === "manual" &&
+                          (!manualAccountDetails || manualAccountError)))) ||
+                    (step === 2 && isStep2ButtonDisabled) ||
+                    loading ||
+                    manualDetailsLoading ||
+                    beneficiaryLoading ||
+                    openBankingProcessing ||
+                    isInitializing
+                  }
+                  className="flex-[2] px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <RingLoader size={18} color="#ffffff" />
+                      <span>Processing...</span>
+                    </>
+                  ) : manualDetailsLoading ? (
+                    <>
+                      <RingLoader size={18} color="#ffffff" />
+                      <span>Loading details...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Continue</span>
+                      <FaArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </motion.button>
+              )}
 
-            {step === 3 && (
-              <>
-                {formData.paymentMethod === "bank" &&
-                  isOpenBankingAvailable() ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleInitiateOpenBanking}
-                    disabled={
-                      !formData.agreeToTerms ||
-                      loading ||
-                      openBankingProcessing ||
-                      !selectedBeneficiary ||
-                      !selectedBank ||
-                      !formData.sendAmount ||
-                      parseFloat(formData.sendAmount) <= 0
-                    }
-                    className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {openBankingProcessing ? (
-                      <>
-                        <RingLoader size={18} color="#ffffff" />
-                        <span>Initializing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Open Banking</span>
-                        <FaArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </motion.button>
-                ) : formData.paymentMethod === "bank" ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleNextStep}
-                    disabled={
-                      !formData.agreeToTerms || loading || openBankingProcessing
-                    }
-                    className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <>
-                        <RingLoader size={18} color="#ffffff" />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Confirm Transfer</span>
-                        <FiSend className="w-4 h-4" />
-                      </>
-                    )}
-                  </motion.button>
-                ) : null}
+              {step === 3 && (
+                <>
+                  {formData.paymentMethod === "bank" &&
+                    isOpenBankingAvailable() ? (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleInitiateOpenBanking}
+                      disabled={
+                        !formData.agreeToTerms ||
+                        loading ||
+                        openBankingProcessing ||
+                        !selectedBeneficiary ||
+                        !selectedBank ||
+                        !formData.sendAmount ||
+                        parseFloat(formData.sendAmount) <= 0
+                      }
+                      className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {openBankingProcessing ? (
+                        <>
+                          <RingLoader size={18} color="#ffffff" />
+                          <span>Initializing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Open Banking</span>
+                          <FaArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </motion.button>
+                  ) : formData.paymentMethod === "bank" ? (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleNextStep}
+                      disabled={
+                        !formData.agreeToTerms || loading || openBankingProcessing
+                      }
+                      className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? (
+                        <>
+                          <RingLoader size={18} color="#ffffff" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Confirm Transfer</span>
+                          <FiSend className="w-4 h-4" />
+                        </>
+                      )}
+                    </motion.button>
+                  ) : null}
 
-                {formData.paymentMethod === "manual" && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleNextStep}
-                    disabled={
-                      !formData.agreeToTerms || loading || openBankingProcessing
-                    }
-                    className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <>
-                        <RingLoader size={18} color="#ffffff" />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Confirm Transfer</span>
-                        <FiSend className="w-4 h-4" />
-                      </>
-                    )}
-                  </motion.button>
-                )}
-              </>
-            )}
-          </motion.div>
-        )}
-      </main>
+                  {formData.paymentMethod === "manual" && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleNextStep}
+                      disabled={
+                        !formData.agreeToTerms || loading || openBankingProcessing
+                      }
+                      className="flex-1 px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? (
+                        <>
+                          <RingLoader size={18} color="#ffffff" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Confirm Transfer</span>
+                          <FiSend className="w-4 h-4" />
+                        </>
+                      )}
+                    </motion.button>
+                  )}
+                </>
+              )}
+            </motion.div>
+          )}
+        </main>
 
-      {showOpenBanking && (
-        <PaymentInitiation
-          selectedCurrency={formData.sendCurrency?.value}
-          amount={formData?.sendAmount || ""}
-          purpose={formData?.purpose?.value || ""}
-          paymentMethod="bank_transfer"
-          selectedBeneficiaryBank={selectedBank}
-          selectedBeneficiary={selectedBeneficiary}
-          customerId={customerId || localStorage.getItem("authcustomer_id")}
-          showPaymentInitiation={showOpenBanking}
-          transactionType="remittance"
-          onClose={() => {
-            setShowOpenBanking(false);
-            setOpenBankingProcessing(false);
-          }}
-          onSuccess={(result) => {
-            if (result.success) {
+        {showOpenBanking && (
+          <PaymentInitiation
+            selectedCurrency={formData.sendCurrency?.value}
+            amount={formData?.sendAmount || ""}
+            purpose={formData?.purpose?.value || ""}
+            paymentMethod="bank_transfer"
+            selectedBeneficiaryBank={selectedBank}
+            selectedBeneficiary={selectedBeneficiary}
+            customerId={customerId || localStorage.getItem("authcustomer_id")}
+            showPaymentInitiation={showOpenBanking}
+            transactionType="remittance"
+            onClose={() => {
               setShowOpenBanking(false);
               setOpenBankingProcessing(false);
-              dispatch(setStep(4));
-            } else {
-              setOpenBankingProcessing(false);
-            }
-          }}
-        />
-      )}
-    </div>
+            }}
+            onSuccess={(result) => {
+              if (result.success) {
+                setShowOpenBanking(false);
+                setOpenBankingProcessing(false);
+                dispatch(setStep(4));
+              } else {
+                setOpenBankingProcessing(false);
+              }
+            }}
+          />
+        )}
+      </div>
+    </>
   );
 };
 
