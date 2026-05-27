@@ -1596,6 +1596,8 @@ function SignUpIndividualContent() {
     country_code: country.country_code,
   }));
 
+  const canadaOnlyOptions = countryOptions.filter(option => option.label === "Canada");
+
   const nationalityOptions = nationalities.map((nat) => ({
     value: nat.id,
     label: nat.name,
@@ -2469,7 +2471,7 @@ function SignUpIndividualContent() {
                     <Select
                       id="country"
                       name="country"
-                      options={countryOptions}
+                      options={canadaOnlyOptions}
                       onChange={handleCountrySelect}
                       onBlur={formik.handleBlur}
                       className="basic-single"
@@ -2479,6 +2481,9 @@ function SignUpIndividualContent() {
                       value={selectedCountry}
                       isLoading={loadingCountries}
                     />
+                    <p className="text-amber-600 text-sm mt-2">
+                      ⚠️ Note: Only Canada is allowed 
+                  </p>
                     {formik.touched.country && formik.errors.country ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
