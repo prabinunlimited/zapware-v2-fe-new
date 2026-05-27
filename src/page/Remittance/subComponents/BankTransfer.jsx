@@ -786,16 +786,46 @@ const BankTransfer = ({
                 <label className="block text-sm font-medium text-gray-700">
                   Select Your Bank Account *
                 </label>
-                {displayedSilaAccountsLoading ? (
-                  <div className="flex items-center">
-                    <RingLoader size={20} color="#3b82f6" />
-                    <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-500">
-                    {silaAccountOptions.length} account(s) available
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {displayedSilaAccountsLoading ? (
+                    <div className="flex items-center">
+                      <RingLoader size={20} color="#3b82f6" />
+                      <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {silaAccountOptions.length} account(s) available
+                    </span>
+                  )}
+
+                  {/* Add/Remove Bank Button - Using existing BankLink route */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                      console.log("➕ Navigating to manage bank accounts via BankLink");
+
+                      // Save current state if needed
+                      if (onSaveRemittanceState) {
+                        onSaveRemittanceState();
+                      }
+
+                      // Navigate to existing BankLink route
+                      navigate(`/linkbank/${customerId}`, {
+                        state: {
+                          returnTo: `/remittance/${customerId}`,
+                          returnStep: 2,
+                          preserveRemittanceState: true,
+                          from: "remittance"
+                        }
+                      });
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <FaPlus className="w-3 h-3" />
+                    Add/Remove Bank
+                  </button>
+                </div>
               </div>
 
               {displayedSilaAccountsError ? (
@@ -865,8 +895,15 @@ const BankTransfer = ({
                             type="button"
                             className="mt-2 text-sm text-blue-600 hover:text-blue-800"
                             onClick={() => {
-                              // You can add navigation to bank linking page here
-                              toast.info("Redirecting to bank linking...");
+                              const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                              navigate(`/linkbank/${customerId}`, {
+                                state: {
+                                  returnTo: `/remittance/${customerId}`,
+                                  returnStep: 2,
+                                  preserveRemittanceState: true,
+                                  from: "remittance"
+                                }
+                              });
                             }}
                           >
                             Link a Bank Account
