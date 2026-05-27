@@ -361,6 +361,7 @@ function SignUpIndividualContent() {
   const [initializationError, setInitializationError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [registrationDataLoaded, setRegistrationDataLoaded] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -414,6 +415,75 @@ function SignUpIndividualContent() {
     selectedAccounts,
     accountOptions,
   ]);
+
+  // Add THIS WHOLE BLOCK after your other useEffects
+  useEffect(() => {
+    const loadRegistrationData = () => {
+      // Check navigation state first
+      const navData = location.state || {};
+
+      // Then check session storage
+      const savedData = sessionStorage.getItem('registrationData');
+      let registrationData = {};
+
+      if (savedData) {
+        try {
+          registrationData = JSON.parse(savedData);
+          console.log("Loaded registration data:", registrationData);
+        } catch (error) {
+          console.error("Error parsing registration data:", error);
+        }
+      }
+
+      const finalData = { ...registrationData, ...navData };
+
+      // Populate email
+      if (finalData.email && finalData.emailVerified) {
+        formik.setFieldValue("email", finalData.email);
+      }
+
+      // Populate mobile
+      if (finalData.mobile_number && finalData.mobileVerified) {
+        formik.setFieldValue("mobile_number", finalData.mobile_number);
+
+        if (finalData.phone_code) {
+          formik.setFieldValue("mobilenumber_countrycode", finalData.phone_code);
+          const countryWithCode = countryOptions.find(
+            opt => opt.phoneCode === finalData.phone_code
+          );
+          if (countryWithCode) {
+            setSelectedPhoneCode({
+              value: countryWithCode.value,
+              label: countryWithCode.label,
+              phoneCode: countryWithCode.phoneCode,
+              flag_url: countryWithCode.flag_url
+            });
+          }
+        }
+      }
+
+      // Populate country
+      if (finalData.selectedCountry) {
+        const country = finalData.selectedCountry;
+        const countryOption = {
+          value: country.id || country.value,
+          label: country.label,
+          country_code: country.country_code,
+          flag_url: country.flag_url,
+          phoneCode: country.phoneCode
+        };
+
+        dispatch(setSelectedCountry(countryOption));
+        formik.setFieldValue("country", country.id || country.value);
+      }
+
+      if (finalData.emailVerified && finalData.mobileVerified) {
+        setRegistrationDataLoaded(true);
+      }
+    };
+
+    loadRegistrationData();
+  }, []);
 
   const dispatch = useDispatch();
   const location = useLocation();
@@ -531,7 +601,7 @@ function SignUpIndividualContent() {
         if (
           termsFetched &&
           termsConditions.length > 0 &&
-          acceptedTerms.length !== termsConditions.length
+          acceptedTerms.length === 0
         ) {
           setErrorMessage("Please accept the terms and conditions");
           setIsModalOpen(true);
@@ -798,7 +868,7 @@ function SignUpIndividualContent() {
     try {
       setShowFullScreenLoader(true);
       console.log("📝 Formik values before transformation:", values);
-  
+
       // Prepare the data for submission
       const submissionData = {
         customer_type: "individual",
@@ -844,7 +914,7 @@ function SignUpIndividualContent() {
         selected_accounts: selectedAccounts,
         service_provide_ids: service_provide_ids,
       };
-  
+
       // Clean up empty optional fields
       const cleanedData = { ...submissionData };
       Object.keys(cleanedData).forEach((key) => {
@@ -856,36 +926,24 @@ function SignUpIndividualContent() {
           delete cleanedData[key];
         }
       });
-  
+
       console.log("📤 Final payload being sent:", {
         ...cleanedData,
         password: "***HIDDEN***",
         confirm_password: "***HIDDEN***",
       });
-  
+
       // Dispatch the submission action
       const resultAction = await dispatch(submitIndividualSignup(cleanedData));
-  
+
       if (submitIndividualSignup.fulfilled.match(resultAction)) {
         const responseData = resultAction.payload;
         console.log("✅ Submission successful:", responseData);
-  
+
         if (responseData.status === "success") {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
-  
-          // Determine navigation based on account type
-          const navigationState = {
-            mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
-            kyc_verify: kyc_verify,
-            customerData: responseData.data || null,
-            hasSSN: !!cleanedData.ssn,
-            isRemittanceOnly: isRemit,
-            isMultiCurrency: !isRemit && selectedAccounts && selectedAccounts.length > 0,
-            selectedAccounts: selectedAccounts,
-            accountType: isRemit ? "remittance_only" : "multi_currency",
-          };
-  
+
           // Navigate to phone verification
           navigate("/phoneverification", {
             state: {
@@ -893,8 +951,6 @@ function SignUpIndividualContent() {
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
               hasSSN: !!cleanedData.ssn,
-              isRemittanceOnly: isRemit,  // ← ADD THIS
-              selectedAccounts: selectedAccounts,  // ← ADD THIS
             },
           });
         } else {
@@ -904,7 +960,7 @@ function SignUpIndividualContent() {
       } else {
         const error = resultAction.payload || resultAction.error;
         console.error("❌ Submission rejected:", error);
-  
+
         if (error?.message) {
           setErrorMessage(error.message);
           setIsModalOpen(true);
@@ -1696,10 +1752,11 @@ function SignUpIndividualContent() {
           <div className="p-6 md:p-8">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
-              <div className="flex items-center space-x-4">
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl shadow-sm">
+              <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
+                {/* Icon container - responsive sizing */}
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 sm:p-3 rounded-xl shadow-sm flex-shrink-0">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="w-5 h-5 sm:w-6 sm:h-6 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1713,11 +1770,13 @@ function SignUpIndividualContent() {
                     />
                   </svg>
                 </div>
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+
+                {/* Text content - responsive adjustments */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight break-words">
                     Create Your Individual Account
                   </h2>
-                  <p className="text-gray-500 mt-1.5">
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
                     Complete your profile to get started with our platform
                   </p>
                 </div>
@@ -1779,8 +1838,8 @@ function SignUpIndividualContent() {
                         }
                       }}
                       className={`flex-shrink-0 whitespace-nowrap px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-medium transition-all duration-300 relative ${activeSection === idx
-                          ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
-                          : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+                        ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50/50 rounded-t-lg"
+                        : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
                         } ${!isSectionValid ? "border-b-2 border-red-500" : ""}`}
                     >
                       {/* Show full text on tablet/desktop, abbreviated on mobile */}
@@ -1817,6 +1876,38 @@ function SignUpIndividualContent() {
               className="space-y-6"
               noValidate
             >
+              {/* Add verification banners here - after form opening tag */}
+              {registrationDataLoaded && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start">
+                    <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 mt-0.5 mr-3" />
+                    <div>
+                      <h4 className="text-green-800 font-medium">Email & Mobile Verified</h4>
+                      <p className="text-green-700 text-sm">
+                        Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been populated form previous step.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedCountry && registrationDataLoaded && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <h4 className="text-blue-800 font-medium">Country Pre-selected</h4>
+                      <p className="text-blue-700 text-sm">
+                        Country: <strong>{selectedCountry.label}</strong> from previous step.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
               {/* Personal Information Section */}
               <section className={`${activeSection !== 0 ? "hidden" : ""}`}>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -2470,11 +2561,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(1)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2494,7 +2585,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(1)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Identity Verification
                     <svg
@@ -2819,11 +2910,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(2)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -2844,7 +2935,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(2)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Security
                     <svg
@@ -3056,11 +3147,11 @@ function SignUpIndividualContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-10">
+                <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
                   <button
                     type="button"
                     onClick={() => handlePreviousSection(3)}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center group"
+                    className="px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 shadow-sm flex items-center justify-center group w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform"
@@ -3081,7 +3172,7 @@ function SignUpIndividualContent() {
                   <button
                     type="button"
                     onClick={() => handleNextSection(3)}
-                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center group"
+                    className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"
                   >
                     Next: Terms & Conditions
                     <svg
@@ -3267,9 +3358,9 @@ function SignUpIndividualContent() {
                       type="submit"
                       disabled={
                         isSubmitting ||
-                        progress < 95 ||
+                        progress < 100 ||
                         (termsConditions.length > 0 &&
-                          acceptedTerms.length !== termsConditions.length) ||
+                          acceptedTerms.length === 0) ||
                         (shouldShowSSNField && (!formik.values.ssn || formik.values.ssn.replace(/-/g, "").length !== 9))
                       }
                       className="px-4 md:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center group w-full sm:w-auto"

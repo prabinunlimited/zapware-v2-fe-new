@@ -106,6 +106,9 @@ const BankTransfer = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  // Add local state to track if beneficiaries have been loaded
+  const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
+
   // Transform for dropdown
   const beneficiaries = useMemo(() => {
     return (allBeneficiaries || [])
@@ -133,16 +136,24 @@ const BankTransfer = ({
 
     if (
       customerId &&
-      (!allBeneficiaries || allBeneficiaries.length === 0) &&
+      !beneficiariesFetched &&
       !beneficiariesLoading
     ) {
       console.log(
         "🔄 BankTransfer: Fetching beneficiaries for customer:",
         customerId
       );
-      dispatch(fetchBeneficiaries(customerId));
+      dispatch(fetchBeneficiaries(customerId))
+        .unwrap()
+        .then(() => {
+          setBeneficiariesFetched(true);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch beneficiaries:", error);
+          setBeneficiariesFetched(true); // Mark as fetched even on error to stop loading
+        });
     }
-  }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
+  }, [dispatch, paramCustomerId, beneficiariesFetched, beneficiariesLoading]);
 
   // FETCH SILA BANK ACCOUNTS ON MOUNT
   useEffect(() => {
@@ -217,6 +228,9 @@ const BankTransfer = ({
       silaAccountsCount: displayedSilaBankAccounts?.length || 0,
       hasSilaAccounts: displayedHasSilaAccounts,
       selectedBankAccount: selectedBankAccount,
+      beneficiariesCount: beneficiaries.length,
+      beneficiariesLoading: beneficiariesLoading,
+      beneficiariesFetched: beneficiariesFetched,
     });
   }, [
     onFieldChange,
@@ -228,6 +242,9 @@ const BankTransfer = ({
     displayedSilaBankAccounts,
     displayedHasSilaAccounts,
     selectedBankAccount,
+    beneficiaries.length,
+    beneficiariesLoading,
+    beneficiariesFetched,
   ]);
 
   // Default payout options - fallback if paymentOptions is empty
@@ -331,6 +348,78 @@ const BankTransfer = ({
 
     fetchOccupations();
   }, [API_URL]);
+
+  // Set default values for Purpose, Income Source, and Occupation
+  useEffect(() => {
+    // Set default Purpose of Transfer to "Trade"
+    if (purposeOptions.length > 0 && !formData?.purpose) {
+      // Try multiple matching strategies
+      let defaultPurpose = purposeOptions.find(
+        (opt) => opt.value === "Trade" || opt.label === "Trade"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultPurpose) {
+        defaultPurpose = purposeOptions.find(
+          (opt) => opt.value?.toLowerCase() === "trade" || opt.label?.toLowerCase() === "trade"
+        );
+      }
+
+      if (defaultPurpose && onFieldChange) {
+        onFieldChange("purpose", defaultPurpose);
+        console.log("✅ Default purpose set to:", defaultPurpose);
+      } else {
+        console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
+      }
+    }
+
+    // Set default Source of Income to "Savings" (note: Savings with 's')
+    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+      // Try multiple matching strategies
+      let defaultIncomeSource = incomeSourceOptions.find(
+        (opt) => opt.value === "Savings" || opt.label === "Savings" ||
+          opt.value === "Saving" || opt.label === "Saving"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultIncomeSource) {
+        defaultIncomeSource = incomeSourceOptions.find(
+          (opt) => opt.value?.toLowerCase() === "savings" || opt.label?.toLowerCase() === "savings" ||
+            opt.value?.toLowerCase() === "saving" || opt.label?.toLowerCase() === "saving"
+        );
+      }
+
+      if (defaultIncomeSource && onFieldChange) {
+        onFieldChange("incomeSource", defaultIncomeSource);
+        console.log("✅ Default income source set to:", defaultIncomeSource);
+      } else {
+        console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
+      }
+    }
+
+    // Set default Occupation to "Engineer"
+    if (occupations.length > 0 && !formData?.occupation) {
+      // Try multiple matching strategies
+      let defaultOccupation = occupations.find(
+        (opt) => opt.value === "Engineer" || opt.label === "Engineer"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultOccupation) {
+        defaultOccupation = occupations.find(
+          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+        );
+      }
+
+      if (defaultOccupation && onFieldChange) {
+        onFieldChange("occupation", defaultOccupation.value);
+        console.log("✅ Default occupation set to:", defaultOccupation);
+      } else {
+        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
+      }
+    }
+  }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
+
 
   // Auto-select first beneficiary if none selected
   useEffect(() => {
@@ -578,6 +667,24 @@ const BankTransfer = ({
     });
   };
 
+  // Get placeholder text for beneficiary select
+  const getBeneficiaryPlaceholder = () => {
+    // If still loading and haven't fetched yet
+    if (beneficiariesLoading || (!beneficiariesFetched && beneficiaries.length === 0)) {
+      return "Loading beneficiaries...";
+    }
+    // If fetch is complete and no beneficiaries
+    if (beneficiariesFetched && beneficiaries.length === 0) {
+      return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+    }
+    // If using beneficiary code
+    if (showCodeInput) {
+      return "Disabled - Using beneficiary code";
+    }
+    // Normal state
+    return "Select beneficiary...";
+  };
+
   // Bank Detail Item component (for consistency with ManualDeposit)
   const BankDetailItem = ({ icon, label, value }) => (
     <div className="flex items-start gap-2">
@@ -679,16 +786,46 @@ const BankTransfer = ({
                 <label className="block text-sm font-medium text-gray-700">
                   Select Your Bank Account *
                 </label>
-                {displayedSilaAccountsLoading ? (
-                  <div className="flex items-center">
-                    <RingLoader size={20} color="#3b82f6" />
-                    <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-500">
-                    {silaAccountOptions.length} account(s) available
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {displayedSilaAccountsLoading ? (
+                    <div className="flex items-center">
+                      <RingLoader size={20} color="#3b82f6" />
+                      <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {silaAccountOptions.length} account(s) available
+                    </span>
+                  )}
+
+                  {/* Add/Remove Bank Button - Using existing BankLink route */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                      console.log("➕ Navigating to manage bank accounts via BankLink");
+
+                      // Save current state if needed
+                      if (onSaveRemittanceState) {
+                        onSaveRemittanceState();
+                      }
+
+                      // Navigate to existing BankLink route
+                      navigate(`/linkbank/${customerId}`, {
+                        state: {
+                          returnTo: `/remittance/${customerId}`,
+                          returnStep: 2,
+                          preserveRemittanceState: true,
+                          from: "remittance"
+                        }
+                      });
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <FaPlus className="w-3 h-3" />
+                    Add/Remove Bank
+                  </button>
+                </div>
               </div>
 
               {displayedSilaAccountsError ? (
@@ -758,8 +895,15 @@ const BankTransfer = ({
                             type="button"
                             className="mt-2 text-sm text-blue-600 hover:text-blue-800"
                             onClick={() => {
-                              // You can add navigation to bank linking page here
-                              toast.info("Redirecting to bank linking...");
+                              const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                              navigate(`/linkbank/${customerId}`, {
+                                state: {
+                                  returnTo: `/remittance/${customerId}`,
+                                  returnStep: 2,
+                                  preserveRemittanceState: true,
+                                  from: "remittance"
+                                }
+                              });
                             }}
                           >
                             Link a Bank Account
@@ -802,18 +946,21 @@ const BankTransfer = ({
               options={beneficiaries}
               value={selectedBeneficiary || null}
               onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading}
-              isDisabled={beneficiariesLoading || showCodeInput}
+              isLoading={beneficiariesLoading && !beneficiariesFetched}
+              isDisabled={showCodeInput}
               classNamePrefix="select"
               styles={selectStyles}
-              placeholder={
-                beneficiariesLoading
-                  ? "Loading beneficiaries..."
-                  : showCodeInput
-                    ? "Disabled - Using beneficiary code"
-                    : "Select beneficiary..."
-              }
+              placeholder={getBeneficiaryPlaceholder()}
               isSearchable
+              noOptionsMessage={() => {
+                if (beneficiariesFetched && beneficiaries.length === 0) {
+                  return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+                }
+                if (beneficiariesLoading) {
+                  return "Loading beneficiaries...";
+                }
+                return "No options available";
+              }}
               getOptionLabel={(option) =>
                 option?.formattedName ||
                 `${option?.name || "Unknown"} (${option?.phone_number || option?.benef_uuid || "No Contact"

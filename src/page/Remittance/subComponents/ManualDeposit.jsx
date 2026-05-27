@@ -226,6 +226,77 @@ const ManualDeposit = ({
     fetchOccupations();
   }, [API_URL]);
 
+  // Set default values for Purpose, Income Source, and Occupation
+  useEffect(() => {
+    // Set default Purpose of Transfer to "Trade"
+    if (purposeOptions.length > 0 && !formData?.purpose) {
+      // Try multiple matching strategies
+      let defaultPurpose = purposeOptions.find(
+        (opt) => opt.value === "Trade" || opt.label === "Trade"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultPurpose) {
+        defaultPurpose = purposeOptions.find(
+          (opt) => opt.value?.toLowerCase() === "trade" || opt.label?.toLowerCase() === "trade"
+        );
+      }
+
+      if (defaultPurpose && onFieldChange) {
+        onFieldChange("purpose", defaultPurpose);
+        console.log("✅ Default purpose set to:", defaultPurpose);
+      } else {
+        console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
+      }
+    }
+
+    // Set default Source of Income to "Savings" (note: Savings with 's')
+    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+      // Try multiple matching strategies
+      let defaultIncomeSource = incomeSourceOptions.find(
+        (opt) => opt.value === "Savings" || opt.label === "Savings" ||
+          opt.value === "Saving" || opt.label === "Saving"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultIncomeSource) {
+        defaultIncomeSource = incomeSourceOptions.find(
+          (opt) => opt.value?.toLowerCase() === "savings" || opt.label?.toLowerCase() === "savings" ||
+            opt.value?.toLowerCase() === "saving" || opt.label?.toLowerCase() === "saving"
+        );
+      }
+
+      if (defaultIncomeSource && onFieldChange) {
+        onFieldChange("incomeSource", defaultIncomeSource);
+        console.log("✅ Default income source set to:", defaultIncomeSource);
+      } else {
+        console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
+      }
+    }
+
+    // Set default Occupation to "Engineer"
+    if (occupations.length > 0 && !formData?.occupation) {
+      // Try multiple matching strategies
+      let defaultOccupation = occupations.find(
+        (opt) => opt.value === "Engineer" || opt.label === "Engineer"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultOccupation) {
+        defaultOccupation = occupations.find(
+          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+        );
+      }
+
+      if (defaultOccupation && onFieldChange) {
+        onFieldChange("occupation", defaultOccupation.value);
+        console.log("✅ Default occupation set to:", defaultOccupation);
+      } else {
+        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupationOptions);
+      }
+    }
+  }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
+
   // Auto-select first beneficiary if none selected
   useEffect(() => {
     if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
