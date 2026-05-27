@@ -49,7 +49,7 @@ const executeWithRetry = async (
       return result;
     } catch (error) {
       lastError = error;
-      
+
       // Clear the fetching state immediately on error
       apiCoordinator.clearSignature(signature);
 
@@ -410,24 +410,53 @@ export const convertCurrency = createAsyncThunk(
           timeout: 30000,
         });
 
+        // Check if response has an error property
+        if (response.data.error) {
+          throw new Error(response.data.error);
+        }
+
+        // Check if response has error_message property
+        if (response.data.error_message) {
+          throw new Error(response.data.error_message);
+        }
+
+        // Check status
         if (response.data.status === "Success") {
           return response.data;
         } else {
-          throw new Error(response.data.message);
+          // Use error message from response if available
+          const errorMsg = response.data.message ||
+            response.data.error ||
+            response.data.error_message ||
+            "Currency conversion failed";
+          throw new Error(errorMsg);
         }
       };
 
       return await executeWithRetry(apiCall, signature);
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Currency conversion failed. Please try again.";
+      console.error("Currency conversion error details:", error);
+
+      // Extract error message from various possible locations
+      let errorMessage = "Currency conversion failed. Please try again.";
+
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.error_message) {
+        errorMessage = error.response.data.error_message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Log the specific error for debugging
+      console.log("Returning error message:", errorMessage);
+
       return rejectWithValue(errorMessage);
     }
   }
 );
-
 export const sendPasscode = createAsyncThunk(
   "payout/sendPasscode",
   async (customerId, { rejectWithValue }) => {
@@ -479,7 +508,6 @@ export const verifyPasscode = createAsyncThunk(
           },
           {
             timeout: 30000,
-            // ✅ Add context to config so interceptor can use it
             context: context 
           }
         );
@@ -495,11 +523,42 @@ export const verifyPasscode = createAsyncThunk(
       // Always clear the signature on error to allow retry
       apiCoordinator.clearSignature(signature);
       
-      return rejectWithValue(
-        error.response?.data?.message || 
-        error.message || 
-        "Passcode verification failed. Please try again."
-      );
+      // Enhanced error handling
+      let errorMessage = "Passcode verification failed. Please try again.";
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Check for validation errors
+        if (errorData.errors) {
+          const validationErrors = [];
+          Object.keys(errorData.errors).forEach(field => {
+            const messages = errorData.errors[field];
+            if (Array.isArray(messages)) {
+              messages.forEach(msg => {
+                // Just show the message without the field name
+                validationErrors.push(msg);
+              });
+            } else {
+              // Just show the message without the field name
+              validationErrors.push(messages);
+            }
+          });
+          errorMessage = validationErrors.join("\n");
+        }
+        // Check for message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Check for error field
+        else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -529,10 +588,40 @@ export const submitPayout = createAsyncThunk(
 
       return await executeWithRetry(apiCall, signature);
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Payout submission failed. Please try again.";
+      let errorMessage = "Payout submission failed. Please try again.";
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Check for validation errors object (Laravel style)
+        if (errorData.errors) {
+          const validationErrors = [];
+          Object.keys(errorData.errors).forEach(field => {
+            const messages = errorData.errors[field];
+            if (Array.isArray(messages)) {
+              messages.forEach(msg => {
+                // Show only the message, not the field name
+                validationErrors.push(msg);
+              });
+            } else {
+              // Show only the message, not the field name
+              validationErrors.push(messages);
+            }
+          });
+          errorMessage = validationErrors.join("\n");
+        }
+        // Check for message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Check for error field
+        else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       return rejectWithValue(errorMessage);
     }
   }
@@ -808,8 +897,14 @@ const payoutSlice = createSlice({
       })
       .addCase(convertCurrency.rejected, (state, action) => {
         state.loading = false;
-        state.modalMessage = action.payload;
+        // Make sure we're getting the error message correctly
+        const errorMessage = action.payload || action.error?.message;
+        state.modalMessage = errorMessage;
         state.showErrorModal = true;
+
+        // Log for debugging
+        console.error("Conversion rejected with payload:", action.payload);
+        console.error("Conversion rejected with error:", action.error);
       })
 
       // Send Passcode

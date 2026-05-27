@@ -1164,9 +1164,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setShowSearchResults(false);
     setPhoneInput("");
     dispatch(clearPhoneSearch());
-    // Keep the phone in formik for new beneficiary
-    formik.setFieldValue("phone_number", phoneInput);
-    formik.setFieldValue("country_phone_code", countryCodeInput);
+    
+    // Check if beneficiary was found or not
+    const wasBeneficiaryFound = phoneSearch.exists === true;
+    
+    if (wasBeneficiaryFound) {
+      // Beneficiary WAS found - DO NOT populate phone number
+      console.log("Beneficiary was found, NOT populating phone number for new beneficiary");
+      // Optionally clear the phone fields
+      formik.setFieldValue("phone_number", "");
+      formik.setFieldValue("country_phone_code", "");
+      // Also clear the local state
+      setCountryCodeInput("");
+    } else {
+      // Beneficiary was NOT found - populate the phone number they searched with
+      console.log("Beneficiary not found, populating phone number for new beneficiary");
+      formik.setFieldValue("phone_number", phoneInput);
+      formik.setFieldValue("country_phone_code", countryCodeInput);
+    }
+    
     setStep(1);
   };
 

@@ -101,16 +101,16 @@ import OwnerInfo from "./Steps/OwnerInfo";
 // ===================== DOB VALIDATION FUNCTIONS =====================
 const validateAge = (dateOfBirth) => {
   if (!dateOfBirth) return false;
-  
+
   const today = new Date();
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age >= 18;
 };
 
@@ -585,6 +585,23 @@ const Institution = () => {
     () => getSafeCountryOptions(),
     [getSafeCountryOptions],
   );
+  const canadaOnlyOptions = useMemo(() => {
+    if (!countryOptions || countryOptions.length === 0) return [];
+    
+    // Try to find Canada by different possible values
+    const canada = countryOptions.find(option => 
+      option.label === "Canada" ||
+      option.label?.toLowerCase() === "canada" ||
+      option.value === "Canada" ||
+      option.country_code === "CA" ||
+      option.country_code?.toLowerCase() === "ca" ||
+      option.originalData?.name === "Canada" ||
+      option.originalData?.country_code === "CA"
+    );
+    
+    // If Canada found, return as array, otherwise return empty array
+    return canada ? [canada] : [];
+  }, [countryOptions]);
 
   useEffect(() => {
     return () => {
@@ -725,37 +742,60 @@ const Institution = () => {
       // Check SSN requirement from the actual API response
       if (
         locationStateData.service_provide_ids &&
-        locationStateData.accountOptions
+        locationStateData.accountOptions &&
+        Array.isArray(locationStateData.service_provide_ids) &&
+        Array.isArray(locationStateData.accountOptions)
       ) {
         // Find if any selected account requires SSN
-        const selectedAccountNeedsSSN =
-          locationStateData.service_provide_ids.some((idWithType) => {
-            const [serviceId, type] = idWithType.split("-");
-            const account = locationStateData.accountOptions.find(
-              (a) =>
-                a.service_provide_id.toString() === serviceId &&
-                a.accountType === type,
-            );
+        let selectedAccountNeedsSSN = false;
+
+        try {
+          selectedAccountNeedsSSN = locationStateData.service_provide_ids.some((idWithType) => {
+            // Skip invalid entries
+            if (!idWithType || typeof idWithType !== 'string') return false;
+
+            const parts = idWithType.split("-");
+            if (parts.length < 2) return false;
+
+            const [serviceId, type] = parts;
+            if (!serviceId || !type) return false;
+
+            // Find matching account with safe property access
+            const account = locationStateData.accountOptions.find((a) => {
+              // SAFE CHECK: Ensure a and a.service_provide_id exist
+              if (!a || a.service_provide_id === undefined || a.service_provide_id === null) {
+                return false;
+              }
+              return a.service_provide_id.toString() === serviceId && a.accountType === type;
+            });
+
             return account && account.ssn_required === "Y";
-          }) || false;
+          });
+        } catch (error) {
+          console.error("Error checking SSN requirement:", error);
+          selectedAccountNeedsSSN = false;
+        }
 
         console.log("🔍 SSN Requirement Check:", {
           selectedAccountNeedsSSN,
           accountOptions: locationStateData.accountOptions,
           selectedIds: locationStateData.service_provide_ids,
           selectedAccounts: locationStateData.service_provide_ids.map((id) => {
-            const [serviceId, type] = id.split("-");
-            const account = locationStateData.accountOptions.find(
-              (a) =>
-                a.service_provide_id.toString() === serviceId &&
-                a.accountType === type,
-            );
-            return {
-              id,
-              currency: account?.currency,
-              type: account?.accountType,
-              ssn_required: account?.ssn_required,
-            };
+            try {
+              const [serviceId, type] = id.split("-");
+              const account = locationStateData.accountOptions.find((a) => {
+                if (!a || a.service_provide_id === undefined) return false;
+                return a.service_provide_id.toString() === serviceId && a.accountType === type;
+              });
+              return {
+                id,
+                currency: account?.currency,
+                type: account?.accountType,
+                ssn_required: account?.ssn_required,
+              };
+            } catch (err) {
+              return { id, error: "Invalid format" };
+            }
           }),
         });
 
@@ -773,39 +813,52 @@ const Institution = () => {
   useEffect(() => {
     if (
       locationStateData?.service_provide_ids &&
-      locationStateData?.accountOptions
+      locationStateData?.accountOptions &&
+      Array.isArray(locationStateData.service_provide_ids) &&
+      Array.isArray(locationStateData.accountOptions)
     ) {
       const serviceProviderIds = locationStateData.service_provide_ids;
       const accountOptions = locationStateData.accountOptions;
-
+  
       let hasNamed = false;
       let hasUSD = false;
       let hasUSDNamed = false;
-
+  
       try {
         hasNamed =
           serviceProviderIds.some((idWithType) => {
+            if (!idWithType || typeof idWithType !== 'string') return false;
             const parts = idWithType.split("-");
             return parts.length > 1 && parts[1] === "named";
           }) || false;
-
+  
         hasUSD =
           serviceProviderIds.some((idWithType) => {
-            const id = parseInt(idWithType.split("-")[0]);
-            const account = accountOptions.find(
-              (opt) => opt.service_provide_id === id,
-            );
+            if (!idWithType || typeof idWithType !== 'string') return false;
+            const parts = idWithType.split("-");
+            if (parts.length === 0) return false;
+            const id = parseInt(parts[0]);
+            const account = accountOptions.find((opt) => {
+              if (!opt || opt.service_provide_id === undefined || opt.service_provide_id === null) {
+                return false;
+              }
+              return opt.service_provide_id === id;
+            });
             return account && account.currency === "USD";
           }) || false;
-
+  
         hasUSDNamed =
           serviceProviderIds.some((idWithType) => {
+            if (!idWithType || typeof idWithType !== 'string') return false;
             const parts = idWithType.split("-");
             if (parts.length > 1 && parts[1] === "named") {
               const id = parseInt(parts[0]);
-              const account = accountOptions.find(
-                (opt) => opt.service_provide_id === id,
-              );
+              const account = accountOptions.find((opt) => {
+                if (!opt || opt.service_provide_id === undefined || opt.service_provide_id === null) {
+                  return false;
+                }
+                return opt.service_provide_id === id;
+              });
               return account && account.currency === "USD";
             }
             return false;
@@ -813,7 +866,7 @@ const Institution = () => {
       } catch (error) {
         console.error("❌ Error determining institution account types:", error);
       }
-
+  
       console.log("🏢 Institution Account Analysis:", {
         hasNamed,
         hasUSD,
@@ -822,22 +875,22 @@ const Institution = () => {
         accountOptions,
         remittanceOnlyAccepted,
       });
-
+  
       // CRITICAL FIX: Set the showField flags based on conditions
       const shouldShowFields = hasUSDNamed || remittanceOnlyAccepted;
-
+  
       console.log("🎯 Setting field visibility:", {
         shouldShowFields,
         hasUSDNamed,
         remittanceOnlyAccepted,
-        isNamedAccount: hasUSDNamed, // This should match the selector
+        isNamedAccount: hasUSDNamed,
       });
-
+  
       // Store in Redux
       dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
       dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
       dispatch(setFormField({ field: "isNamedAccount", value: hasUSDNamed }));
-
+  
       // SET THE FIELD VISIBILITY FLAGS
       dispatch(
         setFormField({
@@ -863,7 +916,7 @@ const Institution = () => {
           value: shouldShowFields,
         }),
       );
-
+  
       dispatch(
         setFormField({
           field: "service_provide_ids",
@@ -1100,7 +1153,7 @@ const Institution = () => {
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
             ? validationValues.terms_and_conditions?.length ===
-              termsConditions.length
+            termsConditions.length
             : true;
 
         return (
@@ -1379,7 +1432,7 @@ const Institution = () => {
         if (values.dob && !validateAge(values.dob)) {
           return "You must be at least 18 years old to register";
         }
-        
+
         const allTermsAccepted =
           termsConditions && termsConditions.length > 0
             ? values.terms_and_conditions?.length === termsConditions.length
@@ -1555,10 +1608,9 @@ const Institution = () => {
     setShowSSNConfirmation(false);
     if (pendingNextStep) {
       console.log(
-        `SSN confirmed for ${
-          isNamedAccount
-            ? "USD Named Account"
-            : "Remittance Services Only account"
+        `SSN confirmed for ${isNamedAccount
+          ? "USD Named Account"
+          : "Remittance Services Only account"
         }`,
       );
       proceedToNextStep();
@@ -1865,7 +1917,7 @@ const Institution = () => {
           dispatch(
             setErrorMessage(
               error.message ||
-                "An unexpected error occurred. Please try again.",
+              "An unexpected error occurred. Please try again.",
             ),
           );
         }
@@ -1926,9 +1978,8 @@ const Institution = () => {
     () =>
       naicsCodes.map((code) => ({
         value: code.id || code.code,
-        label: `${code.code} - ${
-          code.description || `${code.category} - ${code.subcategory}`
-        }`,
+        label: `${code.code} - ${code.description || `${code.category} - ${code.subcategory}`
+          }`,
       })),
     [naicsCodes],
   );
@@ -2125,9 +2176,8 @@ const Institution = () => {
           </div>
 
           <div
-            className={`space-y-6 ${
-              values.is_controller === "yes" ? "opacity-75" : ""
-            }`}
+            className={`space-y-6 ${values.is_controller === "yes" ? "opacity-75" : ""
+              }`}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Row 1: First Name & Middle Name */}
@@ -2311,9 +2361,9 @@ const Institution = () => {
                         value={countryOptions.find(
                           (opt) =>
                             opt.phoneCode ===
-                              values.controller_mobilenumber_countrycode ||
+                            values.controller_mobilenumber_countrycode ||
                             opt.phone_code ===
-                              values.controller_mobilenumber_countrycode,
+                            values.controller_mobilenumber_countrycode,
                         )}
                         onChange={(option) => {
                           if (option) {
@@ -2966,11 +3016,10 @@ const Institution = () => {
                   {[1, 2, 3, 4, 5].map((step) => (
                     <div key={step} className="flex flex-col items-center">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          currentStep >= step
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= step
                             ? "bg-blue-600 text-white"
                             : "bg-gray-200 text-gray-600"
-                        }`}
+                          }`}
                       >
                         {step}
                       </div>
@@ -3172,7 +3221,7 @@ const Institution = () => {
                         <CustomSelect
                           id="country_of_registration"
                           label="Country of Registration"
-                          options={countryOptions}
+                          options={canadaOnlyOptions} 
                           onChange={enhancedSelectChange(
                             "country_of_registration",
                             setFieldValue,
@@ -3191,7 +3240,7 @@ const Institution = () => {
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
-                          options={countryOptions}
+                          options={canadaOnlyOptions}
                           onChange={enhancedSelectChange(
                             "country_of_operation",
                             setFieldValue,
@@ -3255,7 +3304,7 @@ const Institution = () => {
                         <CustomSelect
                           id="registered_address_street_country"
                           label="Country"
-                          options={countryOptions}
+                          options={canadaOnlyOptions}
                           onChange={enhancedSelectChange(
                             "registered_address_street_country",
                             setFieldValue,
@@ -3610,17 +3659,17 @@ const Institution = () => {
                                 value={countryOptions.find(
                                   (opt) =>
                                     opt.phoneCode ===
-                                      values.mobilenumber_countrycode ||
+                                    values.mobilenumber_countrycode ||
                                     opt.phone_code ===
-                                      values.mobilenumber_countrycode,
+                                    values.mobilenumber_countrycode,
                                 )}
                                 onChange={(option) => {
                                   if (option) {
                                     setFieldValue(
                                       "mobilenumber_countrycode",
                                       option.phoneCode ||
-                                        option.phone_code ||
-                                        "",
+                                      option.phone_code ||
+                                      "",
                                     );
                                   }
                                 }}
@@ -3697,7 +3746,7 @@ const Institution = () => {
                           onChange={(e) => {
                             const selectedDate = e.target.value;
                             enhancedHandleChange("dob", setFieldValue)(e);
-                            
+
                             // Validate age on change
                             if (selectedDate) {
                               const isValidAge = validateAge(selectedDate);
@@ -3725,13 +3774,13 @@ const Institution = () => {
                           fieldStyles={FIELD_STYLES}
                           max={getMaxDateForDOB()}
                         />
-                        
+
                         {/* Helper text - Always visible */}
                         <div className="text-xs text-gray-500 mt-1 flex items-center">
                           <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
                           You must be at least 18 years old to register
                         </div>
-                        
+
                         {/* Error message - Only visible when there's an error */}
                         {values.dob_error && (
                           <div className="text-red-500 text-xs mt-1 flex items-center">
@@ -3740,7 +3789,7 @@ const Institution = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       <FormField
                         id="designation"
                         label="Designation"
