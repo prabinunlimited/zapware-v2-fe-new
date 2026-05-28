@@ -64,7 +64,7 @@ export const fetchOccupations = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("bearertoken");
-      const response = await axios.get(`${API_URL}/fetch-occupation`, {
+      const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

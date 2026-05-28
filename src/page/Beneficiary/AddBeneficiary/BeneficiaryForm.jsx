@@ -1008,7 +1008,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       toast.error("Please select beneficiary type (Individual or Institution)");
       return;
     }
-  
+
     if (!phoneInput.trim()) {
       toast.error("Please enter a phone number to search");
       return;
@@ -1164,10 +1164,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setShowSearchResults(false);
     setPhoneInput("");
     dispatch(clearPhoneSearch());
-    
+
     // Check if beneficiary was found or not
     const wasBeneficiaryFound = phoneSearch.exists === true;
-    
+
     if (wasBeneficiaryFound) {
       // Beneficiary WAS found - DO NOT populate phone number
       console.log("Beneficiary was found, NOT populating phone number for new beneficiary");
@@ -1182,14 +1182,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       formik.setFieldValue("phone_number", phoneInput);
       formik.setFieldValue("country_phone_code", countryCodeInput);
     }
-    
+
     setStep(1);
   };
 
   const nextStep = () => {
     // If in phone search step (step 0), handle differently
     if (step === 0) {
-      if(!selectedBeneficiaryType){
+      if (!selectedBeneficiaryType) {
         toast.error("Please select beneficiary type")
         return false
       }
@@ -2698,11 +2698,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               accountCurrency === "PKR" ||
               accountCurrency === "CAD") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bank Name field */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Name
                     </FieldLabel>
-
                     {currentBanks && currentBanks.length > 0 ? (
                       <select
                         className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
@@ -2762,6 +2762,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     )}
                   </div>
 
+                  {/* Account Number field */}
                   <div className="mb-4">
                     <FieldLabel required>
                       Account Number
@@ -2782,6 +2783,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     />
                   </div>
 
+                  {/* Branch Code field */}
                   <div className="mb-4">
                     <FieldLabel>
                       Branch Code
@@ -2828,6 +2830,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     )}
                   </div>
 
+                  {/* Bank State field */}
                   <div className="mb-4">
                     <FieldLabel>
                       Bank State
@@ -2847,6 +2850,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     />
                   </div>
 
+                  {/* BANK COUNTRY FIELD - ADD THIS FOR CAD */}
+                  <div className="mb-4">
+                    <FieldLabel required>
+                      Bank Country
+                    </FieldLabel>
+                    <select
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
+                      value={account.bankCountry || ""}
+                      onChange={(e) => {
+                        handleBankAccountChange(
+                          index,
+                          "bankCountry",
+                          e.target.value
+                        );
+                      }}
+                      required
+                    >
+                      <option value="">-- Select Bank Country --</option>
+                      {countries.map((country) => (
+                        <option key={country.id} value={country.id}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Conditional IBAN and Account Title for PKR and CAD */}
                   {(accountCurrency === "PKR" || accountCurrency === "CAD") && (
                     <>
                       <div className="mb-4">
@@ -3060,8 +3090,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 formik.setFieldValue("beneftype", "individual");
               }}
               className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedBeneficiaryType === "individual"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-200 hover:border-gray-300 bg-white"
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-gray-200 hover:border-gray-300 bg-white"
                 }`}
             >
               <div className="font-medium">Individual</div>
@@ -3074,8 +3104,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 formik.setFieldValue("beneftype", "institution");
               }}
               className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedBeneficiaryType === "institution"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-200 hover:border-gray-300 bg-white"
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-gray-200 hover:border-gray-300 bg-white"
                 }`}
             >
               <div className="font-medium">Institution</div>
@@ -3260,7 +3290,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center justify-center font-medium"
                   >
                     <FaUser className="mr-2" />
-                    Create New {selectedBeneficiaryType === "individual" ? "Individual" :"Institution"} Beneficiary
+                    Create New {selectedBeneficiaryType === "individual" ? "Individual" : "Institution"} Beneficiary
                   </button>
                 </div>
               </div>
