@@ -30,7 +30,7 @@ import {
   selectRemittanceReadyBeneficiaries,
   selectRemittanceReadyBanks,
   selectBeneficiariesLoading,
-  fetchBeneficiaries, // ADD THIS LINE
+  fetchBeneficiaries,
   selectBeneficiaryBanks,
   selectBanksLoading,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
@@ -51,6 +51,7 @@ const ManualDeposit = ({
   incomeSourceOptions = [],
   relationOptions = [],
   paymentOptions = [],
+  onSaveRemittanceState,
 }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -62,19 +63,20 @@ const ManualDeposit = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  // Add local state to track if beneficiaries have been loaded
+  const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
+
   // Transform for dropdown
   const beneficiaries = useMemo(() => {
-    return allBeneficiaries
-      .filter((benef) => benef.status === 1 && benef.active_status === 1)
+    return (allBeneficiaries || [])
+      .filter((benef) => benef?.status === 1 && benef?.active_status === 1)
       .map((benef) => ({
         ...benef,
-        value: benef.id,
-        label: `${benef.name} (${
-          benef.full_phone_number || benef.phone_number || benef.benef_uuid
-        })`,
-        formattedName: `${benef.name} (${
-          benef.phone_number || benef.email || benef.benef_uuid
-        })`,
+        value: benef?.id,
+        label: `${benef?.name} (${benef?.full_phone_number || benef?.phone_number || benef?.benef_uuid
+          })`,
+        formattedName: `${benef?.name} (${benef?.phone_number || benef?.email || benef?.benef_uuid
+          })`,
       }));
   }, [allBeneficiaries]);
 
@@ -83,30 +85,44 @@ const ManualDeposit = ({
     const customerId =
       paramCustomerId || localStorage.getItem("customerId") || "1720";
 
-    if (customerId && allBeneficiaries.length === 0 && !beneficiariesLoading) {
+    if (
+      customerId &&
+      !beneficiariesFetched &&
+      !beneficiariesLoading
+    ) {
       console.log(
         "🔄 ManualDeposit: Fetching beneficiaries for customer:",
         customerId
       );
-      dispatch(fetchBeneficiaries(customerId));
+      dispatch(fetchBeneficiaries(customerId))
+        .unwrap()
+        .then(() => {
+          setBeneficiariesFetched(true);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch beneficiaries:", error);
+          setBeneficiariesFetched(true); // Mark as fetched even on error to stop loading
+        });
     }
   }, [
     dispatch,
     paramCustomerId,
-    allBeneficiaries.length,
+    beneficiariesFetched,
     beneficiariesLoading,
   ]);
+
   const beneficiaryBanks = useSelector(selectBeneficiaryBanks);
 
-  // ADD THESE LOGS HERE:
+  // Debug logs
   console.log("All beneficiaries from Redux:", allBeneficiaries);
   console.log("Remittance ready beneficiaries:", beneficiaries);
-  console.log("Number of all beneficiaries:", allBeneficiaries.length);
+  console.log("Number of all beneficiaries:", allBeneficiaries?.length || 0);
   console.log(
     "Number of remittance ready beneficiaries:",
     beneficiaries.length
   );
   console.log("Beneficiaries loading state:", beneficiariesLoading);
+  console.log("Beneficiaries fetched state:", beneficiariesFetched);
 
   // Local state
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
@@ -114,6 +130,8 @@ const ManualDeposit = ({
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [occupations, setOccupations] = useState([]);
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
+
+  const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
 
   // Default payout options
   const defaultPayoutOptions = useMemo(
@@ -207,6 +225,77 @@ const ManualDeposit = ({
 
     fetchOccupations();
   }, [API_URL]);
+
+  // Set default values for Purpose, Income Source, and Occupation
+  useEffect(() => {
+    // Set default Purpose of Transfer to "Trade"
+    if (purposeOptions.length > 0 && !formData?.purpose) {
+      // Try multiple matching strategies
+      let defaultPurpose = purposeOptions.find(
+        (opt) => opt.value === "Trade" || opt.label === "Trade"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultPurpose) {
+        defaultPurpose = purposeOptions.find(
+          (opt) => opt.value?.toLowerCase() === "trade" || opt.label?.toLowerCase() === "trade"
+        );
+      }
+
+      if (defaultPurpose && onFieldChange) {
+        onFieldChange("purpose", defaultPurpose);
+        console.log("✅ Default purpose set to:", defaultPurpose);
+      } else {
+        console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
+      }
+    }
+
+    // Set default Source of Income to "Savings" (note: Savings with 's')
+    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+      // Try multiple matching strategies
+      let defaultIncomeSource = incomeSourceOptions.find(
+        (opt) => opt.value === "Savings" || opt.label === "Savings" ||
+          opt.value === "Saving" || opt.label === "Saving"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultIncomeSource) {
+        defaultIncomeSource = incomeSourceOptions.find(
+          (opt) => opt.value?.toLowerCase() === "savings" || opt.label?.toLowerCase() === "savings" ||
+            opt.value?.toLowerCase() === "saving" || opt.label?.toLowerCase() === "saving"
+        );
+      }
+
+      if (defaultIncomeSource && onFieldChange) {
+        onFieldChange("incomeSource", defaultIncomeSource);
+        console.log("✅ Default income source set to:", defaultIncomeSource);
+      } else {
+        console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
+      }
+    }
+
+    // Set default Occupation to "Engineer"
+    if (occupations.length > 0 && !formData?.occupation) {
+      // Try multiple matching strategies
+      let defaultOccupation = occupations.find(
+        (opt) => opt.value === "Engineer" || opt.label === "Engineer"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultOccupation) {
+        defaultOccupation = occupations.find(
+          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+        );
+      }
+
+      if (defaultOccupation && onFieldChange) {
+        onFieldChange("occupation", defaultOccupation.value);
+        console.log("✅ Default occupation set to:", defaultOccupation);
+      } else {
+        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupationOptions);
+      }
+    }
+  }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
 
   // Auto-select first beneficiary if none selected
   useEffect(() => {
@@ -325,70 +414,9 @@ const ManualDeposit = ({
       relationOptions,
       payoutMethodOptions,
       findMatchingOption,
-      beneficiaryBanks, // Keep this dependency
+      beneficiaryBanks,
     ]
   );
-
-  // Handle beneficiary code lookup
-  // const handleBeneficiaryCodeLookupInternal = async () => {
-  //   if (!beneficiaryCode.trim()) {
-  //     toast.error("Please enter a beneficiary code");
-  //     return;
-  //   }
-
-  //   try {
-  //     setIsLoadingCode(true);
-  //     const result = await dispatch(
-  //       fetchBeneficiaryByCode(beneficiaryCode)
-  //     ).unwrap();
-
-  //     if (result.data) {
-  //       const beneficiaryData = result.data;
-
-  //       const transformedBeneficiary = {
-  //         value: beneficiaryData.id,
-  //         id: beneficiaryData.id,
-  //         label: `${beneficiaryData.name} (${beneficiaryData.phone_number})`,
-  //         name: beneficiaryData.name,
-  //         benef_uuid: beneficiaryData.benef_uuid,
-  //         occupation: beneficiaryData.occupation,
-  //         relationtobenef: beneficiaryData.relationtobenef,
-  //         transfer_purpose: beneficiaryData.transfer_purpose,
-  //         income_source: beneficiaryData.income_source,
-  //         payout_method:
-  //           beneficiaryData.payout_method || beneficiaryData.payment_method,
-  //         ...beneficiaryData,
-  //       };
-
-  //       await handleBeneficiarySelect(transformedBeneficiary);
-  //       toast.success("Beneficiary details loaded successfully!");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching beneficiary by code:", error);
-  //     if (error.response?.status === 404) {
-  //       toast.error("No beneficiary found with this code");
-  //     } else {
-  //       toast.error("Failed to fetch beneficiary details");
-  //     }
-  //   } finally {
-  //     setIsLoadingCode(false);
-  //   }
-  // };
-
-  // Handle beneficiary code input change
-  // const handleBeneficiaryCodeInputChange = useCallback(
-  //   (e) => {
-  //     const value = e.target.value;
-  //     setBeneficiaryCode(value);
-  //     setShowCodeInput(value.trim().length > 0);
-
-  //     // If clearing the code input, enable dropdown
-  //     if (!value.trim() && selectedBeneficiary) {
-  //       handleBeneficiarySelect(selectedBeneficiary);
-  //     }
-  //   },
-  //   [selectedBeneficiary, handleBeneficiarySelect]
-  // );
 
   // Handle file upload
   const handleFileUploadInternal = (e) => {
@@ -402,6 +430,24 @@ const ManualDeposit = ({
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
     onFieldChange("occupation", selectedOption?.value || "");
+  };
+
+  // Get placeholder text for beneficiary select
+  const getBeneficiaryPlaceholder = () => {
+    // If still loading and haven't fetched yet
+    if (beneficiariesLoading || (!beneficiariesFetched && beneficiaries.length === 0)) {
+      return "Loading beneficiaries...";
+    }
+    // If fetch is complete and no beneficiaries
+    if (beneficiariesFetched && beneficiaries.length === 0) {
+      return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+    }
+    // If using beneficiary code
+    if (showCodeInput) {
+      return "Disabled - Using beneficiary code";
+    }
+    // Normal state
+    return "Select beneficiary...";
   };
 
   // Bank Detail Item component
@@ -423,9 +469,25 @@ const ManualDeposit = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    const customerId =
-      paramCustomerId || localStorage.getItem("authcustomer_id");
-    navigate(`/addbeneficiary/${customerId}`);
+    const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+    console.log("➕ Navigating to add beneficiary from ManualDeposit");
+
+    setIsNavigatingToAdd(true);
+
+    // Save state before navigating
+    if (onSaveRemittanceState) {
+      onSaveRemittanceState();
+    }
+
+    navigate(`/addbeneficiary/${customerId}`, {
+      state: {
+        returnTo: `/remittance/${customerId}`,
+        returnStep: 2,
+        returnToStep: 2,
+        preserveRemittanceState: true,
+        from: "remittance"
+      }
+    });
   };
 
   return (
@@ -446,28 +508,41 @@ const ManualDeposit = ({
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                disabled={isNavigatingToAdd}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FaPlus className="w-3 h-3" />
-                Add New Beneficiary
+                {isNavigatingToAdd ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaPlus className="w-3 h-3" />
+                    Add New Beneficiary
+                  </>
+                )}
               </button>
             </div>
             <Select
               options={beneficiaries}
               value={selectedBeneficiary}
               onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading} // ✅ Use Redux loading state
-              isDisabled={beneficiariesLoading || showCodeInput}
+              isLoading={beneficiariesLoading && !beneficiariesFetched}
+              isDisabled={showCodeInput}
               classNamePrefix="select"
               styles={selectStyles}
-              placeholder={
-                beneficiariesLoading
-                  ? "Loading beneficiaries..."
-                  : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
-              }
+              placeholder={getBeneficiaryPlaceholder()}
               isSearchable
+              noOptionsMessage={() => {
+                if (beneficiariesFetched && beneficiaries.length === 0) {
+                  return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+                }
+                if (beneficiariesLoading) {
+                  return "Loading beneficiaries...";
+                }
+                return "No options available";
+              }}
               getOptionLabel={(option) =>
                 option.formattedName ||
                 `${option.name} (${option.phone_number || option.benef_uuid})`
@@ -476,14 +551,14 @@ const ManualDeposit = ({
             />
           </div>
 
-          {/* OR Separator */}
+          {/* OR Separator - Commented out */}
           {/* <div className="flex items-center my-4">
             <div className="flex-1 border-t border-gray-300"></div>
             <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
             <div className="flex-1 border-t border-gray-300"></div>
           </div> */}
 
-          {/* Enter Beneficiary Code Field */}
+          {/* Enter Beneficiary Code Field - Commented out */}
           {/* <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Enter Beneficiary Code
@@ -562,33 +637,91 @@ const ManualDeposit = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Occupation
             </label>
-            <div className="flex gap-2">
-              <Select
-                options={occupations}
-                value={
-                  occupations.find(
-                    (opt) => opt.value === formData.occupation
-                  ) || null
-                }
-                onChange={handleOccupationChange}
-                isLoading={isLoadingOccupations}
-                classNamePrefix="select"
-                styles={selectStyles}
-                placeholder={
-                  isLoadingOccupations
-                    ? "Loading occupations..."
-                    : "Select occupation..."
-                }
-                className="flex-1"
-              />
-              <input
-                type="text"
-                value={formData.occupation || ""}
-                onChange={(e) => onFieldChange("occupation", e.target.value)}
-                placeholder="Or enter custom occupation"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1">
+                <Select
+                  options={occupations}
+                  value={
+                    occupations.find(
+                      (opt) => opt.value === formData.occupation
+                    ) || null
+                  }
+                  onChange={handleOccupationChange}
+                  isLoading={isLoadingOccupations}
+                  classNamePrefix="select"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "48px",
+                      borderRadius: "0.5rem",
+                      borderColor: "#e5e7eb",
+                      boxShadow: "none",
+                      "&:hover": { borderColor: "#9ca3af" },
+                      fontSize: "0.95rem",
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        minHeight: "44px",
+                      }
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      borderRadius: "0.5rem",
+                      fontSize: "0.95rem",
+                      border: "1px solid #e5e7eb",
+                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                      zIndex: 9999,
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        maxHeight: "300px",
+                        overflowY: "auto",
+                      }
+                    }),
+                    option: (base, { isSelected, isFocused }) => ({
+                      ...base,
+                      backgroundColor: isSelected ? "#f3f4f6" : "white",
+                      color: isSelected ? "#111827" : "#4b5563",
+                      padding: "12px 16px",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                      '@media (max-width: 640px)': {
+                        padding: "10px 12px",
+                        fontSize: "0.875rem",
+                      },
+                      "&:hover": { backgroundColor: "#f3f4f6" },
+                    }),
+                  }}
+                  placeholder={
+                    isLoadingOccupations
+                      ? "Loading occupations..."
+                      : "Select occupation..."
+                  }
+                  className="w-full"
+                  isSearchable
+                  isClearable
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.occupation || ""}
+                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  placeholder="Or enter custom occupation"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  style={{
+                    minHeight: "48px",
+                    '@media (max-width: 640px)': {
+                      minHeight: "44px",
+                      fontSize: "0.875rem",
+                    }
+                  }}
+                />
+              </div>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Select from dropdown or type custom occupation
+            </p>
           </div>
 
           {/* Beneficiary Bank */}
@@ -612,10 +745,10 @@ const ManualDeposit = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option.bank_name || "Unknown Bank";

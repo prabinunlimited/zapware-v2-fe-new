@@ -606,6 +606,13 @@ const BankLink = () => {
     }
   }, [customerId, dispatch]);
 
+  useEffect(()=>{
+    if(customerId && !showPlaidLink && !isAddingAccount) {
+      dispatch(setShowPlaidLink(true));
+      setShowPlaidButton(false);
+1    }
+  }, [customerId, showPlaidLink, isAddingAccount, dispatch])
+
   // Event handlers - ALL DEFINED BEFORE EMPTY STATE
   const handleRefresh = useCallback(() => {
     if (customerId && !isRefreshing) {
@@ -756,9 +763,9 @@ const BankLink = () => {
       className="text-center py-16 px-4"
     >
       <div className="max-w-2xl mx-auto">
-        <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-8">
+        {/* <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-8">
           <FaBuilding className="text-gray-400 text-5xl" />
-        </div>
+        </div> */}
 
         <h3 className="text-3xl font-bold text-gray-900 mb-4">
           {showCardPaymentMessage
@@ -766,13 +773,13 @@ const BankLink = () => {
             : "No Bank Accounts Linked"}
         </h3>
 
-        <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">
+        {/* <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">
           {showCardPaymentMessage
             ? "Link a bank account to enable instant deposits, withdrawals, and card payments with enterprise-grade security."
             : "Connect your bank account to access all financial features including instant transfers, bill payments, and investment options."}
-        </p>
+        </p> */}
 
-        <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 border border-gray-200 mb-8">
+        {/* <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 border border-gray-200 mb-8">
           <h4 className="font-semibold text-gray-900 mb-6 text-lg flex items-center justify-center">
             <FaLock className="mr-3 text-green-500" />
             Enterprise Security Features
@@ -802,9 +809,9 @@ const BankLink = () => {
               <p className="text-sm text-gray-600 mt-1">Up to $250,000</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
-        <motion.button
+        {/* <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onAction}
@@ -817,7 +824,7 @@ const BankLink = () => {
         >
           <FaPlus className="inline mr-3" />
           Link Your First Bank Account
-        </motion.button>
+        </motion.button> */}
 
         {showCardPaymentMessage && onReturnToCard && (
           <button
@@ -853,9 +860,9 @@ const BankLink = () => {
                   <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
                     Bank Accounts Management
                   </h1>
-                  <p className="text-gray-600 mt-1">
+                  {/* <p className="text-gray-600 mt-1">
                     Manage your linked financial accounts and payment methods
-                  </p>
+                  </p> */}
                 </div>
               </div>
 
@@ -888,7 +895,7 @@ const BankLink = () => {
                 />
               </motion.button>
 
-              {showPlaidButton && (
+              {/* {showPlaidButton && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -903,7 +910,7 @@ const BankLink = () => {
                   <FaPlus className="mr-2.5" />
                   Link New Account
                 </motion.button>
-              )}
+              )} */}
             </div>
           </div>
         </motion.header>
@@ -942,7 +949,8 @@ const BankLink = () => {
             <ZapPlaidLink
               onSuccess={handleBankLinkSuccessCallback}
               onClose={handleClosePlaidModal}
-              showButton={!showPlaidButton}
+              showButton={true}
+              autoInitialize={false}
             />
           )}
 

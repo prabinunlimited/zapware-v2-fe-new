@@ -158,6 +158,71 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+// ===================== CHANGE PASSWORD ASYNC THUNK =====================
+export const changePassword = createAsyncThunk(
+  "auth/changePassword",
+  async ({ currentPassword, newPassword, confirmPassword }, { rejectWithValue, getState }) => {
+    try {
+      const state = getState();
+      const token = state.auth.token;
+      
+      // Get customer UUID from localStorage
+      const customerUuid = localStorage.getItem("customerUuid");
+      
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found");
+      }
+
+      const payload = {
+        userType: "customer",
+        userId: customerUuid,
+        oldPassword: currentPassword,
+        newPassword: newPassword,
+        confirmNewPassword: confirmPassword,
+      };
+
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/change-password`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Extract error message from the nested structure
+        let errorMessage = "Failed to change password";
+        
+        if (data.message) {
+          if (typeof data.message === "string") {
+            errorMessage = data.message;
+          } else if (typeof data.message === "object") {
+            // Handle nested error object like { newPassword: ["The new password field must be at least 12 characters."] }
+            const firstErrorKey = Object.keys(data.message)[0];
+            if (firstErrorKey && data.message[firstErrorKey] && data.message[firstErrorKey].length > 0) {
+              errorMessage = data.message[firstErrorKey][0];
+            } else {
+              errorMessage = JSON.stringify(data.message);
+            }
+          }
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to change password");
+    }
+  }
+);
+
 // ===================== CONSTANTS =====================
 const KYC_STATUS = {
   PENDING: "0",
@@ -1245,6 +1310,23 @@ const authSlice = createSlice({
             },
           };
         }
+      })
+
+      .addCase(changePassword.pending, (state) => {
+        state.isLoading = true;
+        state.isSubmitting = true;
+        state.error = null;
+      })
+      .addCase(changePassword.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isSubmitting = false;
+        state.error = null;
+        state.lastPasswordChange = Date.now();
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.isSubmitting = false;
+        state.error = action.payload || "Password change failed";
       });
   },
 });

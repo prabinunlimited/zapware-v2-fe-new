@@ -37,3 +37,40 @@ body {
   position: absolute;
   z-index: 9999;
 }
+
+/* Custom scrollbar for mobile tabs */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: thin;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Ensure smooth scrolling on mobile */
+.tabs-container {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile tab adjustments */
+@media (max-width: 768px) {
+  .mobile-tab-text {
+    font-size: 0.75rem;
+  }
+}

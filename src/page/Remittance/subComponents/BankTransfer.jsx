@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FaUniversity,
   FaFileUpload,
@@ -39,7 +39,7 @@ import {
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 // Import deposit slice actions and selectors
-import { 
+import {
   checkSilaBankAccounts,
   selectSilaBankAccounts,
   selectHasSilaAccounts,
@@ -77,16 +77,22 @@ const BankTransfer = ({
   silaAccountsError = null,
   selectedBankAccount = null,
   onBankAccountSelect,
+  customerId: propCustomerId,
+  onSaveRemittanceState,
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { customerId: paramCustomerId } = useParams();
+
+  // Get customer ID from props or params or localStorage
+  const customerId = propCustomerId || paramCustomerId || localStorage.getItem("customerId") || localStorage.getItem("authcustomer_id")
 
   // Get Sila bank accounts from Redux store
   const reduxSilaBankAccounts = useSelector(selectSilaBankAccounts);
   const reduxHasSilaAccounts = useSelector(selectHasSilaAccounts);
   const reduxSilaAccountsLoading = useSelector(selectSilaAccountsLoading);
   const reduxSilaAccountsError = useSelector(selectSilaAccountsError);
-  
+
   // Use props if provided, otherwise use Redux store
   const displayedSilaAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
   const displayedSilaBankAccounts = silaBankAccounts.length > 0 ? silaBankAccounts : reduxSilaBankAccounts;
@@ -100,6 +106,9 @@ const BankTransfer = ({
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  // Add local state to track if beneficiaries have been loaded
+  const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
+
   // Transform for dropdown
   const beneficiaries = useMemo(() => {
     return (allBeneficiaries || [])
@@ -107,18 +116,16 @@ const BankTransfer = ({
       .map((benef) => ({
         ...benef,
         value: benef?.id,
-        label: `${benef?.name || "Unknown"} (${
-          benef?.full_phone_number ||
+        label: `${benef?.name || "Unknown"} (${benef?.full_phone_number ||
           benef?.phone_number ||
           benef?.benef_uuid ||
           "No Phone"
-        })`,
-        formattedName: `${benef?.name || "Unknown"} (${
-          benef?.phone_number ||
+          })`,
+        formattedName: `${benef?.name || "Unknown"} (${benef?.phone_number ||
           benef?.email ||
           benef?.benef_uuid ||
           "No Contact"
-        })`,
+          })`,
       }));
   }, [allBeneficiaries]);
 
@@ -129,21 +136,29 @@ const BankTransfer = ({
 
     if (
       customerId &&
-      (!allBeneficiaries || allBeneficiaries.length === 0) &&
+      !beneficiariesFetched &&
       !beneficiariesLoading
     ) {
       console.log(
         "🔄 BankTransfer: Fetching beneficiaries for customer:",
         customerId
       );
-      dispatch(fetchBeneficiaries(customerId));
+      dispatch(fetchBeneficiaries(customerId))
+        .unwrap()
+        .then(() => {
+          setBeneficiariesFetched(true);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch beneficiaries:", error);
+          setBeneficiariesFetched(true); // Mark as fetched even on error to stop loading
+        });
     }
-  }, [dispatch, paramCustomerId, allBeneficiaries, beneficiariesLoading]);
+  }, [dispatch, paramCustomerId, beneficiariesFetched, beneficiariesLoading]);
 
   // FETCH SILA BANK ACCOUNTS ON MOUNT
   useEffect(() => {
     const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
-    
+
     if (customerId && !displayedSilaAccountsLoading) {
       console.log("🔄 BankTransfer: Fetching Sila bank accounts for customer:", customerId);
       dispatch(checkSilaBankAccounts(customerId))
@@ -166,7 +181,7 @@ const BankTransfer = ({
       const accountNumber = account.accountNumberHash || account.account_number || '****';
       const provider = account.provider || account.bank || 'Unknown Bank';
       const accountType = account.account_type || account.accountType || 'Checking';
-      
+
       return {
         ...account,
         value: account.id || account.account_id,
@@ -197,6 +212,8 @@ const BankTransfer = ({
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
   const [showBankAccountInfo, setShowBankAccountInfo] = useState(false);
 
+  const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
+
   // Debug logging
   useEffect(() => {
     console.log("BankTransfer Props Debug:", {
@@ -211,6 +228,9 @@ const BankTransfer = ({
       silaAccountsCount: displayedSilaBankAccounts?.length || 0,
       hasSilaAccounts: displayedHasSilaAccounts,
       selectedBankAccount: selectedBankAccount,
+      beneficiariesCount: beneficiaries.length,
+      beneficiariesLoading: beneficiariesLoading,
+      beneficiariesFetched: beneficiariesFetched,
     });
   }, [
     onFieldChange,
@@ -222,6 +242,9 @@ const BankTransfer = ({
     displayedSilaBankAccounts,
     displayedHasSilaAccounts,
     selectedBankAccount,
+    beneficiaries.length,
+    beneficiariesLoading,
+    beneficiariesFetched,
   ]);
 
   // Default payout options - fallback if paymentOptions is empty
@@ -258,8 +281,8 @@ const BankTransfer = ({
         backgroundColor: isSelected
           ? "#eff6ff"
           : isFocused
-          ? "#f8fafc"
-          : "white",
+            ? "#f8fafc"
+            : "white",
         color: isSelected ? "#1e40af" : "#374151",
         fontWeight: isSelected ? "600" : "500",
         padding: "12px 16px",
@@ -325,6 +348,78 @@ const BankTransfer = ({
 
     fetchOccupations();
   }, [API_URL]);
+
+  // Set default values for Purpose, Income Source, and Occupation
+  useEffect(() => {
+    // Set default Purpose of Transfer to "Trade"
+    if (purposeOptions.length > 0 && !formData?.purpose) {
+      // Try multiple matching strategies
+      let defaultPurpose = purposeOptions.find(
+        (opt) => opt.value === "Trade" || opt.label === "Trade"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultPurpose) {
+        defaultPurpose = purposeOptions.find(
+          (opt) => opt.value?.toLowerCase() === "trade" || opt.label?.toLowerCase() === "trade"
+        );
+      }
+
+      if (defaultPurpose && onFieldChange) {
+        onFieldChange("purpose", defaultPurpose);
+        console.log("✅ Default purpose set to:", defaultPurpose);
+      } else {
+        console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
+      }
+    }
+
+    // Set default Source of Income to "Savings" (note: Savings with 's')
+    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+      // Try multiple matching strategies
+      let defaultIncomeSource = incomeSourceOptions.find(
+        (opt) => opt.value === "Savings" || opt.label === "Savings" ||
+          opt.value === "Saving" || opt.label === "Saving"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultIncomeSource) {
+        defaultIncomeSource = incomeSourceOptions.find(
+          (opt) => opt.value?.toLowerCase() === "savings" || opt.label?.toLowerCase() === "savings" ||
+            opt.value?.toLowerCase() === "saving" || opt.label?.toLowerCase() === "saving"
+        );
+      }
+
+      if (defaultIncomeSource && onFieldChange) {
+        onFieldChange("incomeSource", defaultIncomeSource);
+        console.log("✅ Default income source set to:", defaultIncomeSource);
+      } else {
+        console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
+      }
+    }
+
+    // Set default Occupation to "Engineer"
+    if (occupations.length > 0 && !formData?.occupation) {
+      // Try multiple matching strategies
+      let defaultOccupation = occupations.find(
+        (opt) => opt.value === "Engineer" || opt.label === "Engineer"
+      );
+
+      // If not found, try case-insensitive match
+      if (!defaultOccupation) {
+        defaultOccupation = occupations.find(
+          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+        );
+      }
+
+      if (defaultOccupation && onFieldChange) {
+        onFieldChange("occupation", defaultOccupation.value);
+        console.log("✅ Default occupation set to:", defaultOccupation);
+      } else {
+        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
+      }
+    }
+  }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
+
 
   // Auto-select first beneficiary if none selected
   useEffect(() => {
@@ -455,16 +550,16 @@ const BankTransfer = ({
   // Handle bank account selection
   const handleBankAccountSelect = (selectedOption) => {
     console.log("BankTransfer: Sila bank account selected:", selectedOption);
-    
+
     if (onBankAccountSelect) {
       onBankAccountSelect(selectedOption);
     }
-    
+
     // Also update Redux store if needed
     if (selectedOption) {
       dispatch(setSelectedBankAccount(selectedOption));
     }
-    
+
     toast.success(`Selected ${selectedOption?.account_name || 'bank account'}`);
   };
 
@@ -487,9 +582,8 @@ const BankTransfer = ({
         const transformedBeneficiary = {
           value: beneficiaryData?.id,
           id: beneficiaryData?.id,
-          label: `${beneficiaryData?.name || "Unknown"} (${
-            beneficiaryData?.phone_number || "No Phone"
-          })`,
+          label: `${beneficiaryData?.name || "Unknown"} (${beneficiaryData?.phone_number || "No Phone"
+            })`,
           name: beneficiaryData?.name,
           benef_uuid: beneficiaryData?.benef_uuid,
           occupation: beneficiaryData?.occupation,
@@ -552,8 +646,43 @@ const BankTransfer = ({
 
   // Add New Beneficiary button
   const handleAddNewBeneficiary = () => {
-    toast.info("Redirecting to add new beneficiary...");
-    // You can implement navigation to beneficiary creation page
+    const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+    console.log("➕ Navigating to add beneficiary from ManualDeposit");
+
+    setIsNavigatingToAdd(true);
+
+    //State before navigating
+    if (onSaveRemittanceState) {
+      onSaveRemittanceState();
+    }
+
+    navigate(`/addbeneficiary/${customerId}`, {
+      state: {
+        returnTo: `/remittance/${customerId}`,
+        returnStep: 2,
+        returnToStep: 2,
+        preserveRemittanceState: true,
+        from: "remittance"  // ADD THIS FLAG
+      }
+    });
+  };
+
+  // Get placeholder text for beneficiary select
+  const getBeneficiaryPlaceholder = () => {
+    // If still loading and haven't fetched yet
+    if (beneficiariesLoading || (!beneficiariesFetched && beneficiaries.length === 0)) {
+      return "Loading beneficiaries...";
+    }
+    // If fetch is complete and no beneficiaries
+    if (beneficiariesFetched && beneficiaries.length === 0) {
+      return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+    }
+    // If using beneficiary code
+    if (showCodeInput) {
+      return "Disabled - Using beneficiary code";
+    }
+    // Normal state
+    return "Select beneficiary...";
   };
 
   // Bank Detail Item component (for consistency with ManualDeposit)
@@ -589,7 +718,7 @@ const BankTransfer = ({
             {showBankAccountInfo ? "Hide Details" : "Show Details"}
           </button>
         </div>
-        
+
         {showBankAccountInfo && (
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -626,11 +755,11 @@ const BankTransfer = ({
                 </p>
               </div>
             </div>
-            
+
             <div className="pt-3 border-t border-blue-200">
               <p className="text-xs text-gray-500 mb-1">Additional Info</p>
               <p className="text-xs text-gray-700">
-                This account will be used as the source for your bank transfer. 
+                This account will be used as the source for your bank transfer.
                 {selectedBankAccount.fednow_credit_enabled && " Supports FedNow transfers."}
                 {selectedBankAccount.rtp_credit_enabled && " Supports RTP transfers."}
               </p>
@@ -657,18 +786,48 @@ const BankTransfer = ({
                 <label className="block text-sm font-medium text-gray-700">
                   Select Your Bank Account *
                 </label>
-                {displayedSilaAccountsLoading ? (
-                  <div className="flex items-center">
-                    <RingLoader size={20} color="#3b82f6" />
-                    <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-500">
-                    {silaAccountOptions.length} account(s) available
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {displayedSilaAccountsLoading ? (
+                    <div className="flex items-center">
+                      <RingLoader size={20} color="#3b82f6" />
+                      <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {silaAccountOptions.length} account(s) available
+                    </span>
+                  )}
+
+                  {/* Add/Remove Bank Button - Using existing BankLink route */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                      console.log("➕ Navigating to manage bank accounts via BankLink");
+
+                      // Save current state if needed
+                      if (onSaveRemittanceState) {
+                        onSaveRemittanceState();
+                      }
+
+                      // Navigate to existing BankLink route
+                      navigate(`/linkbank/${customerId}`, {
+                        state: {
+                          returnTo: `/remittance/${customerId}`,
+                          returnStep: 2,
+                          preserveRemittanceState: true,
+                          from: "remittance"
+                        }
+                      });
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <FaPlus className="w-3 h-3" />
+                    Add/Remove Bank
+                  </button>
+                </div>
               </div>
-              
+
               {displayedSilaAccountsError ? (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-sm text-red-600">{displayedSilaAccountsError}</p>
@@ -696,8 +855,8 @@ const BankTransfer = ({
                       displayedSilaAccountsLoading
                         ? "Loading your bank accounts..."
                         : silaAccountOptions.length === 0
-                        ? "No bank accounts found. Please link a bank account."
-                        : "Select your bank account..."
+                          ? "No bank accounts found. Please link a bank account."
+                          : "Select your bank account..."
                     }
                     isSearchable
                     getOptionLabel={(option) => (
@@ -721,9 +880,9 @@ const BankTransfer = ({
                     )}
                     getOptionValue={(option) => option.value}
                   />
-                  
+
                   {selectedBankAccount && renderBankAccountInfo()}
-                  
+
                   {silaAccountOptions.length === 0 && !displayedSilaAccountsLoading && (
                     <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-start">
@@ -736,8 +895,15 @@ const BankTransfer = ({
                             type="button"
                             className="mt-2 text-sm text-blue-600 hover:text-blue-800"
                             onClick={() => {
-                              // You can add navigation to bank linking page here
-                              toast.info("Redirecting to bank linking...");
+                              const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
+                              navigate(`/linkbank/${customerId}`, {
+                                state: {
+                                  returnTo: `/remittance/${customerId}`,
+                                  returnStep: 2,
+                                  preserveRemittanceState: true,
+                                  from: "remittance"
+                                }
+                              });
                             }}
                           >
                             Link a Bank Account
@@ -760,32 +926,44 @@ const BankTransfer = ({
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                disabled={isNavigatingToAdd}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FaPlus className="w-3 h-3" />
-                Add New Beneficiary
+                {isNavigatingToAdd ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaPlus className="w-3 h-3" />
+                    Add New Beneficiary
+                  </>
+                )}
               </button>
             </div>
             <Select
               options={beneficiaries}
               value={selectedBeneficiary || null}
               onChange={handleBeneficiarySelect}
-              isLoading={beneficiariesLoading}
-              isDisabled={beneficiariesLoading || showCodeInput}
+              isLoading={beneficiariesLoading && !beneficiariesFetched}
+              isDisabled={showCodeInput}
               classNamePrefix="select"
               styles={selectStyles}
-              placeholder={
-                beneficiariesLoading
-                  ? "Loading beneficiaries..."
-                  : showCodeInput
-                  ? "Disabled - Using beneficiary code"
-                  : "Select beneficiary..."
-              }
+              placeholder={getBeneficiaryPlaceholder()}
               isSearchable
+              noOptionsMessage={() => {
+                if (beneficiariesFetched && beneficiaries.length === 0) {
+                  return "No beneficiaries found. Click 'Add New Beneficiary' to create one.";
+                }
+                if (beneficiariesLoading) {
+                  return "Loading beneficiaries...";
+                }
+                return "No options available";
+              }}
               getOptionLabel={(option) =>
                 option?.formattedName ||
-                `${option?.name || "Unknown"} (${
-                  option?.phone_number || option?.benef_uuid || "No Contact"
+                `${option?.name || "Unknown"} (${option?.phone_number || option?.benef_uuid || "No Contact"
                 })`
               }
               getOptionValue={(option) => option?.id}
@@ -905,31 +1083,95 @@ const BankTransfer = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Occupation
             </label>
-            <div className="flex gap-2">
-              <Select
-                options={occupations}
-                value={currentOccupationValue}
-                onChange={handleOccupationChange}
-                isLoading={isLoadingOccupations}
-                classNamePrefix="select"
-                styles={selectStyles}
-                placeholder={
-                  isLoadingOccupations
-                    ? "Loading occupations..."
-                    : "Select occupation..."
-                }
-                className="flex-1"
-                isSearchable
-                isClearable
-              />
-              <input
-                type="text"
-                value={formData?.occupation || ""}
-                onChange={(e) => onFieldChange("occupation", e.target.value)}
-                placeholder="Or enter custom occupation"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1">
+                <Select
+                  options={occupations}
+                  value={currentOccupationValue}
+                  onChange={handleOccupationChange}
+                  isLoading={isLoadingOccupations}
+                  classNamePrefix="select"
+                  styles={{
+                    ...selectStyles,
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "48px",
+                      borderRadius: "0.5rem",
+                      borderColor: "#e5e7eb",
+                      boxShadow: "none",
+                      "&:hover": { borderColor: "#9ca3af" },
+                      fontSize: "0.95rem",
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        minHeight: "44px",
+                      }
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      borderRadius: "0.5rem",
+                      fontSize: "0.95rem",
+                      border: "1px solid #e5e7eb",
+                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                      zIndex: 9999,
+                      '@media (max-width: 640px)': {
+                        fontSize: "0.875rem",
+                        maxHeight: "300px",
+                        overflowY: "auto",
+                      }
+                    }),
+                    option: (base, { isSelected, isFocused }) => ({
+                      ...base,
+                      backgroundColor: isSelected
+                        ? "#eff6ff"
+                        : isFocused
+                          ? "#f8fafc"
+                          : "white",
+                      color: isSelected ? "#1e40af" : "#374151",
+                      fontWeight: isSelected ? "600" : "500",
+                      padding: "12px 16px",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                      '@media (max-width: 640px)': {
+                        padding: "10px 12px",
+                        fontSize: "0.875rem",
+                      },
+                      "&:hover": {
+                        backgroundColor: "#f8fafc",
+                      },
+                    }),
+                  }}
+                  placeholder={
+                    isLoadingOccupations
+                      ? "Loading occupations..."
+                      : "Select occupation..."
+                  }
+                  className="w-full"
+                  isSearchable
+                  isClearable
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData?.occupation || ""}
+                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  placeholder="Or enter custom occupation"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  style={{
+                    minHeight: "48px",
+                    '@media (max-width: 640px)': {
+                      minHeight: "44px",
+                      fontSize: "0.875rem",
+                    }
+                  }}
+                />
+              </div>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Select from dropdown or type custom occupation
+            </p>
           </div>
 
           {/* Beneficiary Bank */}
@@ -954,10 +1196,10 @@ const BankTransfer = ({
                 banksLoading
                   ? "Loading banks..."
                   : !selectedBeneficiary
-                  ? "Select a beneficiary first"
-                  : !beneficiaryBanks || beneficiaryBanks.length === 0
-                  ? "No bank accounts found for this beneficiary"
-                  : "Select beneficiary bank..."
+                    ? "Select a beneficiary first"
+                    : !beneficiaryBanks || beneficiaryBanks.length === 0
+                      ? "No bank accounts found for this beneficiary"
+                      : "Select beneficiary bank..."
               }
               getOptionLabel={(option) => {
                 const bankName = option?.bank_name || "Unknown Bank";
@@ -993,10 +1235,10 @@ const BankTransfer = ({
           {(selectedCurrency === "EUR" ||
             selectedCurrency === "GBP" ||
             selectedCurrency === "DKK") &&
-          selectedBank &&
-          selectedBeneficiary &&
-          formData?.amount &&
-          parseFloat(formData.amount) > 0 ? (
+            selectedBank &&
+            selectedBeneficiary &&
+            formData?.amount &&
+            parseFloat(formData.amount) > 0 ? (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <div>

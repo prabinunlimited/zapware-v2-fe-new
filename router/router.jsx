@@ -12,6 +12,7 @@ import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
 import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
+import KYCVerification from "../src/features/Auth/KYCVerification";
 import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
@@ -29,6 +30,7 @@ import PublicRoute from "./PublicRoute";
 
 import URLDebugger from "./URLDebugger";
 import Profile from "../src/page/Profile/Profile";
+import ChangePassword from "../src/page/Changepassword/ChangePassword";
 import TransferBalancePage from "../src/page/Transfer/TransferBalancePage";
 import DepositPage from "../src/page/Deposit/DepositPage";
 import BankLink from "../src/page/Deposit/components/BankLink";
@@ -39,9 +41,13 @@ import AddTeamMember from "../src/page/Team/AddNewMember";
 import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
+import RecurringRemit from "../src/page/Remittance/RecurringRemit/RecurringRemit"
+import RecurringRemitDetail from "../src/page/Remittance/RecurringRemit/RecurringRemitDetail";
 import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
+import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
+import CustomerSupport from "../src/page/CustomerSupport/CustomerSupport";
 
 const ProtectedLayout = () => {
   return (
@@ -87,6 +93,10 @@ const router = createBrowserRouter([
         element: <PhoneVerification />,
       },
       {
+        path: "kyc-verification",
+        element: <KYCVerification />,
+      },
+      {
         path: "forgotpassword",
         element: <ForgotPassword />,
       },
@@ -109,6 +119,10 @@ const router = createBrowserRouter([
       {
         path: "monthlytransactions/:customerId",
         element: <MonthlyTransactions />,
+      },
+      {
+        path: "alltransactions/:customerId/:selectedCurrencyCode?",
+        element: <AllTransactions />,
       },
       {
         path: "transfer/:customerId",
@@ -146,7 +160,14 @@ const router = createBrowserRouter([
         path: "team/:customerId",
         element: <Team />,
       },
-      { path: "addteam/:customerId", element: <AddTeamMember /> },
+      { 
+        path: "addteam/:customerId", 
+        element: <AddTeamMember />
+      },
+      { 
+        path: "editmember/:customerId/:staffId", 
+        element: <AddTeamMember />  
+      },
       {
         path: "homeremit/:customerId",
         element: <HomeRemit />,
@@ -168,6 +189,10 @@ const router = createBrowserRouter([
         element: <Profile />,
       },
       {
+        path: "change-password/:customerId",  
+        element: <ChangePassword />,
+      },
+      {
         path: "payout/:customerId",
         element: <PayoutPage />,
       },
@@ -176,9 +201,22 @@ const router = createBrowserRouter([
         element: <Remittance />,
       },
       {
+        path: "recurring-remit/:customerId",
+        element: <RecurringRemit/>,
+      },
+      {
+        path: "recurring-remit/:customerId/:recurringRemittanceId",
+        element: <RecurringRemitDetail />,
+      },
+       {
         path: "/bankletter/:accountId",
         element: <BankLetter />,
       },
+      {
+        path: "customer-support/:customerId", 
+        element: <CustomerSupport />,
+      },
+      
     ],
   },
 

@@ -170,6 +170,12 @@ export const selectReferralSuccessMessage = createSelector(
   }
 );
 
+// ✅ ADD THIS NEW SELECTOR HERE - at the end with other selectors
+export const selectHasCurrencyAccounts = (state) => {
+  return state.currencyAccounts.accountOptions?.length > 0;
+};
+
+
 export const selectAgentSuccessMessage = createSelector(
   [selectValidationMessage, selectAgentError, selectIsAgentValidating],
   (validationMessage, agentError, isAgentValidating) => {

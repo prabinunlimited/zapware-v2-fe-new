@@ -292,6 +292,12 @@ const headerSlice = createSlice({
         state.profileLoading = false;
         state.profileError = null;
 
+         // ✅ ADD THIS: Cache customer type in localStorage
+         const customerType = state.profileData?.customer_type;
+         if (customerType) {
+           localStorage.setItem('customer_type', customerType);
+         }
+
         if (action.payload !== null) {
           console.log(
             "✅ REDUX: Profile data received:",

@@ -61,6 +61,10 @@ function PhoneVerification() {
     mobileNumber,
     hasSSN = false, // ← Extract it
     customerData,
+    isRemittanceOnly = false,  // ← ADD THIS
+    isMultiCurrency = false,   // ← ADD THIS
+    selectedAccounts = [],     // ← ADD THIS
+    accountType = null,
   } = location.state || {};
   const otpRefs = useRef(new Array(6).fill(null));
 
@@ -236,11 +240,41 @@ function PhoneVerification() {
     }
 
     // If KYC is already completed, proceed to home
+    // If KYC is already completed, navigate based on account type
     if (response.kyc_status === 1 || response.kyc_status === "1") {
+      if (isRemittanceOnly) {
+        toast.success("Verification complete! Redirecting to login...");
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
+      } else {
+        toast.success("Verification complete! Redirecting to dashboard...");
+        setTimeout(() => {
+          navigate("/");
+        }, 1500);
+      }
       return response;
     }
 
     // If no Plaid URL and KYC not completed, proceed normally
+    // If no Plaid URL and KYC not completed, navigate based on account type
+    if (isRemittanceOnly) {
+      toast.success("Account created successfully! Redirecting to login...");
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+    } else {
+      toast.success("Registration successful! Redirecting to KYC verification...");
+      setTimeout(() => {
+        navigate("/kyc-verification", {
+          state: {
+            customerData: customerData || response.customer_data,
+            selectedAccounts: selectedAccounts,
+            fromRegistration: true
+          }
+        });
+      }, 2000);
+    }
     return response;
   };
 
@@ -343,46 +377,33 @@ function PhoneVerification() {
 
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
-
-            // ✅ CRITICAL: Check for under review status before proceeding
+            // Check if account is under review
             if (data.plaid_kyc_required === "N") {
-              console.log(
-                "⏳ Account is under review - stopping further processing",
-              );
-
-              // Reset OTP state
-              dispatch(setOtp(new Array(6).fill("")));
-
-              // Show under review modal
-              setTimeout(() => {
-                showUnderReviewModal();
-              }, 100);
-
-              return; // Stop further processing
-            }
-
-            // Store authentication data if available
-            if (data.token) {
-              localStorage.setItem("authtoken", data.token);
-            }
-            if (data.customer_id) {
-              localStorage.setItem("authcustomer_id", data.customer_id);
-            }
-
-            // Handle KYC/Plaid flow (only if plaid_kyc_required is not "N")
-            const processedData = await handleKycVerification(data);
-
-            if (processedData === null) {
-              // KYC verification is in progress, don't navigate yet
+              showUnderReviewModal(accountType);
               return;
             }
 
-            // If no KYC required or KYC already completed
-            if (processedData) {
-              setTimeout(() => {
-                navigate("/");
-              }, 2000);
+            // Store auth data
+            if (data.token) localStorage.setItem("authtoken", data.token);
+            if (data.customer_id) localStorage.setItem("authcustomer_id", data.customer_id);
+
+            // For Remittance Only - go to login
+            if (isRemittanceOnly) {
+              setTimeout(() => navigate("/login"), 2000);
+              return;
             }
+
+            // For Multi-Currency - go to KYC with the Plaid URL
+            setTimeout(() => {
+              navigate("/kyc-verification", {
+                state: {
+                  plaidUrl: data.plaid_url,  // ← IMPORTANT: Pass the URL here
+                  customerId: data.customer_id,
+                  isWhitelabelled: data.is_whitelabelled_partner_customer === "1",
+                  selectedAccounts: selectedAccounts,
+                }
+              });
+            }, 1500);
           } else {
             toast.error(data.message || "OTP verification failed");
           }
@@ -699,11 +720,10 @@ function PhoneVerification() {
               whileTap={{ scale: 0.95 }}
               onClick={handleResendOTP}
               disabled={resendAttempts <= 0 || resendTimer > 0 || isSubmitting}
-              className={`w-full py-3 sm:py-4 rounded-lg ${
-                resendTimer > 0 || resendAttempts <= 0
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
-              } flex items-center justify-center font-semibold text-base sm:text-xl`}
+              className={`w-full py-3 sm:py-4 rounded-lg ${resendTimer > 0 || resendAttempts <= 0
+                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
+                } flex items-center justify-center font-semibold text-base sm:text-xl`}
             >
               <FiRefreshCw className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
               {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend Code"}
@@ -715,9 +735,8 @@ function PhoneVerification() {
             <div className="flex items-center justify-between text-sm sm:text-lg text-gray-600">
               <span>Attempts remaining:</span>
               <span
-                className={`font-semibold ${
-                  resendAttempts <= 2 ? "text-orange-500" : "text-green-600"
-                }`}
+                className={`font-semibold ${resendAttempts <= 2 ? "text-orange-500" : "text-green-600"
+                  }`}
               >
                 {resendAttempts}
               </span>

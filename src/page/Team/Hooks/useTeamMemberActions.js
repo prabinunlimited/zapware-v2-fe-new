@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import {
   fetchRoles,
   addTeamMember,
+  updateTeamMember, // ADD THIS
   clearError,
   clearSuccess,
   setShowPopup,
@@ -28,6 +29,16 @@ export const useTeamMemberActions = () => {
     [dispatch]
   );
 
+  // ADD THIS NEW FUNCTION
+  const updateTeamMemberAction = useCallback(
+    (customerId, staffId, memberData, authToken, API_URL) => {
+      return dispatch(
+        updateTeamMember({ customerId, staffId, memberData, authToken, API_URL })
+      );
+    },
+    [dispatch]
+  );
+
   const resetError = useCallback(() => {
     dispatch(clearError());
   }, [dispatch]);
@@ -46,6 +57,7 @@ export const useTeamMemberActions = () => {
   return {
     loadRoles,
     createTeamMember,
+    updateTeamMember: updateTeamMemberAction, // ADD THIS
     resetError,
     resetSuccess,
     updateShowPopup,

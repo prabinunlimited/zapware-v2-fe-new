@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { IoIosArrowForward } from "react-icons/io";
-import { Repeat, Download } from "lucide-react";
+import { Repeat, Download, Headphones } from "lucide-react";
 import depositImg from "../../../assets/images/icon/Deposit-Img.png";
 import convertImg from "../../../assets/images/icon/Convert-Img.png";
 import remitImg from "../../../assets/images/icon/Remit-Img.png";
@@ -21,6 +21,8 @@ import {
   fetchAllowedModules,
   downloadUserManual,
   setPopupData,
+  setHasFetchedProfile,
+  setHasFetchedModules,
 } from "./NavigateSectionSlice";
 
 // Import selectors
@@ -92,6 +94,21 @@ function NavigateSectionContent({
     (module) => module.module_name === "Recurring Remit",
   );
 
+  // Cleanup effect for invalid customerId
+  useEffect(() => {
+    // If customerId is missing or invalid, reset the component state
+    if (!customerId || customerId === "undefined" || customerId === "null") {
+      console.log("NavigateSection: Invalid customerId, resetting state");
+      hasFetchBeenCalled.current = false;
+      setIsFetching(false);
+      setLocalError(null);
+      
+      // Also reset Redux flags to allow refetch on next login
+      dispatch(setHasFetchedProfile(false));
+      dispatch(setHasFetchedModules(false));
+    }
+  }, [customerId, dispatch]);
+
   const fetchData = useCallback(async () => {
     if (hasFetchBeenCalled.current || !customerId) return;
 
@@ -121,7 +138,6 @@ function NavigateSectionContent({
       }
     } catch (error) {
       console.error("Fetch error:", error);
-      ///setLocalError(error.message || "Failed to fetch navigation data");
       hasFetchBeenCalled.current = false;
     } finally {
       setIsFetching(false);
@@ -290,14 +306,44 @@ function NavigateSectionContent({
 
   const handleRecurringRemitClick = () => {
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
-      const authCustomerId = localStorage.getItem("authcustomer_id");
-      const effectiveCustomerId = customerUuid || customerId || authCustomerId;
-      navigate(`/recurring-remit/${effectiveCustomerId}`);
+      // For navigation, use the numeric customer_id from localStorage or prop
+      // The customerId prop already contains the numeric ID (12773)
+      const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
+      
+      console.log("Navigating to recurring remit with numeric ID:", numericCustomerId);
+      
+      if (!numericCustomerId) {
+        showPopup("Customer ID not found. Please login again.");
+        return;
+      }
+      
+      // Navigate using numeric customer_id (12773)
+      navigate(`/recurring-remit/${numericCustomerId}`);
     } catch (error) {
       console.error("Navigation error:", error);
       showPopup(
         "Unable to navigate to recurring remittance. Please try again.",
+      );
+    }
+  };
+
+  const handleCustomerSupportClick = () => {
+    try {
+      const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
+      
+      console.log("Navigating to customer support with numeric ID:", numericCustomerId);
+      
+      if (!numericCustomerId) {
+        showPopup("Customer ID not found. Please login again.");
+        return;
+      }
+      
+      // Navigate to customer support page
+      navigate(`/customer-support/${numericCustomerId}`);
+    } catch (error) {
+      console.error("Navigation error:", error);
+      showPopup(
+        "Unable to navigate to customer support. Please try again.",
       );
     }
   };
@@ -342,8 +388,8 @@ function NavigateSectionContent({
   // Navigation items configuration
   const navigationItems = [
     {
-      id: "dashboard",
-      label: "Dashboard",
+      id: "home",
+      label: "Home",
       icon: <MdDashboard className="w-5 h-5" />,
       iconColor: "text-blue-600",
       bgColor: "bg-blue-50",
@@ -451,8 +497,18 @@ function NavigateSectionContent({
       iconColor: "text-purple-600",
       bgColor: "bg-purple-50",
       onClick: handleRecurringRemitClick,
-      visible: isRecurringRemitAllowed, // ✅ FIXED: Show everywhere, not just on remittance page
+      visible: isRecurringRemitAllowed, // Show everywhere, not just on remittance page
       description: "Schedule recurring transfers",
+    },
+    {
+      id: "customer-support",
+      label: "Customer Support",
+      icon: <Headphones className="w-5 h-5 text-blue-600" />,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+      onClick: handleCustomerSupportClick,
+      visible: true, // Always visible
+      description: "Get help and support",
     },
   ];
 

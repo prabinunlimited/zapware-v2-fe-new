@@ -359,75 +359,7 @@ export const verifyPasscode = createAsyncThunk(
       if (response.data?.status === "success" && response.data?.data) {
         const responseData = response.data.data;
 
-        // Store temporary auth data for KYC flow
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          // Store temporary authentication data
-          const tempAuthData = {
-            token: responseData.token,
-            customer_id: responseData.customer_id,
-            email: email,
-            timestamp: Date.now(),
-            requiresKyc: true,
-          };
-
-          sessionStorage.setItem(
-            "temp_auth_data",
-            JSON.stringify(tempAuthData)
-          );
-          localStorage.setItem("pending_customer_id", responseData.customer_id);
-
-          if (
-            responseData.plaid_status === "success" &&
-            responseData.plaid_url
-          ) {
-            return {
-              requiresPlaidRedirect: true,
-              plaidUrl: responseData.plaid_url,
-              customerData: responseData,
-              customer_id: responseData.customer_id,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              tempToken: responseData.token,
-              message:
-                "KYC verification required - redirecting to bank verification",
-            };
-          }
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return {
-                requiresPlaidRedirect: true,
-                plaidUrl: plaidResponse.url,
-                customerData: responseData,
-                customer_id: responseData.customer_id,
-                kyc_status: responseData.kyc_status,
-                bank_approve_status: responseData.bank_approve_status,
-                tempToken: responseData.token,
-                message:
-                  "KYC verification required - redirecting to bank verification",
-              };
-            }
-          } catch (plaidError) {
-            // Even if Plaid fails, store the temp auth data
-            return {
-              requiresKycVerification: true,
-              customer_id: responseData.customer_id,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              tempToken: responseData.token,
-              message: "KYC verification required",
-            };
-          }
-        }
-
-        // Handle owner login
+        // CASE 1: Owner login
         if (responseData.is_owner_login === "1") {
           return {
             is_owner_login: true,
@@ -441,33 +373,78 @@ export const verifyPasscode = createAsyncThunk(
           };
         }
 
-        // Handle bank approval status
+        // CASE 2: Remittance Only Customer with Pending KYC - Show message (NO redirect)
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer === "Y") {
+          
+          return {
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "Y",
+            plaid_message: responseData.plaid_message || "Your KYC Verification is in Pending state. Please contact support team on suds@xchangely.com or call at +1 (408) 242-9705",
+            customer_id: responseData.customer_id,
+            // ❌ NO token, NO requiresPlaidRedirect
+          };
+        }
+
+        // CASE 3: Non-Remittance Customer with Pending KYC - Redirect to Plaid (Open in new tab)
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer !== "Y") {
+          
+          // Store temporary auth data
+          const tempAuthData = {
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            email: email,
+            timestamp: Date.now(),
+            requiresKyc: true,
+          };
+          sessionStorage.setItem("temp_auth_data", JSON.stringify(tempAuthData));
+          
+          return {
+            requiresPlaidRedirect: true,
+            plaidUrl: responseData.plaid_url,
+            customer_id: responseData.customer_id,
+            kyc_status: responseData.kyc_status,
+            isRemittanceOnlyCustomer: "N",
+            plaid_message: responseData.plaid_message,
+            // ❌ NO token for authentication
+          };
+        }
+
+        // CASE 4: Handle bank approval status
         if (responseData.bank_approve_status !== "1") {
           throw new Error("Bank account not approved. Please contact support.");
         }
 
-        // Successful login with KYC verified
-        return {
-          token: responseData.token,
-          customer_id: responseData.customer_id,
-          kyc_status: responseData.kyc_status,
-          bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer:
-            responseData.isRemittanceOnlyCustomer || false,
-          customer_type: responseData.customer_type || "individual",
-          is_staff_login: responseData.is_staff_login || "0",
-          staff_role: responseData.staff_role || "",
-          staff_id: responseData.staff_id || "0",
-          is_owner_login: responseData.is_owner_login || "0",
-          owner_id: responseData.owner_id || "0",
-          whitelabelled_customer: responseData.whitelabelled_customer || "N",
-          whitelabelled_customer_partnerid:
-            responseData.whitelabelled_customer_partnerid || "0",
-          whitelabelled_customer_partnername:
-            responseData.whitelabelled_customer_partnername || "",
-          customerUuid: responseData.customerUuid || null,
-          message: "Login successful",
-        };
+        // CASE 5: Successful login with KYC verified
+        if (responseData.token && responseData.customer_id) {
+          // Save customerUuid to localStorage
+          if (responseData.customerUuid) {
+            localStorage.setItem('customerUuid', responseData.customerUuid);
+            console.log('✅ Customer UUID saved from verifyPasscode:', responseData.customerUuid);
+          }
+
+          return {
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            kyc_status: responseData.kyc_status,
+            bank_approve_status: responseData.bank_approve_status,
+            isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
+            customer_type: responseData.customer_type || "individual",
+            is_staff_login: responseData.is_staff_login || "0",
+            staff_role: responseData.staff_role || "",
+            staff_id: responseData.staff_id || "0",
+            is_owner_login: responseData.is_owner_login || "0",
+            owner_id: responseData.owner_id || "0",
+            whitelabelled_customer: responseData.whitelabelled_customer || "N",
+            whitelabelled_customer_partnerid: responseData.whitelabelled_customer_partnerid || "0",
+            whitelabelled_customer_partnername: responseData.whitelabelled_customer_partnername || "",
+            customerUuid: responseData.customerUuid || null,
+            message: "Login successful",
+          };
+        }
+
+        throw new Error("Invalid server response format");
       }
 
       // Handle non-success responses
@@ -478,8 +455,7 @@ export const verifyPasscode = createAsyncThunk(
           errorMessage.includes("Invalid passcode") ||
           errorMessage.includes("Invalid credentials")
         ) {
-          errorMessage =
-            "Invalid passcode. Please check the code and try again.";
+          errorMessage = "Invalid passcode. Please check the code and try again.";
         } else if (errorMessage.includes("expired")) {
           errorMessage = "Passcode has expired. Please request a new one.";
         }
@@ -619,12 +595,9 @@ export const verifyOTP = createAsyncThunk(
     try {
       dispatch({ type: "auth/setVerifyingOtp", payload: true });
 
-      // Clean inputs
-      const cleanPhoneCode = phone_code.replace(/\D/g, "");
       const cleanMobileNumber = mobile_number.replace(/\D/g, "");
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
 
-      // Validate inputs
       if (!phone_code || !cleanMobileNumber || !formattedOTP || !password) {
         throw new Error("All fields are required");
       }
@@ -654,117 +627,71 @@ export const verifyOTP = createAsyncThunk(
         },
       });
 
-      // Handle successful response
       if (response.data.status === "success") {
         const responseData = response.data.data;
 
-        // Handle Plaid redirect directly from login response
-        if (
-          response.data?.plaid_status === "success" &&
-          response.data?.plaid_url
-        ) {
-          sessionStorage.setItem(
-            "pending_mobile_auth",
-            JSON.stringify({
-              phone_code: phone_code,
-              mobile_number: cleanMobileNumber,
-              customer_id: responseData.customer_id,
-              timestamp: Date.now(),
-            })
-          );
-
+        // ✅ CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer === "Y") {
+          
+          // Return ONLY the message, NO token, NO customer_id for authentication
           return {
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "Y",
+            plaid_message: responseData.plaid_message,
+            showKycMessage: true,
+            requiresRedirect: false,
+            // ❌ DO NOT include token or customer_id here
+          };
+        }
+
+        // ✅ CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
+        if (responseData.kyc_status === "0" && 
+            responseData.isRemittanceOnlyCustomer !== "Y") {
+          
+          return {
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "N",
             requiresPlaidRedirect: true,
-            plaidUrl: response.data.plaid_url,
-            customerData: responseData,
-            message: "Redirecting to bank verification...",
+            plaidUrl: responseData.plaid_url,
+            customer_id: responseData.customer_id,
+            plaid_message: responseData.plaid_message,
+            // ❌ DO NOT include token here
           };
         }
 
-        // Handle KYC verification required
-        if (responseData.kyc_status === "0" || responseData.kyc_status === 0) {
-          sessionStorage.setItem(
-            "pending_mobile_auth",
-            JSON.stringify({
-              phone_code: phone_code,
-              mobile_number: cleanMobileNumber,
-              customer_id: responseData.customer_id,
-              timestamp: Date.now(),
-            })
-          );
-
-          try {
-            const plaidResponse = await dispatch(
-              initiatePlaidFlow({
-                customerId: responseData.customer_id,
-                hostname: window.location.hostname,
-              })
-            ).unwrap();
-
-            if (plaidResponse.url) {
-              return {
-                requiresPlaidRedirect: true,
-                plaidUrl: plaidResponse.url,
-                customerData: responseData,
-                message: "Redirecting to bank verification...",
-              };
-            }
-          } catch (plaidError) {
-            return {
-              requiresKycVerification: true,
-              kyc_status: responseData.kyc_status,
-              bank_approve_status: responseData.bank_approve_status,
-              customerData: responseData,
-              message:
-                "Bank verification required but setup failed. Please contact support.",
-            };
+        // ✅ CASE 3: KYC Completed - Normal login
+        if (responseData.token && responseData.customer_id) {
+          if (responseData.customerUuid) {
+            localStorage.setItem('customerUuid', responseData.customerUuid);
+            console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
           }
-        }
+          
+          // Save other auth data
+          localStorage.setItem('authcustomer_id', responseData.customer_id);
+          localStorage.setItem('authtoken', responseData.token);
 
-        // Handle bank approval
-        if (responseData.bank_approve_status !== "1") {
           return {
-            requiresBankApproval: true,
+            status: "success",
+            token: responseData.token,
+            customer_id: responseData.customer_id,
+            kyc_status: responseData.kyc_status,
             bank_approve_status: responseData.bank_approve_status,
-            customerData: responseData,
-            message: "Bank account approval pending. Please contact support.",
+            isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
+            customer_type: responseData.customer_type || "individual",
+            customerUuid: responseData.customerUuid || null,
+            message: "Login successful",
           };
         }
 
-        // Handle owner login
-        if (responseData.is_owner_login === "1") {
-          return {
-            is_owner_login: true,
-            owner_id: responseData.owner_id,
-            owner_role_name: responseData.owner_role_name,
-            customerData: responseData,
-            message: "Owner login successful",
-          };
-        }
-
-        // Successful login
-        return {
-          status: "success",
-          token: responseData.token,
-          customer_id: responseData.customer_id,
-          kyc_status: responseData.kyc_status,
-          bank_approve_status: responseData.bank_approve_status,
-          isRemittanceOnlyCustomer:
-            responseData.isRemittanceOnlyCustomer || false,
-          customer_type: responseData.customer_type || "individual",
-          message: response.data.message || "Login successful",
-          data: responseData,
-        };
+        throw new Error("Invalid response from server");
       } else {
         throw new Error(response.data.message || "OTP verification failed");
       }
     } catch (error) {
       console.log("❌ Verify OTP Error:", error);
-      console.log("❌ Error response:", error.response);
-      console.log("❌ Error response data:", error.response?.data);
       
       let errorMessage = "";
-      let errorStatus = error.response?.status || 500;
       
       if (error.response?.data) {
         const responseData = error.response.data;
@@ -772,21 +699,8 @@ export const verifyOTP = createAsyncThunk(
           errorMessage = responseData;
         } else if (responseData.message) {
           errorMessage = responseData.message;
-        } else if (responseData.error) {
-          errorMessage = responseData.error;
-        } else if (responseData.detail) {
-          errorMessage = responseData.detail;
         } else {
-          switch (errorStatus) {
-            case 401:
-              errorMessage = "Invalid OTP. Please check and try again.";
-              break;
-            case 400:
-              errorMessage = "Invalid OTP format.";
-              break;
-            default:
-              errorMessage = "OTP verification failed. Please try again.";
-          }
+          errorMessage = "OTP verification failed. Please try again.";
         }
       } else if (error.message) {
         errorMessage = error.message;
@@ -797,7 +711,6 @@ export const verifyOTP = createAsyncThunk(
       dispatch({ type: "auth/setError", payload: errorMessage });
       return rejectWithValue({
         message: errorMessage,
-        status: errorStatus
       });
     } finally {
       dispatch({ type: "auth/setVerifyingOtp", payload: false });
@@ -1266,11 +1179,18 @@ export const loginUser = createAsyncThunk(
           kyc_status,
           bank_approve_status,
           plaid_link_url,
+          customerUuid,
         } = response.data.data;
 
         // Store user token as "authtoken", NOT "bearertoken"
         localStorage.setItem("authtoken", userToken);
         localStorage.setItem("authcustomer_id", customer_id);
+
+        // ✅ SAVE customerUuid to localStorage
+        if (customerUuid) {
+          localStorage.setItem('customerUuid', customerUuid);
+          console.log('✅ Customer UUID saved from loginUser:', customerUuid);
+        }
 
         if (is_owner_login === "1") {
           dispatch({
@@ -1419,6 +1339,13 @@ export const logoutUser = createAsyncThunk(
         }
       );
 
+      // Clear all auth-related data from localStorage
+      localStorage.removeItem('customerUuid');
+      localStorage.removeItem('authtoken');
+      localStorage.removeItem('authcustomer_id');
+      localStorage.removeItem('currentCustomerId');
+      localStorage.removeItem('bearertoken');
+      
       dispatch({ type: "auth/clearAuthState" });
       return true;
     } catch (error) {

@@ -92,6 +92,7 @@ import {
   selectLastDownloadUrl,
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
+import { partnerLogin } from "../../../services/authService";
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -111,6 +112,8 @@ const Login = () => {
   // State for country selection
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
+  const isPartnerLoggingInRef = useRef(false);
+
   // Select state from Redux
   const auth = useSelector(selectAuth);
   const countries = useSelector(selectCountries);
@@ -126,6 +129,7 @@ const Login = () => {
   const requiresKyc = useSelector(selectRequiresKycVerification);
   const showCustomerType = useSelector(selectShowCustomerType);
   const isRedirecting = useSelector(selectIsRedirecting);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -573,8 +577,8 @@ const Login = () => {
                 password: values.password,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                    customer_type: values.customerType,
-                  }),
+                  customer_type: values.customerType,
+                }),
               })
             ).unwrap();
             dispatch(setShowPasscodeInput(true));
@@ -587,8 +591,8 @@ const Login = () => {
                 mobile_number: values.mobile_number,
                 ...(showCustomerType === "Y" &&
                   values.customerType && {
-                    customer_type: values.customerType,
-                  }),
+                  customer_type: values.customerType,
+                }),
               })
             ).unwrap();
             dispatch(setShowOtpInput(true));
@@ -630,6 +634,16 @@ const Login = () => {
                 inputType === "email" ? values.email : values.mobile_number,
             },
           };
+
+          // ✅ ADD THIS CODE RIGHT AFTER the authState definition (before dispatch(setAuthState))
+          localStorage.setItem('authcustomer_id', processedData.customer_id);
+          localStorage.setItem('bearertoken', processedData.token);
+          if (processedData.isRemittanceOnlyCustomer) {
+            localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
+          }
+          if (processedData.customer_type) {
+            localStorage.setItem('customer_type', processedData.customer_type);
+          }
 
           dispatch(setAuthState(authState));
 
@@ -692,12 +706,12 @@ const Login = () => {
   const countryOptions = useMemo(() => {
     return Array.isArray(countries)
       ? countries.map((country) => ({
-          value: country.id,
-          label: `${country.name} (${country.phone_code})`,
-          countryName: country.name,
-          phone_code: country.phone_code,
-          flagUrl: country.flag_url,
-        }))
+        value: country.id,
+        label: `${country.name} (${country.phone_code})`,
+        countryName: country.name,
+        phone_code: country.phone_code,
+        flagUrl: country.flag_url,
+      }))
       : [];
   }, [countries]);
 
@@ -706,7 +720,7 @@ const Login = () => {
     if (!values.selected_country_id) {
       return null;
     }
-    
+
     return countryOptions.find(
       (option) => option.value === values.selected_country_id
     ) || null;
@@ -715,10 +729,10 @@ const Login = () => {
   // ✅ Country select handler - defined after setFieldValue is available
   const handleCountrySelect = (selectedOption) => {
     if (!selectedOption) return;
-    
+
     setFieldValue("selected_country_id", selectedOption.value);
     setFieldValue("phone_code", selectedOption.phone_code);
-    
+
     dispatch(
       setSelectedCountry({
         country: selectedOption.countryName,
@@ -845,8 +859,8 @@ const Login = () => {
         password: values.password,
         ...(showCustomerType === "Y" &&
           values.customerType && {
-            customer_type: values.customerType,
-          }),
+          customer_type: values.customerType,
+        }),
       };
 
       const result = await dispatch(generateOTP(payload)).unwrap();
@@ -1001,6 +1015,7 @@ const Login = () => {
 
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
 
+      // ✅ NEW: Check for owner login
       if (result.is_owner_login === true || result.is_owner_login === "1") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1018,6 +1033,51 @@ const Login = () => {
         return;
       }
 
+      // ✅ NEW: Case 1 - Remittance Only Customer with Pending KYC (Show message, NO redirect)
+      if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "KYC Verification Pending",
+            message: result.plaid_message,
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
+      // ✅ NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
+      if (result.requiresPlaidRedirect && result.plaidUrl) {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+
+        window.location.href = result.plaidUrl;
+
+        // Optional: Show notification
+        dispatch(
+          openModal({
+            title: "Verification Required",
+            message: "Redirecting to verification page...",
+            type: "info",
+            modalProps: {
+              showSpinner: true,
+              autoClose: true,
+              autoCloseDelay: 3000,
+            },
+          })
+        );
+        return;
+      }
+
+      // Keep existing code for Plaid redirect (if any)
       if (result.requiresPlaidRedirect) {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1050,6 +1110,17 @@ const Login = () => {
             },
           })
         );
+
+        // ✅ ADD THIS CODE RIGHT HERE (after setAuthState but before dispatch(setPasscode))
+        localStorage.setItem('authcustomer_id', customerId);
+        localStorage.setItem('bearertoken', processedData.token);
+        if (processedData.isRemittanceOnlyCustomer) {
+          localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
+        }
+        if (processedData.customer_type) {
+          localStorage.setItem('customer_type', processedData.customer_type);
+        }
+
 
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
@@ -1124,7 +1195,7 @@ const Login = () => {
                     dispatch(setShowPasscodeInput(false));
                     dispatch(setPasscodeSent(false));
                     dispatch(setPasscode(new Array(6).fill("")));
-                    handleGeneratePasscode({ preventDefault: () => {} });
+                    handleGeneratePasscode({ preventDefault: () => { } });
                   },
                 },
               ],
@@ -1140,9 +1211,19 @@ const Login = () => {
       return;
     }
 
+    // Clear OTP sent state and close any open modals
+    dispatch(setOtpSent(false));
+    dispatch(closeModal());
+
     try {
       if (otp.length !== 6 || otp.some((digit) => !digit)) {
-        dispatch(setError("Please enter a valid 6-digit OTP"));
+        dispatch(
+          openModal({
+            title: "Incomplete Code",
+            message: "Please enter all 6 digits to continue",
+            type: "error",
+          })
+        );
         return;
       }
 
@@ -1160,40 +1241,88 @@ const Login = () => {
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
-      if (result.requiresPlaidRedirect) {
+      // CASE 1: Remittance Only Customer with Pending KYC - Show message modal
+      if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
+        dispatch(
+          openModal({
+            title: "Account Application Pending",
+            message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
+      // CASE 2: Non-Remittance Customer with Pending KYC - Show redirect message THEN redirect
+      if (result.requiresPlaidRedirect && result.plaidUrl) {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        // Show redirecting message first
+        dispatch(
+          openModal({
+            title: "Redirecting",
+            message: "Redirecting to verification page...",
+            type: "info",
+            modalProps: {
+              showSpinner: true,
+              autoClose: true,
+              autoCloseDelay: 2000,
+            },
+            disableBackdropClick: true,
+          })
+        );
+
+        // Then redirect after 2 seconds
+        setTimeout(() => {
+          window.location.href = result.plaidUrl;
+        }, 2000);
+
+        return;
+      }
+
+      // CASE 3: Handle KYC verification through existing handler
+      if (result.requiresPlaidRedirect === undefined && result.requiresKycVerification) {
         const processedData = await handleKycVerification(result, values);
-        return;
-      }
-
-      const processedData = await handleKycVerification(result, values);
-
-      if (processedData === null) {
-        return;
-      }
-
-      if (processedData) {
-        if (processedData.is_owner_login) {
+        if (processedData === null) {
           return;
         }
+      }
 
+      // CASE 4: Successful login (KYC completed)
+      if (result.token && result.customer_id) {
         dispatch(
           setAuthState({
-            token: processedData.token,
-            customerId: processedData.customer_id,
+            token: result.token,
+            customerId: result.customer_id,
             isAuthenticated: true,
             user: {
               mobile_number: values.mobile_number,
               phone_code: values.phone_code,
-              isRemittanceOnlyCustomer:
-                processedData.isRemittanceOnlyCustomer || false,
-              customerType: processedData.customer_type || "individual",
+              isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
+              customerType: result.customer_type || "individual",
             },
           })
         );
+
+        localStorage.setItem('authcustomer_id', result.customer_id);
+        localStorage.setItem('bearertoken', result.token);
+        if (result.isRemittanceOnlyCustomer) {
+          localStorage.setItem('isRemittanceOnlyCustomer', result.isRemittanceOnlyCustomer);
+        }
+        if (result.customer_type) {
+          localStorage.setItem('customer_type', result.customer_type);
+        }
+
+
 
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
@@ -1212,23 +1341,57 @@ const Login = () => {
         setTimeout(() => {
           dispatch(closeModal());
           dispatch(setRedirecting(true));
-          handleSuccessfulLoginRedirect(processedData);
+          handleSuccessfulLoginRedirect({
+            customer_id: result.customer_id,
+            isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
+          });
         }, 1500);
+        return;
       }
+
+      // If none of the above conditions matched
+      if (!result.requiresPlaidRedirect && !result.token) {
+        throw new Error("Unexpected response from server");
+      }
+
     } catch (error) {
+      console.error("OTP Verification Error:", error);
       dispatch(setOtp(new Array(6).fill("")));
 
-      if (
-        error.message &&
+      // Don't show error for KYC related messages that are already handled
+      if (error.message &&
         !error.message.includes("bank verification") &&
         !error.message.includes("KYC") &&
-        !error.message.includes("Plaid")
-      ) {
+        !error.message.includes("Plaid")) {
         dispatch(
           openModal({
             title: "Verification Error",
-            message: error.message,
+            message: error.message || "OTP verification failed. Please try again.",
             type: "error",
+            modalProps: {
+              actions: [
+                {
+                  label: "Try Again",
+                  primary: true,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(setOtp(new Array(6).fill("")));
+                    dispatch(setShowOtpInput(true));
+                  },
+                },
+                {
+                  label: "Request New OTP",
+                  primary: false,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(setShowOtpInput(false));
+                    dispatch(setOtpSent(false));
+                    dispatch(setOtp(new Array(6).fill("")));
+                    handleGenerateOTP();
+                  },
+                },
+              ],
+            },
           })
         );
       }
@@ -1265,11 +1428,10 @@ const Login = () => {
                 id="email-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
-                  inputType === "email"
-                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                    : ""
-                }`}
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
+                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                  : ""
+                  }`}
               ></span>
               <label
                 htmlFor="email-radio"
@@ -1292,11 +1454,10 @@ const Login = () => {
                 id="mobile-radio"
               />
               <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${
-                  inputType === "mobile"
-                    ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                    : ""
-                }`}
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "mobile"
+                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                  : ""
+                  }`}
               ></span>
               <label
                 htmlFor="mobile-radio"
@@ -1519,11 +1680,46 @@ const Login = () => {
                 Remember Me
               </label>
               <button
-                onClick={() => navigate("/forgotpassword")}
+                onClick={async () => {
+                  // Prevent multiple simultaneous calls
+                  if (isPartnerLoggingInRef.current) {
+                    return;
+                  }
+
+                  setForgotPasswordLoading(true);
+                  isPartnerLoggingInRef.current = true;
+
+                  try {
+                    // Check if we already have the data
+                    const existingToken = localStorage.getItem("bearertoken");
+                    const existingPartnerId = localStorage.getItem("whitelabelledpartnerid");
+
+                    if (!existingToken || !existingPartnerId) {
+                      await partnerLogin();
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    navigate("/forgotpassword");
+                  } catch (error) {
+                    console.error("Partner login error:", error);
+                    navigate("/forgotpassword");
+                  } finally {
+                    setForgotPasswordLoading(false);
+                    isPartnerLoggingInRef.current = false;
+                  }
+                }}
                 type="button"
-                className="text-sm text-red-600 hover:underline"
+                className="text-sm text-red-600 hover:underline flex items-center gap-2"
+                disabled={forgotPasswordLoading}
               >
-                Forgot Password?
+                {forgotPasswordLoading ? (
+                  <>
+                    <RingLoader size={14} color="#dc2626" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  "Forgot Password?"
+                )}
               </button>
             </div>
           </form>
@@ -1537,18 +1733,21 @@ const Login = () => {
             <motion.button
               whileHover={{
                 scale: 1.05,
-                boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.5)",
+                boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.5), 0 0 0 2px rgba(245, 158, 11, 0.2)",
               }}
               whileTap={{ scale: 0.95 }}
               onClick={handleNavigation}
-              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 transition-all bg-white overflow-hidden group"
+              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl 
+               bg-gradient-to-r from-amber-500 to-orange-600 
+               text-white font-semibold shadow-lg
+               transition-all duration-300 overflow-hidden group"
             >
               <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100"
+                className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-700 opacity-0 group-hover:opacity-100"
                 initial={{ x: "-100%" }}
                 whileHover={{
                   x: "100%",
-                  transition: { duration: 0.8, ease: "easeInOut" },
+                  transition: { duration: 0.6, ease: "easeInOut" },
                 }}
               />
 
@@ -1556,7 +1755,7 @@ const Login = () => {
                 {[...Array(3)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-1 h-1 bg-blue-400 rounded-full"
+                    className="absolute w-1 h-1 bg-white rounded-full"
                     initial={{
                       x: "-20px",
                       y: Math.random() * 40,
@@ -1578,9 +1777,9 @@ const Login = () => {
               </div>
 
               <motion.div
-                className="absolute inset-0 rounded-xl border-2 border-transparent"
+                className="absolute inset-0 rounded-xl border-2 border-white/30"
                 whileHover={{
-                  borderColor: "rgba(59, 130, 246, 0.3)",
+                  borderColor: "rgba(255, 255, 255, 0.5)",
                   scale: 1.02,
                   transition: {
                     duration: 0.3,

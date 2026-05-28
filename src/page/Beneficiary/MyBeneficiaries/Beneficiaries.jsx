@@ -861,6 +861,7 @@ const Beneficiaries = ({ mode = "list" }) => {
           beneficiaryId={selectedBeneficiary.id}
           beneficiaryName={selectedBeneficiary.name}
           onClose={handleCloseBankDetails}
+          customerId={customerId}
         />
       )}
 
