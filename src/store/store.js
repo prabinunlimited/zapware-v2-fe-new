@@ -521,6 +521,7 @@ if (process.env.NODE_ENV !== "production") {
     const state = store.getState();
     persistCriticalStates(state);
   });
+} else {
 }
 
 const persistCriticalStates = (state) => {
