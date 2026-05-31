@@ -484,7 +484,7 @@ function SelectCountry() {
             <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Verify your email</h3>
+            <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your email</h3>
           </div>
 
           <div className="mb-4">
@@ -532,7 +532,7 @@ function SelectCountry() {
             <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Verify your mobile number</h3>
+            <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your mobile number</h3>
           </div>
 
           <div className="mb-4">
@@ -860,7 +860,7 @@ function SelectCountry() {
         {!isVerificationComplete && !showEmailExistsPopup && !showMobileExistsPopup && (
           <div className="text-center mt-6">
             <p className="text-xs sm:text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-              Please verify both your email and mobile number to continue
+              Please check both your email and mobile number to continue
             </p>
           </div>
         )}

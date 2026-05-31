@@ -63,6 +63,17 @@ import {
   selectNationalitiesLoading,
   selectIdDocumentTypesLoading,
   submitIndividualSignup,
+  sendEmailVerificationPasscode,
+  validateEmailVerificationPasscode,
+  selectEmailVerification,
+  selectIsEmailVerified,
+  selectShowVerificationInput,
+  selectIsSendingCode,
+  selectIsVerifying,
+  setEmailVerificationField,
+  clearEmailVerificationError,
+  clearEmailVerificationSuccess,
+  resetEmailVerification,
 } from "../slices/signupSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -411,6 +422,12 @@ function SignUpIndividualContent() {
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
   const [monthlyExpectedActivity, setMonthlyExpectedActivity] = useState("");
 
+  const emailVerification = useSelector(selectEmailVerification);
+  const isEmailVerified = useSelector(selectIsEmailVerified);
+  const showVerificationInput = useSelector(selectShowVerificationInput);
+  const isSendingCode = useSelector(selectIsSendingCode);
+  const isVerifying = useSelector(selectIsVerifying);
+
   useEffect(() => {
     console.log("🔍 Selector Debug:", {
       isNamedAccount,
@@ -428,75 +445,6 @@ function SignUpIndividualContent() {
     selectedAccounts,
     accountOptions,
   ]);
-
-  // Add THIS WHOLE BLOCK after your other useEffects
-  useEffect(() => {
-    const loadRegistrationData = () => {
-      // Check navigation state first
-      const navData = location.state || {};
-
-      // Then check session storage
-      const savedData = sessionStorage.getItem('registrationData');
-      let registrationData = {};
-
-      if (savedData) {
-        try {
-          registrationData = JSON.parse(savedData);
-          console.log("Loaded registration data:", registrationData);
-        } catch (error) {
-          console.error("Error parsing registration data:", error);
-        }
-      }
-
-      const finalData = { ...registrationData, ...navData };
-
-      // Populate email
-      if (finalData.email && finalData.emailVerified) {
-        formik.setFieldValue("email", finalData.email);
-      }
-
-      // Populate mobile
-      if (finalData.mobile_number && finalData.mobileVerified) {
-        formik.setFieldValue("mobile_number", finalData.mobile_number);
-
-        if (finalData.phone_code) {
-          formik.setFieldValue("mobilenumber_countrycode", finalData.phone_code);
-          const countryWithCode = countryOptions.find(
-            opt => opt.phoneCode === finalData.phone_code
-          );
-          if (countryWithCode) {
-            setSelectedPhoneCode({
-              value: countryWithCode.value,
-              label: countryWithCode.label,
-              phoneCode: countryWithCode.phoneCode,
-              flag_url: countryWithCode.flag_url
-            });
-          }
-        }
-      }
-
-      // Populate country
-      if (finalData.selectedCountry) {
-        const country = finalData.selectedCountry;
-        const countryOption = {
-          value: country.id || country.value,
-          label: country.label,
-          country_code: country.country_code,
-          flag_url: country.flag_url,
-          phoneCode: country.phoneCode
-        };
-
-        dispatch(setSelectedCountry(countryOption));
-        formik.setFieldValue("country", country.id || country.value);
-      }
-
-      if (finalData.emailVerified && finalData.mobileVerified) {
-        setRegistrationDataLoaded(true);
-      }
-    };
-
-    loadRegistrationData();
-  }, []);
 
   useEffect(() => {
     const fetchOccupations = async () => {
@@ -777,6 +725,81 @@ function SignUpIndividualContent() {
     },
   });
 
+  // useEffect(() => {
+  //   if (formik.values.email && isEmailVerified) {
+  //     dispatch(resetEmailVerification());
+  //   }
+  // }, [formik.values.email, dispatch, isEmailVerified]);
+
+  // Add THIS WHOLE BLOCK after your other useEffects
+  useEffect(() => {
+    const loadRegistrationData = () => {
+      // Check navigation state first
+      const navData = location.state || {};
+
+      // Then check session storage
+      const savedData = sessionStorage.getItem('registrationData');
+      let registrationData = {};
+
+      if (savedData) {
+        try {
+          registrationData = JSON.parse(savedData);
+          console.log("Loaded registration data:", registrationData);
+        } catch (error) {
+          console.error("Error parsing registration data:", error);
+        }
+      }
+
+      const finalData = { ...registrationData, ...navData };
+
+      // Populate email
+      if (finalData.email && finalData.emailVerified) {
+        formik.setFieldValue("email", finalData.email);
+      }
+
+      // Populate mobile
+      if (finalData.mobile_number && finalData.mobileVerified) {
+        formik.setFieldValue("mobile_number", finalData.mobile_number);
+
+        if (finalData.phone_code) {
+          formik.setFieldValue("mobilenumber_countrycode", finalData.phone_code);
+          const countryWithCode = countryOptions.find(
+            opt => opt.phoneCode === finalData.phone_code
+          );
+          if (countryWithCode) {
+            setSelectedPhoneCode({
+              value: countryWithCode.value,
+              label: countryWithCode.label,
+              phoneCode: countryWithCode.phoneCode,
+              flag_url: countryWithCode.flag_url
+            });
+          }
+        }
+      }
+
+      // Populate country
+      if (finalData.selectedCountry) {
+        const country = finalData.selectedCountry;
+        const countryOption = {
+          value: country.id || country.value,
+          label: country.label,
+          country_code: country.country_code,
+          flag_url: country.flag_url,
+          phoneCode: country.phoneCode
+        };
+
+        dispatch(setSelectedCountry(countryOption));
+        formik.setFieldValue("country", country.id || country.value);
+      }
+
+      if (finalData.emailVerified && finalData.mobileVerified) {
+        setRegistrationDataLoaded(true);
+      }
+    };
+
+    loadRegistrationData();
+  }, []);
+
   // Handle sending countries selection
   const handleSendingCountriesChange = (selectedOptions) => {
     const selectedValues = selectedOptions.map(option => option.value);
@@ -846,6 +869,11 @@ function SignUpIndividualContent() {
     const sectionFields = getSectionFields(sectionIndex, formik.values);
     const errors = {};
 
+    // ADD THIS NEW CHECK for section 0 (Personal Information)
+    if (sectionIndex === 0 && !isEmailVerified) {
+      errors.email = "Email must be verified before proceeding";
+    }
+
     // Special handling for section 2 (Identity Verification) to check SSN requirement
     if (sectionIndex === 2) {
       const hasUSDNamedAccount = isNamedAccount;
@@ -870,6 +898,13 @@ function SignUpIndividualContent() {
   // Handle navigation between sections with validation - UPDATED
   // Handle navigation between sections with validation - UPDATED with SSN check
   const handleNextSection = async (currentSection) => {
+
+    if (currentSection === 0) {
+      if (!isEmailVerified) {
+        toast.error("Please verify your email before proceeding");
+        return; // Stop navigation - prevents moving to next section
+      }
+    }
     // Mark all fields in current section as touched
     const sectionFields = getSectionFields(currentSection, formik.values, isNamedAccount, isRemit);
     sectionFields.forEach((field) => {
@@ -983,7 +1018,7 @@ function SignUpIndividualContent() {
         customer_sending_countries: values.customer_sending_countries,
         customer_receiving_funds_countries: values.customer_receiving_funds_countries,
         occupation: values.occupation || "",
-        purpose_of_account: values.purpose_of_account || "", 
+        purpose_of_account: values.purpose_of_account || "",
         monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
@@ -1534,6 +1569,69 @@ function SignUpIndividualContent() {
 
   const isRuleMet = (regex) => regex.test(formik.values.password);
 
+  const handleSendVerificationCode = async () => {
+    const email = formik.values.email;
+
+    if (!email) {
+      toast.error("Please enter your email address first");
+      return;
+    }
+
+    if (formik.errors.email) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    try {
+      const result = await dispatch(sendEmailVerificationPasscode(email));
+      if (sendEmailVerificationPasscode.fulfilled.match(result)) {
+        toast.success("Verification code sent to your email!");
+      } else {
+        toast.error(result.payload || "Failed to send verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to send verification code");
+    }
+  };
+
+  const handleVerifyEmailCode = async () => {
+    const code = emailVerification.verificationCode;
+
+    if (!code || code.length !== 6) {
+      toast.error("Please enter a valid 6-digit verification code");
+      return;
+    }
+
+    try {
+      const result = await dispatch(validateEmailVerificationPasscode({
+        email: formik.values.email,
+        passcode: code
+      }));
+
+      if (validateEmailVerificationPasscode.fulfilled.match(result)) {
+        toast.success("Email verified successfully!");
+        dispatch(setEmailVerificationField({ field: "verificationCode", value: "" }));
+      } else {
+        toast.error(result.payload || "Invalid verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to verify email");
+    }
+  };
+
+  const handleVerificationCodeChange = (e) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    dispatch(setEmailVerificationField({ field: "verificationCode", value }));
+
+    if (emailVerification.error) {
+      dispatch(clearEmailVerificationError());
+    }
+  };
+
+  const handleResendCode = () => {
+    handleSendVerificationCode();
+  };
+
   // Progress calculation with validation check
   useEffect(() => {
     const calculateProgress = async () => {
@@ -1595,8 +1693,6 @@ function SignUpIndividualContent() {
     phoneCode: country.phone_code,
     country_code: country.country_code,
   }));
-
-  const canadaOnlyOptions = countryOptions.filter(option => option.label === "Canada");
 
   const nationalityOptions = nationalities.map((nat) => ({
     value: nat.id,
@@ -1982,7 +2078,7 @@ function SignUpIndividualContent() {
               noValidate
             >
               {/* Add verification banners here - after form opening tag */}
-              {registrationDataLoaded && (
+              {/* {registrationDataLoaded && (
                 <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-start">
                     <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 mt-0.5 mr-3" />
@@ -2010,7 +2106,7 @@ function SignUpIndividualContent() {
                     </div>
                   </div>
                 </div>
-              )}
+              )} */}
 
 
               {/* Personal Information Section */}
@@ -2044,12 +2140,12 @@ function SignUpIndividualContent() {
                       type: "text",
                       placeholder: "Enter your last name",
                     },
-                    {
-                      id: "email",
-                      label: "Email Address *",
-                      type: "email",
-                      placeholder: "your.email@example.com",
-                    },
+                    // {
+                    //   id: "email",
+                    //   label: "Email Address *",
+                    //   type: "email",
+                    //   placeholder: "your.email@example.com",
+                    // },
                     {
                       id: "dob",
                       label: "Date of Birth *",
@@ -2101,6 +2197,133 @@ function SignUpIndividualContent() {
                       ) : null}
                     </div>
                   ))}
+                  {/* Email Field with Verification */}
+                  <div className="relative">
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2.5">
+                      Email Address *
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          id="email"
+                          name="email"
+                          type="email"
+                          placeholder="your.email@example.com"
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.email}
+                          disabled={isEmailVerified}
+                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
+          ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
+          ${formik.touched.email && formik.errors.email && !isEmailVerified
+                              ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                              : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                            } shadow-sm`}
+                        />
+                      </div>
+
+                      {/* Verify Button - Only show when not verified */}
+                      {!isEmailVerified && (
+                        <button
+                          type="button"
+                          onClick={handleSendVerificationCode}
+                          disabled={isSendingCode || !formik.values.email || formik.errors.email}
+                          className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                        >
+                          {isSendingCode ? (
+                            <div className="flex items-center gap-2">
+                              <RingLoader size={16} color="#ffffff" />
+                              <span>Sending...</span>
+                            </div>
+                          ) : (
+                            'Verify'
+                          )}
+                        </button>
+                      )}
+
+                      {/* Verified Badge - Show when verified instead of button */}
+                      {isEmailVerified && (
+                        <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
+                          <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
+                          <span className="font-medium">Verified</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Email field error */}
+                    {formik.touched.email && formik.errors.email && !isEmailVerified && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {formik.errors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Verification Code Input (shown after clicking Verify) */}
+                  {showVerificationInput && !isEmailVerified && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Enter Verification Code
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={emailVerification.verificationCode}
+                            onChange={handleVerificationCodeChange}
+                            placeholder="Enter 6-digit code"
+                            maxLength={6}
+                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleVerifyEmailCode}
+                          disabled={isVerifying || !emailVerification.verificationCode || emailVerification.verificationCode.length !== 6}
+                          className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                        >
+                          {isVerifying ? (
+                            <div className="flex items-center gap-2">
+                              <RingLoader size={16} color="#ffffff" />
+                              <span>Verifying...</span>
+                            </div>
+                          ) : (
+                            'Submit'
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Resend link */}
+                      <div className="mt-3 text-center">
+                        <button
+                          type="button"
+                          onClick={handleResendCode}
+                          disabled={isSendingCode}
+                          className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                        </button>
+                      </div>
+
+                      {/* Error message */}
+                      {emailVerification.error && (
+                        <p className="text-red-500 text-xs mt-3 flex items-center">
+                          <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                          {emailVerification.error}
+                        </p>
+                      )}
+
+                      {/* Success message */}
+                      {emailVerification.success && !isEmailVerified && (
+                        <p className="text-green-600 text-xs mt-3 flex items-center">
+                          <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                          {emailVerification.success}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <label
@@ -2278,7 +2501,7 @@ function SignUpIndividualContent() {
                   {/* Purpose of Account - Text Field */}
                   <div>
                     <label htmlFor="purpose_of_account" className="block text-sm font-medium text-gray-700 mb-2.5">
-                      Purpose of Account 
+                      Purpose of Account
                     </label>
                     <input
                       id="purpose_of_account"
@@ -2289,8 +2512,8 @@ function SignUpIndividualContent() {
                       onBlur={formik.handleBlur}
                       value={formik.values.purpose_of_account}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.purpose_of_account && formik.errors.purpose_of_account
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                     />
                     {formik.touched.purpose_of_account && formik.errors.purpose_of_account ? (
@@ -2306,7 +2529,7 @@ function SignUpIndividualContent() {
                   {/* Monthly Expected Activity - Text Field */}
                   <div>
                     <label htmlFor="monthly_expected_activity" className="block text-sm font-medium text-gray-700 mb-2.5">
-                      Monthly Expected Activity 
+                      Monthly Expected Activity
                     </label>
                     <input
                       id="monthly_expected_activity"
@@ -2317,8 +2540,8 @@ function SignUpIndividualContent() {
                       onBlur={formik.handleBlur}
                       value={formik.values.monthly_expected_activity}
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.monthly_expected_activity && formik.errors.monthly_expected_activity
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                     />
                     {formik.touched.monthly_expected_activity && formik.errors.monthly_expected_activity ? (
@@ -2471,7 +2694,7 @@ function SignUpIndividualContent() {
                     <Select
                       id="country"
                       name="country"
-                      options={canadaOnlyOptions}
+                      options={countryOptions}
                       onChange={handleCountrySelect}
                       onBlur={formik.handleBlur}
                       className="basic-single"
@@ -2481,9 +2704,7 @@ function SignUpIndividualContent() {
                       value={selectedCountry}
                       isLoading={loadingCountries}
                     />
-                    <p className="text-amber-600 text-sm mt-2">
-                      ⚠️ Note: Only Canada is allowed 
-                  </p>
+
                     {formik.touched.country && formik.errors.country ? (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
                         <svg
