@@ -154,6 +154,92 @@ export const submitIndividualSignup = createAsyncThunk(
   }
 );
 
+// Email verification actions
+export const sendEmailVerificationPasscode = createAsyncThunk(
+  "signup/sendEmailVerificationPasscode",
+  async (email, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+      const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
+      const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
+      
+      let partnerId = 0;
+      
+      // Change this condition from === "1" to === "Y"
+      if (iswhitelabelledpartner === "Y" && whitelabelledpartnerid) {
+        partnerId = parseInt(whitelabelledpartnerid);
+      }
+      
+      const payload = {
+        email: email,
+        user_type: "customer",
+        partner_id: partnerId,
+      };
+      
+      const response = await api.post("/send-passcode-registration", payload, {
+        headers: {
+          Authorization: `Bearer ${bearertoken}`,
+        },
+      });
+      
+      return response.data;
+    } catch (error) {
+      let errorMessage = "Failed to send verification code. Please try again.";
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const validateEmailVerificationPasscode = createAsyncThunk(
+  "signup/validateEmailVerificationPasscode",
+  async ({ email, passcode }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+      const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
+      const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
+      
+      let partnerId = 0;
+      
+      // Change this condition from === "1" to === "Y"
+      if (iswhitelabelledpartner === "Y" && whitelabelledpartnerid) {
+        partnerId = parseInt(whitelabelledpartnerid);
+      }
+      
+      const payload = {
+        email: email,
+        user_type: "customer",
+        partner_id: partnerId,
+        passcode: passcode,
+      };
+      
+      const response = await api.post("/validate-passcode-registration", payload, {
+        headers: {
+          Authorization: `Bearer ${bearertoken}`,
+        },
+      });
+      
+      return response.data;
+    } catch (error) {
+      let errorMessage = "Invalid verification code. Please try again.";
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 const initialState = {
   formData: {
     customer_type: "individual",
@@ -183,6 +269,16 @@ const initialState = {
     accept_disclosure: 0,
     accept_fees: 0,
     terms_and_conditions: [],
+  },
+
+  emailVerification: {
+    isVerified: false,
+    isSendingCode: false,
+    isVerifying: false,
+    verificationCode: "",
+    showVerificationInput: false,
+    error: null,
+    success: null,
   },
 
   nationalities: [],
@@ -215,6 +311,7 @@ const initialState = {
   currentStep: 0,
   totalSteps: 5,
   formProgress: 0,
+  
 };
 
 const signupSlice = createSlice({
@@ -309,6 +406,7 @@ const signupSlice = createSlice({
       );
     },
 
+
     nextStep: (state) => {
       if (state.currentStep < state.totalSteps - 1) {
         state.currentStep += 1;
@@ -339,6 +437,33 @@ const signupSlice = createSlice({
           state.formData[key] = formikValues[key];
         }
       });
+    },
+
+    setEmailVerificationField: (state, action) => {
+      const { field, value } = action.payload;
+      if (field in state.emailVerification) {
+        state.emailVerification[field] = value;
+      }
+    },
+    
+    resetEmailVerification: (state) => {
+      state.emailVerification = {
+        isVerified: false,
+        isSendingCode: false,
+        isVerifying: false,
+        verificationCode: "",
+        showVerificationInput: false,
+        error: null,
+        success: null,
+      };
+    },
+    
+    clearEmailVerificationError: (state) => {
+      state.emailVerification.error = null;
+    },
+    
+    clearEmailVerificationSuccess: (state) => {
+      state.emailVerification.success = null;
     },
   },
   extraReducers: (builder) => {
@@ -414,7 +539,44 @@ const signupSlice = createSlice({
         state.submissionLoading = false;
         state.submissionError = action.payload?.message || "Submission failed";
         state.validationErrors = action.payload?.errors || {};
-      });
+      })
+
+      // Add these NEW cases
+    .addCase(sendEmailVerificationPasscode.pending, (state) => {
+      state.emailVerification.isSendingCode = true;
+      state.emailVerification.error = null;
+      state.emailVerification.success = null;
+    })
+    .addCase(sendEmailVerificationPasscode.fulfilled, (state, action) => {
+      state.emailVerification.isSendingCode = false;
+      state.emailVerification.showVerificationInput = true;
+      state.emailVerification.success = "Verification code sent to your email!";
+      state.emailVerification.error = null;
+    })
+    .addCase(sendEmailVerificationPasscode.rejected, (state, action) => {
+      state.emailVerification.isSendingCode = false;
+      state.emailVerification.error = action.payload || "Failed to send verification code";
+      state.emailVerification.success = null;
+    })
+    
+    .addCase(validateEmailVerificationPasscode.pending, (state) => {
+      state.emailVerification.isVerifying = true;
+      state.emailVerification.error = null;
+      state.emailVerification.success = null;
+    })
+    .addCase(validateEmailVerificationPasscode.fulfilled, (state, action) => {
+      state.emailVerification.isVerifying = false;
+      state.emailVerification.isVerified = true;
+      state.emailVerification.showVerificationInput = false;
+      state.emailVerification.success = "Email verified successfully!";
+      state.emailVerification.verificationCode = "";
+      state.emailVerification.error = null;
+    })
+    .addCase(validateEmailVerificationPasscode.rejected, (state, action) => {
+      state.emailVerification.isVerifying = false;
+      state.emailVerification.error = action.payload || "Invalid verification code";
+      state.emailVerification.success = null;
+    });
   },
 });
 
@@ -469,6 +631,15 @@ export const selectAnyErrors = (state) =>
   state.signup.gendersError ||
   state.signup.termsError;
 
+// Add these NEW selectors
+export const selectEmailVerification = (state) => state.signup.emailVerification;
+export const selectIsEmailVerified = (state) => state.signup.emailVerification.isVerified;
+export const selectEmailVerificationError = (state) => state.signup.emailVerification.error;
+export const selectEmailVerificationSuccess = (state) => state.signup.emailVerification.success;
+export const selectShowVerificationInput = (state) => state.signup.emailVerification.showVerificationInput;
+export const selectIsSendingCode = (state) => state.signup.emailVerification.isSendingCode;
+export const selectIsVerifying = (state) => state.signup.emailVerification.isVerifying;
+
 export const {
   setFormField,
   setMetadataField,
@@ -484,6 +655,10 @@ export const {
   resetForm,
   resetFormData,
   syncFormikToRedux,
+  setEmailVerificationField,
+  resetEmailVerification,
+  clearEmailVerificationError,
+  clearEmailVerificationSuccess,
 } = signupSlice.actions;
 
 export default signupSlice.reducer;

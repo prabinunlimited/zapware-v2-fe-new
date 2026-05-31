@@ -13,6 +13,7 @@ import {
   faEyeSlash,
   faCheckCircle,
   faTimesCircle,
+  faExclamationCircle
 } from "@fortawesome/free-solid-svg-icons";
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
@@ -95,6 +96,21 @@ import {
   setBusinessAlias,
   setOwnerAdd,
 } from "../slices/institutionRegistrationSlice";
+
+import {
+  // ... your existing imports ...
+  sendEmailVerificationPasscode,
+  validateEmailVerificationPasscode,
+  selectEmailVerification,
+  selectIsEmailVerified,
+  selectShowVerificationInput,
+  selectIsSendingCode,
+  selectIsVerifying,
+  setEmailVerificationField,
+  clearEmailVerificationError,
+  clearEmailVerificationSuccess,
+  resetEmailVerification,
+} from "../slices/signupSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
 
@@ -375,6 +391,12 @@ const Institution = () => {
   const [zipApiError, setZipApiError] = useState(null);
   const countryCodeRef = useRef("");
 
+  const emailVerification = useSelector(selectEmailVerification);
+  const isResponsiblePersonEmailVerified = useSelector(selectIsEmailVerified);
+  const showVerificationInput = useSelector(selectShowVerificationInput);
+  const isSendingCode = useSelector(selectIsSendingCode);
+  const isVerifying = useSelector(selectIsVerifying);
+
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
     const isNamedAccount = useSelector(selectIsNamedAccount);
@@ -585,23 +607,6 @@ const Institution = () => {
     () => getSafeCountryOptions(),
     [getSafeCountryOptions],
   );
-  const canadaOnlyOptions = useMemo(() => {
-    if (!countryOptions || countryOptions.length === 0) return [];
-    
-    // Try to find Canada by different possible values
-    const canada = countryOptions.find(option => 
-      option.label === "Canada" ||
-      option.label?.toLowerCase() === "canada" ||
-      option.value === "Canada" ||
-      option.country_code === "CA" ||
-      option.country_code?.toLowerCase() === "ca" ||
-      option.originalData?.name === "Canada" ||
-      option.originalData?.country_code === "CA"
-    );
-    
-    // If Canada found, return as array, otherwise return empty array
-    return canada ? [canada] : [];
-  }, [countryOptions]);
 
   useEffect(() => {
     return () => {
@@ -735,6 +740,70 @@ const Institution = () => {
     [dispatch],
   );
 
+  // Email verification handlers for Responsible Person
+  const handleSendVerificationCode = async (email, setFieldValue) => {
+    if (!email) {
+      toast.error("Please enter your email address first");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    try {
+      const result = await dispatch(sendEmailVerificationPasscode(email));
+      if (sendEmailVerificationPasscode.fulfilled.match(result)) {
+        toast.success("Verification code sent to your email!");
+      } else {
+        toast.error(result.payload || "Failed to send verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to send verification code");
+    }
+  };
+
+  const handleVerifyEmailCode = async (email, setFieldValue) => {
+    const code = emailVerification.verificationCode;
+
+    if (!code || code.length !== 6) {
+      toast.error("Please enter a valid 6-digit verification code");
+      return;
+    }
+
+    try {
+      const result = await dispatch(validateEmailVerificationPasscode({
+        email: email,
+        passcode: code
+      }));
+
+      if (validateEmailVerificationPasscode.fulfilled.match(result)) {
+        toast.success("Email verified successfully!");
+        dispatch(setEmailVerificationField({ field: "verificationCode", value: "" }));
+        setFieldValue("email_verified", true);
+      } else {
+        toast.error(result.payload || "Invalid verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to verify email");
+    }
+  };
+
+  const handleVerificationCodeChange = (e) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    dispatch(setEmailVerificationField({ field: "verificationCode", value }));
+
+    if (emailVerification.error) {
+      dispatch(clearEmailVerificationError());
+    }
+  };
+
+  const handleResendCode = (email) => {
+    handleSendVerificationCode(email);
+  };
+
   useEffect(() => {
     if (locationStateData && Object.keys(locationStateData).length > 0) {
       processLocationState(locationStateData);
@@ -819,11 +888,11 @@ const Institution = () => {
     ) {
       const serviceProviderIds = locationStateData.service_provide_ids;
       const accountOptions = locationStateData.accountOptions;
-  
+
       let hasNamed = false;
       let hasUSD = false;
       let hasUSDNamed = false;
-  
+
       try {
         hasNamed =
           serviceProviderIds.some((idWithType) => {
@@ -831,7 +900,7 @@ const Institution = () => {
             const parts = idWithType.split("-");
             return parts.length > 1 && parts[1] === "named";
           }) || false;
-  
+
         hasUSD =
           serviceProviderIds.some((idWithType) => {
             if (!idWithType || typeof idWithType !== 'string') return false;
@@ -846,7 +915,7 @@ const Institution = () => {
             });
             return account && account.currency === "USD";
           }) || false;
-  
+
         hasUSDNamed =
           serviceProviderIds.some((idWithType) => {
             if (!idWithType || typeof idWithType !== 'string') return false;
@@ -866,7 +935,7 @@ const Institution = () => {
       } catch (error) {
         console.error("❌ Error determining institution account types:", error);
       }
-  
+
       console.log("🏢 Institution Account Analysis:", {
         hasNamed,
         hasUSD,
@@ -875,22 +944,22 @@ const Institution = () => {
         accountOptions,
         remittanceOnlyAccepted,
       });
-  
+
       // CRITICAL FIX: Set the showField flags based on conditions
       const shouldShowFields = hasUSDNamed || remittanceOnlyAccepted;
-  
+
       console.log("🎯 Setting field visibility:", {
         shouldShowFields,
         hasUSDNamed,
         remittanceOnlyAccepted,
         isNamedAccount: hasUSDNamed,
       });
-  
+
       // Store in Redux
       dispatch(setFormField({ field: "hasNamedAccounts", value: hasNamed }));
       dispatch(setFormField({ field: "isUSDSelected", value: hasUSD }));
       dispatch(setFormField({ field: "isNamedAccount", value: hasUSDNamed }));
-  
+
       // SET THE FIELD VISIBILITY FLAGS
       dispatch(
         setFormField({
@@ -916,7 +985,7 @@ const Institution = () => {
           value: shouldShowFields,
         }),
       );
-  
+
       dispatch(
         setFormField({
           field: "service_provide_ids",
@@ -1505,6 +1574,12 @@ const Institution = () => {
         // Check age validation for step 2
         if (currentStep === 2 && values.dob && !validateAge(values.dob)) {
           dispatch(setErrorMessage("You must be at least 18 years old to register"));
+          dispatch(setShowPopup(true));
+          return;
+        }
+
+        if (currentStep === 2 && !isResponsiblePersonEmailVerified) {
+          dispatch(setErrorMessage("Please verify your email address before proceeding"));
           dispatch(setShowPopup(true));
           return;
         }
@@ -3017,8 +3092,8 @@ const Institution = () => {
                     <div key={step} className="flex flex-col items-center">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= step
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-600"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-600"
                           }`}
                       >
                         {step}
@@ -3221,7 +3296,7 @@ const Institution = () => {
                         <CustomSelect
                           id="country_of_registration"
                           label="Country of Registration"
-                          options={canadaOnlyOptions} 
+                          options={countryOptions}
                           onChange={enhancedSelectChange(
                             "country_of_registration",
                             setFieldValue,
@@ -3240,7 +3315,7 @@ const Institution = () => {
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
-                          options={canadaOnlyOptions}
+                          options={countryOptions}
                           onChange={enhancedSelectChange(
                             "country_of_operation",
                             setFieldValue,
@@ -3304,7 +3379,7 @@ const Institution = () => {
                         <CustomSelect
                           id="registered_address_street_country"
                           label="Country"
-                          options={canadaOnlyOptions}
+                          options={countryOptions}
                           onChange={enhancedSelectChange(
                             "registered_address_street_country",
                             setFieldValue,
@@ -3554,25 +3629,142 @@ const Institution = () => {
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
-                      <FormField
-                        id="email"
-                        label="Email Address"
-                        name="email"
-                        type="email"
-                        value={values.email || ""}
-                        onChange={enhancedHandleChange(
-                          "email",
-                          setFieldValue,
-                          setResponsiblePersonEmail,
+                      {/* Email Field with Verification */}
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                          Email Address <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <input
+                              id="email"
+                              name="email"
+                              type="email"
+                              value={values.email || ""}
+                              onChange={(e) => {
+                                enhancedHandleChange("email", setFieldValue, setResponsiblePersonEmail)(e);
+                                // Reset verification when email changes
+                                if (isResponsiblePersonEmailVerified) {
+                                  dispatch(resetEmailVerification());
+                                  setFieldValue("email_verified", false);
+                                }
+                              }}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("email")}
+                              disabled={isResponsiblePersonEmailVerified}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+          ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
+          ${touched.email && errors.email && !isResponsiblePersonEmailVerified
+                                  ? "border-red-500 focus:ring-red-500"
+                                  : "border-gray-300 focus:ring-blue-500"
+                                }`}
+                              placeholder="your.email@example.com"
+                            />
+                          </div>
+
+                          {/* Verify Button - Only show when not verified */}
+                          {!isResponsiblePersonEmailVerified && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
+                              disabled={isSendingCode || !values.email || errors.email}
+                              className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !values.email || errors.email
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                                }`}
+                            >
+                              {isSendingCode ? (
+                                <div className="flex items-center gap-2">
+                                  <RingLoader size={16} color="#ffffff" />
+                                  <span>Sending...</span>
+                                </div>
+                              ) : (
+                                'Verify'
+                              )}
+                            </button>
+                          )}
+
+                          {/* Verified Badge - Show when verified instead of button */}
+                          {isResponsiblePersonEmailVerified && (
+                            <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                              <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
+                              <span>Verified</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Email field error */}
+                        {touched.email && errors.email && !isResponsiblePersonEmailVerified && (
+                          <div className="text-red-500 text-xs mt-1 flex items-center">
+                            <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                            {errors.email}
+                          </div>
                         )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("email")}
-                        touched={touched.email}
-                        error={errors.email}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
+                      </div>
+
+                      {/* Verification Code Input (shown after clicking Verify) */}
+                      {showVerificationInput && !isResponsiblePersonEmailVerified && (
+                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Enter Verification Code
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={emailVerification?.verificationCode || ""}
+                                onChange={handleVerificationCodeChange}
+                                placeholder="Enter 6-digit code"
+                                maxLength={6}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyEmailCode(values.email, setFieldValue)}
+                              disabled={isVerifying || !emailVerification?.verificationCode || emailVerification?.verificationCode?.length !== 6}
+                              className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                            >
+                              {isVerifying ? (
+                                <div className="flex items-center gap-2">
+                                  <RingLoader size={16} color="#ffffff" />
+                                  <span>Verifying...</span>
+                                </div>
+                              ) : (
+                                'Submit'
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Resend link */}
+                          <div className="mt-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleResendCode(values.email)}
+                              disabled={isSendingCode}
+                              className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                            </button>
+                          </div>
+
+                          {/* Error message */}
+                          {emailVerification?.error && (
+                            <p className="text-red-500 text-xs mt-3 flex items-center">
+                              <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                              {emailVerification.error}
+                            </p>
+                          )}
+
+                          {/* Success message */}
+                          {emailVerification?.success && !isResponsiblePersonEmailVerified && (
+                            <p className="text-green-600 text-xs mt-3 flex items-center">
+                              <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                              {emailVerification.success}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       <PasswordField
                         id="password"
                         label="Password"
@@ -3736,58 +3928,46 @@ const Institution = () => {
                       />
 
                       {/* Date of Birth and Designation on same row - WITH AGE VALIDATION AND MESSAGE */}
-                      <div className="relative">
-                        <FormField
-                          id="dob"
-                          label="Date of Birth"
-                          name="dob"
+                      <div className="space-y-2">
+                        <label htmlFor="dob" className="block text-sm font-medium text-gray-700">
+                          Date of Birth <span className="text-red-500">*</span>
+                        </label>
+                        <Field
                           type="date"
-                          value={values.dob || ""}
+                          id="dob"
+                          name="dob"
+                          max={getMaxDateForDOB()}  // This returns date 18 years ago
                           onChange={(e) => {
                             const selectedDate = e.target.value;
-                            enhancedHandleChange("dob", setFieldValue)(e);
-
-                            // Validate age on change
-                            if (selectedDate) {
-                              const isValidAge = validateAge(selectedDate);
-                              if (!isValidAge) {
-                                setFieldValue("dob_error", "You must be at least 18 years old to register");
-                              } else {
-                                setFieldValue("dob_error", "");
-                              }
-                            } else {
-                              setFieldValue("dob_error", "");
+                            const maxDate = getMaxDateForDOB();
+                            if (selectedDate > maxDate) {
+                              e.target.value = maxDate;
                             }
+                            handleChange(e);
                           }}
-                          onBlur={(e) => {
-                            handleBlur(e);
-                            const selectedDate = values.dob;
-                            if (selectedDate && !validateAge(selectedDate)) {
-                              setFieldValue("dob_error", "You must be at least 18 years old to register");
-                            }
-                          }}
-                          onFocus={() => setActiveField("dob")}
-                          touched={touched.dob}
-                          error={errors.dob || values.dob_error}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                          max={getMaxDateForDOB()}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${touched.dob && errors.dob
+                            ? "border-red-500 focus:ring-red-500"
+                            : touched.dob &&
+                              values.dob &&
+                              !validateAge(values.dob)
+                              ? "border-red-500 focus:ring-red-500"
+                              : "border-gray-300 focus:ring-blue-500"
+                            }`}
                         />
-
-                        {/* Helper text - Always visible */}
-                        <div className="text-xs text-gray-500 mt-1 flex items-center">
-                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                          You must be at least 18 years old to register
-                        </div>
-
-                        {/* Error message - Only visible when there's an error */}
-                        {values.dob_error && (
+                        {/* Age validation message */}
+                        {touched.dob && values.dob && !validateAge(values.dob) && (
                           <div className="text-red-500 text-xs mt-1 flex items-center">
-                            <FontAwesomeIcon icon={faTimesCircle} className="mr-1 w-3 h-3" />
-                            {values.dob_error}
+                            <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                            You must be at least 18 years old to register
                           </div>
                         )}
+
+                        {/* Helpful message explaining why they can't select certain dates */}
+                        <div className="text-xs text-gray-500 mt-1 flex items-center">
+                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                          You must be at least 18 years old to register. Only dates before {getMaxDateForDOB()} are selectable.
+                        </div>
+
                       </div>
 
                       <FormField
