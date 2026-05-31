@@ -195,7 +195,7 @@ const ManualDeposit = ({
       setIsLoadingOccupations(true);
       try {
         const bearertoken = localStorage.getItem("bearertoken");
-        const response = await axios.get(`${API_URL}/fetch-occupation`, {
+        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
           headers: { Authorization: `Bearer ${bearertoken}` },
         });
 
