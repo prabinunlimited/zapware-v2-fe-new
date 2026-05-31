@@ -3790,7 +3790,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     </div>
                   </div>
 
-                  {/* Nationality */}
                   {/* Nationality - Only show for individuals, not institutions */}
                   {formik.values.beneftype === "individual" && (
                     <div>
