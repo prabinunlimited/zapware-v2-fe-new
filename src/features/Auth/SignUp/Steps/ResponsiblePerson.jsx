@@ -1,4 +1,7 @@
 import React from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheckCircle, faExclamationCircle, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import { RingLoader } from "react-spinners";
 import FormField from "../../Auth/SignUp/FormFields/FormField";
 import PasswordField from "../../Auth/SignUp/FormFields/PasswordField";
 import SelectField from "../../Auth/SignUp/FormFields/SelectField";
@@ -18,6 +21,17 @@ const ResponsiblePerson = ({
   showConfirmPassword,
   passwordValidationRules,
   dispatch,
+  // Email verification props
+  emailVerification,
+  isEmailVerified,
+  showVerificationInput,
+  isSendingCode,
+  isVerifying,
+  handleSendVerificationCode,
+  handleVerifyEmailCode,
+  handleVerificationCodeChange,
+  handleResendCode,
+  resetEmailVerification,
 }) => {
   return (
     <>
@@ -54,20 +68,139 @@ const ResponsiblePerson = ({
           activeField={activeField}
         />
 
-        <FormField
-          id="email"
-          label="Email Address"
-          name="email"
-          type="email"
-          value={values.email}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          onFocus={() => setActiveField("email")}
-          touched={touched.email}
-          error={errors.email}
-          required
-          activeField={activeField}
-        />
+        {/* Email Field with Verification */}
+        <div className="space-y-2">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email Address <span className="text-red-500">*</span>
+          </label>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={values.email || ""}
+                onChange={(e) => {
+                  handleChange(e);
+                  // Reset verification when email changes
+                  if (isEmailVerified) {
+                    resetEmailVerification();
+                    setFieldValue("email_verified", false);
+                  }
+                }}
+                onBlur={handleBlur}
+                onFocus={() => setActiveField("email")}
+                disabled={isEmailVerified}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+                  ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
+                  ${touched.email && errors.email && !isEmailVerified
+                    ? "border-red-500 focus:ring-red-500"
+                    : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                placeholder="your.email@example.com"
+              />
+            </div>
+            
+            {/* Verify Button - Only show when not verified */}
+            {!isEmailVerified && (
+              <button
+                type="button"
+                onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
+                disabled={isSendingCode || !values.email || errors.email}
+                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+              >
+                {isSendingCode ? (
+                  <div className="flex items-center gap-2">
+                    <RingLoader size={16} color="#ffffff" />
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  'Verify'
+                )}
+              </button>
+            )}
+            
+            {/* Verified Badge - Show when verified instead of button */}
+            {isEmailVerified && (
+              <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap">
+                <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
+                <span className="font-medium">Verified</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Email field error */}
+          {touched.email && errors.email && !isEmailVerified && (
+            <div className="text-red-500 text-xs mt-1 flex items-center">
+              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+              {errors.email}
+            </div>
+          )}
+        </div>
+
+        {/* Verification Code Input (shown after clicking Verify) */}
+        {showVerificationInput && !isEmailVerified && (
+          <div className="md:col-span-2 mt-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter Verification Code
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={emailVerification?.verificationCode || ""}
+                  onChange={handleVerificationCodeChange}
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleVerifyEmailCode(values.email, setFieldValue)}
+                disabled={isVerifying || !emailVerification?.verificationCode || emailVerification?.verificationCode?.length !== 6}
+                className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+              >
+                {isVerifying ? (
+                  <div className="flex items-center gap-2">
+                    <RingLoader size={16} color="#ffffff" />
+                    <span>Verifying...</span>
+                  </div>
+                ) : (
+                  'Submit'
+                )}
+              </button>
+            </div>
+            
+            {/* Resend link */}
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => handleResendCode(values.email)}
+                disabled={isSendingCode}
+                className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+              </button>
+            </div>
+            
+            {/* Error message */}
+            {emailVerification?.error && (
+              <p className="text-red-500 text-xs mt-3 flex items-center">
+                <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                {emailVerification.error}
+              </p>
+            )}
+            
+            {/* Success message */}
+            {emailVerification?.success && !isEmailVerified && (
+              <p className="text-green-600 text-xs mt-3 flex items-center">
+                <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                {emailVerification.success}
+              </p>
+            )}
+          </div>
+        )}
 
         <FormField
           id="designation"
@@ -209,7 +342,7 @@ const ResponsiblePerson = ({
             id="street_address_2"
             label="Street Address 2 (Optional)"
             name="street_address_2"
-            value={values.stear_address_2}
+            value={values.street_address_2}
             onChange={handleChange}
             onBlur={handleBlur}
             onFocus={() => setActiveField("street_address_2")}
