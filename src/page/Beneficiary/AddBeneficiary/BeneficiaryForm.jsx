@@ -3077,7 +3077,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       </div>
 
       <div className="space-y-6">
-        {/* ✅ ADD THIS BENEFICIARY TYPE SELECTOR HERE */}
+        {/* Beneficiary Type Selector */}
         <div>
           <FieldLabel required info="Select whether you're searching for an individual or institution">
             Select Beneficiary Type
@@ -3113,6 +3113,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             </button>
           </div>
         </div>
+
         {/* Phone Input */}
         <div>
           <FieldLabel
@@ -3121,6 +3122,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           >
             Beneficiary Phone Number
           </FieldLabel>
+
+          {/* Country Code and Phone Number Row */}
           <div className="flex flex-col md:flex-row gap-2">
             {/* Country Code Selector */}
             <div className="w-full md:w-1/3">
@@ -3153,7 +3156,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               />
             </div>
 
-            {/* Phone Number Input */}
+            {/* Phone Number Input and Search Button - Maintain original desktop layout */}
             <div className="flex gap-2 w-full md:flex-1">
               <input
                 type="tel"
@@ -3172,11 +3175,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 placeholder="Enter phone number"
                 disabled={phoneSearchLoading}
               />
+              {/* Desktop Search Button - Visible on all screens, but we'll add mobile version below */}
               <button
                 type="button"
                 onClick={handlePhoneSearch}
                 disabled={!phoneInput.trim() || phoneSearchLoading || !selectedBeneficiaryType}
-                className={`px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap flex items-center ${phoneSearchLoading
+                className={`hidden md:flex px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap items-center ${phoneSearchLoading
                   ? "bg-gray-300 cursor-not-allowed"
                   : !phoneInput.trim() || !selectedBeneficiaryType
                     ? "bg-gray-300 cursor-not-allowed"
@@ -3197,6 +3201,34 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </button>
             </div>
           </div>
+
+          {/* Mobile Search Button - Only visible on mobile */}
+          <div className="mt-3 md:hidden">
+            <button
+              type="button"
+              onClick={handlePhoneSearch}
+              disabled={!phoneInput.trim() || phoneSearchLoading || !selectedBeneficiaryType}
+              className={`w-full px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center ${phoneSearchLoading
+                ? "bg-gray-300 cursor-not-allowed"
+                : !phoneInput.trim() || !selectedBeneficiaryType
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+                }`}
+            >
+              {phoneSearchLoading ? (
+                <>
+                  <RingLoader size={16} color="#ffffff" className="mr-2" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <FaSearch className="mr-2" />
+                  Search 
+                </>
+              )}
+            </button>
+          </div>
+
           <p className="text-sm text-gray-500 mt-2">
             We'll check if a beneficiary with this phone number already exists
           </p>
@@ -3222,7 +3254,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
                 </div>
 
-                {/* Inside renderPhoneSearchStep function, update the beneficiary details display */}
+                {/* Beneficiary Details */}
                 <div className="mb-6 p-4 bg-white rounded-lg border border-yellow-100">
                   <h4 className="font-semibold text-gray-800 mb-2">
                     Existing Beneficiary Details:
