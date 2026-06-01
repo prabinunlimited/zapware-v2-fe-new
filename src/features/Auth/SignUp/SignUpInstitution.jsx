@@ -3312,7 +3312,7 @@ const Institution = () => {
 
                       {/* Country of Registration and Primary Country of Operation on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <CustomSelect
+                        {/* <CustomSelect
                           id="country_of_registration"
                           label="Country of Registration"
                           options={countryOptions}
@@ -3330,7 +3330,7 @@ const Institution = () => {
                           isLoading={countriesLoading}
                           isCountryField={true}
                           showPhoneCode={false}
-                        />
+                        /> */}
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
