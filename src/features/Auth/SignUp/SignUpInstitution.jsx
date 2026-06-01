@@ -369,6 +369,7 @@ const Institution = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFullScreenLoader, setShowFullScreenLoader] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [purposeOfAccount, setPurposeOfAccount] = useState("");
 
   const initialLoadRef = React.useRef(false);
   const institutionState = useSelector(selectInstitutionRegistration);
@@ -500,7 +501,7 @@ const Institution = () => {
       controller_designation: "",
       controller_ssn: "",
       is_controller: "",
-
+      purpose_of_account: mergedData.purpose_of_account || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1702,6 +1703,13 @@ const Institution = () => {
     setPendingNextStep(false);
   }, []);
 
+  const handlePurposeOfAccountChange = (e, setFieldValue) => {
+    const value = e.target.value;
+    setPurposeOfAccount(value);
+    setFieldValue("purpose_of_account", value);
+    dispatch(setFormField({ field: "purpose_of_account", value }));
+  };
+
   const handleSubmit = useCallback(
     async (values, { setSubmitting, setErrors }) => {
       try {
@@ -1802,6 +1810,7 @@ const Institution = () => {
           naice_code: finalFormData.naice_code,
           business_type: finalFormData.business_type,
           business_alias: finalFormData.business_alias,
+          purpose_of_account: finalFormData.purpose_of_account || "",
           company_phone_number: finalFormData.company_phone_number,
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
@@ -1898,6 +1907,15 @@ const Institution = () => {
           submitInstitutionForm(finalData),
         ).unwrap();
 
+        if (result && result.status === "error") {
+          dispatch(setErrorMessage(result.message || "Registration failed"));
+          dispatch(setShowPopup(true));
+          setIsSubmitting(false);
+          setShowFullScreenLoader(false);
+          setSubmitting(false);
+          return;
+        }
+
         if (
           result &&
           (result.status === "success" || result.success === true)
@@ -1974,6 +1992,7 @@ const Institution = () => {
           }
         }
       } catch (error) {
+        // THIS IS WHERE YOU NEED TO CHANGE THE CODE
         if (error.response && error.response.data) {
           const errorData = error.response.data;
           if (errorData.message) {
@@ -3558,6 +3577,23 @@ const Institution = () => {
                           fieldStyles={FIELD_STYLES}
                         />
                       </div>
+
+                      <div className="mt-4">
+                        <FormField
+                          id="purpose_of_account"
+                          label="Purpose of Account"
+                          name="purpose_of_account"
+                          value={values.purpose_of_account || ""}
+                          onChange={(e) => handlePurposeOfAccountChange(e, setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("purpose_of_account")}
+                          touched={touched.purpose_of_account}
+                          error={errors.purpose_of_account}
+                          placeholder="e.g., Business transactions, International payments, Investment management"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -3832,19 +3868,19 @@ const Institution = () => {
                               // 🔥 AUTO-FILL PHONE COUNTRY CODE based on selected resident country
                               if (option.phoneCode || option.phone_code) {
                                 const phoneCode = option.phoneCode || option.phone_code;
-                              
+
                                 setFieldValue("mobilenumber_countrycode", phoneCode);
-                              
+
                                 // NEW
                                 setFieldValue("mobilenumber_country", option.value);
-                              
+
                                 dispatch(
                                   setFormField({
                                     field: "mobilenumber_countrycode",
                                     value: phoneCode,
                                   })
                                 );
-                              
+
                                 dispatch(
                                   setFormField({
                                     field: "mobilenumber_country",
@@ -3889,19 +3925,19 @@ const Institution = () => {
                                   if (option) {
                                     const phoneCode =
                                       option.phoneCode || option.phone_code || "";
-                                
+
                                     setFieldValue("mobilenumber_countrycode", phoneCode);
-                                
+
                                     // NEW
                                     setFieldValue("mobilenumber_country", option.value);
-                                
+
                                     dispatch(
                                       setFormField({
                                         field: "mobilenumber_countrycode",
                                         value: phoneCode,
                                       })
                                     );
-                                
+
                                     dispatch(
                                       setFormField({
                                         field: "mobilenumber_country",
