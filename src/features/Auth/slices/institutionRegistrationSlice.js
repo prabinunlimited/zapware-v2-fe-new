@@ -276,8 +276,6 @@ export const submitInstitutionForm = createAsyncThunk(
   "institution/submitRegistration",
   async (formData, { rejectWithValue }) => {
     try {
-      // Log what we're sending for debugging
-
       const response = await api.post(
         "/customers/sign-up-institution",
         formData,
@@ -297,14 +295,19 @@ export const submitInstitutionForm = createAsyncThunk(
 
       return response.data;
     } catch (error) {
-      // Enhanced error handling
+      // Enhanced error handling to preserve your API's error structure
       if (error.response?.data) {
-        return rejectWithValue(
-          error.response.data.message || "Registration failed",
-        );
+        // Preserve the entire error response from your API
+        // Your API returns: { status: "error", message: "...", data: "" }
+        return rejectWithValue(error.response.data);
       }
-
-      return rejectWithValue(error.message || "Submission failed");
+      
+      // Handle network errors or other issues
+      return rejectWithValue({ 
+        status: "error", 
+        message: error.message || "Submission failed",
+        data: ""
+      });
     }
   },
 );

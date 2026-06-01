@@ -3059,16 +3059,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   // Render Step 0 - Phone Search
   const renderPhoneSearchStep = () => (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
-        <div className="flex items-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mr-4">
-            <FaPhone size={24} />
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-6 rounded-2xl border border-blue-200">
+        <div className="flex flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 text-blue-600 flex-shrink-0">
+            <FaPhone size={18} className="sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">
+          <div className="flex-1">
+            <h2 className="text-base sm:text-xl font-bold text-gray-800">
               Search Existing Beneficiary
             </h2>
-            <p className="text-gray-600">
+            <p className="text-xs sm:text-base text-gray-600">
               Enter the beneficiary's phone number to check if they already
               exist in the system.
             </p>
@@ -3077,12 +3077,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       </div>
 
       <div className="space-y-6">
-        {/* ✅ ADD THIS BENEFICIARY TYPE SELECTOR HERE */}
+        {/* Beneficiary Type Selector */}
         <div>
           <FieldLabel required info="Select whether you're searching for an individual or institution">
             Select Beneficiary Type
           </FieldLabel>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => {
@@ -3113,6 +3113,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             </button>
           </div>
         </div>
+
         {/* Phone Input */}
         <div>
           <FieldLabel
@@ -3121,6 +3122,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           >
             Beneficiary Phone Number
           </FieldLabel>
+
+          {/* Country Code and Phone Number Row */}
           <div className="flex flex-col md:flex-row gap-2">
             {/* Country Code Selector */}
             <div className="w-full md:w-1/3">
@@ -3153,7 +3156,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               />
             </div>
 
-            {/* Phone Number Input */}
+            {/* Phone Number Input and Search Button - Maintain original desktop layout */}
             <div className="flex gap-2 w-full md:flex-1">
               <input
                 type="tel"
@@ -3172,11 +3175,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 placeholder="Enter phone number"
                 disabled={phoneSearchLoading}
               />
+              {/* Desktop Search Button - Visible on all screens, but we'll add mobile version below */}
               <button
                 type="button"
                 onClick={handlePhoneSearch}
                 disabled={!phoneInput.trim() || phoneSearchLoading || !selectedBeneficiaryType}
-                className={`px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap flex items-center ${phoneSearchLoading
+                className={`hidden md:flex px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap items-center ${phoneSearchLoading
                   ? "bg-gray-300 cursor-not-allowed"
                   : !phoneInput.trim() || !selectedBeneficiaryType
                     ? "bg-gray-300 cursor-not-allowed"
@@ -3197,6 +3201,34 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </button>
             </div>
           </div>
+
+          {/* Mobile Search Button - Only visible on mobile */}
+          <div className="mt-3 md:hidden">
+            <button
+              type="button"
+              onClick={handlePhoneSearch}
+              disabled={!phoneInput.trim() || phoneSearchLoading || !selectedBeneficiaryType}
+              className={`w-full px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center ${phoneSearchLoading
+                ? "bg-gray-300 cursor-not-allowed"
+                : !phoneInput.trim() || !selectedBeneficiaryType
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+                }`}
+            >
+              {phoneSearchLoading ? (
+                <>
+                  <RingLoader size={16} color="#ffffff" className="mr-2" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <FaSearch className="mr-2" />
+                  Search
+                </>
+              )}
+            </button>
+          </div>
+
           <p className="text-sm text-gray-500 mt-2">
             We'll check if a beneficiary with this phone number already exists
           </p>
@@ -3205,50 +3237,50 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         {/* Search Results */}
         {(showSearchResults || (phoneSearch.searched && !phoneSearchLoading)) && (
           <div
-            className={`p-6 rounded-xl border-2 ${usingExistingBeneficiary || (phoneSearch.exists && !phoneSearchLoading && !usingExistingBeneficiary)
+            className={`p-4 sm:p-6 rounded-xl border-2 ${usingExistingBeneficiary || (phoneSearch.exists && !phoneSearchLoading && !usingExistingBeneficiary)
               ? "border-yellow-200 bg-yellow-50"
               : "border-green-200 bg-green-50"
               }`}
           >
             {usingExistingBeneficiary || (phoneSearch.exists && phoneSearch.data && !usingExistingBeneficiary) ? (
               <div>
-                <div className="flex items-center text-yellow-700 mb-4">
-                  <FaExclamationTriangle className="mr-3" size={24} />
+                <div className="flex flex-row items-start sm:items-center text-yellow-700 mb-4 gap-3">
+                  <FaExclamationTriangle size={18} className="sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
                   <div>
-                    <h3 className="font-bold text-lg">Beneficiary Found!</h3>
-                    <p className="text-sm">
+                    <h3 className="font-bold text-base sm:text-lg">Beneficiary Found!</h3>
+                    <p className="text-xs sm:text-sm">
                       We found an existing beneficiary with this phone number
                     </p>
                   </div>
                 </div>
 
-                {/* Inside renderPhoneSearchStep function, update the beneficiary details display */}
-                <div className="mb-6 p-4 bg-white rounded-lg border border-yellow-100">
-                  <h4 className="font-semibold text-gray-800 mb-2">
+                {/* Beneficiary Details */}
+                <div className="mb-6 p-3 sm:p-4 bg-white rounded-lg border border-yellow-100 overflow-x-auto">
+                  <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
                     Existing Beneficiary Details:
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <span className="text-sm text-gray-500">Name:</span>
-                      <p className="font-medium">
+                      <span className="text-xs sm:text-sm text-gray-500">Name:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
                         {foundBeneficiary?.displayName || foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-500">Email:</span>
-                      <p className="font-medium">
+                      <span className="text-xs sm:text-sm text-gray-500">Email:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
                         {foundBeneficiary?.displayEmail || foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-500">Phone:</span>
-                      <p className="font-medium">
+                      <span className="text-xs sm:text-sm text-gray-500">Phone:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
                         {foundBeneficiary?.displayPhone || foundBeneficiary?.full_phone_number || foundBeneficiary?.phone_number || phoneSearch.data?.full_phone_number || phoneSearch.data?.phone_number || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-500">Country:</span>
-                      <p className="font-medium">
+                      <span className="text-xs sm:text-sm text-gray-500">Country:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
                         {foundBeneficiary?.displayCountry || (() => {
                           const countryId = foundBeneficiary?.country_id || phoneSearch.data?.country_id;
                           if (countryId) {
@@ -3260,8 +3292,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-500">Currency:</span>
-                      <p className="font-medium">
+                      <span className="text-xs sm:text-sm text-gray-500">Currency:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
                         {foundBeneficiary?.displayCurrency || (() => {
                           const banks = foundBeneficiary?.banks || phoneSearch.data?.banks;
                           if (banks && banks.length > 0) {
@@ -3275,41 +3307,41 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <button
                     type="button"
                     onClick={handleUseFoundBeneficiary}
-                    className="flex-1 px-6 py-3 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition-all duration-300 flex items-center justify-center font-medium"
+                    className="w-full sm:flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
                   >
-                    <FaCheckCircle className="mr-2" />
+                    <FaCheckCircle className="mr-2" size={14} />
                     Use Existing Beneficiary
                   </button>
                   <button
                     type="button"
                     onClick={handleCreateNewBeneficiary}
-                    className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center justify-center font-medium"
+                    className="w-full sm:flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
                   >
-                    <FaUser className="mr-2" />
+                    <FaUser className="mr-2" size={14} />
                     Create New {selectedBeneficiaryType === "individual" ? "Individual" : "Institution"} Beneficiary
                   </button>
                 </div>
               </div>
             ) : (!phoneSearch.exists && phoneSearch.searched) || (!usingExistingBeneficiary && showSearchResults && !phoneSearch.exists) ? (
               <div>
-                <div className="flex items-center text-green-700 mb-4">
-                  <FaCheckCircle className="mr-3" size={24} />
+                <div className="flex flex-row items-start sm:items-center text-green-700 mb-4 gap-3">
+                  <FaCheckCircle size={18} className="sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
                   <div>
-                    <h3 className="font-bold text-lg">
+                    <h3 className="font-bold text-base sm:text-lg">
                       No Existing Beneficiary Found
                     </h3>
-                    <p className="text-sm">
+                    <p className="text-xs sm:text-sm">
                       You can create a new beneficiary with this phone number
                     </p>
                   </div>
                 </div>
 
-                <div className="mb-6 p-4 bg-white rounded-lg border border-green-100">
-                  <p className="text-gray-700">
+                <div className="mb-6 p-3 sm:p-4 bg-white rounded-lg border border-green-100">
+                  <p className="text-sm sm:text-base text-gray-700 break-words">
                     No beneficiary was found with the phone number{" "}
                     <span className="font-semibold">{phoneInput}</span>. You can
                     proceed to create a new beneficiary.
@@ -3319,9 +3351,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 <button
                   type="button"
                   onClick={handleCreateNewBeneficiary}
-                  className="w-full px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all duration-300 flex items-center justify-center font-medium"
+                  className="w-full px-4 sm:px-6 py-2.5 sm:py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
                 >
-                  <FaUser className="mr-2" />
+                  <FaUser className="mr-2" size={14} />
                   Create New Beneficiary
                 </button>
               </div>
@@ -3330,33 +3362,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         )}
 
         {/* Action Buttons */}
-        <div className="flex flex-col md:flex-row gap-4 pt-8 border-t border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 border-t border-gray-200">
           <button
             type="button"
             onClick={handleCancel}
-            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 flex items-center justify-center font-medium"
+            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 flex items-center justify-center font-medium text-sm sm:text-base order-2 sm:order-1"
           >
-            <FaArrowLeft className="mr-2" />
+            <FaArrowLeft className="mr-2" size={14} />
             Cancel
           </button>
           <button
             type="button"
             onClick={nextStep}
             disabled={phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType}
-            className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium ${phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType
+            className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium text-sm sm:text-base order-1 sm:order-2 ${phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType
               ? "bg-gray-300 cursor-not-allowed text-gray-500"
               : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
               }`}
           >
             {phoneSearchLoading ? (
               <>
-                <RingLoader size={20} color="#ffffff" className="mr-2" />
+                <RingLoader size={16} color="#ffffff" className="mr-2" />
                 Searching...
               </>
             ) : (
               <>
                 Continue
-                <FaChevronRight className="ml-2" />
+                <FaChevronRight className="ml-2" size={12} />
               </>
             )}
           </button>
@@ -3401,11 +3433,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col border border-gray-200">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
             <div>
-              <h1 className="text-2xl font-bold text-white flex items-center">
-                <FaMoneyBillWave className="mr-3" size={28} />
+              <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center">
+                <FaMoneyBillWave className="mr-3" size={24} />
                 {mode === "create"
                   ? usingExistingBeneficiary
                     ? "Add Bank Account to Existing Beneficiary"
@@ -3414,7 +3446,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     ? "Edit Bank Details"
                     : "Edit Beneficiary"}
               </h1>
-              <p className="text-blue-100 mt-1">
+              <p className="text-blue-100 mt-1 text-sm">
                 {mode === "create"
                   ? usingExistingBeneficiary
                     ? "Add a new bank account to an existing beneficiary"
@@ -3436,42 +3468,84 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           {/* Progress Steps - Only show for create mode */}
           {mode === "create" && (
             <div className="relative pt-4">
-              <div className="flex justify-between mb-2">
-                {steps.map((stepItem) => (
-                  <div
-                    key={stepItem.number}
-                    className="flex flex-col items-center flex-1"
-                  >
+              {/* Mobile Version - Simplified */}
+              <div className="md:hidden">
+                <div className="flex justify-between mb-2">
+                  {steps.map((stepItem) => (
                     <div
-                      className={`flex items-center justify-center w-12 h-12 rounded-full border-4 border-white ${step === stepItem.number
-                        ? "bg-blue-500"
-                        : step > stepItem.number
-                          ? "bg-blue-400"
-                          : "bg-blue-300"
-                        } text-white font-bold text-lg shadow-lg`}
+                      key={stepItem.number}
+                      className="flex flex-col items-center flex-1"
                     >
-                      {step === stepItem.number ? (
-                        <div className="animate-pulse">{stepItem.number}</div>
-                      ) : (
-                        stepItem.number
-                      )}
-                    </div>
-                    <div className="text-center mt-3">
-                      <div className="text-sm font-semibold text-white">
-                        {stepItem.title}
+                      <div
+                        className={`flex items-center justify-center w-10 h-10 rounded-full border-2 border-white ${step === stepItem.number
+                            ? "bg-blue-500"
+                            : step > stepItem.number
+                              ? "bg-blue-400"
+                              : "bg-blue-300"
+                          } text-white font-bold text-sm shadow-lg`}
+                      >
+                        {stepItem.number}
                       </div>
-                      <div className="text-xs text-blue-200">
-                        {stepItem.description}
+                      <div className="text-center mt-2">
+                        <div className="text-xs font-semibold text-white">
+                          {stepItem.title.split(' ')[0]}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+                <div className="absolute top-6 left-0 right-0 h-1 bg-blue-400 -z-10">
+                  <div
+                    className="h-full bg-white transition-all duration-500 ease-out"
+                    style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
+                  />
+                </div>
+                <div className="text-center mt-3">
+                  <div className="text-xs text-blue-200">
+                    {steps[step]?.description}
                   </div>
-                ))}
+                </div>
               </div>
-              <div className="absolute top-8 left-0 right-0 h-2 bg-blue-400 -z-10">
-                <div
-                  className="h-full bg-white transition-all duration-500 ease-out"
-                  style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
-                />
+
+              {/* Desktop Version - Original Layout */}
+              <div className="hidden md:block">
+                <div className="flex justify-between mb-2">
+                  {steps.map((stepItem) => (
+                    <div
+                      key={stepItem.number}
+                      className="flex flex-col items-center flex-1"
+                    >
+                      <div
+                        className={`flex items-center justify-center w-12 h-12 rounded-full border-4 border-white ${step === stepItem.number
+                            ? "bg-blue-500"
+                            : step > stepItem.number
+                              ? "bg-blue-400"
+                              : "bg-blue-300"
+                          } text-white font-bold text-lg shadow-lg`}
+                      >
+                        {step === stepItem.number ? (
+                          <div className="animate-pulse">{stepItem.number}</div>
+                        ) : (
+                          stepItem.number
+                        )}
+                      </div>
+                      <div className="text-center mt-3">
+                        <div className="text-sm font-semibold text-white">
+                          {stepItem.title}
+                        </div>
+                        <div className="text-xs text-blue-200">
+                          {stepItem.description}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="absolute top-8 left-0 right-0 h-2 bg-blue-400 -z-10">
+                  <div
+                    className="h-full bg-white transition-all duration-500 ease-out"
+                    style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
           )}
