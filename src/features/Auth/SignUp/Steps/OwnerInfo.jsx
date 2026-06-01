@@ -96,7 +96,7 @@ const OwnerItem = ({
   return (
     <div className="border border-gray-200 rounded-lg p-4">
       {/* Debug Info */}
-      {process.env.NODE_ENV === "development" && (
+      {/* {process.env.NODE_ENV === "development" && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
           <strong>Owner {index + 1} State:</strong>
           <div className="grid grid-cols-2 gap-1 mt-1">
@@ -115,7 +115,7 @@ const OwnerItem = ({
             </span>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-blue-600">Owner {index + 1}</h3>
@@ -636,7 +636,7 @@ const OwnerInfo = ({
     <>
       <h2 className="text-xl font-semibold mb-4">Owner Details</h2>
 
-      {process.env.NODE_ENV === "development" && (
+      {/* {process.env.NODE_ENV === "development" && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <details>
             <summary className="cursor-pointer font-bold text-yellow-800">
@@ -652,7 +652,7 @@ const OwnerInfo = ({
             </div>
           </details>
         </div>
-      )}
+      )} */}
 
       <FieldArray name="owner_details">
         {({ push, remove }) => {
