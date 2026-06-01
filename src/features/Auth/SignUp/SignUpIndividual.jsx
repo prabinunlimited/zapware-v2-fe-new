@@ -787,9 +787,22 @@ function SignUpIndividualContent() {
           flag_url: country.flag_url,
           phoneCode: country.phoneCode
         };
-
+      
         dispatch(setSelectedCountry(countryOption));
         formik.setFieldValue("country", country.id || country.value);
+        
+        // 🔥 ADD THIS BLOCK - Auto-fill phone code when country is populated
+        if (countryOption.phoneCode) {
+          formik.setFieldValue("mobilenumber_countrycode", countryOption.phoneCode);
+          formik.setFieldValue("flag_url", countryOption.flag_url || "");
+          
+          setSelectedPhoneCode({
+            value: countryOption.value,
+            label: countryOption.label,
+            phoneCode: countryOption.phoneCode,
+            flag_url: countryOption.flag_url
+          });
+        }
       }
 
       if (finalData.emailVerified && finalData.mobileVerified) {
@@ -1341,23 +1354,39 @@ function SignUpIndividualContent() {
   const handleCountrySelect = async (selectedOption) => {
     const countryId = selectedOption?.value || "";
     const countryCode = selectedOption?.country_code || "";
-
+    const phoneCode = selectedOption?.phoneCode || "";  // Get phone code
+    const flagUrl = selectedOption?.flag_url || "";
+  
     // Update Redux state
     dispatch(setSelectedCountry(selectedOption));
-
-    // Update formik values
+  
+    // Update formik values for country
     formik.setFieldValue("country", countryId);
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
     formik.setFieldValue("zip_code", "");
-
+    
+    // 🔥 NEW: Auto-fill phone country code
+    if (phoneCode) {
+      formik.setFieldValue("mobilenumber_countrycode", phoneCode);
+      formik.setFieldValue("flag_url", flagUrl);
+      
+      // Also update the selectedPhoneCode state for the dropdown display
+      setSelectedPhoneCode({
+        value: selectedOption.value,
+        label: selectedOption.label,
+        phoneCode: phoneCode,
+        flag_url: flagUrl
+      });
+    }
+  
     // Store country code for ZIP lookup
     countryCodeRef.current = countryCode;
-
+  
     // Clear ZIP lookup data
     dispatch(clearZipLookupData());
-
-    // Auto-set SSN field for US residents (same logic as Institution component)
+  
+    // Auto-set SSN field for US residents
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
     }

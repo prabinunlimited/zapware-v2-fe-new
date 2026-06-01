@@ -3823,13 +3823,47 @@ const Institution = () => {
                           id="resident_country"
                           label="Resident Country"
                           options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "resident_country",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) => opt.value === values.resident_country,
-                          )}
+                          onChange={(option) => {
+                            if (option) {
+                              // Update resident country
+                              setFieldValue("resident_country", option.value);
+                              dispatch(setFormField({ field: "resident_country", value: option.value }));
+
+                              // 🔥 AUTO-FILL PHONE COUNTRY CODE based on selected resident country
+                              if (option.phoneCode || option.phone_code) {
+                                const phoneCode = option.phoneCode || option.phone_code;
+                              
+                                setFieldValue("mobilenumber_countrycode", phoneCode);
+                              
+                                // NEW
+                                setFieldValue("mobilenumber_country", option.value);
+                              
+                                dispatch(
+                                  setFormField({
+                                    field: "mobilenumber_countrycode",
+                                    value: phoneCode,
+                                  })
+                                );
+                              
+                                dispatch(
+                                  setFormField({
+                                    field: "mobilenumber_country",
+                                    value: option.value,
+                                  })
+                                );
+                              }
+                            }
+                          }}
+                          value={
+                            countryOptions.find(
+                              (opt) => opt.value === values.mobilenumber_country
+                            ) ||
+                            countryOptions.find(
+                              (opt) =>
+                                opt.phoneCode === values.mobilenumber_countrycode ||
+                                opt.phone_code === values.mobilenumber_countrycode
+                            )
+                          }
                           touched={touched.resident_country}
                           error={errors.resident_country}
                           required
@@ -3849,19 +3883,30 @@ const Institution = () => {
                                 label="Country Code"
                                 options={countryOptions}
                                 value={countryOptions.find(
-                                  (opt) =>
-                                    opt.phoneCode ===
-                                    values.mobilenumber_countrycode ||
-                                    opt.phone_code ===
-                                    values.mobilenumber_countrycode,
+                                  (opt) => opt.value === values.mobilenumber_country
                                 )}
                                 onChange={(option) => {
                                   if (option) {
-                                    setFieldValue(
-                                      "mobilenumber_countrycode",
-                                      option.phoneCode ||
-                                      option.phone_code ||
-                                      "",
+                                    const phoneCode =
+                                      option.phoneCode || option.phone_code || "";
+                                
+                                    setFieldValue("mobilenumber_countrycode", phoneCode);
+                                
+                                    // NEW
+                                    setFieldValue("mobilenumber_country", option.value);
+                                
+                                    dispatch(
+                                      setFormField({
+                                        field: "mobilenumber_countrycode",
+                                        value: phoneCode,
+                                      })
+                                    );
+                                
+                                    dispatch(
+                                      setFormField({
+                                        field: "mobilenumber_country",
+                                        value: option.value,
+                                      })
                                     );
                                   }
                                 }}
