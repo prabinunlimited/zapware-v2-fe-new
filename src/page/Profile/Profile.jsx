@@ -74,7 +74,7 @@ const Profile = () => {
 
   const authtoken = localStorage.getItem("authtoken");
   const uuid = localStorage.getItem("UUID");
-  const countries = JSON.parse(localStorage.getItem("allcountries") || "[]");
+  // const countries = JSON.parse(localStorage.getItem("allcountries") || "[]");
   const bearertoken = localStorage.getItem("bearertoken");
 
   // Get countries from Redux (already fetched by Login/App initialization)
@@ -937,7 +937,7 @@ const Profile = () => {
 
       const payload = {
         customer_id: customerUuid,
-        email: tempEmailData.email, 
+        email: tempEmailData.email,
       };
 
       console.log("📧 Resending email passcode:", payload);
@@ -1185,8 +1185,8 @@ const Profile = () => {
 
   const isUnitedStatesSelected = () => {
     if (!editableData.country_id) return false;
-    if (countries.length > 0) {
-      const selectedCountry = countries.find(
+    if (reduxCountries && reduxCountries.length > 0) {
+      const selectedCountry = reduxCountries.find(
         (c) => c.id.toString() === editableData.country_id.toString(),
       );
       return (
@@ -2084,8 +2084,8 @@ const Profile = () => {
                       onChange={handleChangeModalInput}
                       placeholder="Enter new mobile number"
                       className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${changeModalData.newMobileNumber && !isValidMobileNumber(changeModalData.newMobileNumber)
-                          ? "border-red-500 bg-red-50"
-                          : "border-gray-300"
+                        ? "border-red-500 bg-red-50"
+                        : "border-gray-300"
                         }`}
                     />
                     {changeModalData.newMobileNumber && !isValidMobileNumber(changeModalData.newMobileNumber) && (
@@ -2643,7 +2643,7 @@ const Profile = () => {
                         className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Select country</option>
-                        {countries.map((country) => (
+                        {reduxCountries && reduxCountries.map((country) => (  // ← Use reduxCountries
                           <option key={country.id} value={country.id}>
                             {country.name}
                           </option>
