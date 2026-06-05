@@ -190,15 +190,28 @@ const ProtectedRoute = () => {
       <Header customerId={routeCustomerId || customerId} />
 
       {/* Mobile Menu Button - Only show on mobile when menu is closed */}
-      {isMobile && !isMobileMenuOpen && (
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="fixed top-20 left-4 z-40 lg:hidden bg-white rounded-full p-3 shadow-lg border border-gray-200"
-          aria-label="Open menu"
-        >
-          <FiMenu className="w-5 h-5 text-gray-700" />
-        </button>
-      )}
+      {/* {isMobile && !isMobileMenuOpen && (
+  <button
+    onClick={() => setIsMobileMenuOpen(true)}
+    className="
+      fixed
+      left-0
+      z-40
+      lg:hidden
+      bg-white
+      rounded-full
+      p-3
+      shadow-md
+      border
+      border-gray-200
+    "
+    style={{
+      top: `${headerHeight + 10}px`,
+    }}
+  >
+    <FiMenu className="w-5 h-5 text-gray-700" />
+  </button>
+)} */}
 
       {/* Mobile Menu Overlay - NO EXTRA CONTENT, JUST NAVIGATION */}
       <AnimatePresence>
@@ -248,10 +261,22 @@ const ProtectedRoute = () => {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="p-4 md:p-6">
-            <Outlet />
-          </div>
-        </div>
+  <div className="p-4 md:p-6">
+
+    {isMobile && !isMobileMenuOpen && (
+      <div className="mb-4">
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="bg-white rounded-full p-3 shadow-md border border-gray-100"
+        >
+          <FiMenu className="w-5 h-5 text-gray-600" />
+        </button>
+      </div>
+    )}
+
+    <Outlet />
+  </div>
+</div>
       </div>
 
       {/* Footer */}

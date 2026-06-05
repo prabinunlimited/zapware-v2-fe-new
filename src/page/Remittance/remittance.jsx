@@ -2539,7 +2539,7 @@ const Remittance = () => {
               {/* Content */}
               <div className="p-6">
                 <p className="text-slate-700 mb-6">
-                  For first time users : Please link your bank first to continue through bank transfer.
+                  For first time users : Please link your bank first before proceeding through bank transfer.
                 </p>
 
                 <button
