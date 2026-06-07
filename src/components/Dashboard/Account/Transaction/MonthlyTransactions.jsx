@@ -40,6 +40,18 @@ import {
   selectStatementsError,
 } from "../Transaction/TransactionSlice";
 
+// --- Helper function to generate years from 2010 to current year only ---
+const generateYearOptions = () => {
+  const currentYear = new Date().getFullYear(); // Gets current year dynamically
+  const startYear = 2010;
+  const years = [];
+  // Show years in descending order (latest first)
+  for (let year = currentYear; year >= startYear; year--) {
+    years.push(year);
+  }
+  return years;
+};
+
 // --- Animation Variants ---
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -145,6 +157,25 @@ const MonthlyTransactions = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [hoveredRow, setHoveredRow] = useState(null);
+
+  // Generate year options dynamically (will update when year changes)
+  const yearOptions = useMemo(() => generateYearOptions(), []);
+  
+  // Optional: Add effect to update year options when year changes (for real-time updates)
+  useEffect(() => {
+    // You can add a timer to check if year has changed, but it's not necessary
+    // because the component will re-render on page refresh or navigation
+    const interval = setInterval(() => {
+      // Force re-render when year changes (optional)
+      const currentYear = new Date().getFullYear();
+      const lastYear = yearOptions[0]; // First item is the latest year
+      if (currentYear > lastYear) {
+        window.location.reload(); // Simple reload to get new years
+      }
+    }, 60000); // Check every minute (adjust as needed)
+    
+    return () => clearInterval(interval);
+  }, [yearOptions]);
 
   // Redux State
   const statements = useSelector(selectStatements);
@@ -420,7 +451,7 @@ const MonthlyTransactions = () => {
                           value={selectedYear}
                         >
                           <option value="">All</option>
-                          {[2025, 2024, 2023].map((year) => (
+                          {yearOptions.map((year) => (
                             <option key={year} value={year}>
                               {year}
                             </option>

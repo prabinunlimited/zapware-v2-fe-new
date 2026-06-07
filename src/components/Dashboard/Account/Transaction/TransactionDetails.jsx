@@ -47,7 +47,7 @@ const TransactionDetails = React.memo(
     // Track if initial load has been done
     const initialLoadDoneRef = useRef(false);
     const lastCurrencyRef = useRef(selectedCurrencyCode);
-
+    const fetchAttemptedRef = useRef(false);
     // Local state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
@@ -71,58 +71,33 @@ const TransactionDetails = React.memo(
     // ✅ OPTIMIZED: Fetch transactions with caching awareness
     useEffect(() => {
       // Early returns for invalid state
-      if (
-        !customerId ||
-        !selectedCurrencyCode ||
-        selectedCurrencyCode === "all"
-      ) {
-        console.log(
-          "⏳ TransactionDetails: Missing required params, skipping fetch",
-          {
-            customerId,
-            selectedCurrencyCode,
-          },
-        );
+      if (!customerId || !selectedCurrencyCode || selectedCurrencyCode === "all") {
+        console.log("⏳ TransactionDetails: Missing required params, skipping fetch");
         return;
       }
-
-      // Skip if we already loaded data for this currency
-      if (
-        initialLoadDoneRef.current &&
-        lastCurrencyRef.current === selectedCurrencyCode &&
-        finalTransactions.length > 0
-      ) {
-        console.log(
-          "📊 TransactionDetails: Using cached transaction data for",
-          selectedCurrencyCode,
-        );
+    
+      // ✅ CRITICAL FIX: Don't fetch if we've already attempted for this currency
+      if (fetchAttemptedRef.current && lastCurrencyRef.current === selectedCurrencyCode) {
+        console.log("📊 TransactionDetails: Already attempted fetch for", selectedCurrencyCode);
         return;
       }
-
+    
       // Skip if already loading
       if (finalLoading) {
         console.log("⏳ TransactionDetails: Already loading transactions");
         return;
       }
-
-      // Fetch transactions
-      if (!finalLoading && finalTransactions.length === 0) {
-        console.log(
-          "🚀 TransactionDetails: Fetching transactions for",
-          selectedCurrencyCode,
-        );
-
+    
+      // ✅ FIXED: Fetch only once per currency, regardless of transaction count
+      if (!finalLoading && !fetchAttemptedRef.current) {
+        console.log("🚀 TransactionDetails: Fetching transactions for", selectedCurrencyCode);
+        
         fetchTransactions(customerId, selectedCurrencyCode);
+        fetchAttemptedRef.current = true;
         initialLoadDoneRef.current = true;
         lastCurrencyRef.current = selectedCurrencyCode;
       }
-    }, [
-      customerId,
-      selectedCurrencyCode,
-      finalLoading,
-      finalTransactions.length,
-      fetchTransactions,
-    ]);
+    }, [customerId, selectedCurrencyCode, finalLoading, fetchTransactions]);
 
     // ✅ Reset pagination and cache tracking when currency changes
     useEffect(() => {

@@ -69,7 +69,7 @@ const RecurringRemit = () => {
 
   // ✅ Use numeric ID from URL param or localStorage for API endpoints (GET requests)
   const numericCustomerId = paramCustomerId || authCustomerId;
-  
+
   // ✅ Use UUID for payload data (POST/PUT requests)
   const uuidCustomerId = customerUuid;
 
@@ -98,7 +98,7 @@ const RecurringRemit = () => {
         if (showLoading) setLoading(true);
         const endpoint = `${API_URL}/recurring-remittance/list/${numericCustomerId}`;
         console.log("Fetching from endpoint:", endpoint);
-        
+
         const response = await fetch(endpoint, {
           method: "GET",
           headers: {
@@ -254,7 +254,7 @@ const RecurringRemit = () => {
   };
 
   const handleViewDetails = (id) => {
-      
+
     navigate(`/recurring-remit/${numericCustomerId}/${id}`);
   };
 
@@ -475,9 +475,8 @@ const RecurringRemit = () => {
             className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50"
           >
             <div
-              className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 ${
-                notification.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-              }`}
+              className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 ${notification.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                }`}
             >
               {notification.type === "success" ? <CheckCircle size={24} /> : <XCircle size={24} />}
               <span className="font-semibold">{notification.message}</span>
@@ -549,9 +548,8 @@ const RecurringRemit = () => {
               transition={{ delay: 0.3 }}
               onClick={handleOpenAddModal}
               disabled={!numericCustomerId}
-              className={`mt-4 lg:mt-0 flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 ${
-                !numericCustomerId ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className={`mt-4 lg:mt-0 flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 ${!numericCustomerId ? "opacity-50 cursor-not-allowed" : ""
+                }`}
             >
               <Plus className="w-5 h-5 mr-2" />
               Create New Recurring Remit
@@ -597,7 +595,7 @@ const RecurringRemit = () => {
           transition={{ delay: 0.6 }}
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-8"
         >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between lg:space-y-0 space-y-4">
             <div className="relative flex-1 lg:max-w-md">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -609,7 +607,8 @@ const RecurringRemit = () => {
               />
             </div>
 
-            <div className="flex items-center space-x-3">
+            {/* Filters - maintain web spacing, wrap on mobile */}
+            <div className="flex flex-wrap items-center gap-3 lg:gap-3 lg:flex-nowrap">
               <button onClick={() => setShowFilters(!showFilters)} className="flex items-center px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50">
                 <Filter size={18} className="mr-2" />
                 Filters {showFilters ? <ChevronUp size={18} className="ml-2" /> : <ChevronDown size={18} className="ml-2" />}
@@ -659,13 +658,11 @@ const RecurringRemit = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                     whileHover={{ y: -8 }}
-                    className={`relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border ${
-                      isActive ? "border-green-200" : "border-gray-200"
-                    }`}
+                    className={`relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border ${isActive ? "border-green-200" : "border-gray-200"
+                      }`}
                   >
-                    <div className={`absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-semibold ${
-                      isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
-                    }`}>
+                    <div className={`absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-semibold ${isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                      }`}>
                       {isActive ? "Active" : "Inactive"}
                     </div>
 
@@ -717,40 +714,42 @@ const RecurringRemit = () => {
                         )}
                       </div>
 
-                      <div className="flex items-stretch space-x-3 pt-4 border-t border-gray-100">
-                        <button  onClick={() => handleViewDetails(itemId)} 
-                             className="flex-1 px-2 py-2 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 flex items-center justify-center gap-1 transition-all text-sm"
+                      <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-4 border-t border-gray-100">
+                        <button
+                          onClick={() => handleViewDetails(itemId)}
+                          className="px-3 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-medium hover:bg-blue-100 flex items-center justify-center gap-1.5 transition-all text-sm"
                         >
-                          <Eye size={14} />
+                          <Eye size={15} />
                           <span>View</span>
                         </button>
 
-                        <button onClick={() => handleOpenEditModal(itemId)} 
-                              className="flex-1 px-2 py-2 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 flex items-center justify-center gap-1 transition-all text-sm"
+                        <button
+                          onClick={() => handleOpenEditModal(itemId)}
+                          className="px-3 py-2.5 bg-gray-50 text-gray-600 rounded-xl font-medium hover:bg-gray-100 flex items-center justify-center gap-1.5 transition-all text-sm"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={15} />
                           <span>Edit</span>
-                         </button>
+                        </button>
 
-                        <button onClick={() => handleStatusUpdate(itemId, getItemActiveStatus(item))}
-                                disabled={isProcessing}
-                                className={`flex-1 px-2 py-2 rounded-xl font-medium flex items-center justify-center gap-1 transition-all text-sm ${
-                                    isActive ? "bg-red-50 text-red-600 hover:bg-red-100" 
-                                    : "bg-green-50 text-green-600 hover:bg-green-100"
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        <button
+                          onClick={() => handleStatusUpdate(itemId, getItemActiveStatus(item))}
+                          disabled={isProcessing}
+                          className={`px-3 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all text-sm ${isActive ? "bg-red-50 text-red-600 hover:bg-red-100"
+                              : "bg-green-50 text-green-600 hover:bg-green-100"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
-                              {isProcessing ? (
-                                <>
-                                  <RingLoader size={12} color={isActive ? "#dc2626" : "#16a34a"} />
-                                  <span className="whitespace-nowrap text-xs">{processingStatus.action}</span>
-                                </>
+                          {isProcessing ? (
+                            <>
+                              <RingLoader size={14} color={isActive ? "#dc2626" : "#16a34a"} />
+                              <span className="text-xs whitespace-nowrap">{processingStatus.action}</span>
+                            </>
                           ) : (
-                          <>
-                            <Power size={14} />
-                           <span className="whitespace-nowrap">{isActive ? "Deactivate" : "Activate"}</span>
-                          </>
-                            )}
-                          </button>
+                            <>
+                              <Power size={15} />
+                              <span className="whitespace-nowrap">{isActive ? "Deactivate" : "Activate"}</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </motion.div>

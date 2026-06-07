@@ -221,7 +221,21 @@ const AllTransactions = () => {
         const transactionDate = new Date(transaction?.transaction_datetime);
         const startDate = new Date(filterStartDate);
         const endDate = new Date(filterEndDate);
+        endDate.setHours(23, 59, 59, 999);
         return transactionDate >= startDate && transactionDate <= endDate;
+      });
+    } else if (filterStartDate) {
+      filtered = filtered.filter((transaction) => {
+        const transactionDate = new Date(transaction?.transaction_datetime);
+        const startDate = new Date(filterStartDate);
+        return transactionDate >= startDate;
+      });
+    } else if (filterEndDate) {
+      filtered = filtered.filter((transaction) => {
+        const transactionDate = new Date(transaction?.transaction_datetime);
+        const endDate = new Date(filterEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        return transactionDate <= endDate;
       });
     }
 
@@ -742,7 +756,7 @@ const AllTransactions = () => {
           }`}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_1fr_auto] gap-2 items-end">
-          {/* Currency Dropdown - Now positioned to the left of Direction */}
+          {/* Currency Dropdown */}
           <div className="flex flex-col">
             <label className="text-gray-600 text-sm mb-1 font-medium">
               Select Currency
@@ -766,24 +780,30 @@ const AllTransactions = () => {
             </select>
           </div>
 
-          {/* Date Filter */}
+          {/* Date Range with From and To Labels */}
           <div className="flex flex-col">
             <label className="text-gray-600 text-sm mb-1 font-medium">
-              Date Range
+              Select Date Range
             </label>
             <div className="flex gap-2">
-              <input
-                type="date"
-                className="border border-gray-300 p-2 rounded-md shadow-sm focus:ring focus:ring-blue-300 text-sm w-full"
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-              />
-              <input
-                type="date"
-                className="border border-gray-300 p-2 rounded-md shadow-sm focus:ring focus:ring-blue-300 text-sm w-full"
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-              />
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">From Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 p-2 rounded-md shadow-sm focus:ring focus:ring-blue-300 text-sm"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">To Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 p-2 rounded-md shadow-sm focus:ring focus:ring-blue-300 text-sm"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
