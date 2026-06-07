@@ -15,6 +15,7 @@ import {
   FaTimes,
   FaHome,
   FaReceipt,
+  FaEye
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
@@ -34,6 +35,7 @@ const Step4Success = ({
   const [showRedirectModal, setShowRedirectModal] = useState(true); // Show modal instead of auto-redirect
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Animation variants
   const containerVariants = {
@@ -129,6 +131,127 @@ const Step4Success = ({
     window.print();
   };
 
+  const handleViewReceipt = () => {
+    setShowReceiptModal(true);
+  };
+
+  const ReceiptContent = () => (
+    <div id="receipt-content" className="bg-white" style={{ fontFamily: "'Helvetica Neue', Arial, sans-serif" }}>
+      <div className="max-w-2xl mx-auto p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-normal text-gray-800 mb-2">Transfer Receipt</h1>
+          <p className="text-green-600 text-sm">Transaction completed successfully</p>
+        </div>
+
+        {/* Transaction Info Block */}
+        <div className="mb-8">
+          <div className="border border-gray-200 rounded p-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Transaction ID:</span>
+                <div className="font-mono text-gray-800 text-xs mt-1 break-all">{transactionId}</div>
+              </div>
+              <div>
+                <span className="text-gray-500">Date:</span>
+                <div className="text-gray-800 mt-1">{formattedDate} at {formattedTime}</div>
+              </div>
+              <div>
+                <span className="text-gray-500">Status:</span>
+                <div className="text-green-600 mt-1">Completed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transfer Details Section */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">Transfer Details</h2>
+          <div className="border border-gray-200 rounded overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Description</th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-700">You Sent</td>
+                  <td className="py-3 px-4 text-sm text-right font-medium text-gray-800">
+                    {formData.sendCurrency?.value} {parseFloat(formData.sendAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-700">Recipient Receives</td>
+                  <td className="py-3 px-4 text-sm text-right font-medium text-gray-800">
+                    {formData.receiveCurrency?.value} {parseFloat(formData.receiveAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-700">Exchange Rate</td>
+                  <td className="py-3 px-4 text-sm text-right text-gray-800">
+                    1 {formData.sendCurrency?.value} = {(exchangeRateData?.fxRate || formData.exchangeRate || 0).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 })} {formData.receiveCurrency?.value}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-700">Transfer Fee</td>
+                  <td className="py-3 px-4 text-sm text-right text-gray-800">
+                    {formData.sendCurrency?.value} {parseFloat(formData.fee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                <tr className="bg-gray-50">
+                  <td className="py-3 px-4 text-sm font-semibold text-gray-800">Total Amount</td>
+                  <td className="py-3 px-4 text-sm text-right font-semibold text-gray-800">
+                    {formData.sendCurrency?.value} {parseFloat(formData.sendAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Recipient Information */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">Recipient Information</h2>
+          <div className="border border-gray-200 rounded overflow-hidden">
+            <table className="w-full">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-600 w-1/2">Beneficiary Name</td>
+                  <td className="py-3 px-4 text-sm text-gray-800 w-1/2">{selectedBeneficiary?.name}</td>
+                </tr>
+                {selectedBeneficiary?.bank_name && (
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 px-4 text-sm text-gray-600">Bank Name</td>
+                    <td className="py-3 px-4 text-sm text-gray-800">{selectedBeneficiary.bank_name}</td>
+                  </tr>
+                )}
+                {selectedBeneficiary?.account_number && (
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 px-4 text-sm text-gray-600">Account Number</td>
+                    <td className="py-3 px-4 text-sm text-gray-800">
+                      ****{selectedBeneficiary.account_number.slice(-4)}
+                    </td>
+                  </tr>
+                )}
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 text-sm text-gray-600">Account Currency</td>
+                  <td className="py-3 px-4 text-sm text-gray-800">{formData.receiveCurrency?.value}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center pt-4 border-t border-gray-200">
+          <p className="text-xs text-gray-400">This is an electronically generated receipt and does not require a signature.</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* Redirect Decision Modal */}
@@ -139,7 +262,7 @@ const Step4Success = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
-            onClick={() => {}} // Prevent closing on backdrop click
+            onClick={() => { }} // Prevent closing on backdrop click
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -248,6 +371,46 @@ const Step4Success = ({
             >
               <RingLoader color="#10b981" size={50} />
               <p className="mt-4 text-gray-600">Redirecting to dashboard...</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Receipt View Modal - Simple, no buttons inside */}
+      <AnimatePresence>
+        {showReceiptModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 backdrop-blur-sm p-4 overflow-y-auto"
+            onClick={() => setShowReceiptModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl max-w-4xl w-full mx-4 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-6 py-4 sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Transaction Receipt</h2>
+                    <p className="text-green-100 text-sm">Your transfer receipt</p>
+                  </div>
+                  <button
+                    onClick={() => setShowReceiptModal(false)}
+                    className="text-white/80 hover:text-white transition-colors"
+                  >
+                    <FaTimes className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <ReceiptContent />
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -576,28 +739,21 @@ const Step4Success = ({
           {/* Action Buttons */}
           <motion.div
             variants={itemVariants}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
           >
+            <button
+              onClick={handleViewReceipt}
+              className="p-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex flex-col items-center justify-center gap-2"
+            >
+              <FaEye className="w-6 h-6" />
+              <span>View Receipt</span>
+            </button>
             <button
               onClick={onDownloadReceipt}
               className="p-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex flex-col items-center justify-center gap-2"
             >
               <FaDownload className="w-6 h-6" />
               <span>Download Receipt</span>
-            </button>
-            <button
-              onClick={handlePrintReceipt}
-              className="p-4 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-colors flex flex-col items-center justify-center gap-2"
-            >
-              <FaPrint className="w-6 h-6" />
-              <span>Print Receipt</span>
-            </button>
-            <button
-              onClick={handleShare}
-              className="p-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex flex-col items-center justify-center gap-2"
-            >
-              <FaShareAlt className="w-6 h-6" />
-              <span>Share Receipt</span>
             </button>
             <button
               onClick={handleNewTransfer}
@@ -716,4 +872,4 @@ const Step4Success = ({
   );
 };
 
-export default Step4Success;
+export default Step4Success;    
