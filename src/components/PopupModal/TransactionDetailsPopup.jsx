@@ -52,17 +52,39 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
   };
 
   const beneficiaryInfo = {
-    name: transaction.beneficiary_name || transaction.beneficiaryName || "Not Available",
-    accountNumber: transaction.beneficiary_account_number || transaction.beneficiaryAccountNumber || "Not Available",
-    bank: transaction.beneficiary_bank || "Not Available",
-    country: transaction.beneficiary_country || "Not Available"
+    name:
+      transaction.beneficiary_name ||
+      transaction.beneficiaryName ||
+      "Not Available",
+  
+    accountNumber:
+      transaction.beneficiary_account_number ||
+      transaction.beneficiaryAccountNumber ||
+      transaction.beneficiary_bank_acc_no ||
+      "Not Available",
+  
+    bank:
+      transaction.beneficiary_bank ||
+      transaction.beneficiary_bank_name ||
+      "Not Available",
+  
+    country:
+      transaction.beneficiary_country ||
+      "Not Available",
   };
 
   // Format currency amounts
   const formatCurrency = (amount, currency = transaction.currency_code) => {
-    if (!amount) return "Not Available";
+    if (amount === null || amount === undefined || amount === "") {
+      return "Not Available";
+    }
+  
     const numAmount = parseFloat(amount);
-    return `${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
+  
+    return `${numAmount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${currency || ""}`;
   };
 
   return (
@@ -102,14 +124,14 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
         </div>
 
         {/* Transaction Status Banner */}
-        <div className={`mb-6 p-4 rounded-lg ${transaction.status === 'completed' || transaction.status === 'successful' ? 'bg-green-50 border border-green-200' : 
-                       transaction.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' : 
-                       transaction.status === 'failed' ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border border-gray-200'}`}>
+        <div className={`mb-6 p-4 rounded-lg ${transaction.status === 'completed' || transaction.status === 'successful' ? 'bg-green-50 border border-green-200' :
+          transaction.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' :
+            transaction.status === 'failed' ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${transaction.status === 'completed' || transaction.status === 'successful' ? 'bg-green-100 text-green-600' : 
-                            transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 
-                            transaction.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+              <div className={`p-2 rounded-full ${transaction.status === 'completed' || transaction.status === 'successful' ? 'bg-green-100 text-green-600' :
+                transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-600' :
+                  transaction.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
                 <FaCheckCircle />
               </div>
               <div>
@@ -133,7 +155,7 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
               <FaMoneyBill className="text-blue-600" />
               Financial Details
             </h3>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
               <DetailItem
                 icon={<FaTag />}
@@ -163,16 +185,21 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
                 label="Fee Amount"
                 value={formatCurrency(transaction.fee_amount)}
               />
-              <DetailItem
+              {/* <DetailItem
                 icon={<FaBalanceScale />}
                 label="Total Amount"
                 value={formatCurrency(transaction.amount_with_fee)}
                 highlight
-              />
+              /> */}
               <DetailItem
                 icon={<FaBalanceScale />}
-                label="Balance After"
-                value={formatCurrency(transaction.balance)}
+                label="Total Amount"
+                value={formatCurrency(
+                  parseFloat(transaction.amount_with_fee || 0) > 0
+                    ? transaction.amount_with_fee
+                    : transaction.instructed_amount
+                )}
+                highlight
               />
               {transaction.service_provider_fee && (
                 <DetailItem
@@ -194,7 +221,7 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
                 </div>
                 Sender Information
               </h3>
-              
+
               <div className="bg-blue-50 rounded-lg p-4 space-y-3">
                 <DetailItem
                   icon={<FaUser />}
@@ -247,7 +274,7 @@ const TransactionDetailsPopup = ({ closePopup, transaction }) => {
                 </div>
                 Beneficiary Information
               </h3>
-              
+
               <div className="bg-green-50 rounded-lg p-4 space-y-3">
                 <DetailItem
                   icon={<FaUser />}

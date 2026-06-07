@@ -162,6 +162,8 @@ const Remittance = () => {
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [activeCard, setActiveCard] = useState(null);
 
+  const [showBankLinkReminder, setShowBankLinkReminder] = useState(true);
+
   const [recurringData, setRecurringData] = useState({
     isRecurring: "0",
     frequency: "",
@@ -410,6 +412,10 @@ const Remittance = () => {
     [],
   );
 
+  const handleCloseBankReminder = useCallback(() => {
+    setShowBankLinkReminder(false);
+  }, []);
+
   const totalToPay = parseFloat(formData.sendAmount || 0);
   const fee = 0;
 
@@ -490,6 +496,7 @@ const Remittance = () => {
 
     initializeData();
   }, [customerId, dispatch, navigate]);
+
 
   useEffect(() => {
     const customerIdToUse =
@@ -2513,6 +2520,49 @@ const Remittance = () => {
     <>
       <div ref={pageTopRef}></div>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+        {/* Popup Modal */}
+        {showBankLinkReminder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-400 to-purple-500 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white">
+                  Link Your Bank Account
+                </h3>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-slate-700 mb-6">
+                  For first time users : Please link your bank first before proceeding through bank transfer.
+                </p>
+
+                <button
+                  onClick={handleCloseBankReminder}
+                  className="w-full px-4 py-2.5 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Close button */}
+              <button
+                onClick={handleCloseBankReminder}
+                className="absolute top-4 right-4 text-white/70 hover:text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </motion.div>
+          </div>
+        )}
+
         <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
           <ProgressSteps />
 
