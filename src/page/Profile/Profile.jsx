@@ -2968,11 +2968,12 @@ const Profile = () => {
                         transition={{ delay: index * 0.1 }}
                         className="bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
                       >
-                        <div className="flex justify-between items-start">
-                          <h4 className="text-sm font-medium text-blue-600">
+                        <div className="p-4 bg-white border rounded-xl">
+                          <h4 className="text-blue-600 font-medium text-base">
                             {item.account_status_name}
                           </h4>
-                          <p className="text-xs text-gray-500 whitespace-nowrap">
+
+                          <p className="mt-1 text-sm text-gray-500">
                             {item.status_date_time}
                           </p>
                         </div>
