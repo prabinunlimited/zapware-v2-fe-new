@@ -1640,6 +1640,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             intermediary_bank_swift: bankAccounts[0]?.intermediarySwift || "",
             rails: bankAccounts[0]?.rails || "Local",
             currency_code: currentCurrency,
+
+            ...(currentCurrency === "INR" && {
+              beneficiary_id_type: formik.values.beneficiary_id_type,
+              beneficiary_id_number: formik.values.beneficiary_id_number,
+            }), 
           };
 
           // Special handling for NPR, KES, NGN currencies
