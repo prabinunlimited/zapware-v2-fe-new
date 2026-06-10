@@ -266,6 +266,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
 
   const [displayBalance, setDisplayBalance] = useState(0);
   const [previousBalance, setPreviousBalance] = useState(0);
+  const [hasStartedExternalFetch, setHasStartedExternalFetch] = useState(false);
 
   const accountState = useSelector(selectAccountState);
   const {
@@ -341,6 +342,13 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
     }
   }, [dispatch, accountDropdown]);
 
+  useEffect(() => {
+    // When external loading becomes true, mark that we've started fetching
+    if (externalLoading && !hasStartedExternalFetch) {
+      setHasStartedExternalFetch(true);
+    }
+  }, [externalLoading, hasStartedExternalFetch]);
+
   const handleTransactionComplete = useCallback(
     async (shouldRefresh = false) => {
       if (shouldRefresh) {
@@ -411,12 +419,26 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
           <div className="flex justify-center items-center h-32">
             <RingLoader color="#3B82F6" size={40} />
           </div>
-          <p className="text-gray-500 mt-4 font-medium">
-            Please wait while we fetch your accounts...
-          </p>
-          <p className="text-gray-400 text-sm mt-2">
-            This may take a few moments
-          </p>
+
+          {isRemittanceOnlyCustomer ? (
+            <>
+              <p className="text-gray-500 mt-4 font-medium">
+                Loading your transactions...
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                Please wait while we fetch your transaction history
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-500 mt-4 font-medium">
+                Please wait while we fetch your accounts...
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                This may take a few moments
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -445,6 +467,64 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
   // When fetch is complete but no accounts found - show ONLY transactions
   // No "No Accounts Found" message - just show transaction history directly
   if (isEmpty) {
+    // For remittance-only customers, wait for external transactions to load first
+    if (isRemittanceOnlyCustomer) {
+      // Show loading if external API hasn't completed yet (either still loading OR hasn't started)
+      if (externalLoading || !hasStartedExternalFetch) {
+        return (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col justify-center items-center w-full space-y-6"
+          >
+            <motion.div
+              variants={itemVariants}
+              className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
+            >
+              <div className="p-6">
+                <div className="flex flex-col justify-center items-center py-12">
+                  <RingLoader color="#3B82F6" size={50} />
+                  <p className="text-gray-500 mt-4 font-medium">Loading your transactions...</p>
+                  <p className="text-gray-400 text-sm mt-2">Please wait while we fetch your transaction history</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        );
+      }
+
+      // Loading complete (whether transactions found or not) - show TransactionDetails
+      return (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="flex flex-col justify-center items-center w-full space-y-6"
+        >
+          <motion.div
+            variants={itemVariants}
+            className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 overflow-y-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="p-6">
+              <TransactionDetails
+                customerId={customerId}
+                selectedCurrencyCode="all"
+                onTransactionComplete={handleTransactionComplete}
+                externalTransactions={externalTransactions}
+                externalLoading={externalLoading}
+                externalError={externalError}
+              />
+            </div>
+          </motion.div>
+        </motion.div>
+      );
+    }
+
+    // For non-remittance customers with no accounts, show transaction details directly
     return (
       <motion.div
         variants={containerVariants}
@@ -460,23 +540,14 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
           transition={{ duration: 0.5 }}
         >
           <div className="p-6">
-            {/* ✅ Show loading spinner for remittance customers while fetching */}
-            {isRemittanceOnlyCustomer && (!externalTransactions || externalTransactions.length === 0) ? (
-              <div className="flex flex-col justify-center items-center py-12">
-                <RingLoader color="#3B82F6" size={50} />
-                <p className="text-gray-500 mt-4 font-medium">Loading your transactions...</p>
-                <p className="text-gray-400 text-sm mt-2">Please wait while we fetch your transaction history</p>
-              </div>
-            ) : (
-              <TransactionDetails
-                customerId={customerId}
-                selectedCurrencyCode="all"
-                onTransactionComplete={handleTransactionComplete}
-                externalTransactions={externalTransactions}
-                externalLoading={externalLoading}
-                externalError={externalError}
-              />
-            )}
+            <TransactionDetails
+              customerId={customerId}
+              selectedCurrencyCode="all"
+              onTransactionComplete={handleTransactionComplete}
+              externalTransactions={externalTransactions}
+              externalLoading={externalLoading}
+              externalError={externalError}
+            />
           </div>
         </motion.div>
       </motion.div>
@@ -776,7 +847,7 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
       >
         <div className="p-6">
           {/* ✅ Show loading spinner for remittance customers while fetching */}
-          {isRemittanceOnlyCustomer && (!externalTransactions || externalTransactions.length === 0) ? (
+          {isRemittanceOnlyCustomer && externalLoading ? (
             <div className="flex flex-col justify-center items-center py-12">
               <RingLoader color="#3B82F6" size={50} />
               <p className="text-gray-500 mt-4 font-medium">Loading your transactions...</p>
