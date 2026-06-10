@@ -252,7 +252,7 @@ const balanceVariants = {
 };
 
 // Main Component
-const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransactions, externalLoading, externalError, isRemittanceOnlyCustomer }) => {
+const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransactions, externalLoading, externalError, isRemittanceOnlyCustomer, onRefreshTransactions }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { customerId } = useParams();
@@ -517,6 +517,8 @@ const AccountSummary = React.memo(({ textColor, onCurrencyChange, externalTransa
                 externalTransactions={externalTransactions}
                 externalLoading={externalLoading}
                 externalError={externalError}
+                onRefresh={onRefreshTransactions}  
+                isRemittanceOnlyCustomer={isRemittanceOnlyCustomer}
               />
             </div>
           </motion.div>
