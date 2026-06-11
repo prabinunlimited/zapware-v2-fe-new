@@ -96,9 +96,13 @@ import {
   setBusinessAlias,
   setOwnerAdd,
   fetchEmployeesNumberTypes, // ADD THIS LINE
-  setEmployeesNumber, // ADD THIS LINE
-  selectEmployeesNumberTypes, // ADD THIS LINE
+  setEmployeesNumber,
+  selectEmployeesNumberTypes,
   selectEmployeesNumberLoading,
+  fetchDirectorRoles,      // ADD THIS LINE
+  selectDirectorRoles,     // ADD THIS LINE
+  selectDirectorRolesLoading, // ADD THIS LINE
+  setDirectorRoleId,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -392,6 +396,9 @@ const Institution = () => {
 
   const employeesNumberTypes = useSelector(selectEmployeesNumberTypes);
   const employeesNumberLoading = useSelector(selectEmployeesNumberLoading);
+
+  const directorRoles = useSelector(selectDirectorRoles);
+  const directorRolesLoading = useSelector(selectDirectorRolesLoading);
 
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
@@ -1036,6 +1043,7 @@ const Institution = () => {
       dispatch(fetchTermsAndConditions());
       dispatch(fetchInstitutionData());
       dispatch(fetchEmployeesNumberTypes());
+      dispatch(fetchDirectorRoles());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1843,6 +1851,7 @@ const Institution = () => {
           business_alias: finalFormData.business_alias,
           purpose_of_account: finalFormData.purpose_of_account || "",
           employees_number: finalFormData.employees_number || "",
+          director_role_id: finalFormData.director_role_id || "",
           company_phone_number: finalFormData.company_phone_number,
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
@@ -2192,6 +2201,8 @@ const Institution = () => {
       handleControllerZipLookup,
       isZipLoading,
       activeField,
+      directorRoles,        // ADD THIS
+      directorRolesLoading,
     }) => {
       console.log("🎯 Formik Render - SSN Debug:", {
         currentStep,
@@ -2218,6 +2229,15 @@ const Institution = () => {
           values.country === "United States",
       });
       const dispatch = useDispatch();
+      const directorRoleOptions = useMemo(() => {
+        if (!directorRoles || !Array.isArray(directorRoles)) {
+          return [];
+        }
+        return directorRoles.map(role => ({
+          value: role.id,
+          label: role.name
+        }));
+      }, [directorRoles]);
       const syncControllerFromPrimary = useCallback(() => {
         const primaryContactFields = {
           controller_first_name: values.first_name,
@@ -2240,6 +2260,7 @@ const Institution = () => {
           controller_dob: values.dob,
           controller_designation: values.designation,
           controller_ssn: values.ssn,
+          director_role_id: "",
         };
         Object.entries(primaryContactFields).forEach(([field, value]) => {
           if (value !== undefined && value !== null && value !== "") {
@@ -2276,6 +2297,7 @@ const Institution = () => {
             "controller_dob",
             "controller_designation",
             "controller_ssn",
+            "director_role_id"
           ];
           controllerFields.forEach((field) => {
             setFieldValue(field, "");
@@ -2283,6 +2305,7 @@ const Institution = () => {
           });
         }
       };
+
 
       return (
         <div className="mt-8 border-t pt-6">
@@ -2821,7 +2844,92 @@ const Institution = () => {
               })()}
             </div>
           </div>
+         {/* Director Dropdwon */}
+        <div className="mt-4 max-w-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Director Role <span className="text-gray-400 text-xs ml-1">(Optional)</span>
+          </label>
+          <Select
+            id="director_role_id"
+            name="director_role_id"
+            options={directorRoleOptions}
+            onChange={(option) => {
+              if (option) {
+                setFieldValue("director_role_id", option.value);
+                dispatch(setDirectorRoleId(option.value));
+                dispatch(
+                  setFormField({
+                    field: "director_role_id",
+                    value: option.value,
+                  })
+                );
+              } else {
+                setFieldValue("director_role_id", "");
+                dispatch(setDirectorRoleId(""));
+                dispatch(
+                  setFormField({
+                    field: "director_role_id",
+                    value: "",
+                  })
+                );
+              }
+            }}
+            value={directorRoleOptions.find(
+              (opt) => opt.value === values.director_role_id
+            )}
+            isDisabled={false}
+            isLoading={directorRolesLoading}
+            placeholder="Select director role (optional)"
+            isClearable={true}
+            styles={{
+              control: (base) => ({
+                ...base,
+                minHeight: "38px",
+                borderColor: "#d1d5db",
+                borderRadius: "0.5rem",
+                padding: "0.25rem 0.5rem",
+                "&:hover": {
+                  borderColor: "#9ca3af",
+                },
+              }),
+              placeholder: (base) => ({
+                ...base,
+                fontSize: "0.875rem",
+                color: "#6b7280",
+              }),
+              menu: (base) => ({
+                ...base,
+                fontSize: "0.875rem",
+                zIndex: 9999,
+              }),
+              singleValue: (base) => ({
+                ...base,
+                fontSize: "0.875rem",
+              }),
+              option: (base, state) => ({
+                ...base,
+                fontSize: "0.875rem",
+                backgroundColor: state.isSelected
+                  ? "#3b82f6"
+                  : state.isFocused
+                    ? "#eff6ff"
+                    : "white",
+                color: state.isSelected ? "white" : "#1f2937",
+                "&:hover": {
+                  backgroundColor: "#eff6ff",
+                },
+              }),
+            }}
+          />
+          {touched.director_role_id && errors.director_role_id && (
+            <div className="text-red-500 text-xs mt-1 flex items-center">
+              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+              {errors.director_role_id}
+            </div>
+          )}
         </div>
+        </div>
+        
       );
     },
   );
@@ -3993,24 +4101,24 @@ const Institution = () => {
                       {/* Country of Registration and Primary Country of Operation on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         {/* <CustomSelect
-                          id="country_of_registration"
-                          label="Country of Registration"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "country_of_registration",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) =>
-                              opt.value === values.country_of_registration,
-                          )}
-                          touched={touched.country_of_registration}
-                          error={errors.country_of_registration}
-                          required // ← ADD THIS LINE
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        /> */}
+                            id="country_of_registration"
+                            label="Country of Registration"
+                            options={countryOptions}
+                            onChange={enhancedSelectChange(
+                              "country_of_registration",
+                              setFieldValue,
+                            )}
+                            value={countryOptions.find(
+                              (opt) =>
+                                opt.value === values.country_of_registration,
+                            )}
+                            touched={touched.country_of_registration}
+                            error={errors.country_of_registration}
+                            required // ← ADD THIS LINE
+                            isLoading={countriesLoading}
+                            isCountryField={true}
+                            showPhoneCode={false}
+                          /> */}
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
@@ -4353,8 +4461,8 @@ const Institution = () => {
                               onFocus={() => setActiveField("email")}
                               disabled={isResponsiblePersonEmailVerified}
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
-          ${touched.email && errors.email && !isResponsiblePersonEmailVerified
+            ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
+            ${touched.email && errors.email && !isResponsiblePersonEmailVerified
                                   ? "border-red-500 focus:ring-red-500"
                                   : "border-gray-300 focus:ring-blue-500"
                                 }`}
@@ -5141,6 +5249,8 @@ const Institution = () => {
                       handleControllerZipLookup={handleControllerZipLookup}
                       isZipLoading={isZipLoading}
                       activeField={activeField}
+                      directorRoles={directorRoles}           // ADD THIS
+                      directorRolesLoading={directorRolesLoading}
                     />
                   </motion.div>
                 )}

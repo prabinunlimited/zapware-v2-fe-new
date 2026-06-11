@@ -125,26 +125,6 @@ export const fetchIndustryTypesWithNAICS = createAsyncThunk(
   },
 );
 
-export const fetchDirectorsRoles = createAsyncThunk(
-  "institutionRegistration/fetchDirectorsRoles",
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/directors-roles");
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
-      } else {
-        return [];
-      }
-    } catch (error) {
-      return rejectWithValue(
-        error.message || "Failed to fetch directors roles",
-      );
-    }
-  },
-);
-
 export const fetchGenders = createAsyncThunk(
   "institutionRegistration/fetchGenders",
   async () => {
@@ -458,6 +438,33 @@ export const fetchEmployeesNumberTypes = createAsyncThunk(
   },
 );
 
+export const fetchDirectorRoles = createAsyncThunk(
+  "institutionRegistration/fetchDirectorRoles",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/director-roles");
+
+      // Handle the actual response structure: { status, message, data: { lists } }
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      // Fallback for other possible structures
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch director roles");
+    }
+  }
+);
+
 export const fetchTermsAndConditions = createAsyncThunk(
   "institutionRegistration/fetchTermsAndConditions",
   async (_, { rejectWithValue }) => {
@@ -670,7 +677,6 @@ const initialState = {
     idIssuedDate: "",
     is_controller: "",
     institutionTypes: [],
-    directorsRoles: [],
   },
 
   // UI state
@@ -745,6 +751,8 @@ const initialState = {
   employeesNumberTypes: [],
   employeesNumber: "",
   employeesNumberLoading: false,
+  directorRoles: [],
+  directorRolesLoading: false,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -969,6 +977,10 @@ const institutionRegistrationSlice = createSlice({
     setEmployeesNumber: (state, action) => {
       state.employeesNumber = action.payload;
       state.formData.employees_number = action.payload;
+    },
+
+    setDirectorRoleId: (state, action) => {
+      state.formData.director_role_id = action.payload;
     },
 
     // Controller sync
@@ -1366,17 +1378,6 @@ const institutionRegistrationSlice = createSlice({
         state.termsConditions = [];
       })
 
-      .addCase(fetchDirectorsRoles.pending, (state) => {
-        state.directorsRoles = null;
-      })
-      .addCase(fetchDirectorsRoles.fulfilled, (state, action) => {
-        state.directorsRoles = action.payload;
-      })
-      .addCase(fetchDirectorsRoles.rejected, (state, action) => {
-        state.directorsRoles = [];
-        state.error = action.payload;
-      })
-
       // Business Alias Validation
       .addCase(validateBusinessAlias.pending, (state) => {
         state.businessAliasValid = null;
@@ -1630,6 +1631,17 @@ const institutionRegistrationSlice = createSlice({
       .addCase(fetchEmployeesNumberTypes.rejected, (state) => {
         state.employeesNumberLoading = false;
         state.employeesNumberTypes = [];
+      })
+      .addCase(fetchDirectorRoles.pending, (state) => {
+        state.directorRolesLoading = true;
+      })
+      .addCase(fetchDirectorRoles.fulfilled, (state, action) => {
+        state.directorRolesLoading = false;
+        state.directorRoles = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchDirectorRoles.rejected, (state) => {
+        state.directorRolesLoading = false;
+        state.directorRoles = [];
       });
   },
 });
@@ -1705,6 +1717,7 @@ export const {
   initializeInstitutionSignup,
   resetForm,
   setEmployeesNumber,
+  setDirectorRoleId,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1842,6 +1855,12 @@ export const selectEmployeesNumberTypes = (state) =>
 export const selectEmployeesNumberLoading = (state) =>
   state.institutionRegistration.employeesNumberLoading;
 
+export const selectDirectorRoles = (state) =>
+  state.institutionRegistration.directorRoles;
+
+export const selectDirectorRolesLoading = (state) =>
+  state.institutionRegistration.directorRolesLoading;
+
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
 // =============================================================================
@@ -1859,8 +1878,5 @@ export const selectCanAddOwner = (state) => {
   const total = state.institutionRegistration.totalOwnershipPercentage;
   return total < 100 && state.institutionRegistration.ownerAdd === "Y";
 };
-
-export const selectDirectorsRoles = (state) =>
-  state.institutionRegistration.directorsRoles;
 
 export default institutionRegistrationSlice.reducer;
