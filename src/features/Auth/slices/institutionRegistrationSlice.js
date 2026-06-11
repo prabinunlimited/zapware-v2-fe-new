@@ -301,10 +301,10 @@ export const submitInstitutionForm = createAsyncThunk(
         // Your API returns: { status: "error", message: "...", data: "" }
         return rejectWithValue(error.response.data);
       }
-      
+
       // Handle network errors or other issues
-      return rejectWithValue({ 
-        status: "error", 
+      return rejectWithValue({
+        status: "error",
         message: error.message || "Submission failed",
         data: ""
       });
@@ -396,8 +396,8 @@ export const fetchInstitutionTypes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
-          error.message ||
-          "Failed to fetch institution types",
+        error.message ||
+        "Failed to fetch institution types",
       );
     }
   },
@@ -437,6 +437,23 @@ export const fetchIdDocumentTypes = createAsyncThunk(
       return rejectWithValue(
         error.message || "Failed to fetch ID document types",
       );
+    }
+  },
+);
+
+export const fetchEmployeesNumberTypes = createAsyncThunk(
+  "institutionRegistration/fetchEmployeesNumberTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/employees-number-types");
+
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch employees number types");
     }
   },
 );
@@ -725,6 +742,9 @@ const initialState = {
   whiteLabelledPartnerId: null,
   partnerPackageModule: false,
   controllerSynced: false,
+  employeesNumberTypes: [],
+  employeesNumber: "",
+  employeesNumberLoading: false,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -944,6 +964,11 @@ const institutionRegistrationSlice = createSlice({
       state.isWhiteLabelledPartner = action.payload.isWhiteLabelledPartner;
       state.whiteLabelledPartnerId = action.payload.whiteLabelledPartnerId;
       state.partnerPackageModule = action.payload.partnerPackageModule;
+    },
+
+    setEmployeesNumber: (state, action) => {
+      state.employeesNumber = action.payload;
+      state.formData.employees_number = action.payload;
     },
 
     // Controller sync
@@ -1594,6 +1619,17 @@ const institutionRegistrationSlice = createSlice({
       .addCase(syncControllerDataForm.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchEmployeesNumberTypes.pending, (state) => {
+        state.employeesNumberLoading = true;
+      })
+      .addCase(fetchEmployeesNumberTypes.fulfilled, (state, action) => {
+        state.employeesNumberLoading = false;
+        state.employeesNumberTypes = action.payload;
+      })
+      .addCase(fetchEmployeesNumberTypes.rejected, (state) => {
+        state.employeesNumberLoading = false;
+        state.employeesNumberTypes = [];
       });
   },
 });
@@ -1668,6 +1704,7 @@ export const {
   setIsAddingOwner,
   initializeInstitutionSignup,
   resetForm,
+  setEmployeesNumber,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1798,6 +1835,12 @@ export const selectTermsLoading = (state) =>
 
 export const selectTermsFetched = (state) =>
   state.institutionRegistration.termsFetched;
+
+export const selectEmployeesNumberTypes = (state) =>
+  state.institutionRegistration.employeesNumberTypes;
+
+export const selectEmployeesNumberLoading = (state) =>
+  state.institutionRegistration.employeesNumberLoading;
 
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
