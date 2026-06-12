@@ -367,22 +367,33 @@ export const fetchInstitutionTypes = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get("/institution-types");
-
-      if (!Array.isArray(response.data)) {
-        throw new Error("Invalid response format");
+      
+      // Handle the nested response structure: { status, message, data: { lists } }
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
       }
-
-      return response.data;
+      
+      // Fallback for direct array response
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      // Fallback for response.data.data being an array
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      
+      // If no valid data found, return empty array
+      return [];
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
         error.message ||
-        "Failed to fetch institution types",
+        "Failed to fetch institution types"
       );
     }
-  },
+  }
 );
-
 export const fetchOwnerRoles = createAsyncThunk(
   "institution/fetchOwnerRoles",
   async (_, { rejectWithValue }) => {

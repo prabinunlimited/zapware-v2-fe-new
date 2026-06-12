@@ -96,19 +96,21 @@ import {
   fetchIdDocumentTypes,
   setBusinessAlias,
   setOwnerAdd,
-  fetchEmployeesNumberTypes, // ADD THIS LINE
+  fetchEmployeesNumberTypes,
   setEmployeesNumber,
   selectEmployeesNumberTypes,
   selectEmployeesNumberLoading,
-  fetchDirectorRoles,      // ADD THIS LINE
-  selectDirectorRoles,     // ADD THIS LINE
-  selectDirectorRolesLoading, // ADD THIS LINE
+  fetchDirectorRoles,
+  selectDirectorRoles,
+  selectDirectorRolesLoading,
   setDirectorRoleId,
   fetchInstitutionAccountTypes,
   selectInstitutionAccountTypes,
   selectInstitutionAccountTypesLoading,
   selectSelectedInstitutionAccountTypeId,
   setSelectedInstitutionAccountTypeId,
+  fetchInstitutionTypes,
+  selectInstitutionTypes,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -410,6 +412,8 @@ const Institution = () => {
   const institutionAccountTypesLoading = useSelector(selectInstitutionAccountTypesLoading);
   const selectedInstitutionAccountTypeId = useSelector(selectSelectedInstitutionAccountTypeId);
 
+  const institutionTypes = useSelector(selectInstitutionTypes);
+
   const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
   const [nomineeFirstName, setNomineeFirstName] = useState("");
   const [nomineeMiddleName, setNomineeMiddleName] = useState("");
@@ -481,6 +485,7 @@ const Institution = () => {
     const mergedData = { ...formData, ...localFormData };
     const safeData = {
       institution_account_type_id: mergedData.institution_account_type_id || "",
+      institution_type_id: mergedData.institution_type_id || "",
       owner_details: [
         {
           id: Date.now(),
@@ -1061,6 +1066,7 @@ const Institution = () => {
       dispatch(fetchEmployeesNumberTypes());
       dispatch(fetchDirectorRoles());
       dispatch(fetchInstitutionAccountTypes());
+      dispatch(fetchInstitutionTypes());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1167,6 +1173,7 @@ const Institution = () => {
       case 1: {
         const requiredFields = [
           "institution_account_type_id",
+          "institution_type_id",
           "institution_name",
           "registration_number",
           "registered_address_street_country",
@@ -1390,6 +1397,7 @@ const Institution = () => {
         case 1:
           const step1Fields = [
             "institution_account_type_id",
+            "institution_type_id",
             "institution_name",
             "registration_number",
             "country_of_registration",
@@ -1871,6 +1879,7 @@ const Institution = () => {
         const finalData = {
           ...restFormData,
           institution_account_type_id: finalFormData.institution_account_type_id,
+          institution_type_id: finalFormData.institution_type_id,
           agent_code: agentCode,
           referral_code: referralCode,
           ein: finalFormData.ein,
@@ -2173,6 +2182,16 @@ const Institution = () => {
       label: type.name,
     }));
   }, [institutionAccountTypes]);
+
+  const institutionTypeOptions = useMemo(() => {
+    if (!institutionTypes || !Array.isArray(institutionTypes)) {
+      return [];
+    }
+    return institutionTypes.map((type) => ({
+      value: type.id,
+      label: type.name,
+    }));
+  }, [institutionTypes]);
 
   const businessTypeOptions = useMemo(
     () =>
@@ -3265,42 +3284,83 @@ const Institution = () => {
                       Business Information
                     </h2>
 
-                    <div className="mb-6">
-                      <CustomSelect
-                        id="institution_account_type_id"
-                        label="Institution Account Type"
-                        name="institution_account_type_id"
-                        options={institutionAccountTypeOptions}
-                        onChange={(option) => {
-                          if (option) {
-                            const value = option.value;
-                            setFieldValue("institution_account_type_id", value);
-                            setLocalFormData((prev) => ({
-                              ...prev,
-                              institution_account_type_id: value,
-                            }));
-                            dispatch(setSelectedInstitutionAccountTypeId(value));
-                            dispatch(
-                              setFormField({
-                                field: "institution_account_type_id",
-                                value: value,
-                              })
-                            );
-                          }
-                        }}
-                        value={institutionAccountTypeOptions.find(
-                          (opt) => opt.value === values.institution_account_type_id
-                        )}
-                        onBlur={handleBlur}
-                        touched={touched.institution_account_type_id}
-                        error={errors.institution_account_type_id}
-                        required={true}
-                        isLoading={institutionAccountTypesLoading}
-                        placeholder="Select institution account type..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Select the account type that best describes your institution
-                      </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {/* Institution Account Type */}
+                      <div>
+                        <CustomSelect
+                          id="institution_account_type_id"
+                          label="Institution Account Type"
+                          name="institution_account_type_id"
+                          options={institutionAccountTypeOptions}
+                          onChange={(option) => {
+                            if (option) {
+                              const value = option.value;
+                              setFieldValue("institution_account_type_id", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                institution_account_type_id: value,
+                              }));
+                              dispatch(setSelectedInstitutionAccountTypeId(value));
+                              dispatch(
+                                setFormField({
+                                  field: "institution_account_type_id",
+                                  value: value,
+                                })
+                              );
+                            }
+                          }}
+                          value={institutionAccountTypeOptions.find(
+                            (opt) => opt.value === values.institution_account_type_id
+                          )}
+                          onBlur={handleBlur}
+                          touched={touched.institution_account_type_id}
+                          error={errors.institution_account_type_id}
+                          required={true}
+                          isLoading={institutionAccountTypesLoading}
+                          placeholder="Select institution account type..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Select the account type that best describes your institution
+                        </p>
+                      </div>
+
+                      {/* Institution Type - Side by side */}
+                      <div>
+                        <CustomSelect
+                          id="institution_type_id"
+                          label="Institution Type"
+                          name="institution_type_id"
+                          options={institutionTypeOptions}
+                          onChange={(option) => {
+                            if (option) {
+                              const value = option.value;
+                              setFieldValue("institution_type_id", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                institution_type_id: value,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "institution_type_id",
+                                  value: value,
+                                })
+                              );
+                            }
+                          }}
+                          value={institutionTypeOptions.find(
+                            (opt) => opt.value === values.institution_type_id
+                          )}
+                          onBlur={handleBlur}
+                          touched={touched.institution_type_id}
+                          error={errors.institution_type_id}
+                          required={true}
+                          isLoading={!institutionTypes || institutionTypes.length === 0}
+                          placeholder="Select institution type..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Select the type that best describes your institution
+                        </p>
+                      </div>
                     </div>
 
                     {/* Business Name and Registration Number on same row */}
