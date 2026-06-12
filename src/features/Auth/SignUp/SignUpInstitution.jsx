@@ -13,7 +13,8 @@ import {
   faEyeSlash,
   faCheckCircle,
   faTimesCircle,
-  faExclamationCircle
+  faExclamationCircle,
+  faUserPlus
 } from "@fortawesome/free-solid-svg-icons";
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
@@ -399,6 +400,11 @@ const Institution = () => {
 
   const directorRoles = useSelector(selectDirectorRoles);
   const directorRolesLoading = useSelector(selectDirectorRolesLoading);
+
+  const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
+  const [nomineeFirstName, setNomineeFirstName] = useState("");
+  const [nomineeMiddleName, setNomineeMiddleName] = useState("");
+  const [nomineeLastName, setNomineeLastName] = useState("");
 
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
@@ -1841,8 +1847,16 @@ const Institution = () => {
           return country?.value || countryName;
         };
 
+        const {
+          has_nominees,
+          nominee_first_name,
+          nominee_middle_name,
+          nominee_last_name,
+          ...restFormData
+        } = finalFormData;
+
         const finalData = {
-          ...finalFormData,
+          ...restFormData,
           agent_code: agentCode,
           referral_code: referralCode,
           ein: finalFormData.ein,
@@ -1857,6 +1871,15 @@ const Institution = () => {
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
           service_providers: serviceProviderIds,
+
+          has_nominees: hasNominees,
+          customer_controller_nominees: hasNominees === "1"
+            ? JSON.stringify([{
+              nominee_first_name: nomineeFirstName || "",
+              nominee_middle_name: nomineeMiddleName || "",
+              nominee_last_name: nomineeLastName || "",
+            }])
+            : JSON.stringify([]),
 
           specify_high_risk_countries: finalFormData.specify_high_risk_countries?.length
             ? JSON.stringify(finalFormData.specify_high_risk_countries)
@@ -2201,8 +2224,16 @@ const Institution = () => {
       handleControllerZipLookup,
       isZipLoading,
       activeField,
-      directorRoles,        // ADD THIS
+      directorRoles,
       directorRolesLoading,
+      hasNominees,
+      nomineeFirstName,
+      nomineeMiddleName,
+      nomineeLastName,
+      setHasNominees,
+      setNomineeFirstName,
+      setNomineeMiddleName,
+      setNomineeLastName,
     }) => {
       console.log("🎯 Formik Render - SSN Debug:", {
         currentStep,
@@ -2844,92 +2875,8 @@ const Institution = () => {
               })()}
             </div>
           </div>
-         {/* Director Dropdwon */}
-        <div className="mt-4 max-w-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Director Role <span className="text-gray-400 text-xs ml-1">(Optional)</span>
-          </label>
-          <Select
-            id="director_role_id"
-            name="director_role_id"
-            options={directorRoleOptions}
-            onChange={(option) => {
-              if (option) {
-                setFieldValue("director_role_id", option.value);
-                dispatch(setDirectorRoleId(option.value));
-                dispatch(
-                  setFormField({
-                    field: "director_role_id",
-                    value: option.value,
-                  })
-                );
-              } else {
-                setFieldValue("director_role_id", "");
-                dispatch(setDirectorRoleId(""));
-                dispatch(
-                  setFormField({
-                    field: "director_role_id",
-                    value: "",
-                  })
-                );
-              }
-            }}
-            value={directorRoleOptions.find(
-              (opt) => opt.value === values.director_role_id
-            )}
-            isDisabled={false}
-            isLoading={directorRolesLoading}
-            placeholder="Select director role (optional)"
-            isClearable={true}
-            styles={{
-              control: (base) => ({
-                ...base,
-                minHeight: "38px",
-                borderColor: "#d1d5db",
-                borderRadius: "0.5rem",
-                padding: "0.25rem 0.5rem",
-                "&:hover": {
-                  borderColor: "#9ca3af",
-                },
-              }),
-              placeholder: (base) => ({
-                ...base,
-                fontSize: "0.875rem",
-                color: "#6b7280",
-              }),
-              menu: (base) => ({
-                ...base,
-                fontSize: "0.875rem",
-                zIndex: 9999,
-              }),
-              singleValue: (base) => ({
-                ...base,
-                fontSize: "0.875rem",
-              }),
-              option: (base, state) => ({
-                ...base,
-                fontSize: "0.875rem",
-                backgroundColor: state.isSelected
-                  ? "#3b82f6"
-                  : state.isFocused
-                    ? "#eff6ff"
-                    : "white",
-                color: state.isSelected ? "white" : "#1f2937",
-                "&:hover": {
-                  backgroundColor: "#eff6ff",
-                },
-              }),
-            }}
-          />
-          {touched.director_role_id && errors.director_role_id && (
-            <div className="text-red-500 text-xs mt-1 flex items-center">
-              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-              {errors.director_role_id}
-            </div>
-          )}
         </div>
-        </div>
-        
+
       );
     },
   );
@@ -5227,6 +5174,7 @@ const Institution = () => {
                       Please specify if you are the controller of this
                       institution or provide controller details.
                     </p>
+
                     <ControllerSection
                       values={values}
                       setFieldValue={setFieldValue}
@@ -5249,12 +5197,218 @@ const Institution = () => {
                       handleControllerZipLookup={handleControllerZipLookup}
                       isZipLoading={isZipLoading}
                       activeField={activeField}
-                      directorRoles={directorRoles}           // ADD THIS
+                      directorRoles={directorRoles}
                       directorRolesLoading={directorRolesLoading}
                     />
+
+                    {/* Director Dropdown */}
+                    <div className="mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left side - Director Role Dropdown */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Director Role
+                          </label>
+                          <Select
+                            id="director_role_id"
+                            name="director_role_id"
+                            options={directorRoles?.map(role => ({ value: role.id, label: role.name })) || []}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue("director_role_id", option.value);
+                                dispatch(setDirectorRoleId(option.value));
+                                dispatch(
+                                  setFormField({
+                                    field: "director_role_id",
+                                    value: option.value,
+                                  })
+                                );
+                              } else {
+                                setFieldValue("director_role_id", "");
+                                dispatch(setDirectorRoleId(""));
+                                dispatch(
+                                  setFormField({
+                                    field: "director_role_id",
+                                    value: "",
+                                  })
+                                );
+                              }
+                            }}
+                            value={(directorRoles?.map(role => ({ value: role.id, label: role.name })) || []).find(
+                              (opt) => opt.value === values.director_role_id
+                            )}
+                            isDisabled={false}
+                            isLoading={directorRolesLoading}
+                            placeholder="Select director role"
+                            isClearable={true}
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "38px",
+                                borderColor: "#d1d5db",
+                                borderRadius: "0.5rem",
+                                padding: "0.25rem 0.5rem",
+                                "&:hover": {
+                                  borderColor: "#9ca3af",
+                                },
+                              }),
+                              placeholder: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                color: "#6b7280",
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                zIndex: 9999,
+                              }),
+                              singleValue: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                              }),
+                              option: (base, state) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                backgroundColor: state.isSelected
+                                  ? "#3b82f6"
+                                  : state.isFocused
+                                    ? "#eff6ff"
+                                    : "white",
+                                color: state.isSelected ? "white" : "#1f2937",
+                                "&:hover": {
+                                  backgroundColor: "#eff6ff",
+                                },
+                              }),
+                            }}
+                          />
+                          {touched.director_role_id && errors.director_role_id && (
+                            <div className="text-red-500 text-xs mt-1 flex items-center">
+                              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                              {errors.director_role_id}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right side - Has Nominees Radio Buttons */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Has Nominees?
+                          </label>
+                          <div className="flex items-center gap-4 pt-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="has_nominees"
+                                value="1"
+                                checked={hasNominees === "1"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setHasNominees(value);
+                                  setFieldValue("has_nominees", value);
+                                  if (value === "0") {
+                                    setNomineeFirstName("");
+                                    setNomineeMiddleName("");
+                                    setNomineeLastName("");
+                                    setFieldValue("nominee_first_name", "");
+                                    setFieldValue("nominee_middle_name", "");
+                                    setFieldValue("nominee_last_name", "");
+                                  }
+                                }}
+                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">Yes</span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="has_nominees"
+                                value="0"
+                                checked={hasNominees === "0"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setHasNominees(value);
+                                  setFieldValue("has_nominees", value);
+                                  if (value === "0") {
+                                    setNomineeFirstName("");
+                                    setNomineeMiddleName("");
+                                    setNomineeLastName("");
+                                    setFieldValue("nominee_first_name", "");
+                                    setFieldValue("nominee_middle_name", "");
+                                    setFieldValue("nominee_last_name", "");
+                                  }
+                                }}
+                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">No</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nominee Text Fields - Shows below when "Yes" is selected */}
+                    {hasNominees === "1" && (
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <h4 className="text-md font-medium text-gray-800 mb-4 flex items-center gap-2">
+                          <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" />
+                          Nominee Information
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              First Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeFirstName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeFirstName(value);
+                                setFieldValue("nominee_first_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter first name"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Middle Name <span className="text-gray-400 text-xs">(Optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeMiddleName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeMiddleName(value);
+                                setFieldValue("nominee_middle_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter middle name"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Last Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeLastName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeLastName(value);
+                                setFieldValue("nominee_last_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter last name"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
-
                 {currentStep === 4 && (
                   <motion.div
                     key="step4"
