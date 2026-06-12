@@ -201,6 +201,11 @@ const institutionSchema = (currentStep, options = {}) => {
 
   // Step-specific schemas
   const step1Schema = Yup.object().shape({
+    institution_account_type_id: Yup.number()
+    .required("Please select an Institution Account Type")
+    .nullable()
+    .typeError("Please select a valid Institution Account Type"),
+
     institution_name: Yup.string()
       .required("Business name is required")
       .min(2, "Business name must be at least 2 characters"),

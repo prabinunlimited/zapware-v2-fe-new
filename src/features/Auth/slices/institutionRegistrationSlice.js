@@ -125,26 +125,6 @@ export const fetchIndustryTypesWithNAICS = createAsyncThunk(
   },
 );
 
-export const fetchDirectorsRoles = createAsyncThunk(
-  "institutionRegistration/fetchDirectorsRoles",
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await api.get("/directors-roles");
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
-      } else {
-        return [];
-      }
-    } catch (error) {
-      return rejectWithValue(
-        error.message || "Failed to fetch directors roles",
-      );
-    }
-  },
-);
-
 export const fetchGenders = createAsyncThunk(
   "institutionRegistration/fetchGenders",
   async () => {
@@ -301,10 +281,10 @@ export const submitInstitutionForm = createAsyncThunk(
         // Your API returns: { status: "error", message: "...", data: "" }
         return rejectWithValue(error.response.data);
       }
-      
+
       // Handle network errors or other issues
-      return rejectWithValue({ 
-        status: "error", 
+      return rejectWithValue({
+        status: "error",
         message: error.message || "Submission failed",
         data: ""
       });
@@ -396,8 +376,8 @@ export const fetchInstitutionTypes = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
-          error.message ||
-          "Failed to fetch institution types",
+        error.message ||
+        "Failed to fetch institution types",
       );
     }
   },
@@ -439,6 +419,50 @@ export const fetchIdDocumentTypes = createAsyncThunk(
       );
     }
   },
+);
+
+export const fetchEmployeesNumberTypes = createAsyncThunk(
+  "institutionRegistration/fetchEmployeesNumberTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/employees-number-types");
+
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch employees number types");
+    }
+  },
+);
+
+export const fetchDirectorRoles = createAsyncThunk(
+  "institutionRegistration/fetchDirectorRoles",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/director-roles");
+
+      // Handle the actual response structure: { status, message, data: { lists } }
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      // Fallback for other possible structures
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch director roles");
+    }
+  }
 );
 
 export const fetchTermsAndConditions = createAsyncThunk(
@@ -547,6 +571,36 @@ export const uploadFile = createAsyncThunk(
   },
 );
 
+export const fetchInstitutionAccountTypes = createAsyncThunk(
+  "institutionRegistration/fetchInstitutionAccountTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/institution-account-types");
+
+      // Handle the response structure
+      if (response.data?.status === "success" && response.data?.data) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch institution account types"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -653,7 +707,6 @@ const initialState = {
     idIssuedDate: "",
     is_controller: "",
     institutionTypes: [],
-    directorsRoles: [],
   },
 
   // UI state
@@ -725,6 +778,15 @@ const initialState = {
   whiteLabelledPartnerId: null,
   partnerPackageModule: false,
   controllerSynced: false,
+  employeesNumberTypes: [],
+  employeesNumber: "",
+  employeesNumberLoading: false,
+  directorRoles: [],
+  directorRolesLoading: false,
+  institutionAccountTypes: [],
+  institutionAccountTypesLoading: false,
+  selectedInstitutionAccountTypeId: null,
+  institutionAccountTypeError: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -944,6 +1006,23 @@ const institutionRegistrationSlice = createSlice({
       state.isWhiteLabelledPartner = action.payload.isWhiteLabelledPartner;
       state.whiteLabelledPartnerId = action.payload.whiteLabelledPartnerId;
       state.partnerPackageModule = action.payload.partnerPackageModule;
+    },
+
+    setEmployeesNumber: (state, action) => {
+      state.employeesNumber = action.payload;
+      state.formData.employees_number = action.payload;
+    },
+
+    setDirectorRoleId: (state, action) => {
+      state.formData.director_role_id = action.payload;
+    },
+
+    setSelectedInstitutionAccountTypeId: (state, action) => {
+      state.selectedInstitutionAccountTypeId = action.payload;
+      state.formData.institution_account_type_id = action.payload;
+    },
+    clearInstitutionAccountTypeError: (state) => {
+      state.institutionAccountTypeError = null;
     },
 
     // Controller sync
@@ -1341,17 +1420,6 @@ const institutionRegistrationSlice = createSlice({
         state.termsConditions = [];
       })
 
-      .addCase(fetchDirectorsRoles.pending, (state) => {
-        state.directorsRoles = null;
-      })
-      .addCase(fetchDirectorsRoles.fulfilled, (state, action) => {
-        state.directorsRoles = action.payload;
-      })
-      .addCase(fetchDirectorsRoles.rejected, (state, action) => {
-        state.directorsRoles = [];
-        state.error = action.payload;
-      })
-
       // Business Alias Validation
       .addCase(validateBusinessAlias.pending, (state) => {
         state.businessAliasValid = null;
@@ -1594,6 +1662,41 @@ const institutionRegistrationSlice = createSlice({
       .addCase(syncControllerDataForm.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchEmployeesNumberTypes.pending, (state) => {
+        state.employeesNumberLoading = true;
+      })
+      .addCase(fetchEmployeesNumberTypes.fulfilled, (state, action) => {
+        state.employeesNumberLoading = false;
+        state.employeesNumberTypes = action.payload;
+      })
+      .addCase(fetchEmployeesNumberTypes.rejected, (state) => {
+        state.employeesNumberLoading = false;
+        state.employeesNumberTypes = [];
+      })
+      .addCase(fetchDirectorRoles.pending, (state) => {
+        state.directorRolesLoading = true;
+      })
+      .addCase(fetchDirectorRoles.fulfilled, (state, action) => {
+        state.directorRolesLoading = false;
+        state.directorRoles = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchDirectorRoles.rejected, (state) => {
+        state.directorRolesLoading = false;
+        state.directorRoles = [];
+      })
+      .addCase(fetchInstitutionAccountTypes.pending, (state) => {
+        state.institutionAccountTypesLoading = true;
+        state.institutionAccountTypeError = null;
+      })
+      .addCase(fetchInstitutionAccountTypes.fulfilled, (state, action) => {
+        state.institutionAccountTypesLoading = false;
+        state.institutionAccountTypes = action.payload;
+      })
+      .addCase(fetchInstitutionAccountTypes.rejected, (state, action) => {
+        state.institutionAccountTypesLoading = false;
+        state.institutionAccountTypeError = action.payload;
+        state.institutionAccountTypes = [];
       });
   },
 });
@@ -1668,6 +1771,10 @@ export const {
   setIsAddingOwner,
   initializeInstitutionSignup,
   resetForm,
+  setEmployeesNumber,
+  setDirectorRoleId,
+  setSelectedInstitutionAccountTypeId,
+  clearInstitutionAccountTypeError,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1799,6 +1906,30 @@ export const selectTermsLoading = (state) =>
 export const selectTermsFetched = (state) =>
   state.institutionRegistration.termsFetched;
 
+export const selectEmployeesNumberTypes = (state) =>
+  state.institutionRegistration.employeesNumberTypes;
+
+export const selectEmployeesNumberLoading = (state) =>
+  state.institutionRegistration.employeesNumberLoading;
+
+export const selectDirectorRoles = (state) =>
+  state.institutionRegistration.directorRoles;
+
+export const selectDirectorRolesLoading = (state) =>
+  state.institutionRegistration.directorRolesLoading;
+
+export const selectInstitutionAccountTypes = (state) =>
+  state.institutionRegistration.institutionAccountTypes;
+
+export const selectInstitutionAccountTypesLoading = (state) =>
+  state.institutionRegistration.institutionAccountTypesLoading;
+
+export const selectSelectedInstitutionAccountTypeId = (state) =>
+  state.institutionRegistration.selectedInstitutionAccountTypeId;
+
+export const selectInstitutionAccountTypeError = (state) =>
+  state.institutionRegistration.institutionAccountTypeError;
+
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
 // =============================================================================
@@ -1816,8 +1947,5 @@ export const selectCanAddOwner = (state) => {
   const total = state.institutionRegistration.totalOwnershipPercentage;
   return total < 100 && state.institutionRegistration.ownerAdd === "Y";
 };
-
-export const selectDirectorsRoles = (state) =>
-  state.institutionRegistration.directorsRoles;
 
 export default institutionRegistrationSlice.reducer;

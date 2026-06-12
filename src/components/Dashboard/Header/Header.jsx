@@ -147,7 +147,7 @@ const Header = ({ customerId }) => {
   // Handle logout - UPDATED with proper cleanup
   const handleLogout = useCallback(async () => {
     console.log("🔴 Starting logout process...");
-    
+
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -156,32 +156,32 @@ const Header = ({ customerId }) => {
       clearTimeout(fetchTimeoutRef.current);
       fetchTimeoutRef.current = null;
     }
-  
+
     try {
       apiCoordinator.clear();
     } catch (e) {
       console.warn("API coordinator clear error:", e);
     }
-  
+
     const tokenToUse =
       authtoken ||
       localStorage.getItem("authtoken") ||
       localStorage.getItem("bearertoken");
-  
+
     try {
       if (tokenToUse) {
         await dispatch(logoutUser(tokenToUse)).unwrap();
       } else {
         dispatch(logoutUser());
       }
-      
+
       dispatch(resetNavigateSection());
       localStorage.clear();
       sessionStorage.clear();
-      
+
       console.log("✅ Logout successful, redirecting...");
       window.location.href = "/";
-      
+
     } catch (error) {
       console.error("Logout error:", error);
       dispatch(resetNavigateSection());
@@ -388,7 +388,7 @@ const Header = ({ customerId }) => {
         id: 3,
         label: "Change Password",
         icon: FaKey,
-        color: "text-violet-600",      
+        color: "text-violet-600",
         bgColor: "bg-violet-500/10",
         borderColor: "border-violet-200",
         onClick: handleChangePassword,
@@ -428,7 +428,7 @@ const Header = ({ customerId }) => {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 md:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          
+
           {/* Menu Panel */}
           <motion.div
             ref={mobileMenuRef}
@@ -449,7 +449,7 @@ const Header = ({ customerId }) => {
                   <FaTimes className="w-6 h-6" />
                 </button>
               </div>
-              
+
               {/* User Info */}
               <div className="flex items-center space-x-4">
                 <div className="relative">
@@ -553,23 +553,23 @@ const Header = ({ customerId }) => {
 
     const displayName =
       profileData?.first_name &&
-      profileData.first_name !== "User" &&
-      profileData.first_name !== "undefined" &&
-      profileData.first_name !== "null"
+        profileData.first_name !== "User" &&
+        profileData.first_name !== "undefined" &&
+        profileData.first_name !== "null"
         ? profileData.first_name
         : localStorage.getItem("firstName") &&
           localStorage.getItem("firstName") !== "User" &&
           localStorage.getItem("firstName") !== "undefined" &&
           localStorage.getItem("firstName") !== "null"
-        ? localStorage.getItem("firstName")
-        : "User";
+          ? localStorage.getItem("firstName")
+          : "User";
 
     const userRole =
       isStaffLogin === "1"
         ? staffRole
         : isOwnerLogin === "1"
-        ? ownerRoleName
-        : "Customer";
+          ? ownerRoleName
+          : "Customer";
 
     return (
       <>
@@ -625,7 +625,7 @@ const Header = ({ customerId }) => {
                   stiffness: 500,
                   damping: 30,
                 }}
-                className="absolute right-0 mt-2 w-96 bg-white/95 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
+                className="absolute right-0 mt-2 w-80 bg-white/95 backdrop-blur-xl border border-white/30 rounded-2xl shadow-2xl shadow-black/30 z-50 overflow-hidden"
                 style={{
                   background: "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
                   maxHeight: "calc(100vh - 100px)",
@@ -634,27 +634,27 @@ const Header = ({ customerId }) => {
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
               >
-                {/* Profile Header */}
+                {/* Profile Header - Reduced padding */}
                 <motion.div
-                  className="p-8 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 sticky top-0 z-10"
+                  className="p-5 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 sticky top-0 z-10"
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <div className="flex items-center space-x-5">
+                  <div className="flex items-center space-x-3">
                     <motion.div whileHover={{ scale: 1.1, rotate: 5 }} className="relative">
-                      <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shadow-lg backdrop-blur-sm">
-                        <FaUserCircle className="w-10 h-10 text-white" />
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-sm">
+                        <FaUserCircle className="w-7 h-7 text-white" />
                       </div>
                       <motion.div
                         animate={{ scale: [1, 1.3, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white shadow-lg"
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white shadow-lg"
                       />
                     </motion.div>
                     <div className="flex-1 min-w-0">
                       <motion.p
-                        className="text-xl font-bold text-white truncate"
+                        className="text-base font-bold text-white truncate"
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.2 }}
@@ -662,7 +662,7 @@ const Header = ({ customerId }) => {
                         {displayName}
                       </motion.p>
                       <motion.p
-                        className="text-blue-100 mt-1 text-sm"
+                        className="text-blue-100 mt-0.5 text-xs"
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
@@ -670,15 +670,15 @@ const Header = ({ customerId }) => {
                         ID: {customerId}
                       </motion.p>
                       <motion.div
-                        className="flex items-center mt-3 space-x-2"
+                        className="flex items-center mt-2 space-x-2"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.4 }}
                       >
-                        <div className="px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
+                        <div className="px-2 py-0.5 bg-white/20 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
                           {userRole}
                         </div>
-                        <div className="px-2 py-1 bg-green-500/20 text-green-100 text-xs rounded-full">
+                        <div className="px-2 py-0.5 bg-green-500/20 text-green-100 text-xs rounded-full">
                           Active
                         </div>
                       </motion.div>
@@ -686,77 +686,77 @@ const Header = ({ customerId }) => {
                   </div>
                 </motion.div>
 
-                {/* Menu Items */}
-                <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
-                  <div className="p-6">
-                    <div className="space-y-3">
+                {/* Menu Items - Reduced padding and sizes */}
+                <div className="overflow-y-auto" style={{ maxHeight: "350px" }}>
+                  <div className="p-4">
+                    <div className="space-y-2">
                       {dropdownItems.map((item) => (
                         <motion.div
                           key={item.id}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: item.delay, type: "spring", stiffness: 500 }}
-                          whileHover={{ scale: 1.02, x: 5 }}
+                          whileHover={{ scale: 1.01, x: 3 }}
                         >
                           <button
                             onClick={item.onClick}
-                            className="flex items-start w-full text-left p-5 rounded-2xl transition-all duration-300 group border border-gray-100 hover:border-gray-200 hover:shadow-lg bg-white/50 hover:bg-white"
+                            className="flex items-start w-full text-left p-3 rounded-xl transition-all duration-300 group border border-gray-100 hover:border-gray-200 hover:shadow-md bg-white/50 hover:bg-white"
                           >
-                            <div className={`p-4 rounded-xl ${item.bgColor} border ${item.borderColor} group-hover:scale-110 transition-all duration-300 shadow-sm`}>
-                              <item.icon className={`w-6 h-6 ${item.color}`} />
+                            <div className={`p-2 rounded-lg ${item.bgColor} border ${item.borderColor} group-hover:scale-105 transition-all duration-300 shadow-sm`}>
+                              <item.icon className={`w-4 h-4 ${item.color}`} />
                             </div>
-                            <div className="ml-5 flex-1 min-w-0">
-                              <span className="font-semibold text-gray-900 group-hover:text-gray-800 transition-colors duration-200">
+                            <div className="ml-3 flex-1 min-w-0">
+                              <span className="font-semibold text-sm text-gray-900 group-hover:text-gray-800 transition-colors duration-200">
                                 {item.label}
                               </span>
-                              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
                                 {item.description}
                               </p>
                             </div>
-                            <FaChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 mt-1 group-hover:translate-x-1 transition-all duration-200" />
+                            <FaChevronRight className="w-3 h-3 text-gray-400 group-hover:text-gray-600 mt-1 group-hover:translate-x-1 transition-all duration-200" />
                           </button>
                         </motion.div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Logout */}
+                  {/* Logout - Reduced padding */}
                   <motion.div
-                    className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
+                    className="px-4 py-3 bg-gradient-to-r from-red-50 to-orange-50/50 border-t border-gray-100"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.7 }}
                   >
                     <motion.button
                       onClick={handleLogout}
-                      whileHover={{ scale: 1.02 }}
-                      className="flex items-center w-full p-5 rounded-2xl bg-white border border-red-200 hover:border-red-300 hover:shadow-lg transition-all duration-300 group"
+                      whileHover={{ scale: 1.01 }}
+                      className="flex items-center w-full p-3 rounded-xl bg-white border border-red-200 hover:border-red-300 hover:shadow-md transition-all duration-300 group"
                     >
-                      <div className="p-4 rounded-xl bg-red-500/10 border border-red-200 group-hover:bg-red-500/20 transition-colors duration-200">
-                        <FaSignOutAlt className="w-6 h-6 text-red-500" />
+                      <div className="p-2 rounded-lg bg-red-500/10 border border-red-200 group-hover:bg-red-500/20 transition-colors duration-200">
+                        <FaSignOutAlt className="w-4 h-4 text-red-500" />
                       </div>
-                      <div className="ml-5 flex-1 text-left">
-                        <span className="font-semibold text-red-600 group-hover:text-red-700 transition-colors duration-200">
+                      <div className="ml-3 flex-1 text-left">
+                        <span className="font-semibold text-sm text-red-600 group-hover:text-red-700 transition-colors duration-200">
                           Logout
                         </span>
-                        <p className="text-sm text-red-500/80 mt-2">
+                        <p className="text-xs text-red-500/80 mt-1">
                           Sign out from your account
                         </p>
                       </div>
-                      <FaChevronRight className="w-4 h-4 text-red-400 group-hover:text-red-500 mt-1 group-hover:translate-x-1 transition-all duration-200" />
+                      <FaChevronRight className="w-3 h-3 text-red-400 group-hover:text-red-500 mt-1 group-hover:translate-x-1 transition-all duration-200" />
                     </motion.button>
                   </motion.div>
 
-                  {/* Footer */}
+                  {/* Footer - Reduced padding */}
                   <motion.div
-                    className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
+                    className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-100"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.8 }}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <FaStar className="w-4 h-4 text-yellow-500 mr-2" />
+                      <div className="flex items-center text-xs text-gray-500">
+                        <FaStar className="w-3 h-3 text-yellow-500 mr-1.5" />
                         <span>Secure Portal • v2.1.0</span>
                       </div>
                       <div className="text-xs text-gray-400">Last login: Today</div>
