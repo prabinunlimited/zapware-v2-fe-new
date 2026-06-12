@@ -571,6 +571,36 @@ export const uploadFile = createAsyncThunk(
   },
 );
 
+export const fetchInstitutionAccountTypes = createAsyncThunk(
+  "institutionRegistration/fetchInstitutionAccountTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/institution-account-types");
+
+      // Handle the response structure
+      if (response.data?.status === "success" && response.data?.data) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch institution account types"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -753,6 +783,10 @@ const initialState = {
   employeesNumberLoading: false,
   directorRoles: [],
   directorRolesLoading: false,
+  institutionAccountTypes: [],
+  institutionAccountTypesLoading: false,
+  selectedInstitutionAccountTypeId: null,
+  institutionAccountTypeError: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -981,6 +1015,14 @@ const institutionRegistrationSlice = createSlice({
 
     setDirectorRoleId: (state, action) => {
       state.formData.director_role_id = action.payload;
+    },
+
+    setSelectedInstitutionAccountTypeId: (state, action) => {
+      state.selectedInstitutionAccountTypeId = action.payload;
+      state.formData.institution_account_type_id = action.payload;
+    },
+    clearInstitutionAccountTypeError: (state) => {
+      state.institutionAccountTypeError = null;
     },
 
     // Controller sync
@@ -1642,6 +1684,19 @@ const institutionRegistrationSlice = createSlice({
       .addCase(fetchDirectorRoles.rejected, (state) => {
         state.directorRolesLoading = false;
         state.directorRoles = [];
+      })
+      .addCase(fetchInstitutionAccountTypes.pending, (state) => {
+        state.institutionAccountTypesLoading = true;
+        state.institutionAccountTypeError = null;
+      })
+      .addCase(fetchInstitutionAccountTypes.fulfilled, (state, action) => {
+        state.institutionAccountTypesLoading = false;
+        state.institutionAccountTypes = action.payload;
+      })
+      .addCase(fetchInstitutionAccountTypes.rejected, (state, action) => {
+        state.institutionAccountTypesLoading = false;
+        state.institutionAccountTypeError = action.payload;
+        state.institutionAccountTypes = [];
       });
   },
 });
@@ -1718,6 +1773,8 @@ export const {
   resetForm,
   setEmployeesNumber,
   setDirectorRoleId,
+  setSelectedInstitutionAccountTypeId,
+  clearInstitutionAccountTypeError,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1860,6 +1917,18 @@ export const selectDirectorRoles = (state) =>
 
 export const selectDirectorRolesLoading = (state) =>
   state.institutionRegistration.directorRolesLoading;
+
+export const selectInstitutionAccountTypes = (state) =>
+  state.institutionRegistration.institutionAccountTypes;
+
+export const selectInstitutionAccountTypesLoading = (state) =>
+  state.institutionRegistration.institutionAccountTypesLoading;
+
+export const selectSelectedInstitutionAccountTypeId = (state) =>
+  state.institutionRegistration.selectedInstitutionAccountTypeId;
+
+export const selectInstitutionAccountTypeError = (state) =>
+  state.institutionRegistration.institutionAccountTypeError;
 
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors

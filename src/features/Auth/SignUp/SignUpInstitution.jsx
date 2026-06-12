@@ -104,6 +104,11 @@ import {
   selectDirectorRoles,     // ADD THIS LINE
   selectDirectorRolesLoading, // ADD THIS LINE
   setDirectorRoleId,
+  fetchInstitutionAccountTypes,
+  selectInstitutionAccountTypes,
+  selectInstitutionAccountTypesLoading,
+  selectSelectedInstitutionAccountTypeId,
+  setSelectedInstitutionAccountTypeId,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -401,6 +406,10 @@ const Institution = () => {
   const directorRoles = useSelector(selectDirectorRoles);
   const directorRolesLoading = useSelector(selectDirectorRolesLoading);
 
+  const institutionAccountTypes = useSelector(selectInstitutionAccountTypes);
+  const institutionAccountTypesLoading = useSelector(selectInstitutionAccountTypesLoading);
+  const selectedInstitutionAccountTypeId = useSelector(selectSelectedInstitutionAccountTypeId);
+
   const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
   const [nomineeFirstName, setNomineeFirstName] = useState("");
   const [nomineeMiddleName, setNomineeMiddleName] = useState("");
@@ -471,6 +480,7 @@ const Institution = () => {
   const getInitialFormData = useCallback(() => {
     const mergedData = { ...formData, ...localFormData };
     const safeData = {
+      institution_account_type_id: mergedData.institution_account_type_id || "",
       owner_details: [
         {
           id: Date.now(),
@@ -1050,6 +1060,7 @@ const Institution = () => {
       dispatch(fetchInstitutionData());
       dispatch(fetchEmployeesNumberTypes());
       dispatch(fetchDirectorRoles());
+      dispatch(fetchInstitutionAccountTypes());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1155,6 +1166,7 @@ const Institution = () => {
     switch (step) {
       case 1: {
         const requiredFields = [
+          "institution_account_type_id",
           "institution_name",
           "registration_number",
           "registered_address_street_country",
@@ -1377,6 +1389,7 @@ const Institution = () => {
       switch (step) {
         case 1:
           const step1Fields = [
+            "institution_account_type_id",
             "institution_name",
             "registration_number",
             "country_of_registration",
@@ -1857,6 +1870,7 @@ const Institution = () => {
 
         const finalData = {
           ...restFormData,
+          institution_account_type_id: finalFormData.institution_account_type_id,
           agent_code: agentCode,
           referral_code: referralCode,
           ein: finalFormData.ein,
@@ -2150,6 +2164,16 @@ const Institution = () => {
     [naicsCodes],
   );
 
+  const institutionAccountTypeOptions = useMemo(() => {
+    if (!institutionAccountTypes || !Array.isArray(institutionAccountTypes)) {
+      return [];
+    }
+    return institutionAccountTypes.map((type) => ({
+      value: type.id,
+      label: type.name,
+    }));
+  }, [institutionAccountTypes]);
+
   const businessTypeOptions = useMemo(
     () =>
       businessTypes.map((type) => ({
@@ -2260,6 +2284,7 @@ const Institution = () => {
           values.country === "United States",
       });
       const dispatch = useDispatch();
+
       const directorRoleOptions = useMemo(() => {
         if (!directorRoles || !Array.isArray(directorRoles)) {
           return [];
@@ -2269,6 +2294,7 @@ const Institution = () => {
           label: role.name
         }));
       }, [directorRoles]);
+
       const syncControllerFromPrimary = useCallback(() => {
         const primaryContactFields = {
           controller_first_name: values.first_name,
@@ -3238,6 +3264,45 @@ const Institution = () => {
                     <h2 className="text-xl font-semibold mb-4">
                       Business Information
                     </h2>
+
+                    <div className="mb-6">
+                      <CustomSelect
+                        id="institution_account_type_id"
+                        label="Institution Account Type"
+                        name="institution_account_type_id"
+                        options={institutionAccountTypeOptions}
+                        onChange={(option) => {
+                          if (option) {
+                            const value = option.value;
+                            setFieldValue("institution_account_type_id", value);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              institution_account_type_id: value,
+                            }));
+                            dispatch(setSelectedInstitutionAccountTypeId(value));
+                            dispatch(
+                              setFormField({
+                                field: "institution_account_type_id",
+                                value: value,
+                              })
+                            );
+                          }
+                        }}
+                        value={institutionAccountTypeOptions.find(
+                          (opt) => opt.value === values.institution_account_type_id
+                        )}
+                        onBlur={handleBlur}
+                        touched={touched.institution_account_type_id}
+                        error={errors.institution_account_type_id}
+                        required={true}
+                        isLoading={institutionAccountTypesLoading}
+                        placeholder="Select institution account type..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Select the account type that best describes your institution
+                      </p>
+                    </div>
+
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <FormField
@@ -5409,6 +5474,7 @@ const Institution = () => {
                     )}
                   </motion.div>
                 )}
+
                 {currentStep === 4 && (
                   <motion.div
                     key="step4"
