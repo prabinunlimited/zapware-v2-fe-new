@@ -367,22 +367,22 @@ export const fetchInstitutionTypes = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get("/institution-types");
-      
+
       // Handle the nested response structure: { status, message, data: { lists } }
       if (response.data?.status === "success" && response.data?.data?.lists) {
         return response.data.data.lists;
       }
-      
+
       // Fallback for direct array response
       if (Array.isArray(response.data)) {
         return response.data;
       }
-      
+
       // Fallback for response.data.data being an array
       if (response.data?.data && Array.isArray(response.data.data)) {
         return response.data.data;
       }
-      
+
       // If no valid data found, return empty array
       return [];
     } catch (error) {
@@ -612,6 +612,36 @@ export const fetchInstitutionAccountTypes = createAsyncThunk(
   }
 );
 
+export const fetchTransactionCurrencies = createAsyncThunk(
+  "institutionRegistration/fetchTransactionCurrencies",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/partners/transaction-currencies-all");
+
+      // Handle different response structures
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch transaction currencies"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -798,6 +828,10 @@ const initialState = {
   institutionAccountTypesLoading: false,
   selectedInstitutionAccountTypeId: null,
   institutionAccountTypeError: null,
+  transactionCurrencies: [],
+  transactionCurrenciesLoading: false,
+  transactionCurrenciesError: null,
+  selectedTransactionCurrency: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -1034,6 +1068,11 @@ const institutionRegistrationSlice = createSlice({
     },
     clearInstitutionAccountTypeError: (state) => {
       state.institutionAccountTypeError = null;
+    },
+
+    setSelectedTransactionCurrency: (state, action) => {
+      state.selectedTransactionCurrency = action.payload;
+      state.formData.annual_equivalent_amount_currency = action.payload;
     },
 
     // Controller sync
@@ -1708,6 +1747,19 @@ const institutionRegistrationSlice = createSlice({
         state.institutionAccountTypesLoading = false;
         state.institutionAccountTypeError = action.payload;
         state.institutionAccountTypes = [];
+      })
+      .addCase(fetchTransactionCurrencies.pending, (state) => {
+        state.transactionCurrenciesLoading = true;
+        state.transactionCurrenciesError = null;
+      })
+      .addCase(fetchTransactionCurrencies.fulfilled, (state, action) => {
+        state.transactionCurrenciesLoading = false;
+        state.transactionCurrencies = action.payload;
+      })
+      .addCase(fetchTransactionCurrencies.rejected, (state, action) => {
+        state.transactionCurrenciesLoading = false;
+        state.transactionCurrenciesError = action.payload;
+        state.transactionCurrencies = [];
       });
   },
 });
@@ -1786,6 +1838,7 @@ export const {
   setDirectorRoleId,
   setSelectedInstitutionAccountTypeId,
   clearInstitutionAccountTypeError,
+  setSelectedTransactionCurrency,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1940,6 +1993,15 @@ export const selectSelectedInstitutionAccountTypeId = (state) =>
 
 export const selectInstitutionAccountTypeError = (state) =>
   state.institutionRegistration.institutionAccountTypeError;
+
+export const selectTransactionCurrencies = (state) =>
+  state.institutionRegistration.transactionCurrencies;
+
+export const selectTransactionCurrenciesLoading = (state) =>
+  state.institutionRegistration.transactionCurrenciesLoading;
+
+export const selectSelectedTransactionCurrency = (state) =>
+  state.institutionRegistration.selectedTransactionCurrency;
 
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors

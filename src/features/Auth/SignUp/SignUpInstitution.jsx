@@ -111,6 +111,10 @@ import {
   setSelectedInstitutionAccountTypeId,
   fetchInstitutionTypes,
   selectInstitutionTypes,
+  fetchTransactionCurrencies,
+  selectTransactionCurrencies,
+  selectTransactionCurrenciesLoading,
+  setSelectedTransactionCurrency,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -414,6 +418,9 @@ const Institution = () => {
 
   const institutionTypes = useSelector(selectInstitutionTypes);
 
+  const transactionCurrencies = useSelector(selectTransactionCurrencies);
+  const transactionCurrenciesLoading = useSelector(selectTransactionCurrenciesLoading);
+
   const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
   const [nomineeFirstName, setNomineeFirstName] = useState("");
   const [nomineeMiddleName, setNomineeMiddleName] = useState("");
@@ -560,6 +567,8 @@ const Institution = () => {
       expected_frequency_payments_in: mergedData.expected_frequency_payments_in || "",
       expected_avg_payments_in_currency: mergedData.expected_avg_payments_in_currency || "",
       expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
+      annual_equivalent_amount_currency: mergedData.annual_equivalent_amount_currency || "",
+      annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1067,6 +1076,7 @@ const Institution = () => {
       dispatch(fetchDirectorRoles());
       dispatch(fetchInstitutionAccountTypes());
       dispatch(fetchInstitutionTypes());
+      dispatch(fetchTransactionCurrencies());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -2192,6 +2202,16 @@ const Institution = () => {
       label: type.name,
     }));
   }, [institutionTypes]);
+
+  const currencyOptions = useMemo(() => {
+    if (!transactionCurrencies || !Array.isArray(transactionCurrencies)) {
+      return [];
+    }
+    return transactionCurrencies.map((currency) => ({
+      value: currency.currency_code,
+      label: currency.currency_code
+    }));
+  }, [transactionCurrencies]);
 
   const businessTypeOptions = useMemo(
     () =>
@@ -3448,8 +3468,8 @@ const Institution = () => {
                       )}
                     </div>
 
-                    {/* Industry Type on full row */}
-                    <div className="mb-6">
+                    {/* Industry Type and Annual Currency - Side by side */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <CustomSelect
                         id="industry_type"
                         label="Industry Type"
@@ -3469,10 +3489,54 @@ const Institution = () => {
                         required={true}
                         placeholder="Select Industry Type"
                       />
+
+                      <CustomSelect
+                        id="annual_equivalent_amount_currency"
+                        label="Annual Equivalent Amount Currency"
+                        options={currencyOptions}
+                        onChange={(option) => {
+                          if (option) {
+                            setFieldValue("annual_equivalent_amount_currency", option.value);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              annual_equivalent_amount_currency: option.value,
+                            }));
+                            dispatch(setSelectedTransactionCurrency(option.value));
+                          }
+                        }}
+                        value={currencyOptions.find(
+                          (opt) => opt.value === values.annual_equivalent_amount_currency
+                        )}
+                        onBlur={handleBlur}
+                        touched={touched.annual_equivalent_amount_currency}
+                        error={errors.annual_equivalent_amount_currency}
+                        placeholder="Select currency"
+                        isLoading={transactionCurrenciesLoading}
+                        required={false}
+                      />
                     </div>
 
-                    {/* Purpose of Account */}
-                    <div className="mt-4">
+                    {/* Annual Equivalent Amount and Purpose of Account - Side by side */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <FormField
+                        id="annual_equivalent_amount"
+                        label="Annual Equivalent Amount"
+                        name="annual_equivalent_amount"
+                        type="text"
+                        value={values.annual_equivalent_amount || ""}
+                        onChange={enhancedHandleChange(
+                          "annual_equivalent_amount",
+                          setFieldValue,
+                        )}
+                        onBlur={handleBlur}
+                        onFocus={() => setActiveField("annual_equivalent_amount")}
+                        touched={touched.annual_equivalent_amount}
+                        error={errors.annual_equivalent_amount}
+                        placeholder="e.g., 1000000.00"
+                        activeField={activeField}
+                        fieldStyles={FIELD_STYLES}
+                      />
+
                       <FormField
                         id="purpose_of_account"
                         label="Purpose of Account"
