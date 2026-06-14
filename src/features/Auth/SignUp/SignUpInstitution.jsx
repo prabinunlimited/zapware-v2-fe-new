@@ -13,7 +13,8 @@ import {
   faEyeSlash,
   faCheckCircle,
   faTimesCircle,
-  faExclamationCircle
+  faExclamationCircle,
+  faUserPlus
 } from "@fortawesome/free-solid-svg-icons";
 import { Formik, Form, Field, FieldArray } from "formik";
 import { motion, AnimatePresence } from "framer-motion";
@@ -95,6 +96,19 @@ import {
   fetchIdDocumentTypes,
   setBusinessAlias,
   setOwnerAdd,
+  fetchEmployeesNumberTypes, // ADD THIS LINE
+  setEmployeesNumber,
+  selectEmployeesNumberTypes,
+  selectEmployeesNumberLoading,
+  fetchDirectorRoles,      // ADD THIS LINE
+  selectDirectorRoles,     // ADD THIS LINE
+  selectDirectorRolesLoading, // ADD THIS LINE
+  setDirectorRoleId,
+  fetchInstitutionAccountTypes,
+  selectInstitutionAccountTypes,
+  selectInstitutionAccountTypesLoading,
+  selectSelectedInstitutionAccountTypeId,
+  setSelectedInstitutionAccountTypeId,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -386,6 +400,21 @@ const Institution = () => {
   const termsLoading = useSelector(selectTermsLoading);
   const termsFetched = useSelector(selectTermsFetched);
 
+  const employeesNumberTypes = useSelector(selectEmployeesNumberTypes);
+  const employeesNumberLoading = useSelector(selectEmployeesNumberLoading);
+
+  const directorRoles = useSelector(selectDirectorRoles);
+  const directorRolesLoading = useSelector(selectDirectorRolesLoading);
+
+  const institutionAccountTypes = useSelector(selectInstitutionAccountTypes);
+  const institutionAccountTypesLoading = useSelector(selectInstitutionAccountTypesLoading);
+  const selectedInstitutionAccountTypeId = useSelector(selectSelectedInstitutionAccountTypeId);
+
+  const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
+  const [nomineeFirstName, setNomineeFirstName] = useState("");
+  const [nomineeMiddleName, setNomineeMiddleName] = useState("");
+  const [nomineeLastName, setNomineeLastName] = useState("");
+
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
@@ -451,6 +480,7 @@ const Institution = () => {
   const getInitialFormData = useCallback(() => {
     const mergedData = { ...formData, ...localFormData };
     const safeData = {
+      institution_account_type_id: mergedData.institution_account_type_id || "",
       owner_details: [
         {
           id: Date.now(),
@@ -502,6 +532,29 @@ const Institution = () => {
       controller_ssn: "",
       is_controller: "",
       purpose_of_account: mergedData.purpose_of_account || "",
+      employees_number: mergedData.employees_number || "",
+
+      // New business payment fields
+      business_model_overview: mergedData.business_model_overview || "",
+      business_size: mergedData.business_size || "",
+      high_risk_countries: mergedData.high_risk_countries || 0,
+      specify_high_risk_countries: mergedData.specify_high_risk_countries || [],
+      conducting_payment_activities: mergedData.conducting_payment_activities || "",
+      reason_for_payments: mergedData.reason_for_payments || "",
+      product_services_required: mergedData.product_services_required || "",
+      beneficiary_types: mergedData.beneficiary_types || "",
+      beneficiary_types_other: mergedData.beneficiary_types_other || "",
+      beneficiary_industries_top_5: mergedData.beneficiary_industries_top_5 || "",
+      expected_frequency_payments_out: mergedData.expected_frequency_payments_out || "",
+      expected_avg_payments_out_currency: mergedData.expected_avg_payments_out_currency || "",
+      expected_avg_payments_out_amount: mergedData.expected_avg_payments_out_amount || "",
+      sender_types: mergedData.sender_types || "",
+      sender_types_other: mergedData.sender_types_other || "",
+      sender_industries_top_5: mergedData.sender_industries_top_5 || "",
+      countries_to_receive_funds_from: mergedData.countries_to_receive_funds_from || [],
+      expected_frequency_payments_in: mergedData.expected_frequency_payments_in || "",
+      expected_avg_payments_in_currency: mergedData.expected_avg_payments_in_currency || "",
+      expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1005,6 +1058,9 @@ const Institution = () => {
       dispatch(fetchIndustryTypes());
       dispatch(fetchTermsAndConditions());
       dispatch(fetchInstitutionData());
+      dispatch(fetchEmployeesNumberTypes());
+      dispatch(fetchDirectorRoles());
+      dispatch(fetchInstitutionAccountTypes());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1110,6 +1166,7 @@ const Institution = () => {
     switch (step) {
       case 1: {
         const requiredFields = [
+          "institution_account_type_id",
           "institution_name",
           "registration_number",
           "registered_address_street_country",
@@ -1332,6 +1389,7 @@ const Institution = () => {
       switch (step) {
         case 1:
           const step1Fields = [
+            "institution_account_type_id",
             "institution_name",
             "registration_number",
             "country_of_registration",
@@ -1802,8 +1860,17 @@ const Institution = () => {
           return country?.value || countryName;
         };
 
+        const {
+          has_nominees,
+          nominee_first_name,
+          nominee_middle_name,
+          nominee_last_name,
+          ...restFormData
+        } = finalFormData;
+
         const finalData = {
-          ...finalFormData,
+          ...restFormData,
+          institution_account_type_id: finalFormData.institution_account_type_id,
           agent_code: agentCode,
           referral_code: referralCode,
           ein: finalFormData.ein,
@@ -1811,11 +1878,30 @@ const Institution = () => {
           business_type: finalFormData.business_type,
           business_alias: finalFormData.business_alias,
           purpose_of_account: finalFormData.purpose_of_account || "",
+          employees_number: finalFormData.employees_number || "",
+          director_role_id: finalFormData.director_role_id || "",
           company_phone_number: finalFormData.company_phone_number,
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
           service_providers: serviceProviderIds,
+
+          has_nominees: hasNominees,
+          customer_controller_nominees: hasNominees === "1"
+            ? JSON.stringify([{
+              nominee_first_name: nomineeFirstName || "",
+              nominee_middle_name: nomineeMiddleName || "",
+              nominee_last_name: nomineeLastName || "",
+            }])
+            : JSON.stringify([]),
+
+          specify_high_risk_countries: finalFormData.specify_high_risk_countries?.length
+            ? JSON.stringify(finalFormData.specify_high_risk_countries)
+            : "",
+
+          countries_to_receive_funds_from: finalFormData.countries_to_receive_funds_from?.length
+            ? JSON.stringify(finalFormData.countries_to_receive_funds_from)
+            : "",
 
           user_images: userImagesArray,
 
@@ -2078,6 +2164,16 @@ const Institution = () => {
     [naicsCodes],
   );
 
+  const institutionAccountTypeOptions = useMemo(() => {
+    if (!institutionAccountTypes || !Array.isArray(institutionAccountTypes)) {
+      return [];
+    }
+    return institutionAccountTypes.map((type) => ({
+      value: type.id,
+      label: type.name,
+    }));
+  }, [institutionAccountTypes]);
+
   const businessTypeOptions = useMemo(
     () =>
       businessTypes.map((type) => ({
@@ -2152,6 +2248,16 @@ const Institution = () => {
       handleControllerZipLookup,
       isZipLoading,
       activeField,
+      directorRoles,
+      directorRolesLoading,
+      hasNominees,
+      nomineeFirstName,
+      nomineeMiddleName,
+      nomineeLastName,
+      setHasNominees,
+      setNomineeFirstName,
+      setNomineeMiddleName,
+      setNomineeLastName,
     }) => {
       console.log("🎯 Formik Render - SSN Debug:", {
         currentStep,
@@ -2178,6 +2284,17 @@ const Institution = () => {
           values.country === "United States",
       });
       const dispatch = useDispatch();
+
+      const directorRoleOptions = useMemo(() => {
+        if (!directorRoles || !Array.isArray(directorRoles)) {
+          return [];
+        }
+        return directorRoles.map(role => ({
+          value: role.id,
+          label: role.name
+        }));
+      }, [directorRoles]);
+
       const syncControllerFromPrimary = useCallback(() => {
         const primaryContactFields = {
           controller_first_name: values.first_name,
@@ -2200,6 +2317,7 @@ const Institution = () => {
           controller_dob: values.dob,
           controller_designation: values.designation,
           controller_ssn: values.ssn,
+          director_role_id: "",
         };
         Object.entries(primaryContactFields).forEach(([field, value]) => {
           if (value !== undefined && value !== null && value !== "") {
@@ -2236,6 +2354,7 @@ const Institution = () => {
             "controller_dob",
             "controller_designation",
             "controller_ssn",
+            "director_role_id"
           ];
           controllerFields.forEach((field) => {
             setFieldValue(field, "");
@@ -2243,6 +2362,7 @@ const Institution = () => {
           });
         }
       };
+
 
       return (
         <div className="mt-8 border-t pt-6">
@@ -2782,6 +2902,7 @@ const Institution = () => {
             </div>
           </div>
         </div>
+
       );
     },
   );
@@ -3143,6 +3264,45 @@ const Institution = () => {
                     <h2 className="text-xl font-semibold mb-4">
                       Business Information
                     </h2>
+
+                    <div className="mb-6">
+                      <CustomSelect
+                        id="institution_account_type_id"
+                        label="Institution Account Type"
+                        name="institution_account_type_id"
+                        options={institutionAccountTypeOptions}
+                        onChange={(option) => {
+                          if (option) {
+                            const value = option.value;
+                            setFieldValue("institution_account_type_id", value);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              institution_account_type_id: value,
+                            }));
+                            dispatch(setSelectedInstitutionAccountTypeId(value));
+                            dispatch(
+                              setFormField({
+                                field: "institution_account_type_id",
+                                value: value,
+                              })
+                            );
+                          }
+                        }}
+                        value={institutionAccountTypeOptions.find(
+                          (opt) => opt.value === values.institution_account_type_id
+                        )}
+                        onBlur={handleBlur}
+                        touched={touched.institution_account_type_id}
+                        error={errors.institution_account_type_id}
+                        required={true}
+                        isLoading={institutionAccountTypesLoading}
+                        placeholder="Select institution account type..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Select the account type that best describes your institution
+                      </p>
+                    </div>
+
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <FormField
@@ -3251,6 +3411,646 @@ const Institution = () => {
                       />
                     </div>
 
+                    {/* Purpose of Account */}
+                    <div className="mt-4">
+                      <FormField
+                        id="purpose_of_account"
+                        label="Purpose of Account"
+                        name="purpose_of_account"
+                        value={values.purpose_of_account || ""}
+                        onChange={(e) => handlePurposeOfAccountChange(e, setFieldValue)}
+                        onBlur={handleBlur}
+                        onFocus={() => setActiveField("purpose_of_account")}
+                        touched={touched.purpose_of_account}
+                        error={errors.purpose_of_account}
+                        placeholder="e.g., Business transactions, International payments, Investment management"
+                        activeField={activeField}
+                        fieldStyles={FIELD_STYLES}
+                      />
+                    </div>
+
+                    {/* Business Payment Information */}
+                    <div className="mt-8">
+                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
+                        Business Payment Information
+                      </h3>
+
+                      <div className="space-y-6">
+                        {/* Business Model Overview */}
+                        <div>
+                          <FormField
+                            id="business_model_overview"
+                            label="Business Model Overview"
+                            name="business_model_overview"
+                            as="textarea"
+                            rows={4}
+                            value={values.business_model_overview || ""}
+                            onChange={enhancedHandleChange(
+                              "business_model_overview",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("business_model_overview")}
+                            touched={touched.business_model_overview}
+                            error={errors.business_model_overview}
+                            required={false}
+                            activeField={activeField}
+                            placeholder="Describe your business model"
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Business Size and High Risk Countries */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <CustomSelect
+                            id="business_size"
+                            label="Business Size"
+                            options={[
+                              { value: "startup", label: "Startup" },
+                              { value: "small", label: "Small" },
+                              { value: "medium", label: "Medium" },
+                              { value: "large", label: "Large" },
+                              { value: "enterprise", label: "Enterprise" },
+                            ]}
+                            onChange={enhancedSelectChange("business_size", setFieldValue)}
+                            value={[
+                              { value: "startup", label: "Startup" },
+                              { value: "small", label: "Small" },
+                              { value: "medium", label: "Medium" },
+                              { value: "large", label: "Large" },
+                              { value: "enterprise", label: "Enterprise" },
+                            ].find((opt) => opt.value === values.business_size)}
+                            touched={touched.business_size}
+                            error={errors.business_size}
+                            placeholder="Select business size"
+                          />
+
+                          {/* High Risk Countries Involved */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              High Risk Countries Involved
+                            </label>
+                            <div className="flex items-center space-x-4 mb-4">
+                              <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="high_risk_countries"
+                                  value="1"
+                                  checked={values.high_risk_countries === 1}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value);
+                                    setFieldValue("high_risk_countries", value);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      high_risk_countries: value,
+                                      specify_high_risk_countries:
+                                        value === 0 ? [] : prev.specify_high_risk_countries,
+                                    }));
+                                    dispatch(
+                                      setFormField({
+                                        field: "high_risk_countries",
+                                        value,
+                                      }),
+                                    );
+                                  }}
+                                  className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-700">Yes</span>
+                              </label>
+                              <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="high_risk_countries"
+                                  value="0"
+                                  checked={values.high_risk_countries === 0}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value);
+                                    setFieldValue("high_risk_countries", value);
+                                    setFieldValue("specify_high_risk_countries", []);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      high_risk_countries: value,
+                                      specify_high_risk_countries: [],
+                                    }));
+                                    dispatch(
+                                      setFormField({
+                                        field: "high_risk_countries",
+                                        value,
+                                      }),
+                                    );
+                                    dispatch(
+                                      setFormField({
+                                        field: "specify_high_risk_countries",
+                                        value: [],
+                                      }),
+                                    );
+                                  }}
+                                  className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-700">No</span>
+                              </label>
+                            </div>
+
+                            {/* Conditional multi-select for specifying high risk countries */}
+                            {values.high_risk_countries === 1 && (
+                              <div className="mt-3">
+                                <CustomSelect
+                                  id="specify_high_risk_countries"
+                                  label="Specify High Risk Countries"
+                                  options={countryOptions}
+                                  isMulti={true}
+                                  onChange={(selectedOptions) => {
+                                    // Extract just the IDs/values from selected options
+                                    const selectedIds = selectedOptions
+                                      ? selectedOptions.map((opt) => opt.value)
+                                      : [];
+
+                                    // Set the field value as an array of IDs
+                                    setFieldValue("specify_high_risk_countries", selectedIds);
+
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      specify_high_risk_countries: selectedIds,
+                                    }));
+
+                                    dispatch(
+                                      setFormField({
+                                        field: "specify_high_risk_countries",
+                                        value: selectedIds,
+                                      }),
+                                    );
+                                  }}
+                                  value={countryOptions.filter((opt) =>
+                                    values.specify_high_risk_countries?.includes(opt.value),
+                                  )}
+                                  onBlur={handleBlur}
+                                  touched={touched.specify_high_risk_countries}
+                                  error={errors.specify_high_risk_countries}
+                                  placeholder="Select high risk countries..."
+                                  isLoading={countriesLoading}
+                                  required={false}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Conducting Payment Activities */}
+                        <div>
+                          <FormField
+                            id="conducting_payment_activities"
+                            label="Conducting Payment Activities"
+                            name="conducting_payment_activities"
+                            as="textarea"
+                            rows={3}
+                            value={values.conducting_payment_activities || ""}
+                            onChange={enhancedHandleChange(
+                              "conducting_payment_activities",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("conducting_payment_activities")}
+                            touched={touched.conducting_payment_activities}
+                            error={errors.conducting_payment_activities}
+                            required={false}
+                            activeField={activeField}
+                            placeholder="Describe your payment activities"
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Employees Number - USING YOUR DYNAMIC API */}
+                        <div>
+                          <CustomSelect
+                            id="employees_number"
+                            label="Number of Employees"
+                            options={employeesNumberTypes.map(type => ({
+                              value: type,
+                              label: type
+                            }))}
+                            onChange={(option) => {
+                              if (option) {
+                                const value = option.value;
+                                setFieldValue("employees_number", value);
+                                setLocalFormData(prev => ({ ...prev, employees_number: value }));
+                                dispatch(setEmployeesNumber(value));
+                              }
+                            }}
+                            value={values.employees_number ? {
+                              value: values.employees_number,
+                              label: values.employees_number
+                            } : null}
+                            onBlur={handleBlur}
+                            touched={touched.employees_number}
+                            error={errors.employees_number}
+                            required={false}
+                            placeholder="Select number of employees"
+                            isLoading={employeesNumberLoading}
+                          />
+                        </div>
+
+                        {/* Reason for Payments */}
+                        <div>
+                          <FormField
+                            id="reason_for_payments"
+                            label="Reason for Payments"
+                            name="reason_for_payments"
+                            as="textarea"
+                            rows={3}
+                            value={values.reason_for_payments || ""}
+                            onChange={enhancedHandleChange(
+                              "reason_for_payments",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("reason_for_payments")}
+                            touched={touched.reason_for_payments}
+                            error={errors.reason_for_payments}
+                            required={false}
+                            placeholder="Explain the reason for payment processing"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Product Services Required */}
+                        <div>
+                          <CustomSelect
+                            id="product_services_required"
+                            label="Product Services Required"
+                            options={[
+                              { value: "payment_processing", label: "Payment Processing" },
+                              { value: "cross_border", label: "Cross Border Payments" },
+                              { value: "mass_payouts", label: "Mass Payouts" },
+                              { value: "virtual_accounts", label: "Virtual Accounts" },
+                              { value: "fx_services", label: "FX Services" },
+                              { value: "other", label: "Other" },
+                            ]}
+                            onChange={enhancedSelectChange("product_services_required", setFieldValue)}
+                            value={[
+                              { value: "payment_processing", label: "Payment Processing" },
+                              { value: "cross_border", label: "Cross Border Payments" },
+                              { value: "mass_payouts", label: "Mass Payouts" },
+                              { value: "virtual_accounts", label: "Virtual Accounts" },
+                              { value: "fx_services", label: "FX Services" },
+                              { value: "other", label: "Other" },
+                            ].find((opt) => opt.value === values.product_services_required)}
+                            touched={touched.product_services_required}
+                            error={errors.product_services_required}
+                            required={false}
+                            placeholder="Select product services required"
+                          />
+                        </div>
+
+                        {/* Beneficiary Types */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <CustomSelect
+                              id="beneficiary_types"
+                              label="Beneficiary Types"
+                              options={[
+                                { value: "Individual", label: "Individual" },
+                                { value: "Business", label: "Business" },
+                                { value: "Both", label: "Both" },
+                                { value: "Other", label: "Other" },
+                              ]}
+                              onChange={enhancedSelectChange("beneficiary_types", setFieldValue)}
+                              value={[
+                                { value: "Individual", label: "Individual" },
+                                { value: "Business", label: "Business" },
+                                { value: "Both", label: "Both" },
+                                { value: "Other", label: "Other" },
+                              ].find((opt) => opt.value === values.beneficiary_types)}
+                              touched={touched.beneficiary_types}
+                              error={errors.beneficiary_types}
+                              placeholder="Select beneficiary types"
+                            />
+                          </div>
+
+                          {values.beneficiary_types === "Other" && (
+                            <FormField
+                              id="beneficiary_types_other"
+                              label="Other Beneficiary Types"
+                              name="beneficiary_types_other"
+                              value={values.beneficiary_types_other || ""}
+                              onChange={enhancedHandleChange(
+                                "beneficiary_types_other",
+                                setFieldValue,
+                              )}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("beneficiary_types_other")}
+                              touched={touched.beneficiary_types_other}
+                              error={errors.beneficiary_types_other}
+                              required={false}
+                              placeholder="Specify other beneficiary types"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          )}
+                        </div>
+
+                        {/* Beneficiary Industries Top 5 */}
+                        <div>
+                          <FormField
+                            id="beneficiary_industries_top_5"
+                            label="Beneficiary Industries Top 5"
+                            name="beneficiary_industries_top_5"
+                            as="textarea"
+                            rows={3}
+                            value={values.beneficiary_industries_top_5 || ""}
+                            onChange={enhancedHandleChange(
+                              "beneficiary_industries_top_5",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("beneficiary_industries_top_5")}
+                            touched={touched.beneficiary_industries_top_5}
+                            error={errors.beneficiary_industries_top_5}
+                            required={false}
+                            placeholder="List top 5 beneficiary industries (comma separated)"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Expected Frequency Payments Out */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <CustomSelect
+                            id="expected_frequency_payments_out"
+                            label="Expected Frequency of Payments Out"
+                            options={[
+                              { value: "daily", label: "Daily" },
+                              { value: "weekly", label: "Weekly" },
+                              { value: "monthly", label: "Monthly" },
+                              { value: "quarterly", label: "Quarterly" },
+                              { value: "yearly", label: "Yearly" },
+                            ]}
+                            onChange={enhancedSelectChange("expected_frequency_payments_out", setFieldValue)}
+                            value={[
+                              { value: "daily", label: "Daily" },
+                              { value: "weekly", label: "Weekly" },
+                              { value: "monthly", label: "Monthly" },
+                              { value: "quarterly", label: "Quarterly" },
+                              { value: "yearly", label: "Yearly" },
+                            ].find((opt) => opt.value === values.expected_frequency_payments_out)}
+                            touched={touched.expected_frequency_payments_out}
+                            error={errors.expected_frequency_payments_out}
+                            placeholder="Select frequency"
+                          />
+
+                          <CustomSelect
+                            id="expected_avg_payments_out_currency"
+                            label="Expected Avg Payments Out Currency"
+                            options={[
+                              { value: "USD", label: "USD - US Dollar" },
+                              { value: "EUR", label: "EUR - Euro" },
+                              { value: "GBP", label: "GBP - British Pound" },
+                              { value: "CAD", label: "CAD - Canadian Dollar" },
+                              { value: "AUD", label: "AUD - Australian Dollar" },
+                            ]}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue("expected_avg_payments_out_currency", option.value);
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  expected_avg_payments_out_currency: option.value,
+                                }));
+                                dispatch(
+                                  setFormField({
+                                    field: "expected_avg_payments_out_currency",
+                                    value: option.value,
+                                  }),
+                                );
+                              }
+                            }}
+                            value={[
+                              { value: "USD", label: "USD - US Dollar" },
+                              { value: "EUR", label: "EUR - Euro" },
+                              { value: "GBP", label: "GBP - British Pound" },
+                              { value: "CAD", label: "CAD - Canadian Dollar" },
+                              { value: "AUD", label: "AUD - Australian Dollar" },
+                            ].find((opt) => opt.value === values.expected_avg_payments_out_currency)}
+                            touched={touched.expected_avg_payments_out_currency}
+                            error={errors.expected_avg_payments_out_currency}
+                            placeholder="Select currency"
+                            required={false}
+                          />
+
+                          <FormField
+                            id="expected_avg_payments_out_amount"
+                            label="Expected Avg Payments Out Amount"
+                            name="expected_avg_payments_out_amount"
+                            type="number"
+                            step="0.01"
+                            value={values.expected_avg_payments_out_amount || ""}
+                            onChange={enhancedHandleChange(
+                              "expected_avg_payments_out_amount",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("expected_avg_payments_out_amount")}
+                            touched={touched.expected_avg_payments_out_amount}
+                            error={errors.expected_avg_payments_out_amount}
+                            required={false}
+                            placeholder="e.g., 10000.00"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Sender Types */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <CustomSelect
+                              id="sender_types"
+                              label="Sender Types"
+                              options={[
+                                { value: "Individual", label: "Individual" },
+                                { value: "Business", label: "Business" },
+                                { value: "Both", label: "Both" },
+                                { value: "Other", label: "Other" },
+                              ]}
+                              onChange={enhancedSelectChange("sender_types", setFieldValue)}
+                              value={[
+                                { value: "Individual", label: "Individual" },
+                                { value: "Business", label: "Business" },
+                                { value: "Both", label: "Both" },
+                                { value: "Other", label: "Other" },
+                              ].find((opt) => opt.value === values.sender_types)}
+                              touched={touched.sender_types}
+                              error={errors.sender_types}
+                              placeholder="Select sender types"
+                            />
+                          </div>
+
+                          {values.sender_types === "Other" && (
+                            <FormField
+                              id="sender_types_other"
+                              label="Other Sender Types"
+                              name="sender_types_other"
+                              value={values.sender_types_other || ""}
+                              onChange={enhancedHandleChange(
+                                "sender_types_other",
+                                setFieldValue,
+                              )}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("sender_types_other")}
+                              touched={touched.sender_types_other}
+                              error={errors.sender_types_other}
+                              required={false}
+                              placeholder="Specify other sender types"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          )}
+                        </div>
+
+                        {/* Sender Industries Top 5 */}
+                        <div>
+                          <FormField
+                            id="sender_industries_top_5"
+                            label="Sender Industries Top 5"
+                            name="sender_industries_top_5"
+                            as="textarea"
+                            rows={3}
+                            value={values.sender_industries_top_5 || ""}
+                            onChange={enhancedHandleChange(
+                              "sender_industries_top_5",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("sender_industries_top_5")}
+                            touched={touched.sender_industries_top_5}
+                            error={errors.sender_industries_top_5}
+                            required={false}
+                            placeholder="List top 5 sender industries (comma separated)"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+
+                        {/* Countries to Receive Funds From - ADD THIS SECTION */}
+                        <div>
+                          <CustomSelect
+                            id="countries_to_receive_funds_from"
+                            label="Countries to Receive Funds From"
+                            options={countryOptions}
+                            isMulti={true}
+                            onChange={(selectedOptions) => {
+                              const selectedIds = selectedOptions
+                                ? selectedOptions.map((opt) => opt.value)
+                                : [];
+                              setFieldValue("countries_to_receive_funds_from", selectedIds);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                countries_to_receive_funds_from: selectedIds,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "countries_to_receive_funds_from",
+                                  value: selectedIds,
+                                }),
+                              );
+                            }}
+                            value={countryOptions.filter((opt) =>
+                              values.countries_to_receive_funds_from?.includes(opt.value),
+                            )}
+                            onBlur={handleBlur}
+                            touched={touched.countries_to_receive_funds_from}
+                            error={errors.countries_to_receive_funds_from}
+                            placeholder="Select countries to receive funds from..."
+                            isLoading={countriesLoading}
+                            required={false}
+                          />
+                        </div>
+
+                        {/* Expected Frequency Payments In */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <CustomSelect
+                            id="expected_frequency_payments_in"
+                            label="Expected Frequency of Payments In"
+                            options={[
+                              { value: "daily", label: "Daily" },
+                              { value: "weekly", label: "Weekly" },
+                              { value: "monthly", label: "Monthly" },
+                              { value: "quarterly", label: "Quarterly" },
+                              { value: "yearly", label: "Yearly" },
+                            ]}
+                            onChange={enhancedSelectChange("expected_frequency_payments_in", setFieldValue)}
+                            value={[
+                              { value: "daily", label: "Daily" },
+                              { value: "weekly", label: "Weekly" },
+                              { value: "monthly", label: "Monthly" },
+                              { value: "quarterly", label: "Quarterly" },
+                              { value: "yearly", label: "Yearly" },
+                            ].find((opt) => opt.value === values.expected_frequency_payments_in)}
+                            touched={touched.expected_frequency_payments_in}
+                            error={errors.expected_frequency_payments_in}
+                            placeholder="Select frequency"
+                          />
+
+                          <CustomSelect
+                            id="expected_avg_payments_in_currency"
+                            label="Expected Avg Payments IN Currency"
+                            options={[
+                              { value: "USD", label: "USD - US Dollar" },
+                              { value: "EUR", label: "EUR - Euro" },
+                              { value: "GBP", label: "GBP - British Pound" },
+                              { value: "CAD", label: "CAD - Canadian Dollar" },
+                              { value: "AUD", label: "AUD - Australian Dollar" },
+                            ]}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue("expected_avg_payments_in_currency", option.value);
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  expected_avg_payments_in_currency: option.value,
+                                }));
+                                dispatch(
+                                  setFormField({
+                                    field: "expected_avg_payments_in_currency",
+                                    value: option.value,
+                                  }),
+                                );
+                              }
+                            }}
+                            value={[
+                              { value: "USD", label: "USD - US Dollar" },
+                              { value: "EUR", label: "EUR - Euro" },
+                              { value: "GBP", label: "GBP - British Pound" },
+                              { value: "CAD", label: "CAD - Canadian Dollar" },
+                              { value: "AUD", label: "AUD - Australian Dollar" },
+                            ].find((opt) => opt.value === values.expected_avg_payments_in_currency)}
+                            touched={touched.expected_avg_payments_in_currency}
+                            error={errors.expected_avg_payments_in_currency}
+                            placeholder="Select currency"
+                            required={false}
+                          />
+
+                          <FormField
+                            id="expected_avg_payments_in_amount"
+                            label="Expected Avg Payments In Amount"
+                            name="expected_avg_payments_in_amount"
+                            type="number"
+                            step="0.01"
+                            value={values.expected_avg_payments_in_amount || ""}
+                            onChange={enhancedHandleChange(
+                              "expected_avg_payments_in_amount",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("expected_avg_payments_in_amount")}
+                            touched={touched.expected_avg_payments_in_amount}
+                            error={errors.expected_avg_payments_in_amount}
+                            required={false}
+                            placeholder="e.g., 10000.00"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     {/* EIN and NAICS Code on same row - FIXED CONDITION */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       {/* EIN Field - Always show if either condition is true */}
@@ -3313,24 +4113,24 @@ const Institution = () => {
                       {/* Country of Registration and Primary Country of Operation on same row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         {/* <CustomSelect
-                          id="country_of_registration"
-                          label="Country of Registration"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "country_of_registration",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) =>
-                              opt.value === values.country_of_registration,
-                          )}
-                          touched={touched.country_of_registration}
-                          error={errors.country_of_registration}
-                          required // ← ADD THIS LINE
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        /> */}
+                            id="country_of_registration"
+                            label="Country of Registration"
+                            options={countryOptions}
+                            onChange={enhancedSelectChange(
+                              "country_of_registration",
+                              setFieldValue,
+                            )}
+                            value={countryOptions.find(
+                              (opt) =>
+                                opt.value === values.country_of_registration,
+                            )}
+                            touched={touched.country_of_registration}
+                            error={errors.country_of_registration}
+                            required // ← ADD THIS LINE
+                            isLoading={countriesLoading}
+                            isCountryField={true}
+                            showPhoneCode={false}
+                          /> */}
                         <CustomSelect
                           id="country_of_operation"
                           label="Primary Country of Operation"
@@ -3578,22 +4378,6 @@ const Institution = () => {
                         />
                       </div>
 
-                      <div className="mt-4">
-                        <FormField
-                          id="purpose_of_account"
-                          label="Purpose of Account"
-                          name="purpose_of_account"
-                          value={values.purpose_of_account || ""}
-                          onChange={(e) => handlePurposeOfAccountChange(e, setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("purpose_of_account")}
-                          touched={touched.purpose_of_account}
-                          error={errors.purpose_of_account}
-                          placeholder="e.g., Business transactions, International payments, Investment management"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -3689,8 +4473,8 @@ const Institution = () => {
                               onFocus={() => setActiveField("email")}
                               disabled={isResponsiblePersonEmailVerified}
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
-          ${touched.email && errors.email && !isResponsiblePersonEmailVerified
+            ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
+            ${touched.email && errors.email && !isResponsiblePersonEmailVerified
                                   ? "border-red-500 focus:ring-red-500"
                                   : "border-gray-300 focus:ring-blue-500"
                                 }`}
@@ -4455,6 +5239,7 @@ const Institution = () => {
                       Please specify if you are the controller of this
                       institution or provide controller details.
                     </p>
+
                     <ControllerSection
                       values={values}
                       setFieldValue={setFieldValue}
@@ -4477,7 +5262,216 @@ const Institution = () => {
                       handleControllerZipLookup={handleControllerZipLookup}
                       isZipLoading={isZipLoading}
                       activeField={activeField}
+                      directorRoles={directorRoles}
+                      directorRolesLoading={directorRolesLoading}
                     />
+
+                    {/* Director Dropdown */}
+                    <div className="mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left side - Director Role Dropdown */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Director Role
+                          </label>
+                          <Select
+                            id="director_role_id"
+                            name="director_role_id"
+                            options={directorRoles?.map(role => ({ value: role.id, label: role.name })) || []}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue("director_role_id", option.value);
+                                dispatch(setDirectorRoleId(option.value));
+                                dispatch(
+                                  setFormField({
+                                    field: "director_role_id",
+                                    value: option.value,
+                                  })
+                                );
+                              } else {
+                                setFieldValue("director_role_id", "");
+                                dispatch(setDirectorRoleId(""));
+                                dispatch(
+                                  setFormField({
+                                    field: "director_role_id",
+                                    value: "",
+                                  })
+                                );
+                              }
+                            }}
+                            value={(directorRoles?.map(role => ({ value: role.id, label: role.name })) || []).find(
+                              (opt) => opt.value === values.director_role_id
+                            )}
+                            isDisabled={false}
+                            isLoading={directorRolesLoading}
+                            placeholder="Select director role"
+                            isClearable={true}
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "38px",
+                                borderColor: "#d1d5db",
+                                borderRadius: "0.5rem",
+                                padding: "0.25rem 0.5rem",
+                                "&:hover": {
+                                  borderColor: "#9ca3af",
+                                },
+                              }),
+                              placeholder: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                color: "#6b7280",
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                zIndex: 9999,
+                              }),
+                              singleValue: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                              }),
+                              option: (base, state) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                backgroundColor: state.isSelected
+                                  ? "#3b82f6"
+                                  : state.isFocused
+                                    ? "#eff6ff"
+                                    : "white",
+                                color: state.isSelected ? "white" : "#1f2937",
+                                "&:hover": {
+                                  backgroundColor: "#eff6ff",
+                                },
+                              }),
+                            }}
+                          />
+                          {touched.director_role_id && errors.director_role_id && (
+                            <div className="text-red-500 text-xs mt-1 flex items-center">
+                              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                              {errors.director_role_id}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right side - Has Nominees Radio Buttons */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Has Nominees?
+                          </label>
+                          <div className="flex items-center gap-4 pt-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="has_nominees"
+                                value="1"
+                                checked={hasNominees === "1"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setHasNominees(value);
+                                  setFieldValue("has_nominees", value);
+                                  if (value === "0") {
+                                    setNomineeFirstName("");
+                                    setNomineeMiddleName("");
+                                    setNomineeLastName("");
+                                    setFieldValue("nominee_first_name", "");
+                                    setFieldValue("nominee_middle_name", "");
+                                    setFieldValue("nominee_last_name", "");
+                                  }
+                                }}
+                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">Yes</span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="has_nominees"
+                                value="0"
+                                checked={hasNominees === "0"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setHasNominees(value);
+                                  setFieldValue("has_nominees", value);
+                                  if (value === "0") {
+                                    setNomineeFirstName("");
+                                    setNomineeMiddleName("");
+                                    setNomineeLastName("");
+                                    setFieldValue("nominee_first_name", "");
+                                    setFieldValue("nominee_middle_name", "");
+                                    setFieldValue("nominee_last_name", "");
+                                  }
+                                }}
+                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">No</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nominee Text Fields - Shows below when "Yes" is selected */}
+                    {hasNominees === "1" && (
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <h4 className="text-md font-medium text-gray-800 mb-4 flex items-center gap-2">
+                          <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" />
+                          Nominee Information
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              First Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeFirstName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeFirstName(value);
+                                setFieldValue("nominee_first_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter first name"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Middle Name <span className="text-gray-400 text-xs">(Optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeMiddleName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeMiddleName(value);
+                                setFieldValue("nominee_middle_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter middle name"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Last Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={nomineeLastName}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNomineeLastName(value);
+                                setFieldValue("nominee_last_name", value);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter last name"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 

@@ -33,7 +33,7 @@ import * as XLSX from "xlsx";
 import { useTransactionData } from "../../../../hooks/transactionHooks";
 
 const TransactionDetails = React.memo(
-  ({ customerId, selectedCurrencyCode, onTransactionComplete, externalTransactions, externalLoading,externalError }) => {
+  ({ customerId, selectedCurrencyCode, onTransactionComplete, externalTransactions, externalLoading,externalError, onRefresh, isRemittanceOnlyCustomer }) => {
     const navigate = useNavigate();
 
     // ✅ USE TRANSACTION HOOK (working as before)
@@ -282,6 +282,18 @@ const TransactionDetails = React.memo(
 
     // ✅ Enhanced refresh function with cache clearing
     const handleManualRefresh = useCallback(() => {
+      // For remittance-only customers, use the external refresh callback
+      if (isRemittanceOnlyCustomer) {
+        if (onRefresh) {
+          console.log("🔄 TransactionDetails: External refresh triggered for remittance customer");
+          onRefresh();
+        } else {
+          console.warn("TransactionDetails: No onRefresh callback provided for remittance customer");
+        }
+        return;
+      }
+    
+      // For regular customers, use internal logic
       if (
         !customerId ||
         !selectedCurrencyCode ||
@@ -290,19 +302,19 @@ const TransactionDetails = React.memo(
         console.warn("TransactionDetails: Cannot refresh - missing params");
         return;
       }
-
+    
       console.log(
         "🔄 TransactionDetails: Manual refresh triggered for",
         selectedCurrencyCode,
       );
-
+    
       // Reset tracking refs
       initialLoadDoneRef.current = false;
       setTransactionCompletionNotified(false);
-
+    
       // Force refresh using the hook's forceRefresh function
       forceRefresh(customerId, selectedCurrencyCode);
-    }, [customerId, selectedCurrencyCode, forceRefresh]);
+    }, [customerId, selectedCurrencyCode, forceRefresh, isRemittanceOnlyCustomer, onRefresh]);
 
     const exportSingleTransactionPDF = useCallback(
       async (transaction) => {
@@ -1701,6 +1713,11 @@ TransactionDetails.propTypes = {
   customerId: PropTypes.string.isRequired,
   selectedCurrencyCode: PropTypes.string,
   onTransactionComplete: PropTypes.func,
+  externalTransactions: PropTypes.array,
+  externalLoading: PropTypes.bool,
+  externalError: PropTypes.object,
+  onRefresh: PropTypes.func,
+  isRemittanceOnlyCustomer: PropTypes.bool,
 };
 
 TransactionDetails.defaultProps = {

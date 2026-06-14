@@ -303,6 +303,25 @@ const HomepageContent = React.memo(() => {
     }
   }, [isRemittanceOnlyCustomer, customerId, authtoken, bearertoken, transactionLoading, hasFetchedTransactions]);
 
+  const handleRefreshTransactions = useCallback(async () => {
+    console.log("🔄 Manual refresh triggered for remittance-only customer");
+    
+    // Reset transaction fetch state
+    transactionsFetchedRef.current = false;
+    setHasFetchedTransactions(false);
+    setTransactionData(null);
+    setTransactionError(null);
+    
+    // Clear API cache for this endpoint
+    const transactionEndpoint = `/transactions/currency-transaction-details/${customerId}/all`;
+    const fullUrl = `${API_URL}${transactionEndpoint}`;
+    const transactionSig = `GET-${fullUrl}-{}`;
+    apiCoordinator.clearCache(transactionSig); // If your apiCoordinator has this method
+    
+    // Fetch fresh data
+    await fetchTransactionDetails();
+  }, [customerId, API_URL, fetchTransactionDetails]);
+
   // ✅ Separate useEffect specifically for transaction fetch with all dependencies logged
   useEffect(() => {
     console.log("🔍 Transaction useEffect triggered");
@@ -699,6 +718,7 @@ const HomepageContent = React.memo(() => {
                   externalLoading={isRemittanceOnlyCustomer ? transactionLoading : undefined}
                   externalError={isRemittanceOnlyCustomer ? transactionError : undefined}
                   isRemittanceOnlyCustomer={isRemittanceOnlyCustomer}
+                  onRefreshTransactions={isRemittanceOnlyCustomer ? handleRefreshTransactions : undefined}
                 />
               </motion.div>
             </div>
