@@ -1883,6 +1883,7 @@ const Institution = () => {
           nominee_first_name,
           nominee_middle_name,
           nominee_last_name,
+          trading_names_list,
           ...restFormData
         } = finalFormData;
 
@@ -1904,6 +1905,8 @@ const Institution = () => {
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
           service_providers: serviceProviderIds,
+          no_of_trading_names: values.no_of_trading_names || 0,
+          trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
 
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
@@ -3551,6 +3554,109 @@ const Institution = () => {
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
+
+                      <div>
+                        <CustomSelect
+                          id="no_of_trading_names"
+                          label="Number of Trading Names"
+                          options={[
+                            { value: 1, label: "1" },
+                            { value: 2, label: "2" },
+                            { value: 3, label: "3" },
+                            { value: 4, label: "4" },
+                            { value: 5, label: "5" },
+                            { value: 6, label: "6" },
+                            { value: 7, label: "7" },
+                            { value: 8, label: "8" },
+                            { value: 9, label: "9" },
+                            { value: 10, label: "10" },
+                          ]}
+                          onChange={(option) => {
+                            if (option) {
+                              const count = option.value;
+                              setFieldValue("no_of_trading_names", count);
+                              setFieldValue("trading_names_list", Array(count).fill(""));
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                no_of_trading_names: count,
+                                trading_names_list: Array(count).fill(""),
+                              }));
+                            } else {
+                              setFieldValue("no_of_trading_names", 0);
+                              setFieldValue("trading_names_list", []);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                no_of_trading_names: 0,
+                                trading_names_list: [],
+                              }));
+                            }
+                          }}
+                          value={
+                            values.no_of_trading_names
+                              ? { value: values.no_of_trading_names, label: values.no_of_trading_names.toString() }
+                              : null
+                          }
+                          onBlur={handleBlur}
+                          touched={touched.no_of_trading_names}
+                          error={errors.no_of_trading_names}
+                          required={false}
+                          placeholder="Select number of trading names..."
+                          isLoading={false}
+                          isClearable={true}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Select how many trading names your business operates under (optional)
+                        </p>
+                      </div>
+
+                      {/* Dynamic Trading Names Input Fields - Plain text fields, no icons */}
+                      {values.no_of_trading_names > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <h4 className="text-md font-medium text-gray-800 mb-4">
+                            Trading Names
+                          </h4>
+
+                          <div className="space-y-3">
+                            {[...Array(values.no_of_trading_names)].map((_, index) => (
+                              <motion.div
+                                key={index}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.2, delay: index * 0.05 }}
+                              >
+                                <FormField
+                                  id={`trading_name_${index}`}
+                                  label={`Trading Name ${index + 1}`}
+                                  name={`trading_names_list[${index}]`}
+                                  value={values.trading_names_list?.[index] || ""}
+                                  onChange={(e) => {
+                                    const updatedList = [...(values.trading_names_list || [])];
+                                    updatedList[index] = e.target.value;
+                                    setFieldValue("trading_names_list", updatedList);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      trading_names_list: updatedList,
+                                    }));
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField(`trading_name_${index}`)}
+                                  touched={touched.trading_names_list?.[index]}
+                                  error={errors.trading_names_list?.[index]}
+                                  required={false}
+                                  placeholder={`Enter trading name ${index + 1}`}
+                                  activeField={activeField}
+                                  fieldStyles={FIELD_STYLES}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
                     </div>
 
                     {/* Business Payment Information */}
