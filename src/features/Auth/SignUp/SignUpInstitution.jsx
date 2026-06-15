@@ -96,19 +96,25 @@ import {
   fetchIdDocumentTypes,
   setBusinessAlias,
   setOwnerAdd,
-  fetchEmployeesNumberTypes, // ADD THIS LINE
+  fetchEmployeesNumberTypes,
   setEmployeesNumber,
   selectEmployeesNumberTypes,
   selectEmployeesNumberLoading,
-  fetchDirectorRoles,      // ADD THIS LINE
-  selectDirectorRoles,     // ADD THIS LINE
-  selectDirectorRolesLoading, // ADD THIS LINE
+  fetchDirectorRoles,
+  selectDirectorRoles,
+  selectDirectorRolesLoading,
   setDirectorRoleId,
   fetchInstitutionAccountTypes,
   selectInstitutionAccountTypes,
   selectInstitutionAccountTypesLoading,
   selectSelectedInstitutionAccountTypeId,
   setSelectedInstitutionAccountTypeId,
+  fetchInstitutionTypes,
+  selectInstitutionTypes,
+  fetchTransactionCurrencies,
+  selectTransactionCurrencies,
+  selectTransactionCurrenciesLoading,
+  setSelectedTransactionCurrency,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -410,6 +416,11 @@ const Institution = () => {
   const institutionAccountTypesLoading = useSelector(selectInstitutionAccountTypesLoading);
   const selectedInstitutionAccountTypeId = useSelector(selectSelectedInstitutionAccountTypeId);
 
+  const institutionTypes = useSelector(selectInstitutionTypes);
+
+  const transactionCurrencies = useSelector(selectTransactionCurrencies);
+  const transactionCurrenciesLoading = useSelector(selectTransactionCurrenciesLoading);
+
   const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
   const [nomineeFirstName, setNomineeFirstName] = useState("");
   const [nomineeMiddleName, setNomineeMiddleName] = useState("");
@@ -481,6 +492,7 @@ const Institution = () => {
     const mergedData = { ...formData, ...localFormData };
     const safeData = {
       institution_account_type_id: mergedData.institution_account_type_id || "",
+      institution_type_id: mergedData.institution_type_id || "",
       owner_details: [
         {
           id: Date.now(),
@@ -555,6 +567,10 @@ const Institution = () => {
       expected_frequency_payments_in: mergedData.expected_frequency_payments_in || "",
       expected_avg_payments_in_currency: mergedData.expected_avg_payments_in_currency || "",
       expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
+      annual_equivalent_amount_currency: mergedData.annual_equivalent_amount_currency || "",
+      annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
+      business_website_social_media: mergedData.business_website_social_media || "",
+      trust_purpose: mergedData.trust_purpose || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1061,6 +1077,8 @@ const Institution = () => {
       dispatch(fetchEmployeesNumberTypes());
       dispatch(fetchDirectorRoles());
       dispatch(fetchInstitutionAccountTypes());
+      dispatch(fetchInstitutionTypes());
+      dispatch(fetchTransactionCurrencies());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1167,6 +1185,7 @@ const Institution = () => {
       case 1: {
         const requiredFields = [
           "institution_account_type_id",
+          "institution_type_id",
           "institution_name",
           "registration_number",
           "registered_address_street_country",
@@ -1390,6 +1409,7 @@ const Institution = () => {
         case 1:
           const step1Fields = [
             "institution_account_type_id",
+            "institution_type_id",
             "institution_name",
             "registration_number",
             "country_of_registration",
@@ -1865,12 +1885,14 @@ const Institution = () => {
           nominee_first_name,
           nominee_middle_name,
           nominee_last_name,
+          trading_names_list,
           ...restFormData
         } = finalFormData;
 
         const finalData = {
           ...restFormData,
           institution_account_type_id: finalFormData.institution_account_type_id,
+          institution_type_id: finalFormData.institution_type_id,
           agent_code: agentCode,
           referral_code: referralCode,
           ein: finalFormData.ein,
@@ -1884,7 +1906,11 @@ const Institution = () => {
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
+          business_website_social_media: finalFormData.business_website_social_media || "",
           service_providers: serviceProviderIds,
+          no_of_trading_names: values.no_of_trading_names || 0,
+          trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
+          trust_purpose: finalFormData.trust_purpose || "",
 
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
@@ -2173,6 +2199,26 @@ const Institution = () => {
       label: type.name,
     }));
   }, [institutionAccountTypes]);
+
+  const institutionTypeOptions = useMemo(() => {
+    if (!institutionTypes || !Array.isArray(institutionTypes)) {
+      return [];
+    }
+    return institutionTypes.map((type) => ({
+      value: type.id,
+      label: type.name,
+    }));
+  }, [institutionTypes]);
+
+  const currencyOptions = useMemo(() => {
+    if (!transactionCurrencies || !Array.isArray(transactionCurrencies)) {
+      return [];
+    }
+    return transactionCurrencies.map((currency) => ({
+      value: currency.currency_code,
+      label: currency.currency_code
+    }));
+  }, [transactionCurrencies]);
 
   const businessTypeOptions = useMemo(
     () =>
@@ -3265,42 +3311,83 @@ const Institution = () => {
                       Business Information
                     </h2>
 
-                    <div className="mb-6">
-                      <CustomSelect
-                        id="institution_account_type_id"
-                        label="Institution Account Type"
-                        name="institution_account_type_id"
-                        options={institutionAccountTypeOptions}
-                        onChange={(option) => {
-                          if (option) {
-                            const value = option.value;
-                            setFieldValue("institution_account_type_id", value);
-                            setLocalFormData((prev) => ({
-                              ...prev,
-                              institution_account_type_id: value,
-                            }));
-                            dispatch(setSelectedInstitutionAccountTypeId(value));
-                            dispatch(
-                              setFormField({
-                                field: "institution_account_type_id",
-                                value: value,
-                              })
-                            );
-                          }
-                        }}
-                        value={institutionAccountTypeOptions.find(
-                          (opt) => opt.value === values.institution_account_type_id
-                        )}
-                        onBlur={handleBlur}
-                        touched={touched.institution_account_type_id}
-                        error={errors.institution_account_type_id}
-                        required={true}
-                        isLoading={institutionAccountTypesLoading}
-                        placeholder="Select institution account type..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Select the account type that best describes your institution
-                      </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {/* Institution Account Type */}
+                      <div>
+                        <CustomSelect
+                          id="institution_account_type_id"
+                          label="Institution Account Type"
+                          name="institution_account_type_id"
+                          options={institutionAccountTypeOptions}
+                          onChange={(option) => {
+                            if (option) {
+                              const value = option.value;
+                              setFieldValue("institution_account_type_id", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                institution_account_type_id: value,
+                              }));
+                              dispatch(setSelectedInstitutionAccountTypeId(value));
+                              dispatch(
+                                setFormField({
+                                  field: "institution_account_type_id",
+                                  value: value,
+                                })
+                              );
+                            }
+                          }}
+                          value={institutionAccountTypeOptions.find(
+                            (opt) => opt.value === values.institution_account_type_id
+                          )}
+                          onBlur={handleBlur}
+                          touched={touched.institution_account_type_id}
+                          error={errors.institution_account_type_id}
+                          required={true}
+                          isLoading={institutionAccountTypesLoading}
+                          placeholder="Select institution account type..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Select the account type that best describes your institution
+                        </p>
+                      </div>
+
+                      {/* Institution Type - Side by side */}
+                      <div>
+                        <CustomSelect
+                          id="institution_type_id"
+                          label="Institution Type"
+                          name="institution_type_id"
+                          options={institutionTypeOptions}
+                          onChange={(option) => {
+                            if (option) {
+                              const value = option.value;
+                              setFieldValue("institution_type_id", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                institution_type_id: value,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "institution_type_id",
+                                  value: value,
+                                })
+                              );
+                            }
+                          }}
+                          value={institutionTypeOptions.find(
+                            (opt) => opt.value === values.institution_type_id
+                          )}
+                          onBlur={handleBlur}
+                          touched={touched.institution_type_id}
+                          error={errors.institution_type_id}
+                          required={true}
+                          isLoading={!institutionTypes || institutionTypes.length === 0}
+                          placeholder="Select institution type..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Select the type that best describes your institution
+                        </p>
+                      </div>
                     </div>
 
                     {/* Business Name and Registration Number on same row */}
@@ -3388,8 +3475,8 @@ const Institution = () => {
                       )}
                     </div>
 
-                    {/* Industry Type on full row */}
-                    <div className="mb-6">
+                    {/* Industry Type and Annual Currency - Side by side */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <CustomSelect
                         id="industry_type"
                         label="Industry Type"
@@ -3409,10 +3496,54 @@ const Institution = () => {
                         required={true}
                         placeholder="Select Industry Type"
                       />
+
+                      <CustomSelect
+                        id="annual_equivalent_amount_currency"
+                        label="Annual Equivalent Amount Currency"
+                        options={currencyOptions}
+                        onChange={(option) => {
+                          if (option) {
+                            setFieldValue("annual_equivalent_amount_currency", option.value);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              annual_equivalent_amount_currency: option.value,
+                            }));
+                            dispatch(setSelectedTransactionCurrency(option.value));
+                          }
+                        }}
+                        value={currencyOptions.find(
+                          (opt) => opt.value === values.annual_equivalent_amount_currency
+                        )}
+                        onBlur={handleBlur}
+                        touched={touched.annual_equivalent_amount_currency}
+                        error={errors.annual_equivalent_amount_currency}
+                        placeholder="Select currency"
+                        isLoading={transactionCurrenciesLoading}
+                        required={false}
+                      />
                     </div>
 
-                    {/* Purpose of Account */}
-                    <div className="mt-4">
+                    {/* Annual Equivalent Amount and Purpose of Account - Side by side */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <FormField
+                        id="annual_equivalent_amount"
+                        label="Annual Equivalent Amount"
+                        name="annual_equivalent_amount"
+                        type="text"
+                        value={values.annual_equivalent_amount || ""}
+                        onChange={enhancedHandleChange(
+                          "annual_equivalent_amount",
+                          setFieldValue,
+                        )}
+                        onBlur={handleBlur}
+                        onFocus={() => setActiveField("annual_equivalent_amount")}
+                        touched={touched.annual_equivalent_amount}
+                        error={errors.annual_equivalent_amount}
+                        placeholder="e.g., 1000000.00"
+                        activeField={activeField}
+                        fieldStyles={FIELD_STYLES}
+                      />
+
                       <FormField
                         id="purpose_of_account"
                         label="Purpose of Account"
@@ -3427,6 +3558,186 @@ const Institution = () => {
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
+
+                      <div>
+                        <CustomSelect
+                          id="no_of_trading_names"
+                          label="Number of Trading Names"
+                          options={[
+                            { value: 1, label: "1" },
+                            { value: 2, label: "2" },
+                            { value: 3, label: "3" },
+                            { value: 4, label: "4" },
+                            { value: 5, label: "5" },
+                            { value: 6, label: "6" },
+                            { value: 7, label: "7" },
+                            { value: 8, label: "8" },
+                            { value: 9, label: "9" },
+                            { value: 10, label: "10" },
+                          ]}
+                          onChange={(option) => {
+                            if (option) {
+                              const count = option.value;
+                              setFieldValue("no_of_trading_names", count);
+                              setFieldValue("trading_names_list", Array(count).fill(""));
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                no_of_trading_names: count,
+                                trading_names_list: Array(count).fill(""),
+                              }));
+                            } else {
+                              setFieldValue("no_of_trading_names", 0);
+                              setFieldValue("trading_names_list", []);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                no_of_trading_names: 0,
+                                trading_names_list: [],
+                              }));
+                            }
+                          }}
+                          value={
+                            values.no_of_trading_names
+                              ? { value: values.no_of_trading_names, label: values.no_of_trading_names.toString() }
+                              : null
+                          }
+                          onBlur={handleBlur}
+                          touched={touched.no_of_trading_names}
+                          error={errors.no_of_trading_names}
+                          required={false}
+                          placeholder="Select number of trading names..."
+                          isLoading={false}
+                          isClearable={true}
+                        />
+                        {/* <p className="text-xs text-gray-500 mt-1">
+                          Select how many trading names your business operates under 
+                        </p> */}
+                      </div>
+
+                      {/* Dynamic Trading Names Input Fields - Plain text fields, no icons */}
+                      {values.no_of_trading_names > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <h4 className="text-md font-medium text-gray-800 mb-4">
+                            Trading Names
+                          </h4>
+
+                          <div className="space-y-3">
+                            {[...Array(values.no_of_trading_names)].map((_, index) => (
+                              <motion.div
+                                key={index}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.2, delay: index * 0.05 }}
+                              >
+                                <FormField
+                                  id={`trading_name_${index}`}
+                                  label={`Trading Name ${index + 1}`}
+                                  name={`trading_names_list[${index}]`}
+                                  value={values.trading_names_list?.[index] || ""}
+                                  onChange={(e) => {
+                                    const updatedList = [...(values.trading_names_list || [])];
+                                    updatedList[index] = e.target.value;
+                                    setFieldValue("trading_names_list", updatedList);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      trading_names_list: updatedList,
+                                    }));
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField(`trading_name_${index}`)}
+                                  touched={touched.trading_names_list?.[index]}
+                                  error={errors.trading_names_list?.[index]}
+                                  required={false}
+                                  placeholder={`Enter trading name ${index + 1}`}
+                                  activeField={activeField}
+                                  fieldStyles={FIELD_STYLES}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+
+                      <div>
+                        <FormField
+                          id="business_website_social_media"
+                          label="Social Media or Website "
+                          name="business_website_social_media"
+                          value={values.business_website_social_media || ""}
+                          onChange={enhancedHandleChange("business_website_social_media", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("business_website_social_media")}
+                          touched={touched.business_website_social_media}
+                          error={errors.business_website_social_media}
+                          required={false}
+                          placeholder="https://www.example.com or @socialmediahandle"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        {/* <p className="text-xs text-gray-500 mt-1">
+                          Enter your company website URL or social media profile link
+                        </p> */}
+                      </div>
+
+                      {values.institution_type_id && (
+                        (() => {
+                          const selectedInstitutionType = institutionTypeOptions.find(
+                            opt => opt.value === values.institution_type_id
+                          );
+                          const isTrustType = selectedInstitutionType?.label?.toLowerCase() === 'trust';
+
+                          return isTrustType ? (
+                            <div>
+                              <FormField
+                                id="trust_purpose"
+                                label="Purpose of the Trust Account"
+                                name="trust_purpose"
+                                as="textarea"
+                                rows={3}
+                                value={values.trust_purpose || ""}
+                                onChange={enhancedHandleChange("trust_purpose", setFieldValue)}
+                                onBlur={handleBlur}
+                                onFocus={() => setActiveField("trust_purpose")}
+                                touched={touched.trust_purpose}
+                                error={errors.trust_purpose}
+                                required={false}
+                                placeholder="Please describe the purpose of this trust account"
+                                activeField={activeField}
+                                fieldStyles={FIELD_STYLES}
+                              />
+                              {/* <p className="text-xs text-gray-500 mt-1">
+                                  Provide information about the trust's purpose, beneficiaries, and intended use 
+                                </p> */}
+                            </div>
+                          ) : null;
+                        })()
+                      )}
+
+                      <div className="mt-4">
+                        <FormField
+                          id="tax_id"
+                          label="Tax ID "
+                          name="tax_id"
+                          value={values.tax_id || ""}
+                          onChange={enhancedHandleChange("tax_id", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("tax_id")}
+                          touched={touched.tax_id}
+                          error={errors.tax_id}
+                          required={false}
+                          placeholder="XX-XXXXXXX or Tax Registration Number"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        {/* <p className="text-xs text-gray-500 mt-1">
+                          Enter your Tax ID (EIN for US entities, TRN for other countries)
+                        </p> */}
+                      </div>
+
                     </div>
 
                     {/* Business Payment Information */}

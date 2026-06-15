@@ -711,6 +711,51 @@ export const submitTransaction = createAsyncThunk(
   },
 );
 
+export const checkTransactionLimit = createAsyncThunk(
+  "remittance/checkTransactionLimit",
+  async ({ destinationCurrencyCode, amount }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("bearertoken");
+      
+      if (!token) {
+        return rejectWithValue("Authentication required");
+      }
+
+      console.log("🔍 Checking transaction limit:", {
+        destinationCurrencyCode,
+        amount,
+      });
+
+      const response = await axios.get(
+        `${API_URL}/destination-currency-transaction-limit-check/${destinationCurrencyCode}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("✅ Transaction limit response:", response.data);
+
+      // Extract limit from response.data.data.transaction_limit and convert to number
+      const limitValue = parseFloat(response.data?.data?.transaction_limit) || Infinity;
+
+      console.log("📊 Extracted limit:", limitValue, "Comparing with amount:", amount);
+
+      return {
+        limit: limitValue,
+        currentAmount: amount,
+        destinationCurrency: destinationCurrencyCode,
+        rawResponse: response.data,
+      };
+    } catch (error) {
+      console.error("❌ Error checking transaction limit:", error);
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  }
+);
+
 const initialState = {
   step: 1,
   formData: {
