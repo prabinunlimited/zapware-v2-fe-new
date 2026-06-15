@@ -3729,7 +3729,7 @@ const Institution = () => {
                           touched={touched.tax_id}
                           error={errors.tax_id}
                           required={false}
-                          placeholder=""
+                          placeholder="XX-XXXXXXX or Tax Registration Number"
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />

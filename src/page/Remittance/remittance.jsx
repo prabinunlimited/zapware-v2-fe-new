@@ -61,6 +61,7 @@ import {
   fetchManualAccountDetails,
   setExchangeRateData,
   clearExchangeRateData,
+  checkTransactionLimit,
 } from "./slices/remittanceSlice";
 
 import { fetchAllStaticData } from "./slices/staticDataSlice";
@@ -168,6 +169,16 @@ const Remittance = () => {
     isRecurring: "0",
     frequency: "",
     custom_days: "",
+  });
+
+  const [showLimitExceededModal, setShowLimitExceededModal] = useState(false);
+  const [isCheckingLimit, setIsCheckingLimit] = useState(false);
+  const [limitExceededData, setLimitExceededData] = useState({
+    limit: 0,
+    amount: 0,
+    currency: "",
+    sendAmount: 0,
+    sendCurrency: "",
   });
 
   // Refs for preventing duplicate API calls
@@ -1521,9 +1532,10 @@ const Remittance = () => {
     setShowConfirmPopup(false);
   }, []);
 
-  const handleNextStep = useCallback(() => {
+  const handleNextStep = useCallback(async () => {
     if (step === 1) {
       const sendNum = parseFloat(formData.sendAmount || 0);
+      const receiveNum = parseFloat(formData.receiveAmount || 0);
       if (isNaN(sendNum) || sendNum < 5) {
         setAmountError(`Minimum send amount is ${formData.sendCurrency?.value || 'USD'} 5.00`);
         return;
@@ -1543,16 +1555,47 @@ const Remittance = () => {
         }
       }
 
-      dispatch(setStep(2));
+      // 👇 NEW CODE: Check transaction limit
+      setIsCheckingLimit(true);
+      try {
+        const destinationCurrency = formData.receiveCurrency?.value || formData.receiveCurrency?.currency_code;
 
-      setTimeout(() => {
-        pageTopRef.current?.scrollIntoView({
-          behavior: "instant",
-          block: "start",
-        });
-      }, 0);
+        const result = await dispatch(checkTransactionLimit({
+          destinationCurrencyCode: destinationCurrency,
+          amount: receiveNum,
+        })).unwrap();
+
+        const limit = result.limit;
+        if (limit !== undefined && receiveNum > limit) {
+          setLimitExceededData({
+            limit: limit,
+            amount: receiveNum,
+            currency: destinationCurrency,
+            sendAmount: sendNum,
+            sendCurrency: formData.sendCurrency?.value || 'USD',
+          });
+          setShowLimitExceededModal(true);
+          setIsCheckingLimit(false);
+          return;
+        }
+
+        dispatch(setStep(2));
+        setTimeout(() => {
+          pageTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+        }, 0);
+      } catch (error) {
+        console.error("Limit check failed, proceeding:", error);
+        dispatch(setStep(2));
+        setTimeout(() => {
+          pageTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+        }, 0);
+      } finally {
+        setIsCheckingLimit(false);
+      }
+      // 👆 END NEW CODE
+
     } else if (step === 2) {
-      // Basic validations
+      // Keep your existing step 2 code exactly as is
       if (!selectedBeneficiary) {
         console.log("Validation failed: No beneficiary selected");
         return;
@@ -1568,7 +1611,6 @@ const Remittance = () => {
         return;
       }
 
-      // Manual payment method validation
       if (formData.paymentMethod === "manual") {
         if (!formData.document) {
           console.log("Validation failed: No document uploaded for manual payment");
@@ -1576,27 +1618,21 @@ const Remittance = () => {
         }
       }
 
-      // Bank transfer validations
       if (formData.paymentMethod === "bank") {
-        // For USD transfers, need Sila bank account
         if (formData.sendCurrency?.value === "USD") {
           if (!hasSilaAccounts || silaBankAccounts.length === 0) {
             console.log("Validation failed: No Sila accounts available for USD");
             return;
           }
-
           if (!selectedSilaBankAccount) {
             console.log("Validation failed: No Sila bank account selected for USD");
             return;
           }
-
           if (!selectedSilaBankAccount.web_debit_verified) {
             console.log("Validation failed: Selected Sila account not verified");
             return;
           }
         }
-
-        // For all bank transfers, need beneficiary bank selected
         if (!selectedBank) {
           console.log("Validation failed: No beneficiary bank selected");
           return;
@@ -1605,28 +1641,18 @@ const Remittance = () => {
 
       console.log("✅ All validations passed, moving to step 3");
       dispatch(setStep(3));
-
       setTimeout(() => {
-        pageTopRef.current?.scrollIntoView({
-          behavior: "instant",
-          block: "start",
-        });
+        pageTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
       }, 0);
     } else if (step === 3) {
       if (!formData.agreeToTerms) {
         console.log("Validation failed: Terms not agreed");
         return;
       }
-
-      if (
-        formData.paymentMethod === "bank" &&
-        formData.sendCurrency?.value === "USD" &&
-        !selectedSilaBankAccount
-      ) {
+      if (formData.paymentMethod === "bank" && formData.sendCurrency?.value === "USD" && !selectedSilaBankAccount) {
         console.log("Validation failed: No Sila bank account for USD transfer");
         return;
       }
-
       setShowConfirmPopup(true);
     }
   }, [
@@ -1641,6 +1667,7 @@ const Remittance = () => {
     hasSilaAccounts,
     silaBankAccounts,
     dispatch,
+    checkTransactionLimit,
   ]);
 
   const handlePreviousStep = useCallback(() => {
@@ -2563,6 +2590,95 @@ const Remittance = () => {
           </div>
         )}
 
+        {/* Transaction Limit Exceeded Modal */}
+        {showLimitExceededModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <FaExclamationTriangle className="w-6 h-6 text-white" />
+                  <h3 className="text-lg font-semibold text-white">Transaction Limit Exceeded</h3>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="space-y-4">
+                  <p className="text-slate-700">The amount you're trying to send exceeds the maximum allowed transaction limit.</p>
+
+                  <div className="bg-red-50 rounded-xl p-4 border border-red-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-slate-600">Your amount ({limitExceededData.currency}):</span>
+                      <span className="font-bold text-red-600">
+                        {limitExceededData.currency} {limitExceededData.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-slate-600">Send amount ({limitExceededData.sendCurrency}):</span>
+                      <span className="font-bold text-slate-700">
+                        {limitExceededData.sendCurrency} {limitExceededData.sendAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-red-200 pt-2 mt-2">
+                      <span className="text-sm text-slate-600">Maximum allowed:</span>
+                      <span className="font-bold text-slate-900">
+                        {limitExceededData.currency} {limitExceededData.limit?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                    <div className="flex items-start gap-3">
+                      <FaInfoCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800 mb-1">What can you do?</p>
+                        <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
+                          <li>Reduce your transfer amount to within the limit</li>
+                          <li>Contact support for higher transaction limits</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setShowLimitExceededModal(false)}
+                    className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowLimitExceededModal(false);
+                      setTimeout(() => {
+                        const amountInput = document.querySelector('input[type="text"][placeholder="0.00"]');
+                        if (amountInput) amountInput.focus();
+                      }, 100);
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
+                  >
+                    Adjust Amount
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowLimitExceededModal(false)}
+                className="absolute top-4 right-4 text-white/70 hover:text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </motion.div>
+          </div>
+        )}
+
         <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
           <ProgressSteps />
 
@@ -2620,6 +2736,7 @@ const Remittance = () => {
                         parseFloat(formData.sendAmount) < 5 ||
                         amountError || // Check if there's an amount error
                         !exchangeRateData?.fxRate ||
+                        isCheckingLimit ||
                         (formData.paymentMethod === "manual" &&
                           (!manualAccountDetails || manualAccountError)))) ||
                     (step === 2 && isStep2ButtonDisabled) ||
@@ -2631,7 +2748,12 @@ const Remittance = () => {
                   }
                   className="flex-[2] px-6 py-3.5 text-base rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? (
+                  {isCheckingLimit ? (
+                    <>
+                      <RingLoader size={18} color="#ffffff" />
+                      <span>Checking limit...</span>
+                    </>
+                  ) : loading ? (
                     <>
                       <RingLoader size={18} color="#ffffff" />
                       <span>Processing...</span>
