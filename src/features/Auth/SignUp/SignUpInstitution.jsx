@@ -569,6 +569,7 @@ const Institution = () => {
       expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
       annual_equivalent_amount_currency: mergedData.annual_equivalent_amount_currency || "",
       annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
+      business_website_social_media: mergedData.business_website_social_media || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1904,6 +1905,7 @@ const Institution = () => {
           companyphone_countrycode: finalFormData.companyphone_countrycode,
           business_email: finalFormData.business_email,
           business_website: finalFormData.business_website,
+          business_website_social_media: finalFormData.business_website_social_media || "",
           service_providers: serviceProviderIds,
           no_of_trading_names: values.no_of_trading_names || 0,
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
@@ -3605,7 +3607,7 @@ const Institution = () => {
                           isClearable={true}
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Select how many trading names your business operates under (optional)
+                          Select how many trading names your business operates under 
                         </p>
                       </div>
 
@@ -3657,6 +3659,28 @@ const Institution = () => {
                           </div>
                         </motion.div>
                       )}
+
+                      <div>
+                        <FormField
+                          id="business_website_social_media"
+                          label="Social Media or Website "
+                          name="business_website_social_media"
+                          value={values.business_website_social_media || ""}
+                          onChange={enhancedHandleChange("business_website_social_media", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("business_website_social_media")}
+                          touched={touched.business_website_social_media}
+                          error={errors.business_website_social_media}
+                          required={false}
+                          placeholder="https://www.example.com or @socialmediahandle"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Enter your company website URL or social media profile link
+                        </p>
+                      </div>
+
                     </div>
 
                     {/* Business Payment Information */}
