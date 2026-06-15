@@ -571,6 +571,9 @@ const Institution = () => {
       annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
       business_website_social_media: mergedData.business_website_social_media || "",
       trust_purpose: mergedData.trust_purpose || "",
+      tax_id: mergedData.tax_id || "",
+      registered_business_address_apartment_unit_no: mergedData.registered_business_address_apartment_unit_no || "",
+      registered_business_address_suburb: mergedData.registered_business_address_suburb || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1911,6 +1914,9 @@ const Institution = () => {
           no_of_trading_names: values.no_of_trading_names || 0,
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
           trust_purpose: finalFormData.trust_purpose || "",
+          tax_id: finalFormData.tax_id || "",
+          registered_business_address_apartment_unit_no: finalFormData.registered_business_address_apartment_unit_no || "",
+          registered_business_address_suburb: finalFormData.registered_business_address_suburb || "",
 
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
@@ -3736,6 +3742,48 @@ const Institution = () => {
                         {/* <p className="text-xs text-gray-500 mt-1">
                           Enter your Tax ID (EIN for US entities, TRN for other countries)
                         </p> */}
+                      </div>
+
+                      <div className="mt-4">
+                        <FormField
+                          id="registered_business_address_apartment_unit_no"
+                          label="Apartment Number of the business "
+                          name="registered_business_address_apartment_unit_no"
+                          value={values.registered_business_address_apartment_unit_no || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_business_address_apartment_unit_no",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("registered_business_address_apartment_unit_no")}
+                          touched={touched.registered_business_address_apartment_unit_no}
+                          error={errors.registered_business_address_apartment_unit_no}
+                          required={false}
+                          activeField={activeField}
+                          placeholder="e.g., Apt 4B, Unit 12, Suite 100"
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <FormField
+                          id="registered_business_address_suburb"
+                          label="Suburb of the business"
+                          name="registered_business_address_suburb"
+                          value={values.registered_business_address_suburb || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_business_address_suburb",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("registered_business_address_suburb")}
+                          touched={touched.registered_business_address_suburb}
+                          error={errors.registered_business_address_suburb}
+                          required={false}
+                          activeField={activeField}
+                          placeholder="Enter suburb/district"
+                          fieldStyles={FIELD_STYLES}
+                        />
                       </div>
 
                     </div>
