@@ -570,7 +570,7 @@ const Institution = () => {
       annual_equivalent_amount_currency: mergedData.annual_equivalent_amount_currency || "",
       annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
       business_website_social_media: mergedData.business_website_social_media || "",
-      trust_purpose: mergedData.trust_purpose || "", 
+      trust_purpose: mergedData.trust_purpose || "",
       // Add dob_error state
       dob_error: "",
 
@@ -1911,7 +1911,7 @@ const Institution = () => {
           no_of_trading_names: values.no_of_trading_names || 0,
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
           trust_purpose: finalFormData.trust_purpose || "",
-          
+
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
             ? JSON.stringify([{
@@ -3709,13 +3709,34 @@ const Institution = () => {
                                 activeField={activeField}
                                 fieldStyles={FIELD_STYLES}
                               />
-                                {/* <p className="text-xs text-gray-500 mt-1">
+                              {/* <p className="text-xs text-gray-500 mt-1">
                                   Provide information about the trust's purpose, beneficiaries, and intended use 
                                 </p> */}
                             </div>
                           ) : null;
                         })()
                       )}
+
+                      <div className="mt-4">
+                        <FormField
+                          id="tax_id"
+                          label="Tax ID "
+                          name="tax_id"
+                          value={values.tax_id || ""}
+                          onChange={enhancedHandleChange("tax_id", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("tax_id")}
+                          touched={touched.tax_id}
+                          error={errors.tax_id}
+                          required={false}
+                          placeholder=""
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                        {/* <p className="text-xs text-gray-500 mt-1">
+                          Enter your Tax ID (EIN for US entities, TRN for other countries)
+                        </p> */}
+                      </div>
 
                     </div>
 
