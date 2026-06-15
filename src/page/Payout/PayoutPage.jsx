@@ -445,6 +445,7 @@ const PayoutPage = () => {
         if (
           serviceProviderId !== 27 &&
           serviceProviderId !== 24 &&
+          serviceProviderId !== 59 &&
           ((formValues.from === "GBP" && formValues.to === "GBP") ||
             (formValues.from === "GBP" && formValues.to === "DKK") ||
             (formValues.from === "GBP" && formValues.to === "EUR") ||
@@ -694,6 +695,7 @@ const PayoutPage = () => {
     )
       return true;
     if (toServiceProviderInr === 41) return true;
+    if (toServiceProviderInr === 59) return true;
     return false;
   };
 
@@ -711,7 +713,8 @@ const PayoutPage = () => {
       toServiceProviderInr !== 49
     )
       return true;
-    if (toServiceProviderInr === 49 || toServiceProviderInr === 41) return true;
+    if (toServiceProviderInr === 49 || toServiceProviderInr === 41 ||
+      toServiceProviderInr === 59) return true;
     return false;
   };
 
