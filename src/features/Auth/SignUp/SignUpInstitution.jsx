@@ -570,6 +570,7 @@ const Institution = () => {
       annual_equivalent_amount_currency: mergedData.annual_equivalent_amount_currency || "",
       annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
       business_website_social_media: mergedData.business_website_social_media || "",
+      trust_purpose: mergedData.trust_purpose || "", 
       // Add dob_error state
       dob_error: "",
 
@@ -1909,7 +1910,8 @@ const Institution = () => {
           service_providers: serviceProviderIds,
           no_of_trading_names: values.no_of_trading_names || 0,
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
-
+          trust_purpose: finalFormData.trust_purpose || "",
+          
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
             ? JSON.stringify([{
@@ -3606,9 +3608,9 @@ const Institution = () => {
                           isLoading={false}
                           isClearable={true}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
+                        {/* <p className="text-xs text-gray-500 mt-1">
                           Select how many trading names your business operates under 
-                        </p>
+                        </p> */}
                       </div>
 
                       {/* Dynamic Trading Names Input Fields - Plain text fields, no icons */}
@@ -3676,10 +3678,44 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
+                        {/* <p className="text-xs text-gray-500 mt-1">
                           Enter your company website URL or social media profile link
-                        </p>
+                        </p> */}
                       </div>
+
+                      {values.institution_type_id && (
+                        (() => {
+                          const selectedInstitutionType = institutionTypeOptions.find(
+                            opt => opt.value === values.institution_type_id
+                          );
+                          const isTrustType = selectedInstitutionType?.label?.toLowerCase() === 'trust';
+
+                          return isTrustType ? (
+                            <div>
+                              <FormField
+                                id="trust_purpose"
+                                label="Purpose of the Trust Account"
+                                name="trust_purpose"
+                                as="textarea"
+                                rows={3}
+                                value={values.trust_purpose || ""}
+                                onChange={enhancedHandleChange("trust_purpose", setFieldValue)}
+                                onBlur={handleBlur}
+                                onFocus={() => setActiveField("trust_purpose")}
+                                touched={touched.trust_purpose}
+                                error={errors.trust_purpose}
+                                required={false}
+                                placeholder="Please describe the purpose of this trust account"
+                                activeField={activeField}
+                                fieldStyles={FIELD_STYLES}
+                              />
+                                {/* <p className="text-xs text-gray-500 mt-1">
+                                  Provide information about the trust's purpose, beneficiaries, and intended use 
+                                </p> */}
+                            </div>
+                          ) : null;
+                        })()
+                      )}
 
                     </div>
 
