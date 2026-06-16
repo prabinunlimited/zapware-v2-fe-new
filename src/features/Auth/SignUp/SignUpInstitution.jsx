@@ -572,8 +572,17 @@ const Institution = () => {
       business_website_social_media: mergedData.business_website_social_media || "",
       trust_purpose: mergedData.trust_purpose || "",
       tax_id: mergedData.tax_id || "",
+
       registered_business_address_apartment_unit_no: mergedData.registered_business_address_apartment_unit_no || "",
       registered_business_address_suburb: mergedData.registered_business_address_suburb || "",
+
+      principal_business_address_country: mergedData.principal_business_address_country || "",
+      principal_business_address_postal_code: mergedData.principal_business_address_postal_code || "",
+      principal_business_street: mergedData.principal_business_street || "",
+      principal_business_address_city: mergedData.principal_business_address_city || "",
+      principal_business_address_state: mergedData.principal_business_address_state || "",
+      same_as_registered_address: mergedData.same_as_registered_address !== undefined ? mergedData.same_as_registered_address : "",
+
       // Add dob_error state
       dob_error: "",
 
@@ -1915,8 +1924,16 @@ const Institution = () => {
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
           trust_purpose: finalFormData.trust_purpose || "",
           tax_id: finalFormData.tax_id || "",
+
           registered_business_address_apartment_unit_no: finalFormData.registered_business_address_apartment_unit_no || "",
           registered_business_address_suburb: finalFormData.registered_business_address_suburb || "",
+          
+          principal_business_address_country: findCountryId(finalFormData.principal_business_address_country),
+          same_as_registered_address: finalFormData.same_as_registered_address || 0,
+          principal_business_address_postal_code: finalFormData.principal_business_address_postal_code,
+          principal_business_street: finalFormData.principal_business_street,
+          principal_business_address_city: finalFormData.principal_business_address_city,
+          principal_business_address_state: finalFormData.principal_business_address_state,
 
           has_nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
@@ -3131,6 +3148,45 @@ const Institution = () => {
             [dispatch, countryOptions, setFieldValue],
           );
 
+          const handlePrincipalZipLookup = useCallback(
+            async (zipCode, countryId) => {
+              const country = countryOptions.find(
+                (opt) => opt.value === countryId,
+              );
+              if (!country || !country.country_code) return;
+
+              setIsZipLoading(true);
+              setZipApiError(null);
+
+              try {
+                const result = await dispatch(
+                  fetchLocationByZip({
+                    countryCode: country.country_code,
+                    zipCode: zipCode,
+                  }),
+                ).unwrap();
+
+                if (result.success) {
+                  if (result.city) {
+                    setFieldValue("principal_business_address_city", result.city);
+                    toast.success(`City auto-filled: ${result.city}`, { autoClose: 2000 });
+                  }
+                  if (result.state) {
+                    setFieldValue("principal_business_address_state", result.state);
+                    toast.success(`State auto-filled: ${result.state}`, { autoClose: 2000 });
+                  }
+                } else {
+                  toast.warning(`Could not auto-fill location for ZIP code: ${zipCode}`, { autoClose: 3000 });
+                }
+              } catch (error) {
+                toast.warning(`Invalid ZIP code or service unavailable`, { autoClose: 3000 });
+              } finally {
+                setIsZipLoading(false);
+              }
+            },
+            [dispatch, countryOptions, setFieldValue],
+          );
+
           const handleResponsiblePersonZipLookup = useCallback(
             async (zipCode, countryId) => {
               const country = countryOptions.find(
@@ -3743,49 +3799,6 @@ const Institution = () => {
                           Enter your Tax ID (EIN for US entities, TRN for other countries)
                         </p> */}
                       </div>
-
-                      <div className="mt-4">
-                        <FormField
-                          id="registered_business_address_apartment_unit_no"
-                          label="Apartment Number of the business "
-                          name="registered_business_address_apartment_unit_no"
-                          value={values.registered_business_address_apartment_unit_no || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_business_address_apartment_unit_no",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_business_address_apartment_unit_no")}
-                          touched={touched.registered_business_address_apartment_unit_no}
-                          error={errors.registered_business_address_apartment_unit_no}
-                          required={false}
-                          activeField={activeField}
-                          placeholder="e.g., Apt 4B, Unit 12, Suite 100"
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <FormField
-                          id="registered_business_address_suburb"
-                          label="Suburb of the business"
-                          name="registered_business_address_suburb"
-                          value={values.registered_business_address_suburb || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_business_address_suburb",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_business_address_suburb")}
-                          touched={touched.registered_business_address_suburb}
-                          error={errors.registered_business_address_suburb}
-                          required={false}
-                          activeField={activeField}
-                          placeholder="Enter suburb/district"
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
                     </div>
 
                     {/* Business Payment Information */}
@@ -4466,89 +4479,6 @@ const Institution = () => {
 
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
-                        Country Information
-                      </h3>
-
-                      {/* Country of Registration and Primary Country of Operation on same row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        {/* <CustomSelect
-                            id="country_of_registration"
-                            label="Country of Registration"
-                            options={countryOptions}
-                            onChange={enhancedSelectChange(
-                              "country_of_registration",
-                              setFieldValue,
-                            )}
-                            value={countryOptions.find(
-                              (opt) =>
-                                opt.value === values.country_of_registration,
-                            )}
-                            touched={touched.country_of_registration}
-                            error={errors.country_of_registration}
-                            required // ← ADD THIS LINE
-                            isLoading={countriesLoading}
-                            isCountryField={true}
-                            showPhoneCode={false}
-                          /> */}
-                        <CustomSelect
-                          id="country_of_operation"
-                          label="Primary Country of Operation"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "country_of_operation",
-                            setFieldValue,
-                          )}
-                          value={countryOptions.find(
-                            (opt) => opt.value === values.country_of_operation,
-                          )}
-                          touched={touched.country_of_operation}
-                          error={errors.country_of_operation}
-                          required // ← This one already has required (good)
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        />
-                      </div>
-
-                      {/* Additional Operating Countries on full row */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Additional Operating Countries (Optional)
-                        </label>
-                        <Select
-                          isMulti
-                          options={countryOptions}
-                          value={countryOptions.filter((opt) =>
-                            values.operating_countries?.includes(opt.value),
-                          )}
-                          onChange={(selectedOptions) => {
-                            setFieldValue(
-                              "operating_countries",
-                              selectedOptions
-                                ? selectedOptions.map((opt) => opt.value)
-                                : [],
-                            );
-                          }}
-                          placeholder="Select countries..."
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                          styles={{
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "50px",
-                              borderColor: "#d1d5db",
-                              borderRadius: "0.5rem",
-                              "&:hover": {
-                                borderColor: "#9ca3af",
-                              },
-                            }),
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-8">
-                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
                         Registered Address
                       </h3>
 
@@ -4692,41 +4622,52 @@ const Institution = () => {
                         />
                       </div>
 
-                      {/* 5. State */}
-                      <div className="mb-4">
+                      {/* State/Province & Apartment Number - SIDE BY SIDE */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           id="registered_address_street_state"
                           label="State/Province"
                           name="registered_address_street_state"
                           value={values.registered_address_street_state || ""}
-                          onChange={enhancedHandleChange(
-                            "registered_address_street_state",
-                            setFieldValue,
-                          )}
+                          onChange={enhancedHandleChange("registered_address_street_state", setFieldValue)}
                           onBlur={handleBlur}
-                          onFocus={() =>
-                            setActiveField("registered_address_street_state")
-                          }
+                          onFocus={() => setActiveField("registered_address_street_state")}
                           touched={touched.registered_address_street_state}
                           error={errors.registered_address_street_state}
                           required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
+                       <FormField
+                          id="registered_business_address_apartment_unit_no"
+                          label="Apartment Number of the business"
+                          name="registered_business_address_apartment_unit_no"
+                          value={values.registered_business_address_apartment_unit_no || ""}
+                          onChange={enhancedHandleChange(
+                            "registered_business_address_apartment_unit_no",
+                            setFieldValue,
+                          )}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("registered_business_address_apartment_unit_no")}
+                          touched={touched.registered_business_address_apartment_unit_no}
+                          error={errors.registered_business_address_apartment_unit_no}
+                          required
+                          activeField={activeField}
+                          placeholder="e.g., Apt 4B, Unit 12, Suite 100"
+                          fieldStyles={FIELD_STYLES}
+                        />
+
                       </div>
 
-                      {/* Date of Incorporation on full row */}
-                      <div className="mt-4">
+                      {/* Date of Incorporation & Suburb of the business - SIDE BY SIDE */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <FormField
                           id="date_incorporation"
                           label="Date of Incorporation"
                           name="date_incorporation"
                           type="date"
                           value={values.date_incorporation || ""}
-                          onChange={enhancedHandleChange(
-                            "date_incorporation",
-                            setFieldValue,
-                          )}
+                          onChange={enhancedHandleChange("date_incorporation", setFieldValue)}
                           onBlur={handleBlur}
                           onFocus={() => setActiveField("date_incorporation")}
                           touched={touched.date_incorporation}
@@ -4735,9 +4676,256 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
+                        <FormField
+                          id="registered_business_address_suburb"
+                          label="Suburb of the business"
+                          name="registered_business_address_suburb"
+                          value={values.registered_business_address_suburb || ""}
+                          onChange={enhancedHandleChange("registered_business_address_suburb", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("registered_business_address_suburb")}
+                          touched={touched.registered_business_address_suburb}
+                          error={errors.registered_business_address_suburb}
+                          required={false}
+                          activeField={activeField}
+                          placeholder="Enter suburb/district"
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+                    </div>
+
+                    {/* ========== PRINCIPAL ADDRESS ========== */}
+                    <div className="mt-8">
+                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
+                        Principal Address
+                      </h3>
+
+                      {/* Same as Registered Address Radio Buttons */}
+                      <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Is Principal Business Address same as Registered Address?
+                        </label>
+                        <div className="flex items-center space-x-6">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="same_as_registered_address"
+                              value="1"
+                              checked={values.same_as_registered_address === 1 || values.same_as_registered_address === "1"}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                setFieldValue("same_as_registered_address", value);
+                                setLocalFormData((prev) => ({ ...prev, same_as_registered_address: value }));
+                                dispatch(setFormField({ field: "same_as_registered_address", value }));
+
+                                if (value === 1 || value === "1") {
+                                  // Auto-fill principal address with registered address
+                                  setFieldValue("principal_business_address_country", values.registered_address_street_country);
+                                  setFieldValue("principal_business_address_postal_code", values.registered_address_street_zip);
+                                  setFieldValue("principal_business_street", values.registered_address_street_1);
+                                  setFieldValue("principal_business_address_city", values.registered_address_street_city);
+                                  setFieldValue("principal_business_address_state", values.registered_address_street_state);
+                                  setFieldValue("principal_business_address_apartment_unit_no", values.registered_business_address_apartment_unit_no || "");
+                                  setFieldValue("principal_business_address_suburb", values.registered_business_address_suburb || "");
+
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_address_country: values.registered_address_street_country,
+                                    principal_business_address_postal_code: values.registered_address_street_zip,
+                                    principal_business_street: values.registered_address_street_1,
+                                    principal_business_address_city: values.registered_address_street_city,
+                                    principal_business_address_state: values.registered_address_street_state,
+                                    principal_business_address_apartment_unit_no: values.registered_business_address_apartment_unit_no || "",
+                                    principal_business_address_suburb: values.registered_business_address_suburb || "",
+                                  }));
+                                }
+                              }}
+                              className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Yes</span>
+                          </label>
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="same_as_registered_address"
+                              value="0"
+                              checked={values.same_as_registered_address === 0 || values.same_as_registered_address === "0"}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                setFieldValue("same_as_registered_address", value);
+                                setLocalFormData((prev) => ({ ...prev, same_as_registered_address: value }));
+                                dispatch(setFormField({ field: "same_as_registered_address", value }));
+
+                                if (value === 0 || value === "0") {
+                                  // Clear principal address fields
+                                  setFieldValue("principal_business_address_country", "");
+                                  setFieldValue("principal_business_address_postal_code", "");
+                                  setFieldValue("principal_business_street", "");
+                                  setFieldValue("principal_business_address_city", "");
+                                  setFieldValue("principal_business_address_state", "");
+                                  setFieldValue("principal_business_address_apartment_unit_no", "");
+                                  setFieldValue("principal_business_address_suburb", "");
+
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    principal_business_address_country: "",
+                                    principal_business_address_postal_code: "",
+                                    principal_business_street: "",
+                                    principal_business_address_city: "",
+                                    principal_business_address_state: "",
+                                    principal_business_address_apartment_unit_no: "",
+                                    principal_business_address_suburb: "",
+                                  }));
+                                }
+                              }}
+                              className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">No</span>
+                          </label>
+                        </div>
                       </div>
 
+                      {/* Principal Address Fields */}
+                      <div className={`space-y-4 ${values.same_as_registered_address === 1 ? "opacity-60" : ""}`}>
+                        {/* Country */}
+                        <div className="mb-4">
+                          <CustomSelect
+                            id="principal_business_address_country"
+                            label=" Country"
+                            options={countryOptions}
+                            onChange={enhancedSelectChange("principal_business_address_country", setFieldValue)}
+                            value={countryOptions.find((opt) => opt.value === values.principal_business_address_country)}
+                            touched={touched.principal_business_address_country}
+                            error={errors.principal_business_address_country}
+                            required
+                            isLoading={countriesLoading}
+                            isCountryField={true}
+                            showPhoneCode={false}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                        </div>
+
+                        {/* ZIP/Postal Code */}
+                        <div className="mb-4">
+                          <FormField
+                            id="principal_business_address_postal_code"
+                            label="ZIP/Postal Code"
+                            name="principal_business_address_postal_code"
+                            value={values.principal_business_address_postal_code || ""}
+                            onChange={(e) => {
+                              const zipCode = e.target.value;
+                              enhancedHandleChange("principal_business_address_postal_code", setFieldValue)(e);
+                              if (zipDebounceTimer) clearTimeout(zipDebounceTimer);
+                              const timer = setTimeout(() => {
+                                const countryId = values.principal_business_address_country;
+                                if (zipCode && countryId && zipCode.replace(/\s+/g, "").length >= 3) {
+                                  handlePrincipalZipLookup(zipCode, countryId);
+                                }
+                              }, 1000);
+                              setZipDebounceTimer(timer);
+                            }}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_address_postal_code")}
+                            touched={touched.principal_business_address_postal_code}
+                            error={errors.principal_business_address_postal_code}
+                            required
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                        </div>
+
+                        {/* Street Address */}
+                        <div className="mb-4">
+                          <FormField
+                            id="principal_business_street"
+                            label=" Street Address"
+                            name="principal_business_street"
+                            value={values.principal_business_street || ""}
+                            onChange={enhancedHandleChange("principal_business_street", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_street")}
+                            touched={touched.principal_business_street}
+                            error={errors.principal_business_street}
+                            required
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                        </div>
+
+                        {/* City & State */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            id="principal_business_address_city"
+                            label="City"
+                            name="principal_business_address_city"
+                            value={values.principal_business_address_city || ""}
+                            onChange={enhancedHandleChange("principal_business_address_city", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_address_city")}
+                            touched={touched.principal_business_address_city}
+                            error={errors.principal_business_address_city}
+                            required
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                          <FormField
+                            id="principal_business_address_state"
+                            label="State/Province"
+                            name="principal_business_address_state"
+                            value={values.principal_business_address_state || ""}
+                            onChange={enhancedHandleChange("principal_business_address_state", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_address_state")}
+                            touched={touched.principal_business_address_state}
+                            error={errors.principal_business_address_state}
+                            required
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            id="principal_business_address_apartment_unit_no"
+                            label="Number of the address of the business"
+                            name="principal_business_address_apartment_unit_no"
+                            value={values.principal_business_address_apartment_unit_no || ""}
+                            onChange={enhancedHandleChange("principal_business_address_apartment_unit_no", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_address_apartment_unit_no")}
+                            touched={touched.principal_business_address_apartment_unit_no}
+                            error={errors.principal_business_address_apartment_unit_no}
+                            required
+                            activeField={activeField}
+                            placeholder="e.g., Apt 4B, Suite 100, Unit 12"
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                          <FormField
+                            id="principal_business_address_suburb"
+                            label="Suburb the business is located in"
+                            name="principal_business_address_suburb"
+                            value={values.principal_business_address_suburb || ""}
+                            onChange={enhancedHandleChange("principal_business_address_suburb", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("principal_business_address_suburb")}
+                            touched={touched.principal_business_address_suburb}
+                            error={errors.principal_business_address_suburb}
+                            required={false}
+                            activeField={activeField}
+                            placeholder="Enter suburb/district"
+                            fieldStyles={FIELD_STYLES}
+                            disabled={values.same_as_registered_address === 1}
+                          />
+                        </div>
+
+                      </div>
                     </div>
+
                   </motion.div>
                 )}
 
