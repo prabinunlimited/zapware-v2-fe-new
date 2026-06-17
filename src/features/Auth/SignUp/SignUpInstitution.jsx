@@ -543,6 +543,11 @@ const Institution = () => {
       controller_designation: "",
       controller_ssn: "",
       is_controller: "",
+      controllerHouseNumber: mergedData.controllerHouseNumber || "",
+      percentage_of_shares: mergedData.percentage_of_shares || "",
+      suburb: mergedData.suburb || "",
+      controller_past_nationalities: mergedData.controller_past_nationalities || [],
+      aliases: mergedData.aliases || "",
       purpose_of_account: mergedData.purpose_of_account || "",
       employees_number: mergedData.employees_number || "",
 
@@ -1898,6 +1903,30 @@ const Institution = () => {
           nominee_middle_name,
           nominee_last_name,
           trading_names_list,
+          controller_first_name,
+          controller_middle_name,
+          controller_last_name,
+          controller_city,
+          controller_confirm_password,
+          controller_gender,
+          controller_state,
+          controller_street_address_1,
+          controller_street_address_2,
+          controller_resident_country,
+          controller_nationality,
+          controller_zip_code,
+          controller_ssn,
+          controller_dob,
+          controller_password,
+          controller_country,
+          controller_mobile_number,
+          controller_mobilenumber_countrycode,
+          controller_designation,
+          controllerHouseNumber,
+          percentage_of_shares,   
+          suburb, 
+          controller_past_nationalities, 
+          aliases,
           ...restFormData
         } = finalFormData;
 
@@ -1927,7 +1956,7 @@ const Institution = () => {
 
           registered_business_address_apartment_unit_no: finalFormData.registered_business_address_apartment_unit_no || "",
           registered_business_address_suburb: finalFormData.registered_business_address_suburb || "",
-          
+
           principal_business_address_country: findCountryId(finalFormData.principal_business_address_country),
           same_as_registered_address: finalFormData.same_as_registered_address || 0,
           principal_business_address_postal_code: finalFormData.principal_business_address_postal_code,
@@ -1995,6 +2024,13 @@ const Institution = () => {
             finalFormData.controller_street_address_2 || "",
           controllerGender: finalFormData.controller_gender,
           controllerSsn: finalFormData.controller_ssn,
+          controllerHouseNumber: controllerHouseNumber || "",
+          percentage_of_shares: percentage_of_shares || "",
+          suburb: suburb || "",
+          controller_past_nationalities: controller_past_nationalities?.length
+          ? JSON.stringify(controller_past_nationalities)
+          : "",
+          aliases: aliases || "",
 
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
@@ -2387,6 +2423,9 @@ const Institution = () => {
           controller_designation: values.designation,
           controller_ssn: values.ssn,
           director_role_id: "",
+          controller_doc_type: values.doc_type,
+          controller_doc_id: values.doc_id,
+          controller_doc_country: values.doc_country,
         };
         Object.entries(primaryContactFields).forEach(([field, value]) => {
           if (value !== undefined && value !== null && value !== "") {
@@ -2423,7 +2462,10 @@ const Institution = () => {
             "controller_dob",
             "controller_designation",
             "controller_ssn",
-            "director_role_id"
+            "director_role_id",
+            "controller_doc_type",
+            "controller_doc_id",
+            "controller_doc_country",
           ];
           controllerFields.forEach((field) => {
             setFieldValue(field, "");
@@ -2902,6 +2944,30 @@ const Institution = () => {
                 fieldStyles={FIELD_STYLES}
               />
 
+              <CustomSelect
+                id="controller_doc_type"
+                label="ID Document Type"
+                options={idDocumentTypeOptions}
+                onChange={(option) => {
+                  if (option) {
+                    setFieldValue("controller_doc_type", option.value);
+                    dispatch(
+                      setFormField({
+                        field: "controller_doc_type",
+                        value: option.value,
+                      })
+                    );
+                  }
+                }}
+                value={idDocumentTypeOptions.find(
+                  (opt) => opt.value === values.controller_doc_type
+                )}
+                touched={touched.controller_doc_type}
+                error={errors.controller_doc_type}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+              />
+
               {(function () {
                 // Check if either USD named account OR remittance only is selected
                 const hasUSDNamedAccount = isNamedAccount;
@@ -2968,6 +3034,50 @@ const Institution = () => {
                   </div>
                 ) : null;
               })()}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                id="controller_doc_id"
+                label="ID Document Number"
+                name="controller_doc_id"
+                value={values.controller_doc_id || ""}
+                onChange={enhancedHandleChange("controller_doc_id", setFieldValue)}
+                onBlur={handleBlur}
+                onFocus={() => setActiveField("controller_doc_id")}
+                touched={touched.controller_doc_id}
+                error={errors.controller_doc_id}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                fieldStyles={FIELD_STYLES}
+                placeholder="Enter ID document number"
+              />
+              <CustomSelect
+                id="controller_doc_country"
+                label="ID Issuing Country"
+                options={countryOptions}
+                onChange={(option) => {
+                  if (option) {
+                    setFieldValue("controller_doc_country", option.value);
+                    dispatch(
+                      setFormField({
+                        field: "controller_doc_country",
+                        value: option.value,
+                      })
+                    );
+                  }
+                }}
+                value={countryOptions.find(
+                  (opt) => opt.value === values.controller_doc_country
+                )}
+                touched={touched.controller_doc_country}
+                error={errors.controller_doc_country}
+                required={values.is_controller === "no"}
+                disabled={values.is_controller === "yes"}
+                isLoading={countriesLoading}
+                isCountryField={true}
+                showPhoneCode={false}
+              />
             </div>
           </div>
         </div>
@@ -3779,7 +3889,7 @@ const Institution = () => {
                         })()
                       )}
 
-                      <div className="mt-4">
+                      <div className="mt-2">
                         <FormField
                           id="tax_id"
                           label="Tax ID "
@@ -4424,7 +4534,7 @@ const Institution = () => {
                     </div>
 
                     {/* EIN and NAICS Code on same row - FIXED CONDITION */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 mt-4">
                       {/* EIN Field - Always show if either condition is true */}
                       {(isNamedAccount || remittanceOnlyAccepted) && (
                         <FormField
@@ -4638,7 +4748,7 @@ const Institution = () => {
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                       <FormField
+                        <FormField
                           id="registered_business_address_apartment_unit_no"
                           label="Apartment Number of the business"
                           name="registered_business_address_apartment_unit_no"
@@ -5816,10 +5926,136 @@ const Institution = () => {
                     {/* Director Dropdown */}
                     <div className="mt-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          id="doc_state"
+                          label="ID Issuing State"
+                          name="doc_state"
+                          value={values.doc_state || ""}
+                          onChange={enhancedHandleChange("doc_state", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("doc_state")}
+                          touched={touched.doc_state}
+                          error={errors.doc_state}
+                          required={false}
+                          placeholder="e.g., California, NY, London"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+
+                        <FormField
+                          id="controllerHouseNumber"
+                          label="House Number"
+                          name="controllerHouseNumber"  // Use camelCase here
+                          value={values.controllerHouseNumber || ""}
+                          onChange={enhancedHandleChange("controllerHouseNumber", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("controllerHouseNumber")}
+                          touched={touched.controllerHouseNumber}
+                          error={errors.controllerHouseNumber}
+                          required={false}
+                          placeholder="e.g., 123, 45A, B-12"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <FormField
+                          id="percentage_of_shares"
+                          label="Percentage of Shares"
+                          name="percentage_of_shares"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={values.percentage_of_shares || ""}
+                          onChange={enhancedHandleChange("percentage_of_shares", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("percentage_of_shares")}
+                          touched={touched.percentage_of_shares}
+                          error={errors.percentage_of_shares}
+                          required={false}
+                          placeholder="e.g., 25.50"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+
+                        <FormField
+                          id="suburb"
+                          label="Suburb"
+                          name="suburb"
+                          value={values.suburb || ""}
+                          onChange={enhancedHandleChange("suburb", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("suburb")}
+                          touched={touched.suburb}
+                          error={errors.suburb}
+                          required={false}
+                          placeholder="e.g., New Baneshwor"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+                      {/* Past Nationalities and Aliases - Side by Side */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        {/* Past Nationalities - Multi-select */}
+                        <div>
+                          <CustomSelect
+                            id="controller_past_nationalities"
+                            label="Past Nationalities"
+                            options={nationalityOptions}
+                            isMulti={true}
+                            onChange={(selectedOptions) => {
+                              const selectedIds = selectedOptions
+                                ? selectedOptions.map((opt) => opt.value)
+                                : [];
+                              setFieldValue("controller_past_nationalities", selectedIds);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                controller_past_nationalities: selectedIds,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "controller_past_nationalities",
+                                  value: selectedIds,
+                                })
+                              );
+                            }}
+                            value={nationalityOptions.filter((opt) =>
+                              values.controller_past_nationalities?.includes(opt.value)
+                            )}
+                            onBlur={handleBlur}
+                            touched={touched.controller_past_nationalities}
+                            error={errors.controller_past_nationalities}
+                            placeholder="Select past nationalities..."
+                            required={false}
+                          />
+                        </div>
+
+                        <FormField
+                          id="aliases"
+                          label="Aliases"
+                          name="aliases"
+                          value={values.aliases || ""}
+                          onChange={enhancedHandleChange("aliases", setFieldValue)}
+                          onBlur={handleBlur}
+                          onFocus={() => setActiveField("aliases")}
+                          touched={touched.aliases}
+                          error={errors.aliases}
+                          required={false}
+                          placeholder="e.g., Alias Name"
+                          activeField={activeField}
+                          fieldStyles={FIELD_STYLES}
+                        />
+                      </div>
+
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
                         {/* Left side - Director Role Dropdown */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Director Role
+                            Role
                           </label>
                           <Select
                             id="director_role_id"
