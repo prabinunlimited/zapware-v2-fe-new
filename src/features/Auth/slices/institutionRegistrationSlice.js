@@ -368,21 +368,32 @@ export const fetchInstitutionTypes = createAsyncThunk(
     try {
       const response = await api.get("/institution-types");
 
-      if (!Array.isArray(response.data)) {
-        throw new Error("Invalid response format");
+      // Handle the nested response structure: { status, message, data: { lists } }
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
       }
 
-      return response.data;
+      // Fallback for direct array response
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      // Fallback for response.data.data being an array
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      // If no valid data found, return empty array
+      return [];
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message ||
         error.message ||
-        "Failed to fetch institution types",
+        "Failed to fetch institution types"
       );
     }
-  },
+  }
 );
-
 export const fetchOwnerRoles = createAsyncThunk(
   "institution/fetchOwnerRoles",
   async (_, { rejectWithValue }) => {
@@ -601,6 +612,66 @@ export const fetchInstitutionAccountTypes = createAsyncThunk(
   }
 );
 
+export const fetchTransactionCurrencies = createAsyncThunk(
+  "institutionRegistration/fetchTransactionCurrencies",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/partners/transaction-currencies-all");
+
+      // Handle different response structures
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch transaction currencies"
+      );
+    }
+  }
+);
+
+export const fetchStatesByCountry = createAsyncThunk(
+  "institutionRegistration/fetchStatesByCountry",
+  async (countryId, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/country-states/${countryId}`);
+
+      // Handle different response structures
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch states"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -787,6 +858,14 @@ const initialState = {
   institutionAccountTypesLoading: false,
   selectedInstitutionAccountTypeId: null,
   institutionAccountTypeError: null,
+  transactionCurrencies: [],
+  transactionCurrenciesLoading: false,
+  transactionCurrenciesError: null,
+  selectedTransactionCurrency: null,
+  states: [],
+  statesLoading: false,
+  statesError: null,
+  selectedStateId: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -1023,6 +1102,29 @@ const institutionRegistrationSlice = createSlice({
     },
     clearInstitutionAccountTypeError: (state) => {
       state.institutionAccountTypeError = null;
+    },
+
+    setSelectedTransactionCurrency: (state, action) => {
+      state.selectedTransactionCurrency = action.payload;
+      state.formData.annual_equivalent_amount_currency = action.payload;
+    },
+
+    setStates: (state, action) => {
+      state.states = action.payload;
+    },
+    setStatesLoading: (state, action) => {
+      state.statesLoading = action.payload;
+    },
+    setStatesError: (state, action) => {
+      state.statesError = action.payload;
+    },
+    setSelectedStateId: (state, action) => {
+      state.selectedStateId = action.payload;
+      state.formData.state = action.payload;
+    },
+    clearStates: (state) => {
+      state.states = [];
+      state.selectedStateId = null;
     },
 
     // Controller sync
@@ -1697,6 +1799,35 @@ const institutionRegistrationSlice = createSlice({
         state.institutionAccountTypesLoading = false;
         state.institutionAccountTypeError = action.payload;
         state.institutionAccountTypes = [];
+      })
+      .addCase(fetchTransactionCurrencies.pending, (state) => {
+        state.transactionCurrenciesLoading = true;
+        state.transactionCurrenciesError = null;
+      })
+      .addCase(fetchTransactionCurrencies.fulfilled, (state, action) => {
+        state.transactionCurrenciesLoading = false;
+        state.transactionCurrencies = action.payload;
+      })
+      .addCase(fetchTransactionCurrencies.rejected, (state, action) => {
+        state.transactionCurrenciesLoading = false;
+        state.transactionCurrenciesError = action.payload;
+        state.transactionCurrencies = [];
+      })
+
+      .addCase(fetchStatesByCountry.pending, (state) => {
+        state.statesLoading = true;
+        state.statesError = null;
+      })
+      .addCase(fetchStatesByCountry.fulfilled, (state, action) => {
+        state.statesLoading = false;
+        state.states = action.payload || [];
+        state.selectedStateId = null;
+        state.formData.state = "";
+      })
+      .addCase(fetchStatesByCountry.rejected, (state, action) => {
+        state.statesLoading = false;
+        state.statesError = action.payload;
+        state.states = [];
       });
   },
 });
@@ -1775,6 +1906,12 @@ export const {
   setDirectorRoleId,
   setSelectedInstitutionAccountTypeId,
   clearInstitutionAccountTypeError,
+  setSelectedTransactionCurrency,
+  setStates,
+  setStatesLoading,
+  setStatesError,
+  setSelectedStateId,
+  clearStates,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -1929,6 +2066,27 @@ export const selectSelectedInstitutionAccountTypeId = (state) =>
 
 export const selectInstitutionAccountTypeError = (state) =>
   state.institutionRegistration.institutionAccountTypeError;
+
+export const selectTransactionCurrencies = (state) =>
+  state.institutionRegistration.transactionCurrencies;
+
+export const selectTransactionCurrenciesLoading = (state) =>
+  state.institutionRegistration.transactionCurrenciesLoading;
+
+export const selectSelectedTransactionCurrency = (state) =>
+  state.institutionRegistration.selectedTransactionCurrency;
+
+export const selectStates = (state) =>
+  state.institutionRegistration.states;
+
+export const selectStatesLoading = (state) =>
+  state.institutionRegistration.statesLoading;
+
+export const selectStatesError = (state) =>
+  state.institutionRegistration.statesError;
+
+export const selectSelectedStateId = (state) =>
+  state.institutionRegistration.selectedStateId;
 
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors

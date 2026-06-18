@@ -202,9 +202,14 @@ const institutionSchema = (currentStep, options = {}) => {
   // Step-specific schemas
   const step1Schema = Yup.object().shape({
     institution_account_type_id: Yup.number()
-    .required("Please select an Institution Account Type")
-    .nullable()
-    .typeError("Please select a valid Institution Account Type"),
+      .required("Please select an Institution Account Type")
+      .nullable()
+      .typeError("Please select a valid Institution Account Type"),
+
+    institution_type_id: Yup.number()
+      .required("Please select an Institution Type")
+      .nullable()
+      .typeError("Please select a valid Institution Type"),
 
     institution_name: Yup.string()
       .required("Business name is required")
@@ -237,6 +242,11 @@ const institutionSchema = (currentStep, options = {}) => {
       .max(new Date(), "Date of incorporation cannot be in the future")
       .required("Date of incorporation is required"),
 
+    registered_business_address_apartment_unit_no: Yup.string()
+      .required("Apartment/Unit number is required")
+      .min(1, "Please enter a valid apartment/unit number"),
+
+
     industry_type: Yup.string()
       .required("Industry type is required")
       .test(
@@ -263,10 +273,10 @@ const institutionSchema = (currentStep, options = {}) => {
     // FIXED: NAICS Code validation for named accounts
     ...(showNAICSField &&
       isNamedAccount && {
-        naice_code: Yup.string().required(
-          "NAICS code is required for USD Named Accounts",
-        ),
-      }),
+      naice_code: Yup.string().required(
+        "NAICS code is required for USD Named Accounts",
+      ),
+    }),
 
     ...(showBusinessTypeField && {
       business_type: Yup.string().required("Business type is required"),

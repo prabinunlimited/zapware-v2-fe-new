@@ -65,7 +65,7 @@ const OwnerItem = ({
           )}
         </div>
         <span className="text-gray-500 text-sm font-medium bg-gray-100 px-2 py-1 rounded">
-          +{phoneCode}
+          {phoneCode}
         </span>
       </div>
     );
