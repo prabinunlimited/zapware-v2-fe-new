@@ -642,6 +642,36 @@ export const fetchTransactionCurrencies = createAsyncThunk(
   }
 );
 
+export const fetchStatesByCountry = createAsyncThunk(
+  "institutionRegistration/fetchStatesByCountry",
+  async (countryId, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/country-states/${countryId}`);
+
+      // Handle different response structures
+      if (response.data?.status === "success" && response.data?.data?.lists) {
+        return response.data.data.lists;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch states"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -832,6 +862,10 @@ const initialState = {
   transactionCurrenciesLoading: false,
   transactionCurrenciesError: null,
   selectedTransactionCurrency: null,
+  states: [],
+  statesLoading: false,
+  statesError: null,
+  selectedStateId: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -1073,6 +1107,24 @@ const institutionRegistrationSlice = createSlice({
     setSelectedTransactionCurrency: (state, action) => {
       state.selectedTransactionCurrency = action.payload;
       state.formData.annual_equivalent_amount_currency = action.payload;
+    },
+
+    setStates: (state, action) => {
+      state.states = action.payload;
+    },
+    setStatesLoading: (state, action) => {
+      state.statesLoading = action.payload;
+    },
+    setStatesError: (state, action) => {
+      state.statesError = action.payload;
+    },
+    setSelectedStateId: (state, action) => {
+      state.selectedStateId = action.payload;
+      state.formData.state = action.payload;
+    },
+    clearStates: (state) => {
+      state.states = [];
+      state.selectedStateId = null;
     },
 
     // Controller sync
@@ -1760,6 +1812,22 @@ const institutionRegistrationSlice = createSlice({
         state.transactionCurrenciesLoading = false;
         state.transactionCurrenciesError = action.payload;
         state.transactionCurrencies = [];
+      })
+
+      .addCase(fetchStatesByCountry.pending, (state) => {
+        state.statesLoading = true;
+        state.statesError = null;
+      })
+      .addCase(fetchStatesByCountry.fulfilled, (state, action) => {
+        state.statesLoading = false;
+        state.states = action.payload || [];
+        state.selectedStateId = null;
+        state.formData.state = "";
+      })
+      .addCase(fetchStatesByCountry.rejected, (state, action) => {
+        state.statesLoading = false;
+        state.statesError = action.payload;
+        state.states = [];
       });
   },
 });
@@ -1839,6 +1907,11 @@ export const {
   setSelectedInstitutionAccountTypeId,
   clearInstitutionAccountTypeError,
   setSelectedTransactionCurrency,
+  setStates,
+  setStatesLoading,
+  setStatesError,
+  setSelectedStateId,
+  clearStates,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -2002,6 +2075,18 @@ export const selectTransactionCurrenciesLoading = (state) =>
 
 export const selectSelectedTransactionCurrency = (state) =>
   state.institutionRegistration.selectedTransactionCurrency;
+
+export const selectStates = (state) =>
+  state.institutionRegistration.states;
+
+export const selectStatesLoading = (state) =>
+  state.institutionRegistration.statesLoading;
+
+export const selectStatesError = (state) =>
+  state.institutionRegistration.statesError;
+
+export const selectSelectedStateId = (state) =>
+  state.institutionRegistration.selectedStateId;
 
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
