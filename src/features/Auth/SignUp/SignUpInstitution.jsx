@@ -115,6 +115,11 @@ import {
   selectTransactionCurrencies,
   selectTransactionCurrenciesLoading,
   setSelectedTransactionCurrency,
+  fetchStatesByCountry,
+  selectStates,
+  selectStatesLoading,
+  selectStatesError,
+  clearStates,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -420,6 +425,19 @@ const Institution = () => {
 
   const transactionCurrencies = useSelector(selectTransactionCurrencies);
   const transactionCurrenciesLoading = useSelector(selectTransactionCurrenciesLoading);
+
+  const states = useSelector(selectStates);
+  const statesLoading = useSelector(selectStatesLoading);
+  const statesError = useSelector(selectStatesError);
+
+  const [principalStates, setPrincipalStates] = useState([]);
+  const [principalStatesLoading, setPrincipalStatesLoading] = useState(false);
+
+  const [responsiblePersonStates, setResponsiblePersonStates] = useState([]);
+  const [responsiblePersonStatesLoading, setResponsiblePersonStatesLoading] = useState(false);
+
+  const [controllerStates, setControllerStates] = useState([]);
+  const [controllerStatesLoading, setControllerStatesLoading] = useState(false);
 
   const [hasNominees, setHasNominees] = useState("0"); // "1" for Yes, "0" for No
   const [nomineeFirstName, setNomineeFirstName] = useState("");
@@ -1897,6 +1915,27 @@ const Institution = () => {
           return country?.value || countryName;
         };
 
+        const findStateName = (stateId) => {
+          if (!stateId) return "";
+          
+          // Combine all state lists
+          const allStates = [
+            ...states,
+            ...principalStates,
+            ...responsiblePersonStates,
+            ...controllerStates
+          ];
+          
+          // Find state by ID (handle both string and number IDs)
+          const state = allStates.find(s =>
+            s.id === stateId ||
+            s.id === parseInt(stateId) ||
+            s.id === String(stateId)
+          );
+          
+          return state?.name || stateId;
+        };
+
         const {
           has_nominees,
           nominee_first_name,
@@ -1923,9 +1962,9 @@ const Institution = () => {
           controller_mobilenumber_countrycode,
           controller_designation,
           controllerHouseNumber,
-          percentage_of_shares,   
-          suburb, 
-          controller_past_nationalities, 
+          percentage_of_shares,
+          suburb,
+          controller_past_nationalities,
           aliases,
           ...restFormData
         } = finalFormData;
@@ -1953,6 +1992,12 @@ const Institution = () => {
           trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
           trust_purpose: finalFormData.trust_purpose || "",
           tax_id: finalFormData.tax_id || "",
+
+          // CONVERT STATE IDS TO NAMES - ADD THESE LINES (around line 1680-1690):
+          registered_address_street_state: findStateName(finalFormData.registered_address_street_state),
+          principal_business_address_state: findStateName(finalFormData.principal_business_address_state),
+          state: findStateName(finalFormData.state),
+          controller_state: findStateName(finalFormData.controller_state),
 
           registered_business_address_apartment_unit_no: finalFormData.registered_business_address_apartment_unit_no || "",
           registered_business_address_suburb: finalFormData.registered_business_address_suburb || "",
@@ -2028,8 +2073,8 @@ const Institution = () => {
           percentage_of_shares: percentage_of_shares || "",
           suburb: suburb || "",
           controller_past_nationalities: controller_past_nationalities?.length
-          ? JSON.stringify(controller_past_nationalities)
-          : "",
+            ? JSON.stringify(controller_past_nationalities)
+            : "",
           aliases: aliases || "",
 
           doc_type: finalFormData.doc_type,
@@ -2212,6 +2257,7 @@ const Institution = () => {
       institutionState,
       countryOptions,
       locationStateData,
+
     ],
   );
 
@@ -2813,24 +2859,156 @@ const Institution = () => {
                 )}
               </div>
 
-              {/* State */}
-              <FormField
-                id="controller_state"
-                label="State/Province"
-                name="controller_state"
-                value={values.controller_state || ""}
-                onChange={enhancedHandleChange(
-                  "controller_state",
-                  setFieldValue,
+              {/* Controller State/Province with Dynamic Dropdown */}
+              <div className="space-y-2">
+                <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
+                  State/Province <span className="text-red-500">*</span>
+                </label>
+
+                {controllerStates && controllerStates.length > 0 ? (
+                  <Select
+                    id="controller_state"
+                    name="controller_state"
+                    options={controllerStates.map(state => ({
+                      value: state.id || state.name,
+                      label: state.name
+                    }))}
+                    value={(() => {
+                      // First check if we have a selected state from the dropdown
+                      const selectedState = controllerStates.find(s =>
+                        s.id === values.controller_state ||
+                        s.name === values.controller_state
+                      );
+
+                      if (selectedState) {
+                        return {
+                          value: selectedState.id || selectedState.name,
+                          label: selectedState.name
+                        };
+                      }
+
+                      // If there's a text value (auto-filled or manually entered), show it
+                      if (values.controller_state) {
+                        return {
+                          value: values.controller_state,
+                          label: values.controller_state
+                        };
+                      }
+
+                      return null;
+                    })()}
+                    onChange={(option) => {
+                      if (option) {
+                        const value = option.label;
+                        setFieldValue("controller_state", value);
+                        setLocalFormData((prev) => ({
+                          ...prev,
+                          controller_state: value,
+                        }));
+                        dispatch(setFormField({
+                          field: "controller_state",
+                          value: value
+                        }));
+                      } else {
+                        setFieldValue("controller_state", "");
+                        setLocalFormData((prev) => ({
+                          ...prev,
+                          controller_state: "",
+                        }));
+                        dispatch(setFormField({
+                          field: "controller_state",
+                          value: ""
+                        }));
+                      }
+                    }}
+                    onBlur={handleBlur}
+                    isDisabled={controllerStatesLoading || !values.controller_country || values.is_controller === "yes"}
+                    isLoading={controllerStatesLoading}
+                    placeholder={controllerStatesLoading ? "Loading states..." : "Select state/province..."}
+                    isClearable={true}
+                    styles={{
+                      control: (base, state) => ({
+                        ...base,
+                        minHeight: "50px",
+                        borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#d1d5db",
+                        borderRadius: "0.5rem",
+                        padding: "0.25rem 0.5rem",
+                        fontSize: "0.875rem",
+                        backgroundColor: (!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "#f3f4f6" : "white",
+                        opacity: (!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? 0.6 : 1,
+                        "&:hover": {
+                          borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#9ca3af",
+                        },
+                      }),
+                      placeholder: (base) => ({
+                        ...base,
+                        fontSize: "0.875rem",
+                        color: "#6b7280",
+                      }),
+                      menu: (base) => ({
+                        ...base,
+                        fontSize: "0.875rem",
+                        zIndex: 9999,
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        fontSize: "0.875rem",
+                      }),
+                      option: (base, state) => ({
+                        ...base,
+                        fontSize: "0.875rem",
+                        backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                        color: state.isSelected ? "white" : "#1f2937",
+                        "&:hover": {
+                          backgroundColor: "#eff6ff",
+                        },
+                      }),
+                    }}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    id="controller_state"
+                    name="controller_state"
+                    value={values.controller_state || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFieldValue("controller_state", value);
+                      setLocalFormData((prev) => ({
+                        ...prev,
+                        controller_state: value,
+                      }));
+                      dispatch(setFormField({
+                        field: "controller_state",
+                        value: value
+                      }));
+                    }}
+                    onBlur={handleBlur}
+                    onFocus={() => setActiveField("controller_state")}
+                    disabled={controllerStatesLoading || !values.controller_country || values.is_controller === "yes"}
+                    placeholder={controllerStatesLoading ? "Loading states..." : !values.controller_country ? "Please select country first" : "Enter state/province..."}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+        ${(!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+        ${touched.controller_state && errors.controller_state
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:ring-blue-500"
+                      }`}
+                  />
                 )}
-                onBlur={handleBlur}
-                onFocus={() => setActiveField("controller_state")}
-                touched={touched.controller_state}
-                error={errors.controller_state}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
-                fieldStyles={FIELD_STYLES}
-              />
+
+                {touched.controller_state && errors.controller_state && (
+                  <div className="text-red-500 text-xs mt-1 flex items-center">
+                    <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                    {errors.controller_state}
+                  </div>
+                )}
+
+                {controllerStates && controllerStates.length === 0 && values.controller_country && !controllerStatesLoading && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    No states available for the selected country. Please enter the state manually.
+                  </p>
+                )}
+              </div>
 
               {/* City & Street Address 1 */}
               <FormField
@@ -3178,6 +3356,144 @@ const Institution = () => {
           React.useEffect(() => {
             setFormValues(values);
           }, [values]);
+          React.useEffect(() => {
+            // Clear states when country is empty
+            if (!values.registered_address_street_country) {
+              dispatch(clearStates());
+              // Clear the state value when country is empty
+              setFieldValue("registered_address_street_state", "");
+              setLocalFormData((prev) => ({
+                ...prev,
+                registered_address_street_state: "",
+              }));
+              dispatch(setFormField({
+                field: "registered_address_street_state",
+                value: ""
+              }));
+              return;
+            }
+
+            // Clear the state value when country changes (before fetching new states)
+            setFieldValue("registered_address_street_state", "");
+            setLocalFormData((prev) => ({
+              ...prev,
+              registered_address_street_state: "",
+            }));
+            dispatch(setFormField({
+              field: "registered_address_street_state",
+              value: ""
+            }));
+
+            // Debounce the state fetch to avoid excessive API calls
+            const timer = setTimeout(() => {
+              dispatch(fetchStatesByCountry(values.registered_address_street_country));
+            }, 500);
+
+            return () => clearTimeout(timer);
+          }, [values.registered_address_street_country, dispatch]);
+
+          React.useEffect(() => {
+            const fetchPrincipalStates = async () => {
+              if (!values.principal_business_address_country) {
+                setPrincipalStates([]);
+                return;
+              }
+
+              setPrincipalStatesLoading(true);
+
+              try {
+                const result = await dispatch(
+                  fetchStatesByCountry(values.principal_business_address_country)
+                ).unwrap();
+
+                setPrincipalStates(result || []);
+              } catch (error) {
+                setPrincipalStates([]);
+              } finally {
+                setPrincipalStatesLoading(false);
+              }
+            };
+
+            const timer = setTimeout(fetchPrincipalStates, 500);
+            return () => clearTimeout(timer);
+          }, [values.principal_business_address_country, dispatch]);
+
+          // useEffect for Responsible Person states
+          React.useEffect(() => {
+            const fetchResponsiblePersonStates = async () => {
+              if (!values.country) {
+                setResponsiblePersonStates([]);
+                // Clear the state value when country is empty
+                setFieldValue("state", "");
+                setLocalFormData((prev) => ({
+                  ...prev,
+                  state: "",
+                }));
+                dispatch(setFormField({
+                  field: "state",
+                  value: ""
+                }));
+                return;
+              }
+
+              // Clear the state value when country changes
+              setFieldValue("state", "");
+              setLocalFormData((prev) => ({
+                ...prev,
+                state: "",
+              }));
+              dispatch(setFormField({
+                field: "state",
+                value: ""
+              }));
+
+              setResponsiblePersonStatesLoading(true);
+
+              try {
+                const result = await dispatch(
+                  fetchStatesByCountry(values.country)
+                ).unwrap();
+
+                setResponsiblePersonStates(result || []);
+              } catch (error) {
+                setResponsiblePersonStates([]);
+              } finally {
+                setResponsiblePersonStatesLoading(false);
+              }
+            };
+
+            const timer = setTimeout(fetchResponsiblePersonStates, 500);
+            return () => clearTimeout(timer);
+          }, [values.country, dispatch, setFieldValue]);
+
+          // useEffect for Controller states
+          React.useEffect(() => {
+            const fetchControllerStates = async () => {
+              if (!values.controller_country) {
+                setControllerStates([]);
+                // Don't clear the state if it was auto-filled from responsible person
+                // Only clear if the country changed
+                return;
+              }
+
+              setControllerStatesLoading(true);
+
+              try {
+                const result = await dispatch(
+                  fetchStatesByCountry(values.controller_country)
+                ).unwrap();
+
+                setControllerStates(result || []);
+              } catch (error) {
+                setControllerStates([]);
+              } finally {
+                setControllerStatesLoading(false);
+              }
+            };
+
+            const timer = setTimeout(fetchControllerStates, 500);
+            return () => clearTimeout(timer);
+          }, [values.controller_country, dispatch]);
 
           // DEFINE THE ZIP LOOKUP FUNCTIONS HERE where setFieldValue is available:
           const handleBusinessZipLookup = useCallback(
@@ -4734,20 +5050,158 @@ const Institution = () => {
 
                       {/* State/Province & Apartment Number - SIDE BY SIDE */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          id="registered_address_street_state"
-                          label="State/Province"
-                          name="registered_address_street_state"
-                          value={values.registered_address_street_state || ""}
-                          onChange={enhancedHandleChange("registered_address_street_state", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("registered_address_street_state")}
-                          touched={touched.registered_address_street_state}
-                          error={errors.registered_address_street_state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
+                        {/* State/Province with Dynamic Dropdown */}
+                        <div className="mb-4">
+                          <div className="space-y-2">
+                            <label htmlFor="registered_address_street_state" className="block text-sm font-medium text-gray-700">
+                              State/Province <span className="text-red-500">*</span>
+                            </label>
+
+                            {states && states.length > 0 ? (
+                              <Select
+                                id="registered_address_street_state"
+                                name="registered_address_street_state"
+                                options={states.map(state => ({
+                                  value: state.id || state.name,
+                                  label: state.name
+                                }))}
+                                value={(() => {
+                                  // Find the selected state by ID or name
+                                  const selectedState = states.find(s =>
+                                    s.id === values.registered_address_street_state ||
+                                    s.name === values.registered_address_street_state
+                                  );
+
+                                  if (selectedState) {
+                                    return {
+                                      value: selectedState.id || selectedState.name,
+                                      label: selectedState.name
+                                    };
+                                  }
+
+                                  // If no state selected but there's a text value, show it
+                                  if (values.registered_address_street_state) {
+                                    return {
+                                      value: values.registered_address_street_state,
+                                      label: values.registered_address_street_state
+                                    };
+                                  }
+
+                                  return null;
+                                })()}
+                                onChange={(option) => {
+                                  if (option) {
+                                    const value = option.label;
+                                    setFieldValue("registered_address_street_state", value);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      registered_address_street_state: value,
+                                    }));
+                                    dispatch(setFormField({
+                                      field: "registered_address_street_state",
+                                      value: value
+                                    }));
+                                  } else {
+                                    setFieldValue("registered_address_street_state", "");
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      registered_address_street_state: "",
+                                    }));
+                                    dispatch(setFormField({
+                                      field: "registered_address_street_state",
+                                      value: ""
+                                    }));
+                                  }
+                                }}
+                                onBlur={handleBlur}
+                                isDisabled={statesLoading || !values.registered_address_street_country}
+                                isLoading={statesLoading}
+                                placeholder={statesLoading ? "Loading states..." : "Select state/province..."}
+                                isClearable={true}
+                                styles={{
+                                  control: (base, state) => ({
+                                    ...base,
+                                    minHeight: "50px",
+                                    borderColor: touched.registered_address_street_state && errors.registered_address_street_state ? "#ef4444" : "#d1d5db",
+                                    borderRadius: "0.5rem",
+                                    padding: "0.25rem 0.5rem",
+                                    fontSize: "0.875rem",
+                                    backgroundColor: (!values.registered_address_street_country || statesLoading) ? "#f3f4f6" : "white",
+                                    opacity: (!values.registered_address_street_country || statesLoading) ? 0.6 : 1,
+                                    "&:hover": {
+                                      borderColor: touched.registered_address_street_state && errors.registered_address_street_state ? "#ef4444" : "#9ca3af",
+                                    },
+                                  }),
+                                  placeholder: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    color: "#6b7280",
+                                  }),
+                                  menu: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    zIndex: 9999,
+                                  }),
+                                  singleValue: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                  }),
+                                  option: (base, state) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                                    color: state.isSelected ? "white" : "#1f2937",
+                                    "&:hover": {
+                                      backgroundColor: "#eff6ff",
+                                    },
+                                  }),
+                                }}
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                id="registered_address_street_state"
+                                name="registered_address_street_state"
+                                value={values.registered_address_street_state || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setFieldValue("registered_address_street_state", label);
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    registered_address_street_state: value,
+                                  }));
+                                  dispatch(setFormField({
+                                    field: "registered_address_street_state",
+                                    value: value
+                                  }));
+                                }}
+                                onBlur={handleBlur}
+                                onFocus={() => setActiveField("registered_address_street_state")}
+                                disabled={statesLoading || !values.registered_address_street_country}
+                                placeholder={statesLoading ? "Loading states..." : !values.registered_address_street_country ? "Please select country first" : "Enter state/province..."}
+                                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+          ${(!values.registered_address_street_country || statesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+          ${touched.registered_address_street_state && errors.registered_address_street_state
+                                    ? "border-red-500 focus:ring-red-500"
+                                    : "border-gray-300 focus:ring-blue-500"
+                                  }`}
+                              />
+                            )}
+
+                            {touched.registered_address_street_state && errors.registered_address_street_state && (
+                              <div className="text-red-500 text-xs mt-1 flex items-center">
+                                <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                {errors.registered_address_street_state}
+                              </div>
+                            )}
+
+                            {states && states.length === 0 && values.registered_address_street_country && !statesLoading && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                No states available for the selected country. Please enter the state manually.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                         <FormField
                           id="registered_business_address_apartment_unit_no"
                           label="Apartment Number of the business"
@@ -4981,21 +5435,156 @@ const Institution = () => {
                             fieldStyles={FIELD_STYLES}
                             disabled={values.same_as_registered_address === 1}
                           />
-                          <FormField
-                            id="principal_business_address_state"
-                            label="State/Province"
-                            name="principal_business_address_state"
-                            value={values.principal_business_address_state || ""}
-                            onChange={enhancedHandleChange("principal_business_address_state", setFieldValue)}
-                            onBlur={handleBlur}
-                            onFocus={() => setActiveField("principal_business_address_state")}
-                            touched={touched.principal_business_address_state}
-                            error={errors.principal_business_address_state}
-                            required
-                            activeField={activeField}
-                            fieldStyles={FIELD_STYLES}
-                            disabled={values.same_as_registered_address === 1}
-                          />
+                          {/* Principal Address State/Province with Dynamic Dropdown */}
+                          <div className="mb-4">
+                            <div className="space-y-2">
+                              <label htmlFor="principal_business_address_state" className="block text-sm font-medium text-gray-700">
+                                State/Province <span className="text-red-500">*</span>
+                              </label>
+
+                              {principalStates && principalStates.length > 0 ? (
+                                <Select
+                                  id="principal_business_address_state"
+                                  name="principal_business_address_state"
+                                  options={principalStates.map(state => ({
+                                    value: state.id || state.name,
+                                    label: state.name
+                                  }))}
+                                  value={(() => {
+                                    const selectedState = principalStates.find(s =>
+                                      s.id === values.principal_business_address_state ||
+                                      s.name === values.principal_business_address_state
+                                    );
+
+                                    if (selectedState) {
+                                      return {
+                                        value: selectedState.id || selectedState.name,
+                                        label: selectedState.name
+                                      };
+                                    }
+
+                                    if (values.principal_business_address_state) {
+                                      return {
+                                        value: values.principal_business_address_state,
+                                        label: values.principal_business_address_state
+                                      };
+                                    }
+
+                                    return null;
+                                  })()}
+                                  onChange={(option) => {
+                                    if (option) {
+                                      const value = option.label;
+                                      setFieldValue("principal_business_address_state", value);
+                                      setLocalFormData((prev) => ({
+                                        ...prev,
+                                        principal_business_address_state: value,
+                                      }));
+                                      dispatch(setFormField({
+                                        field: "principal_business_address_state",
+                                        value: value
+                                      }));
+                                    } else {
+                                      setFieldValue("principal_business_address_state", "");
+                                      setLocalFormData((prev) => ({
+                                        ...prev,
+                                        principal_business_address_state: "",
+                                      }));
+                                      dispatch(setFormField({
+                                        field: "principal_business_address_state",
+                                        value: ""
+                                      }));
+                                    }
+                                  }}
+                                  onBlur={handleBlur}
+                                  isDisabled={principalStatesLoading || !values.principal_business_address_country || values.same_as_registered_address === 1}
+                                  isLoading={principalStatesLoading}
+                                  placeholder={principalStatesLoading ? "Loading states..." : "Select state/province..."}
+                                  isClearable={true}
+                                  styles={{
+                                    control: (base, state) => ({
+                                      ...base,
+                                      minHeight: "50px",
+                                      borderColor: touched.principal_business_address_state && errors.principal_business_address_state ? "#ef4444" : "#d1d5db",
+                                      borderRadius: "0.5rem",
+                                      padding: "0.25rem 0.5rem",
+                                      fontSize: "0.875rem",
+                                      backgroundColor: (!values.principal_business_address_country || principalStatesLoading || values.same_as_registered_address === 1) ? "#f3f4f6" : "white",
+                                      opacity: (!values.principal_business_address_country || principalStatesLoading || values.same_as_registered_address === 1) ? 0.6 : 1,
+                                      "&:hover": {
+                                        borderColor: touched.principal_business_address_state && errors.principal_business_address_state ? "#ef4444" : "#9ca3af",
+                                      },
+                                    }),
+                                    placeholder: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      color: "#6b7280",
+                                    }),
+                                    menu: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      zIndex: 9999,
+                                    }),
+                                    singleValue: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                    }),
+                                    option: (base, state) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                                      color: state.isSelected ? "white" : "#1f2937",
+                                      "&:hover": {
+                                        backgroundColor: "#eff6ff",
+                                      },
+                                    }),
+                                  }}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  id="principal_business_address_state"
+                                  name="principal_business_address_state"
+                                  value={values.principal_business_address_state || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setFieldValue("principal_business_address_state", value);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      principal_business_address_state: value,
+                                    }));
+                                    dispatch(setFormField({
+                                      field: "principal_business_address_state",
+                                      value: value
+                                    }));
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField("principal_business_address_state")}
+                                  disabled={principalStatesLoading || !values.principal_business_address_country || values.same_as_registered_address === 1}
+                                  placeholder={principalStatesLoading ? "Loading states..." : !values.principal_business_address_country ? "Please select country first" : "Enter state/province..."}
+                                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+          ${(!values.principal_business_address_country || principalStatesLoading || values.same_as_registered_address === 1) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+          ${touched.principal_business_address_state && errors.principal_business_address_state
+                                      ? "border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:ring-blue-500"
+                                    }`}
+                                />
+                              )}
+
+                              {touched.principal_business_address_state && errors.principal_business_address_state && (
+                                <div className="text-red-500 text-xs mt-1 flex items-center">
+                                  <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                  {errors.principal_business_address_state}
+                                </div>
+                              )}
+
+                              {principalStates && principalStates.length === 0 && values.principal_business_address_country && !principalStatesLoading && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  No states available for the selected country. Please enter the state manually.
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -5763,24 +6352,155 @@ const Institution = () => {
                         />
                       </div>
 
+                      {/* State/Province with Dynamic Dropdown - RESPONSIBLE PERSON */}
                       <div className="mb-4">
-                        <FormField
-                          id="state"
-                          label="State/Province"
-                          name="state"
-                          value={values.state || ""}
-                          onChange={enhancedHandleChange(
-                            "state",
-                            setFieldValue,
+                        <div className="space-y-2">
+                          <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                            State/Province <span className="text-red-500">*</span>
+                          </label>
+
+                          {responsiblePersonStates && responsiblePersonStates.length > 0 ? (
+                            <Select
+                              id="state"
+                              name="state"
+                              options={responsiblePersonStates.map(state => ({
+                                value: state.id || state.name,
+                                label: state.name
+                              }))}
+                              value={(() => {
+                                const selectedState = responsiblePersonStates.find(s =>
+                                  s.id === values.state ||
+                                  s.name === values.state
+                                );
+
+                                if (selectedState) {
+                                  return {
+                                    value: selectedState.id || selectedState.name,
+                                    label: selectedState.name
+                                  };
+                                }
+
+                                if (values.state) {
+                                  return {
+                                    value: values.state,
+                                    label: values.state
+                                  };
+                                }
+
+                                return null;
+                              })()}
+                              onChange={(option) => {
+                                if (option) {
+                                  const value = option.label;
+                                  setFieldValue("state", value);
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    state: value,
+                                  }));
+                                  dispatch(setFormField({
+                                    field: "state",
+                                    value: value
+                                  }));
+                                } else {
+                                  setFieldValue("state", "");
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    state: "",
+                                  }));
+                                  dispatch(setFormField({
+                                    field: "state",
+                                    value: ""
+                                  }));
+                                }
+                              }}
+                              onBlur={handleBlur}
+                              isDisabled={responsiblePersonStatesLoading || !values.country}
+                              isLoading={responsiblePersonStatesLoading}
+                              placeholder={responsiblePersonStatesLoading ? "Loading states..." : "Select state/province..."}
+                              isClearable={true}
+                              styles={{
+                                control: (base, state) => ({
+                                  ...base,
+                                  minHeight: "50px",
+                                  borderColor: touched.state && errors.state ? "#ef4444" : "#d1d5db",
+                                  borderRadius: "0.5rem",
+                                  padding: "0.25rem 0.5rem",
+                                  fontSize: "0.875rem",
+                                  backgroundColor: (!values.country || responsiblePersonStatesLoading) ? "#f3f4f6" : "white",
+                                  opacity: (!values.country || responsiblePersonStatesLoading) ? 0.6 : 1,
+                                  "&:hover": {
+                                    borderColor: touched.state && errors.state ? "#ef4444" : "#9ca3af",
+                                  },
+                                }),
+                                placeholder: (base) => ({
+                                  ...base,
+                                  fontSize: "0.875rem",
+                                  color: "#6b7280",
+                                }),
+                                menu: (base) => ({
+                                  ...base,
+                                  fontSize: "0.875rem",
+                                  zIndex: 9999,
+                                }),
+                                singleValue: (base) => ({
+                                  ...base,
+                                  fontSize: "0.875rem",
+                                }),
+                                option: (base, state) => ({
+                                  ...base,
+                                  fontSize: "0.875rem",
+                                  backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                                  color: state.isSelected ? "white" : "#1f2937",
+                                  "&:hover": {
+                                    backgroundColor: "#eff6ff",
+                                  },
+                                }),
+                              }}
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              id="state"
+                              name="state"
+                              value={values.state || ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setFieldValue("state", value);
+                                setLocalFormData((prev) => ({
+                                  ...prev,
+                                  state: value,
+                                }));
+                                dispatch(setFormField({
+                                  field: "state",
+                                  value: value
+                                }));
+                              }}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("state")}
+                              disabled={responsiblePersonStatesLoading || !values.country}
+                              placeholder={responsiblePersonStatesLoading ? "Loading states..." : !values.country ? "Please select country first" : "Enter state/province..."}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+          ${(!values.country || responsiblePersonStatesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+          ${touched.state && errors.state
+                                  ? "border-red-500 focus:ring-red-500"
+                                  : "border-gray-300 focus:ring-blue-500"
+                                }`}
+                            />
                           )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("state")}
-                          touched={touched.state}
-                          error={errors.state}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
+
+                          {touched.state && errors.state && (
+                            <div className="text-red-500 text-xs mt-1 flex items-center">
+                              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                              {errors.state}
+                            </div>
+                          )}
+
+                          {responsiblePersonStates && responsiblePersonStates.length === 0 && values.country && !responsiblePersonStatesLoading && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              No states available for the selected country. Please enter the state manually.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
