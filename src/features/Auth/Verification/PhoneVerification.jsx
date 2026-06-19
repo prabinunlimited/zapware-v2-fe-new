@@ -53,6 +53,9 @@ function PhoneVerification() {
   const [showPlaidModal, setShowPlaidModal] = useState(false);
   const [plaidUrl, setPlaidUrl] = useState("");
   const [isPlaidLoading, setIsPlaidLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);  // ← ADD THIS
+  const [redirectMessage, setRedirectMessage] = useState("")
+  
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -368,42 +371,81 @@ function PhoneVerification() {
         mobile_number: number,
         otp: otp.join(""),
       };
-
+  
       try {
         const result = await dispatch(validateOtp(loginData));
-
+  
         if (result.payload) {
           const data = result.payload;
-
+  
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
-            // Check if account is under review
-            if (data.plaid_kyc_required === "N") {
-              showUnderReviewModal(accountType);
-              return;
-            }
-
+  
             // Store auth data
             if (data.token) localStorage.setItem("authtoken", data.token);
             if (data.customer_id) localStorage.setItem("authcustomer_id", data.customer_id);
-
-            // For Remittance Only - go to login
-            if (isRemittanceOnly) {
-              setTimeout(() => navigate("/login"), 2000);
-              return;
-            }
-
-            // For Multi-Currency - go to KYC with the Plaid URL
-            setTimeout(() => {
-              navigate("/kyc-verification", {
-                state: {
-                  plaidUrl: data.plaid_url,  // ← IMPORTANT: Pass the URL here
-                  customerId: data.customer_id,
-                  isWhitelabelled: data.is_whitelabelled_partner_customer === "1",
-                  selectedAccounts: selectedAccounts,
-                }
+  
+            // ✅ FIRST CHECK: If plaid_kyc_required is "N", redirect to login
+            if (data.plaid_kyc_required === "N") {
+              console.log("🔄 plaid_kyc_required is N - Redirecting to login");
+              
+              // Show loading state
+              setIsRedirecting(true);
+              setRedirectMessage("OTP verified! Redirecting to login...");
+              
+              toast.info("OTP verified! Redirecting to login...", {
+                autoClose: 2000,
               });
-            }, 1500);
+              
+              // Redirect to login after 2 seconds
+              setTimeout(() => {
+                navigate("/login", {
+                  state: {
+                    message: "Verification complete! Please login to continue.",
+                  }
+                });
+              }, 2000);
+              return; // ⚠️ IMPORTANT: This return prevents further execution
+            }
+  
+            // ✅ SECOND CHECK: For Remittance Only - go to login
+            if (isRemittanceOnly) {
+              console.log("🔄 isRemittanceOnly is true - Redirecting to login");
+              setIsRedirecting(true);
+              setRedirectMessage("Redirecting to login...");
+              
+              toast.info("Redirecting to login...");
+              setTimeout(() => navigate("/login"), 2000);
+              return; // ⚠️ IMPORTANT: This return prevents further execution
+            }
+  
+            // ✅ THIRD CHECK: For Multi-Currency with Plaid URL - go to KYC
+            if (data.plaid_url && data.plaid_url !== "") {
+              console.log("🔄 Has Plaid URL - Redirecting to KYC verification");
+              setIsRedirecting(true);
+              setRedirectMessage("Redirecting to KYC verification...");
+              
+              toast.info("Redirecting to KYC verification...");
+              setTimeout(() => {
+                navigate("/kyc-verification", {
+                  state: {
+                    plaidUrl: data.plaid_url,
+                    customerId: data.customer_id,
+                    isWhitelabelled: data.is_whitelabelled_partner_customer === "1",
+                    selectedAccounts: selectedAccounts,
+                  }
+                });
+              }, 1500);
+              return; // ⚠️ IMPORTANT: This return prevents further execution
+            }
+  
+            // ✅ FINAL FALLBACK: Default - go to home
+            console.log("🔄 No specific condition met - Redirecting to home");
+            setIsRedirecting(true);
+            setRedirectMessage("Redirecting to login...");
+            
+            setTimeout(() => navigate("/"), 1500);
+            
           } else {
             toast.error(data.message || "OTP verification failed");
           }
@@ -419,7 +461,6 @@ function PhoneVerification() {
       }
     },
   });
-
   useEffect(() => {
     const storedMobileNumber = localStorage.getItem("fullMobileNumber");
     if (storedMobileNumber) {
@@ -531,6 +572,22 @@ function PhoneVerification() {
       className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-4 sm:p-6"
     >
       <ToastContainer position="top-right" autoClose={1000} />
+
+      {isRedirecting && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="text-gray-700 font-medium text-center">
+              {redirectMessage || "Please wait..."}
+            </p>
+            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-blue-600 h-1.5 rounded-full animate-pulse w-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
       <div className="w-full flex flex-col items-center justify-between max-w-md sm:max-w-xl lg:max-w-2xl bg-white rounded-xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 border border-gray-100">
         {/* Header */}
