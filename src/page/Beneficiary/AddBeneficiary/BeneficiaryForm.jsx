@@ -1136,14 +1136,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       ]);
 
       // Reset ID type fields
-      formik.setFieldValue("beneficiary_id_type", "");
-      formik.setFieldValue("beneficiary_id_number", "");
+      // formik.setFieldValue("beneficiary_id_type", "");
+      // formik.setFieldValue("beneficiary_id_number", "");
 
       // Set the relationship dropdown state
       if (relationshipValue === "other") {
         setShowOtherRelationship(true);
       } else {
-        setShowOtherRelationship(false);
+        setShowOtherRelationship(false); 
       }
     }
 

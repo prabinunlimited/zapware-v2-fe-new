@@ -199,6 +199,9 @@ const Remittance = () => {
   const isInitialMount = useRef(true);
   const pageTopRef = useRef(null);
 
+  const [deliveryTimeData, setDeliveryTimeData] = useState(null);
+  const [deliveryTimeLoading, setDeliveryTimeLoading] = useState(false);
+
   // Professional payment method options
   const paymentOptions = useMemo(
     () => [
@@ -787,6 +790,43 @@ const Remittance = () => {
       dispatch(setReceiveAmount(calculatedReceiveAmount.toString()));
     }
   }, [exchangeRateData, formData.sendAmount, dispatch]);
+
+  // Fetch estimated delivery time based on payment method
+  useEffect(() => {
+    const showEstimated = localStorage.getItem("show_estimated_time_delivery");
+    if (showEstimated !== "Y") {
+      setDeliveryTimeData(null);
+      return;
+    }
+
+    if (!formData.paymentMethod) return;
+
+    let isMounted = true;
+    setDeliveryTimeLoading(true);
+
+    const token = localStorage.getItem("bearertoken");
+
+    fetch(`${API_URL}/remit-type/${formData.paymentMethod}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted) {
+          setDeliveryTimeData(data);
+          setDeliveryTimeLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setDeliveryTimeData(null);
+          setDeliveryTimeLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.paymentMethod]);
 
   useEffect(() => {
     return () => {
@@ -2463,6 +2503,34 @@ const Remittance = () => {
                 handlePaymentMethodChange={handlePaymentMethodChange}
                 navigate={navigate}
               />
+            )}
+
+            {/* Estimated Delivery Time */}
+            {localStorage.getItem("show_estimated_time_delivery") === "Y" && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                {deliveryTimeLoading ? (
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <FaSpinner className="w-3.5 h-3.5 animate-spin" />
+                    <span className="text-xs">Loading delivery time...</span>
+                  </div>
+                ) : deliveryTimeData?.deliverTime ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
+                  >
+                    <FaClock className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700 mb-0.5">
+                        Estimated Delivery Time
+                      </p>
+                      <p className="text-sm text-amber-800">
+                        {deliveryTimeData.deliverTime}
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </div>
             )}
           </motion.div>
         );
