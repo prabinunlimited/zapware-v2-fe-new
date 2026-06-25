@@ -282,32 +282,51 @@ export const updateBeneficiaryBank = createAsyncThunk(
 // ===================== ADD BENEFICIARY BANK ASYNC THUNKS =====================
 export const addBeneficiaryBank = createAsyncThunk(
   "beneficiaries/addBeneficiaryBank",
-  async ({ beneficiaryId, bankData }, { rejectWithValue }) => {
+  async ({ customerId, bankData }, { rejectWithValue }) => {
     try {
+      console.log("📤 Adding bank to existing beneficiary...");
+      console.log("📤 Customer ID:", customerId);
+      console.log("📤 Bank Data:", bankData);
+
       const authtoken = localStorage.getItem("authtoken");
+
+      // Ensure we have beneficiary_id in the payload
+      const payload = {
+        ...bankData,
+        customer_id: customerId
+      };
+
+      console.log("📤 Payload for create-benef-bank:", JSON.stringify(payload, null, 2));
+
       const response = await fetch(
-        `${API_URL}/beneficiaries/${beneficiaryId}/banks`,
+        `${API_URL}/beneficiaries/create-benef-bank`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authtoken}`,
           },
-          body: JSON.stringify(bankData),
+          body: JSON.stringify(payload),
         }
       );
 
+      console.log("📡 API Response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ API Error Response:", errorText);
         throw new Error("Failed to add bank");
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log("✅ Bank added successfully:", result);
+      return result;
     } catch (error) {
+      console.error("❌ addBeneficiaryBank error:", error);
       return rejectWithValue(error.message);
     }
   }
 );
-
 // ===================== DELETE BENEFICIARY BANK ASYNC THUNKS =====================
 export const deleteBeneficiaryBank = createAsyncThunk(
   "beneficiaries/deleteBeneficiaryBank",
