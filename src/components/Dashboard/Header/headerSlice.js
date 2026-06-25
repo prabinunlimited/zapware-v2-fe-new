@@ -80,6 +80,16 @@ export const fetchUserProfile = createAsyncThunk(
 
       if (response.data.status === "success") {
         const profile = response.data.profile;
+        // ✅ Store profile image in localStorage
+        if (profile.profile_image) {
+          localStorage.setItem('profilePicture', profile.profile_image);
+        }
+        
+        // Store other user details
+        localStorage.setItem("firstName", profile.first_name);
+        localStorage.setItem("lastName", profile.last_name);
+        localStorage.setItem("middleName", profile.middle_name || "");
+        
         localStorage.setItem("firstName", profile.first_name);
         localStorage.setItem("lastName", profile.last_name);
         localStorage.setItem("middleName", profile.middle_name || "");
