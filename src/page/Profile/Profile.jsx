@@ -21,6 +21,8 @@ import {
   FaUsers,
   FaUserTie,
   FaBusinessTime,
+  FaCamera,
+  FaSpinner,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -109,6 +111,7 @@ const Profile = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [profilePicture, setProfilePicture] = useState(null);
   const [croppedImage, setCroppedImage] = useState(null);
+  const [profilePictureLoading, setProfilePictureLoading] = useState(true);
   const [agreedDetails, setAgreedDetails] = useState([]);
   const [isChargesPopupOpen, setIsChargesPopupOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -170,6 +173,7 @@ const Profile = () => {
     type: "success",
     errors: null,
   });
+  const [toast, setToast] = useState(null);
 
   // Check if account type is individual
   const isIndividualAccount = useMemo(() => {
@@ -185,6 +189,28 @@ const Profile = () => {
       return () => clearTimeout(timer);
     }
   }, [isModalOpen]);
+
+  // Initialize profile picture from localStorage on mount
+  useEffect(() => {
+    const cachedImage = localStorage.getItem('profilePicture');
+    if (cachedImage) {
+      console.log("🔄 Loading cached profile picture:", cachedImage);
+      setProfilePicture(cachedImage);
+      setProfilePictureLoading(false);
+    } else {
+      // If no cached image, show loading until API responds
+      setProfilePictureLoading(true);
+    }
+  }, []);
+
+  // Load profile picture from localStorage on mount
+useEffect(() => {
+  const cachedImage = localStorage.getItem('profilePicture');
+  if (cachedImage) {
+    console.log("🔄 Loading profile picture from localStorage:", cachedImage);
+    setProfilePicture(cachedImage);
+  }
+}, []);
 
   // Resend OTP timer
   useEffect(() => {
@@ -275,49 +301,109 @@ const Profile = () => {
   ]);
   // =============== END FIX ===============
 
-  // Fetch additional profile data that's not in Redux
-  useEffect(() => {
-    const fetchAdditionalProfileData = async () => {
-      if (!profileData || !customerId) return;
+// Fetch additional profile data that's not in Redux
+useEffect(() => {
+  const fetchAdditionalProfileData = async () => {
+    if (!profileData || !customerId) return;
 
-      try {
-        console.log("📸 Profile: Fetching additional profile data");
-
-        const [imageResponse, termsResponse, statusLogResponse] =
-          await Promise.all([
-            axios.get(`${API_URL}/kyc/${customerId}`, {
-              headers: { Authorization: `Bearer ${bearertoken}` },
-            }),
-            axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
-              headers: { Authorization: `Bearer ${authtoken}` },
-            }),
-            axios.get(`${API_URL}/account-status-log/${customerId}`, {
-              headers: { Authorization: `Bearer ${authtoken}` },
-            }),
-          ]);
-
-        console.log("✅ Profile: Additional data fetched successfully");
-
-        setProfilePicture(imageResponse.data.profile_picture);
-        setCroppedImage(imageResponse.data.document_picture_front);
-
-        if (
-          termsResponse.data.status === "success" &&
-          termsResponse.data.count_agreed > "0"
-        ) {
-          setAgreedDetails(termsResponse.data.agreed_details);
-        }
-
-        setStatusHistory(statusLogResponse.data);
-      } catch (err) {
-        console.error("❌ Profile: Failed to fetch additional data", err);
+    try {
+      console.log("📸 Profile: Fetching additional profile data");
+      console.log("📸 profileData:", profileData);
+      
+      // ✅ FIRST: Check if profileData already has the image
+      const imageFromProfile = profileData.profile_image || 
+                              profileData.profile_picture || 
+                              null;
+      
+      if (imageFromProfile && imageFromProfile !== "") {
+        console.log("✅ Found profile picture in profileData:", imageFromProfile);
+        setProfilePicture(imageFromProfile);
+        localStorage.setItem('profilePicture', imageFromProfile);
+        // Still continue to fetch other data (terms, status log)
+        // but we already have the image
       }
-    };
 
-    if (profileData && customerId && authtoken && bearertoken) {
-      fetchAdditionalProfileData();
+      // ✅ SECOND: Check localStorage as fallback
+      const cachedImage = localStorage.getItem('profilePicture');
+      if (cachedImage && !imageFromProfile) {
+        console.log("🔄 Found cached profile picture:", cachedImage);
+        setProfilePicture(cachedImage);
+      }
+
+      setSaveLoading(true);
+
+      const [imageResponse, termsResponse, statusLogResponse] =
+        await Promise.all([
+          axios.get(`${API_URL}/kyc/${customerId}`, {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+          }),
+          axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
+            headers: { Authorization: `Bearer ${authtoken}` },
+          }),
+          axios.get(`${API_URL}/account-status-log/${customerId}`, {
+            headers: { Authorization: `Bearer ${authtoken}` },
+          }),
+        ]);
+
+      console.log("✅ Profile: Additional data fetched successfully");
+      console.log("📸 Image response:", imageResponse.data);
+
+      // ✅ THIRD: Get image from KYC API (if profileData didn't have it)
+      const pictureUrl = imageResponse.data.data?.profile_image || 
+                        imageResponse.data.profile_image || 
+                        imageResponse.data.data?.profile_picture ||
+                        imageResponse.data.profile_picture || 
+                        imageResponse.data.picture ||
+                        null;
+      
+      console.log("🖼️ Profile picture URL from KYC API:", pictureUrl);
+
+      // Only update if we have a valid URL and it's different from what we have
+      if (pictureUrl && pictureUrl !== "") {
+        // Check if it's different from the current image
+        if (profilePicture !== pictureUrl) {
+          setProfilePicture(pictureUrl);
+          localStorage.setItem('profilePicture', pictureUrl);
+          console.log("✅ Profile picture updated from KYC API:", pictureUrl);
+        }
+      } else if (imageResponse.data.message === "KYC not found") {
+        // KYC not found - check if we have cached image from profileData
+        const cached = localStorage.getItem('profilePicture');
+        if (!cached && !imageFromProfile) {
+          // Only clear if no cached image exists
+          setProfilePicture(null);
+        } else {
+          // Keep existing image
+          console.log("ℹ️ KYC not found but keeping existing image");
+        }
+      }
+      
+      setCroppedImage(imageResponse.data.document_picture_front);
+
+      if (
+        termsResponse.data.status === "success" &&
+        termsResponse.data.count_agreed > "0"
+      ) {
+        setAgreedDetails(termsResponse.data.agreed_details);
+      }
+
+      setStatusHistory(statusLogResponse.data);
+    } catch (err) {
+      console.error("❌ Profile: Failed to fetch additional data", err);
+      // On error, try to use cached image
+      const cachedImage = localStorage.getItem('profilePicture');
+      if (cachedImage) {
+        setProfilePicture(cachedImage);
+      }
+    } finally {
+      setSaveLoading(false);
     }
-  }, [profileData, customerId, authtoken, bearertoken]);
+  };
+
+  if (profileData && customerId && authtoken && bearertoken) {
+    fetchAdditionalProfileData();
+  }
+}, [profileData, customerId, authtoken, bearertoken]);
 
   // Fetch tab data when tab changes - ONLY for non-individual accounts
   useEffect(() => {
@@ -1182,6 +1268,140 @@ const Profile = () => {
       setSaveLoading(false);
     }
   };
+ // Handle profile picture upload
+const handleProfilePictureUpload = async (file) => {
+  // Validate file
+  if (!file) {
+    setModalData({
+      isOpen: true,
+      title: "Error",
+      message: "Please select a file to upload.",
+      type: "error",
+    });
+    setIsModalOpen(true);
+    return;
+  }
+
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    setModalData({
+      isOpen: true,
+      title: "Invalid File Type",
+      message: "Please upload a valid image file (JPEG, PNG, JPG, GIF, WEBP).",
+      type: "error",
+    });
+    setIsModalOpen(true);
+    return;
+  }
+
+// Validate file size (max 5MB)
+const maxSize = 5 * 1024 * 1024; // 5MB
+if (file.size > maxSize) {
+  console.log("❌ File too large:", file.size, "max:", maxSize);
+  setToast({ message: "Please upload an image smaller than 5MB.", type: "error" });
+  setTimeout(() => setToast(null), 4000);
+  return;
+}
+
+  setSaveLoading(true); // ← Show loading spinner
+
+  try {
+    const customerUuid = localStorage.getItem("customerUuid");
+    
+    if (!customerUuid) {
+      throw new Error("Customer UUID not found. Please logout and login again.");
+    }
+
+    const formData = new FormData();
+    formData.append('profile_image', file);
+
+    console.log("📸 Uploading profile picture...");
+    console.log("Customer UUID:", customerUuid);
+    console.log("File:", file.name, file.type, file.size);
+
+    const response = await axios.post(
+      `${API_URL}/customers/update-profile-image/${customerUuid}`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${authtoken}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    console.log("📸 Upload response:", response.data);
+
+    if (response.data.status === "success") {
+      console.log("✅ Profile picture uploaded successfully");
+
+      // Get the image URL from the response
+      const newPictureUrl = response.data.data?.profile_image || 
+                           response.data.profile_image;
+
+      if (newPictureUrl && newPictureUrl !== "") {
+        // Update state with the new image
+        setProfilePicture(newPictureUrl);
+        localStorage.setItem('profilePicture', newPictureUrl);
+        console.log("🖼️ Profile picture updated and cached:", newPictureUrl);
+      } else {
+        console.warn("⚠️ Upload succeeded but no image URL returned");
+      }
+
+      // Show success message
+      setToast({ message: "Profile picture uploaded successfully!", type: "success" });
+      setTimeout(() => setToast(null), 4000);
+
+      // Refresh profile data in background
+      setTimeout(async () => {
+        if (bearertoken) {
+          await dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+        // Fetch additional data to ensure image is up to date
+        try {
+          const imageResponse = await axios.get(`${API_URL}/kyc/${customerId}`, {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+          });
+          const refreshedUrl = imageResponse.data.data?.profile_image || 
+                              imageResponse.data.profile_image || 
+                              null;
+          if (refreshedUrl && refreshedUrl !== "") {
+            setProfilePicture(refreshedUrl);
+            localStorage.setItem('profilePicture', refreshedUrl);
+          }
+        } catch (err) {
+          console.error("Error refreshing profile picture:", err);
+        }
+        setSaveLoading(false); // ← Hide loading after everything is done
+      }, 500);
+
+    } else {
+      throw new Error(response.data.message || "Failed to upload profile picture");
+    }
+  } catch (err) {
+    console.error("❌ Failed to upload profile picture:", err);
+    setModalData({
+      isOpen: true,
+      title: "Upload Failed",
+      message: err.response?.data?.message || "Failed to upload profile picture. Please try again.",
+      type: "error",
+    });
+    setIsModalOpen(true);
+    setSaveLoading(false); // ← Hide loading on error
+  } finally {
+    // Don't set saveLoading false here - it's handled in the timeout or error
+  }
+};
+  // Handle file input change
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      handleProfilePictureUpload(file);
+    }
+    // Reset the input so the same file can be selected again
+    event.target.value = '';
+  };
 
   const isUnitedStatesSelected = () => {
     if (!editableData.country_id) return false;
@@ -1941,6 +2161,14 @@ const Profile = () => {
   // =============== MAIN RENDER ===============
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-[9999] px-5 py-4 rounded-xl shadow-xl text-white text-sm font-medium
+          ${toast.type === "error" ? "bg-red-500" : "bg-green-500"}`}>
+          {toast.message}
+          <button onClick={() => setToast(null)} className="ml-4 opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
       {isModalOpen && (
         <PopupModal
           title={modalData.title}
@@ -2426,24 +2654,62 @@ const Profile = () => {
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
                   <div className="flex items-center gap-4">
-                    {/* Profile Picture */}
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-md overflow-hidden">
-                      {profilePicture ? (
-                        <img
-                          src={profilePicture}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
+                    {/* Profile Picture with Upload/Remove functionality */}
+                    <div className="relative">
+                      {/* Profile Picture Container */}
+                      <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-md overflow-hidden">
+                        {profilePictureLoading ? (
+                          // Show loading spinner while image is loading
+                          <div className="flex items-center justify-center w-full h-full">
+                            <RingLoader size={30} color="#3B82F6" loading={true} />
+                          </div>
+                        ) : profilePicture ? (
+                          <img
+                            src={profilePicture}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FaUser className="h-10 w-10 md:h-12 md:w-12 text-gray-400" />
+                        )}
+                      </div>
+
+                      {/* Upload Button Overlay - Camera Icon */}
+                      <label
+                        htmlFor="profile-picture-upload"
+                        className={`absolute -bottom-1 -right-1 p-1.5 rounded-full shadow-md cursor-pointer transition-all hover:scale-110 ${headerColorProps.className}`}
+                        style={headerColorProps.style}
+                        title="Upload profile picture"
+                      >
+                        <FaCamera className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />
+                        <input
+                          id="profile-picture-upload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/jpg,image/gif,image/webp"
+                          onChange={handleFileChange}
+                          className="hidden"
+                          disabled={saveLoading || profilePictureLoading}
                         />
-                      ) : (
-                        <FaUser className="h-10 w-10 md:h-12 md:w-12 text-gray-400" />
+                      </label>
+
+                      {/* Loading Overlay for upload */}
+                      {saveLoading && (
+                        <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center">
+                          <FaSpinner className="w-6 h-6 text-white animate-spin" />
+                        </div>
                       )}
                     </div>
+
                     <div>
                       <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
                         My Profile
                       </h1>
                       <p className="text-gray-500 text-sm mt-1">
                         Manage your account information
+                      </p>
+                      {/* Show file upload hint */}
+                      <p className="text-xs text-gray-400 mt-1 hidden md:block">
+                        Click camera icon to upload photo 
                       </p>
                     </div>
                   </div>
