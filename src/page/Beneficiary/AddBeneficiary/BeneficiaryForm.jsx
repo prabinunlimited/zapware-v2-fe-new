@@ -64,6 +64,10 @@ import {
   selectBankDeleteSuccess,
   deleteBeneficiaryBank,
   addBeneficiaryBank,
+  validateBeneficiaryCreate,
+  selectValidateLoading,
+  selectValidateError,
+  selectValidateSuccess,
 } from "../AddBeneficiary/addBeneficiarySlice";
 
 // Import from beneficiarySlice for phone search
@@ -133,6 +137,204 @@ AlertBox.propTypes = {
 
 AlertBox.defaultProps = {
   message: "Please log in to continue!",
+};
+
+const ValidationErrorModal = ({ isOpen, onClose, errors, title = "Validation Error" }) => {
+  if (!isOpen) return null;
+
+  // Format error messages from API response
+  const formatErrors = (errorData) => {
+    console.log("🔍 Formatting errors - Input:", errorData);
+    console.log("🔍 ErrorData type:", typeof errorData);
+
+    // If it's a string, return as single error
+    if (typeof errorData === 'string') {
+      return [errorData];
+    }
+
+    // If it's an array, return as is
+    if (Array.isArray(errorData)) {
+      return errorData;
+    }
+
+    // If it's an object
+    if (typeof errorData === 'object' && errorData !== null) {
+      const messages = [];
+
+      // Handle the specific API response format: { status: "error", message: { field: ["error"] } }
+      if (errorData.status === "error" && errorData.message && typeof errorData.message === 'object') {
+        console.log("📦 Found status:error with message object:", errorData.message);
+        Object.entries(errorData.message).forEach(([field, fieldErrors]) => {
+          // Format field name for display (but we'll only show the error message)
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            // Only show the error message, not the field name
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { message: { field: ["error"] } } format
+      if (errorData.message && typeof errorData.message === 'object') {
+        console.log("📦 Found message object:", errorData.message);
+        Object.entries(errorData.message).forEach(([field, fieldErrors]) => {
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { message: "error string" } format
+      if (errorData.message && typeof errorData.message === 'string') {
+        return [errorData.message];
+      }
+
+      // Handle { errors: { field: ["error"] } } format
+      if (errorData.errors && typeof errorData.errors === 'object') {
+        console.log("📦 Found errors object:", errorData.errors);
+        Object.entries(errorData.errors).forEach(([field, fieldErrors]) => {
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { error: "error string" } format
+      if (errorData.error && typeof errorData.error === 'string') {
+        return [errorData.error];
+      }
+
+      // If none of the above, try to extract any string values
+      const stringValues = Object.values(errorData).filter(val => typeof val === 'string');
+      if (stringValues.length > 0) {
+        return stringValues;
+      }
+
+      // Last resort: convert object to string
+      try {
+        return [JSON.stringify(errorData)];
+      } catch (e) {
+        return ['Validation failed. Please check your details.'];
+      }
+    }
+
+    return ['Validation failed. Please check your details.'];
+  };
+
+  const errorMessages = formatErrors(errors);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
+      role="dialog"
+      aria-labelledby="error-modal-title"
+      aria-describedby="error-modal-message"
+      onClick={onClose}
+    >
+      <div
+        className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-lg shadow-xl bg-white text-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start mb-4">
+          <div className="flex-shrink-0 mr-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <FaExclamationTriangle className="text-red-600 text-xl" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h2 id="error-modal-title" className="text-xl font-bold text-red-600">
+              {title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-60 overflow-y-auto">
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <ul className="space-y-2">
+              {errorMessages.map((error, index) => (
+                <li key={index} className="flex items-start text-sm">
+                  <span className="text-red-500 mr-2 mt-0.5">•</span>
+                  <span className="text-red-700">{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+ValidationErrorModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  errors: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.object,
+    PropTypes.array
+  ]),
+  title: PropTypes.string,
+};
+
+ValidationErrorModal.defaultProps = {
+  errors: 'Validation failed. Please check your details.',
+  title: 'Validation Error',
 };
 
 const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
@@ -210,6 +412,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const addExistingBeneficiarySuccess = useSelector(selectAddExistingBeneficiarySuccess);
   const addExistingBeneficiaryError = useSelector(selectAddExistingBeneficiaryError);
 
+  const validateLoading = useSelector(selectValidateLoading);
+  const validateError = useSelector(selectValidateError);
+  const validateSuccess = useSelector(selectValidateSuccess);
+
   // Create state from beneficiarySlice
   const beneficiariesCreateLoading = useSelector(
     selectBeneficiariesCreateLoading
@@ -235,6 +441,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
     return 1;
   });
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalData, setErrorModalData] = useState(null);
 
   const [editBankOnlyMode, setEditBankOnlyMode] = useState(() => {
     return mode === "edit" && location.state?.editBankOnly;
@@ -264,6 +472,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [branchCode, setBranchCode] = useState("");
   const [fieldTouched, setFieldTouched] = useState({});
   const [selectedCountryCode, setSelectedCountryCode] = useState("");
+
+  const [validationError, setValidationError] = useState(null);
 
   // Swift support function
   const isSwiftSupportedForCurrency = (currency) => {
@@ -534,7 +744,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       setStep(2); // Skip to bank information step
       setUsingExistingBeneficiary(true);
       setExistingBeneficiaryId(location.state.existingBeneficiaryId);
-      
+
       // ✅ RESET bank accounts to a completely empty state for adding new bank
       setBankAccounts([{
         id: null,
@@ -560,7 +770,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         bankCountry: "",
         currency: "" // Empty currency - user must select
       }]);
-      
+
       // ✅ Reset currency to empty so user must select
       setCurrency("");
     }
@@ -790,12 +1000,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       bankDataInitialized.current = true;  // <-- Prevent re-running
       setEditBankOnlyMode(true);
       setStep(2);
-  
+
       // If specific bank data is passed, pre-populate the bank account
       if (location.state?.bankData) {
         const bankData = location.state.bankData;
         const initialCurrency = bankData.currency_code || bankData.currency || "USD";
-        
+
         setBankAccounts([{
           id: bankData.id,
           rails: bankData.rails || "",
@@ -820,7 +1030,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           bankCountry: bankData.bank_country || "",
           currency: initialCurrency  // <-- Use local variable, not state
         }]);
-  
+
         // Set the currency
         setCurrency(initialCurrency);
       }
@@ -1262,7 +1472,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setStep(1);
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     // If in phone search step (step 0), handle differently
     if (step === 0) {
       // Check if beneficiary is already yours (Y) - prevent proceeding
@@ -1278,8 +1488,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       }
 
       if (!selectedBeneficiaryType) {
-        toast.error("Please select beneficiary type")
-        return false
+        toast.error("Please select beneficiary type");
+        return false;
       }
       if (!phoneInput.trim()) {
         toast.error("Please enter a phone number to search");
@@ -1331,48 +1541,150 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       return true;
     }
 
-    // For steps 1 and 2, use existing validation
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      const countryInput = formik.values.country_id;
-      if (countryInput === "" || countryInput === " ") {
-        toast.error(`Country Required for Currency: ${currency}`);
-        return false;
+    // For step 1 - VALIDATE BEFORE PROCEEDING
+    if (step === 1) {
+      // Currency-specific validations
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        const countryInput = formik.values.country_id;
+        if (countryInput === "" || countryInput === " ") {
+          toast.error(`Country Required for Currency: ${currency}`);
+          return false;
+        }
+        const streetInput = formik.values.street;
+        if (streetInput === "" || streetInput === " ") {
+          toast.error(`Street Required for Currency: ${currency}`);
+          return false;
+        }
+        const idTypeInput = formik.values.beneficiary_id_type;
+        if (idTypeInput === "" || idTypeInput === " ") {
+          toast.error(`ID Type Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const idNumber = formik.values.beneficiary_id_number;
+        if (idNumber === "" || idNumber === " ") {
+          toast.error(`ID Number Required for Currency: ${currency}`);
+          return false;
+        }
+
+        if (currency === "INR") {
+          const cityInput = formik.values.city;
+          if (cityInput === "" || cityInput === " ") {
+            toast.error(`City Required for Currency: ${currency}`);
+            return false;
+          }
+        }
       }
-      const streetInput = formik.values.street;
-      if (streetInput === "" || streetInput === " ") {
-        toast.error(`Street Required for Currency: ${currency}`);
-        return false;
-      }
-      const idTypeInput = formik.values.beneficiary_id_type;
-      if (idTypeInput === "" || idTypeInput === " ") {
-        toast.error(`ID Type Required for Currency: ${currency}`);
+
+      // General form validation
+      if (!isFormValid()) {
+        toast.error("Please fill all required fields before proceeding");
         return false;
       }
 
-      const idNumber = formik.values.beneficiary_id_number;
-      if (idNumber === "" || idNumber === " ") {
-        toast.error(`ID Number Required for Currency: ${currency}`);
-        return false;
-      }
+      // NEW VALIDATION STEP - Only for new beneficiary creation
+      if (mode === "create" && !usingExistingBeneficiary && !editBankOnlyMode && !isAddBankOnlyMode) {
+        try {
+          // Prepare validation payload
+          let cleanedCountryCode = formik.values.country_phone_code || "";
+          if (cleanedCountryCode.includes('_')) {
+            cleanedCountryCode = cleanedCountryCode.split('_')[0];
+          }
+          if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
+            cleanedCountryCode = `+${cleanedCountryCode}`;
+          }
 
-      if (currency === "INR") {
-        const cityInput = formik.values.city;
-        if (cityInput === "" || cityInput === " ") {
-          toast.error(`City Required for Currency: ${currency}`);
+          // Get customer UUID from localStorage
+          const customerUuid = localStorage.getItem("userUuid") ||
+            localStorage.getItem("customerUuid") ||
+            localStorage.getItem("uuid");
+
+          console.log("🔍 Customer UUID from localStorage:", customerUuid);
+
+          const validationPayload = {
+            customer_id: customerUuid,  // Send customer UUID as customer_id value
+            beneftype: formik.values.beneftype,
+            name: formik.values.name,
+            phone_number: formik.values.phone_number,
+            email: formik.values.email,
+            country_phone_code: cleanedCountryCode,
+          };
+
+          console.log("🔍 Validating beneficiary data:", validationPayload);
+
+          // Show loading indicator
+          setLoading(true);
+
+          // Call the validation API
+          const result = await dispatch(validateBeneficiaryCreate(validationPayload)).unwrap();
+
+          console.log("✅ Validation successful:", result);
+
+          // Validation passed - proceed to next step
+          setValidationError(null);
+          setLoading(false);
+          setStep(step + 1);
+          return true;
+
+        } catch (error) {
+          // Validation failed - Show error modal
+          console.error("❌ Validation failed:", error);
+          console.log("🔍 Error object:", error);
+
+          // Format the error data for the modal
+          let errorData = { message: 'Validation failed. Please check your details.' };
+
+          // Check if error has response.data (from axios/fetch)
+          if (error?.response?.data) {
+            errorData = error.response.data;
+            console.log("📦 Error from response.data:", errorData);
+          }
+          // Check if error is already the API response
+          else if (error?.data) {
+            errorData = error.data;
+            console.log("📦 Error from data:", errorData);
+          }
+          // Check if error has message property
+          else if (error?.message) {
+            // If message is an object (like { customer_id: ["error"] })
+            if (typeof error.message === 'object') {
+              errorData = { message: error.message };
+            } else {
+              errorData = { message: error.message };
+            }
+            console.log("📦 Error with message:", errorData);
+          }
+          // If error is a string, try to parse it
+          else if (typeof error === 'string') {
+            try {
+              const parsed = JSON.parse(error);
+              errorData = parsed;
+              console.log("📦 Parsed error string:", errorData);
+            } catch (e) {
+              errorData = { message: error };
+              console.log("📦 Error as string:", errorData);
+            }
+          }
+
+          console.log("📦 Final error data being passed to modal:", errorData);
+
+          // Set error data and show modal
+          setErrorModalData(errorData);
+          setShowErrorModal(true);
+          setValidationError(
+            typeof errorData.message === 'object'
+              ? JSON.stringify(errorData.message)
+              : errorData.message || 'Validation failed'
+          );
+          setLoading(false);
           return false;
         }
       }
     }
 
-    // General form validation
-    if (!isFormValid()) {
-      toast.error("Please fill all required fields before proceeding");
-      return false;
-    }
-
-    if (step === 1) {
-      // When moving from step 1 to step 2
+    // For step 2, handle as before
+    if (step === 2) {
+      // Check if we can proceed to submit
       const invalidSwiftAccounts = bankAccounts.filter(
         (account) =>
           account.rails === "Swift" &&
@@ -1385,11 +1697,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         );
         return false;
       }
+
+      // For edit mode or existing beneficiary, you might want to submit directly
+      // or just proceed with the current logic
+      return true;
     }
 
+    // Default - move to next step
     setStep(step + 1);
     return true;
   };
+
   const prevStep = () => {
     if (step === 0) {
       // If at phone search step, go back
@@ -4508,14 +4826,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <button
                     type="button"
                     onClick={nextStep}
-                    disabled={isLoading}
-                    className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 md:flex-none font-medium ${isLoading
+                    disabled={isLoading || validateLoading}
+                    className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 md:flex-none font-medium ${isLoading || validateLoading
                       ? "bg-gray-300 cursor-not-allowed text-gray-500"
                       : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
                       }`}
                   >
-                    {isLoading ? (
-                      <RingLoader size={20} color="#ffffff" />
+                    {isLoading || validateLoading ? (
+                      <>
+                        <RingLoader size={20} color="#ffffff" className="mr-2" />
+                        {validateLoading ? "Validating..." : "Loading..."}
+                      </>
                     ) : (
                       <>
                         Next Step
@@ -4690,6 +5011,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         pauseOnHover
         theme="colored"
       />
+      <ValidationErrorModal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorModalData(null);
+        }}
+        errors={errorModalData}
+        title="Validation Error"
+      />
+
     </div>
   );
 };

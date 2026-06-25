@@ -586,7 +586,7 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
 
       // Extract data from the response
       const extractedData = result.data || [];
-      
+
       console.log("Extracted ID types:", extractedData);
 
       return { currency, benefType, data: extractedData };
@@ -595,7 +595,7 @@ export const fetchIdTypesByCurrency = createAsyncThunk(
       return rejectWithValue(error.message);
     }
   }
-);  
+);
 export const fetchCitiesByCountry = createAsyncThunk(
   "beneficiaries/fetchCitiesByCountry",
   async (countryId, { rejectWithValue }) => {
@@ -932,6 +932,67 @@ export const createBeneficiaryRequestRemit = createAsyncThunk(
   }
 );
 
+export const validateBeneficiaryCreate = createAsyncThunk(
+  "beneficiaries/validateBeneficiaryCreate",
+  async (payload, { rejectWithValue }) => {
+    try {
+      console.log("🔍 Validating beneficiary creation...");
+      console.log("🔍 Payload:", payload);
+
+      const authtoken = localStorage.getItem("authtoken");
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/validate-beneficiary-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      console.log("📡 Validation API Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("📡 Validation API Response text:", responseText);
+
+      if (!response.ok) {
+        console.error("❌ Validation API Error Response:", responseText);
+        
+        // Try to parse the error response
+        try {
+          const errorData = JSON.parse(responseText);
+          console.log("📦 Parsed error data:", errorData);
+          
+          // Return the FULL error object
+          return rejectWithValue(errorData);
+        } catch (parseError) {
+          // If response is not JSON, return a simple error object
+          return rejectWithValue({ 
+            message: responseText || 'Validation failed. Please check your details.' 
+          });
+        }
+      }
+
+      const result = JSON.parse(responseText);
+      console.log("✅ Validation API Success Response:", result);
+
+      return {
+        success: true,
+        message: result.message || "Validation successful",
+        data: result.data || {}
+      };
+    } catch (error) {
+      console.error("❌ validateBeneficiaryCreate error:", error);
+      return rejectWithValue({ 
+        message: error.message || "Validation failed. Please check your details." 
+      });
+    }
+  }
+);
+
 // ===================== INITIAL STATE =====================
 const initialState = {
   createLoading: false,
@@ -946,6 +1007,10 @@ const initialState = {
   updateLoading: false,
   updateError: null,
   updateSuccess: false,
+
+  validateLoading: false,
+  validateError: null,
+  validateSuccess: false,
 
   bankLoading: false,
   bankError: null,
@@ -1142,11 +1207,11 @@ const addBeneficiarySlice = createSlice({
         console.log("✅ fetchIdTypesByCurrency FULFILLED");
         state.dropdownLoading = false;
         const { currency, benefType, data } = action.payload;
-        
+
         // Store with compound key to support different benefTypes
         const key = `${currency}_${benefType}`;
         state.idTypes[key] = data;
-        
+
         // Also store with just currency for backward compatibility
         if (!state.idTypes[currency]) {
           state.idTypes[currency] = data;
@@ -1320,6 +1385,26 @@ const addBeneficiarySlice = createSlice({
         state.updateLoading = false;
         state.updateError = action.payload;
         state.updateSuccess = false;
+      })
+
+      // ===================== VALIDATE BENEFICIARY CREATE =====================
+      .addCase(validateBeneficiaryCreate.pending, (state) => {
+        console.log("⏳ validateBeneficiaryCreate PENDING");
+        state.validateLoading = true;
+        state.validateError = null;
+        state.validateSuccess = false;
+      })
+      .addCase(validateBeneficiaryCreate.fulfilled, (state, action) => {
+        console.log("✅ validateBeneficiaryCreate FULFILLED");
+        state.validateLoading = false;
+        state.validateSuccess = true;
+        state.validateError = null;
+      })
+      .addCase(validateBeneficiaryCreate.rejected, (state, action) => {
+        console.error("❌ validateBeneficiaryCreate REJECTED:", action.payload);
+        state.validateLoading = false;
+        state.validateSuccess = false;
+        state.validateError = action.payload || "Validation failed";
       });
   },
 });
@@ -1398,6 +1483,10 @@ export const selectBankDeleteLoading = (state) => state.addBeneficiary.bankDelet
 export const selectBankDeleteError = (state) => state.addBeneficiary.bankDeleteError;
 export const selectBankDeleteSuccess = (state) => state.addBeneficiary.bankDeleteSuccess;
 
+export const selectValidateLoading = (state) => state.addBeneficiary.validateLoading || false;
+export const selectValidateError = (state) => state.addBeneficiary.validateError || null;
+export const selectValidateSuccess = (state) => state.addBeneficiary.validateSuccess || false;
+
 export const selectBankAddLoading = (state) => state.addBeneficiary.bankAddLoading;
 export const selectBankAddError = (state) => state.addBeneficiary.bankAddError;
 export const selectBankAddSuccess = (state) => state.addBeneficiary.bankAddSuccess;
@@ -1405,17 +1494,17 @@ export const selectBankOperation = (state) =>
   state.addBeneficiary.bankOperation;
 export const selectBankId = (state) => state.addBeneficiary.bankId;
 
-export const selectBankLoading = (state) => 
-  state.addBeneficiary.bankUpdateLoading || 
-  state.addBeneficiary.bankDeleteLoading || 
+export const selectBankLoading = (state) =>
+  state.addBeneficiary.bankUpdateLoading ||
+  state.addBeneficiary.bankDeleteLoading ||
   state.addBeneficiary.bankAddLoading;
-export const selectBankError = (state) => 
-  state.addBeneficiary.bankUpdateError || 
-  state.addBeneficiary.bankDeleteError || 
+export const selectBankError = (state) =>
+  state.addBeneficiary.bankUpdateError ||
+  state.addBeneficiary.bankDeleteError ||
   state.addBeneficiary.bankAddError;
-export const selectBankSuccess = (state) => 
-  state.addBeneficiary.bankUpdateSuccess || 
-  state.addBeneficiary.bankDeleteSuccess || 
+export const selectBankSuccess = (state) =>
+  state.addBeneficiary.bankUpdateSuccess ||
+  state.addBeneficiary.bankDeleteSuccess ||
   state.addBeneficiary.bankAddSuccess;
 
 export const selectBankById = (bankId) => (state) => {
