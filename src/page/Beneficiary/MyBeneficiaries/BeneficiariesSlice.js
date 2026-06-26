@@ -172,19 +172,31 @@ export const createAndAddBeneficiary = createAsyncThunk(
 // ===================== SEARCH BENEFICIARY BY PHONE (API CALL) =====================
 export const searchBeneficiaryByPhone = createAsyncThunk(
   "beneficiaries/searchBeneficiaryByPhone",
-  async ({ phoneNumber, countryPhoneCode,beneficiaryType }, { rejectWithValue }) => {
+  async ({ phoneNumber, countryPhoneCode, beneficiaryType }, { rejectWithValue, getState }) => {
     try {
-      // Clean the country code - ensure it has + prefix
+      // Get customer_uuid from Redux state or localStorage
+      const state = getState();
+      let customerUuid = state.auth?.user?.uuid || localStorage.getItem("userUuid") || null;
+
+      if (!customerUuid) {
+        customerUuid = localStorage.getItem("customerUuid") || null;
+      }
+
+      if (!customerUuid) {
+        console.error("❌ No customer UUID found");
+        return rejectWithValue("Customer UUID not found. Please log in again.");
+      }
+
       let cleanedCountryCode = countryPhoneCode;
       if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
         cleanedCountryCode = `+${cleanedCountryCode}`;
       }
 
-      // Prepare payload according to API requirements
       const payload = {
-        beneficiary_type: beneficiaryType,
+        beneficiary_type: beneficiaryType || "individual",
         mobile_number_country_code: cleanedCountryCode,
-        mobile_number: phoneNumber
+        mobile_number: phoneNumber,
+        customer_uuid: customerUuid
       };
 
       console.log('🔍 Searching beneficiary with payload:', payload);
@@ -193,7 +205,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       const API_URL = import.meta.env.VITE_API_URL;
 
       const response = await fetch(
-        `${API_URL}/beneficiaries/fetch-by-type-mobile`,
+        `${API_URL}/beneficiaries/fetch-by-type-mobile-customer`,
         {
           method: 'POST',
           headers: {
@@ -209,24 +221,28 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       const result = await response.json();
       console.log('✅ API Response data:', result);
 
-      // Check if beneficiary exists based on the response structure
-      // The API returns data as an array when beneficiary is found
+      // Check if beneficiary exists - HANDLE BOTH MESSAGE TYPES
       if (result.status === "success" &&
-        result.message === "Beneficiary Fetched Successfully!" &&
+        (result.message === "Beneficiary Fetched Successfully!" ||
+          result.message === "Beneficiary Already exist!") &&
         result.data &&
-        Array.isArray(result.data) &&
-        result.data.length > 0) {
+        result.data.beneficiaryData &&
+        Array.isArray(result.data.beneficiaryData) &&
+        result.data.beneficiaryData.length > 0) {
 
-        // Extract the first beneficiary from the array
-        const beneficiaryData = result.data[0];
+        const beneficiaryData = result.data.beneficiaryData[0];
+        const isCurrentCustomerBenef = result.data.is_current_customer_benef || "N";
+
         console.log('✅ Beneficiary found:', beneficiaryData);
+        console.log('📌 is_current_customer_benef:', isCurrentCustomerBenef);
 
         return {
           exists: true,
           data: beneficiaryData,
           searched: true,
           processed: false,
-          message: 'Beneficiary found'
+          message: result.message,
+          isCurrentCustomerBenef: isCurrentCustomerBenef
         };
       }
 
@@ -236,25 +252,45 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
           result.message?.includes("Not Found") ||
           !result.data ||
           result.data === "" ||
-          (Array.isArray(result.data) && result.data.length === 0))) {
+          result.data === null ||
+          (Array.isArray(result.data) && result.data.length === 0) ||
+          (result.data && !result.data.beneficiaryData) ||
+          (result.data && Array.isArray(result.data.beneficiaryData) && result.data.beneficiaryData.length === 0))) {
         console.log('ℹ️ No beneficiary found with this phone number');
         return {
           exists: false,
           data: null,
           searched: true,
           processed: false,
-          message: 'No beneficiary found with this phone number'
+          message: 'No beneficiary found with this phone number',
+          isCurrentCustomerBenef: null
         };
       }
 
-      // If response has beneficiary data directly without array wrapper
+      // Fallback: If response has beneficiary data directly
       if (result.data && !Array.isArray(result.data) && result.data.id) {
+        const isCurrentCustomerBenef = result.data.is_current_customer_benef || "N";
         return {
           exists: true,
           data: result.data,
           searched: true,
           processed: false,
-          message: 'Beneficiary found'
+          message: 'Beneficiary found',
+          isCurrentCustomerBenef: isCurrentCustomerBenef
+        };
+      }
+
+      // If result.data is an array directly
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        const beneficiaryData = result.data[0];
+        const isCurrentCustomerBenef = result.is_current_customer_benef || "N";
+        return {
+          exists: true,
+          data: beneficiaryData,
+          searched: true,
+          processed: false,
+          message: 'Beneficiary found',
+          isCurrentCustomerBenef: isCurrentCustomerBenef
         };
       }
 
@@ -265,12 +301,61 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
         data: null,
         searched: true,
         processed: false,
-        message: 'No beneficiary found with this phone number'
+        message: 'No beneficiary found with this phone number',
+        isCurrentCustomerBenef: null
       };
 
     } catch (error) {
       console.error('❌ Phone search API error:', error);
       return rejectWithValue(error.message || 'Failed to search for beneficiary');
+    }
+  }
+);
+
+// ===================== ADD EXISTING BENEFICIARY TO CUSTOMER =====================
+export const addExistingBeneficiary = createAsyncThunk(
+  "beneficiaries/addExistingBeneficiary",
+  async ({ beneficiaryUuid, customerUuid }, { rejectWithValue }) => {
+    try {
+      const authtoken = localStorage.getItem("authtoken");
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      const payload = {
+        beneficiary_uuid: beneficiaryUuid,
+        customer_uuid: customerUuid
+      };
+
+      console.log('📤 Adding existing beneficiary with payload:', payload);
+
+      const response = await fetch(
+        `${API_URL}/beneficiaries/add-existing-beneficiary`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authtoken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      console.log('📡 API Response status:', response.status);
+
+      const result = await response.json();
+      console.log('✅ API Response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to add existing beneficiary');
+      }
+
+      return {
+        success: true,
+        data: result,
+        message: result.message || 'Beneficiary added successfully!'
+      };
+    } catch (error) {
+      console.error('❌ Add existing beneficiary error:', error);
+      return rejectWithValue(error.message || 'Failed to add existing beneficiary');
     }
   }
 );
@@ -733,6 +818,14 @@ const initialState = {
     exists: false,
     data: null,
     processed: false,
+    isCurrentCustomerBenef: null,
+  },
+
+  addExistingBeneficiaryState: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
   },
 
   // Last updated timestamp
@@ -1111,6 +1204,7 @@ const beneficiarySlice = createSlice({
         state.phoneSearch.exists = false;
         state.phoneSearch.data = null;
         state.phoneSearch.processed = false;
+        state.phoneSearch.isCurrentCustomerBenef = null;
       })
       .addCase(searchBeneficiaryByPhone.fulfilled, (state, action) => {
         state.phoneSearch.loading = false;
@@ -1119,6 +1213,7 @@ const beneficiarySlice = createSlice({
         state.phoneSearch.data = action.payload.data;
         state.phoneSearch.processed = false;
         state.phoneSearch.error = null;
+        state.phoneSearch.isCurrentCustomerBenef = action.payload.isCurrentCustomerBenef || null;
 
         console.log('✅ Phone search fulfilled:', {
           exists: action.payload.exists,
@@ -1132,8 +1227,30 @@ const beneficiarySlice = createSlice({
         state.phoneSearch.data = null;
         state.phoneSearch.error = action.payload;
         state.phoneSearch.processed = false;
+        state.phoneSearch.isCurrentCustomerBenef = null;
 
         console.error('❌ Phone search rejected:', action.payload);
+      })
+
+      // ===================== ADD EXISTING BENEFICIARY =====================
+      .addCase(addExistingBeneficiary.pending, (state) => {
+        state.addExistingBeneficiaryState.loading = true;
+        state.addExistingBeneficiaryState.error = null;
+        state.addExistingBeneficiaryState.success = false;
+      })
+      .addCase(addExistingBeneficiary.fulfilled, (state, action) => {
+        state.addExistingBeneficiaryState.loading = false;
+        state.addExistingBeneficiaryState.success = true;
+        state.addExistingBeneficiaryState.data = action.payload;
+        state.addExistingBeneficiaryState.error = null;
+
+        // Optionally refresh the beneficiaries list
+        state.lastUpdated = new Date().toISOString();
+      })
+      .addCase(addExistingBeneficiary.rejected, (state, action) => {
+        state.addExistingBeneficiaryState.loading = false;
+        state.addExistingBeneficiaryState.success = false;
+        state.addExistingBeneficiaryState.error = action.payload;
       })
 
       // ===================== FETCH BENEFICIARIES =====================
@@ -1512,6 +1629,15 @@ export const selectPhoneSearchData = (state) =>
   state.beneficiaries.phoneSearch.data;
 export const selectPhoneSearchProcessed = (state) =>
   state.beneficiaries.phoneSearch.processed;
+export const selectIsCurrentCustomerBenef = (state) =>
+  state.beneficiaries.phoneSearch.isCurrentCustomerBenef;
+
+export const selectAddExistingBeneficiaryLoading = (state) =>
+  state.beneficiaries.addExistingBeneficiaryState.loading;
+export const selectAddExistingBeneficiaryError = (state) =>
+  state.beneficiaries.addExistingBeneficiaryState.error;
+export const selectAddExistingBeneficiarySuccess = (state) =>
+  state.beneficiaries.addExistingBeneficiaryState.success;
 
 // ===================== UTILITY SELECTORS =====================
 

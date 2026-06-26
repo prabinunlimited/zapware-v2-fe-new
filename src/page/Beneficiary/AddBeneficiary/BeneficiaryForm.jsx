@@ -63,6 +63,11 @@ import {
   selectBankDeleteError,
   selectBankDeleteSuccess,
   deleteBeneficiaryBank,
+  addBeneficiaryBank,
+  validateBeneficiaryCreate,
+  selectValidateLoading,
+  selectValidateError,
+  selectValidateSuccess,
 } from "../AddBeneficiary/addBeneficiarySlice";
 
 // Import from beneficiarySlice for phone search
@@ -81,6 +86,10 @@ import {
   clearCreateState as clearBeneficiariesCreateState,
   selectBeneficiaries,
   setPhoneSearchProcessed,
+  addExistingBeneficiary,
+  selectAddExistingBeneficiaryLoading,
+  selectAddExistingBeneficiaryError,
+  selectAddExistingBeneficiarySuccess,
 } from "../MyBeneficiaries/BeneficiariesSlice";
 
 import {
@@ -130,6 +139,204 @@ AlertBox.defaultProps = {
   message: "Please log in to continue!",
 };
 
+const ValidationErrorModal = ({ isOpen, onClose, errors, title = "Validation Error" }) => {
+  if (!isOpen) return null;
+
+  // Format error messages from API response
+  const formatErrors = (errorData) => {
+    console.log("🔍 Formatting errors - Input:", errorData);
+    console.log("🔍 ErrorData type:", typeof errorData);
+
+    // If it's a string, return as single error
+    if (typeof errorData === 'string') {
+      return [errorData];
+    }
+
+    // If it's an array, return as is
+    if (Array.isArray(errorData)) {
+      return errorData;
+    }
+
+    // If it's an object
+    if (typeof errorData === 'object' && errorData !== null) {
+      const messages = [];
+
+      // Handle the specific API response format: { status: "error", message: { field: ["error"] } }
+      if (errorData.status === "error" && errorData.message && typeof errorData.message === 'object') {
+        console.log("📦 Found status:error with message object:", errorData.message);
+        Object.entries(errorData.message).forEach(([field, fieldErrors]) => {
+          // Format field name for display (but we'll only show the error message)
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            // Only show the error message, not the field name
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { message: { field: ["error"] } } format
+      if (errorData.message && typeof errorData.message === 'object') {
+        console.log("📦 Found message object:", errorData.message);
+        Object.entries(errorData.message).forEach(([field, fieldErrors]) => {
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { message: "error string" } format
+      if (errorData.message && typeof errorData.message === 'string') {
+        return [errorData.message];
+      }
+
+      // Handle { errors: { field: ["error"] } } format
+      if (errorData.errors && typeof errorData.errors === 'object') {
+        console.log("📦 Found errors object:", errorData.errors);
+        Object.entries(errorData.errors).forEach(([field, fieldErrors]) => {
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach(err => {
+              // Only show the error message, not the field name
+              messages.push(err);
+            });
+          } else if (typeof fieldErrors === 'string') {
+            messages.push(fieldErrors);
+          } else if (typeof fieldErrors === 'object') {
+            if (fieldErrors.message) {
+              messages.push(fieldErrors.message);
+            } else {
+              try {
+                messages.push(JSON.stringify(fieldErrors));
+              } catch (e) {
+                messages.push('Invalid error format');
+              }
+            }
+          }
+        });
+        return messages.length > 0 ? messages : ['Validation failed. Please check your details.'];
+      }
+
+      // Handle { error: "error string" } format
+      if (errorData.error && typeof errorData.error === 'string') {
+        return [errorData.error];
+      }
+
+      // If none of the above, try to extract any string values
+      const stringValues = Object.values(errorData).filter(val => typeof val === 'string');
+      if (stringValues.length > 0) {
+        return stringValues;
+      }
+
+      // Last resort: convert object to string
+      try {
+        return [JSON.stringify(errorData)];
+      } catch (e) {
+        return ['Validation failed. Please check your details.'];
+      }
+    }
+
+    return ['Validation failed. Please check your details.'];
+  };
+
+  const errorMessages = formatErrors(errors);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
+      role="dialog"
+      aria-labelledby="error-modal-title"
+      aria-describedby="error-modal-message"
+      onClick={onClose}
+    >
+      <div
+        className="max-w-lg w-11/12 md:w-1/2 p-6 rounded-lg shadow-xl bg-white text-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start mb-4">
+          <div className="flex-shrink-0 mr-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <FaExclamationTriangle className="text-red-600 text-xl" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h2 id="error-modal-title" className="text-xl font-bold text-red-600">
+              {title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-60 overflow-y-auto">
+          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <ul className="space-y-2">
+              {errorMessages.map((error, index) => (
+                <li key={index} className="flex items-start text-sm">
+                  <span className="text-red-500 mr-2 mt-0.5">•</span>
+                  <span className="text-red-700">{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+ValidationErrorModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  errors: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.object,
+    PropTypes.array
+  ]),
+  title: PropTypes.string,
+};
+
+ValidationErrorModal.defaultProps = {
+  errors: 'Validation failed. Please check your details.',
+  title: 'Validation Error',
+};
+
 const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -138,6 +345,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Add useRef to track mounted state
   const isMounted = useRef(true);
+  const bankDataInitialized = useRef(false);
 
   // Handle different route patterns
   let customerId, beneficiaryId;
@@ -198,6 +406,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const phoneSearchLoading = useSelector(selectPhoneSearchLoading);
   const phoneExists = useSelector(selectPhoneExists);
   const phoneSearchData = useSelector(selectPhoneSearchData);
+  const [isCurrentCustomerBenef, setIsCurrentCustomerBenef] = useState(null);
+
+  const addExistingBeneficiaryLoading = useSelector(selectAddExistingBeneficiaryLoading);
+  const addExistingBeneficiarySuccess = useSelector(selectAddExistingBeneficiarySuccess);
+  const addExistingBeneficiaryError = useSelector(selectAddExistingBeneficiaryError);
+
+  const validateLoading = useSelector(selectValidateLoading);
+  const validateError = useSelector(selectValidateError);
+  const validateSuccess = useSelector(selectValidateSuccess);
 
   // Create state from beneficiarySlice
   const beneficiariesCreateLoading = useSelector(
@@ -224,10 +441,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
     return 1;
   });
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalData, setErrorModalData] = useState(null);
 
   const [editBankOnlyMode, setEditBankOnlyMode] = useState(() => {
     return mode === "edit" && location.state?.editBankOnly;
   });
+  const isAddBankOnlyMode = location.state?.addBankOnly || false;
+
   const [beneficiariesLoaded, setBeneficiariesLoaded] = useState(false);
   const [usingExistingBeneficiary, setUsingExistingBeneficiary] = useState(false);
   const [existingBeneficiaryId, setExistingBeneficiaryId] = useState(null);
@@ -251,6 +472,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   const [branchCode, setBranchCode] = useState("");
   const [fieldTouched, setFieldTouched] = useState({});
   const [selectedCountryCode, setSelectedCountryCode] = useState("");
+
+  const [validationError, setValidationError] = useState(null);
 
   // Swift support function
   const isSwiftSupportedForCurrency = (currency) => {
@@ -514,6 +737,45 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   }, [dispatch, customerId, mode]);
 
+  useEffect(() => {
+    if (isAddBankOnlyMode && location.state?.existingBeneficiaryId) {
+      console.log("📝 Add bank only mode - fetching beneficiary data:", location.state.existingBeneficiaryId);
+      dispatch(fetchBeneficiaryById(location.state.existingBeneficiaryId));
+      setStep(2); // Skip to bank information step
+      setUsingExistingBeneficiary(true);
+      setExistingBeneficiaryId(location.state.existingBeneficiaryId);
+
+      // ✅ RESET bank accounts to a completely empty state for adding new bank
+      setBankAccounts([{
+        id: null,
+        rails: "",
+        iban: "",
+        swift: "",
+        intermediarySwift: "",
+        routingNumber: "",
+        accountNumber: "",
+        bankName: "",
+        ifsc: "",
+        bankCode: "",
+        paymentMethod: "",
+        bankState: "",
+        branchCode: "",
+        accountName: "",
+        accountTitle: "",
+        walletProvider: "",
+        mobileNumber: "",
+        otherProvider: "",
+        accountType: "",
+        sortCode: "",
+        bankCountry: "",
+        currency: "" // Empty currency - user must select
+      }]);
+
+      // ✅ Reset currency to empty so user must select
+      setCurrency("");
+    }
+  }, [isAddBankOnlyMode, location.state, dispatch]);
+
   // Sync countryCodeInput with formik value in edit mode
   useEffect(() => {
     if (mode === "edit" && formik.values.country_phone_code) {
@@ -548,9 +810,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   // Populate form when beneficiary data is loaded
   useEffect(() => {
     if (
-      mode === "edit" &&
-      beneficiaryDetails &&
-      !initialData &&
+      ((mode === "edit" && beneficiaryDetails && !initialData) ||
+        (isAddBankOnlyMode && beneficiaryDetails)) &&
       isMounted.current
     ) {
       console.log(
@@ -578,7 +839,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         beneficiary_id_number: beneficiaryDetails.beneficiary_id_number || "",
       });
 
-      if (
+      // For addBankOnly mode, start with empty bank account
+      if (isAddBankOnlyMode) {
+        setBankAccounts([{
+          id: null,
+          rails: "",
+          iban: "",
+          swift: "",
+          intermediarySwift: "",
+          routingNumber: "",
+          accountNumber: "",
+          bankName: "",
+          ifsc: "",
+          bankCode: "",
+          paymentMethod: paymentMethod,
+          bankState: "",
+          branchCode: "",
+          accountName: "",
+          accountTitle: "",
+          walletProvider: "",
+          mobileNumber: "",
+          otherProvider: "",
+          accountType: "",
+          sortCode: "",
+          bankCountry: "",
+          currency: currency
+        }]);
+      } else if (
         beneficiaryDetails.banks &&
         beneficiaryDetails.banks.length > 0 &&
         isMounted.current
@@ -613,7 +900,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         );
       }
     }
-  }, [beneficiaryDetails, mode, initialData, formik.setValues, currency, paymentMethod]);
+  }, [beneficiaryDetails, mode, initialData, isAddBankOnlyMode, formik.setValues, currency, paymentMethod]);
 
   // Fetch nationalities and countries immediately when component mounts
   useEffect(() => {
@@ -709,11 +996,46 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   // Handle edit bank only mode
   useEffect(() => {
-    if (mode === "edit" && location.state?.editBankOnly) {
+    if (mode === "edit" && location.state?.editBankOnly && !bankDataInitialized.current) {
+      bankDataInitialized.current = true;  // <-- Prevent re-running
       setEditBankOnlyMode(true);
       setStep(2);
+
+      // If specific bank data is passed, pre-populate the bank account
+      if (location.state?.bankData) {
+        const bankData = location.state.bankData;
+        const initialCurrency = bankData.currency_code || bankData.currency || "USD";
+
+        setBankAccounts([{
+          id: bankData.id,
+          rails: bankData.rails || "",
+          iban: bankData.benef_iban || "",
+          swift: bankData.swift_code || "",
+          intermediarySwift: bankData.intermediary_bank_swift || "",
+          routingNumber: bankData.routing_number || "",
+          accountNumber: bankData.bank_acc_no || "",
+          bankName: bankData.bank_name || "",
+          ifsc: bankData.ifsc || "",
+          bankCode: bankData.bankCode || "",
+          paymentMethod: bankData.payment_method || paymentMethod,
+          bankState: bankData.bankState || "",
+          branchCode: bankData.branchCode || "",
+          accountName: bankData.account_name || "",
+          accountTitle: bankData.account_title || "",
+          walletProvider: bankData.wallet_provider || "",
+          mobileNumber: bankData.mobile_number || "",
+          otherProvider: bankData.other_provider || "",
+          accountType: bankData.account_type || "",
+          sortCode: bankData.sort_code || "",
+          bankCountry: bankData.bank_country || "",
+          currency: initialCurrency  // <-- Use local variable, not state
+        }]);
+
+        // Set the currency
+        setCurrency(initialCurrency);
+      }
     }
-  }, [location.state, mode]);
+  }, [mode, location.state, paymentMethod]);  // <-- REMOVED currency from deps
 
   // Fetch cities when country changes
   useEffect(() => {
@@ -843,11 +1165,15 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
       // Handle found beneficiary
       if (phoneSearch.exists && phoneSearch.data) {
+        const isCurrentCustomerBenefValue = phoneSearch.isCurrentCustomerBenef || "N";
         const beneficiaryData = phoneSearch.data;
         console.log("✅ Found beneficiary data:", beneficiaryData);
 
         // Map nationality if needed
         let nationalityId = beneficiaryData.nationality_id;
+
+        // Store the flag
+        setIsCurrentCustomerBenef(isCurrentCustomerBenefValue);
 
         // If nationality_id is empty but we have nationalities loaded, try to find by name
         if (
@@ -953,8 +1279,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           });
         }
 
-        // Set usingExistingBeneficiary to true to lock the form fields
-        setUsingExistingBeneficiary(true);
+        // Set usingExistingBeneficiary based on the flag
+        if (isCurrentCustomerBenefValue === "Y") {
+          // This is already your beneficiary - cannot use or create new
+          setUsingExistingBeneficiary(false);
+          toast.info("This beneficiary is already associated with your account.");
+        } else if (isCurrentCustomerBenefValue === "N") {
+          // Beneficiary found but not yours - can use existing
+          setUsingExistingBeneficiary(false);
+          toast.success(`Beneficiary found: ${displayData.name}`);
+        }
 
         // Important: Set showSearchResults to true to show the "Beneficiary Found" UI
         setShowSearchResults(true);
@@ -1050,111 +1384,63 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
-  const handleUseFoundBeneficiary = () => {
-    console.log("🔄 Using existing beneficiary:", foundBeneficiary || phoneSearch.data);
+  const handleUseFoundBeneficiary = async () => {
+    console.log("🔄 Using existing beneficiary via API:", foundBeneficiary || phoneSearch.data);
 
     const beneficiaryToUse = foundBeneficiary || phoneSearch.data;
 
-    if (beneficiaryToUse) {
-      // Store the existing beneficiary ID
-      if (beneficiaryToUse.id) {
-        setExistingBeneficiaryId(beneficiaryToUse.id);
-        console.log("📌 Stored existing beneficiary ID:", beneficiaryToUse.id);
-      }
-
-      // Map nationality if needed
-      let nationalityId = beneficiaryToUse.nationality_id;
-      if (!nationalityId && beneficiaryToUse.nationality && nationalities.length > 0) {
-        nationalityId = mapNationalityToId(beneficiaryToUse.nationality, nationalities);
-      }
-
-      // Map relationship if needed
-      let relationshipValue = beneficiaryToUse.relationtobenef;
-      const relationshipMap = {
-        Father: "father",
-        Mother: "mother",
-        Sister: "sister",
-        Brother: "brother",
-        Cousin: "cousin",
-        Friend: "friend",
-        Other: "other",
-      };
-      if (relationshipValue && relationshipMap[relationshipValue]) {
-        relationshipValue = relationshipMap[relationshipValue];
-      }
-
-      // Set all form values (personal details only)
-      const formValues = {
-        name: beneficiaryToUse.name || "",
-        country_id: beneficiaryToUse.country_id?.toString() || "",
-        country_phone_code: beneficiaryToUse.country_phone_code || countryCodeInput,
-        phone_number: beneficiaryToUse.phone_number || phoneInput,
-        email: beneficiaryToUse.email || "",
-        beneftype: beneficiaryToUse.beneftype || "individual",
-        state: beneficiaryToUse.state || "",
-        city: beneficiaryToUse.city || "",
-        street: beneficiaryToUse.street || "",
-        postalcode: beneficiaryToUse.postalcode || "",
-        relationtobenef: relationshipValue || "",
-        otherRelationship: beneficiaryToUse.otherRelationship || "",
-        nationality_id: nationalityId?.toString() || "",
-        status: beneficiaryToUse.status?.toString() || "1",
-        nic_bcc_code: beneficiaryToUse.nic_bcc_code || "",
-        beneficiary_id_type: beneficiaryToUse.beneficiary_id_type || "",
-        beneficiary_id_number: beneficiaryToUse.beneficiary_id_number || "",
-      };
-
-      console.log("📝 Setting personal form values:", formValues);
-      formik.setValues(formValues);
-
-      // Reset bank accounts to empty/default state
-      console.log("🏦 Resetting bank accounts to empty state");
-      setBankAccounts([
-        {
-          rails: "",
-          iban: "",
-          swift: "",
-          intermediarySwift: "",
-          routingNumber: "",
-          accountNumber: "",
-          bankName: "",
-          ifsc: "",
-          bankCode: "",
-          paymentMethod: paymentMethod,
-          bankState: "",
-          branchCode: "",
-          accountName: "",
-          accountTitle: "",
-          walletProvider: "",
-          mobileNumber: "",
-          otherProvider: "",
-          accountType: "",
-          sortCode: "",
-          bankCountry: "",
-          currency: currency,
-        },
-      ]);
-
-      // Reset ID type fields
-      // formik.setFieldValue("beneficiary_id_type", "");
-      // formik.setFieldValue("beneficiary_id_number", "");
-
-      // Set the relationship dropdown state
-      if (relationshipValue === "other") {
-        setShowOtherRelationship(true);
-      } else {
-        setShowOtherRelationship(false); 
-      }
+    if (!beneficiaryToUse) {
+      toast.error("Beneficiary data not found. Please search again.");
+      return;
     }
 
-    // Set states
-    setUsingExistingBeneficiary(true);
-    setShowSearchResults(false);
+    // Get the beneficiary UUID
+    const beneficiaryUuid = beneficiaryToUse.benef_uuid || beneficiaryToUse.uuid;
 
-    // Small delay to ensure form values are set before validation
-    setTimeout(() => {
-      setStep(1);
-    }, 100);
+    if (!beneficiaryUuid) {
+      toast.error("Beneficiary UUID not found. Cannot add this beneficiary.");
+      return;
+    }
+
+    // Get customer UUID from localStorage or Redux
+    let customerUuid = localStorage.getItem("userUuid") || localStorage.getItem("customerUuid");
+
+    if (!customerUuid) {
+      // Try to get from Redux state if available
+      const state = store.getState();
+      customerUuid = state?.auth?.user?.uuid;
+    }
+
+    if (!customerUuid) {
+      toast.error("Customer UUID not found. Please log in again.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Call the API to add existing beneficiary
+      const result = await dispatch(addExistingBeneficiary({
+        beneficiaryUuid: beneficiaryUuid,
+        customerUuid: customerUuid
+      })).unwrap();
+
+      console.log("✅ Add existing beneficiary result:", result);
+
+      if (result.success) {
+        toast.success("Beneficiary added successfully!");
+
+        // Navigate back to beneficiaries page after successful addition
+        setTimeout(() => {
+          navigate(-1); // Go back to previous page
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("❌ Failed to add existing beneficiary:", error);
+      toast.error(error.message || "Failed to add beneficiary. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateNewBeneficiary = () => {
@@ -1186,12 +1472,24 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     setStep(1);
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     // If in phone search step (step 0), handle differently
     if (step === 0) {
+      // Check if beneficiary is already yours (Y) - prevent proceeding
+      if (phoneSearch.isCurrentCustomerBenef === "Y") {
+        toast.error("This beneficiary is already associated with your account. You cannot proceed.");
+        return false;
+      }
+
+      // Check if beneficiary was found but not yours (N) - force use existing
+      if (phoneSearch.isCurrentCustomerBenef === "N") {
+        toast.error("Please click 'Use Existing Beneficiary' to proceed with this beneficiary.");
+        return false;
+      }
+
       if (!selectedBeneficiaryType) {
-        toast.error("Please select beneficiary type")
-        return false
+        toast.error("Please select beneficiary type");
+        return false;
       }
       if (!phoneInput.trim()) {
         toast.error("Please enter a phone number to search");
@@ -1243,48 +1541,150 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       return true;
     }
 
-    // For steps 1 and 2, use existing validation
-    // Currency-specific validations
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
-      const countryInput = formik.values.country_id;
-      if (countryInput === "" || countryInput === " ") {
-        toast.error(`Country Required for Currency: ${currency}`);
-        return false;
+    // For step 1 - VALIDATE BEFORE PROCEEDING
+    if (step === 1) {
+      // Currency-specific validations
+      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+        const countryInput = formik.values.country_id;
+        if (countryInput === "" || countryInput === " ") {
+          toast.error(`Country Required for Currency: ${currency}`);
+          return false;
+        }
+        const streetInput = formik.values.street;
+        if (streetInput === "" || streetInput === " ") {
+          toast.error(`Street Required for Currency: ${currency}`);
+          return false;
+        }
+        const idTypeInput = formik.values.beneficiary_id_type;
+        if (idTypeInput === "" || idTypeInput === " ") {
+          toast.error(`ID Type Required for Currency: ${currency}`);
+          return false;
+        }
+
+        const idNumber = formik.values.beneficiary_id_number;
+        if (idNumber === "" || idNumber === " ") {
+          toast.error(`ID Number Required for Currency: ${currency}`);
+          return false;
+        }
+
+        if (currency === "INR") {
+          const cityInput = formik.values.city;
+          if (cityInput === "" || cityInput === " ") {
+            toast.error(`City Required for Currency: ${currency}`);
+            return false;
+          }
+        }
       }
-      const streetInput = formik.values.street;
-      if (streetInput === "" || streetInput === " ") {
-        toast.error(`Street Required for Currency: ${currency}`);
-        return false;
-      }
-      const idTypeInput = formik.values.beneficiary_id_type;
-      if (idTypeInput === "" || idTypeInput === " ") {
-        toast.error(`ID Type Required for Currency: ${currency}`);
+
+      // General form validation
+      if (!isFormValid()) {
+        toast.error("Please fill all required fields before proceeding");
         return false;
       }
 
-      const idNumber = formik.values.beneficiary_id_number;
-      if (idNumber === "" || idNumber === " ") {
-        toast.error(`ID Number Required for Currency: ${currency}`);
-        return false;
-      }
+      // NEW VALIDATION STEP - Only for new beneficiary creation
+      if (mode === "create" && !usingExistingBeneficiary && !editBankOnlyMode && !isAddBankOnlyMode) {
+        try {
+          // Prepare validation payload
+          let cleanedCountryCode = formik.values.country_phone_code || "";
+          if (cleanedCountryCode.includes('_')) {
+            cleanedCountryCode = cleanedCountryCode.split('_')[0];
+          }
+          if (cleanedCountryCode && !cleanedCountryCode.startsWith('+')) {
+            cleanedCountryCode = `+${cleanedCountryCode}`;
+          }
 
-      if (currency === "INR") {
-        const cityInput = formik.values.city;
-        if (cityInput === "" || cityInput === " ") {
-          toast.error(`City Required for Currency: ${currency}`);
+          // Get customer UUID from localStorage
+          const customerUuid = localStorage.getItem("userUuid") ||
+            localStorage.getItem("customerUuid") ||
+            localStorage.getItem("uuid");
+
+          console.log("🔍 Customer UUID from localStorage:", customerUuid);
+
+          const validationPayload = {
+            customer_id: customerUuid,  // Send customer UUID as customer_id value
+            beneftype: formik.values.beneftype,
+            name: formik.values.name,
+            phone_number: formik.values.phone_number,
+            email: formik.values.email,
+            country_phone_code: cleanedCountryCode,
+          };
+
+          console.log("🔍 Validating beneficiary data:", validationPayload);
+
+          // Show loading indicator
+          setLoading(true);
+
+          // Call the validation API
+          const result = await dispatch(validateBeneficiaryCreate(validationPayload)).unwrap();
+
+          console.log("✅ Validation successful:", result);
+
+          // Validation passed - proceed to next step
+          setValidationError(null);
+          setLoading(false);
+          setStep(step + 1);
+          return true;
+
+        } catch (error) {
+          // Validation failed - Show error modal
+          console.error("❌ Validation failed:", error);
+          console.log("🔍 Error object:", error);
+
+          // Format the error data for the modal
+          let errorData = { message: 'Validation failed. Please check your details.' };
+
+          // Check if error has response.data (from axios/fetch)
+          if (error?.response?.data) {
+            errorData = error.response.data;
+            console.log("📦 Error from response.data:", errorData);
+          }
+          // Check if error is already the API response
+          else if (error?.data) {
+            errorData = error.data;
+            console.log("📦 Error from data:", errorData);
+          }
+          // Check if error has message property
+          else if (error?.message) {
+            // If message is an object (like { customer_id: ["error"] })
+            if (typeof error.message === 'object') {
+              errorData = { message: error.message };
+            } else {
+              errorData = { message: error.message };
+            }
+            console.log("📦 Error with message:", errorData);
+          }
+          // If error is a string, try to parse it
+          else if (typeof error === 'string') {
+            try {
+              const parsed = JSON.parse(error);
+              errorData = parsed;
+              console.log("📦 Parsed error string:", errorData);
+            } catch (e) {
+              errorData = { message: error };
+              console.log("📦 Error as string:", errorData);
+            }
+          }
+
+          console.log("📦 Final error data being passed to modal:", errorData);
+
+          // Set error data and show modal
+          setErrorModalData(errorData);
+          setShowErrorModal(true);
+          setValidationError(
+            typeof errorData.message === 'object'
+              ? JSON.stringify(errorData.message)
+              : errorData.message || 'Validation failed'
+          );
+          setLoading(false);
           return false;
         }
       }
     }
 
-    // General form validation
-    if (!isFormValid()) {
-      toast.error("Please fill all required fields before proceeding");
-      return false;
-    }
-
-    if (step === 1) {
-      // When moving from step 1 to step 2
+    // For step 2, handle as before
+    if (step === 2) {
+      // Check if we can proceed to submit
       const invalidSwiftAccounts = bankAccounts.filter(
         (account) =>
           account.rails === "Swift" &&
@@ -1297,8 +1697,13 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         );
         return false;
       }
+
+      // For edit mode or existing beneficiary, you might want to submit directly
+      // or just proceed with the current logic
+      return true;
     }
 
+    // Default - move to next step
     setStep(step + 1);
     return true;
   };
@@ -1348,7 +1753,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
   };
 
-  // UPDATED: Handle submit for both new and existing beneficiaries
   // UPDATED: Handle submit for both new and existing beneficiaries
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1549,46 +1953,120 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     }
 
     try {
-      if (mode === "create") {
-        // CREATE NEW BENEFICIARY (both cases - with or without existing beneficiary)
-        console.log("✨ Creating new beneficiary");
-        console.log("Bank accounts to add:", bankAccountsToSend.length);
-        console.log("Using existing beneficiary flag:", usingExistingBeneficiary);
+      if (mode === "create" || isAddBankOnlyMode) {
+        console.log("✨ Creating new beneficiary or adding bank to existing");
+        console.log("Is add bank only mode:", isAddBankOnlyMode);
         console.log("Existing beneficiary ID:", existingBeneficiaryId);
+        console.log("Bank accounts to add:", bankAccountsToSend.length);
 
-        const result = await dispatch(
-          createAndAddBeneficiary({
-            customerId,
-            beneficiaryData: {
-              ...beneficiaryData,
-              country_phone_code: cleanedCountryCode,
-            },
-            bankAccounts: bankAccountsToSend,
-            currency: currency,
-            country_code: cleanedCountryCode,
-          })
-        ).unwrap();
+        let result;
 
-        console.log("📦 Create result:", result);
+        if (isAddBankOnlyMode && existingBeneficiaryId) {
+          // CALL THE ADD BENEF BANK API FOR ADDING BANK TO EXISTING BENEFICIARY
+          console.log("📤 Calling addBeneficiaryBank API");
 
-        // Handle different response scenarios
-        if (result?.success === true || result?.beneficiaryId || result?.warning) {
-          if (bankAccountsToSend.length === 0) {
-            toast.success("Beneficiary created successfully!");
-          } else {
-            toast.success("Beneficiary created successfully with bank account!");
+          // Prepare bank data for the API
+          const bankData = bankAccountsToSend[0] || {};
+          const currentCurrency = bankData.currency || currency;
+
+          const payload = {
+            benef_id: existingBeneficiaryId,
+            benef_iban: bankData.iban || "",
+            bic_code: bankData.swift || "",
+            bank_name: bankData.bankName || "",
+            bank_branch: bankData.branchCode || "",
+            bank_address: bankData.bankState || "",
+            bank_city: bankData.bankCity || "",
+            bank_state: bankData.bankState || "",
+            bank_country: bankData.bankCountry || "",
+            ifsc: bankData.ifsc || "",
+            sort_code: bankData.sortCode || "",
+            account_number: bankData.accountNumber || "",
+            account_type: bankData.accountType || "",
+            payment_method: bankData.paymentMethod || "Local",
+            routing_number: bankData.routingNumber || "",
+            bank_acc_no: bankData.accountNumber || "",
+            description: "",
+            beneficiary_wallet: bankData.walletProvider || "",
+            swift: bankData.swift || "",
+            intermediary_bank_swift: bankData.intermediarySwift || "",
+            rails: bankData.rails || "Local",
+            currency_code: currentCurrency,
+          };
+
+          // Add ID fields for specific currencies
+          if (["BDT", "INR", "PKR"].includes(currentCurrency)) {
+            payload.beneficiary_id_type = formik.values.beneficiary_id_type;
+            payload.beneficiary_id_number = formik.values.beneficiary_id_number;
           }
+
+          // Special handling for NPR, KES, NGN currencies
+          if (["NPR", "KES", "NGN"].includes(currentCurrency)) {
+            if (bankData.bankCode) {
+              payload.bank_code = bankData.bankCode;
+            }
+            if (bankData.accountName) {
+              payload.account_name = bankData.accountName;
+            }
+          }
+
+          // Remove empty values
+          Object.keys(payload).forEach(key => {
+            if (payload[key] === undefined || payload[key] === "") {
+              delete payload[key];
+            }
+          });
+
+          console.log("📤 Payload for addBeneficiaryBank:", payload);
+
+          // Call the API to add bank to existing beneficiary
+          result = await dispatch(addBeneficiaryBank({
+            customerId: customerId,
+            bankData: payload
+          })).unwrap();
+
+          console.log("📦 Add bank result:", result);
+
+          toast.success("Bank account added successfully!");
           setTimeout(() => {
             navigate(-1);
           }, 1500);
-        } else if (result?.error) {
-          toast.error(result.error);
+
         } else {
-          // If we got here, assume success
-          toast.success("Beneficiary created successfully!");
-          setTimeout(() => {
-            navigate(-1);
-          }, 1500);
+          // Original flow - create new beneficiary with banks
+          result = await dispatch(
+            createAndAddBeneficiary({
+              customerId,
+              beneficiaryData: {
+                ...beneficiaryData,
+                country_phone_code: cleanedCountryCode,
+              },
+              bankAccounts: bankAccountsToSend,
+              currency: currency,
+              country_code: cleanedCountryCode,
+            })
+          ).unwrap();
+
+          console.log("📦 Create result:", result);
+
+          // Handle different response scenarios
+          if (result?.success === true || result?.beneficiaryId || result?.warning) {
+            if (bankAccountsToSend.length === 0) {
+              toast.success("Beneficiary created successfully!");
+            } else {
+              toast.success("Beneficiary created successfully with bank account!");
+            }
+            setTimeout(() => {
+              navigate(-1);
+            }, 1500);
+          } else if (result?.error) {
+            toast.error(result.error);
+          } else {
+            toast.success("Beneficiary created successfully!");
+            setTimeout(() => {
+              navigate(-1);
+            }, 1500);
+          }
         }
       } else if (mode === "edit") {
         // CHECK IF THIS IS BANK-ONLY EDIT MODE
@@ -1644,7 +2122,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             ...(currentCurrency === "INR" && {
               beneficiary_id_type: formik.values.beneficiary_id_type,
               beneficiary_id_number: formik.values.beneficiary_id_number,
-            }), 
+            }),
           };
 
           // Special handling for NPR, KES, NGN currencies
@@ -1781,47 +2259,28 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const removeBankAccount = async (index) => {
     console.log("🗑️ Remove bank account called at index:", index);
-    console.log("Current bankAccounts:", bankAccounts);
 
+    // ADD THIS CHECK - Prevent deletion if only one bank account
     if (bankAccounts.length === 1) {
-      toast.error("At least one bank account is required");
+      toast.error("Cannot delete the only bank account. At least one bank account is required.");
       return;
     }
 
     const accountToRemove = bankAccounts[index];
-    console.log("Account to remove:", accountToRemove);
-    console.log("Account ID:", accountToRemove.id);
-    console.log("Mode:", mode);
 
-    // Check if this is an existing bank account (has an ID) or a new unsaved account
     if (mode === "edit" && accountToRemove.id) {
-      console.log("✅ This is an existing bank account with ID:", accountToRemove.id);
-      console.log("Will call delete API");
-
       try {
         setLoading(true);
-        console.log("📤 Calling deleteBeneficiaryBank API with:", {
-          beneficiaryId: beneficiaryId,
-          bankId: accountToRemove.id
-        });
-
-        // Call API to delete the bank account from server
         await dispatch(deleteBeneficiaryBank({
           beneficiaryId: beneficiaryId,
           bankId: accountToRemove.id,
           customerId: customerId
         })).unwrap();
 
-        console.log("✅ Delete API successful");
-
-        // Remove from local state after successful deletion
         const newBankAccounts = bankAccounts.filter((_, i) => i !== index);
         setBankAccounts(newBankAccounts);
-
         toast.success("Bank account removed successfully!");
 
-        // If we're in editBankOnlyMode and we deleted the only bank account,
-        // navigate back to beneficiaries list
         if (editBankOnlyMode && newBankAccounts.length === 0) {
           setTimeout(() => {
             navigate(-1);
@@ -1834,9 +2293,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         setLoading(false);
       }
     } else {
-      console.log("🆕 This is a new unsaved account (no ID) or not in edit mode");
-      console.log("Removing from local state only");
-      // For new unsaved accounts, just remove from local state
       const newBankAccounts = bankAccounts.filter((_, i) => i !== index);
       setBankAccounts(newBankAccounts);
       toast.info("Bank account removed from form");
@@ -2039,11 +2495,14 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </p>
             </div>
           </div>
-          {(mode === "edit" || index > 0) && (
+          {!editBankOnlyMode && (mode === "edit" || index > 0) && (
             <button
               type="button"
               onClick={() => removeBankAccount(index)}
-              className="flex items-center text-red-600 hover:text-red-800 text-sm font-medium transition-colors duration-200 p-2 hover:bg-red-50 rounded-lg"
+              disabled={bankAccounts.length === 1}
+              className={`flex items-center text-red-600 hover:text-red-800 text-sm font-medium transition-colors duration-200 p-2 hover:bg-red-50 rounded-lg ${bankAccounts.length === 1 ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              title={bankAccounts.length === 1 ? "Cannot delete the only bank account" : "Delete this bank account"}
             >
               <FaTrash className="mr-2" size={14} />
               Remove
@@ -2056,9 +2515,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           <div className="mb-4">
             <FieldLabel required={!usingExistingBeneficiary}>
               Select Rails
-              {usingExistingBeneficiary && (
+              {/* {usingExistingBeneficiary && (
                 <span className="ml-1 text-xs text-gray-500">(Optional - Skip if no bank account to add)</span>
-              )}
+              )} */}
             </FieldLabel>
             <select
               className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
@@ -2068,7 +2527,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               }
               required={!usingExistingBeneficiary}
             >
-              <option value="">{usingExistingBeneficiary ? "Select Rails (Optional)" : "Select Rails"}</option>
+              <option value="">{usingExistingBeneficiary ? "Select Rails " : "Select Rails"}</option>
               <option value="Local">
                 {accountCurrency === "GBP"
                   ? "FPS"
@@ -2090,12 +2549,12 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <option value="Mobile">Mobile</option>
             </select>
-            {usingExistingBeneficiary && !account.rails && (
+            {/* {usingExistingBeneficiary && !account.rails && (
               <div className="flex items-center mt-2 text-gray-500 text-sm">
                 <FaInfoCircle className="mr-1" size={12} />
                 <span>No rails selected - beneficiary will be saved without a bank account</span>
               </div>
-            )}
+            )} */}
             {account.rails && (
               <div className="flex items-center mt-2 text-green-600 text-sm">
                 <FaCheckCircle className="mr-1" size={12} />
@@ -3242,12 +3701,87 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         {/* Search Results */}
         {(showSearchResults || (phoneSearch.searched && !phoneSearchLoading)) && (
           <div
-            className={`p-4 sm:p-6 rounded-xl border-2 ${usingExistingBeneficiary || (phoneSearch.exists && !phoneSearchLoading && !usingExistingBeneficiary)
-              ? "border-yellow-200 bg-yellow-50"
-              : "border-green-200 bg-green-50"
+            className={`p-4 sm:p-6 rounded-xl border-2 ${phoneSearch.isCurrentCustomerBenef === "Y"
+              ? "border-red-200 bg-red-50"
+              : phoneSearch.isCurrentCustomerBenef === "N"
+                ? "border-yellow-200 bg-yellow-50"
+                : "border-green-200 bg-green-50"
               }`}
           >
-            {usingExistingBeneficiary || (phoneSearch.exists && phoneSearch.data && !usingExistingBeneficiary) ? (
+            {phoneSearch.isCurrentCustomerBenef === "Y" ? (
+              // Case Y: Already your beneficiary - Cannot use or create new
+              <div>
+                <div className="flex flex-row items-start sm:items-center text-red-700 mb-4 gap-3">
+                  <FaExclamationTriangle size={18} className="sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg">Beneficiary Already Exists!</h3>
+                    <p className="text-xs sm:text-sm">
+                      This beneficiary is already associated with your account.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Beneficiary Details */}
+                <div className="mb-6 p-3 sm:p-4 bg-white rounded-lg border border-red-100 overflow-x-auto">
+                  <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
+                    Beneficiary Details:
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs sm:text-sm text-gray-500">Name:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
+                        {foundBeneficiary?.displayName || foundBeneficiary?.name || phoneSearch.data?.name || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm text-gray-500">Email:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
+                        {foundBeneficiary?.displayEmail || foundBeneficiary?.email || phoneSearch.data?.email || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm text-gray-500">Phone:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
+                        {foundBeneficiary?.displayPhone || foundBeneficiary?.full_phone_number || foundBeneficiary?.phone_number || phoneSearch.data?.full_phone_number || phoneSearch.data?.phone_number || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm text-gray-500">Country:</span>
+                      <p className="font-medium text-sm sm:text-base break-words">
+                        {foundBeneficiary?.displayCountry || (() => {
+                          const countryId = foundBeneficiary?.country_id || phoneSearch.data?.country_id;
+                          if (countryId) {
+                            const country = countries.find(c => c.id === parseInt(countryId));
+                            return country?.name || "N/A";
+                          }
+                          return "N/A";
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSearchResults(false);
+                      setPhoneInput("");
+                      setFoundBeneficiary(null);
+                      setUsingExistingBeneficiary(false);
+                      setExistingBeneficiaryId(null);
+                      setIsCurrentCustomerBenef(null);
+                      dispatch(clearPhoneSearch());
+                    }}
+                    className="w-full px-4 sm:px-6 py-2.5 sm:py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
+                  >
+                    <FaSearch className="mr-2" size={14} />
+                    Search Again
+                  </button>
+                </div>
+              </div>
+            ) : phoneSearch.isCurrentCustomerBenef === "N" ? (
+              // Case N: Beneficiary found but not yours - Show Use Existing Beneficiary
               <div>
                 <div className="flex flex-row items-start sm:items-center text-yellow-700 mb-4 gap-3">
                   <FaExclamationTriangle size={18} className="sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
@@ -3296,19 +3830,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         })()}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-xs sm:text-sm text-gray-500">Currency:</span>
-                      <p className="font-medium text-sm sm:text-base break-words">
-                        {foundBeneficiary?.displayCurrency || (() => {
-                          const banks = foundBeneficiary?.banks || phoneSearch.data?.banks;
-                          if (banks && banks.length > 0) {
-                            const activeBank = banks.find(bank => bank.deleted_at === null);
-                            return activeBank?.currency_code || "N/A";
-                          }
-                          return "N/A";
-                        })()}
-                      </p>
-                    </div>
                   </div>
                 </div>
 
@@ -3316,22 +3837,28 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <button
                     type="button"
                     onClick={handleUseFoundBeneficiary}
-                    className="w-full sm:flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
+                    disabled={loading || addExistingBeneficiaryLoading}
+                    className={`w-full sm:flex-1 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base ${loading || addExistingBeneficiaryLoading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-yellow-500 hover:bg-yellow-600 text-white"
+                      }`}
                   >
-                    <FaCheckCircle className="mr-2" size={14} />
-                    Use Existing Beneficiary
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateNewBeneficiary}
-                    className="w-full sm:flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base"
-                  >
-                    <FaUser className="mr-2" size={14} />
-                    Create New {selectedBeneficiaryType === "individual" ? "Individual" : "Institution"} Beneficiary
+                    {loading || addExistingBeneficiaryLoading ? (
+                      <>
+                        <RingLoader size={16} color="#ffffff" className="mr-2" />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <FaCheckCircle className="mr-2" size={14} />
+                        Use Existing Beneficiary
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
             ) : (!phoneSearch.exists && phoneSearch.searched) || (!usingExistingBeneficiary && showSearchResults && !phoneSearch.exists) ? (
+              // No beneficiary found - Show Create New
               <div>
                 <div className="flex flex-row items-start sm:items-center text-green-700 mb-4 gap-3">
                   <FaCheckCircle size={18} className="sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
@@ -3379,8 +3906,18 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           <button
             type="button"
             onClick={nextStep}
-            disabled={phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType}
-            className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium text-sm sm:text-base order-1 sm:order-2 ${phoneSearchLoading || !phoneInput.trim() || !selectedBeneficiaryType
+            disabled={
+              phoneSearchLoading ||
+              !phoneInput.trim() ||
+              !selectedBeneficiaryType ||
+              phoneSearch.isCurrentCustomerBenef === "Y" ||  // DISABLE WHEN Y
+              phoneSearch.isCurrentCustomerBenef === "N"     // DISABLE WHEN N - force use existing beneficiary
+            }
+            className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 font-medium text-sm sm:text-base order-1 sm:order-2 ${phoneSearchLoading ||
+              !phoneInput.trim() ||
+              !selectedBeneficiaryType ||
+              phoneSearch.isCurrentCustomerBenef === "Y" ||  // DISABLE WHEN Y
+              phoneSearch.isCurrentCustomerBenef === "N"     // DISABLE WHEN N - force use existing beneficiary
               ? "bg-gray-300 cursor-not-allowed text-gray-500"
               : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
               }`}
@@ -3389,6 +3926,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               <>
                 <RingLoader size={16} color="#ffffff" className="mr-2" />
                 Searching...
+              </>
+            ) : phoneSearch.isCurrentCustomerBenef === "Y" ? (
+              <>
+                <FaExclamationTriangle className="mr-2" size={14} />
+                Cannot Proceed
+              </>
+            ) : phoneSearch.isCurrentCustomerBenef === "N" ? (
+              <>
+                <FaInfoCircle className="mr-2" size={14} />
+                Use Existing
               </>
             ) : (
               <>
@@ -3443,15 +3990,26 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center">
                 <FaMoneyBillWave className="mr-3" size={24} />
-                {mode === "create"
-                  ? usingExistingBeneficiary
-                    ? "Add Bank Account to Existing Beneficiary"
-                    : "Add New Beneficiary"
-                  : editBankOnlyMode
-                    ? "Edit Bank Details"
-                    : "Edit Beneficiary"}
+                {isAddBankOnlyMode ? "Add Bank Account" :
+                  mode === "create"
+                    ? usingExistingBeneficiary
+                      ? "Add Bank Account to Existing Beneficiary"
+                      : "Add New Beneficiary"
+                    : editBankOnlyMode
+                      ? "Edit Bank Details"
+                      : "Edit Beneficiary"}
               </h1>
               <p className="text-blue-100 mt-1 text-sm">
+                {isAddBankOnlyMode ? "Add a new bank account to an existing beneficiary" :
+                  mode === "create"
+                    ? usingExistingBeneficiary
+                      ? "Add a new bank account to an existing beneficiary"
+                      : "Fill in the details to add a new beneficiary"
+                    : editBankOnlyMode
+                      ? "Update the bank account information for this beneficiary"
+                      : "Update beneficiary information"}
+              </p>
+              {/* <p className="text-blue-100 mt-1 text-sm">
                 {mode === "create"
                   ? usingExistingBeneficiary
                     ? "Add a new bank account to an existing beneficiary"
@@ -3459,7 +4017,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   : editBankOnlyMode
                     ? "Update the bank account information for this beneficiary"
                     : "Update beneficiary information"}
-              </p>
+              </p> */}
             </div>
             <button
               onClick={handleCancel}
@@ -3471,7 +4029,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           </div>
 
           {/* Progress Steps - Only show for create mode */}
-          {mode === "create" && (
+          {mode === "create" && !isAddBankOnlyMode && (
             <div className="relative pt-4">
               {/* Mobile Version - Simplified */}
               <div className="md:hidden">
@@ -3483,10 +4041,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     >
                       <div
                         className={`flex items-center justify-center w-10 h-10 rounded-full border-2 border-white ${step === stepItem.number
-                            ? "bg-blue-500"
-                            : step > stepItem.number
-                              ? "bg-blue-400"
-                              : "bg-blue-300"
+                          ? "bg-blue-500"
+                          : step > stepItem.number
+                            ? "bg-blue-400"
+                            : "bg-blue-300"
                           } text-white font-bold text-sm shadow-lg`}
                       >
                         {stepItem.number}
@@ -3522,10 +4080,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     >
                       <div
                         className={`flex items-center justify-center w-12 h-12 rounded-full border-4 border-white ${step === stepItem.number
-                            ? "bg-blue-500"
-                            : step > stepItem.number
-                              ? "bg-blue-400"
-                              : "bg-blue-300"
+                          ? "bg-blue-500"
+                          : step > stepItem.number
+                            ? "bg-blue-400"
+                            : "bg-blue-300"
                           } text-white font-bold text-lg shadow-lg`}
                       >
                         {step === stepItem.number ? (
@@ -3558,7 +4116,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
         <div className="flex-1 overflow-auto p-8">
           {/* Step Indicator - Only show for create mode */}
-          {mode === "create" && (
+          {mode === "create" && !isAddBankOnlyMode && (
             <div className="mb-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
               <div className="flex items-center">
                 <div
@@ -3589,11 +4147,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             </div>
           )}
 
-          {/* STEP 0: Phone Search (only for create mode) */}
-          {mode === "create" && step === 0 && renderPhoneSearchStep()}
+          {/* STEP 0: Phone Search - Hide in editBankOnlyMode and isAddBankOnlyMode */}
+          {mode === "create" && step === 0 && !editBankOnlyMode && !isAddBankOnlyMode && renderPhoneSearchStep()}
 
-          {/* STEP 1: Beneficiary Details - Hide in editBankOnlyMode */}
-          {!editBankOnlyMode && (step === 1 || mode === "edit") && (
+          {/* STEP 1: Beneficiary Details - Hide in editBankOnlyMode and isAddBankOnlyMode */}
+          {!editBankOnlyMode && !isAddBankOnlyMode && (step === 1 || mode === "edit") && (
             <form
               onSubmit={(e) => {
                 if (mode === "create") {
@@ -4268,14 +4826,17 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <button
                     type="button"
                     onClick={nextStep}
-                    disabled={isLoading}
-                    className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 md:flex-none font-medium ${isLoading
+                    disabled={isLoading || validateLoading}
+                    className={`px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center flex-1 md:flex-none font-medium ${isLoading || validateLoading
                       ? "bg-gray-300 cursor-not-allowed text-gray-500"
                       : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
                       }`}
                   >
-                    {isLoading ? (
-                      <RingLoader size={20} color="#ffffff" />
+                    {isLoading || validateLoading ? (
+                      <>
+                        <RingLoader size={20} color="#ffffff" className="mr-2" />
+                        {validateLoading ? "Validating..." : "Loading..."}
+                      </>
                     ) : (
                       <>
                         Next Step
@@ -4309,8 +4870,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             </form>
           )}
 
-          {/* Step 2 - Bank Information - Shows for editBankOnlyMode as well */}
-          {((mode === "create" && step === 2) || editBankOnlyMode) && (
+          {/* Step 2 - Bank Information - Shows for editBankOnlyMode and isAddBankOnlyMode */}
+          {((mode === "create" && step === 2) || editBankOnlyMode || isAddBankOnlyMode) && (
             <div className="space-y-8">
               {/* Info banner for bank-only edit mode or existing beneficiary */}
               {editBankOnlyMode && (
@@ -4389,7 +4950,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      if (editBankOnlyMode) {
+                      if (editBankOnlyMode || isAddBankOnlyMode) {
                         navigate(-1);
                       } else {
                         setStep(1);
@@ -4398,7 +4959,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-300 flex-1 flex items-center justify-center font-medium"
                   >
                     <FaChevronLeft className="mr-2" />
-                    {editBankOnlyMode ? "Back to Beneficiaries" : "Back to Details"}
+                    {editBankOnlyMode || isAddBankOnlyMode ? "Back to Beneficiaries" : "Back to Details"}
                   </button>
                   <button
                     type="submit"
@@ -4450,6 +5011,16 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         pauseOnHover
         theme="colored"
       />
+      <ValidationErrorModal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorModalData(null);
+        }}
+        errors={errorModalData}
+        title="Validation Error"
+      />
+
     </div>
   );
 };
