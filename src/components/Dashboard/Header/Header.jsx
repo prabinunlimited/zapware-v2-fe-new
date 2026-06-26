@@ -84,7 +84,7 @@ const Header = ({ customerId }) => {
   const isNavigatingRef = useRef(false);
   const navigationTimerRef = useRef(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+  const [profilePicture, setProfilePicture] = useState(null);
   const {
     headerColor,
     logoUrl,
@@ -284,6 +284,22 @@ const Header = ({ customerId }) => {
     };
   }, [dispatch, bearertoken, customerId, profileLoading, profileData]);
 
+  // Load profile picture from localStorage and Redux
+  useEffect(() => {
+    // Check localStorage first
+    const cachedImage = localStorage.getItem('profilePicture');
+    if (cachedImage) {
+      setProfilePicture(cachedImage);
+      return;
+    }
+
+    // If not in localStorage, check profileData
+    if (profileData?.profile_image) {
+      setProfilePicture(profileData.profile_image);
+      localStorage.setItem('profilePicture', profileData.profile_image);
+    }
+  }, [profileData]);
+
   // Navigation handlers
   const handleProfileClick = useCallback(() => {
     clearAndNavigate(`/profile/${customerId}`);
@@ -453,8 +469,16 @@ const Header = ({ customerId }) => {
               {/* User Info */}
               <div className="flex items-center space-x-4">
                 <div className="relative">
-                  <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <FaUserCircle className="w-8 h-8 text-white" />
+                  <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center overflow-hidden">
+                    {profilePicture ? (
+                      <img
+                        src={profilePicture}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <FaUserCircle className="w-8 h-8 text-white" />
+                    )}
                   </div>
                   {/* Green dot for mobile */}
                   <motion.div
@@ -589,7 +613,15 @@ const Header = ({ customerId }) => {
               transition={{ type: "spring", stiffness: 300 }}
               className="relative"
             >
-              <FaUserCircle className="w-10 h-10 text-white" />
+              {profilePicture ? (
+                <img
+                  src={profilePicture}
+                  alt="Profile"
+                  className="w-10 h-10 rounded-full object-cover border-2 border-white/30"
+                />
+              ) : (
+                <FaUserCircle className="w-10 h-10 text-white" />
+              )}
               <motion.div
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
@@ -643,8 +675,16 @@ const Header = ({ customerId }) => {
                 >
                   <div className="flex items-center space-x-3">
                     <motion.div whileHover={{ scale: 1.1, rotate: 5 }} className="relative">
-                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-sm">
-                        <FaUserCircle className="w-7 h-7 text-white" />
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-sm overflow-hidden">
+                        {profilePicture ? (
+                          <img
+                            src={profilePicture}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FaUserCircle className="w-7 h-7 text-white" />
+                        )}
                       </div>
                       <motion.div
                         animate={{ scale: [1, 1.3, 1] }}
@@ -772,9 +812,17 @@ const Header = ({ customerId }) => {
         <div className="md:hidden relative">
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex items-center justify-center w-10 h-10 bg-white/10 rounded-full hover:bg-white/20 transition-all duration-200 relative"
+            className="flex items-center justify-center w-10 h-10 bg-white/10 rounded-full hover:bg-white/20 transition-all duration-200 relative overflow-hidden"
           >
-            <FaUserCircle className="w-6 h-6 text-white" />
+            {profilePicture ? (
+              <img
+                src={profilePicture}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <FaUserCircle className="w-6 h-6 text-white" />
+            )}
           </button>
           {/* Green dot for mobile avatar button */}
           <motion.div
@@ -789,6 +837,7 @@ const Header = ({ customerId }) => {
     profileLoading,
     profileError,
     profileData,
+    profilePicture,
     isDropdownOpen,
     isOwnerLogin,
     isStaffLogin,
