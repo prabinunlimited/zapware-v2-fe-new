@@ -163,7 +163,11 @@ const Remittance = () => {
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [activeCard, setActiveCard] = useState(null);
 
-  const [showBankLinkReminder, setShowBankLinkReminder] = useState(true);
+  const [showBankLinkReminder, setShowBankLinkReminder] = useState(() => {
+    // Check if user has already seen the reminder
+    const hasSeenBankReminder = localStorage.getItem('has_seen_bank_reminder');
+    return !hasSeenBankReminder; // Show only if not seen before
+  });
 
   const [recurringData, setRecurringData] = useState({
     isRecurring: "0",
@@ -427,6 +431,8 @@ const Remittance = () => {
   );
 
   const handleCloseBankReminder = useCallback(() => {
+    // Save to localStorage so it won't show again
+    localStorage.setItem('has_seen_bank_reminder', 'true');
     setShowBankLinkReminder(false);
   }, []);
 
