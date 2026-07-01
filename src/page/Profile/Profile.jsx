@@ -203,20 +203,20 @@ const Profile = () => {
     }
   }, []);
 
-//  Load profile picture from localStorage immediately on mount
-useEffect(() => {
-  const cachedImage = localStorage.getItem('profilePicture');
-  if (cachedImage) {
-    console.log("🔄 Loading profile picture from localStorage:", cachedImage);
-    setProfilePicture(cachedImage);
-    //  Hide loading immediately if we have cached image
-    setSaveLoading(false);
-  } else {
-    //  No image, just hide loading and show default avatar
-    setSaveLoading(false);
-    setProfilePicture(null);
-  }
-}, []);
+  //  Load profile picture from localStorage immediately on mount
+  useEffect(() => {
+    const cachedImage = localStorage.getItem('profilePicture');
+    if (cachedImage) {
+      console.log("🔄 Loading profile picture from localStorage:", cachedImage);
+      setProfilePicture(cachedImage);
+      //  Hide loading immediately if we have cached image
+      setSaveLoading(false);
+    } else {
+      //  No image, just hide loading and show default avatar
+      setSaveLoading(false);
+      setProfilePicture(null);
+    }
+  }, []);
 
   // Resend OTP timer
   useEffect(() => {
@@ -307,105 +307,105 @@ useEffect(() => {
   ]);
   // =============== END FIX ===============
 
-// Fetch additional profile data that's not in Redux
-useEffect(() => {
-  const fetchAdditionalProfileData = async () => {
-    if (!profileData || !customerId) return;
+  // Fetch additional profile data that's not in Redux
+  useEffect(() => {
+    const fetchAdditionalProfileData = async () => {
+      if (!profileData || !customerId) return;
 
-    try {
-      console.log("📸 Profile: Fetching additional profile data");
-      
-      // ✅ Check profileData for the image
-      const imageFromProfile = profileData.profile_image || 
-                              profileData.profile_picture || 
-                              null;
-      
-      if (imageFromProfile && imageFromProfile !== "") {
-        console.log("✅ Found profile picture in profileData:", imageFromProfile);
-        setProfilePicture(imageFromProfile);
-        localStorage.setItem('profilePicture', imageFromProfile);
-      }
-
-      // ✅ Check localStorage as fallback
-      const cachedImage = localStorage.getItem('profilePicture');
-      if (cachedImage && !imageFromProfile) {
-        console.log("🔄 Found cached profile picture:", cachedImage);
-        setProfilePicture(cachedImage);
-      }
-
-      // ✅ If no image found, just use default avatar (no spinner)
-      if (!imageFromProfile && !cachedImage) {
-        console.log("ℹ️ No profile picture found, showing default avatar");
-        setProfilePicture(null);
-      }
-
-      // ✅ Set loading to false immediately after checking cache
-      setSaveLoading(false);
-
-      // Fetch other data in background
-      const [termsResponse, statusLogResponse] = await Promise.all([
-        axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
-          headers: { Authorization: `Bearer ${authtoken}` },
-        }),
-        axios.get(`${API_URL}/account-status-log/${customerId}`, {
-          headers: { Authorization: `Bearer ${authtoken}` },
-        }),
-      ]);
-
-      console.log("✅ Terms and status log fetched");
-
-      // Fetch KYC in background (non-blocking)
       try {
-        const imageResponse = await axios.get(`${API_URL}/kyc/${customerId}`, {
-          headers: { Authorization: `Bearer ${bearertoken}` },
-        });
-        
-        console.log("📸 KYC Image response:", imageResponse.data);
-        
-        const pictureUrl = imageResponse.data.data?.profile_image || 
-                          imageResponse.data.profile_image || 
-                          imageResponse.data.data?.profile_picture ||
-                          imageResponse.data.profile_picture || 
-                          imageResponse.data.picture ||
-                          null;
-        
-        if (pictureUrl && pictureUrl !== "" && pictureUrl !== profilePicture) {
-          setProfilePicture(pictureUrl);
-          localStorage.setItem('profilePicture', pictureUrl);
-          console.log("✅ Profile picture updated from KYC API:", pictureUrl);
+        console.log("📸 Profile: Fetching additional profile data");
+
+        // ✅ Check profileData for the image
+        const imageFromProfile = profileData.profile_image ||
+          profileData.profile_picture ||
+          null;
+
+        if (imageFromProfile && imageFromProfile !== "") {
+          console.log("✅ Found profile picture in profileData:", imageFromProfile);
+          setProfilePicture(imageFromProfile);
+          localStorage.setItem('profilePicture', imageFromProfile);
         }
-        
-        setCroppedImage(imageResponse.data.document_picture_front);
-      } catch (kycErr) {
-        console.log("ℹ️ KYC API not available, using existing image");
-      }
 
-      if (
-        termsResponse.data.status === "success" &&
-        termsResponse.data.count_agreed > "0"
-      ) {
-        setAgreedDetails(termsResponse.data.agreed_details);
-      }
+        // ✅ Check localStorage as fallback
+        const cachedImage = localStorage.getItem('profilePicture');
+        if (cachedImage && !imageFromProfile) {
+          console.log("🔄 Found cached profile picture:", cachedImage);
+          setProfilePicture(cachedImage);
+        }
 
-      setStatusHistory(statusLogResponse.data);
-    } catch (err) {
-      console.error("❌ Profile: Failed to fetch additional data", err);
-      const cachedImage = localStorage.getItem('profilePicture');
-      if (cachedImage) {
-        setProfilePicture(cachedImage);
-      } else {
-        setProfilePicture(null);
+        // ✅ If no image found, just use default avatar (no spinner)
+        if (!imageFromProfile && !cachedImage) {
+          console.log("ℹ️ No profile picture found, showing default avatar");
+          setProfilePicture(null);
+        }
+
+        // ✅ Set loading to false immediately after checking cache
+        setSaveLoading(false);
+
+        // Fetch other data in background
+        const [termsResponse, statusLogResponse] = await Promise.all([
+          axios.get(`${API_URL}/terms-agreed-details/${customerId}`, {
+            headers: { Authorization: `Bearer ${authtoken}` },
+          }),
+          axios.get(`${API_URL}/account-status-log/${customerId}`, {
+            headers: { Authorization: `Bearer ${authtoken}` },
+          }),
+        ]);
+
+        console.log("✅ Terms and status log fetched");
+
+        // Fetch KYC in background (non-blocking)
+        try {
+          const imageResponse = await axios.get(`${API_URL}/kyc/${customerId}`, {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+          });
+
+          console.log("📸 KYC Image response:", imageResponse.data);
+
+          const pictureUrl = imageResponse.data.data?.profile_image ||
+            imageResponse.data.profile_image ||
+            imageResponse.data.data?.profile_picture ||
+            imageResponse.data.profile_picture ||
+            imageResponse.data.picture ||
+            null;
+
+          if (pictureUrl && pictureUrl !== "" && pictureUrl !== profilePicture) {
+            setProfilePicture(pictureUrl);
+            localStorage.setItem('profilePicture', pictureUrl);
+            console.log("✅ Profile picture updated from KYC API:", pictureUrl);
+          }
+
+          setCroppedImage(imageResponse.data.document_picture_front);
+        } catch (kycErr) {
+          console.log("ℹ️ KYC API not available, using existing image");
+        }
+
+        if (
+          termsResponse.data.status === "success" &&
+          termsResponse.data.count_agreed > "0"
+        ) {
+          setAgreedDetails(termsResponse.data.agreed_details);
+        }
+
+        setStatusHistory(statusLogResponse.data);
+      } catch (err) {
+        console.error("❌ Profile: Failed to fetch additional data", err);
+        const cachedImage = localStorage.getItem('profilePicture');
+        if (cachedImage) {
+          setProfilePicture(cachedImage);
+        } else {
+          setProfilePicture(null);
+        }
+      } finally {
+        // ✅ Always hide loading
+        setSaveLoading(false);
       }
-    } finally {
-      // ✅ Always hide loading
-      setSaveLoading(false);
+    };
+
+    if (profileData && customerId && authtoken && bearertoken) {
+      fetchAdditionalProfileData();
     }
-  };
-
-  if (profileData && customerId && authtoken && bearertoken) {
-    fetchAdditionalProfileData();
-  }
-}, [profileData, customerId, authtoken, bearertoken]);
+  }, [profileData, customerId, authtoken, bearertoken]);
   // Fetch tab data when tab changes - ONLY for non-individual accounts
   useEffect(() => {
     const fetchTabData = async () => {
@@ -2652,40 +2652,33 @@ useEffect(() => {
             {/* Main Content Area - 3 columns width */}
             <div className="lg:col-span-3 space-y-6 md:space-y-8">
               {/* Profile Header Card */}
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
-                  <div className="flex items-center gap-4">
+              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+                  {/* Left side - Profile Picture and Text */}
+                  <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
                     {/* Profile Picture with Upload functionality */}
-                    <div className="relative">
+                    <div className="relative flex-shrink-0">
                       {/* Profile Picture Container */}
-                      <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-md overflow-hidden">
-                        {/* ✅ Only show spinner during actual upload or initial fetch */}
-                        {saveLoading && !profilePicture ? (
-                          // Show loading spinner ONLY when actively loading and no image yet
-                          <div className="flex items-center justify-center w-full h-full">
-                            <RingLoader size={30} color="#3B82F6" loading={true} />
-                          </div>
-                        ) : profilePicture ? (
-                          // Show the image if it exists
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-md overflow-hidden">
+                        {profilePicture ? (
                           <img
                             src={profilePicture}
                             alt="Profile"
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          // ✅ Show default avatar when no image and not loading
-                          <FaUser className="h-10 w-10 md:h-12 md:w-12 text-gray-400" />
+                          <FaUser className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 text-gray-400" />
                         )}
                       </div>
 
                       {/* Upload Button Overlay - Camera Icon */}
                       <label
                         htmlFor="profile-picture-upload"
-                        className={`absolute -bottom-1 -right-1 p-1.5 rounded-full shadow-md cursor-pointer transition-all hover:scale-110 ${headerColorProps.className}`}
+                        className={`absolute -bottom-1 -right-1 p-1 sm:p-1.5 md:p-1.5 rounded-full shadow-md cursor-pointer transition-all hover:scale-110 ${headerColorProps.className}`}
                         style={headerColorProps.style}
                         title="Upload profile picture"
                       >
-                        <FaCamera className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />
+                        <FaCamera className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5 text-white" />
                         <input
                           id="profile-picture-upload"
                           type="file"
@@ -2696,36 +2689,40 @@ useEffect(() => {
                         />
                       </label>
 
-                      {/* Loading Overlay - shows during upload */}
+                      {/* Loading Overlay - shows during upload when image exists */}
                       {saveLoading && profilePicture && (
                         <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center">
-                          <FaSpinner className="w-6 h-6 text-white animate-spin" />
+                          <FaSpinner className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white animate-spin" />
                         </div>
                       )}
                     </div>
 
-                    <div>
-                      <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+                    {/* Text Content */}
+                    <div className="flex-1 min-w-0">
+                      <h1 className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 truncate">
                         My Profile
                       </h1>
-                      <p className="text-gray-500 text-sm mt-1">
+                      <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">
                         Manage your account information
                       </p>
-                      {/* Show file upload hint */}
-                      <p className="text-xs text-gray-400 mt-1 hidden md:block">
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">
                         Click camera icon to upload photo
                       </p>
                     </div>
                   </div>
-                  <motion.button
-                    onClick={handleEditToggle}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`text-white font-medium py-2.5 px-5 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${headerColorProps.className}`}
-                    style={headerColorProps.style}
-                  >
-                    {isEditing ? "Cancel Editing" : "Edit Profile"}
-                  </motion.button>
+
+                  {/* Right side - Edit Button */}
+                  <div className="w-full sm:w-auto flex-shrink-0">
+                    <motion.button
+                      onClick={handleEditToggle}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full sm:w-auto text-white font-medium py-2 px-4 sm:py-2.5 sm:px-5 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm sm:text-base ${headerColorProps.className}`}
+                      style={headerColorProps.style}
+                    >
+                      {isEditing ? "Cancel Editing" : "Edit Profile"}
+                    </motion.button>
+                  </div>
                 </div>
               </div>
 
@@ -2812,8 +2809,8 @@ useEffect(() => {
                     <label className="block text-xs text-gray-500 mb-1">
                       Email Address
                     </label>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-800 truncate py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-800 truncate py-2 flex-1">
                         {displayProfileData.email || "Not Available"}
                       </span>
                       <motion.button

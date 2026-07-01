@@ -140,7 +140,7 @@ class ErrorBoundary extends React.Component {
 }
 
 // Helper functions for section validation
-const getSectionFields = (sectionIndex, values) => {
+const getSectionFields = (sectionIndex, values,shouldShowPurposeOfAccount) => {
   switch (sectionIndex) {
     case 0: // Personal Information
       const fields = [
@@ -153,6 +153,9 @@ const getSectionFields = (sectionIndex, values) => {
       ];
       if (values.middle_name && values.middle_name.trim() !== "") {
         fields.push("middle_name");
+      }
+      if (shouldShowPurposeOfAccount) {
+        fields.push("purpose_of_account");
       }
       return fields;
 
@@ -246,7 +249,7 @@ const getSectionRequiredFields = (sectionIndex) => {
 };
 
 // SIMPLIFIED Validation schema - FIXED
-const createValidationSchema = () => {
+const createValidationSchema = (shouldShowPurposeOfAccount) => {
   return Yup.object({
     first_name: Yup.string()
       .required("First name is required")
@@ -299,6 +302,12 @@ const createValidationSchema = () => {
 
     mobilenumber_countrycode: Yup.string().required("Country code is required"),
 
+    purpose_of_account: shouldShowPurposeOfAccount
+      ? Yup.string()
+          .required("Purpose of account is required")
+          .min(3, "Please provide more detail")
+      : Yup.string().notRequired(),
+    
     // Update the SSN validation in createValidationSchema()
     ssn: Yup.string().test(
       "ssn-validation",
@@ -533,6 +542,8 @@ function SignUpIndividualContent() {
     ssn_required = "N",
     show_remittance_only_on_registration = false,
     accountOptions: locationAccountOptions = [],
+    has_multi_currency = false,
+    selected_currency_accounts = [],
   } = location.state || {};
 
   const formSections = [
@@ -548,6 +559,8 @@ function SignUpIndividualContent() {
   const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
   const isPartnerPackageModule = localStorage.getItem("isPartnerPackageModule");
   const bearertoken = localStorage.getItem("bearertoken");
+
+  const shouldShowPurposeOfAccount = has_multi_currency === true && isRemit === false;
 
   // Enhanced formik configuration - REMOVED custom validation function
   const formik = useFormik({
@@ -594,7 +607,7 @@ function SignUpIndividualContent() {
       selectedAccounts: selectedAccounts,
       remit_customer: isRemit,
     },
-    validationSchema: createValidationSchema(), // Use ONLY Yup validation
+    validationSchema: createValidationSchema(shouldShowPurposeOfAccount), // Use ONLY Yup validation
     validateOnBlur: true,
     validateOnChange: true,
     onSubmit: async (values, { setErrors, setSubmitting }) => {
@@ -628,7 +641,7 @@ function SignUpIndividualContent() {
 
           // Find first section with errors
           for (let i = 0; i < formSections.length - 1; i++) {
-            const sectionFields = getSectionFields(i, values);
+            const sectionFields = getSectionFields(i, values, shouldShowPurposeOfAccount);
             const sectionHasError = sectionFields.some(
               (field) => allErrors[field],
             );
@@ -787,15 +800,15 @@ function SignUpIndividualContent() {
           flag_url: country.flag_url,
           phoneCode: country.phoneCode
         };
-      
+
         dispatch(setSelectedCountry(countryOption));
         formik.setFieldValue("country", country.id || country.value);
-        
+
         // 🔥 ADD THIS BLOCK - Auto-fill phone code when country is populated
         if (countryOption.phoneCode) {
           formik.setFieldValue("mobilenumber_countrycode", countryOption.phoneCode);
           formik.setFieldValue("flag_url", countryOption.flag_url || "");
-          
+
           setSelectedPhoneCode({
             value: countryOption.value,
             label: countryOption.label,
@@ -854,6 +867,7 @@ function SignUpIndividualContent() {
     return (hasUSDNamedAccount && isUSCountry) || (isRemittanceOnly && isUSCountry);
   }, [formik.values.country, isNamedAccount, isRemit]);
 
+
   // DEBUG: Add useEffect to monitor password values and errors
   useEffect(() => {
     console.log("🔍 DEBUG - Formik state:", {
@@ -879,7 +893,7 @@ function SignUpIndividualContent() {
   // Function to validate a section
   // Update validateCurrentSection to check conditional requirements
   const validateCurrentSection = (sectionIndex) => {
-    const sectionFields = getSectionFields(sectionIndex, formik.values);
+    const sectionFields = getSectionFields(sectionIndex, formik.values, shouldShowPurposeOfAccount);
     const errors = {};
 
     // ADD THIS NEW CHECK for section 0 (Personal Information)
@@ -919,7 +933,7 @@ function SignUpIndividualContent() {
       }
     }
     // Mark all fields in current section as touched
-    const sectionFields = getSectionFields(currentSection, formik.values, isNamedAccount, isRemit);
+    const sectionFields = getSectionFields(currentSection, formik.values, shouldShowPurposeOfAccount);
     sectionFields.forEach((field) => {
       formik.setFieldTouched(field, true);
     });
@@ -1356,21 +1370,21 @@ function SignUpIndividualContent() {
     const countryCode = selectedOption?.country_code || "";
     const phoneCode = selectedOption?.phoneCode || "";  // Get phone code
     const flagUrl = selectedOption?.flag_url || "";
-  
+
     // Update Redux state
     dispatch(setSelectedCountry(selectedOption));
-  
+
     // Update formik values for country
     formik.setFieldValue("country", countryId);
     formik.setFieldValue("state", "");
     formik.setFieldValue("city", "");
     formik.setFieldValue("zip_code", "");
-    
+
     // 🔥 NEW: Auto-fill phone country code
     if (phoneCode) {
       formik.setFieldValue("mobilenumber_countrycode", phoneCode);
       formik.setFieldValue("flag_url", flagUrl);
-      
+
       // Also update the selectedPhoneCode state for the dropdown display
       setSelectedPhoneCode({
         value: selectedOption.value,
@@ -1379,13 +1393,13 @@ function SignUpIndividualContent() {
         flag_url: flagUrl
       });
     }
-  
+
     // Store country code for ZIP lookup
     countryCodeRef.current = countryCode;
-  
+
     // Clear ZIP lookup data
     dispatch(clearZipLookupData());
-  
+
     // Auto-set SSN field for US residents
     if (selectedOption?.label === "United States") {
       dispatch(setMetadataField({ field: "showSSNField", value: true }));
@@ -1669,7 +1683,7 @@ function SignUpIndividualContent() {
 
       // Check each section
       for (let i = 0; i < formSections.length - 1; i++) {
-        const sectionFields = getSectionFields(i, formik.values);
+        const sectionFields = getSectionFields(i, formik.values, shouldShowPurposeOfAccount);
 
         // Filter OUT the optional fields from total calculation
         const requiredFields = sectionFields.filter(field =>
@@ -1712,6 +1726,7 @@ function SignUpIndividualContent() {
     isNamedAccount,
     isRemit,
     termsConditions.length,
+    shouldShowPurposeOfAccount,
   ]);
 
   // Options for selects with safe defaults
@@ -1814,7 +1829,7 @@ function SignUpIndividualContent() {
 
     const allErrors = [];
     for (let i = 0; i < formSections.length - 1; i++) {
-      const sectionFields = getSectionFields(i, formik.values);
+      const sectionFields = getSectionFields(i, formik.values, shouldShowPurposeOfAccount);
       const sectionErrors = sectionFields
         .filter((field) => formik.errors[field])
         .map((field) => ({
@@ -2496,6 +2511,37 @@ function SignUpIndividualContent() {
                     ) : null}
                   </div>
 
+
+                  {/* Purpose of Account - Text Field */}
+                  {shouldShowPurposeOfAccount && (
+                    <div>
+                      <label htmlFor="purpose_of_account" className="block text-sm font-medium text-gray-700 mb-2.5">
+                        Purpose of Account *
+                      </label>
+                      <input
+                        id="purpose_of_account"
+                        name="purpose_of_account"
+                        type="text"
+                        placeholder="e.g., Personal savings, Business transactions, Investment"
+                        onChange={handlePurposeOfAccountChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.purpose_of_account}
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.purpose_of_account && formik.errors.purpose_of_account
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                      />
+                      {formik.touched.purpose_of_account && formik.errors.purpose_of_account ? (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          {formik.errors.purpose_of_account}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+
                   {/* Occupation */}
                   <div>
                     <label htmlFor="occupation" className="block text-sm font-medium text-gray-700 mb-2.5">
@@ -2525,34 +2571,6 @@ function SignUpIndividualContent() {
                         value={selectedOccupation}
                       />
                     )}
-                  </div>
-
-                  {/* Purpose of Account - Text Field */}
-                  <div>
-                    <label htmlFor="purpose_of_account" className="block text-sm font-medium text-gray-700 mb-2.5">
-                      Purpose of Account
-                    </label>
-                    <input
-                      id="purpose_of_account"
-                      name="purpose_of_account"
-                      type="text"
-                      placeholder="e.g., Personal savings, Business transactions, Investment"
-                      onChange={handlePurposeOfAccountChange}
-                      onBlur={formik.handleBlur}
-                      value={formik.values.purpose_of_account}
-                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.purpose_of_account && formik.errors.purpose_of_account
-                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                        } shadow-sm`}
-                    />
-                    {formik.touched.purpose_of_account && formik.errors.purpose_of_account ? (
-                      <p className="text-red-500 text-xs mt-2 flex items-center">
-                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        {formik.errors.purpose_of_account}
-                      </p>
-                    ) : null}
                   </div>
 
                   {/* Monthly Expected Activity - Text Field */}
