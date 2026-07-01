@@ -952,7 +952,7 @@ const Header = ({ customerId }) => {
           </div>
 
           {/* FX Rates - Hide on mobile, show on tablet/desktop */}
-          {hasFxData && partnerFxCurrencies.length > 0 && (
+          {/* {hasFxData && partnerFxCurrencies.length > 0 && (
             <div className="hidden md:block flex-1 mx-4">
               <div className="overflow-hidden">
                 <div className="overflow-hidden">
@@ -972,7 +972,7 @@ const Header = ({ customerId }) => {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Profile Section */}
           <div className="flex items-center">
@@ -981,7 +981,7 @@ const Header = ({ customerId }) => {
         </div>
 
         {/* Mobile FX Rates - Optional horizontal scroll */}
-        {hasFxData && partnerFxCurrencies.length > 0 && (
+        {/* {hasFxData && partnerFxCurrencies.length > 0 && (
           <div className="md:hidden px-4 pb-3 overflow-x-auto">
             <div className="flex space-x-4">
               {partnerFxCurrencies.map((fx, index) => (
@@ -992,7 +992,7 @@ const Header = ({ customerId }) => {
               ))}
             </div>
           </div>
-        )}
+        )} */}
       </header>
 
       {/* Mobile Menu */}

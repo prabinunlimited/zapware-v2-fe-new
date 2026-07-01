@@ -325,7 +325,7 @@ const OpenCurrencyAccount = () => {
   // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
-  
+
     // For partner ID 8, we only accept remittance services
     if (isPartnerId8 && !remittanceOnlyAccepted) {
       setModalMessage(
@@ -334,7 +334,7 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
       return;
     }
-  
+
     if (
       isPartnerPackageModule === "N" &&
       selectedAccounts.length === 0 &&
@@ -344,7 +344,7 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
       return;
     }
-  
+
     if (referralCode) {
       try {
         await dispatch(actions.validateReferralCode(referralCode)).unwrap();
@@ -354,7 +354,7 @@ const OpenCurrencyAccount = () => {
         return;
       }
     }
-  
+
     if (
       isPartnerPackageModule === "Y" &&
       selectedPackageCurrencies.length > 0
@@ -374,10 +374,10 @@ const OpenCurrencyAccount = () => {
         return;
       }
     }
-  
+
     // ✅ DECLARE THE VARIABLE FIRST
     let formattedServiceProviderIds = [];
-  
+
     if (isPartnerPackageModule === "N") {
       formattedServiceProviderIds = selectedAccounts.map(accountId => {
         const parts = accountId.split('_');
@@ -385,11 +385,11 @@ const OpenCurrencyAccount = () => {
           const accountType = parts[0];
           const serviceProviderId = parts[1];
           const currency = parts[2];
-  
+
           if (!serviceProviderId || serviceProviderId === 'undefined' || isNaN(serviceProviderId)) {
             return null;
           }
-  
+
           return `${serviceProviderId}-${accountType}-${currency}`;
         }
         return null;
@@ -411,16 +411,21 @@ const OpenCurrencyAccount = () => {
         return null;
       }).filter(Boolean);
     }
-  
+
     // Remove duplicates
     const uniqueFormattedIds = [...new Set(formattedServiceProviderIds)];
-  
+
     if (uniqueFormattedIds.length === 0 && !remittanceOnlyAccepted) {
       setModalMessage("Error: Could not process selected accounts. Please try again.");
       setIsModalOpen(true);
       return;
     }
-  
+
+    //  Check if multi-currency accounts were selected
+    // This determines if we have selected any currency accounts (not remittance only)
+    const hasMultiCurrency = !remittanceOnlyAccepted &&
+      (selectedAccounts.length > 0 || selectedPackageCurrencies.length > 0);
+
     // Prepare navigation state with formatted IDs
     const navState = {
       service_provide_ids: uniqueFormattedIds,
@@ -433,13 +438,17 @@ const OpenCurrencyAccount = () => {
       owner_add: "Y",
       ssn_required: "Y",
       package_currencies: selectedPackageCurrencies,
+      has_multi_currency: hasMultiCurrency,
+      selected_currency_accounts: selectedAccounts,
     };
-  
+
     console.log("📤 Sending to signup:", {
       original: selectedAccounts,
       formatted: uniqueFormattedIds,
+      hasMultiCurrency,
+      remittanceOnlyAccepted,
     });
-  
+
     navigate(
       accountType === "individual" ? "/signupindividual" : "/signupinstitution",
       {
