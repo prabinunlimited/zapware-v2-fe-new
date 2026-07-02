@@ -1443,7 +1443,7 @@ const TransactionDetails = React.memo(
 
               <button
                 onClick={handleManualRefresh}
-                className="hidden md:inline text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-2 hover:bg-blue-50 rounded-lg transition-colors"
+                className="hidden md:inline text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-2 ml-10 hover:bg-blue-50 rounded-lg transition-colors"
                 disabled={finalLoading}
               >
                 Refresh
