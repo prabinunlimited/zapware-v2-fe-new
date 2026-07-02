@@ -488,7 +488,9 @@ export const fetchTermsAndConditions = createAsyncThunk(
       );
 
       const partnerId =
-        isWhiteLabelledPartner === "1" ? whiteLabelledPartnerId : "0";
+        isWhiteLabelledPartner === "Y" && whiteLabelledPartnerId
+          ? whiteLabelledPartnerId
+          : "0";
 
       const response = await api.get(`/terms-by-partner/${partnerId}`);
 
