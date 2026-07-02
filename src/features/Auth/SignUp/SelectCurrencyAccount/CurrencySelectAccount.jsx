@@ -281,6 +281,7 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
     }
   };
+
   // Check if API returned empty data - then force remittance only mode
   useEffect(() => {
     if (!loading && !packageLoading) {
@@ -291,6 +292,7 @@ const OpenCurrencyAccount = () => {
         dispatch(actions.setRemittanceOnlyAccepted(true));
       } else {
         setForceRemittanceOnly(false);
+        dispatch(actions.setRemittanceOnlyAccepted(false));
       }
     }
   }, [loading, packageLoading, hasCurrencyAccounts, accountOptions.length, dispatch]);
