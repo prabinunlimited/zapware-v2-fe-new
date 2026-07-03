@@ -40,7 +40,8 @@ import {
   selectProgressBarWidth,
   selectAccountType,
   selectShowAccountTypeDropdown,
-  selectApiResponse
+  selectApiResponse,
+  resetForgotPassword,
 } from "./forgotPasswordActions";
 
 const ForgotPassword = () => {
@@ -649,7 +650,18 @@ const ForgotPassword = () => {
           <motion.div className="flex justify-between items-center mt-4 sm:mt-6 text-xs sm:text-sm">
             {step > 1 && (
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  if (step === 2) {
+                    // Complete reset - clears everything
+                    dispatch(resetForgotPassword());
+                    // Note: resetForgotPassword already sets step to 1
+                  } else if (step === 3) {
+                    // Go back to step 2
+                    dispatch(setStep(2));
+                  } else {
+                    navigate(-1);
+                  }
+                }}
                 className="text-gray-600 hover:text-gray-800 focus:outline-none flex items-center"
                 disabled={isLoading}
               >
