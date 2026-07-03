@@ -102,9 +102,9 @@ export const fetchAccountDetails = createAsyncThunk(
 
       // Handle both cases - with accounts and without accounts
       let accountsData = [];
-      
-      if (response.data?.count_account_details > 0 && 
-          Array.isArray(response.data.account_details)) {
+
+      if (response.data?.count_account_details > 0 &&
+        Array.isArray(response.data.account_details)) {
         accountsData = response.data.account_details;
         console.log(`✅ Found ${accountsData.length} accounts`);
       } else {
@@ -120,9 +120,9 @@ export const fetchAccountDetails = createAsyncThunk(
         data: accountsData,
         stale: false,
       });
-      
+
       return accountsData;
-      
+
     } catch (error) {
       // Only reject on actual errors (network, auth, etc.)
       if (error.name !== "AbortError" && error.code !== "ECONNABORTED") {
@@ -163,8 +163,8 @@ export const updateAccountBalance = createAsyncThunk(
       );
 
       let accountsData = [];
-      if (balanceResponse.data?.count_account_details > 0 && 
-          Array.isArray(balanceResponse.data.account_details)) {
+      if (balanceResponse.data?.count_account_details > 0 &&
+        Array.isArray(balanceResponse.data.account_details)) {
         accountsData = balanceResponse.data.account_details;
         successfulFetches.set(customerId, {
           timestamp: Date.now(),
@@ -182,10 +182,120 @@ export const updateAccountBalance = createAsyncThunk(
           stale: false,
         });
       }
-      
+
       return accountsData;
     } catch (error) {
       console.error("❌ Error updating account balance:", error);
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+// FETCH TRANSIT CODES
+export const fetchTransitCodes = createAsyncThunk(
+  "account/fetchTransitCodes",
+  async ({ authtoken }, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_URL}/transit-codes`, {
+        headers: { Authorization: `Bearer ${authtoken}` },
+      });
+
+      // Handle different response structures
+      let transitCodes = [];
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        transitCodes = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        transitCodes = response.data;
+      } else if (response.data?.transit_codes && Array.isArray(response.data.transit_codes)) {
+        transitCodes = response.data.transit_codes;
+      }
+
+      console.log(`✅ Fetched ${transitCodes.length} transit codes`);
+      return transitCodes;
+    } catch (error) {
+      console.error("❌ Error fetching transit codes:", error);
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const addBankAccount = createAsyncThunk(
+  "account/addBankAccount",
+  async ({ payload, authtoken }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${API_URL}/transfermate/add-bank-account`,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${authtoken}` },
+        }
+      );
+
+      console.log("✅ Bank account added successfully:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error adding bank account:", error);
+
+      // If there's a response from the server
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Flatten the structure - extract input_errors from nested data
+        const inputErrors = errorData?.data?.input_errors || [];
+        const globalErrors = errorData?.data?.global_errors || [];
+        const messages = errorData?.data?.messages || [];
+        
+        // Return a flattened error object
+        return rejectWithValue({
+          message: errorData.message || "Failed to add bank account",
+          status: error.response.status,
+          data: {
+            input_errors: inputErrors,
+            global_errors: globalErrors,
+            messages: messages,
+            raw: errorData, // Keep raw data for debugging
+          }
+        });
+      }
+
+      // Network or other errors
+      return rejectWithValue({
+        message: error.message || "Failed to add bank account",
+        status: 0,
+        data: null,
+      });
+    }
+  }
+);
+
+export const fetchServiceProviderCurrencies = createAsyncThunk(
+  "account/fetchServiceProviderCurrencies",
+  async ({ serviceProviderId, authtoken }, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/service-provider-bank-account-currencies/${serviceProviderId}`,
+        {
+          headers: { Authorization: `Bearer ${authtoken}` },
+        }
+      );
+
+      console.log("✅ Fetched currencies:", response.data);
+
+      // Handle different response structures
+      let currencies = [];
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        currencies = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        currencies = response.data;
+      } else if (response.data?.currencies && Array.isArray(response.data.currencies)) {
+        currencies = response.data.currencies;
+      }
+
+      return currencies;
+    } catch (error) {
+      console.error("❌ Error fetching currencies:", error);
       const errorMessage = extractErrorMessage(error);
       return rejectWithValue(errorMessage);
     }
@@ -204,6 +314,13 @@ const initialState = {
   accountDropdownOpen: false,
   hasFetchedAccount: false,
   fetchAttempted: false,
+  transitCodes: [],
+  transitCodesLoading: false,
+  addingBankAccount: false,
+  addBankAccountSuccess: false,
+  addBankAccountError: null,
+  serviceProviderCurrencies: [],
+  currenciesLoading: false,
   _debug: {
     sliceName: "account",
     storePath: "state.account",
@@ -314,7 +431,7 @@ const accountSlice = createSlice({
             ? action.payload.length
             : 0,
         });
-        
+
         state.accountLoading = false;
         // Always set accounts, even if empty array
         state.accounts = Array.isArray(action.payload) ? action.payload : [];
@@ -346,12 +463,12 @@ const accountSlice = createSlice({
       .addCase(fetchAccountDetails.rejected, (state, action) => {
         // Only treat as error for actual failures (network, auth, etc.)
         const isNetworkError = action.payload?.includes("Network") ||
-                               action.payload?.includes("Failed to fetch");
+          action.payload?.includes("Failed to fetch");
         const isAuthError = action.payload?.includes("401") ||
-                           action.payload?.includes("unauthorized");
-        
+          action.payload?.includes("unauthorized");
+
         console.log("❌ Fetch rejected:", action.payload);
-        
+
         if (isNetworkError || isAuthError) {
           // Real error - show error state
           state.accountError = typeof action.payload === "string"
@@ -363,7 +480,7 @@ const accountSlice = createSlice({
           state.hasFetchedAccount = state.accounts.length >= 0;
           state.accountError = null;
         }
-        
+
         state.accountLoading = false;
       })
       .addCase(updateAccountBalance.pending, (state) => {
@@ -373,16 +490,16 @@ const accountSlice = createSlice({
       .addCase(updateAccountBalance.fulfilled, (state, action) => {
         state.balanceLoading = false;
         const newAccounts = Array.isArray(action.payload) ? action.payload : [];
-        
+
         state.accounts = newAccounts;
         state.lastUpdated = new Date().toISOString();
         state.hasFetchedAccount = true;
-        
+
         if (state.selectedAccount && newAccounts.length > 0) {
           const updatedAccount = newAccounts.find(
             (account) => account.currency === state.selectedAccount?.currency
           );
-          
+
           if (updatedAccount) {
             state.selectedAccount = {
               ...state.selectedAccount,
@@ -402,6 +519,67 @@ const accountSlice = createSlice({
             ? action.payload
             : extractErrorMessage(action.payload);
         }
+      })
+      .addCase(fetchTransitCodes.pending, (state) => {
+        state.transitCodesLoading = true;
+        state.accountError = null;
+      })
+      .addCase(fetchTransitCodes.fulfilled, (state, action) => {
+        state.transitCodesLoading = false;
+        state.transitCodes = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchTransitCodes.rejected, (state, action) => {
+        state.transitCodesLoading = false;
+        state.transitCodes = []; // Empty array on error
+        // Don't set accountError for transit codes - it's not critical
+      })
+      .addCase(addBankAccount.pending, (state) => {
+        state.addingBankAccount = true;
+        state.addBankAccountSuccess = false;
+        state.addBankAccountError = null;
+        state.accountError = null;
+      })
+      .addCase(addBankAccount.fulfilled, (state, action) => {
+        state.addingBankAccount = false;
+        state.addBankAccountSuccess = true;
+        state.addBankAccountError = null;
+        // Optionally update accounts list if the new account is returned
+        if (action.payload?.account) {
+          state.accounts = [...state.accounts, action.payload.account];
+        }
+      })
+      .addCase(addBankAccount.rejected, (state, action) => {
+        state.addingBankAccount = false;
+        state.addBankAccountSuccess = false;
+      
+        // Handle both string and object error payloads
+        if (typeof action.payload === 'string') {
+          state.addBankAccountError = action.payload;
+          state.accountError = action.payload;
+        } else if (action.payload?.message) {
+          state.addBankAccountError = action.payload.message;
+          state.accountError = action.payload.message;
+          // Store full error details if needed
+          state._debug.errors = action.payload.errors;
+          // Store the full error data for input_errors
+          state._debug.errorData = action.payload.data;
+        } else {
+          state.addBankAccountError = "Failed to add bank account";
+          state.accountError = "Failed to add bank account";
+        }
+      })
+      .addCase(fetchServiceProviderCurrencies.pending, (state) => {
+        state.currenciesLoading = true;
+        state.accountError = null;
+      })
+      .addCase(fetchServiceProviderCurrencies.fulfilled, (state, action) => {
+        state.currenciesLoading = false;
+        state.serviceProviderCurrencies = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchServiceProviderCurrencies.rejected, (state, action) => {
+        state.currenciesLoading = false;
+        state.serviceProviderCurrencies = [];
+        // Don't set accountError for currencies - it's not critical
       });
   },
 });
@@ -446,6 +624,19 @@ export const selectCurrencyOptions = (state) => {
 };
 
 export const selectHasAccounts = (state) => selectAccounts(state).length > 0;
+
+export const selectTransitCodes = (state) => state.account?.transitCodes || [];
+export const selectTransitCodesLoading = (state) => state.account?.transitCodesLoading || false;
+
+export const selectAddingBankAccount = (state) => state.account?.addingBankAccount || false;
+export const selectAddBankAccountSuccess = (state) => state.account?.addBankAccountSuccess || false;
+export const selectAddBankAccountError = (state) => state.account?.addBankAccountError || null;
+
+export const selectServiceProviderCurrencies = (state) =>
+  state.account?.serviceProviderCurrencies || [];
+
+export const selectCurrenciesLoading = (state) =>
+  state.account?.currenciesLoading || false;
 
 export const selectAccountState = (state) => ({
   accounts: selectAccounts(state),
