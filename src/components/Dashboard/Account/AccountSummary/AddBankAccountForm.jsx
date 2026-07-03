@@ -20,7 +20,7 @@ import {
     selectAddBankAccountError,
     fetchServiceProviderCurrencies,
     selectServiceProviderCurrencies,
-    selectCurrenciesLoading, //
+    selectCurrenciesLoading,
 } from "../AccountSummary/AccountSlice";
 
 import {
@@ -108,7 +108,6 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
         setSuccess(false);
 
         try {
-            // Prepare the payload
             const payload = {
                 bank_id: formData.bank_id,
                 customer_id: formData.customer_id,
@@ -121,7 +120,6 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                 account_description: formData.account_description || "",
             };
 
-            // Only add transit fields if Account Number is selected
             if (formData.account_number_type === 'account_number_1') {
                 payload.transit_code_type = formData.transit_code_type;
                 payload.transit_code = formData.transit_code || "";
@@ -130,7 +128,6 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
             const result = await dispatch(addBankAccount({ payload, authtoken }));
 
             if (result.meta.requestStatus === 'fulfilled') {
-                // SUCCESS
                 setResponseModal({
                     isOpen: true,
                     type: 'success',
@@ -141,46 +138,35 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                 
                 onSuccess?.(result.payload);
             } else {
-                // ERROR - Extract error messages from nested structure
                 const errorPayload = result.payload;
-
                 let errorMessages = [];
                 let inputErrors = [];
 
-                // The error structure is: errorPayload.data.data.input_errors
-                // Check for nested data.data.input_errors
                 if (errorPayload?.data?.data?.input_errors && Array.isArray(errorPayload.data.data.input_errors)) {
                     inputErrors = errorPayload.data.data.input_errors;
                     errorMessages = inputErrors.map(err => `${err.ID}: ${err.description}`);
                 }
-                // Check if error has data with input_errors (one level)
                 else if (errorPayload?.data?.input_errors && Array.isArray(errorPayload.data.input_errors)) {
                     inputErrors = errorPayload.data.input_errors;
                     errorMessages = inputErrors.map(err => `${err.ID}: ${err.description}`);
                 }
-                // Check if error has input_errors directly
                 else if (errorPayload?.input_errors && Array.isArray(errorPayload.input_errors)) {
                     inputErrors = errorPayload.input_errors;
                     errorMessages = inputErrors.map(err => `${err.ID}: ${err.description}`);
                 }
-                // Check if error has data with global_errors
                 else if (errorPayload?.data?.global_errors && Array.isArray(errorPayload.data.global_errors)) {
                     errorMessages = errorPayload.data.global_errors;
                 }
-                // Check if error has message
                 else if (errorPayload?.message) {
                     errorMessages = [errorPayload.message];
                 }
-                // Check if error is a string
                 else if (typeof errorPayload === 'string') {
                     errorMessages = [errorPayload];
                 }
-                // Fallback
                 else {
                     errorMessages = ['Failed to add bank account. Please try again.'];
                 }
 
-                // If we still don't have error messages, try to find input_errors anywhere
                 if (errorMessages.length === 0 && inputErrors.length === 0) {
                     const findInputErrors = (obj) => {
                         if (!obj) return null;
@@ -246,7 +232,6 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
         setSuccess(false);
     };
 
-    // Helper function to get flag emoji
     const getFlagEmoji = (countryCode) => {
         if (!countryCode) return '🏳️';
         const codePoints = countryCode
@@ -256,7 +241,6 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
         return String.fromCodePoint(...codePoints);
     };
 
-    // Transform countries to react-select options with format: +977 Nepal (NP)
     const countrySelectOptions = React.useMemo(() => {
         return countryOptions.map((country) => ({
             value: country.country_code || country.value,
@@ -284,14 +268,14 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
 
     return (
         <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black bg-opacity-50 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
         >
             <motion.div
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden"
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-2 sm:mx-4"
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -299,17 +283,19 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-white">Add Bank Account</h2>
-                            <p className="text-white text-opacity-90 text-sm">
+                <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-4 sm:px-6 py-3 sm:py-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-base sm:text-lg font-bold text-white truncate">
+                                Add Bank Account
+                            </h2>
+                            <p className="text-xs sm:text-sm text-white text-opacity-90 truncate">
                                 Fill in the details to add a new bank account
                             </p>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-1 text-white hover:text-white transition-colors rounded-full hover:bg-white hover:bg-opacity-20"
+                            className="p-1.5 sm:p-1 text-white hover:text-white transition-colors rounded-full hover:bg-white hover:bg-opacity-20 flex-shrink-0"
                         >
                             <FiX size={20} />
                         </button>
@@ -317,13 +303,12 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                 </div>
 
                 {/* Form Body */}
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-
+                <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(95vh-130px)] sm:max-h-[calc(90vh-120px)]">
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {/* Bank ID - Auto-filled from API */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Bank ID
                                 </label>
                                 <input
@@ -331,14 +316,14 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     name="bank_id"
                                     value={formData.bank_id}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm"
                                     disabled
                                 />
                             </div>
 
                             {/* Customer ID - Auto-filled from API */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Customer ID
                                 </label>
                                 <input
@@ -346,13 +331,13 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     name="customer_id"
                                     value={formData.customer_id}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm"
                                     disabled
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Currency Type *
                                 </label>
                                 <div className="relative">
@@ -361,7 +346,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                         value={formData.currency_type_id}
                                         onChange={handleChange}
                                         required
-                                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+                                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none text-sm"
                                     >
                                         <option value="">
                                             {currenciesLoading ? 'Loading currencies...' : 'Select Currency'}
@@ -381,7 +366,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
 
                             {/* Account Number Type */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Account Number Type
                                 </label>
                                 <div className="relative">
@@ -389,7 +374,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                         name="account_number_type"
                                         value={formData.account_number_type}
                                         onChange={handleChange}
-                                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+                                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none text-sm"
                                     >
                                         <option value="account_number_1">Account Number</option>
                                         <option value="iban_3">IBAN</option>
@@ -399,8 +384,8 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                             </div>
 
                             {/* Account Name */}
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Account Name *
                                 </label>
                                 <input
@@ -409,15 +394,14 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     value={formData.account_name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                     placeholder="Enter account name"
-
                                 />
                             </div>
 
                             {/* Country Code */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Country Code *
                                 </label>
                                 <Select
@@ -437,7 +421,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     formatOptionLabel={(option) => (
                                         <div className="flex items-center gap-2">
                                             <span>{option.flag || '🏳️'}</span>
-                                            <span>{option.label}</span>
+                                            <span className="text-sm">{option.label}</span>
                                         </div>
                                     )}
                                     styles={{
@@ -448,9 +432,10 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                             '&:hover': {
                                                 borderColor: '#8b5cf6',
                                             },
-                                            padding: '2px 0',
+                                            padding: '0 4px',
                                             borderRadius: '0.5rem',
                                             minHeight: '42px',
+                                            fontSize: '14px',
                                         }),
                                         menu: (base) => ({
                                             ...base,
@@ -468,26 +453,33 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                                 backgroundColor: '#f3e8ff',
                                                 color: '#6b21a5',
                                             },
-                                            padding: '10px 12px',
+                                            padding: '8px 12px',
                                             cursor: 'pointer',
+                                            fontSize: '14px',
                                         }),
                                         placeholder: (base) => ({
                                             ...base,
                                             color: '#9ca3af',
+                                            fontSize: '14px',
                                         }),
                                         singleValue: (base) => ({
                                             ...base,
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '8px',
+                                            fontSize: '14px',
+                                        }),
+                                        input: (base) => ({
+                                            ...base,
+                                            fontSize: '14px',
                                         }),
                                     }}
                                 />
                             </div>
 
                             {/* Bank Name */}
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Bank Name *
                                 </label>
                                 <input
@@ -496,14 +488,14 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     value={formData.bank_name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                     placeholder="Enter bank name"
                                 />
                             </div>
 
                             {/* Account Number */}
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Account Number *
                                 </label>
                                 <input
@@ -512,9 +504,8 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     value={formData.account_number}
                                     onChange={handleChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                     placeholder="Enter account number"
-
                                 />
                             </div>
 
@@ -522,7 +513,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                             {formData.account_number_type === 'account_number_1' && (
                                 <>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                             Transit Code Type
                                         </label>
                                         <div className="relative">
@@ -530,7 +521,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                                 name="transit_code_type"
                                                 value={formData.transit_code_type}
                                                 onChange={handleChange}
-                                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+                                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none text-sm"
                                             >
                                                 <option value="">Select Transit Code</option>
                                                 {transitCodes.map((code) => (
@@ -544,7 +535,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                             Transit Code
                                         </label>
                                         <input
@@ -552,7 +543,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                             name="transit_code"
                                             value={formData.transit_code}
                                             onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                             placeholder="Enter transit code (ABA/SWIFT/Sort Code)"
                                         />
                                     </div>
@@ -560,8 +551,8 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                             )}
 
                             {/* Account Description */}
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                     Account Description
                                 </label>
                                 <textarea
@@ -569,25 +560,25 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                     value={formData.account_description}
                                     onChange={handleChange}
                                     rows="2"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    placeholder="Enter account description "
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                    placeholder="Enter account description"
                                 />
                             </div>
                         </div>
 
                         {/* Form Actions */}
-                        <div className="flex space-x-3 pt-4 border-t border-gray-200">
+                        <div className="flex flex-col-reverse sm:flex-row space-y-reverse space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="w-full sm:flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors border border-gray-300 rounded-lg hover:bg-gray-50"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={addingBankAccount || success}
-                                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                                className="w-full sm:flex-1 px-4 py-2.5 sm:py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
                             >
                                 {addingBankAccount ? (
                                     <>
@@ -612,16 +603,16 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                             initial={{ scale: 0.9, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden"
+                            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-4"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Modal Header */}
-                            <div className={`px-6 py-4 ${responseModal.type === 'success'
+                            <div className={`px-4 sm:px-6 py-4 ${responseModal.type === 'success'
                                 ? 'bg-gradient-to-r from-green-600 to-green-700'
                                 : 'bg-gradient-to-r from-red-600 to-red-700'
                                 }`}>
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-bold text-white">
+                                    <h3 className="text-base sm:text-lg font-bold text-white">
                                         {responseModal.title}
                                     </h3>
                                     <button
@@ -640,53 +631,35 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                             </div>
 
                             {/* Modal Body */}
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6 max-h-[50vh] overflow-y-auto">
                                 {responseModal.type === 'success' ? (
                                     <div className="flex items-start gap-3">
                                         <FiCheckCircle className="text-green-500 mt-0.5 flex-shrink-0" size={24} />
                                         <div>
                                             {responseModal.messages.map((msg, index) => (
-                                                <p key={index} className="text-gray-700">{msg}</p>
+                                                <p key={index} className="text-sm sm:text-base text-gray-700">{msg}</p>
                                             ))}
-                                            <p className="text-sm text-gray-500 mt-2">
+                                            <p className="text-xs sm:text-sm text-gray-500 mt-2">
                                                 The bank account has been added to your account.
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div>
-                                        {/* Show general error messages */}
                                         <div className="flex items-start gap-3 mb-4">
                                             <FiAlertCircle className="text-red-500 mt-0.5 flex-shrink-0" size={24} />
-                                            <div>
+                                            <div className="flex-1 min-w-0">
                                                 {responseModal.messages.map((msg, index) => (
-                                                    <p key={index} className="text-gray-700">{msg}</p>
+                                                    <p key={index} className="text-sm sm:text-base text-gray-700 break-words">{msg}</p>
                                                 ))}
                                             </div>
                                         </div>
-
-                                        {/* Show input errors if any */}
-                                        {/* {responseModal.inputErrors && responseModal.inputErrors.length > 0 && (
-                                            <div className="mt-4 bg-red-50 rounded-lg p-4 border border-red-200">
-                                                <p className="text-sm font-medium text-red-700 mb-2">Please fix the following errors:</p>
-                                                <ul className="space-y-2">
-                                                    {responseModal.inputErrors.map((error, index) => (
-                                                        <li key={index} className="text-sm text-red-600 flex items-start gap-2">
-                                                            <span className="font-medium bg-red-100 px-2 py-0.5 rounded text-red-700 min-w-[120px]">
-                                                                {error.ID}:
-                                                            </span>
-                                                            <span>{error.description}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )} */}
                                     </div>
                                 )}
                             </div>
 
                             {/* Modal Footer */}
-                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                            <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-200">
                                 <button
                                     onClick={() => {
                                         setResponseModal({ ...responseModal, isOpen: false });
@@ -695,7 +668,7 @@ const AddBankAccountForm = ({ isOpen, onClose, onSuccess, accountData }) => {
                                             onClose();
                                         }
                                     }}
-                                    className={`w-full px-4 py-2 ${responseModal.type === 'success'
+                                    className={`w-full px-4 py-2.5 sm:py-2 ${responseModal.type === 'success'
                                         ? 'bg-gradient-to-r from-green-600 to-green-700 hover:opacity-90'
                                         : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:opacity-90'
                                         } text-white text-sm font-medium rounded-lg transition-all`}
