@@ -22,7 +22,7 @@ export const fetchTermsAndConditions = createAsyncThunk(
       });
 
       let partnerId;
-      if (iswhitelabelledpartner === "1" && whitelabelledpartnerid) {
+      if (iswhitelabelledpartner === "Y" && whitelabelledpartnerid) {
         partnerId = whitelabelledpartnerid;
       } else {
         partnerId = "0";
