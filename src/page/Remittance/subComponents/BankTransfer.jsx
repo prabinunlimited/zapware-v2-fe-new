@@ -270,6 +270,15 @@ const BankTransfer = ({
 
   const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
 
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+  const [customOccupation, setCustomOccupation] = useState("");
+
+  const [purposeInitialized, setPurposeInitialized] = useState(false);
+  const [incomeInitialized, setIncomeInitialized] = useState(false);
+  const [occupationInitialized, setOccupationInitialized] = useState(false);
+  const [payoutInitialized, setPayoutInitialized] = useState(false);
+
+
   // Debug logging
   useEffect(() => {
     console.log("BankTransfer Props Debug:", {
@@ -294,6 +303,7 @@ const BankTransfer = ({
     incomeSourceOptions,
     paymentOptions,
     relationOptions,
+    selectedOccupation,
     formData,
     displayedSilaBankAccounts,
     displayedHasSilaAccounts,
@@ -313,7 +323,7 @@ const BankTransfer = ({
     []
   );
 
-// Use provided paymentOptions or fallback to defaults
+  // Use provided paymentOptions or fallback to defaults
   const payoutMethodOptions = useMemo(() => {
     return paymentOptions && paymentOptions.length > 0
       ? paymentOptions
@@ -322,7 +332,11 @@ const BankTransfer = ({
 
   // Set default Payout Method to "Bank Transfer" / "Bank Deposit"
   useEffect(() => {
-    if (payoutMethodOptions.length > 0 && !formData?.payout_method) {
+    if (
+      payoutMethodOptions.length > 0 &&
+      !payoutInitialized &&
+      !formData?.payout_method
+    ) {
       let defaultPayoutMethod = payoutMethodOptions.find(
         (opt) =>
           opt.value === "bank_deposit" ||
@@ -341,6 +355,7 @@ const BankTransfer = ({
 
       if (defaultPayoutMethod && onFieldChange) {
         onFieldChange("payout_method", defaultPayoutMethod);
+        setPayoutInitialized(true);
         console.log("✅ Default payout method set to:", defaultPayoutMethod);
       } else {
         console.log(
@@ -353,7 +368,7 @@ const BankTransfer = ({
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 640);
@@ -405,7 +420,11 @@ const BankTransfer = ({
   // Set default values for Purpose, Income Source, and Occupation
   useEffect(() => {
     // Set default Purpose of Transfer to "Trade"
-    if (purposeOptions.length > 0 && !formData?.purpose) {
+    if (
+      purposeOptions.length > 0 &&
+      !purposeInitialized &&
+      !formData?.purpose
+    ) {
       // Try multiple matching strategies
       let defaultPurpose = purposeOptions.find(
         (opt) => opt.value === "Trade" || opt.label === "Trade"
@@ -420,6 +439,7 @@ const BankTransfer = ({
 
       if (defaultPurpose && onFieldChange) {
         onFieldChange("purpose", defaultPurpose);
+        setPurposeInitialized(true);
         console.log("✅ Default purpose set to:", defaultPurpose);
       } else {
         console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
@@ -427,7 +447,11 @@ const BankTransfer = ({
     }
 
     // Set default Source of Income to "Savings" (note: Savings with 's')
-    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+    if (
+      incomeSourceOptions.length > 0 &&
+      !incomeInitialized &&
+      !formData?.incomeSource
+    ) {
       // Try multiple matching strategies
       let defaultIncomeSource = incomeSourceOptions.find(
         (opt) => opt.value === "Savings" || opt.label === "Savings" ||
@@ -444,6 +468,7 @@ const BankTransfer = ({
 
       if (defaultIncomeSource && onFieldChange) {
         onFieldChange("incomeSource", defaultIncomeSource);
+        setIncomeInitialized(true);
         console.log("✅ Default income source set to:", defaultIncomeSource);
       } else {
         console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
@@ -451,24 +476,30 @@ const BankTransfer = ({
     }
 
     // Set default Occupation to "Engineer"
-    if (occupations.length > 0 && !formData?.occupation) {
-      // Try multiple matching strategies
+    if (
+      occupations.length > 0 &&
+      !occupationInitialized &&
+      !selectedOccupation
+    ) {
       let defaultOccupation = occupations.find(
         (opt) => opt.value === "Engineer" || opt.label === "Engineer"
       );
 
-      // If not found, try case-insensitive match
       if (!defaultOccupation) {
         defaultOccupation = occupations.find(
-          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+          (opt) =>
+            opt.value?.toLowerCase() === "engineer" ||
+            opt.label?.toLowerCase() === "engineer"
         );
       }
 
-      if (defaultOccupation && onFieldChange) {
-        onFieldChange("occupation", defaultOccupation.value);
-        console.log("✅ Default occupation set to:", defaultOccupation);
-      } else {
-        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
+      if (defaultOccupation) {
+        setSelectedOccupation(defaultOccupation);
+
+        if (onFieldChange) {
+          onFieldChange("occupation", defaultOccupation.value);
+        }
+        setOccupationInitialized(true);
       }
     }
   }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
@@ -684,6 +715,9 @@ const BankTransfer = ({
 
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setCustomOccupation("");
+
     if (onFieldChange) {
       onFieldChange("occupation", selectedOption?.value || "");
     }
@@ -1136,7 +1170,7 @@ const BankTransfer = ({
               <div className="flex-1 w-full">
                 <Select
                   options={occupations}
-                  value={currentOccupationValue}
+                  value={selectedOccupation}
                   onChange={handleOccupationChange}
                   isLoading={isLoadingOccupations}
                   classNamePrefix="select"
@@ -1194,8 +1228,11 @@ const BankTransfer = ({
               <div className="flex-1 w-full">
                 <input
                   type="text"
-                  value={formData?.occupation || ""}
-                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  value={customOccupation}
+                  onChange={(e) => {
+                    setCustomOccupation(e.target.value);
+                    onFieldChange("occupation", e.target.value);
+                  }}
                   placeholder="Or enter custom occupation"
                   className="w-full px-3 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                   style={{
@@ -1418,8 +1455,7 @@ const BankTransfer = ({
           maxWidth: isMobile ? "90vw" : "420px",
         }}
         toastClassName={() =>
-          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${
-            isMobile ? "text-sm" : "text-base"
+          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${isMobile ? "text-sm" : "text-base"
           }`
         }
       />

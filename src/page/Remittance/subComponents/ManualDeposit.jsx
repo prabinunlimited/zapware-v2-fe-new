@@ -192,6 +192,10 @@ const ManualDeposit = ({
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
 
   const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+  const [customOccupation, setCustomOccupation] = useState("");
+
+  const [occupationInitialized, setOccupationInitialized] = useState(false);
 
   // Default payout options
   const defaultPayoutOptions = useMemo(
@@ -341,7 +345,11 @@ const ManualDeposit = ({
     }
 
     // Set default Occupation to "Engineer"
-    if (occupations.length > 0 && !formData?.occupation) {
+    if (
+      occupations.length > 0 &&
+      !occupationInitialized &&
+      !selectedOccupation
+    ) {
       // Try multiple matching strategies
       let defaultOccupation = occupations.find(
         (opt) => opt.value === "Engineer" || opt.label === "Engineer"
@@ -354,8 +362,15 @@ const ManualDeposit = ({
         );
       }
 
-      if (defaultOccupation && onFieldChange) {
-        onFieldChange("occupation", defaultOccupation.value);
+      if (defaultOccupation) {
+        setSelectedOccupation(defaultOccupation);
+
+        if (onFieldChange) {
+          onFieldChange("occupation", defaultOccupation.value);
+        }
+
+        setOccupationInitialized(true);
+
         console.log("✅ Default occupation set to:", defaultOccupation);
       } else {
         console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
@@ -451,16 +466,16 @@ const ManualDeposit = ({
           onFieldChange("occupation", selectedOption.occupation);
         }
 
-       // Auto-select first bank if available (use fetched `result`, not stale selector state)
-       if (result.length > 0) {
-        const firstBank = result[0];
-        if (firstBank) {
-          onBankSelect(firstBank);
-          toast.success("Beneficiary details loaded successfully!");
+        // Auto-select first bank if available (use fetched `result`, not stale selector state)
+        if (result.length > 0) {
+          const firstBank = result[0];
+          if (firstBank) {
+            onBankSelect(firstBank);
+            toast.success("Beneficiary details loaded successfully!");
+          }
+        } else {
+          toast.warning("No bank accounts found for this beneficiary");
         }
-      } else {
-        toast.warning("No bank accounts found for this beneficiary");
-      }
       } catch (error) {
         console.error("Error fetching beneficiary banks:", error);
         console.error("Error details:", error.message, error.response?.data);
@@ -474,6 +489,7 @@ const ManualDeposit = ({
       onFieldChange,
       purposeOptions,
       incomeSourceOptions,
+      occupationInitialized,
       relationOptions,
       payoutMethodOptions,
       findMatchingOption,
@@ -492,6 +508,9 @@ const ManualDeposit = ({
 
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setCustomOccupation("");
+
     onFieldChange("occupation", selectedOption?.value || "");
   };
 
@@ -704,11 +723,7 @@ const ManualDeposit = ({
               <div className="flex-1 w-full">
                 <Select
                   options={occupations}
-                  value={
-                    occupations.find(
-                      (opt) => opt.value === formData.occupation
-                    ) || null
-                  }
+                  value={selectedOccupation}
                   onChange={handleOccupationChange}
                   isLoading={isLoadingOccupations}
                   classNamePrefix="select"
@@ -759,8 +774,11 @@ const ManualDeposit = ({
               <div className="flex-1 w-full">
                 <input
                   type="text"
-                  value={formData.occupation || ""}
-                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  value={customOccupation}
+                  onChange={(e) => {
+                    setCustomOccupation(e.target.value);
+                    onFieldChange("occupation", e.target.value);
+                  }}
                   placeholder="Or enter custom occupation"
                   className="w-full px-3 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                   style={{
