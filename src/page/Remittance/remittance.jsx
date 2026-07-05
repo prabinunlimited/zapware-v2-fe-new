@@ -72,6 +72,7 @@ import {
   setSelectedBank,
   fetchBeneficiaryBanks,
   fetchBeneficiaryByCode,
+  fetchBeneficiaries,
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 import {
@@ -162,6 +163,8 @@ const Remittance = () => {
   const [openBankingProcessing, setOpenBankingProcessing] = useState(false);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [activeCard, setActiveCard] = useState(null);
+  const [pendingNewBeneficiaryId, setPendingNewBeneficiaryId] = useState(null);
+
 
   const [showBankLinkReminder, setShowBankLinkReminder] = useState(() => {
     // Check if user has already seen the reminder
@@ -1897,26 +1900,42 @@ const Remittance = () => {
   const handleRecurringDataChange = useCallback((data) => {
     setRecurringData(data);
   }, []);
+
   // Save current remittance state to sessionStorage before navigating to add beneficiary
   const saveRemittanceState = useCallback(() => {
+    // Strip non-serializable fields (React elements like `icon`, and File objects)
+    // before persisting to sessionStorage.
+    const sanitizeOption = (option) => {
+      if (!option || typeof option !== "object") return option;
+      const { icon, ...rest } = option; // drop icon (React element) if present
+      return rest;
+    };
+
     const stateToSave = {
       step,
       sendAmount: formData.sendAmount,
       receiveAmount: formData.receiveAmount,
-      sendCurrency: formData.sendCurrency,
-      receiveCurrency: formData.receiveCurrency,
+      sendCurrency: sanitizeOption(formData.sendCurrency),
+      receiveCurrency: sanitizeOption(formData.receiveCurrency),
       paymentMethod: formData.paymentMethod,
-      purpose: formData.purpose,
-      incomeSource: formData.incomeSource,
-      relation: formData.relation,
+      purpose: sanitizeOption(formData.purpose),
+      incomeSource: sanitizeOption(formData.incomeSource),
+      relation: sanitizeOption(formData.relation),
       occupation: formData.occupation,
-      payout_method: formData.payout_method,
+      payout_method: sanitizeOption(formData.payout_method),
       agreeToTerms: formData.agreeToTerms,
-      document: formData.document,
+      // NOTE: File objects can't survive JSON.stringify/sessionStorage — omit `document`
+      // entirely; if you need to preserve an uploaded file across this navigation,
+      // it needs separate handling (e.g. re-prompt upload, or store in memory/IndexedDB).
       timestamp: Date.now()
     };
-    sessionStorage.setItem('remittance_temp_state', JSON.stringify(stateToSave));
-    console.log("💾 Saved remittance state:", stateToSave);
+
+    try {
+      sessionStorage.setItem('remittance_temp_state', JSON.stringify(stateToSave));
+      console.log("💾 Saved remittance state:", stateToSave);
+    } catch (error) {
+      console.error("❌ Failed to save remittance state:", error);
+    }
   }, [step, formData]);
 
   // Restore remittance state from sessionStorage
@@ -1952,54 +1971,66 @@ const Remittance = () => {
     return false;
   }, [dispatch]);
 
-  // Handle navigation back from Add Beneficiary page
   useEffect(() => {
     console.log("📍 Remittance location state:", location.state);
-
-    // Check if we're returning from adding a beneficiary
+  
     if (location.state?.newBeneficiary && location.state?.returnToStep === 2) {
       console.log("🔄 Returning from Add Beneficiary with new beneficiary:", location.state.newBeneficiary);
-
-      // First, restore the saved remittance state
+  
       const wasRestored = restoreRemittanceState();
       console.log("📊 State restored:", wasRestored);
-
+  
       const newBeneficiary = location.state.newBeneficiary;
-
-      // Auto-select the new beneficiary
+  
       if (newBeneficiary && newBeneficiary.id) {
-        // First, ensure we're on step 2
         if (step !== 2) {
           console.log("📌 Setting step to 2");
           dispatch(setStep(2));
         }
-
-        // Small delay to ensure state is restored and step is set
-        setTimeout(() => {
-          // Select the beneficiary
-          console.log("👤 Selecting beneficiary:", newBeneficiary);
-          handleBeneficiarySelect(newBeneficiary);
-
-          // If there are banks, select the first one
-          if (newBeneficiary.benef_banks && newBeneficiary.benef_banks.length > 0) {
-            console.log("🏦 Selecting first bank:", newBeneficiary.benef_banks[0]);
-            setTimeout(() => {
-              handleBankSelect(newBeneficiary.benef_banks[0]);
-            }, 500);
-          } else {
-            // Try to fetch banks for the new beneficiary
-            console.log("🔍 Fetching banks for new beneficiary");
-            dispatch(fetchBeneficiaryBanks(newBeneficiary.id)).then(() => {
-              // Bank selection will happen in the useEffect that watches beneficiaryBanks
-            });
-          }
-        }, 500); // Increased delay to ensure state restoration completes
-
+  
+        const customerIdForFetch =
+          customerId || localStorage.getItem("customerId") || "1720";
+  
+        // Force a refetch so Redux's `beneficiaries` array includes the
+        // newly created beneficiary with its full record.
+        dispatch(fetchBeneficiaries(customerIdForFetch));
+  
+        // Don't select here — mark it pending. A separate effect below
+        // watches the Redux `beneficiaries` array (the exact same array
+        // that powers the dropdown) and selects the full record the
+        // moment it appears there.
+        setPendingNewBeneficiaryId(newBeneficiary.id);
+  
         // Clear the location state to prevent re-selection on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
-  }, [location.state, dispatch, navigate, handleBeneficiarySelect, handleBankSelect, step, restoreRemittanceState]);
+  }, [location.state, dispatch, navigate, step, restoreRemittanceState, customerId]);
+  
+  // Select the new beneficiary as soon as its FULL record (with name,
+  // phone_number, etc.) shows up in the refetched beneficiaries list.
+  useEffect(() => {
+    if (!pendingNewBeneficiaryId) return;
+  
+    const fullBeneficiary = (beneficiaries || []).find(
+      (b) => b.benef_uuid === pendingNewBeneficiaryId || b.id === pendingNewBeneficiaryId
+    );
+  
+    if (fullBeneficiary) {
+      console.log("👤 Selecting beneficiary (from refreshed Redux list):", fullBeneficiary);
+      handleBeneficiarySelect(fullBeneficiary);
+  
+      if (fullBeneficiary.benef_banks && fullBeneficiary.benef_banks.length > 0) {
+        console.log("🏦 Selecting first bank:", fullBeneficiary.benef_banks[0]);
+        handleBankSelect(fullBeneficiary.benef_banks[0]);
+      } else {
+        console.log("🔍 Fetching banks for new beneficiary");
+        dispatch(fetchBeneficiaryBanks(fullBeneficiary.id));
+      }
+  
+      setPendingNewBeneficiaryId(null);
+    }
+  }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch]);
 
   if (initialLoading) {
     return (
