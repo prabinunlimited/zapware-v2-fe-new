@@ -1897,26 +1897,42 @@ const Remittance = () => {
   const handleRecurringDataChange = useCallback((data) => {
     setRecurringData(data);
   }, []);
+
   // Save current remittance state to sessionStorage before navigating to add beneficiary
   const saveRemittanceState = useCallback(() => {
+    // Strip non-serializable fields (React elements like `icon`, and File objects)
+    // before persisting to sessionStorage.
+    const sanitizeOption = (option) => {
+      if (!option || typeof option !== "object") return option;
+      const { icon, ...rest } = option; // drop icon (React element) if present
+      return rest;
+    };
+
     const stateToSave = {
       step,
       sendAmount: formData.sendAmount,
       receiveAmount: formData.receiveAmount,
-      sendCurrency: formData.sendCurrency,
-      receiveCurrency: formData.receiveCurrency,
+      sendCurrency: sanitizeOption(formData.sendCurrency),
+      receiveCurrency: sanitizeOption(formData.receiveCurrency),
       paymentMethod: formData.paymentMethod,
-      purpose: formData.purpose,
-      incomeSource: formData.incomeSource,
-      relation: formData.relation,
+      purpose: sanitizeOption(formData.purpose),
+      incomeSource: sanitizeOption(formData.incomeSource),
+      relation: sanitizeOption(formData.relation),
       occupation: formData.occupation,
-      payout_method: formData.payout_method,
+      payout_method: sanitizeOption(formData.payout_method),
       agreeToTerms: formData.agreeToTerms,
-      document: formData.document,
+      // NOTE: File objects can't survive JSON.stringify/sessionStorage — omit `document`
+      // entirely; if you need to preserve an uploaded file across this navigation,
+      // it needs separate handling (e.g. re-prompt upload, or store in memory/IndexedDB).
       timestamp: Date.now()
     };
-    sessionStorage.setItem('remittance_temp_state', JSON.stringify(stateToSave));
-    console.log("💾 Saved remittance state:", stateToSave);
+
+    try {
+      sessionStorage.setItem('remittance_temp_state', JSON.stringify(stateToSave));
+      console.log("💾 Saved remittance state:", stateToSave);
+    } catch (error) {
+      console.error("❌ Failed to save remittance state:", error);
+    }
   }, [step, formData]);
 
   // Restore remittance state from sessionStorage

@@ -520,6 +520,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     { value: "brother", label: "Brother" },
     { value: "cousin", label: "Cousin" },
     { value: "friend", label: "Friend" },
+    { value: "customer", label: "Customer" },
     { value: "other", label: "Other" },
   ];
 

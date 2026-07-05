@@ -114,7 +114,7 @@ const ManualDeposit = ({
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 640);
@@ -205,6 +205,37 @@ const ManualDeposit = ({
 
   const payoutMethodOptions =
     paymentOptions.length > 0 ? paymentOptions : defaultPayoutOptions;
+
+  // Set default Payout Method to "Bank Deposit" / "Bank Transfer"
+  useEffect(() => {
+    if (payoutMethodOptions.length > 0 && !formData?.payout_method) {
+      let defaultPayoutMethod = payoutMethodOptions.find(
+        (opt) =>
+          opt.value === "bank_deposit" ||
+          opt.label === "Bank Deposit" ||
+          opt.value === "bank_transfer" ||
+          opt.label === "Bank Transfer"
+      );
+
+      if (!defaultPayoutMethod) {
+        defaultPayoutMethod = payoutMethodOptions.find(
+          (opt) =>
+            opt.value?.toLowerCase().includes("bank") ||
+            opt.label?.toLowerCase().includes("bank")
+        );
+      }
+
+      if (defaultPayoutMethod && onFieldChange) {
+        onFieldChange("payout_method", defaultPayoutMethod);
+        console.log("✅ Default payout method set to:", defaultPayoutMethod);
+      } else {
+        console.log(
+          "⚠️ Could not find 'Bank Transfer/Deposit' in payout options:",
+          payoutMethodOptions
+        );
+      }
+    }
+  }, [payoutMethodOptions, formData?.payout_method, onFieldChange]);
 
   // Custom select styles with mobile responsiveness
   const selectStyles = useMemo(() => getSelectStyles(isMobile), [isMobile]);
@@ -420,19 +451,16 @@ const ManualDeposit = ({
           onFieldChange("occupation", selectedOption.occupation);
         }
 
-        // Auto-select first bank if available
-        if (result.length > 0) {
-          // Wait a moment for the Redux state to update
-          setTimeout(() => {
-            const firstBank = beneficiaryBanks[0];
-            if (firstBank) {
-              onBankSelect(firstBank);
-              toast.success("Beneficiary details loaded successfully!");
-            }
-          }, 100);
-        } else {
-          toast.warning("No bank accounts found for this beneficiary");
+       // Auto-select first bank if available (use fetched `result`, not stale selector state)
+       if (result.length > 0) {
+        const firstBank = result[0];
+        if (firstBank) {
+          onBankSelect(firstBank);
+          toast.success("Beneficiary details loaded successfully!");
         }
+      } else {
+        toast.warning("No bank accounts found for this beneficiary");
+      }
       } catch (error) {
         console.error("Error fetching beneficiary banks:", error);
         console.error("Error details:", error.message, error.response?.data);
@@ -929,16 +957,15 @@ const ManualDeposit = ({
       </div>
 
       {/* Toast Container - Mobile Responsive */}
-      <ToastContainer 
-        position={isMobile ? "bottom-center" : "bottom-right"} 
+      <ToastContainer
+        position={isMobile ? "bottom-center" : "bottom-right"}
         autoClose={5000}
         style={{
           width: isMobile ? "90%" : "auto",
           maxWidth: isMobile ? "90vw" : "420px",
         }}
         toastClassName={() =>
-          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${
-            isMobile ? "text-sm" : "text-base"
+          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${isMobile ? "text-sm" : "text-base"
           }`
         }
       />

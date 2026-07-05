@@ -313,12 +313,43 @@ const BankTransfer = ({
     []
   );
 
-  // Use provided paymentOptions or fallback to defaults
+// Use provided paymentOptions or fallback to defaults
   const payoutMethodOptions = useMemo(() => {
     return paymentOptions && paymentOptions.length > 0
       ? paymentOptions
       : defaultPayoutOptions;
   }, [paymentOptions, defaultPayoutOptions]);
+
+  // Set default Payout Method to "Bank Transfer" / "Bank Deposit"
+  useEffect(() => {
+    if (payoutMethodOptions.length > 0 && !formData?.payout_method) {
+      let defaultPayoutMethod = payoutMethodOptions.find(
+        (opt) =>
+          opt.value === "bank_deposit" ||
+          opt.label === "Bank Deposit" ||
+          opt.value === "bank_transfer" ||
+          opt.label === "Bank Transfer"
+      );
+
+      if (!defaultPayoutMethod) {
+        defaultPayoutMethod = payoutMethodOptions.find(
+          (opt) =>
+            opt.value?.toLowerCase().includes("bank") ||
+            opt.label?.toLowerCase().includes("bank")
+        );
+      }
+
+      if (defaultPayoutMethod && onFieldChange) {
+        onFieldChange("payout_method", defaultPayoutMethod);
+        console.log("✅ Default payout method set to:", defaultPayoutMethod);
+      } else {
+        console.log(
+          "⚠️ Could not find 'Bank Transfer/Deposit' in payout options:",
+          payoutMethodOptions
+        );
+      }
+    }
+  }, [payoutMethodOptions, formData?.payout_method, onFieldChange]);
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
@@ -551,15 +582,13 @@ const BankTransfer = ({
         }
       }
 
-      // Auto-select first bank if available
+      // Auto-select first bank if available (use fetched `result`, not stale selector state)
       if (result?.length > 0) {
-        setTimeout(() => {
-          const firstBank = beneficiaryBanks?.[0];
-          if (firstBank && onBankSelect) {
-            onBankSelect(firstBank);
-            toast.success("Beneficiary details loaded successfully!");
-          }
-        }, 100);
+        const firstBank = result[0];
+        if (firstBank && onBankSelect) {
+          onBankSelect(firstBank);
+          toast.success("Beneficiary details loaded successfully!");
+        }
       } else {
         toast.warning("No bank accounts found for this beneficiary");
       }
