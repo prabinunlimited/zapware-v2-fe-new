@@ -141,7 +141,7 @@ const getVerificationBadges = (account) => {
   return badges;
 };
 
-// Detailed Account Card Component
+// Detailed Account Card Component - MOBILE RESPONSIVE
 const DetailedAccountCard = ({
   account,
   onDelete,
@@ -161,81 +161,66 @@ const DetailedAccountCard = ({
       layout
       className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 overflow-hidden"
     >
-      {/* Account Header */}
-      <div className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start space-x-4 flex-1">
-            {/* Bank Icon */}
+      {/* Account Header - Mobile First */}
+      <div className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-0">
+          {/* Top row: Icon + Info + Expand button on mobile */}
+          <div className="flex items-start space-x-3 sm:space-x-4 flex-1 w-full">
+            {/* Bank Icon - smaller on mobile */}
             <div
-              className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 account.isPlaid === 1
                   ? "bg-gradient-to-br from-blue-500 to-indigo-600"
                   : "bg-gradient-to-br from-gray-600 to-gray-800"
               }`}
             >
-              <FaBuilding className="text-white text-xl" />
+              <FaBuilding className="text-white text-base sm:text-xl" />
             </div>
 
-            {/* Account Info */}
+            {/* Account Info - stacked on mobile */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-3">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">
-                    {account.account_name ||
-                      `${account.firstName} ${account.lastName}`}
-                  </h3>
-                  <span
-                    className={`px-3 py-1 text-xs font-medium rounded-full border ${status.color} flex items-center`}
-                  >
-                    <StatusIcon className="mr-1.5" size={10} />
-                    {status.text}
-                  </span>
-                </div>
-
-                <button
-                  onClick={() =>
-                    setExpandedAccount(isExpanded ? null : account.account_id)
-                  }
-                  className="ml-4 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50"
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-none">
+                  {account.account_name ||
+                    `${account.firstName} ${account.lastName}`}
+                </h3>
+                <span
+                  className={`px-2.5 py-1 text-xs font-medium rounded-full border ${status.color} flex items-center w-fit`}
                 >
-                  {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
-                </button>
+                  <StatusIcon className="mr-1.5" size={10} />
+                  {status.text}
+                </span>
               </div>
 
-              {/* Bank Details */}
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <FaBuilding className="mr-2 text-gray-400" />
-                  <span className="font-medium">
+              {/* Bank Details - responsive grid */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                  <FaBuilding className="mr-1.5 sm:mr-2 text-gray-400 text-xs sm:text-sm" />
+                  <span className="font-medium truncate max-w-[100px] sm:max-w-none">
                     {account.bank || account.provider || "Unknown Bank"}
                   </span>
                 </div>
 
-                <div className="flex items-center text-sm text-gray-600">
-                  <FaIdCard className="mr-2 text-gray-400" />
-                  <span>Account: {account.accountNumberHash}</span>
+                <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                  <FaIdCard className="mr-1.5 sm:mr-2 text-gray-400 text-xs sm:text-sm" />
+                  <span className="truncate max-w-[80px] sm:max-w-none">
+                    {account.accountNumberHash}
+                  </span>
                 </div>
 
-                <div className="flex items-center text-sm text-gray-600">
-                  <FaDollarSign className="mr-2 text-gray-400" />
+                <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                  <FaDollarSign className="mr-1.5 sm:mr-2 text-gray-400 text-xs sm:text-sm" />
                   <span>{account.account_type || "Checking"}</span>
                 </div>
-
-                {account.routing_number && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FaNetworkWired className="mr-2 text-gray-400" />
-                    <span>Routing: •••{account.routing_number.slice(-4)}</span>
-                  </div>
-                )}
               </div>
 
-              {/* Verification Badges */}
+              {/* Verification Badges - wrap on mobile */}
               {verificationBadges.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {verificationBadges.map((badge, idx) => (
                     <span
                       key={idx}
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${badge.color}`}
+                      className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium rounded-full ${badge.color}`}
                     >
                       {badge.text}
                     </span>
@@ -245,26 +230,35 @@ const DetailedAccountCard = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col items-end space-y-3 ml-6">
+          {/* Action Buttons - repositioned for mobile */}
+          <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-3 mt-3 sm:mt-0 sm:ml-6">
+            <button
+              onClick={() =>
+                setExpandedAccount(isExpanded ? null : account.account_id)
+              }
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 order-2 sm:order-1"
+            >
+              {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
+            </button>
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowDeleteConfirm(account.account_id)}
               disabled={isDeleting}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors order-1 sm:order-2 ${
                 isDeleting
                   ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                   : "bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
               }`}
             >
-              {isDeleting ? "Removing..." : "Remove Account"}
+              {isDeleting ? "Removing..." : "Remove"}
             </motion.button>
           </div>
         </div>
       </div>
 
-      {/* Expanded Details */}
+      {/* Expanded Details - Mobile Responsive */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -273,36 +267,37 @@ const DetailedAccountCard = ({
             exit={{ opacity: 0, height: 0 }}
             className="border-t border-gray-100"
           >
-            <div className="p-6 bg-gray-50">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="p-4 sm:p-6 bg-gray-50">
+              {/* Responsive grid - 1 column on mobile, 2 on tablet, 3 on desktop */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {/* Account Information */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 flex items-center">
-                    <FaInfoCircle className="mr-2 text-blue-500" />
+                <div className="space-y-3 sm:space-y-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-sm sm:text-base">
+                    <FaInfoCircle className="mr-2 text-blue-500 text-xs sm:text-sm" />
                     Account Information
                   </h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     <div>
-                      <p className="text-xs text-gray-500">Account Name</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Account Name</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900 break-all">
                         {account.account_name || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Account Type</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Account Type</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900">
                         {account.account_type || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Account Number</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Account Number</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900 break-all">
                         {account.accountNumberHash || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Routing Number</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Routing Number</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900">
                         {account.routing_number || "N/A"}
                       </p>
                     </div>
@@ -310,112 +305,112 @@ const DetailedAccountCard = ({
                 </div>
 
                 {/* Technical Details */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 flex items-center">
-                    <FaCog className="mr-2 text-purple-500" />
+                <div className="space-y-3 sm:space-y-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-sm sm:text-base">
+                    <FaCog className="mr-2 text-purple-500 text-xs sm:text-sm" />
                     Technical Details
                   </h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     <div>
-                      <p className="text-xs text-gray-500">Account ID</p>
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Account ID</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900 break-all">
                         {account.account_id || "N/A"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Provider</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Provider</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-900">
                         {account.provider || "N/A"}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Payment Features */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-gray-900 flex items-center">
-                    <FaNetworkWired className="mr-2 text-indigo-500" />
+                {/* Payment Features - Responsive grid */}
+                <div className="space-y-3 sm:space-y-4 sm:col-span-2 lg:col-span-1">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-sm sm:text-base">
+                    <FaNetworkWired className="mr-2 text-indigo-500 text-xs sm:text-sm" />
                     Payment Features
                   </h4>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <div
-                      className={`p-3 rounded-lg ${
+                      className={`p-2 sm:p-3 rounded-lg ${
                         account.web_debit_verified
                           ? "bg-green-50 border border-green-200"
                           : "bg-gray-50 border border-gray-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900">
                           Web Debit
                         </span>
                         {account.web_debit_verified ? (
-                          <FaCheckCircle className="text-green-500" />
+                          <FaCheckCircle className="text-green-500 text-xs sm:text-sm" />
                         ) : (
-                          <FaTimesCircle className="text-gray-400" />
+                          <FaTimesCircle className="text-gray-400 text-xs sm:text-sm" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Verified</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Verified</p>
                     </div>
 
                     <div
-                      className={`p-3 rounded-lg ${
+                      className={`p-2 sm:p-3 rounded-lg ${
                         account.fednow_credit_enabled
                           ? "bg-blue-50 border border-blue-200"
                           : "bg-gray-50 border border-gray-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900">
                           FedNow Credit
                         </span>
                         {account.fednow_credit_enabled ? (
-                          <FaCheckCircle className="text-blue-500" />
+                          <FaCheckCircle className="text-blue-500 text-xs sm:text-sm" />
                         ) : (
-                          <FaTimesCircle className="text-gray-400" />
+                          <FaTimesCircle className="text-gray-400 text-xs sm:text-sm" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Enabled</p>
                     </div>
 
                     <div
-                      className={`p-3 rounded-lg ${
+                      className={`p-2 sm:p-3 rounded-lg ${
                         account.fednow_debit_enabled
                           ? "bg-blue-50 border border-blue-200"
                           : "bg-gray-50 border border-gray-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900">
                           FedNow Debit
                         </span>
                         {account.fednow_debit_enabled ? (
-                          <FaCheckCircle className="text-blue-500" />
+                          <FaCheckCircle className="text-blue-500 text-xs sm:text-sm" />
                         ) : (
-                          <FaTimesCircle className="text-gray-400" />
+                          <FaTimesCircle className="text-gray-400 text-xs sm:text-sm" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Enabled</p>
                     </div>
 
                     <div
-                      className={`p-3 rounded-lg ${
+                      className={`p-2 sm:p-3 rounded-lg ${
                         account.rtp_credit_enabled
                           ? "bg-teal-50 border border-teal-200"
                           : "bg-gray-50 border border-gray-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900">
                           RTP Credit
                         </span>
                         {account.rtp_credit_enabled ? (
-                          <FaCheckCircle className="text-teal-500" />
+                          <FaCheckCircle className="text-teal-500 text-xs sm:text-sm" />
                         ) : (
-                          <FaTimesCircle className="text-gray-400" />
+                          <FaTimesCircle className="text-gray-400 text-xs sm:text-sm" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Enabled</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Enabled</p>
                     </div>
                   </div>
                 </div>
@@ -425,38 +420,36 @@ const DetailedAccountCard = ({
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation Overlay */}
+      {/* Delete Confirmation Overlay - Mobile Responsive */}
       <AnimatePresence>
         {showDeleteConfirm === account.account_id && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-red-50 border-t border-red-100 p-6"
+            className="bg-red-50 border-t border-red-100 p-4 sm:p-6"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0">
               <div className="flex items-start">
-                <div className="mr-4 p-3 bg-red-100 rounded-xl">
-                  <FaExclamationTriangle className="text-red-600 text-xl" />
+                <div className="mr-3 sm:mr-4 p-2 sm:p-3 bg-red-100 rounded-xl flex-shrink-0">
+                  <FaExclamationTriangle className="text-red-600 text-lg sm:text-xl" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-red-800 text-lg">
+                  <h4 className="font-bold text-red-800 text-base sm:text-lg">
                     Remove this account?
                   </h4>
-                  <p className="text-red-600 mt-1">
-                    This will permanently unlink the account from our system.
-                    All payment methods using this account will be disabled.
+                  <p className="text-red-600 text-sm sm:text-base mt-1">
+                    This will permanently unlink the account.
                   </p>
-                  <p className="text-sm text-red-500 mt-2">
-                    Account: {account.account_name} • Bank:{" "}
-                    {account.bank || account.provider}
+                  <p className="text-xs sm:text-sm text-red-500 mt-2">
+                    Account: {account.account_name}
                   </p>
                 </div>
               </div>
-              <div className="flex space-x-3">
+              <div className="flex space-x-2 sm:space-x-3 w-full sm:w-auto">
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
-                  className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   disabled={isDeleting}
                 >
                   Cancel
@@ -466,15 +459,15 @@ const DetailedAccountCard = ({
                     onDelete(account.account_id, account.account_name)
                   }
                   disabled={isDeleting}
-                  className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDeleting ? (
-                    <span className="flex items-center">
+                    <span className="flex items-center justify-center">
                       <FaSyncAlt className="animate-spin mr-2" />
                       Removing...
                     </span>
                   ) : (
-                    "Remove Account"
+                    "Remove"
                   )}
                 </button>
               </div>
@@ -486,13 +479,13 @@ const DetailedAccountCard = ({
   );
 };
 
-// Pagination Component
+// Pagination Component - Mobile Responsive
 const Pagination = ({ currentPage, totalPages, onPageChange }) => (
-  <div className="flex items-center justify-center space-x-2 mt-8">
+  <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
     <button
       onClick={() => onPageChange(Math.max(1, currentPage - 1))}
       disabled={currentPage === 1}
-      className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base"
     >
       ←
     </button>
@@ -513,7 +506,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => (
         <button
           key={pageNum}
           onClick={() => onPageChange(pageNum)}
-          className={`w-10 h-10 rounded-lg font-medium transition-all ${
+          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium transition-all text-sm sm:text-base ${
             currentPage === pageNum
               ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm"
               : "text-gray-600 hover:bg-gray-100"
@@ -527,12 +520,12 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => (
     <button
       onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
       disabled={currentPage === totalPages}
-      className="w-10 h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base"
     >
       →
     </button>
 
-    <div className="ml-4 text-sm text-gray-500">
+    <div className="w-full sm:w-auto text-center text-xs sm:text-sm text-gray-500 mt-2 sm:mt-0">
       Page {currentPage} of {totalPages}
     </div>
   </div>
@@ -610,7 +603,7 @@ const BankLink = () => {
     if(customerId && !showPlaidLink && !isAddingAccount) {
       dispatch(setShowPlaidLink(true));
       setShowPlaidButton(false);
-1    }
+    }
   }, [customerId, showPlaidLink, isAddingAccount, dispatch])
 
   // Event handlers - ALL DEFINED BEFORE EMPTY STATE
@@ -760,76 +753,19 @@ const BankLink = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="text-center py-16 px-4"
+      className="text-center py-12 sm:py-16 px-4"
     >
       <div className="max-w-2xl mx-auto">
-        {/* <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-8">
-          <FaBuilding className="text-gray-400 text-5xl" />
-        </div> */}
-
-        <h3 className="text-3xl font-bold text-gray-900 mb-4">
+        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 sm:mb-4">
           {showCardPaymentMessage
             ? "Link Your Bank to Get Started"
             : "No Bank Accounts Linked"}
         </h3>
 
-        {/* <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">
-          {showCardPaymentMessage
-            ? "Link a bank account to enable instant deposits, withdrawals, and card payments with enterprise-grade security."
-            : "Connect your bank account to access all financial features including instant transfers, bill payments, and investment options."}
-        </p> */}
-
-        {/* <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 border border-gray-200 mb-8">
-          <h4 className="font-semibold text-gray-900 mb-6 text-lg flex items-center justify-center">
-            <FaLock className="mr-3 text-green-500" />
-            Enterprise Security Features
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <FaShieldAlt className="text-blue-600 text-xl" />
-              </div>
-              <p className="font-medium text-gray-900">256-bit Encryption</p>
-              <p className="text-sm text-gray-600 mt-1">Bank-level security</p>
-            </div>
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <FaUser className="text-green-600 text-xl" />
-              </div>
-              <p className="font-medium text-gray-900">Read-Only Access</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Never store credentials
-              </p>
-            </div>
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <FaCheckCircle className="text-purple-600 text-xl" />
-              </div>
-              <p className="font-medium text-gray-900">FDIC Insured</p>
-              <p className="text-sm text-gray-600 mt-1">Up to $250,000</p>
-            </div>
-          </div>
-        </div> */}
-
-        {/* <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onAction}
-          disabled={disabled}
-          className={`w-full max-w-sm py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
-            disabled
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/25"
-          }`}
-        >
-          <FaPlus className="inline mr-3" />
-          Link Your First Bank Account
-        </motion.button> */}
-
         {showCardPaymentMessage && onReturnToCard && (
           <button
             onClick={onReturnToCard}
-            className="mt-8 text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center mx-auto text-lg"
+            className="mt-6 sm:mt-8 text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center mx-auto text-base sm:text-lg"
           >
             Return to Card Payment
             <FaArrowRight className="ml-3" />
@@ -842,104 +778,82 @@ const BankLink = () => {
   // ========== MAIN RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-25 to-gray-50">
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Enhanced Header */}
+      {/* Main Container - Mobile padding */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+        {/* Enhanced Header - Mobile Responsive */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="pt-8 pb-6"
+          className="pt-4 sm:pt-6 md:pt-8 pb-4 sm:pb-6"
         >
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-sm">
-                  <FaBuilding className="text-white text-2xl" />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl shadow-sm">
+                  <FaBuilding className="text-white text-lg sm:text-2xl" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-                    Bank Accounts Management
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+                    Bank Accounts
                   </h1>
-                  {/* <p className="text-gray-600 mt-1">
-                    Manage your linked financial accounts and payment methods
-                  </p> */}
                 </div>
               </div>
 
               {showCardPaymentMessage && (
-                <div className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                  <FaCreditCard className="text-blue-600 mr-3 text-lg" />
-                  <div>
-                    <span className="text-sm font-semibold text-blue-700">
-                      Bank Account Required for Card Deposits
+                <div className="inline-flex items-center px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 w-full sm:w-auto">
+                  <FaCreditCard className="text-blue-600 mr-2 sm:mr-3 text-sm sm:text-lg flex-shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-xs sm:text-sm font-semibold text-blue-700 block sm:inline">
+                      Bank Account Required
                     </span>
-                    <p className="text-xs text-blue-600 mt-0.5">
-                      Link a bank account to enable secure card payments
+                    <p className="text-[10px] sm:text-xs text-blue-600 mt-0.5 sm:mt-0">
+                      Link a bank account to enable card payments
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleRefresh}
                 disabled={refreshButtonDisabled}
-                className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2.5 sm:p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Refresh accounts"
               >
                 <FaSyncAlt
-                  className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`}
+                  className={`h-4 w-4 sm:h-5 sm:w-5 ${isRefreshing ? "animate-spin" : ""}`}
                 />
               </motion.button>
-
-              {/* {showPlaidButton && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleLinkNewAccount}
-                  disabled={linkButtonDisabled}
-                  className={`inline-flex items-center px-6 py-3.5 rounded-xl font-semibold shadow-sm transition-all duration-200 ${
-                    linkButtonDisabled
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-md hover:shadow-blue-500/25"
-                  }`}
-                >
-                  <FaPlus className="mr-2.5" />
-                  Link New Account
-                </motion.button>
-              )} */}
             </div>
           </div>
         </motion.header>
 
-        <main className="pb-12">
-          {/* Enhanced Card Payment Banner */}
+        <main className="pb-8 sm:pb-12">
+          {/* Enhanced Card Payment Banner - Mobile Responsive */}
           {showCardPaymentMessage && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg"
+              className="mb-6 sm:mb-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg"
             >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div className="flex items-start">
-                  <div className="mr-4 p-3 bg-white/20 rounded-xl">
-                    <FaCreditCard className="text-white text-2xl" />
+                  <div className="mr-3 sm:mr-4 p-2 sm:p-3 bg-white/20 rounded-xl flex-shrink-0">
+                    <FaCreditCard className="text-white text-lg sm:text-2xl" />
                   </div>
                   <div className="text-white">
-                    <h3 className="text-xl font-bold mb-1">
-                      Complete Your Setup for Card Payments
+                    <h3 className="text-base sm:text-xl font-bold mb-0.5 sm:mb-1">
+                      Complete Your Setup
                     </h3>
-                    <p className="text-blue-100 opacity-90">
-                      Link a bank account to enable secure card deposits and
-                      instant transfers. Your account will be encrypted with
-                      bank-level security.
+                    <p className="text-blue-100 opacity-90 text-xs sm:text-sm">
+                      Link a bank account to enable secure card deposits.
                     </p>
                   </div>
                 </div>
-                <FaArrowRight className="text-white/80 text-2xl hidden md:block" />
+                <FaArrowRight className="text-white/80 text-xl sm:text-2xl hidden sm:block" />
               </div>
             </motion.div>
           )}
@@ -967,27 +881,27 @@ const BankLink = () => {
             />
           )}
 
-          {/* Enhanced Loading State */}
+          {/* Enhanced Loading State - Mobile Responsive */}
           {loading ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20"
+              className="flex flex-col items-center justify-center py-12 sm:py-20"
             >
               <div className="relative">
-                <div className="w-24 h-24 border-4 border-gray-200 rounded-full"></div>
-                <div className="w-24 h-24 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
+                <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-gray-200 rounded-full"></div>
+                <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
               </div>
-              <p className="mt-8 text-xl font-semibold text-gray-900">
-                Loading Bank Account Details
+              <p className="mt-6 sm:mt-8 text-lg sm:text-xl font-semibold text-gray-900">
+                Loading Accounts
               </p>
-              <p className="text-gray-500 mt-3">
-                Fetching your financial information securely...
+              <p className="text-gray-500 mt-2 sm:mt-3 text-sm sm:text-base">
+                Fetching your financial information...
               </p>
-              <div className="mt-6 flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-75"></div>
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-150"></div>
+              <div className="mt-4 sm:mt-6 flex items-center space-x-2">
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full animate-pulse delay-75"></div>
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full animate-pulse delay-150"></div>
               </div>
             </motion.div>
           ) : (
@@ -997,32 +911,32 @@ const BankLink = () => {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="space-y-6"
+                  className="space-y-4 sm:space-y-6"
                 >
-                  {/* Enhanced Success Message */}
+                  {/* Enhanced Success Message - Mobile Responsive */}
                   {deleteSuccess && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5 shadow-sm"
+                      className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="mr-4 p-2.5 bg-green-100 rounded-lg">
-                            <FaCheck className="text-green-600 text-lg" />
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="mr-3 sm:mr-4 p-2 sm:p-2.5 bg-green-100 rounded-lg flex-shrink-0">
+                            <FaCheck className="text-green-600 text-base sm:text-lg" />
                           </div>
-                          <div>
-                            <p className="text-green-800 font-semibold">
+                          <div className="min-w-0">
+                            <p className="text-green-800 font-semibold text-sm sm:text-base">
                               Success!
                             </p>
-                            <p className="text-green-700 text-sm mt-0.5">
+                            <p className="text-green-700 text-xs sm:text-sm mt-0.5 truncate">
                               {deleteSuccess}
                             </p>
                           </div>
                         </div>
                         <button
                           onClick={() => dispatch(clearErrors())}
-                          className="text-green-500 hover:text-green-700 p-1 rounded-full hover:bg-green-50"
+                          className="text-green-500 hover:text-green-700 p-1 rounded-full hover:bg-green-50 flex-shrink-0"
                         >
                           ×
                         </button>
@@ -1030,30 +944,30 @@ const BankLink = () => {
                     </motion.div>
                   )}
 
-                  {/* Enhanced Error Message */}
+                  {/* Enhanced Error Message - Mobile Responsive */}
                   {error && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-2xl p-5 shadow-sm"
+                      className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="mr-4 p-2.5 bg-red-100 rounded-lg">
-                            <FaExclamationTriangle className="text-red-600 text-lg" />
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="mr-3 sm:mr-4 p-2 sm:p-2.5 bg-red-100 rounded-lg flex-shrink-0">
+                            <FaExclamationTriangle className="text-red-600 text-base sm:text-lg" />
                           </div>
-                          <div>
-                            <p className="text-red-800 font-semibold">
+                          <div className="min-w-0">
+                            <p className="text-red-800 font-semibold text-sm sm:text-base">
                               Attention Required
                             </p>
-                            <p className="text-red-700 text-sm mt-0.5">
+                            <p className="text-red-700 text-xs sm:text-sm mt-0.5 truncate">
                               {error}
                             </p>
                           </div>
                         </div>
                         <button
                           onClick={handleDismissError}
-                          className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
+                          className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 flex-shrink-0"
                         >
                           ×
                         </button>
@@ -1061,21 +975,20 @@ const BankLink = () => {
                     </motion.div>
                   )}
 
-                  {/* Accounts Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  {/* Accounts Header - Mobile Responsive */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                         Linked Bank Accounts
                       </h2>
-                      <p className="text-gray-600 mt-1">
-                        Manage your connected financial institutions and payment
-                        methods
+                      <p className="text-gray-600 mt-0.5 sm:mt-1 text-sm sm:text-base">
+                        Manage your connected financial institutions
                       </p>
                     </div>
                   </div>
 
                   {/* Enhanced Accounts List */}
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {paginatedAccounts.map((account, index) => (
                       <DetailedAccountCard
                         key={account.account_id}
@@ -1092,7 +1005,7 @@ const BankLink = () => {
 
                   {/* Enhanced Pagination */}
                   {totalPages > 1 && (
-                    <div className="pt-8">
+                    <div className="pt-6 sm:pt-8">
                       <Pagination
                         currentPage={currentPage}
                         totalPages={totalPages}
@@ -1101,22 +1014,22 @@ const BankLink = () => {
                     </div>
                   )}
 
-                  {/* Enhanced Return to Card Payment Button */}
+                  {/* Enhanced Return to Card Payment Button - Mobile Responsive */}
                   {showCardPaymentMessage && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex justify-center pt-10"
+                      className="flex justify-center pt-6 sm:pt-10 px-4"
                     >
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={handleReturnToCardPayment}
-                        className="inline-flex items-center px-8 py-4 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-200"
+                        className="inline-flex items-center px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-200 text-sm sm:text-base w-full sm:w-auto justify-center"
                       >
-                        <FaCreditCard className="mr-3 text-lg" />
+                        <FaCreditCard className="mr-2 sm:mr-3 text-base sm:text-lg" />
                         Return to Card Payment
-                        <FaArrowRight className="ml-4 text-lg" />
+                        <FaArrowRight className="ml-3 sm:ml-4 text-base sm:text-lg" />
                       </motion.button>
                     </motion.div>
                   )}
