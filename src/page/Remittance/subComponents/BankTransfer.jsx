@@ -51,6 +51,62 @@ import {
 import PaymentInitiation from "../../Deposit/components/PaymentInitiation/PaymentInitiation";
 import { setShowPaymentInitiation } from "../../Deposit/slices/depositSlice";
 
+// ========== MOBILE RESPONSIVE SELECT STYLES ==========
+const getSelectStyles = (isMobile) => ({
+  control: (base) => ({
+    ...base,
+    minHeight: isMobile ? "44px" : "56px",
+    borderRadius: "0.5rem",
+    borderColor: "#e5e7eb",
+    boxShadow: "none",
+    "&:hover": { borderColor: "#9ca3af" },
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  option: (base, { isSelected, isFocused }) => ({
+    ...base,
+    backgroundColor: isSelected
+      ? "#eff6ff"
+      : isFocused
+        ? "#f8fafc"
+        : "white",
+    color: isSelected ? "#1e40af" : "#374151",
+    fontWeight: isSelected ? "600" : "500",
+    padding: isMobile ? "8px 12px" : "12px 16px",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    "&:hover": {
+      backgroundColor: "#f8fafc",
+    },
+  }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: "0.5rem",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+    zIndex: 9999,
+    maxHeight: isMobile ? "300px" : "400px",
+    overflowY: "auto",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: "#9ca3af",
+    fontWeight: "500",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "#1f2937",
+    fontWeight: "600",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  input: (base) => ({
+    ...base,
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+});
+
 const BankTransfer = ({
   formData = {},
   manualAccountDetails,
@@ -214,6 +270,15 @@ const BankTransfer = ({
 
   const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
 
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+  const [customOccupation, setCustomOccupation] = useState("");
+
+  const [purposeInitialized, setPurposeInitialized] = useState(false);
+  const [incomeInitialized, setIncomeInitialized] = useState(false);
+  const [occupationInitialized, setOccupationInitialized] = useState(false);
+  const [payoutInitialized, setPayoutInitialized] = useState(false);
+
+
   // Debug logging
   useEffect(() => {
     console.log("BankTransfer Props Debug:", {
@@ -238,6 +303,7 @@ const BankTransfer = ({
     incomeSourceOptions,
     paymentOptions,
     relationOptions,
+    selectedOccupation,
     formData,
     displayedSilaBankAccounts,
     displayedHasSilaAccounts,
@@ -264,53 +330,55 @@ const BankTransfer = ({
       : defaultPayoutOptions;
   }, [paymentOptions, defaultPayoutOptions]);
 
-  // Custom select styles
-  const selectStyles = useMemo(
-    () => ({
-      control: (base) => ({
-        ...base,
-        minHeight: "56px",
-        borderRadius: "0.5rem",
-        borderColor: "#e5e7eb",
-        boxShadow: "none",
-        "&:hover": { borderColor: "#9ca3af" },
-        fontSize: "0.95rem",
-      }),
-      option: (base, { isSelected, isFocused }) => ({
-        ...base,
-        backgroundColor: isSelected
-          ? "#eff6ff"
-          : isFocused
-            ? "#f8fafc"
-            : "white",
-        color: isSelected ? "#1e40af" : "#374151",
-        fontWeight: isSelected ? "600" : "500",
-        padding: "12px 16px",
-        "&:hover": {
-          backgroundColor: "#f8fafc",
-        },
-      }),
-      menu: (base) => ({
-        ...base,
-        borderRadius: "0.5rem",
-        fontSize: "0.95rem",
-        border: "1px solid #e5e7eb",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-        zIndex: 9999,
-      }),
-      placeholder: (base) => ({
-        ...base,
-        color: "#9ca3af",
-        fontWeight: "500",
-      }),
-      singleValue: (base) => ({
-        ...base,
-        color: "#1f2937",
-        fontWeight: "600",
-      }),
-    }),
-    []
-  );
+  // Set default Payout Method to "Bank Transfer" / "Bank Deposit"
+  useEffect(() => {
+    if (
+      payoutMethodOptions.length > 0 &&
+      !payoutInitialized &&
+      !formData?.payout_method
+    ) {
+      let defaultPayoutMethod = payoutMethodOptions.find(
+        (opt) =>
+          opt.value === "bank_deposit" ||
+          opt.label === "Bank Deposit" ||
+          opt.value === "bank_transfer" ||
+          opt.label === "Bank Transfer"
+      );
+
+      if (!defaultPayoutMethod) {
+        defaultPayoutMethod = payoutMethodOptions.find(
+          (opt) =>
+            opt.value?.toLowerCase().includes("bank") ||
+            opt.label?.toLowerCase().includes("bank")
+        );
+      }
+
+      if (defaultPayoutMethod && onFieldChange) {
+        onFieldChange("payout_method", defaultPayoutMethod);
+        setPayoutInitialized(true);
+        console.log("✅ Default payout method set to:", defaultPayoutMethod);
+      } else {
+        console.log(
+          "⚠️ Could not find 'Bank Transfer/Deposit' in payout options:",
+          payoutMethodOptions
+        );
+      }
+    }
+  }, [payoutMethodOptions, formData?.payout_method, onFieldChange]);
+
+  // Detect mobile viewport
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Custom select styles with mobile responsiveness
+  const selectStyles = useMemo(() => getSelectStyles(isMobile), [isMobile]);
 
   // Fetch occupations on component mount
   useEffect(() => {
@@ -352,7 +420,11 @@ const BankTransfer = ({
   // Set default values for Purpose, Income Source, and Occupation
   useEffect(() => {
     // Set default Purpose of Transfer to "Trade"
-    if (purposeOptions.length > 0 && !formData?.purpose) {
+    if (
+      purposeOptions.length > 0 &&
+      !purposeInitialized &&
+      !formData?.purpose
+    ) {
       // Try multiple matching strategies
       let defaultPurpose = purposeOptions.find(
         (opt) => opt.value === "Trade" || opt.label === "Trade"
@@ -367,6 +439,7 @@ const BankTransfer = ({
 
       if (defaultPurpose && onFieldChange) {
         onFieldChange("purpose", defaultPurpose);
+        setPurposeInitialized(true);
         console.log("✅ Default purpose set to:", defaultPurpose);
       } else {
         console.log("⚠️ Could not find 'Trade' in purpose options:", purposeOptions);
@@ -374,7 +447,11 @@ const BankTransfer = ({
     }
 
     // Set default Source of Income to "Savings" (note: Savings with 's')
-    if (incomeSourceOptions.length > 0 && !formData?.incomeSource) {
+    if (
+      incomeSourceOptions.length > 0 &&
+      !incomeInitialized &&
+      !formData?.incomeSource
+    ) {
       // Try multiple matching strategies
       let defaultIncomeSource = incomeSourceOptions.find(
         (opt) => opt.value === "Savings" || opt.label === "Savings" ||
@@ -391,6 +468,7 @@ const BankTransfer = ({
 
       if (defaultIncomeSource && onFieldChange) {
         onFieldChange("incomeSource", defaultIncomeSource);
+        setIncomeInitialized(true);
         console.log("✅ Default income source set to:", defaultIncomeSource);
       } else {
         console.log("⚠️ Could not find 'Savings' in income source options:", incomeSourceOptions);
@@ -398,24 +476,30 @@ const BankTransfer = ({
     }
 
     // Set default Occupation to "Engineer"
-    if (occupations.length > 0 && !formData?.occupation) {
-      // Try multiple matching strategies
+    if (
+      occupations.length > 0 &&
+      !occupationInitialized &&
+      !selectedOccupation
+    ) {
       let defaultOccupation = occupations.find(
         (opt) => opt.value === "Engineer" || opt.label === "Engineer"
       );
 
-      // If not found, try case-insensitive match
       if (!defaultOccupation) {
         defaultOccupation = occupations.find(
-          (opt) => opt.value?.toLowerCase() === "engineer" || opt.label?.toLowerCase() === "engineer"
+          (opt) =>
+            opt.value?.toLowerCase() === "engineer" ||
+            opt.label?.toLowerCase() === "engineer"
         );
       }
 
-      if (defaultOccupation && onFieldChange) {
-        onFieldChange("occupation", defaultOccupation.value);
-        console.log("✅ Default occupation set to:", defaultOccupation);
-      } else {
-        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
+      if (defaultOccupation) {
+        setSelectedOccupation(defaultOccupation);
+
+        if (onFieldChange) {
+          onFieldChange("occupation", defaultOccupation.value);
+        }
+        setOccupationInitialized(true);
       }
     }
   }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
@@ -529,15 +613,13 @@ const BankTransfer = ({
         }
       }
 
-      // Auto-select first bank if available
+      // Auto-select first bank if available (use fetched `result`, not stale selector state)
       if (result?.length > 0) {
-        setTimeout(() => {
-          const firstBank = beneficiaryBanks?.[0];
-          if (firstBank && onBankSelect) {
-            onBankSelect(firstBank);
-            toast.success("Beneficiary details loaded successfully!");
-          }
-        }, 100);
+        const firstBank = result[0];
+        if (firstBank && onBankSelect) {
+          onBankSelect(firstBank);
+          toast.success("Beneficiary details loaded successfully!");
+        }
       } else {
         toast.warning("No bank accounts found for this beneficiary");
       }
@@ -633,6 +715,9 @@ const BankTransfer = ({
 
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setCustomOccupation("");
+
     if (onFieldChange) {
       onFieldChange("occupation", selectedOption?.value || "");
     }
@@ -662,7 +747,7 @@ const BankTransfer = ({
         returnStep: 2,
         returnToStep: 2,
         preserveRemittanceState: true,
-        from: "remittance"  // ADD THIS FLAG
+        from: "remittance"
       }
     });
   };
@@ -702,52 +787,52 @@ const BankTransfer = ({
     </div>
   );
 
-  // Bank Account Info Modal
+  // Bank Account Info Modal - Mobile Responsive
   const renderBankAccountInfo = () => {
     if (!selectedBankAccount) return null;
 
     return (
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex justify-between items-center mb-3">
-          <h4 className="text-md font-semibold text-blue-800">Selected Bank Account Details</h4>
+      <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex justify-between items-center mb-2 sm:mb-3">
+          <h4 className="text-sm sm:text-md font-semibold text-blue-800">Selected Bank Account Details</h4>
           <button
             type="button"
             onClick={() => setShowBankAccountInfo(!showBankAccountInfo)}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm"
           >
             {showBankAccountInfo ? "Hide Details" : "Show Details"}
           </button>
         </div>
 
         {showBankAccountInfo && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2 sm:space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               <div>
-                <p className="text-xs text-gray-500">Account Name</p>
-                <p className="text-sm font-medium">{selectedBankAccount.account_name}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Account Name</p>
+                <p className="text-xs sm:text-sm font-medium break-all">{selectedBankAccount.account_name}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Provider</p>
-                <p className="text-sm font-medium">{selectedBankAccount.provider || 'N/A'}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Provider</p>
+                <p className="text-xs sm:text-sm font-medium">{selectedBankAccount.provider || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Account Type</p>
-                <p className="text-sm font-medium">{selectedBankAccount.account_type || 'N/A'}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Account Type</p>
+                <p className="text-xs sm:text-sm font-medium">{selectedBankAccount.account_type || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Account Number</p>
-                <p className="text-sm font-medium">{selectedBankAccount.accountNumberHash || '****'}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Account Number</p>
+                <p className="text-xs sm:text-sm font-medium">{selectedBankAccount.accountNumberHash || '****'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Routing Number</p>
-                <p className="text-sm font-medium">{selectedBankAccount.routing_number || 'N/A'}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Routing Number</p>
+                <p className="text-xs sm:text-sm font-medium">{selectedBankAccount.routing_number || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-sm font-medium">
+                <p className="text-[10px] sm:text-xs text-gray-500">Status</p>
+                <p className="text-xs sm:text-sm font-medium">
                   {selectedBankAccount.web_debit_verified ? (
                     <span className="flex items-center text-green-600">
-                      <FaCheckCircle className="mr-1" /> Verified
+                      <FaCheckCircle className="mr-1 text-xs sm:text-sm" /> Verified
                     </span>
                   ) : (
                     <span className="text-yellow-600">Pending Verification</span>
@@ -756,9 +841,9 @@ const BankTransfer = ({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-blue-200">
-              <p className="text-xs text-gray-500 mb-1">Additional Info</p>
-              <p className="text-xs text-gray-700">
+            <div className="pt-2 sm:pt-3 border-t border-blue-200">
+              <p className="text-[10px] sm:text-xs text-gray-500 mb-1">Additional Info</p>
+              <p className="text-[10px] sm:text-xs text-gray-700">
                 This account will be used as the source for your bank transfer.
                 {selectedBankAccount.fednow_credit_enabled && " Supports FedNow transfers."}
                 {selectedBankAccount.rtp_credit_enabled && " Supports RTP transfers."}
@@ -771,46 +856,44 @@ const BankTransfer = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Main container */}
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Main container - Mobile padding */}
+      <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">
           Bank Transfer Details
         </h3>
 
-        <div className="space-y-4">
-          {/* Select Your Bank Account (Sila Accounts) */}
+        <div className="space-y-3 sm:space-y-4">
+          {/* Select Your Bank Account (Sila Accounts) - Mobile Responsive */}
           {displayedHasSilaAccounts && selectedCurrency === "USD" && (
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
+            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700">
                   Select Your Bank Account *
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {displayedSilaAccountsLoading ? (
                     <div className="flex items-center">
-                      <RingLoader size={20} color="#3b82f6" />
-                      <span className="ml-2 text-xs text-gray-500">Loading accounts...</span>
+                      <RingLoader size={isMobile ? 16 : 20} color="#3b82f6" />
+                      <span className="ml-2 text-[10px] sm:text-xs text-gray-500">Loading accounts...</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-[10px] sm:text-xs text-gray-500">
                       {silaAccountOptions.length} account(s) available
                     </span>
                   )}
 
-                  {/* Add/Remove Bank Button - Using existing BankLink route */}
+                  {/* Add/Remove Bank Button - Mobile responsive */}
                   <button
                     type="button"
                     onClick={() => {
                       const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
                       console.log("➕ Navigating to manage bank accounts via BankLink");
 
-                      // Save current state if needed
                       if (onSaveRemittanceState) {
                         onSaveRemittanceState();
                       }
 
-                      // Navigate to existing BankLink route
                       navigate(`/linkbank/${customerId}`, {
                         state: {
                           returnTo: `/remittance/${customerId}`,
@@ -820,24 +903,24 @@ const BankTransfer = ({
                         }
                       });
                     }}
-                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
                   >
-                    <FaPlus className="w-3 h-3" />
+                    <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     Add/Remove Bank
                   </button>
                 </div>
               </div>
 
               {displayedSilaAccountsError ? (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-600">{displayedSilaAccountsError}</p>
+                <div className="p-2 sm:p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs sm:text-sm text-red-600">{displayedSilaAccountsError}</p>
                   <button
                     type="button"
                     onClick={() => {
                       const customerId = paramCustomerId || localStorage.getItem("customerId") || "1720";
                       dispatch(checkSilaBankAccounts(customerId));
                     }}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                    className="mt-1 sm:mt-2 text-xs sm:text-sm text-blue-600 hover:text-blue-800"
                   >
                     Retry
                   </button>
@@ -860,20 +943,20 @@ const BankTransfer = ({
                     }
                     isSearchable
                     getOptionLabel={(option) => (
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                         <div>
-                          <div className="font-medium">{option.account_name}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="font-medium text-xs sm:text-sm">{option.account_name}</div>
+                          <div className="text-[10px] sm:text-xs text-gray-500 flex flex-wrap items-center gap-1">
                             {option.provider} • {option.account_type}
                             {option.web_debit_verified && (
-                              <span className="ml-2 text-green-600">
-                                <FaCheckCircle className="inline mr-1" />
+                              <span className="ml-1 text-green-600">
+                                <FaCheckCircle className="inline mr-0.5 text-[10px] sm:text-xs" />
                                 Verified
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-[10px] sm:text-xs text-gray-400">
                           {option.accountNumberHash}
                         </div>
                       </div>
@@ -884,16 +967,16 @@ const BankTransfer = ({
                   {selectedBankAccount && renderBankAccountInfo()}
 
                   {silaAccountOptions.length === 0 && !displayedSilaAccountsLoading && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-start">
-                        <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2" />
-                        <div>
-                          <p className="text-sm text-yellow-800">
+                        <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2 text-xs sm:text-sm flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm text-yellow-800">
                             No bank accounts found. Please link a bank account to proceed.
                           </p>
                           <button
                             type="button"
-                            className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                            className="mt-1 sm:mt-2 text-xs sm:text-sm text-blue-600 hover:text-blue-800"
                             onClick={() => {
                               const customerId = paramCustomerId || localStorage.getItem("authcustomer_id") || localStorage.getItem("customerId");
                               navigate(`/linkbank/${customerId}`, {
@@ -917,26 +1000,26 @@ const BankTransfer = ({
             </div>
           )}
 
-          {/* Beneficiary Selection */}
+          {/* Beneficiary Selection - Mobile Responsive */}
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1 sm:mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700">
                 Select Beneficiary
               </label>
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
                 disabled={isNavigatingToAdd}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isNavigatingToAdd ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     <span>Loading...</span>
                   </>
                 ) : (
                   <>
-                    <FaPlus className="w-3 h-3" />
+                    <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     Add New Beneficiary
                   </>
                 )}
@@ -970,45 +1053,45 @@ const BankTransfer = ({
             />
           </div>
 
-          {/* OR Separator */}
-          <div className="flex items-center my-4">
+          {/* OR Separator - Mobile Responsive */}
+          <div className="flex items-center my-3 sm:my-4">
             <div className="flex-1 border-t border-gray-300"></div>
-            <div className="mx-4 text-sm text-gray-500 font-medium">or</div>
+            <div className="mx-3 sm:mx-4 text-xs sm:text-sm text-gray-500 font-medium">or</div>
             <div className="flex-1 border-t border-gray-300"></div>
           </div>
 
-          {/* Enter Beneficiary Code Field */}
+          {/* Enter Beneficiary Code Field - Mobile Responsive */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Enter Beneficiary Code
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={beneficiaryCode}
                 onChange={handleBeneficiaryCodeInputChange}
                 placeholder="Enter beneficiary code"
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-3 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                 disabled={isLoadingCode}
               />
               <button
                 type="button"
                 onClick={handleBeneficiaryCodeLookupInternal}
                 disabled={isLoadingCode || !beneficiaryCode.trim()}
-                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center"
+                className="px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-sm sm:text-base"
               >
-                <FaSearch className="mr-2" />
+                <FaSearch className="mr-1.5 sm:mr-2 text-xs sm:text-sm" />
                 {isLoadingCode ? "Loading..." : "Search"}
               </button>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-[10px] sm:text-sm text-gray-500">
               Enter the beneficiary code to load their details automatically
             </p>
           </div>
 
           {/* Payout Method */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Select Payout Method
             </label>
             <Select
@@ -1024,7 +1107,7 @@ const BankTransfer = ({
               isClearable
             />
             {payoutMethodOptions.length === 0 && (
-              <p className="mt-1 text-xs text-yellow-600">
+              <p className="mt-1 text-[10px] sm:text-xs text-yellow-600">
                 No payout methods available. Using default options.
               </p>
             )}
@@ -1032,7 +1115,7 @@ const BankTransfer = ({
 
           {/* Purpose of Transfer */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Purpose of Transfer *
             </label>
             <Select
@@ -1048,7 +1131,7 @@ const BankTransfer = ({
               isClearable
             />
             {purposeOptions.length === 0 && (
-              <p className="mt-1 text-xs text-yellow-600">
+              <p className="mt-1 text-[10px] sm:text-xs text-yellow-600">
                 No purpose options loaded. Please check API connection.
               </p>
             )}
@@ -1056,7 +1139,7 @@ const BankTransfer = ({
 
           {/* Source of Income */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Source of Income *
             </label>
             <Select
@@ -1072,22 +1155,22 @@ const BankTransfer = ({
               isClearable
             />
             {incomeSourceOptions.length === 0 && (
-              <p className="mt-1 text-xs text-yellow-600">
+              <p className="mt-1 text-[10px] sm:text-xs text-yellow-600">
                 No income source options loaded. Please check API connection.
               </p>
             )}
           </div>
 
-          {/* Occupation Field */}
+          {/* Occupation Field - Mobile Responsive */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Occupation
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1">
+              <div className="flex-1 w-full">
                 <Select
                   options={occupations}
-                  value={currentOccupationValue}
+                  value={selectedOccupation}
                   onChange={handleOccupationChange}
                   isLoading={isLoadingOccupations}
                   classNamePrefix="select"
@@ -1095,29 +1178,22 @@ const BankTransfer = ({
                     ...selectStyles,
                     control: (base) => ({
                       ...base,
-                      minHeight: "48px",
+                      minHeight: isMobile ? "44px" : "48px",
                       borderRadius: "0.5rem",
                       borderColor: "#e5e7eb",
                       boxShadow: "none",
                       "&:hover": { borderColor: "#9ca3af" },
-                      fontSize: "0.95rem",
-                      '@media (max-width: 640px)': {
-                        fontSize: "0.875rem",
-                        minHeight: "44px",
-                      }
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                     }),
                     menu: (base) => ({
                       ...base,
                       borderRadius: "0.5rem",
-                      fontSize: "0.95rem",
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                       border: "1px solid #e5e7eb",
                       boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                       zIndex: 9999,
-                      '@media (max-width: 640px)': {
-                        fontSize: "0.875rem",
-                        maxHeight: "300px",
-                        overflowY: "auto",
-                      }
+                      maxHeight: isMobile ? "300px" : "400px",
+                      overflowY: "auto",
                     }),
                     option: (base, { isSelected, isFocused }) => ({
                       ...base,
@@ -1128,13 +1204,10 @@ const BankTransfer = ({
                           : "white",
                       color: isSelected ? "#1e40af" : "#374151",
                       fontWeight: isSelected ? "600" : "500",
-                      padding: "12px 16px",
+                      padding: isMobile ? "8px 12px" : "12px 16px",
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                       whiteSpace: "normal",
                       wordBreak: "break-word",
-                      '@media (max-width: 640px)': {
-                        padding: "10px 12px",
-                        fontSize: "0.875rem",
-                      },
                       "&:hover": {
                         backgroundColor: "#f8fafc",
                       },
@@ -1152,31 +1225,30 @@ const BankTransfer = ({
                   menuPosition="fixed"
                 />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 w-full">
                 <input
                   type="text"
-                  value={formData?.occupation || ""}
-                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  value={customOccupation}
+                  onChange={(e) => {
+                    setCustomOccupation(e.target.value);
+                    onFieldChange("occupation", e.target.value);
+                  }}
                   placeholder="Or enter custom occupation"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  className="w-full px-3 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                   style={{
-                    minHeight: "48px",
-                    '@media (max-width: 640px)': {
-                      minHeight: "44px",
-                      fontSize: "0.875rem",
-                    }
+                    minHeight: isMobile ? "44px" : "48px",
                   }}
                 />
               </div>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-[10px] sm:text-xs text-gray-500">
               Select from dropdown or type custom occupation
             </p>
           </div>
 
           {/* Beneficiary Bank */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Beneficiary Bank
             </label>
             <Select
@@ -1226,12 +1298,13 @@ const BankTransfer = ({
               !banksLoading &&
               beneficiaryBanks &&
               beneficiaryBanks.length > 0 && (
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-[10px] sm:text-sm text-gray-500">
                   {beneficiaryBanks.length} bank account(s) available
                 </p>
               )}
           </div>
 
+          {/* Open Banking Section - Mobile Responsive */}
           {(selectedCurrency === "EUR" ||
             selectedCurrency === "GBP" ||
             selectedCurrency === "DKK") &&
@@ -1239,13 +1312,13 @@ const BankTransfer = ({
             selectedBeneficiary &&
             formData?.amount &&
             parseFloat(formData.amount) > 0 ? (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex justify-between items-center mb-4">
+            <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div>
-                  <h4 className="text-lg font-medium text-gray-900">
+                  <h4 className="text-base sm:text-lg font-medium text-gray-900">
                     Open Banking
                   </h4>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Initiate secure bank transfer via Open Banking
                   </p>
                 </div>
@@ -1289,23 +1362,23 @@ const BankTransfer = ({
                     // Dispatch to show PaymentInitiation modal
                     dispatch(setShowPaymentInitiation(true));
                   }}
-                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all"
+                  className="inline-flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all text-sm sm:text-base w-full sm:w-auto"
                 >
-                  <FaUniversity className="mr-2" />
+                  <FaUniversity className="mr-1.5 sm:mr-2 text-sm sm:text-base" />
                   Initiate Open Banking
                 </button>
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start">
-                  <FaInfoCircle className="text-green-600 mt-0.5 mr-3" />
-                  <div>
-                    <p className="text-sm text-green-800">
+                  <FaInfoCircle className="text-green-600 mt-0.5 mr-2 sm:mr-3 text-xs sm:text-sm flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-green-800">
                       <strong>Open Banking</strong> allows you to securely
                       connect your bank account and initiate transfers
                       instantly. No manual bank details required.
                     </p>
-                    <ul className="mt-2 text-xs text-green-700 space-y-1">
+                    <ul className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-green-700 space-y-0.5 sm:space-y-1">
                       <li>• Instant bank account verification</li>
                       <li>• Secure connection via Plaid</li>
                       <li>• Real-time transfer initiation</li>
@@ -1317,9 +1390,9 @@ const BankTransfer = ({
             </div>
           ) : null}
 
-          {/* Compliance Note */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm text-gray-700">
+          {/* Compliance Note - Mobile Responsive */}
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
+            <p className="text-xs sm:text-sm text-gray-700">
               <span className="font-semibold">Note:</span> For compliance
               purposes, we require information about the purpose of your
               transfer and source of funds. All information is kept confidential
@@ -1327,17 +1400,17 @@ const BankTransfer = ({
             </p>
           </div>
 
-          {/* Document Upload Section - Only show if onFileUpload prop is provided */}
+          {/* Document Upload Section - Mobile Responsive */}
           {onFileUpload && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
                 Upload Supporting Document (Optional)
               </label>
               <div className="flex items-center">
-                <label className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                <label className="flex flex-col items-center justify-center w-full p-3 sm:p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
                   <div className="flex flex-col items-center justify-center">
-                    <FaUpload className="w-8 h-8 mb-2 text-gray-500" />
-                    <p className="text-sm text-gray-500">
+                    <FaUpload className="w-6 h-6 sm:w-8 sm:h-8 mb-1.5 sm:mb-2 text-gray-500" />
+                    <p className="text-xs sm:text-sm text-gray-500 text-center">
                       {formData?.document
                         ? formData.document.name || "Document uploaded"
                         : "Click to upload document (PDF, JPG, PNG)"}
@@ -1357,7 +1430,7 @@ const BankTransfer = ({
                   <img
                     src={filePreview}
                     alt="Document preview"
-                    className="h-full object-contain border rounded"
+                    className="h-full object-contain border rounded max-h-48 sm:max-h-64"
                   />
                 </div>
               )}
@@ -1368,7 +1441,7 @@ const BankTransfer = ({
 
       {/* Success/Error Messages */}
       <ToastContainer
-        position="bottom-right"
+        position={isMobile ? "bottom-center" : "bottom-right"}
         autoClose={5000}
         hideProgressBar={false}
         newestOnTop
@@ -1377,6 +1450,14 @@ const BankTransfer = ({
         pauseOnFocusLoss
         draggable
         pauseOnHover
+        style={{
+          width: isMobile ? "90%" : "auto",
+          maxWidth: isMobile ? "90vw" : "420px",
+        }}
+        toastClassName={() =>
+          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${isMobile ? "text-sm" : "text-base"
+          }`
+        }
       />
     </div>
   );

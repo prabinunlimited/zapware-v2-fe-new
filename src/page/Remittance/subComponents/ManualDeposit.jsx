@@ -35,6 +35,55 @@ import {
   selectBanksLoading,
 } from "../../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
+// ========== MOBILE RESPONSIVE SELECT STYLES ==========
+const getSelectStyles = (isMobile) => ({
+  control: (base) => ({
+    ...base,
+    minHeight: isMobile ? "44px" : "56px",
+    borderRadius: "0.5rem",
+    borderColor: "#e5e7eb",
+    boxShadow: "none",
+    "&:hover": { borderColor: "#9ca3af" },
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  option: (base, { isSelected, isFocused }) => ({
+    ...base,
+    backgroundColor: isSelected ? "#f3f4f6" : "white",
+    color: isSelected ? "#111827" : "#4b5563",
+    padding: isMobile ? "8px 12px" : "12px 16px",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    "&:hover": { backgroundColor: "#f3f4f6" },
+  }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: "0.5rem",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+    zIndex: 9999,
+    maxHeight: isMobile ? "300px" : "400px",
+    overflowY: "auto",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: "#9ca3af",
+    fontWeight: "500",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "#1f2937",
+    fontWeight: "600",
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+  input: (base) => ({
+    ...base,
+    fontSize: isMobile ? "0.875rem" : "0.95rem",
+  }),
+});
+
 const ManualDeposit = ({
   formData,
   manualAccountDetails,
@@ -62,6 +111,17 @@ const ManualDeposit = ({
   const banksLoading = useSelector(selectBanksLoading);
 
   const API_URL = import.meta.env.VITE_API_URL;
+
+  // Detect mobile viewport
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Add local state to track if beneficiaries have been loaded
   const [beneficiariesFetched, setBeneficiariesFetched] = useState(false);
@@ -132,6 +192,10 @@ const ManualDeposit = ({
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
 
   const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+  const [customOccupation, setCustomOccupation] = useState("");
+
+  const [occupationInitialized, setOccupationInitialized] = useState(false);
 
   // Default payout options
   const defaultPayoutOptions = useMemo(
@@ -146,33 +210,39 @@ const ManualDeposit = ({
   const payoutMethodOptions =
     paymentOptions.length > 0 ? paymentOptions : defaultPayoutOptions;
 
-  // Custom select styles
-  const selectStyles = useMemo(
-    () => ({
-      control: (base) => ({
-        ...base,
-        minHeight: "56px",
-        borderRadius: "0.5rem",
-        borderColor: "#e5e7eb",
-        boxShadow: "none",
-        "&:hover": { borderColor: "#9ca3af" },
-      }),
-      option: (base, { isSelected }) => ({
-        ...base,
-        backgroundColor: isSelected ? "#f3f4f6" : "white",
-        color: isSelected ? "#111827" : "#4b5563",
-        "&:hover": { backgroundColor: "#f3f4f6" },
-        padding: "12px 16px",
-      }),
-      menu: (base) => ({
-        ...base,
-        borderRadius: "0.5rem",
-        border: "1px solid #e5e7eb",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-      }),
-    }),
-    []
-  );
+  // Set default Payout Method to "Bank Deposit" / "Bank Transfer"
+  useEffect(() => {
+    if (payoutMethodOptions.length > 0 && !formData?.payout_method) {
+      let defaultPayoutMethod = payoutMethodOptions.find(
+        (opt) =>
+          opt.value === "bank_deposit" ||
+          opt.label === "Bank Deposit" ||
+          opt.value === "bank_transfer" ||
+          opt.label === "Bank Transfer"
+      );
+
+      if (!defaultPayoutMethod) {
+        defaultPayoutMethod = payoutMethodOptions.find(
+          (opt) =>
+            opt.value?.toLowerCase().includes("bank") ||
+            opt.label?.toLowerCase().includes("bank")
+        );
+      }
+
+      if (defaultPayoutMethod && onFieldChange) {
+        onFieldChange("payout_method", defaultPayoutMethod);
+        console.log("✅ Default payout method set to:", defaultPayoutMethod);
+      } else {
+        console.log(
+          "⚠️ Could not find 'Bank Transfer/Deposit' in payout options:",
+          payoutMethodOptions
+        );
+      }
+    }
+  }, [payoutMethodOptions, formData?.payout_method, onFieldChange]);
+
+  // Custom select styles with mobile responsiveness
+  const selectStyles = useMemo(() => getSelectStyles(isMobile), [isMobile]);
 
   // Helper function to find matching option
   const findMatchingOption = useCallback((options, value) => {
@@ -275,7 +345,11 @@ const ManualDeposit = ({
     }
 
     // Set default Occupation to "Engineer"
-    if (occupations.length > 0 && !formData?.occupation) {
+    if (
+      occupations.length > 0 &&
+      !occupationInitialized &&
+      !selectedOccupation
+    ) {
       // Try multiple matching strategies
       let defaultOccupation = occupations.find(
         (opt) => opt.value === "Engineer" || opt.label === "Engineer"
@@ -288,11 +362,18 @@ const ManualDeposit = ({
         );
       }
 
-      if (defaultOccupation && onFieldChange) {
-        onFieldChange("occupation", defaultOccupation.value);
+      if (defaultOccupation) {
+        setSelectedOccupation(defaultOccupation);
+
+        if (onFieldChange) {
+          onFieldChange("occupation", defaultOccupation.value);
+        }
+
+        setOccupationInitialized(true);
+
         console.log("✅ Default occupation set to:", defaultOccupation);
       } else {
-        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupationOptions);
+        console.log("⚠️ Could not find 'Engineer' in occupation options:", occupations);
       }
     }
   }, [purposeOptions, incomeSourceOptions, occupations, formData?.purpose, formData?.incomeSource, formData?.occupation, onFieldChange]);
@@ -385,16 +466,13 @@ const ManualDeposit = ({
           onFieldChange("occupation", selectedOption.occupation);
         }
 
-        // Auto-select first bank if available
+        // Auto-select first bank if available (use fetched `result`, not stale selector state)
         if (result.length > 0) {
-          // Wait a moment for the Redux state to update
-          setTimeout(() => {
-            const firstBank = beneficiaryBanks[0];
-            if (firstBank) {
-              onBankSelect(firstBank);
-              toast.success("Beneficiary details loaded successfully!");
-            }
-          }, 100);
+          const firstBank = result[0];
+          if (firstBank) {
+            onBankSelect(firstBank);
+            toast.success("Beneficiary details loaded successfully!");
+          }
         } else {
           toast.warning("No bank accounts found for this beneficiary");
         }
@@ -411,6 +489,7 @@ const ManualDeposit = ({
       onFieldChange,
       purposeOptions,
       incomeSourceOptions,
+      occupationInitialized,
       relationOptions,
       payoutMethodOptions,
       findMatchingOption,
@@ -429,6 +508,9 @@ const ManualDeposit = ({
 
   // Handle occupation change
   const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setCustomOccupation("");
+
     onFieldChange("occupation", selectedOption?.value || "");
   };
 
@@ -450,16 +532,16 @@ const ManualDeposit = ({
     return "Select beneficiary...";
   };
 
-  // Bank Detail Item component
+  // Bank Detail Item component - Mobile Responsive
   const BankDetailItem = ({ icon, label, value }) => (
-    <div className="flex items-start gap-2">
-      <div className="text-gray-500 mt-0.5 text-sm">{icon}</div>
-      <div className="flex-1">
-        <div className="flex items-center gap-1 mb-1">
-          <p className="text-xs text-gray-500 font-medium">{label}</p>
+    <div className="flex items-start gap-1.5 sm:gap-2">
+      <div className="text-gray-500 mt-0.5 text-xs sm:text-sm flex-shrink-0">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 mb-0.5 sm:mb-1">
+          <p className="text-[10px] sm:text-xs text-gray-500 font-medium">{label}</p>
         </div>
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-800 break-all">
+          <p className="text-xs sm:text-sm font-medium text-gray-800 break-all">
             {value || "Not available"}
           </p>
         </div>
@@ -491,34 +573,34 @@ const ManualDeposit = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Main container */}
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Main container - Mobile padding */}
+      <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">
           Manual Deposit Details
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {/* Beneficiary Selection - SINGLE SOURCE */}
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1 sm:mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700">
                 Select Beneficiary
               </label>
               <button
                 type="button"
                 onClick={handleAddNewBeneficiary}
                 disabled={isNavigatingToAdd}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isNavigatingToAdd ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     <span>Loading...</span>
                   </>
                 ) : (
                   <>
-                    <FaPlus className="w-3 h-3" />
+                    <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     Add New Beneficiary
                   </>
                 )}
@@ -589,7 +671,7 @@ const ManualDeposit = ({
 
           {/* Payout Method */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Select Payout Method
             </label>
             <Select
@@ -604,7 +686,7 @@ const ManualDeposit = ({
 
           {/* Purpose of Transfer */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Purpose of Transfer *
             </label>
             <Select
@@ -619,7 +701,7 @@ const ManualDeposit = ({
 
           {/* Source of Income */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Source of Income *
             </label>
             <Select
@@ -632,61 +714,48 @@ const ManualDeposit = ({
             />
           </div>
 
-          {/* Occupation Field */}
+          {/* Occupation Field - Mobile Responsive */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Occupation
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1">
+              <div className="flex-1 w-full">
                 <Select
                   options={occupations}
-                  value={
-                    occupations.find(
-                      (opt) => opt.value === formData.occupation
-                    ) || null
-                  }
+                  value={selectedOccupation}
                   onChange={handleOccupationChange}
                   isLoading={isLoadingOccupations}
                   classNamePrefix="select"
                   styles={{
+                    ...selectStyles,
                     control: (base) => ({
                       ...base,
-                      minHeight: "48px",
+                      minHeight: isMobile ? "44px" : "48px",
                       borderRadius: "0.5rem",
                       borderColor: "#e5e7eb",
                       boxShadow: "none",
                       "&:hover": { borderColor: "#9ca3af" },
-                      fontSize: "0.95rem",
-                      '@media (max-width: 640px)': {
-                        fontSize: "0.875rem",
-                        minHeight: "44px",
-                      }
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                     }),
                     menu: (base) => ({
                       ...base,
                       borderRadius: "0.5rem",
-                      fontSize: "0.95rem",
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                       border: "1px solid #e5e7eb",
                       boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                       zIndex: 9999,
-                      '@media (max-width: 640px)': {
-                        fontSize: "0.875rem",
-                        maxHeight: "300px",
-                        overflowY: "auto",
-                      }
+                      maxHeight: isMobile ? "300px" : "400px",
+                      overflowY: "auto",
                     }),
                     option: (base, { isSelected, isFocused }) => ({
                       ...base,
                       backgroundColor: isSelected ? "#f3f4f6" : "white",
                       color: isSelected ? "#111827" : "#4b5563",
-                      padding: "12px 16px",
+                      padding: isMobile ? "8px 12px" : "12px 16px",
+                      fontSize: isMobile ? "0.875rem" : "0.95rem",
                       whiteSpace: "normal",
                       wordBreak: "break-word",
-                      '@media (max-width: 640px)': {
-                        padding: "10px 12px",
-                        fontSize: "0.875rem",
-                      },
                       "&:hover": { backgroundColor: "#f3f4f6" },
                     }),
                   }}
@@ -702,31 +771,30 @@ const ManualDeposit = ({
                   menuPosition="fixed"
                 />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 w-full">
                 <input
                   type="text"
-                  value={formData.occupation || ""}
-                  onChange={(e) => onFieldChange("occupation", e.target.value)}
+                  value={customOccupation}
+                  onChange={(e) => {
+                    setCustomOccupation(e.target.value);
+                    onFieldChange("occupation", e.target.value);
+                  }}
                   placeholder="Or enter custom occupation"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  className="w-full px-3 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                   style={{
-                    minHeight: "48px",
-                    '@media (max-width: 640px)': {
-                      minHeight: "44px",
-                      fontSize: "0.875rem",
-                    }
+                    minHeight: isMobile ? "44px" : "48px",
                   }}
                 />
               </div>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-[10px] sm:text-xs text-gray-500">
               Select from dropdown or type custom occupation
             </p>
           </div>
 
-          {/* Beneficiary Bank */}
+          {/* Beneficiary Bank - Mobile Responsive */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Beneficiary Bank
             </label>
             <Select
@@ -774,15 +842,15 @@ const ManualDeposit = ({
             {selectedBeneficiary &&
               !banksLoading &&
               beneficiaryBanks.length > 0 && (
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-[10px] sm:text-sm text-gray-500">
                   {beneficiaryBanks.length} bank account(s) available
                 </p>
               )}
           </div>
 
-          {/* Compliance Note */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm text-gray-700">
+          {/* Compliance Note - Mobile Responsive */}
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
+            <p className="text-xs sm:text-sm text-gray-700">
               <span className="font-semibold">Note:</span> For compliance
               purposes, we require information about the purpose of your
               transfer and source of funds. All information is kept confidential
@@ -790,59 +858,59 @@ const ManualDeposit = ({
             </p>
           </div>
 
-          {/* Bank Details Display Section */}
-          <div className="mt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-1">
-              <FaUniversity className="text-blue-500" />
+          {/* Bank Details Display Section - Mobile Responsive */}
+          <div className="mt-3 sm:mt-4">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-2 flex items-center gap-1">
+              <FaUniversity className="text-blue-500 text-xs sm:text-sm" />
               Bank account for deposit
             </h3>
 
             {manualDetailsLoading ? (
-              <div className="flex justify-center py-3">
-                <RingLoader color="#2563eb" size={16} />
-                <span className="ml-2 text-sm text-gray-600">
+              <div className="flex justify-center py-2 sm:py-3">
+                <RingLoader color="#2563eb" size={isMobile ? 14 : 16} />
+                <span className="ml-2 text-xs sm:text-sm text-gray-600">
                   Loading bank details...
                 </span>
               </div>
             ) : manualAccountDetails ? (
-              <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-gray-50 p-2 sm:p-3 rounded border border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <BankDetailItem
-                    icon={<FaUniversity className="text-gray-400" />}
+                    icon={<FaUniversity className="text-gray-400 text-xs sm:text-sm" />}
                     label="Bank Name"
                     value={manualAccountDetails.bank_name}
                   />
                   <BankDetailItem
-                    icon={<FaUser className="text-gray-400" />}
+                    icon={<FaUser className="text-gray-400 text-xs sm:text-sm" />}
                     label="Account Name"
                     value={manualAccountDetails.account_name}
                   />
                   <BankDetailItem
-                    icon={<FaInfoCircle className="text-gray-400" />}
+                    icon={<FaInfoCircle className="text-gray-400 text-xs sm:text-sm" />}
                     label="Account Number"
                     value={manualAccountDetails.account_number}
                   />
                   <BankDetailItem
-                    icon={<FaInfoCircle className="text-gray-400" />}
+                    icon={<FaInfoCircle className="text-gray-400 text-xs sm:text-sm" />}
                     label="Routing Number"
                     value={manualAccountDetails.routing_number}
                   />
                 </div>
               </div>
             ) : manualAccountError || manualAccountDetails?.status === 404 ? (
-              <div className="bg-red-50 p-3 rounded border border-red-200">
+              <div className="bg-red-50 p-2 sm:p-3 rounded border border-red-200">
                 <div className="flex items-start gap-2">
-                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-medium text-red-800 mb-1">
+                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0 text-xs sm:text-sm" />
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-medium text-red-800 mb-0.5 sm:mb-1">
                       Bank Details Not Found
                     </h4>
-                    <p className="text-xs text-red-700">
+                    <p className="text-[10px] sm:text-xs text-red-700">
                       {typeof manualAccountError === "string"
                         ? manualAccountError
                         : "Unable to load bank details"}
                     </p>
-                    <p className="text-xs text-red-600 mt-2">
+                    <p className="text-[10px] sm:text-xs text-red-600 mt-1 sm:mt-2">
                       Please select a different payment method or contact
                       support.
                     </p>
@@ -850,14 +918,14 @@ const ManualDeposit = ({
                 </div>
               </div>
             ) : (
-              <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+              <div className="bg-yellow-50 p-2 sm:p-3 rounded border border-yellow-200">
                 <div className="flex items-start gap-2">
-                  <FaExclamationTriangle className="text-yellow-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-medium text-yellow-800 mb-1">
+                  <FaExclamationTriangle className="text-yellow-500 mt-0.5 flex-shrink-0 text-xs sm:text-sm" />
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-medium text-yellow-800 mb-0.5 sm:mb-1">
                       Bank Details Not Available
                     </h4>
-                    <p className="text-xs text-yellow-700">
+                    <p className="text-[10px] sm:text-xs text-yellow-700">
                       Unable to load bank details for manual deposit with{" "}
                       {formData.sendCurrency?.value || "USD"}. Please select a
                       different payment method or contact support.
@@ -868,16 +936,16 @@ const ManualDeposit = ({
             )}
           </div>
 
-          {/* Document Upload Section */}
+          {/* Document Upload Section - Mobile Responsive */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Upload Bank Deposit Proof *
             </label>
             <div className="flex items-center">
-              <label className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+              <label className="flex flex-col items-center justify-center w-full p-3 sm:p-4 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
                 <div className="flex flex-col items-center justify-center">
-                  <FaUpload className="w-8 h-8 mb-2 text-gray-500" />
-                  <p className="text-sm text-gray-500">
+                  <FaUpload className="w-6 h-6 sm:w-8 sm:h-8 mb-1.5 sm:mb-2 text-gray-500" />
+                  <p className="text-xs sm:text-sm text-gray-500 text-center">
                     {formData.document
                       ? formData.document.name || "Document uploaded"
                       : "Click to upload document (PDF, JPG, PNG)"}
@@ -898,7 +966,7 @@ const ManualDeposit = ({
                 <img
                   src={filePreview}
                   alt="Document preview"
-                  className="h-full object-contain border rounded"
+                  className="h-full object-contain border rounded max-h-48 sm:max-h-64"
                 />
               </div>
             )}
@@ -906,7 +974,19 @@ const ManualDeposit = ({
         </div>
       </div>
 
-      <ToastContainer position="bottom-right" autoClose={5000} />
+      {/* Toast Container - Mobile Responsive */}
+      <ToastContainer
+        position={isMobile ? "bottom-center" : "bottom-right"}
+        autoClose={5000}
+        style={{
+          width: isMobile ? "90%" : "auto",
+          maxWidth: isMobile ? "90vw" : "420px",
+        }}
+        toastClassName={() =>
+          `relative flex p-3 sm:p-4 min-h-10 sm:min-h-12 rounded-lg justify-between overflow-hidden cursor-pointer ${isMobile ? "text-sm" : "text-base"
+          }`
+        }
+      />
     </div>
   );
 };
