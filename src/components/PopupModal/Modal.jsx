@@ -142,18 +142,18 @@ const ModalHeader = ({ title, message, type, modalProps, onClose, currentType })
     )}
     <div className="flex-1 min-w-0">
       {title && (
-        <h3 className={`${currentType.text} text-xl font-bold mb-2`}>
+        <h3 className={`${currentType.text} text-xl font-bold mb-2 break-words`}>
           {title}
         </h3>
       )}
       {message && (
-        <div className={`${currentType.text}`}>
-          {typeof message === "string" ? (
-            <p className="whitespace-pre-wrap leading-relaxed">{message}</p>
-          ) : (
-            <div>{message}</div>
-          )}
-        </div>
+        <div className={`${currentType.text} min-w-0`}>
+        {typeof message === "string" ? (
+          <p className="whitespace-pre-wrap break-words leading-relaxed">{message}</p>
+        ) : (
+          <div className="min-w-0 break-words">{message}</div>
+        )}
+      </div>
       )}
     </div>
     {!modalProps.hideCloseButton && (
@@ -286,10 +286,10 @@ const Modal = ({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`${currentType.bg} ${currentType.border} border-l-4 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto backdrop-blur-sm`}
+            className={`${currentType.bg} ${currentType.border} border-l-4 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto backdrop-blur-sm mx-auto`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <ModalContent
                 title={title}
                 message={message}

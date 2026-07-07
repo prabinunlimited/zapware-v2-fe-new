@@ -111,38 +111,38 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
 
   // Delete Confirmation Modal Component
   const DeleteConfirmationModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <div className="flex items-center justify-center mb-4">
-          <div className="bg-red-100 rounded-full p-3">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-3 sm:p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 mx-2 sm:mx-0">
+        <div className="flex items-center justify-center mb-3 sm:mb-4">
+          <div className="bg-red-100 rounded-full p-2 sm:p-3">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </div>
         </div>
 
-        <h3 className="text-lg font-bold text-gray-900 text-center mb-2">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 text-center mb-2">
           Delete Bank Account
         </h3>
 
         <p className="text-gray-600 text-center mb-6">
           Are you sure you want to delete this bank account for <span className="font-semibold">{beneficiaryName}</span>?
           <br />
-          <span className="text-sm text-red-500">This action cannot be undone.</span>
+          <span className="text-xs sm:text-sm text-red-500">This action cannot be undone.</span>
         </p>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <button
             onClick={cancelDelete}
             disabled={isDeleting}
-            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 sm:py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 w-full sm:w-auto order-2 sm:order-1"
           >
             Cancel
           </button>
           <button
             onClick={confirmDelete}
             disabled={isDeleting}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="px-4 py-2.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto order-1 sm:order-2"
           >
             {isDeleting ? (
               <>
@@ -166,16 +166,16 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[80vh] overflow-hidden m-2 sm:m-0">
           <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-xl font-bold text-gray-900 truncate pr-2">
                 Bank Details for {beneficiaryName}
               </h2>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 sm:p-0 flex-shrink-0"
               >
                 <svg
                   className="w-6 h-6"
@@ -194,9 +194,9 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
             </div>
 
             {loading ? (
-              <div className="flex justify-center items-center py-12">
+              <div className="flex flex-col sm:flex-row justify-center items-center py-8 sm:py-12 gap-2 sm:gap-3">
                 <RingLoader color="#3B82F6" loading={true} size={40} />
-                <span className="ml-3 text-gray-600">Loading bank details...</span>
+                <span className="text-sm sm:text-base text-gray-600">Loading bank details...</span>
               </div>
             ) : error ? (
               <div className="text-center py-8">
@@ -213,9 +213,9 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
               </div>
             ) : !bankDetails || bankDetails.length === 0 ? (
               <div>
-                <div className="text-center py-8">
+                <div className="text-center py-6 sm:py-8">
                   <svg
-                    className="mx-auto h-12 w-12 text-gray-400"
+                    className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -227,10 +227,10 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                       d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
                     />
                   </svg>
-                  <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  <h3 className="mt-2 text-base sm:text-lg font-medium text-gray-900">
                     No bank accounts found
                   </h3>
-                  <p className="mt-1 text-gray-500">
+                  <p className="mt-1 text-sm sm:text-base text-gray-500 px-4">
                     This beneficiary doesn't have any bank accounts registered.
                   </p>
                 </div>
@@ -255,19 +255,19 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
               </div>
             ) : (
               <>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <div className="space-y-3 sm:space-y-4 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto pr-1 sm:pr-2">
                   {bankDetails.map((bank, index) => (
                     <div
                       key={bank.id || index}
-                      className="border border-gray-200 rounded-lg p-4"
+                      className="border border-gray-200 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4"
                     >
                       <div className="mb-3 pb-3 border-b border-gray-200">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-md font-semibold text-gray-800">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2 pb-2 border-b border-gray-200">
+                          <h3 className="text-sm sm:text-md font-semibold text-gray-800">
                             Bank Account #{index + 1}
                           </h3>
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${bank.status === 1
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full self-start sm:self-auto w-fit ${bank.status === 1
                               ? "bg-green-100 text-green-800"
                               : "bg-red-100 text-red-800"
                               }`}
@@ -464,14 +464,14 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                         </div>
                       )}
                     </div> */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* Bank Name */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-500">
+                        <div className="col-span-1">
+                          <label className="text-xs sm:text-sm font-medium text-gray-500 block">
                             Bank Name
                           </label>
 
-                          <p className="text-gray-900 font-medium">
+                          <p className="text-sm sm:text-base text-gray-900 font-medium break-words">
                             {["AED", "DKK", "EUR", "GBP", "USD"].includes(
                               bank.currency_code
                             )
@@ -536,14 +536,14 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                           </div>
                         </div>
 
-                        <div className="flex gap-2 mt-3 justify-end">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-3 justify-end">
                           {/* Delete Button - Hidden if only one bank account */}
                           {bankDetails.length > 1 && (
                             <button
                               onClick={() => handleDeleteBank(bank.id)}
-                              className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+                              className="px-3 py-2 sm:py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                             >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                               Delete
@@ -553,7 +553,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                           {/* Edit Button */}
                           <button
                             onClick={() => handleEditSpecificBank(bank.id)}
-                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+                            className="px-3 py-2 sm:py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -565,10 +565,10 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 flex justify-end gap-3">
+                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
                   <button
                     onClick={handleAddNewBank}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto text-sm sm:text-base order-2 sm:order-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -577,7 +577,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                   </button>
                   <button
                     onClick={onClose}
-                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="px-4 py-2.5 sm:py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors w-full sm:w-auto text-sm sm:text-base order-1 sm:order-2"
                   >
                     Close
                   </button>

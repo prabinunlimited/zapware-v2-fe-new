@@ -506,14 +506,14 @@ const BankTransfer = ({
 
 
   // Auto-select first beneficiary if none selected
-  useEffect(() => {
-    if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
-      const firstBeneficiary = beneficiaries[0];
-      if (firstBeneficiary && onBeneficiarySelect) {
-        handleBeneficiarySelect(firstBeneficiary);
-      }
-    }
-  }, [beneficiaries, selectedBeneficiary, showCodeInput]);
+  // useEffect(() => {
+  //   if (beneficiaries.length > 0 && !selectedBeneficiary && !showCodeInput) {
+  //     const firstBeneficiary = beneficiaries[0];
+  //     if (firstBeneficiary && onBeneficiarySelect) {
+  //       handleBeneficiarySelect(firstBeneficiary);
+  //     }
+  //   }
+  // }, [beneficiaries, selectedBeneficiary, showCodeInput]);
 
   // Auto-select first bank when banks are loaded
   useEffect(() => {
