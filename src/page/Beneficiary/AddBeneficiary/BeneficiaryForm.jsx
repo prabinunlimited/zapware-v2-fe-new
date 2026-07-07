@@ -2951,25 +2951,29 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <FieldLabel required>
                     Bank Country
                   </FieldLabel>
-                  <select
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    value={account.bankCountry || ""}
-                    onChange={(e) => {
-                      handleBankAccountChange(
-                        index,
-                        "bankCountry",
-                        e.target.value
-                      );
+                  <Select
+                    className="text-sm"
+                    classNamePrefix="select"
+                    options={countries.map(country => ({
+                      value: country.id.toString(),
+                      label: country.name
+                    }))}
+                    placeholder="Search and select bank country..."
+                    isSearchable
+                    value={
+                      account.bankCountry
+                        ? {
+                          value: account.bankCountry,
+                          label: countries.find(c => c.id.toString() === account.bankCountry)?.name || account.bankCountry
+                        }
+                        : null
+                    }
+                    onChange={(selectedOption) => {
+                      handleBankAccountChange(index, "bankCountry", selectedOption?.value || "");
                     }}
+                    styles={customStyles}
                     required
-                  >
-                    <option value="">-- Select Bank Country --</option>
-                    {countries.map((country) => (
-                      <option key={country.id} value={country.id}>
-                        {country.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
             )}
@@ -4439,28 +4443,34 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           </span>
                         )}
                       </FieldLabel>
-                      <div className="relative">
-                        <select
-                          className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 appearance-none ${usingExistingBeneficiary
-                            ? "bg-gray-100 cursor-not-allowed"
-                            : "bg-white"
-                            }`}
-                          onChange={formik.handleChange}
-                          value={formik.values.nationality_id}
-                          name="nationality_id"
-                          disabled={usingExistingBeneficiary}
-                        >
-                          <option value="">Select Nationality</option>
-                          {nationalities.map((nationality) => (
-                            <option key={nationality.id} value={nationality.id}>
-                              {nationality.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <FaChevronRight className="text-gray-400 rotate-90" />
-                        </div>
-                      </div>
+                      <Select
+                        className="text-sm"
+                        classNamePrefix="select"
+                        options={nationalities.map((nationality) => ({
+                          value: nationality.id.toString(),
+                          label: nationality.name,
+                        }))}
+                        placeholder="Search and select nationality..."
+                        isSearchable
+                        isDisabled={usingExistingBeneficiary}
+                        value={
+                          formik.values.nationality_id
+                            ? {
+                              value: formik.values.nationality_id,
+                              label:
+                                nationalities.find(
+                                  (n) => n.id.toString() === formik.values.nationality_id
+                                )?.name || formik.values.nationality_id,
+                            }
+                            : null
+                        }
+                        onChange={(selectedOption) => {
+                          if (!usingExistingBeneficiary) {
+                            formik.setFieldValue("nationality_id", selectedOption?.value || "");
+                          }
+                        }}
+                        styles={customStyles}
+                      />
                     </div>
                   )}
 
@@ -4474,17 +4484,34 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </span>
                       )}
                     </FieldLabel>
-                    <select
-                      className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : "bg-white"
-                        }`}
-                      onChange={(e) => {
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={countriesOptions.map((country) => ({
+                        value: country.id.toString(),
+                        label: `${country.label} (${country.country_code})`,
+                      }))}
+                      placeholder="Search and select country..."
+                      isSearchable
+                      isDisabled={usingExistingBeneficiary}
+                      value={
+                        formik.values.country_id
+                          ? {
+                            value: formik.values.country_id,
+                            label: (() => {
+                              const c = countriesOptions.find(
+                                (country) => country.id.toString() === formik.values.country_id
+                              );
+                              return c ? `${c.label} (${c.country_code})` : formik.values.country_id;
+                            })(),
+                          }
+                          : null
+                      }
+                      onChange={(selectedOption) => {
                         if (!usingExistingBeneficiary) {
-                          const selectedCountryId = e.target.value;
+                          const selectedCountryId = selectedOption?.value || "";
                           const selectedCountry = countries.find(
-                            (country) =>
-                              country.id === parseInt(selectedCountryId)
+                            (country) => country.id === parseInt(selectedCountryId)
                           );
 
                           formik.setFieldValue("country_id", selectedCountryId);
@@ -4497,17 +4524,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           }
                         }
                       }}
-                      value={formik.values.country_id}
-                      name="country_id"
-                      disabled={usingExistingBeneficiary}
-                    >
-                      <option value="">Select Country</option>
-                      {countriesOptions.map((country) => (
-                        <option key={country.value} value={country.id}>
-                          {country.label} ({country.country_code})
-                        </option>
-                      ))}
-                    </select>
+                      styles={customStyles}
+                    />
                   </div>
 
                   {/* City */}
