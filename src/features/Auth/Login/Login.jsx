@@ -779,6 +779,26 @@ const Login = () => {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode([]));
+        dispatch(
+          openModal({
+            title: "Multiple Accounts Found",
+            message: result.message,
+            type: "info",
+            modalProps: {
+              showCloseButton: true,
+              actions: [
+                {
+                  label: "OK",
+                  primary: true,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(closeModal());
+                  },
+                },
+              ],
+            },
+          })
+        );
         return;
       }
 
@@ -864,6 +884,35 @@ const Login = () => {
       };
 
       const result = await dispatch(generateOTP(payload)).unwrap();
+
+      if (result.status === "multiple_accounts") {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Multiple Accounts Found",
+            message: result.message,
+            type: "info",
+            modalProps: {
+              showCloseButton: true,
+              actions: [
+                {
+                  label: "OK",
+                  primary: true,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(closeModal());
+                  },
+                },
+              ],
+            },
+          })
+        );
+        return;
+      }
+
 
       if (!result.message || result.message === "OTP sent successfully") {
         dispatch(setShowOtpInput(true));
@@ -1415,31 +1464,6 @@ const Login = () => {
           </h1>
 
           <div className="mb-6 flex items-center gap-6">
-            <div className="relative flex items-center cursor-pointer">
-              <input
-                type="radio"
-                name="sign_in_option"
-                value="email"
-                onChange={(e) => {
-                  dispatch(setInputType(e.target.value));
-                }}
-                checked={inputType === "email"}
-                className="absolute opacity-0 w-5 h-5"
-                id="email-radio"
-              />
-              <span
-                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
-                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
-                  : ""
-                  }`}
-              ></span>
-              <label
-                htmlFor="email-radio"
-                className="font-semibold text-gray-500 uppercase cursor-pointer transition-colors hover:text-blue-400 text-sm"
-              >
-                Email
-              </label>
-            </div>
 
             <div className="relative flex items-center cursor-pointer">
               <input
@@ -1464,6 +1488,32 @@ const Login = () => {
                 className="font-semibold uppercase cursor-pointer transition-colors text-sm text-gray-500 hover:text-blue-400"
               >
                 Mobile Number
+              </label>
+            </div>
+            
+            <div className="relative flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="sign_in_option"
+                value="email"
+                onChange={(e) => {
+                  dispatch(setInputType(e.target.value));
+                }}
+                checked={inputType === "email"}
+                className="absolute opacity-0 w-5 h-5"
+                id="email-radio"
+              />
+              <span
+                className={`w-5 h-5 rounded-full border-2 border-gray-600 mr-3 flex-shrink-0 transition-transform ${inputType === "email"
+                  ? "bg-blue-500 border-transparent scale-75 shadow-[0_0_20px_rgba(76,139,245,0.5)]"
+                  : ""
+                  }`}
+              ></span>
+              <label
+                htmlFor="email-radio"
+                className="font-semibold text-gray-500 uppercase cursor-pointer transition-colors hover:text-blue-400 text-sm"
+              >
+                Email
               </label>
             </div>
           </div>
@@ -1606,29 +1656,42 @@ const Login = () => {
 
             {showCustomerType === "Y" && (
               <div className="relative mb-6">
-                <label
-                  htmlFor="customerType"
-                  className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
-                >
-                  Customer Type
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Customer Type
                 </label>
-                <select
-                  id="customerType"
-                  name="customerType"
-                  className="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-0 focus:border-gray-600 peer"
-                  placeholder=" "
-                  onChange={(e) => {
-                    setFieldValue("customerType", e.target.value);
-                  }}
-                  onBlur={handleBlur}
-                  value={values.customerType}
-                >
-                  <option value="">--Select Customer Type--</option>
-                  <option value="individual">Individual</option>
-                  <option value="institution">Institution</option>
-                </select>
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                    <input
+                      type="radio"
+                      name="customerType"
+                      value="individual"
+                      onChange={(e) => {
+                        setFieldValue("customerType", e.target.value);
+                      }}
+                      onBlur={handleBlur}
+                      checked={values.customerType === "individual"}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm sm:text-base text-gray-700">Individual</span>
+                  </label>
+
+                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                    <input
+                      type="radio"
+                      name="customerType"
+                      value="institution"
+                      onChange={(e) => {
+                        setFieldValue("customerType", e.target.value);
+                      }}
+                      onBlur={handleBlur}
+                      checked={values.customerType === "institution"}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm sm:text-base text-gray-700">Institution</span>
+                  </label>
+                </div>
                 {errors.customerType && touched.customerType && (
-                  <p className="text-red-500 text-xs">{errors.customerType}</p>
+                  <p className="text-red-500 text-xs mt-1">{errors.customerType}</p>
                 )}
               </div>
             )}

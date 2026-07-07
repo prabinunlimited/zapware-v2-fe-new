@@ -30,6 +30,10 @@ import {
   selectModalMessage,
   selectPasscode,
   selectServiceProviderInr,
+  selectInitialLoading,
+  selectSenderBankAccounts,
+  selectSelectedSenderAccount,
+  selectSenderBankAccountsLoading,
 
   // Actions
   setFormValue,
@@ -44,6 +48,8 @@ import {
   setLoading,
   setBenefLoading,
   setVerifying,
+  setSelectedSenderAccount,
+  clearSenderBankAccounts,
 
   // Thunks
   fetchDestinationCurrencies,
@@ -59,7 +65,8 @@ import {
   verifyPasscode,
   submitPayout,
   resetPayoutState,
-  selectInitialLoading,
+  fetchSenderBankAccounts,
+
 } from "./slices/payoutSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -239,6 +246,10 @@ const PayoutPage = () => {
   const [customDays, setCustomDays] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
 
+  const senderBankAccounts = useSelector(selectSenderBankAccounts);
+  const selectedSenderAccount = useSelector(selectSelectedSenderAccount);
+  const senderBankAccountsLoading = useSelector(selectSenderBankAccountsLoading);
+
   // Debug logging
   useEffect(() => {
     console.log("🔍 customerBankAccounts:", customerBankAccounts);
@@ -304,7 +315,6 @@ const PayoutPage = () => {
 
     // Skip if loading states are already active
     if (loading || benefLoading) {
-      console.log("Skipping API call - another request in progress");
       return;
     }
 
@@ -328,9 +338,46 @@ const PayoutPage = () => {
       dispatch(fetchBeneficiaryAccounts({ customerId, currencyCode: value }));
     }
 
-    if (name === "from") {
+    // When source currency is selected
+    if (name === "from" && value) {
+      // Fetch balance
       dispatch(fetchBalance({ customer_id: customerId, currency_code: value }));
+
+      // Clear previous sender bank accounts
+      dispatch(clearSenderBankAccounts());
+      dispatch(setSelectedSenderAccount(null));
+
+      // Find the selected account
+      const safeCustomerAccounts = safeArray(customerBankAccounts);
+      const selectedAccount = safeCustomerAccounts.find(
+        account => account.currency_code === value
+      );
+
+      // If service_provider_id is 59, fetch sender bank accounts using the thunk
+      if (selectedAccount?.service_provider_id === 59) {
+        const customerUuid = localStorage.getItem("customerUuid");
+        if (customerUuid) {
+          dispatch(fetchSenderBankAccounts({
+            customerUuid: customerUuid,
+            currencyCode: value
+          }));
+        } else {
+          toast.error("Customer UUID not found");
+        }
+      } else {
+        dispatch(clearSenderBankAccounts());
+      }
     }
+  };
+
+  const handleSenderAccountChange = (e) => {
+    const value = e.target.value;
+    dispatch(setSelectedSenderAccount(value));
+    // Also store in formValues if needed
+    dispatch(setFormValue({
+      name: "sender_bank_account_id",
+      value: value
+    }));
   };
 
   const handleFileChange = (e) => {
@@ -352,11 +399,17 @@ const PayoutPage = () => {
       toast.error("Please select a beneficiary bank account");
       return;
     }
-    // Use safeArray to ensure we're working with an array
+
+    // Check if service_provider_id is 59 and sender account is required
     const safeCustomerAccounts = safeArray(customerBankAccounts);
     const selectedAccount = safeCustomerAccounts.find(
       (account) => account.currency_code === formValues.from
     );
+
+    if (selectedAccount?.service_provider_id === 59 && !selectedSenderAccount) {
+      toast.error("Please select a sender bank account");
+      return;
+    }
 
     const payload = {
       current_date_time: new Date().toLocaleString(),
@@ -369,6 +422,10 @@ const PayoutPage = () => {
       payment_method: formValues.transaction_type,
       benef_bank_account: formValues.benef_bank_account,
       description: formValues.description,
+      // Add sender bank account ID if service_provider_id is 59
+      ...(selectedAccount?.service_provider_id === 59 && {
+        account_id: selectedSenderAccount
+      }),
       ...(formValues.to === "AED" || formValues.to === "KES"
         ? { promo_code: formValues.promo_code || "" }
         : {}),
@@ -376,16 +433,11 @@ const PayoutPage = () => {
 
     try {
       const result = await dispatch(convertCurrency(payload)).unwrap();
-
-      // Check if result has an error
       if (result.error) {
         throw new Error(result.error);
       }
-
-      // Success - proceed to step 3
       setActiveStep(3);
     } catch (error) {
-      // Error is already handled in the thunk, but we can add additional handling here
       console.error("Conversion failed:", error);
     }
   };
@@ -559,6 +611,10 @@ const PayoutPage = () => {
     formData.append("country_id", formValues.country_id);
     formData.append("transaction_type", formValues.transaction_type);
 
+    if (selectedAccount?.service_provider_id === 59 && selectedSenderAccount) {
+      formData.append("account_id", selectedSenderAccount);
+    }
+
     // Append recurring payment fields
     formData.append("is_recurring", isRecurring ? 1 : 0);
     if (isRecurring) {
@@ -730,7 +786,7 @@ const PayoutPage = () => {
       <ToastContainer position="top-right" autoClose={5000} />
 
       {/* Loading states - Context-aware loaders */}
-      {(loading || initialLoading || benefLoading) && (
+      {(loading || initialLoading || benefLoading || senderBankAccountsLoading) && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex justify-center items-center">
           <div className="bg-white rounded-xl shadow-lg p-6 max-w-xs w-full mx-4 border border-gray-200">
             <div className="text-center">
@@ -738,18 +794,22 @@ const PayoutPage = () => {
                 <RingLoader color="#3B82F6" size={60} />
               </div>
               <h3 className="text-lg font-medium text-gray-800 mb-2 font-sans">
-                {loading
-                  ? "Processing Transaction..."
-                  : initialLoading
-                    ? "Loading Data..."
-                    : "Loading Beneficiaries..."}
+                {senderBankAccountsLoading
+                  ? "Loading Bank Accounts..."
+                  : loading
+                    ? "Processing Transaction..."
+                    : initialLoading
+                      ? "Loading Data..."
+                      : "Loading Beneficiaries..."}
               </h3>
               <p className="text-sm text-gray-600 font-sans">
-                {loading
-                  ? "Your transaction is being processed"
-                  : initialLoading
-                    ? "Please wait while we load your data"
-                    : "Loading beneficiary information..."}
+                {senderBankAccountsLoading
+                  ? "Please wait while we load your bank accounts"
+                  : loading
+                    ? "Your transaction is being processed"
+                    : initialLoading
+                      ? "Please wait while we load your data"
+                      : "Loading beneficiary information..."}
               </p>
             </div>
           </div>
@@ -835,6 +895,61 @@ const PayoutPage = () => {
                   </p>
                 )}
               </div>
+
+              {(() => {
+                const selectedAccount = safeArray(customerBankAccounts).find(
+                  account => account.currency_code === formValues.from
+                );
+                const isServiceProvider59 = selectedAccount?.service_provider_id === 59;
+
+                return isServiceProvider59 && formValues.from ? (
+                  <div>
+                    <label
+                      htmlFor="sender_bank_account"
+                      className="block text-sm font-medium text-gray-700 mb-2 font-sans"
+                    >
+                      Sender Bank Account <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="sender_bank_account"
+                      value={selectedSenderAccount || ""}
+                      onChange={handleSenderAccountChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                      required={isServiceProvider59}
+                      disabled={senderBankAccountsLoading}
+                    >
+                      <option value="">Select Sender Bank Account</option>
+                      {senderBankAccountsLoading ? (
+                        <option value="" disabled>Loading accounts...</option>
+                      ) : senderBankAccounts.length > 0 ? (
+                        senderBankAccounts.map((account) => (
+                          <option key={account.account_id} value={account.account_id}>
+                            {account.bank_name || account.account_name || "Bank Account"} -
+                            {account.account_number || account.bank_acc_no || "N/A"}
+                            {account.iban && ` (IBAN: ${account.iban})`}
+                            {account.swift && ` (SWIFT: ${account.swift})`}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>
+                          No bank accounts available
+                        </option>
+                      )}
+                    </select>
+                    {senderBankAccountsLoading && (
+                      <p className="mt-2 text-sm text-blue-600 font-medium font-sans">
+                        Loading sender bank accounts...
+                      </p>
+                    )}
+                    {!senderBankAccountsLoading && senderBankAccounts.length === 0 && formValues.from && (
+                      <p className="mt-2 text-sm text-yellow-600 font-medium font-sans">
+                        No bank accounts found for this currency
+                      </p>
+                    )}
+                  </div>
+                ) : null;
+              })()}
+
 
               {/* Source Amount */}
               <div>

@@ -73,6 +73,7 @@ import {
   fetchBeneficiaryBanks,
   fetchBeneficiaryByCode,
   fetchBeneficiaries,
+  clearSelectedBeneficiary,
 } from "../Beneficiary/MyBeneficiaries/BeneficiariesSlice";
 
 import {
@@ -989,9 +990,20 @@ const Remittance = () => {
   useEffect(() => {
     if (isInitialMount.current) {
       dispatch(resetForm());
+  
+      // Only clear the previously selected beneficiary if we're NOT
+      // returning from the Add Beneficiary flow (which needs the
+      // beneficiary to remain/become selected).
+      const isReturningFromAddBeneficiary =
+        location.state?.newBeneficiary && location.state?.returnToStep === 2;
+  
+      if (!isReturningFromAddBeneficiary) {
+        dispatch(clearSelectedBeneficiary());
+      }
+  
       isInitialMount.current = false;
     }
-  }, [dispatch]);
+  }, [dispatch, location.state]);
 
   // Debug validation state
   useEffect(() => {

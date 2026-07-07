@@ -496,10 +496,10 @@ export const verifyPasscode = createAsyncThunk(
     try {
       // Clear any existing verification requests first
       apiCoordinator.clearSignature(signature);
-      
+
       const apiCall = async () => {
         console.log("🔐 Verifying passcode for payout:", { customer_id, context });
-        
+
         const response = await api.post(
           `/verify-passcode`,
           {
@@ -508,7 +508,7 @@ export const verifyPasscode = createAsyncThunk(
           },
           {
             timeout: 30000,
-            context: context 
+            context: context
           }
         );
 
@@ -519,16 +519,16 @@ export const verifyPasscode = createAsyncThunk(
       return await executeWithRetry(apiCall, signature);
     } catch (error) {
       console.error("❌ Payout passcode verification failed:", error);
-      
+
       // Always clear the signature on error to allow retry
       apiCoordinator.clearSignature(signature);
-      
+
       // Enhanced error handling
       let errorMessage = "Passcode verification failed. Please try again.";
-      
+
       if (error.response?.data) {
         const errorData = error.response.data;
-        
+
         // Check for validation errors
         if (errorData.errors) {
           const validationErrors = [];
@@ -557,7 +557,7 @@ export const verifyPasscode = createAsyncThunk(
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       return rejectWithValue(errorMessage);
     }
   }
@@ -589,10 +589,10 @@ export const submitPayout = createAsyncThunk(
       return await executeWithRetry(apiCall, signature);
     } catch (error) {
       let errorMessage = "Payout submission failed. Please try again.";
-      
+
       if (error.response?.data) {
         const errorData = error.response.data;
-        
+
         // Check for validation errors object (Laravel style)
         if (errorData.errors) {
           const validationErrors = [];
@@ -621,8 +621,52 @@ export const submitPayout = createAsyncThunk(
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const fetchSenderBankAccounts = createAsyncThunk(
+  "payout/fetchSenderBankAccounts",
+  async ({ customerUuid, currencyCode }, { rejectWithValue }) => {
+    const signature = getRequestSignature(
+      "GET",
+      `/customer-account-details-currency_code/${customerUuid}/${currencyCode}`
+    );
+
+    try {
+      // Check if we have cached data
+      if (apiCoordinator.hasRecentData(signature)) {
+        return apiCoordinator.getRecentData(signature);
+      }
+
+      const apiCall = async () => {
+        const bearertoken = localStorage.getItem("bearertoken");
+        const response = await api.get(
+          `/customer-account-details-currency_code/${customerUuid}/${currencyCode}`,
+          {
+            headers: { Authorization: `Bearer ${bearertoken}` },
+            timeout: 30000,
+          }
+        );
+
+        // Handle different response structures
+        const accounts = response.data.accounts ||
+          response.data.account_details ||
+          response.data.data ||
+          [];
+
+        return accounts;
+      };
+
+      return await executeWithRetry(apiCall, signature);
+    } catch (error) {
+      if (error.__isCachedResponse) {
+        return error.response.data;
+      }
+
+      return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
 );
@@ -693,6 +737,10 @@ const initialState = {
   isRecurring: false,
   recurringFrequency: "",
   customDays: "",
+
+  senderBankAccounts: [], 
+  selectedSenderAccount: null,
+  senderBankAccountsLoading: false,
 
   // Error state
   error: null,
@@ -801,6 +849,14 @@ const payoutSlice = createSlice({
     // Clear error
     clearError: (state) => {
       state.error = null;
+    },
+
+    setSelectedSenderAccount: (state, action) => {
+      state.selectedSenderAccount = action.payload;
+    },
+    clearSenderBankAccounts: (state) => {
+      state.senderBankAccounts = [];
+      state.selectedSenderAccount = null;
     },
   },
 
@@ -960,7 +1016,22 @@ const payoutSlice = createSlice({
         state.loading = false;
         state.modalMessage = action.payload;
         state.showErrorModal = true;
-      });
+      })
+      .addCase(fetchSenderBankAccounts.pending, (state) => {
+        state.senderBankAccountsLoading = true;
+      })
+      .addCase(fetchSenderBankAccounts.fulfilled, (state, action) => {
+        state.senderBankAccountsLoading = false;
+        state.senderBankAccounts = action.payload;
+      })
+      .addCase(fetchSenderBankAccounts.rejected, (state, action) => {
+        state.senderBankAccountsLoading = false;
+        state.senderBankAccounts = [];
+        state.error = action.payload;
+        // Show error in modal
+        state.modalMessage = action.payload || "Failed to load sender bank accounts";
+        state.showErrorModal = true;
+      })
   },
 });
 
@@ -1001,6 +1072,10 @@ export const selectServiceProviderInr = (state) =>
   state.payout.toServiceProviderInr;
 export const selectInitialLoading = (state) => state.payout.initialLoading;
 
+export const selectSenderBankAccounts = (state) => state.payout.senderBankAccounts;
+export const selectSelectedSenderAccount = (state) => state.payout.selectedSenderAccount;
+export const selectSenderBankAccountsLoading = (state) => state.payout.senderBankAccountsLoading;
+
 // ===================== ACTIONS =====================
 export const {
   setFormValue,
@@ -1021,6 +1096,8 @@ export const {
   clearCurrencyCache,
   resetPayoutState,
   clearError,
+  setSelectedSenderAccount,
+  clearSenderBankAccounts,
 } = payoutSlice.actions;
 
 export default payoutSlice.reducer;
