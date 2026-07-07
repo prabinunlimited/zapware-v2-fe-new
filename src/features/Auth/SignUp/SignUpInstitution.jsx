@@ -366,6 +366,35 @@ const SSNInfoPopup = () => {
   );
 };
 
+const PEPPopup = ({ onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
+      <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-red-100 p-2 rounded-full">
+            <FontAwesomeIcon icon={faExclamationCircle} className="text-red-600 text-xl" />
+          </div>
+          <h3 className="text-xl font-bold text-red-600">PEP Association Detected</h3>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-gray-700 mb-3">
+            We  do not accept PEP (Politically Exposed Person) associated institutions.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+        >
+          Understood
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const stepVariants = {
   hidden: { opacity: 0, x: 100 },
   visible: { opacity: 1, x: 0 },
@@ -443,6 +472,9 @@ const Institution = () => {
   const [nomineeFirstName, setNomineeFirstName] = useState("");
   const [nomineeMiddleName, setNomineeMiddleName] = useState("");
   const [nomineeLastName, setNomineeLastName] = useState("");
+
+  const [pepAssociated, setPepAssociated] = useState("0"); // "1" for Yes, "0" for No
+  const [showPepPopup, setShowPepPopup] = useState(false);
 
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
@@ -1237,6 +1269,8 @@ const Institution = () => {
           return value && value.toString().trim() !== "";
         });
 
+        const pepValid = validationValues.pep_associated === "0" || validationValues.pep_associated === 0;
+
         let conditionalFieldsValid = true;
 
         // Update all conditions to check both
@@ -1279,7 +1313,7 @@ const Institution = () => {
         });
 
         return (
-          requiredFieldsFilled && conditionalFieldsValid && !hasValidationErrors
+          requiredFieldsFilled && conditionalFieldsValid && !hasValidationErrors && pepValid
         );
       }
 
@@ -1917,7 +1951,7 @@ const Institution = () => {
 
         const findStateName = (stateId) => {
           if (!stateId) return "";
-          
+
           // Combine all state lists
           const allStates = [
             ...states,
@@ -1925,14 +1959,14 @@ const Institution = () => {
             ...responsiblePersonStates,
             ...controllerStates
           ];
-          
+
           // Find state by ID (handle both string and number IDs)
           const state = allStates.find(s =>
             s.id === stateId ||
             s.id === parseInt(stateId) ||
             s.id === String(stateId)
           );
-          
+
           return state?.name || stateId;
         };
 
@@ -4224,6 +4258,56 @@ const Institution = () => {
                         {/* <p className="text-xs text-gray-500 mt-1">
                           Enter your Tax ID (EIN for US entities, TRN for other countries)
                         </p> */}
+                      </div>
+
+                      {/* NEW: PEP Associated Field */}
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Are you PEP (Politically Exposed Person) associated? <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex items-center space-x-6">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="pep_associated"
+                              value="1"
+                              checked={pepAssociated === "1"}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setPepAssociated(value);
+                                setFieldValue("pep_associated", value);
+
+                                if (value === "1") {
+                                  setShowPepPopup(true);
+                                }
+                              }}
+                              className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Yes</span>
+                          </label>
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="pep_associated"
+                              value="0"
+                              checked={pepAssociated === "0"}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setPepAssociated(value);
+                                setFieldValue("pep_associated", value);
+                                setShowPepPopup(false);
+                              }}
+                              className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">No</span>
+                          </label>
+                        </div>
+                        {touched.pep_associated && errors.pep_associated && (
+                          <div className="text-red-500 text-xs mt-1 flex items-center">
+                            <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                            {errors.pep_associated}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -7156,7 +7240,7 @@ const Institution = () => {
                         validateForm,
                       })
                     }
-                    disabled={loading}
+                    disabled={loading || pepAssociated === "1"}
                     className="flex items-center justify-center w-full md:w-auto gap-2 rounded-xl bg-blue-600 px-8 py-3 text-white shadow-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 font-medium"
                   >
                     {loading ? <RingLoader size={20} color="#fff" /> : "Next →"}
@@ -7167,7 +7251,8 @@ const Institution = () => {
                     disabled={
                       loading ||
                       !isStepComplete(5, values, errors, touched) ||
-                      isSubmitting
+                      isSubmitting || 
+                      pepAssociated === "1"
                     }
                     className="flex items-center justify-center w-full md:w-auto gap-2 rounded-xl bg-green-600 px-8 py-3 text-white shadow-md hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 font-medium"
                   >
@@ -7213,6 +7298,10 @@ const Institution = () => {
                   }
                 />
               )}
+              {showPepPopup && (
+                <PEPPopup onClose={() => setShowPepPopup(false)} />
+              )}
+
             </Form>
           );
         }}
