@@ -340,7 +340,7 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
 
             {/* Modal */}
             <motion.div
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-2 sm:mx-4"
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-2 sm:mx-4 flex flex-col"
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -348,7 +348,7 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
             >
               {/* Header */}
               <div
-                className={`px-4 sm:px-6 py-3 sm:py-4 ${isPriorityAccount
+                className={`px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0 ${isPriorityAccount
                   ? "bg-gradient-to-r from-purple-600 to-purple-700"
                   : "bg-gradient-to-r from-blue-600 to-blue-700"
                   }`}
@@ -411,7 +411,7 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
               </div>
 
               {/* Content */}
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto max-h-[calc(95vh-200px)] sm:max-h-[calc(90vh-180px)]">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1 min-h-0">
                 {/* Balance Card */}
                 <div
                   className={`${isPriorityAccount
@@ -662,14 +662,6 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
                             </ul>
                           </div>
                         </div>
-
-                        {/* Info Badge */}
-                        <div className="mt-4 flex items-center justify-center gap-2 bg-blue-50/80 rounded-lg px-4 py-2 border border-blue-100">
-                          <FiInfo className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-600 text-center">
-                            Both account types are fully visible and interactive
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -711,7 +703,7 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
               </div>
 
               {/* Footer */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
                   <div className="flex items-center space-x-2">
                     <FiInfo className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
