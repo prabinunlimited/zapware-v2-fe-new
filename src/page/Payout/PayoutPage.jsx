@@ -754,7 +754,7 @@ const PayoutPage = () => {
   };
 
   const showTransferPurposeField = () => {
-    console.log("toServiceProviderInr remitpayout", toServiceProviderInr);
+    // console.log("toServiceProviderInr remitpayout", toServiceProviderInr);
     if (
       (["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
         toServiceProviderInr === 27) ||
