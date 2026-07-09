@@ -190,6 +190,26 @@ const CancelModal = ({ onConfirm, onCancel }) => (
   </motion.div>
 );
 
+const ProcessingModal = () => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+  >
+    <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 text-center">
+      <div className="flex justify-center mb-4">
+        <RingLoader color="#3B82F6" size={50} />
+      </div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2 font-sans">
+        Processing Your Payout
+      </h3>
+      <p className="text-gray-600 font-sans">
+        Please wait while we complete your transfer. Don't close this window.
+      </p>
+    </div>
+  </motion.div>
+);
 // Safe array access helper function
 const safeArray = (data) => {
   if (!data) return [];
@@ -249,6 +269,8 @@ const PayoutPage = () => {
   const senderBankAccounts = useSelector(selectSenderBankAccounts);
   const selectedSenderAccount = useSelector(selectSelectedSenderAccount);
   const senderBankAccountsLoading = useSelector(selectSenderBankAccountsLoading);
+
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
 
   // Debug logging
   useEffect(() => {
@@ -443,6 +465,7 @@ const PayoutPage = () => {
   };
 
   const handleSendPasscode = async () => {
+    dispatch(setPasscode(""));
     dispatch(sendPasscode(customerId));
   };
 
@@ -453,7 +476,6 @@ const PayoutPage = () => {
     }
 
     try {
-      // ✅ No need to manually clear signatures - api.js handles this automatically
       const res = await dispatch(
         verifyPasscode({
           customer_id: customerId,
@@ -462,82 +484,110 @@ const PayoutPage = () => {
         })
       ).unwrap();
 
+      // ✅ No need to manually clear signatures - api.js handles this automatically
       if (res.Status === "success") {
-        // Handle B4B payment scenario
-        const toprovider = await axios.get(
-          `${API_URL}/get-sp-currency/${formValues.to}`,
-          {
-            headers: {
-              Authorization: `Bearer ${bearertoken}`,
-            },
-          }
-        );
+        // ✅ close the review + passcode modals, show processing instead
+        dispatch(setShowModal(false));
+        dispatch(setShowPasscodeModal(false));
+        dispatch(setPasscode(""));
+        setShowProcessingModal(true);
 
-        const serviceProviderId = Number(toprovider.data.service_provider_id);
-
-        // Use safeArray to ensure we're working with an array
-        const safeCustomerAccounts = safeArray(customerBankAccounts);
-        const selectedAccount = safeCustomerAccounts.find(
-          (account) => account.currency_code === formValues.from
-        );
-
-        const payload = {
-          current_date_time: new Date().toLocaleString(),
-          bank_id: selectedAccount ? selectedAccount.id : null,
-          customer_id: formValues.customer_id,
-          from: formValues.from,
-          to: formValues.to,
-          value: formValues.value,
-          benefId: formValues.benef_account,
-          payment_method: formValues.transaction_type,
-          benef_bank_account: formValues.benef_bank_account,
-          description: formValues.description,
-        };
-
-        if (
-          serviceProviderId !== 27 &&
-          serviceProviderId !== 24 &&
-          ((formValues.from === "GBP" && formValues.to === "GBP") ||
-            (formValues.from === "GBP" && formValues.to === "DKK") ||
-            (formValues.from === "GBP" && formValues.to === "EUR") ||
-            (formValues.from === "EUR" && formValues.to === "EUR") ||
-            (formValues.from === "EUR" && formValues.to === "GBP") ||
-            (formValues.from === "EUR" && formValues.to === "DKK") ||
-            (formValues.from === "DKK" && formValues.to === "GBP") ||
-            (formValues.from === "DKK" && formValues.to === "EUR") ||
-            (formValues.from === "DKK" && formValues.to === "DKK") ||
-            (formValues.from === "USD" && formValues.to === "USD"))
-        ) {
-          // Call createpayments API after successful verification
-          const res = await axios.post(
-            "https://zapware.unlimitedremit.com/api/b4b/createpayments",
-            payload
+        try {
+          // Handle B4B payment scenario
+          const toprovider = await axios.get(
+            `${API_URL}/get-sp-currency/${formValues.to}`,
+            {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+              },
+            }
           );
 
-          if (res.data.status === "Success") {
-            dispatch(setShowModal(false));
-            dispatch(setModalMessage("Payout initiated successfully!"));
-            dispatch(setShowSuccessModal(true));
+          const serviceProviderId = Number(toprovider.data.service_provider_id);
+          console.log("serviceProviderId", serviceProviderId);
+
+          // Use safeArray to ensure we're working with an array
+          const safeCustomerAccounts = safeArray(customerBankAccounts);
+          const selectedAccount = safeCustomerAccounts.find(
+            (account) => account.currency_code === formValues.from
+          );
+
+          const payload = {
+            current_date_time: new Date().toLocaleString(),
+            bank_id: selectedAccount ? selectedAccount.id : null,
+            customer_id: formValues.customer_id,
+            from: formValues.from,
+            to: formValues.to,
+            value: formValues.value,
+            benefId: formValues.benef_account,
+            payment_method: formValues.transaction_type,
+            benef_bank_account: formValues.benef_bank_account,
+            description: formValues.description,
+          };
+
+          if (serviceProviderId == 59) {
+            await handleSubmit(e, isRecurring, recurringFrequency, customDays);
           } else {
-            dispatch(setModalMessage(res.data.message));
-            dispatch(setShowErrorModal(true));
+            if (
+              serviceProviderId !== 27 &&
+              serviceProviderId !== 24 &&
+              ((formValues.from === "GBP" && formValues.to === "GBP") ||
+                (formValues.from === "GBP" && formValues.to === "DKK") ||
+                (formValues.from === "GBP" && formValues.to === "EUR") ||
+                (formValues.from === "EUR" && formValues.to === "EUR") ||
+                (formValues.from === "EUR" && formValues.to === "GBP") ||
+                (formValues.from === "EUR" && formValues.to === "DKK") ||
+                (formValues.from === "DKK" && formValues.to === "GBP") ||
+                (formValues.from === "DKK" && formValues.to === "EUR") ||
+                (formValues.from === "DKK" && formValues.to === "DKK") ||
+                (formValues.from === "USD" && formValues.to === "USD"))
+            ) {
+              // Call createpayments API after successful verification
+              const paymentRes = await axios.post(
+                "https://zapware.unlimitedremit.com/api/b4b/createpayments",
+                payload
+              );
+
+              if (paymentRes.data.status === "Success") {
+                dispatch(setModalMessage("Payout initiated successfully!"));
+                dispatch(setShowSuccessModal(true));
+              } else {
+                dispatch(setModalMessage(paymentRes.data.message));
+                dispatch(setShowErrorModal(true));
+              }
+            } else {
+              await handleSubmit(e, isRecurring, recurringFrequency, customDays);
+            }
           }
-        } else {
-          await handleSubmit(e, isRecurring, recurringFrequency, customDays);
+        } finally {
+          // whatever happened, stop showing "processing"
+          setShowProcessingModal(false);
         }
       } else {
+        dispatch(setPasscode(""));
         dispatch(setModalMessage(res.message || "Invalid passcode"));
         dispatch(setShowErrorModal(true));
       }
     } catch (err) {
+      setShowProcessingModal(false);
+      dispatch(setPasscode(""));
       console.error("Payout passcode verification error:", err);
 
       // Parse error to extract validation errors
       let errorMessage = "Verification failed";
 
-      if (err.response?.data) {
-        const errorData = err.response.data;
+      if (typeof err === "string") {
+        errorMessage = err;
+      } else if (err instanceof Error && typeof err.message === "string" && err.message) {
+        // .unwrap() sometimes wraps string payloads in an Error, exposing them via err.message
+        errorMessage = err.message;
+      }
 
+      // Handle both axios errors (err.response.data) and RTK unwrap()
+      // rejections, where err IS the payload already (e.g. rejectWithValue(err.response.data))
+      const errorData = err.response?.data || err;
+
+      if (errorData) {
         // Check for Laravel-style validation errors (errors object)
         if (errorData.errors) {
           const validationErrors = [];
@@ -561,8 +611,10 @@ const PayoutPage = () => {
         else if (errorData.error) {
           errorMessage = errorData.error;
         }
-      } else if (err.message) {
-        errorMessage = err.message;
+        // Fallback to err.message for real Error objects (network errors, etc.)
+        else if (err.message) {
+          errorMessage = err.message;
+        }
       }
 
       // Show error in modal (not toast)
@@ -631,7 +683,7 @@ const PayoutPage = () => {
       formData.append("invoice_file", formValues.invoice_file);
     }
 
-    dispatch(submitPayout(formData));
+    await dispatch(submitPayout(formData)).unwrap();
   };
 
   const handleAddBeneficiary = () => {
@@ -739,6 +791,7 @@ const PayoutPage = () => {
 
   // Field visibility helpers
   const showIncomeSourceField = () => {
+    if (toServiceProviderInr === 59) return true;
     if (
       ["INR", "MYR", "KES", "PKR", "GBP", "EUR"].includes(formValues.to) &&
       toServiceProviderInr === 27
@@ -755,6 +808,7 @@ const PayoutPage = () => {
 
   const showTransferPurposeField = () => {
     // console.log("toServiceProviderInr remitpayout", toServiceProviderInr);
+    if (toServiceProviderInr === 59) return true;
     if (
       (["INR", "MYR", "KES", "GBP", "EUR"].includes(formValues.to) &&
         toServiceProviderInr === 27) ||
@@ -1698,6 +1752,11 @@ const PayoutPage = () => {
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showProcessingModal && <ProcessingModal />}
+      </AnimatePresence>
+
     </div>
   );
 };
