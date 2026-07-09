@@ -1642,13 +1642,16 @@ export const selectAddExistingBeneficiarySuccess = (state) =>
 // ===================== UTILITY SELECTORS =====================
 
 // Visible beneficiaries
-export const selectVisibleBeneficiaries = (state) =>
-  (state.beneficiaries.beneficiaries || []).filter(
-    (beneficiary) =>
-      beneficiary.is_visible !== false &&
-      beneficiary.isVisible !== false &&
-      beneficiary.status !== 0
-  );
+export const selectVisibleBeneficiaries = createSelector(
+  [selectBeneficiaries],
+  (beneficiaries) =>
+    beneficiaries.filter(
+      (beneficiary) =>
+        beneficiary.is_visible !== false &&
+        beneficiary.isVisible !== false &&
+        beneficiary.status !== 0
+    )
+);
 
 // Beneficiary by ID
 export const selectBeneficiaryById = (beneficiaryId) => (state) =>

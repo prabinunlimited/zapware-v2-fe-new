@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector,shallowEqual } from "react-redux";
 import { useFormik } from "formik";
 import { RingLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
@@ -390,7 +390,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     bankBranches: state.addBeneficiary?.bankBranches || {},
     dropdownLoading: state.addBeneficiary?.dropdownLoading || false,
     beneficiaryDetails: state.addBeneficiary?.beneficiaryData || null,
-  }));
+  }), shallowEqual);
 
   // Add these after your existing useSelector
   const bankUpdateLoading = useSelector(selectBankUpdateLoading);
