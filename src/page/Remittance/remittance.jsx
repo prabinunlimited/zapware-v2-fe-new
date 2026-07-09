@@ -990,17 +990,17 @@ const Remittance = () => {
   useEffect(() => {
     if (isInitialMount.current) {
       dispatch(resetForm());
-  
+
       // Only clear the previously selected beneficiary if we're NOT
       // returning from the Add Beneficiary flow (which needs the
       // beneficiary to remain/become selected).
       const isReturningFromAddBeneficiary =
         location.state?.newBeneficiary && location.state?.returnToStep === 2;
-  
+
       if (!isReturningFromAddBeneficiary) {
         dispatch(clearSelectedBeneficiary());
       }
-  
+
       isInitialMount.current = false;
     }
   }, [dispatch, location.state]);
@@ -1297,11 +1297,36 @@ const Remittance = () => {
     [dispatch],
   );
 
+  // Strip non-serializable bits (React elements like `icon`) before they ever reach Redux.
+  const stripNonSerializable = useCallback((value) => {
+    if (value instanceof File) return value;
+
+    if (React.isValidElement(value)) {
+      return undefined;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(stripNonSerializable);
+    }
+
+    if (value && typeof value === "object") {
+      const cleaned = {};
+      for (const key of Object.keys(value)) {
+        const v = value[key];
+        if (React.isValidElement(v)) continue; // drop icon, etc.
+        cleaned[key] = v;
+      }
+      return cleaned;
+    }
+
+    return value;
+  }, []);
+
   const handleFieldChange = useCallback(
     (field, value) => {
-      dispatch(setFormField({ field, value }));
+      dispatch(setFormField({ field, value: stripNonSerializable(value) }));
     },
-    [dispatch],
+    [dispatch, stripNonSerializable],
   );
 
   const handleFileUpload = useCallback(
@@ -1985,53 +2010,53 @@ const Remittance = () => {
 
   useEffect(() => {
     console.log("📍 Remittance location state:", location.state);
-  
+
     if (location.state?.newBeneficiary && location.state?.returnToStep === 2) {
       console.log("🔄 Returning from Add Beneficiary with new beneficiary:", location.state.newBeneficiary);
-  
+
       const wasRestored = restoreRemittanceState();
       console.log("📊 State restored:", wasRestored);
-  
+
       const newBeneficiary = location.state.newBeneficiary;
-  
+
       if (newBeneficiary && newBeneficiary.id) {
         if (step !== 2) {
           console.log("📌 Setting step to 2");
           dispatch(setStep(2));
         }
-  
+
         const customerIdForFetch =
           customerId || localStorage.getItem("customerId") || "1720";
-  
+
         // Force a refetch so Redux's `beneficiaries` array includes the
         // newly created beneficiary with its full record.
         dispatch(fetchBeneficiaries(customerIdForFetch));
-  
+
         // Don't select here — mark it pending. A separate effect below
         // watches the Redux `beneficiaries` array (the exact same array
         // that powers the dropdown) and selects the full record the
         // moment it appears there.
         setPendingNewBeneficiaryId(newBeneficiary.id);
-  
+
         // Clear the location state to prevent re-selection on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
   }, [location.state, dispatch, navigate, step, restoreRemittanceState, customerId]);
-  
+
   // Select the new beneficiary as soon as its FULL record (with name,
   // phone_number, etc.) shows up in the refetched beneficiaries list.
   useEffect(() => {
     if (!pendingNewBeneficiaryId) return;
-  
+
     const fullBeneficiary = (beneficiaries || []).find(
       (b) => b.benef_uuid === pendingNewBeneficiaryId || b.id === pendingNewBeneficiaryId
     );
-  
+
     if (fullBeneficiary) {
       console.log("👤 Selecting beneficiary (from refreshed Redux list):", fullBeneficiary);
       handleBeneficiarySelect(fullBeneficiary);
-  
+
       if (fullBeneficiary.benef_banks && fullBeneficiary.benef_banks.length > 0) {
         console.log("🏦 Selecting first bank:", fullBeneficiary.benef_banks[0]);
         handleBankSelect(fullBeneficiary.benef_banks[0]);
@@ -2039,7 +2064,7 @@ const Remittance = () => {
         console.log("🔍 Fetching banks for new beneficiary");
         dispatch(fetchBeneficiaryBanks(fullBeneficiary.id));
       }
-  
+
       setPendingNewBeneficiaryId(null);
     }
   }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch]);
