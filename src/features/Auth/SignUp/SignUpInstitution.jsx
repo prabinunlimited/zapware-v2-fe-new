@@ -120,6 +120,10 @@ import {
   selectStatesLoading,
   selectStatesError,
   clearStates,
+  validateInstitutionStep,
+  fetchOccupation,
+  selectOccupation,
+  selectOccupationLoading
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -476,11 +480,18 @@ const Institution = () => {
   const [pepAssociated, setPepAssociated] = useState("0"); // "1" for Yes, "0" for No
   const [showPepPopup, setShowPepPopup] = useState(false);
 
+  const occupations = useSelector(selectOccupation);
+  const occupationLoading = useSelector(selectOccupationLoading);
+
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
   const [zipApiError, setZipApiError] = useState(null);
   const countryCodeRef = useRef("");
+  const [clientMeta, setClientMeta] = useState({
+    ip: "Unknown",
+    location: "Unknown",
+  });
 
   const emailVerification = useSelector(selectEmailVerification);
   const isResponsiblePersonEmailVerified = useSelector(selectIsEmailVerified);
@@ -601,6 +612,8 @@ const Institution = () => {
       purpose_of_account: mergedData.purpose_of_account || "",
       employees_number: mergedData.employees_number || "",
 
+      responsible_person_occupation: mergedData.responsible_person_occupation || "",
+
       // New business payment fields
       business_model_overview: mergedData.business_model_overview || "",
       business_size: mergedData.business_size || "",
@@ -619,6 +632,7 @@ const Institution = () => {
       sender_types_other: mergedData.sender_types_other || "",
       sender_industries_top_5: mergedData.sender_industries_top_5 || "",
       countries_to_receive_funds_from: mergedData.countries_to_receive_funds_from || [],
+      countries_to_send_funds_to: mergedData.countries_to_send_funds_to || [],
       expected_frequency_payments_in: mergedData.expected_frequency_payments_in || "",
       expected_avg_payments_in_currency: mergedData.expected_avg_payments_in_currency || "",
       expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
@@ -640,6 +654,8 @@ const Institution = () => {
 
       // Add dob_error state
       dob_error: "",
+
+      pep_associated: mergedData.pep_associated || "0",
 
       ...mergedData,
     };
@@ -1146,6 +1162,7 @@ const Institution = () => {
       dispatch(fetchInstitutionAccountTypes());
       dispatch(fetchInstitutionTypes());
       dispatch(fetchTransactionCurrencies());
+      dispatch(fetchOccupation());
       setTimeout(() => {
         dispatch(fetchNAICSCodes());
         dispatch(fetchBusinessTypes());
@@ -1155,6 +1172,23 @@ const Institution = () => {
       }, 1000);
     }
   }, [dispatch]);
+
+  useEffect(() => {
+    fetch("https://ipapi.co/json/")
+      .then((res) => res.json())
+      .then((data) => {
+        setClientMeta({
+          ip: data.ip || "Unknown",
+          location:
+            [data.city, data.region, data.country_name]
+              .filter(Boolean)
+              .join(", ") || "Unknown",
+        });
+      })
+      .catch(() => {
+        setClientMeta({ ip: "Unknown", location: "Unknown" });
+      });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1381,61 +1415,43 @@ const Institution = () => {
       }
 
       case 3: {
-        if (
-          !validationValues.is_controller ||
-          validationValues.is_controller === ""
-        )
-          return false;
-        if (validationValues.is_controller === "yes") return true;
+        const step3Fields = ["is_controller"];
 
-        const controllerRequiredFields = [
+        step3Fields.push(
           "controller_first_name",
+          "controller_middle_name",
           "controller_last_name",
           "controller_email",
-          "controller_password",
-          "controller_confirm_password",
           "controller_resident_country",
-          "controller_phone_code",
-          "controller_phone_number",
+          "controller_mobilenumber_countrycode",
+          "controller_mobile_number",
           "controller_nationality",
-          "controller_country_address",
+          "controller_country",
           "controller_state",
           "controller_city",
           "controller_street_address_1",
           "controller_zip_code",
           "controller_gender",
           "controller_dob",
-        ];
-
-        const controllerFieldsComplete = controllerRequiredFields.every(
-          (field) => {
-            const value = validationValues[field];
-            return value && value.toString().trim() !== "";
-          },
+          "controller_designation",
+          "controller_doc_type",
+          "controller_doc_id",
+          "controller_doc_country",
         );
 
-        const hasUSDNamedAccount = isNamedAccount;
-        const isRemittanceOnly = remittanceOnlyAccepted;
-        const isControllerUSSelected =
-          validationValues.controller_country === "United States" ||
-          validationValues.controller_country === 186;
+        const isUSDNamedForController = isNamedAccount;
+        const isControllerUSCountry =
+          values.controller_country === "United States" ||
+          values.controller_country === 186;
 
-        const ssnValid =
-          !(
-            (hasUSDNamedAccount || isRemittanceOnly) &&
-            isControllerUSSelected
-          ) ||
-          (validationValues.controller_ssn &&
-            !validateSSN(
-              validationValues.controller_ssn,
-              validationValues.controller_country,
-            ));
+        if (
+          (isUSDNamedForController && isControllerUSCountry) ||
+          (remittanceOnlyAccepted && isControllerUSCountry)
+        ) {
+          step3Fields.push("controller_ssn");
+        }
 
-        const passwordsMatch =
-          validationValues.controller_password ===
-          validationValues.controller_confirm_password;
-
-        return controllerFieldsComplete && ssnValid && passwordsMatch;
+        return step3Fields;
       }
 
       case 4: {
@@ -1475,22 +1491,64 @@ const Institution = () => {
   const getStepFields = useCallback(
     (step, values) => {
       switch (step) {
-        case 1:
+        case 1: {
           const step1Fields = [
             "institution_account_type_id",
             "institution_type_id",
             "institution_name",
             "registration_number",
-            "country_of_registration",
+            "registered_address_street_country",
             "registered_address_street_state",
             "registered_address_street_city",
             "registered_address_street_1",
+            "registered_address_street_2",
             "registered_address_street_zip",
             "date_incorporation",
             "industry_type",
+            "pep_associated",
+            "annual_equivalent_amount_currency",
+            "annual_equivalent_amount",
+            "purpose_of_account",
+            "no_of_trading_names",
+            "trading_names_list",
+            "business_website_social_media",
+            "trust_purpose",
+            "tax_id",
+            "business_model_overview",
+            "business_size",
+            "high_risk_countries",
+            "specify_high_risk_countries",
+            "conducting_payment_activities",
+            "employees_number",
+            "reason_for_payments",
+            "product_services_required",
+            "beneficiary_types",
+            "beneficiary_types_other",
+            "beneficiary_industries_top_5",
+            "expected_frequency_payments_out",
+            "expected_avg_payments_out_currency",
+            "expected_avg_payments_out_amount",
+            "sender_types",
+            "sender_types_other",
+            "sender_industries_top_5",
+            "countries_to_send_funds_to",
+            "countries_to_receive_funds_from",
+            "expected_frequency_payments_in",
+            "expected_avg_payments_in_currency",
+            "expected_avg_payments_in_amount",
+            "registered_business_address_apartment_unit_no",
+            "registered_business_address_suburb",
+            "same_as_registered_address",
+            "principal_business_address_country",
+            "principal_business_address_postal_code",
+            "principal_business_street",
+            "principal_business_address_city",
+            "principal_business_address_state",
+            "principal_business_address_apartment_unit_no",
+            "principal_business_address_suburb",
           ];
 
-          // Always include these fields if either condition is true
+          // Conditional fields — only included when the account type requires them
           if (isNamedAccount || remittanceOnlyAccepted) {
             step1Fields.push(
               "business_alias",
@@ -1502,8 +1560,9 @@ const Institution = () => {
 
           if (showBusinessEmailField) step1Fields.push("business_email");
           if (showBusinessWebsiteField) step1Fields.push("business_website");
-          return step1Fields;
 
+          return step1Fields;
+        }
         case 2:
           const step2Fields = [
             "first_name",
@@ -1523,6 +1582,13 @@ const Institution = () => {
             "zip_code",
             "gender",
             "dob",
+            "designation",
+            "responsible_person_occupation",
+            "doc_type",
+            "doc_id",
+            "doc_country",
+            "id_issued_date",
+            "terms_and_conditions",
           ];
 
           // Add SSN field if (USD named account OR remittance only) AND country is NOT US
@@ -1537,43 +1603,52 @@ const Institution = () => {
           }
           return step2Fields;
 
-        case 3:
+        case 3: {
           const step3Fields = ["is_controller"];
-          if (values.is_controller === "no") {
-            step3Fields.push(
-              "controller_first_name",
-              "controller_middle_name",
-              "controller_last_name",
-              "controller_email",
-              "controller_password",
-              "controller_confirm_password",
-              "controller_resident_country",
-              "controller_mobilenumber_countrycode",
-              "controller_mobile_number",
-              "controller_nationality",
-              "controller_country",
-              "controller_state",
-              "controller_city",
-              "controller_street_address_1",
-              "controller_zip_code",
-              "controller_gender",
-              "controller_dob",
-            );
 
-            // ADD controller SSN condition
-            const hasUSDNamedAccount = isNamedAccount;
-            const isControllerUSCountry =
-              values.controller_country === "United States" ||
-              values.controller_country === 186;
+          step3Fields.push(
+            "controller_first_name",
+            "controller_middle_name",
+            "controller_last_name",
+            "controller_email",
+            "controller_resident_country",
+            "controller_mobilenumber_countrycode",
+            "controller_mobile_number",
+            "controller_nationality",
+            "controller_country",
+            "controller_state",
+            "controller_city",
+            "controller_street_address_1",
+            "controller_zip_code",
+            "controller_gender",
+            "controller_dob",
+            "controller_designation",
+            "controller_doc_type",
+            "controller_doc_id",
+            "controller_doc_country",
+            "director_role_id",              
+            "percentage_of_shares",          
+            "controllerHouseNumber",        
+            "has_nominees",                  
+            "nominee_first_name",            
+            "nominee_middle_name",           
+            "nominee_last_name",
+          );
 
-            if (
-              (hasUSDNamedAccount && isControllerUSCountry) ||
-              (remittanceOnlyAccepted && isControllerUSCountry)
-            ) {
-              step3Fields.push("controller_ssn");
-            }
+          const isUSDNamedForController = isNamedAccount;
+          const isControllerUSCountry =
+            values.controller_country === "United States" ||
+            values.controller_country === 186;
+
+          if (
+            (isUSDNamedForController && isControllerUSCountry) ||
+            (remittanceOnlyAccepted && isControllerUSCountry)
+          ) {
+            step3Fields.push("controller_ssn");
           }
+
           return step3Fields;
+        }
 
         case 4:
           const ownerFields = [];
@@ -1716,6 +1791,121 @@ const Institution = () => {
     setPendingNextStep(false);
   }, [currentStep, dispatch, ownerAdd]);
 
+  const buildStepPayload = useCallback((fields, values) => {
+    const payload = {};
+    fields.forEach((field) => {
+      if (field.includes("[") && field.includes("]")) {
+        const baseField = field.split("[")[0];
+        const index = field.match(/\[(\d+)\]/)?.[1];
+        const subField = field.split(".")[1];
+        if (index !== undefined && subField) {
+          if (!payload[baseField]) payload[baseField] = [];
+          if (!payload[baseField][index]) payload[baseField][index] = {};
+          payload[baseField][index][subField] =
+            values[baseField]?.[index]?.[subField] ?? "";
+        }
+      } else {
+        const value = values[field];
+        payload[field] = value === undefined || value === null ? "" : value;
+      }
+    });
+
+    if ("pep_associated" in payload) {
+      payload.is_pep_associated = payload.pep_associated;
+      delete payload.pep_associated;
+    }
+
+    if ("responsible_person_occupation" in payload) {
+      payload.responsiblePersonOccupation = payload.responsible_person_occupation;
+      delete payload.responsible_person_occupation;
+    }
+
+    if ("terms_and_conditions" in payload) {
+      payload.terms = payload.terms_and_conditions;
+      delete payload.terms_and_conditions;
+    }
+
+    const controllerFieldMap = {
+      controller_first_name: "controllerFirstName",
+      controller_middle_name: "controllerMiddleName",
+      controller_last_name: "controllerLastName",
+      controller_email: "controllerEmail",
+      controller_dob: "dob",
+      controller_resident_country: "resident_country",
+      controller_mobilenumber_countrycode: "phone_code",
+      controller_mobile_number: "phone_number",
+      controller_nationality: "nationality",
+      controller_country: "country",
+      controller_state: "state",
+      controller_city: "city",
+      controller_street_address_1: "street_address_1",
+      controller_zip_code: "zip_code",
+      controller_gender: "gender",
+      controller_designation: "designation",
+      controller_doc_country: "id_issue_country_id",
+      controller_ssn: "ssn",
+    };
+
+    const controllerKeys = Object.keys(payload).filter((k) =>
+      k.startsWith("controller_"),
+    );
+    if (controllerKeys.length > 0) {
+      const controllerObj = {};
+      controllerKeys.forEach((k) => {
+        const mappedKey = controllerFieldMap[k] || k;
+        controllerObj[mappedKey] = payload[k];
+        delete payload[k];
+      });
+
+      if ("director_role_id" in payload) {
+        controllerObj.director_role_id = payload.director_role_id;
+        delete payload.director_role_id;
+      }
+      if ("percentage_of_shares" in payload) {
+        controllerObj.controller_percentage_of_shares = payload.percentage_of_shares;
+        delete payload.percentage_of_shares;
+      }
+      if ("controllerHouseNumber" in payload) {
+        controllerObj.controllerApartmentUnitNumber = payload.controllerHouseNumber;
+        delete payload.controllerHouseNumber;
+      }
+
+      payload.officeControllers = [controllerObj];
+    }
+
+    // Step 3: nominees flag (numeric) + customer_controller_nominees array
+    if ("has_nominees" in payload) {
+      payload.nominees = payload.has_nominees === "1" ? 1 : 0;
+      delete payload.has_nominees;
+    }
+
+    const nomineeNameFields = [
+      "nominee_first_name",
+      "nominee_middle_name",
+      "nominee_last_name",
+    ];
+    if (nomineeNameFields.some((f) => f in payload)) {
+      const firstName = payload.nominee_first_name || null;
+      const middleName = payload.nominee_middle_name || null;
+      const lastName = payload.nominee_last_name || null;
+
+      nomineeNameFields.forEach((f) => delete payload[f]);
+
+      payload.customer_controller_nominees =
+        payload.nominees === 1
+          ? [
+            {
+              nomineeFirstName: firstName,
+              nomineeMiddleName: middleName,
+              nomineeLastName: lastName,
+            },
+          ]
+          : [];
+    }
+
+    return payload;
+  }, []);
+
   const handleNextStep = useCallback(
     async (values, { setErrors, setTouched, validateForm }) => {
       try {
@@ -1798,6 +1988,20 @@ const Institution = () => {
             dispatch(setShowPopup(true));
             return;
           }
+          const stepPayload = buildStepPayload(stepFields, values);
+          const validationPayload = {
+            step: currentStep,
+            ...stepPayload,
+            bank_account_options: locationStateData.service_provide_ids || [],
+          };
+
+          try {
+            await dispatch(validateInstitutionStep(validationPayload)).unwrap();
+          } catch (apiError) {
+            // validateInstitutionStep.rejected already sets showPopup/errorMessage
+            // in the slice, so we just stop here without advancing the step.
+            return;
+          }
 
           proceedToNextStep();
         } else {
@@ -1824,6 +2028,8 @@ const Institution = () => {
       isNamedAccount,
       remittanceOnlyAccepted,
       proceedToNextStep,
+      buildStepPayload,        // ADD
+      locationStateData,
     ],
   );
 
@@ -2027,6 +2233,8 @@ const Institution = () => {
           trust_purpose: finalFormData.trust_purpose || "",
           tax_id: finalFormData.tax_id || "",
 
+          responsiblePersonOccupation: finalFormData.responsible_person_occupation || "",
+
           // CONVERT STATE IDS TO NAMES - ADD THESE LINES (around line 1680-1690):
           registered_address_street_state: findStateName(finalFormData.registered_address_street_state),
           principal_business_address_state: findStateName(finalFormData.principal_business_address_state),
@@ -2043,7 +2251,7 @@ const Institution = () => {
           principal_business_address_city: finalFormData.principal_business_address_city,
           principal_business_address_state: finalFormData.principal_business_address_state,
 
-          has_nominees: hasNominees,
+          nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
             ? JSON.stringify([{
               nominee_first_name: nomineeFirstName || "",
@@ -2058,6 +2266,10 @@ const Institution = () => {
 
           countries_to_receive_funds_from: finalFormData.countries_to_receive_funds_from?.length
             ? JSON.stringify(finalFormData.countries_to_receive_funds_from)
+            : "",
+
+            countries_to_send_funds_to: finalFormData.countries_to_send_funds_to?.length  // ADD THIS
+            ? JSON.stringify(finalFormData.countries_to_send_funds_to)
             : "",
 
           user_images: userImagesArray,
@@ -2075,41 +2287,69 @@ const Institution = () => {
           country: findCountryId(finalFormData.country),
           doc_country: findCountryId(finalFormData.doc_country),
 
-          controllerResidentCountry: findCountryId(
-            finalFormData.controller_resident_country,
-          ),
-          controllerCountry: findCountryId(finalFormData.controller_country),
+          // controllerResidentCountry: findCountryId(
+          //   finalFormData.controller_resident_country,
+          // ),
+          // controllerCountry: findCountryId(finalFormData.controller_country),
 
           mobilenumber_countrycode: finalFormData.mobilenumber_countrycode,
           hostname: window.location.hostname,
           terms_and_conditions: finalFormData.terms_and_conditions || [],
 
-          controllerFirstName: finalFormData.controller_first_name,
-          controllerMiddleName: finalFormData.controller_middle_name,
-          controllerLastName: finalFormData.controller_last_name,
-          controllerCity: finalFormData.controller_city,
-          controllerZipCode: finalFormData.controller_zip_code,
-          controllerState: finalFormData.controller_state,
-          controllerDesignation: finalFormData.controller_designation,
-          controllerDob: finalFormData.controller_dob,
-          controllerEmail: finalFormData.controller_email,
-          controllerPassword: finalFormData.controller_password,
-          controllerPhoneCode:
-            finalFormData.controller_mobilenumber_countrycode,
-          controllerPhoneNumber: finalFormData.controller_mobile_number,
-          controllerNationality: finalFormData.controller_nationality,
-          controllerStreetAddress1: finalFormData.controller_street_address_1,
-          controllerStreetAddress2:
-            finalFormData.controller_street_address_2 || "",
-          controllerGender: finalFormData.controller_gender,
-          controllerSsn: finalFormData.controller_ssn,
-          controllerHouseNumber: controllerHouseNumber || "",
-          percentage_of_shares: percentage_of_shares || "",
-          suburb: suburb || "",
-          controller_past_nationalities: controller_past_nationalities?.length
-            ? JSON.stringify(controller_past_nationalities)
-            : "",
-          aliases: aliases || "",
+          // controllerFirstName: finalFormData.controller_first_name,
+          // controllerMiddleName: finalFormData.controller_middle_name,
+          // controllerLastName: finalFormData.controller_last_name,
+          // controllerCity: finalFormData.controller_city,
+          // controllerZipCode: finalFormData.controller_zip_code,
+          // controllerState: finalFormData.controller_state,
+          // controllerDesignation: finalFormData.controller_designation,
+          // controllerDob: finalFormData.controller_dob,
+          // controllerEmail: finalFormData.controller_email,
+          // controllerPassword: finalFormData.controller_password,
+          // controllerPhoneCode:
+          //   finalFormData.controller_mobilenumber_countrycode,
+          // controllerPhoneNumber: finalFormData.controller_mobile_number,
+          // controllerNationality: finalFormData.controller_nationality,
+          // controllerStreetAddress1: finalFormData.controller_street_address_1,
+          // controllerStreetAddress2:
+          //   finalFormData.controller_street_address_2 || "",
+          // controllerGender: finalFormData.controller_gender,
+          // controllerSsn: finalFormData.controller_ssn,
+          // controllerHouseNumber: controllerHouseNumber || "",
+          // percentage_of_shares: percentage_of_shares || "",
+          // suburb: suburb || "",
+          // controller_past_nationalities: controller_past_nationalities?.length
+          //   ? JSON.stringify(controller_past_nationalities)
+          //   : "",
+          // aliases: aliases || "",
+
+          officeControllers: [{
+            controllerFirstName: finalFormData.controller_first_name || "",
+            controllerMiddleName: finalFormData.controller_middle_name || "",
+            controllerLastName: finalFormData.controller_last_name || "",
+            controllerEmail: finalFormData.controller_email || "",
+            controllerPassword: finalFormData.controller_password || "",
+            phone_code: finalFormData.controller_mobilenumber_countrycode || "",
+            phone_number: finalFormData.controller_mobile_number || "",
+            nationality: finalFormData.controller_nationality || "",
+            resident_country: finalFormData.controller_resident_country || "",
+            country: finalFormData.controller_country || "",
+            state: finalFormData.controller_state || "",
+            city: finalFormData.controller_city || "",
+            street_address_1: finalFormData.controller_street_address_1 || "",
+            street_address_2: finalFormData.controller_street_address_2 || "",
+            controllerZipCode: finalFormData.controller_zip_code || "",
+            gender: finalFormData.controller_gender || "",
+            dob: finalFormData.controller_dob || "",
+            controllerDesignation: finalFormData.controller_designation || "",
+            controllerSsn: finalFormData.controller_ssn || "",
+            controllerApartmentUnitNumber: controllerHouseNumber || "",
+            controller_percentage_of_shares: percentage_of_shares || "",
+            controller_doc_type: finalFormData.controller_doc_type || "",
+            controller_doc_id: finalFormData.controller_doc_id || "",
+            id_issue_country_id: findCountryId(finalFormData.controller_doc_country),
+            director_role_id: finalFormData.director_role_id || "",
+          }],
 
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
@@ -2395,6 +2635,14 @@ const Institution = () => {
     () => idDocumentTypes.map((doc) => ({ value: doc.id, label: doc.name })),
     [idDocumentTypes],
   );
+
+  const occupationOptions = useMemo(() => {
+    if (!occupations || !Array.isArray(occupations)) return [];
+    return occupations.map((occ) => ({
+      value: occ.id,
+      label: occ.name || occ.occupation_name || occ.title,
+    }));
+  }, [occupations]);
 
   const passwordValidationRules = useMemo(
     () => [
@@ -4561,12 +4809,12 @@ const Institution = () => {
                             id="product_services_required"
                             label="Product Services Required"
                             options={[
-                              { value: "payment_processing", label: "Payment Processing" },
-                              { value: "cross_border", label: "Cross Border Payments" },
-                              { value: "mass_payouts", label: "Mass Payouts" },
-                              { value: "virtual_accounts", label: "Virtual Accounts" },
-                              { value: "fx_services", label: "FX Services" },
-                              { value: "other", label: "Other" },
+                              { value: "incoming", label: "Incoming" },
+                              { value: "outgoing", label: "Outgoing" },
+                              { value: "incoming,outgoing", label: "Incoming,Outgoing" },
+                              // { value: "virtual_accounts", label: "Virtual Accounts" },
+                              // { value: "fx_services", label: "FX Services" },
+                              // { value: "other", label: "Other" },
                             ]}
                             onChange={enhancedSelectChange("product_services_required", setFieldValue)}
                             value={[
@@ -4841,6 +5089,41 @@ const Institution = () => {
                             touched={touched.countries_to_receive_funds_from}
                             error={errors.countries_to_receive_funds_from}
                             placeholder="Select countries to receive funds from..."
+                            isLoading={countriesLoading}
+                            required={false}
+                          />
+                        </div>
+
+                        {/* Countries to Send Funds To */}
+                        <div>
+                          <CustomSelect
+                            id="countries_to_send_funds_to"
+                            label="Countries to Send Funds To"
+                            options={countryOptions}
+                            isMulti={true}
+                            onChange={(selectedOptions) => {
+                              const selectedIds = selectedOptions
+                                ? selectedOptions.map((opt) => opt.value)
+                                : [];
+                              setFieldValue("countries_to_send_funds_to", selectedIds);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                countries_to_send_funds_to: selectedIds,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "countries_to_send_funds_to",
+                                  value: selectedIds,
+                                }),
+                              );
+                            }}
+                            value={countryOptions.filter((opt) =>
+                              values.countries_to_send_funds_to?.includes(opt.value),
+                            )}
+                            onBlur={handleBlur}
+                            touched={touched.countries_to_send_funds_to}
+                            error={errors.countries_to_send_funds_to}
+                            placeholder="Select countries to send funds to..."
                             isLoading={countriesLoading}
                             required={false}
                           />
@@ -5801,7 +6084,7 @@ const Institution = () => {
                               }}
                               onBlur={handleBlur}
                               onFocus={() => setActiveField("email")}
-                              disabled={isResponsiblePersonEmailVerified}
+                              // disabled={isResponsiblePersonEmailVerified}
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
             ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
             ${touched.email && errors.email && !isResponsiblePersonEmailVerified
@@ -6181,6 +6464,19 @@ const Institution = () => {
                         required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
+                      />
+
+                      <CustomSelect
+                        id="responsible_person_occupation"
+                        label="Occupation"
+                        options={occupationOptions}
+                        onChange={enhancedSelectChange("responsible_person_occupation", setFieldValue)}
+                        value={occupationOptions.find(opt => opt.value === values.responsible_person_occupation)}
+                        touched={touched.responsible_person_occupation}
+                        error={errors.responsible_person_occupation}
+                        required={true}
+                        isLoading={occupationLoading}
+                        placeholder="Select occupation..."
                       />
 
                       {/* ID Document Type and ID Document Number on same row */}
@@ -6629,9 +6925,9 @@ const Institution = () => {
                                         id: term.id,
                                         accepted_at:
                                           new Date().toLocaleString(),
-                                        ip: "Unknown",
-                                        location: "Unknown",
-                                        device: "Unknown",
+                                        ip: clientMeta.ip,
+                                        location: clientMeta.location,
+                                        device: navigator.userAgent,
                                       };
                                       setFieldValue("terms_and_conditions", [
                                         ...currentTerms,
@@ -7251,7 +7547,7 @@ const Institution = () => {
                     disabled={
                       loading ||
                       !isStepComplete(5, values, errors, touched) ||
-                      isSubmitting || 
+                      isSubmitting ||
                       pepAssociated === "1"
                     }
                     className="flex items-center justify-center w-full md:w-auto gap-2 rounded-xl bg-green-600 px-8 py-3 text-white shadow-md hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 font-medium"
