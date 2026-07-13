@@ -74,6 +74,16 @@ import {
   clearEmailVerificationError,
   clearEmailVerificationSuccess,
   resetEmailVerification,
+  sendPhoneVerificationCode,
+  verifyPhoneVerificationCode,
+  selectPhoneVerification,
+  selectIsPhoneVerified,
+  selectShowPhoneVerificationInput,
+  selectIsPhoneSendingCode,
+  selectIsPhoneVerifying,
+  setPhoneVerificationField,
+  clearPhoneVerificationError,
+  resetPhoneVerification,
 } from "../slices/signupSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -140,7 +150,7 @@ class ErrorBoundary extends React.Component {
 }
 
 // Helper functions for section validation
-const getSectionFields = (sectionIndex, values,shouldShowPurposeOfAccount) => {
+const getSectionFields = (sectionIndex, values, shouldShowPurposeOfAccount) => {
   switch (sectionIndex) {
     case 0: // Personal Information
       const fields = [
@@ -304,10 +314,10 @@ const createValidationSchema = (shouldShowPurposeOfAccount) => {
 
     purpose_of_account: shouldShowPurposeOfAccount
       ? Yup.string()
-          .required("Purpose of account is required")
-          .min(3, "Please provide more detail")
+        .required("Purpose of account is required")
+        .min(3, "Please provide more detail")
       : Yup.string().notRequired(),
-    
+
     // Update the SSN validation in createValidationSchema()
     ssn: Yup.string().test(
       "ssn-validation",
@@ -436,6 +446,12 @@ function SignUpIndividualContent() {
   const showVerificationInput = useSelector(selectShowVerificationInput);
   const isSendingCode = useSelector(selectIsSendingCode);
   const isVerifying = useSelector(selectIsVerifying);
+
+  const phoneVerification = useSelector(selectPhoneVerification);
+  const isPhoneVerified = useSelector(selectIsPhoneVerified);
+  const showPhoneVerificationInput = useSelector(selectShowPhoneVerificationInput);
+  const isPhoneSendingCode = useSelector(selectIsPhoneSendingCode);
+  const isPhoneVerifying = useSelector(selectIsPhoneVerifying);
 
   useEffect(() => {
     console.log("🔍 Selector Debug:", {
@@ -930,6 +946,12 @@ function SignUpIndividualContent() {
       if (!isEmailVerified) {
         toast.error("Please verify your email before proceeding");
         return; // Stop navigation - prevents moving to next section
+      }
+    }
+    if (currentSection === 1) {
+      if (!isPhoneVerified) {
+        toast.error("Please verify your phone number before proceeding");
+        return;
       }
     }
     // Mark all fields in current section as touched
@@ -1675,6 +1697,84 @@ function SignUpIndividualContent() {
     handleSendVerificationCode();
   };
 
+  // Phone Verification Handlers
+  const handleSendPhoneVerificationCode = async () => {
+    const countryCode = formik.values.mobilenumber_countrycode;
+    const mobileNumber = formik.values.mobile_number;
+
+    if (!mobileNumber) {
+      toast.error("Please enter your phone number first");
+      return;
+    }
+
+    if (formik.errors.mobile_number) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
+    if (!countryCode) {
+      toast.error("Please select a country code first");
+      return;
+    }
+
+    const partnerId = parseInt(localStorage.getItem("whitelabelledpartnerid"));
+
+    try {
+      const result = await dispatch(sendPhoneVerificationCode({
+        countryCode: countryCode,
+        mobileNumber: mobileNumber,
+        partnerId: partnerId
+      }));
+
+      if (sendPhoneVerificationCode.fulfilled.match(result)) {
+        toast.success("Verification code sent to your phone!");
+      } else {
+        toast.error(result.payload || "Failed to send verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to send verification code");
+    }
+  };
+
+  const handleVerifyPhoneCode = async () => {
+    const code = phoneVerification.verificationCode;
+
+    if (!code || code.length !== 6) {
+      toast.error("Please enter a valid 6-digit verification code");
+      return;
+    }
+
+    try {
+      const result = await dispatch(verifyPhoneVerificationCode({
+        countryCode: formik.values.mobilenumber_countrycode,
+        mobileNumber: formik.values.mobile_number,
+        otpCode: code
+      }));
+
+      if (verifyPhoneVerificationCode.fulfilled.match(result)) {
+        toast.success("Phone number verified successfully!");
+        dispatch(setPhoneVerificationField({ field: "verificationCode", value: "" }));
+      } else {
+        toast.error(result.payload || "Invalid verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to verify phone number");
+    }
+  };
+
+  const handlePhoneVerificationCodeChange = (e) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    dispatch(setPhoneVerificationField({ field: "verificationCode", value }));
+
+    if (phoneVerification.error) {
+      dispatch(clearPhoneVerificationError());
+    }
+  };
+
+  const handleResendPhoneCode = () => {
+    handleSendPhoneVerificationCode();
+  };
+
   // Progress calculation with validation check
   useEffect(() => {
     const calculateProgress = async () => {
@@ -2123,34 +2223,34 @@ function SignUpIndividualContent() {
             >
               {/* Add verification banners here - after form opening tag */}
               {/* {registrationDataLoaded && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-start">
-                    <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 mt-0.5 mr-3" />
-                    <div>
-                      <h4 className="text-green-800 font-medium">Email & Mobile Verified</h4>
-                      <p className="text-green-700 text-sm">
-                        Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been populated form previous step.
-                      </p>
+                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-start">
+                      <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 mt-0.5 mr-3" />
+                      <div>
+                        <h4 className="text-green-800 font-medium">Email & Mobile Verified</h4>
+                        <p className="text-green-700 text-sm">
+                          Your email <strong>{formik.values.email}</strong> and mobile number   <strong>{formik.values.mobile_number}</strong> have been populated form previous step.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {selectedCountry && registrationDataLoaded && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start">
-                    <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                    </svg>
-                    <div>
-                      <h4 className="text-blue-800 font-medium">Country Pre-selected</h4>
-                      <p className="text-blue-700 text-sm">
-                        Country: <strong>{selectedCountry.label}</strong> from previous step.
-                      </p>
+                {selectedCountry && registrationDataLoaded && (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start">
+                      <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                      <div>
+                        <h4 className="text-blue-800 font-medium">Country Pre-selected</h4>
+                        <p className="text-blue-700 text-sm">
+                          Country: <strong>{selectedCountry.label}</strong> from previous step.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )} */}
+                )} */}
 
 
               {/* Personal Information Section */}
@@ -2256,10 +2356,10 @@ function SignUpIndividualContent() {
                           onChange={formik.handleChange}
                           onBlur={formik.handleBlur}
                           value={formik.values.email}
-                          disabled={isEmailVerified}
+                          // disabled={isEmailVerified}
                           className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
-          ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
-          ${formik.touched.email && formik.errors.email && !isEmailVerified
+            ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
+            ${formik.touched.email && formik.errors.email && !isEmailVerified
                               ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                               : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                             } shadow-sm`}
@@ -3033,12 +3133,23 @@ function SignUpIndividualContent() {
                       Phone Number *
                     </label>
                     <div className="flex flex-col md:flex-row gap-3">
+                      {/* Country Code Dropdown */}
                       <div className="w-full md:w-1/3">
                         <Select
                           id="mobilenumber_countrycode"
                           name="mobilenumber_countrycode"
                           options={countryOptions}
-                          onChange={handleCountryCodeSelect}
+                          onChange={(selectedOption) => {
+                            const phoneCode = selectedOption?.phoneCode || "";
+                            formik.setFieldValue("mobilenumber_countrycode", phoneCode);
+                            formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
+                            setSelectedPhoneCode(selectedOption || null);
+                            // Reset phone verification when country code changes
+                            if (isPhoneVerified) {
+                              dispatch(resetPhoneVerification());
+                              formik.setFieldValue("phone_verified", false);
+                            }
+                          }}
                           onBlur={formik.handleBlur}
                           className="basic-single"
                           classNamePrefix="select"
@@ -3057,57 +3168,155 @@ function SignUpIndividualContent() {
                         {formik.touched.mobilenumber_countrycode &&
                           formik.errors.mobilenumber_countrycode ? (
                           <p className="text-red-500 text-xs mt-2 flex items-center">
-                            <svg
-                              className="w-3.5 h-3.5 mr-1"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                clipRule="evenodd"
-                              />
+                            <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
                             {formik.errors.mobilenumber_countrycode}
                           </p>
                         ) : null}
                       </div>
+
+                      {/* Phone Number Input with Verify Button */}
                       <div className="w-full md:w-2/3">
-                        <input
-                          type="text"
-                          id="mobile_number"
-                          name="mobile_number"
-                          onChange={handlePhoneChange}
-                          onKeyPress={handlePhoneKeyPress}
-                          onBlur={formik.handleBlur}
-                          value={formik.values.mobile_number}
-                          className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.mobile_number &&
-                            formik.errors.mobile_number
-                            ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                            : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
-                            } shadow-sm`}
-                          placeholder="9813017273"
-                          maxLength={10}
-                        />
-                        {formik.touched.mobile_number &&
-                          formik.errors.mobile_number ? (
-                          <p className="text-red-500 text-xs mt-2 flex items-center">
-                            <svg
-                              className="w-3.5 h-3.5 mr-1"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              id="mobile_number"
+                              name="mobile_number"
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+                                formik.setFieldValue("mobile_number", rawValue);
+                                // Reset phone verification when number changes
+                                if (isPhoneVerified) {
+                                  dispatch(resetPhoneVerification());
+                                  formik.setFieldValue("phone_verified", false);
+                                }
+                              }}
+                              onKeyPress={(e) => {
+                                if (!/[0-9]/.test(e.key)) {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onBlur={formik.handleBlur}
+                              value={formik.values.mobile_number}
+                              // disabled={isPhoneVerified}
+                              className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
+                ${isPhoneVerified ? 'bg-green-50 border-green-300' : ''}
+                ${formik.touched.mobile_number && formik.errors.mobile_number && !isPhoneVerified
+                                  ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                                  : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                                } shadow-sm`}
+                              placeholder="9813017273"
+                              maxLength={10}
+                            />
+                          </div>
+
+                          {/* Verify Button - Only show when not verified */}
+                          {!isPhoneVerified && (
+                            <button
+                              type="button"
+                              onClick={handleSendPhoneVerificationCode}
+                              disabled={isPhoneSendingCode || !formik.values.mobile_number || formik.errors.mobile_number}
+                              className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
                             >
-                              <path
-                                fillRule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                clipRule="evenodd"
-                              />
+                              {isPhoneSendingCode ? (
+                                <div className="flex items-center gap-2">
+                                  <RingLoader size={16} color="#ffffff" />
+                                  <span>Sending...</span>
+                                </div>
+                              ) : (
+                                'Verify'
+                              )}
+                            </button>
+                          )}
+
+                          {/* Verified Badge - Show when verified */}
+                          {isPhoneVerified && (
+                            <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
+                              <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
+                              <span className="font-medium">Verified</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Phone number error */}
+                        {formik.touched.mobile_number && formik.errors.mobile_number && !isPhoneVerified && (
+                          <p className="text-red-500 text-xs mt-2 flex items-center">
+                            <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
                             {formik.errors.mobile_number}
                           </p>
-                        ) : null}
+                        )}
                       </div>
                     </div>
+
+                    {/* Verification Code Input (shown after clicking Verify) */}
+                    {showPhoneVerificationInput && !isPhoneVerified && (
+                      <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-xl max-w-md">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enter Verification Code
+                        </label>
+                        <div className="flex gap-3 items-center">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={phoneVerification?.verificationCode || ""}
+                              onChange={handlePhoneVerificationCodeChange}
+                              placeholder="6-digit code"
+                              maxLength={6}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-base tracking-[0.3em]"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleVerifyPhoneCode}
+                            disabled={isPhoneVerifying || !phoneVerification?.verificationCode || phoneVerification?.verificationCode?.length !== 6}
+                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap text-sm font-medium"
+                          >
+                            {isPhoneVerifying ? (
+                              <div className="flex items-center gap-2">
+                                <RingLoader size={16} color="#ffffff" />
+                                <span>Verifying...</span>
+                              </div>
+                            ) : (
+                              'Submit'
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Resend link */}
+                        <div className="mt-3 text-center">
+                          <button
+                            type="button"
+                            onClick={handleResendPhoneCode}
+                            disabled={isPhoneSendingCode}
+                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isPhoneSendingCode ? 'Sending...' : "Didn't receive? Resend"}
+                          </button>
+                        </div>
+
+                        {/* Success message */}
+                        {phoneVerification?.success && !isPhoneVerified && (
+                          <p className="text-green-600 text-sm mt-2 flex items-center justify-center gap-1.5">
+                            <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
+                            {phoneVerification.success}
+                          </p>
+                        )}
+
+                        {/* Error message */}
+                        {phoneVerification?.error && (
+                          <p className="text-red-500 text-sm mt-2 flex items-center justify-center gap-1.5">
+                            <FontAwesomeIcon icon={faExclamationCircle} className="text-red-500" />
+                            {typeof phoneVerification.error === 'string'
+                              ? phoneVerification.error
+                              : phoneVerification.error?.message || 'Verification failed'}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

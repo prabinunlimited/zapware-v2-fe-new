@@ -231,25 +231,61 @@ export const validateInstitutionStep = createAsyncThunk(
       );
       return response.data;
     } catch (error) {
-      if (
-        error.response?.data?.status === "error" &&
-        error.response.data.message &&
-        typeof error.response.data.message === "object"
-      ) {
-        const errorMessages = [];
-        Object.values(error.response.data.message).forEach((fieldErrors) => {
-          if (Array.isArray(fieldErrors)) {
-            errorMessages.push(...fieldErrors);
-          } else if (typeof fieldErrors === "string") {
-            errorMessages.push(fieldErrors);
-          }
-        });
-        return rejectWithValue(errorMessages);
+      const responseData = error.response?.data;
+
+      if (responseData?.status === "error" && responseData?.message) {
+        // Case 1: message is an object of field -> [errors]
+        if (typeof responseData.message === "object") {
+          const errorMessages = [];
+          Object.values(responseData.message).forEach((fieldErrors) => {
+            if (Array.isArray(fieldErrors)) {
+              errorMessages.push(...fieldErrors);
+            } else if (typeof fieldErrors === "string") {
+              errorMessages.push(fieldErrors);
+            }
+          });
+          return rejectWithValue(errorMessages);
+        }
+
+        // Case 2: message is a plain string
+        if (typeof responseData.message === "string") {
+          return rejectWithValue(responseData.message);
+        }
       }
 
+      // Fallback: no usable message from the backend at all
       return rejectWithValue(error.message || "Validation failed");
     }
   },
+);
+export const fetchOccupation = createAsyncThunk(
+  "institutionRegistration/fetchOccupation",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/customers/fetch-occupation");
+
+      // Handle response
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        return response.data.data; // Return the array directly
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch occupations"
+      );
+    }
+  }
 );
 
 export const submitInstitutionForm = createAsyncThunk(
@@ -869,6 +905,9 @@ const initialState = {
   statesError: null,
   selectedStateId: null,
 
+  occupations: [],
+  occupationsLoading: false,
+
   // NEW: All missing individual field states
   searchTerm: "",
   businessInstitutionName: "",
@@ -1127,6 +1166,11 @@ const institutionRegistrationSlice = createSlice({
     clearStates: (state) => {
       state.states = [];
       state.selectedStateId = null;
+    },
+
+    setSelectedOccupation: (state, action) => {
+      state.selectedOccupation = action.payload;
+      state.formData.responsible_person_occupation = action.payload;
     },
 
     // Controller sync
@@ -1830,6 +1874,17 @@ const institutionRegistrationSlice = createSlice({
         state.statesLoading = false;
         state.statesError = action.payload;
         state.states = [];
+      })
+      .addCase(fetchOccupation.pending, (state) => {
+        state.occupationsLoading = true;
+      })
+      .addCase(fetchOccupation.fulfilled, (state, action) => {
+        state.occupationsLoading = false;
+        state.occupations = action.payload;
+      })
+      .addCase(fetchOccupation.rejected, (state) => {
+        state.occupationsLoading = false;
+        state.occupations = [];
       });
   },
 });
@@ -1914,6 +1969,7 @@ export const {
   setStatesError,
   setSelectedStateId,
   clearStates,
+  setSelectedOccupation,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -2090,6 +2146,8 @@ export const selectStatesError = (state) =>
 export const selectSelectedStateId = (state) =>
   state.institutionRegistration.selectedStateId;
 
+export const selectOccupation = (state) => state.institutionRegistration.occupations;
+export const selectOccupationLoading = (state) => state.institutionRegistration.occupationsLoading;
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
 // =============================================================================
