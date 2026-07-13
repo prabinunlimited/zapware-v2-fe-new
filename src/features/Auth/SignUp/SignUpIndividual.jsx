@@ -2877,11 +2877,7 @@ function SignUpIndividualContent() {
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       ZIP/Postal Code *
-                      {selectedCountry && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
-                          ✓ Will auto-fill state & city
-                        </span>
-                      )}
+                      
                     </label>
                     <div className="relative">
                       <input
@@ -3047,7 +3043,7 @@ function SignUpIndividualContent() {
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                           } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
+                        placeholder="City"
                         readOnly={false}
                       />
                       {zipLookup.loading && (
@@ -3100,7 +3096,7 @@ function SignUpIndividualContent() {
                           ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                           : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                           } shadow-sm`}
-                        placeholder="Will auto-fill from ZIP code"
+                        placeholder="State"
                         readOnly={false}
                       />
                       {zipLookup.loading && (
