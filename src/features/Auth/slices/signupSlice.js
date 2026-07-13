@@ -162,36 +162,36 @@ export const sendEmailVerificationPasscode = createAsyncThunk(
       const bearertoken = localStorage.getItem("bearertoken");
       const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
       const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
-      
+
       let partnerId = 0;
-      
+
       // Change this condition from === "1" to === "Y"
       if (iswhitelabelledpartner === "Y" && whitelabelledpartnerid) {
         partnerId = parseInt(whitelabelledpartnerid);
       }
-      
+
       const payload = {
         email: email,
         user_type: "customer",
         partner_id: partnerId,
       };
-      
+
       const response = await api.post("/send-passcode-registration", payload, {
         headers: {
           Authorization: `Bearer ${bearertoken}`,
         },
       });
-      
+
       return response.data;
     } catch (error) {
       let errorMessage = "Failed to send verification code. Please try again.";
-      
+
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       return rejectWithValue(errorMessage);
     }
   }
@@ -204,37 +204,97 @@ export const validateEmailVerificationPasscode = createAsyncThunk(
       const bearertoken = localStorage.getItem("bearertoken");
       const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
       const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
-      
+
       let partnerId = 0;
-      
+
       // Change this condition from === "1" to === "Y"
       if (iswhitelabelledpartner === "Y" && whitelabelledpartnerid) {
         partnerId = parseInt(whitelabelledpartnerid);
       }
-      
+
       const payload = {
         email: email,
         user_type: "customer",
         partner_id: partnerId,
         passcode: passcode,
       };
-      
+
       const response = await api.post("/validate-passcode-registration", payload, {
         headers: {
           Authorization: `Bearer ${bearertoken}`,
         },
       });
-      
+
       return response.data;
     } catch (error) {
       let errorMessage = "Invalid verification code. Please try again.";
-      
+
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const sendPhoneVerificationCode = createAsyncThunk(
+  "signup/sendPhoneVerification",
+  async ({ countryCode, mobileNumber, partnerId }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      let finalPartnerId = partnerId ;
+
+      const payload = {
+        country_code: countryCode,
+        mobile_number: mobileNumber,
+        partner_id: finalPartnerId,
+      };
+
+      const response = await api.post("/send-otp-registration", payload, {
+        headers: {
+          Authorization: `Bearer ${bearertoken}`,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      let errorMessage = "Failed to send verification code. Please try again.";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const verifyPhoneVerificationCode = createAsyncThunk(
+  "signup/verifyPhoneCode",
+  async ({ countryCode, mobileNumber, otpCode }, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+
+      const payload = {
+        country_code: countryCode,
+        mobile_number: mobileNumber,
+        otp: otpCode,
+      };
+
+      const response = await api.post("/validate-otp-registration", payload, {
+        headers: {
+          Authorization: `Bearer ${bearertoken}`,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      let errorMessage = "Invalid verification code. Please try again.";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -281,6 +341,18 @@ const initialState = {
     success: null,
   },
 
+  phoneVerification: {
+    isVerified: false,
+    isSendingCode: false,
+    isVerifying: false,
+    verificationCode: "",
+    showVerificationInput: false,
+    error: null,
+    success: null,
+    phoneNumber: "",
+    countryCode: "",
+  },
+
   nationalities: [],
   idDocumentTypes: [],
   genders: [],
@@ -311,7 +383,7 @@ const initialState = {
   currentStep: 0,
   totalSteps: 5,
   formProgress: 0,
-  
+
 };
 
 const signupSlice = createSlice({
@@ -445,7 +517,7 @@ const signupSlice = createSlice({
         state.emailVerification[field] = value;
       }
     },
-    
+
     resetEmailVerification: (state) => {
       state.emailVerification = {
         isVerified: false,
@@ -457,13 +529,45 @@ const signupSlice = createSlice({
         success: null,
       };
     },
-    
+
     clearEmailVerificationError: (state) => {
       state.emailVerification.error = null;
     },
-    
+
     clearEmailVerificationSuccess: (state) => {
       state.emailVerification.success = null;
+    },
+    setPhoneVerificationField: (state, action) => {
+      const { field, value } = action.payload;
+      if (field in state.phoneVerification) {
+        state.phoneVerification[field] = value;
+      }
+    },
+
+    resetPhoneVerification: (state) => {
+      state.phoneVerification = {
+        isVerified: false,
+        isSendingCode: false,
+        isVerifying: false,
+        verificationCode: "",
+        showVerificationInput: false,
+        error: null,
+        success: null,
+        phoneNumber: "",
+        countryCode: "",
+      };
+    },
+
+    clearPhoneVerificationError: (state) => {
+      state.phoneVerification.error = null;
+    },
+
+    clearPhoneVerificationSuccess: (state) => {
+      state.phoneVerification.success = null;
+    },
+
+    setPhoneVerified: (state, action) => {
+      state.phoneVerification.isVerified = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -542,41 +646,79 @@ const signupSlice = createSlice({
       })
 
       // Add these NEW cases
-    .addCase(sendEmailVerificationPasscode.pending, (state) => {
-      state.emailVerification.isSendingCode = true;
-      state.emailVerification.error = null;
-      state.emailVerification.success = null;
-    })
-    .addCase(sendEmailVerificationPasscode.fulfilled, (state, action) => {
-      state.emailVerification.isSendingCode = false;
-      state.emailVerification.showVerificationInput = true;
-      state.emailVerification.success = "Verification code sent to your email!";
-      state.emailVerification.error = null;
-    })
-    .addCase(sendEmailVerificationPasscode.rejected, (state, action) => {
-      state.emailVerification.isSendingCode = false;
-      state.emailVerification.error = action.payload || "Failed to send verification code";
-      state.emailVerification.success = null;
-    })
-    
-    .addCase(validateEmailVerificationPasscode.pending, (state) => {
-      state.emailVerification.isVerifying = true;
-      state.emailVerification.error = null;
-      state.emailVerification.success = null;
-    })
-    .addCase(validateEmailVerificationPasscode.fulfilled, (state, action) => {
-      state.emailVerification.isVerifying = false;
-      state.emailVerification.isVerified = true;
-      state.emailVerification.showVerificationInput = false;
-      state.emailVerification.success = "Email verified successfully!";
-      state.emailVerification.verificationCode = "";
-      state.emailVerification.error = null;
-    })
-    .addCase(validateEmailVerificationPasscode.rejected, (state, action) => {
-      state.emailVerification.isVerifying = false;
-      state.emailVerification.error = action.payload || "Invalid verification code";
-      state.emailVerification.success = null;
-    });
+      .addCase(sendEmailVerificationPasscode.pending, (state) => {
+        state.emailVerification.isSendingCode = true;
+        state.emailVerification.error = null;
+        state.emailVerification.success = null;
+      })
+      .addCase(sendEmailVerificationPasscode.fulfilled, (state, action) => {
+        state.emailVerification.isSendingCode = false;
+        state.emailVerification.showVerificationInput = true;
+        state.emailVerification.success = "Verification code sent to your email!";
+        state.emailVerification.error = null;
+      })
+      .addCase(sendEmailVerificationPasscode.rejected, (state, action) => {
+        state.emailVerification.isSendingCode = false;
+        state.emailVerification.error = action.payload || "Failed to send verification code";
+        state.emailVerification.success = null;
+      })
+
+      .addCase(validateEmailVerificationPasscode.pending, (state) => {
+        state.emailVerification.isVerifying = true;
+        state.emailVerification.error = null;
+        state.emailVerification.success = null;
+      })
+      .addCase(validateEmailVerificationPasscode.fulfilled, (state, action) => {
+        state.emailVerification.isVerifying = false;
+        state.emailVerification.isVerified = true;
+        state.emailVerification.showVerificationInput = false;
+        state.emailVerification.success = "Email verified successfully!";
+        state.emailVerification.verificationCode = "";
+        state.emailVerification.error = null;
+      })
+      .addCase(validateEmailVerificationPasscode.rejected, (state, action) => {
+        state.emailVerification.isVerifying = false;
+        state.emailVerification.error = action.payload || "Invalid verification code";
+        state.emailVerification.success = null;
+      })
+      .addCase(sendPhoneVerificationCode.pending, (state) => {
+        state.phoneVerification.isSendingCode = true;
+        state.phoneVerification.error = null;
+        state.phoneVerification.success = null;
+      })
+      .addCase(sendPhoneVerificationCode.fulfilled, (state, action) => {
+        state.phoneVerification.isSendingCode = false;
+        state.phoneVerification.showVerificationInput = true;
+        state.phoneVerification.success = "Verification code sent to your phone!";
+        state.phoneVerification.error = null;
+        if (action.meta.arg) {
+          state.phoneVerification.phoneNumber = action.meta.arg.mobileNumber;
+          state.phoneVerification.countryCode = action.meta.arg.countryCode;
+        }
+      })
+      .addCase(sendPhoneVerificationCode.rejected, (state, action) => {
+        state.phoneVerification.isSendingCode = false;
+        state.phoneVerification.error = action.payload || "Failed to send verification code";
+        state.phoneVerification.success = null;
+      })
+      .addCase(verifyPhoneVerificationCode.pending, (state) => {
+        state.phoneVerification.isVerifying = true;
+        state.phoneVerification.error = null;
+        state.phoneVerification.success = null;
+      })
+      .addCase(verifyPhoneVerificationCode.fulfilled, (state, action) => {
+        state.phoneVerification.isVerifying = false;
+        state.phoneVerification.isVerified = true;
+        state.phoneVerification.showVerificationInput = false;
+        state.phoneVerification.success = "Phone verified successfully!";
+        state.phoneVerification.verificationCode = "";
+        state.phoneVerification.error = null;
+      })
+      .addCase(verifyPhoneVerificationCode.rejected, (state, action) => {
+        state.phoneVerification.isVerifying = false;
+        state.phoneVerification.error = action.payload || "Invalid verification code";
+        state.phoneVerification.success = null;
+      });
   },
 });
 
@@ -640,6 +782,12 @@ export const selectShowVerificationInput = (state) => state.signup.emailVerifica
 export const selectIsSendingCode = (state) => state.signup.emailVerification.isSendingCode;
 export const selectIsVerifying = (state) => state.signup.emailVerification.isVerifying;
 
+export const selectPhoneVerification = (state) => state.signup.phoneVerification;
+export const selectIsPhoneVerified = (state) => state.signup.phoneVerification.isVerified;
+export const selectShowPhoneVerificationInput = (state) => state.signup.phoneVerification.showVerificationInput;
+export const selectIsPhoneSendingCode = (state) => state.signup.phoneVerification.isSendingCode;
+export const selectIsPhoneVerifying = (state) => state.signup.phoneVerification.isVerifying;
+
 export const {
   setFormField,
   setMetadataField,
@@ -659,6 +807,11 @@ export const {
   resetEmailVerification,
   clearEmailVerificationError,
   clearEmailVerificationSuccess,
+  setPhoneVerificationField,
+  resetPhoneVerification,
+  clearPhoneVerificationError,
+  clearPhoneVerificationSuccess,
+  setPhoneVerified,
 } = signupSlice.actions;
 
 export default signupSlice.reducer;

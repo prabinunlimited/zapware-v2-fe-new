@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk,createSelector } from "@reduxjs/toolkit";
 import api, {
   apiCoordinator,
 } from "../../../services/api";
@@ -1047,24 +1047,42 @@ export const selectDestinationCurrencies = (state) =>
   state.payout.destinationCurrencies;
 export const selectCountries = (state) => state.payout.countries;
 export const selectCurrencies = (state) => state.payout.currencies;
-export const selectConversionData = (state) => ({
-  convertedValue: state.payout.convertedValue,
-  convertedId: state.payout.convertedId,
-  fxRate: state.payout.fxRate,
-  swiftRate: state.payout.swiftRate,
-  payoutRate: state.payout.payoutRate,
-  toServiceProvider: state.payout.toServiceProvider,
-});
+export const selectConversionData = createSelector(
+  [
+    (state) => state.payout.convertedValue,
+    (state) => state.payout.convertedId,
+    (state) => state.payout.fxRate,
+    (state) => state.payout.swiftRate,
+    (state) => state.payout.payoutRate,
+    (state) => state.payout.toServiceProvider,
+  ],
+  (convertedValue, convertedId, fxRate, swiftRate, payoutRate, toServiceProvider) => ({
+    convertedValue,
+    convertedId,
+    fxRate,
+    swiftRate,
+    payoutRate,
+    toServiceProvider,
+  })
+);
 export const selectAvailableBalance = (state) => state.payout.availableBalance;
 export const selectLoading = (state) => state.payout.loading;
 export const selectBenefLoading = (state) => state.payout.benefLoading;
 export const selectVerifying = (state) => state.payout.verifying;
-export const selectModalStates = (state) => ({
-  showModal: state.payout.showModal,
-  showSuccessModal: state.payout.showSuccessModal,
-  showErrorModal: state.payout.showErrorModal,
-  showPasscodeModal: state.payout.showPasscodeModal,
-});
+export const selectModalStates = createSelector(
+  [
+    (state) => state.payout.showModal,
+    (state) => state.payout.showSuccessModal,
+    (state) => state.payout.showErrorModal,
+    (state) => state.payout.showPasscodeModal,
+  ],
+  (showModal, showSuccessModal, showErrorModal, showPasscodeModal) => ({
+    showModal,
+    showSuccessModal,
+    showErrorModal,
+    showPasscodeModal,
+  })
+);
 export const selectModalMessage = (state) => state.payout.modalMessage;
 export const selectPasscode = (state) => state.payout.passcode;
 export const selectError = (state) => state.payout.error;

@@ -12,9 +12,11 @@ import {
   FiCreditCard,
   FiStar,
   FiPlus,
+  FiEdit2
 } from "react-icons/fi";
 import AddBankAccountForm from "./AddBankAccountForm";
 import ViewBankAccounts from "./ViewBankAccounts";
+import EditAccountNameModal from "./EditAccountNameModal";
 
 // Custom hook for copy functionality
 const useCopyToClipboard = () => {
@@ -107,8 +109,8 @@ const AccountField = ({
               onClick={handleCopy}
               disabled={!value || value === "N/A"}
               className={`p-1 transition-colors ${value && value !== "N/A"
-                  ? `${colors.text} ${colors.hover}`
-                  : "text-gray-300 cursor-not-allowed"
+                ? `${colors.text} ${colors.hover}`
+                : "text-gray-300 cursor-not-allowed"
                 }`}
               type="button"
               aria-label="Copy to clipboard"
@@ -124,8 +126,8 @@ const AccountField = ({
         <div className="flex items-center justify-between mt-1">
           <p
             className={`text-sm font-medium break-words ${isSensitive && !isVisible
-                ? "bg-gray-200 text-transparent rounded select-none"
-                : "text-gray-900"
+              ? "bg-gray-200 text-transparent rounded select-none"
+              : "text-gray-900"
               }`}
           >
             {isSensitive && !isVisible ? "••••••••" : displayValue}
@@ -192,9 +194,18 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
   const { copied, copyToClipboard } = useCopyToClipboard();
   const [showAddForm, setShowAddForm] = React.useState(false);
   const [showViewBanks, setShowViewBanks] = React.useState(false);
+  const [showEditNameModal, setShowEditNameModal] = React.useState(false);
+  const [accountNameUpdate, setAccountNameUpdate] = React.useState(null);
 
   const shouldShowAddButton = React.useMemo(() => {
     return accountData?.service_provider_id === 59;
+  }, [accountData]);
+
+  const shouldShowEditButton = React.useMemo(() => {
+    return (
+      accountData?.service_provider_id === 59 &&
+      accountData?.account_type === "global"
+    );
   }, [accountData]);
 
   const isPriorityAccount = React.useMemo(() => {
@@ -210,66 +221,66 @@ const Modal = ({ isOpen, onClose, accountData, onAccountAdded }) => {
 
   const handleCopyAll = async () => {
     let accountInfo = `
-REGULAR ACCOUNT DETAILS:
-Account Number: ${accountData.account_number || "N/A"}
-Account Holder Name: ${accountData.account_name || "N/A"}
-Routing Code: ${accountData.routing_code ||
+  REGULAR ACCOUNT DETAILS:
+  Account Number: ${accountData.account_number || "N/A"}
+  Account Holder Name: ${accountData.account_name || "N/A"}
+  Routing Code: ${accountData.routing_code ||
       accountData.routing_number ||
       accountData.swift_code ||
       "N/A"}
-Bank Name: ${accountData.bank_name || "N/A"}
-Bank Address: ${accountData.bank_address || "N/A"}
+  Bank Name: ${accountData.bank_name || "N/A"}
+  Bank Address: ${accountData.bank_address || "N/A"}
 
-PRIORITY ACCOUNT DETAILS:
-IBAN Number: ${accountData.iban_number ||
+  PRIORITY ACCOUNT DETAILS:
+  IBAN Number: ${accountData.iban_number ||
       accountData.iban ||
       accountData.priority_iban ||
       accountData.priority_acc_no ||
       "N/A"}
-Account Holder Name: ${accountData.account_name || "N/A"}
-Routing Code: ${accountData.priority_routing_no ||
+  Account Holder Name: ${accountData.account_name || "N/A"}
+  Routing Code: ${accountData.priority_routing_no ||
       accountData.routing_code ||
       accountData.routing_number ||
       accountData.swift_code ||
       "N/A"}
-Bank Name: ${accountData.priority_bank_name || accountData.bank_name || "N/A"}
-Bank Address: ${accountData.priority_bank_address || accountData.bank_address || "N/A"}
-    `.trim();
+  Bank Name: ${accountData.priority_bank_name || accountData.bank_name || "N/A"}
+  Bank Address: ${accountData.priority_bank_address || accountData.bank_address || "N/A"}
+      `.trim();
 
     await copyToClipboard(accountInfo);
   };
 
   const handleCopyRegular = async () => {
     const regularInfo = `
-Account Number: ${accountData.account_number || "N/A"}
-Account Holder Name: ${accountData.account_name || "N/A"}
-Routing Code: ${accountData.routing_code ||
+  Account Number: ${accountData.account_number || "N/A"}
+  Account Holder Name: ${accountData.account_name || "N/A"}
+  Routing Code: ${accountData.routing_code ||
       accountData.routing_number ||
       accountData.swift_code ||
       "N/A"}
-Bank Name: ${accountData.bank_name || "N/A"}
-Bank Address: ${accountData.bank_address || "N/A"}
-    `.trim();
+  Bank Name: ${accountData.bank_name || "N/A"}
+  Bank Address: ${accountData.bank_address || "N/A"}
+      `.trim();
 
     await copyToClipboard(regularInfo);
   };
 
   const handleCopyPriority = async () => {
     const priorityInfo = `
-IBAN Number: ${accountData.iban_number ||
+  IBAN Number: ${accountData.iban_number ||
       accountData.iban ||
       accountData.priority_iban ||
       accountData.priority_acc_no ||
       "N/A"}
-Account Holder Name: ${accountData.account_name || "N/A"}
-Routing Code: ${accountData.priority_routing_no ||
+  Account Holder Name: ${accountData.account_name || "N/A"}
+  Routing Code: ${accountData.priority_routing_no ||
       accountData.routing_code ||
       accountData.routing_number ||
       accountData.swift_code ||
       "N/A"}
-Bank Name: ${accountData.priority_bank_name || accountData.bank_name || "N/A"}
-Bank Address: ${accountData.priority_bank_address || accountData.bank_address || "N/A"}
-    `.trim();
+  Bank Name: ${accountData.priority_bank_name || accountData.bank_name || "N/A"}
+  Bank Address: ${accountData.priority_bank_address || accountData.bank_address || "N/A"}
+      `.trim();
 
     await copyToClipboard(priorityInfo);
   };
@@ -295,6 +306,19 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
     setShowAddForm(false);
   };
 
+  const handleAccountNameUpdate = (updatedData) => {
+    // Update the account data with the new name
+    if (updatedData && updatedData.account_name) {
+      setAccountNameUpdate(updatedData);
+
+      // If you have a parent component that needs to know about the update
+      if (onAccountAdded) {
+        onAccountAdded(updatedData);
+      }
+    }
+    setShowEditNameModal(false);
+  };
+
   return (
     <>
       <AnimatePresence>
@@ -316,7 +340,7 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
 
             {/* Modal */}
             <motion.div
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-2 sm:mx-4"
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden mx-2 sm:mx-4 flex flex-col"
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -324,9 +348,9 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
             >
               {/* Header */}
               <div
-                className={`px-4 sm:px-6 py-3 sm:py-4 ${isPriorityAccount
-                    ? "bg-gradient-to-r from-purple-600 to-purple-700"
-                    : "bg-gradient-to-r from-blue-600 to-blue-700"
+                className={`px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0 ${isPriorityAccount
+                  ? "bg-gradient-to-r from-purple-600 to-purple-700"
+                  : "bg-gradient-to-r from-blue-600 to-blue-700"
                   }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -358,7 +382,7 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
 
                 {/* ADD BANK ACCOUNT BUTTON - PLACED BELOW THE HEADER */}
                 {shouldShowAddButton && (
-                  <div className="mt-3 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                  <div className="mt-3 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 flex-wrap">
                     <button
                       onClick={() => setShowAddForm(true)}
                       className="w-full sm:w-auto px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm font-medium rounded-lg transition-all flex items-center justify-center space-x-2 border border-white border-opacity-30"
@@ -373,17 +397,26 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
                       <FiEye size={18} />
                       <span>View Added Banks</span>
                     </button>
+                    {shouldShowEditButton && (
+                      <button
+                        onClick={() => setShowEditNameModal(true)}
+                        className="w-full sm:w-auto px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm font-medium rounded-lg transition-all flex items-center justify-center space-x-2 border border-white border-opacity-30"
+                      >
+                        <FiEdit2 size={18} />
+                        <span>Edit Account Name</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Content */}
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto max-h-[calc(95vh-200px)] sm:max-h-[calc(90vh-180px)]">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1 min-h-0">
                 {/* Balance Card */}
                 <div
                   className={`${isPriorityAccount
-                      ? "bg-gradient-to-br from-purple-50 to-blue-50 border-purple-100"
-                      : "bg-gradient-to-br from-green-50 to-blue-50 border-green-100"
+                    ? "bg-gradient-to-br from-purple-50 to-blue-50 border-purple-100"
+                    : "bg-gradient-to-br from-green-50 to-blue-50 border-green-100"
                     } border rounded-xl p-3 sm:p-4 text-center`}
                 >
                   <p className="text-xs sm:text-sm text-gray-600 mb-1">Available Balance</p>
@@ -629,14 +662,6 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
                             </ul>
                           </div>
                         </div>
-
-                        {/* Info Badge */}
-                        <div className="mt-4 flex items-center justify-center gap-2 bg-blue-50/80 rounded-lg px-4 py-2 border border-blue-100">
-                          <FiInfo className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-600 text-center">
-                            Both account types are fully visible and interactive
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -678,7 +703,7 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
               </div>
 
               {/* Footer */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
                   <div className="flex items-center space-x-2">
                     <FiInfo className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
@@ -721,6 +746,16 @@ Bank Address: ${accountData.priority_bank_address || accountData.bank_address ||
         isOpen={showViewBanks}
         onClose={() => setShowViewBanks(false)}
         customerId={accountData?.customer_id || accountData?.customerId}
+      />
+
+      {/* Edit Account Name Modal */}
+      <EditAccountNameModal
+        isOpen={showEditNameModal}
+        onClose={() => setShowEditNameModal(false)}
+        currentAccountName={accountData?.account_name || ""}
+        accountId={accountData?.account_id || accountData?.accountId || ""}
+        customerId={accountData?.customer_id || accountData?.customerId || ""}
+        onSuccess={handleAccountNameUpdate}
       />
     </>
   );

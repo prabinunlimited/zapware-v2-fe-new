@@ -1,5 +1,5 @@
 // src/components/Dashboard/Account/AccountSummary/AccountSlice.js - COMPLETELY FIXED VERSION
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, createSelector } from "@reduxjs/toolkit";
 import axios from "axios";
 import { extractErrorMessage } from "../../../../utils/errorHandling";
 
@@ -241,12 +241,12 @@ export const addBankAccount = createAsyncThunk(
       // If there's a response from the server
       if (error.response?.data) {
         const errorData = error.response.data;
-        
+
         // Flatten the structure - extract input_errors from nested data
         const inputErrors = errorData?.data?.input_errors || [];
         const globalErrors = errorData?.data?.global_errors || [];
         const messages = errorData?.data?.messages || [];
-        
+
         // Return a flattened error object
         return rejectWithValue({
           message: errorData.message || "Failed to add bank account",
@@ -551,7 +551,7 @@ const accountSlice = createSlice({
       .addCase(addBankAccount.rejected, (state, action) => {
         state.addingBankAccount = false;
         state.addBankAccountSuccess = false;
-      
+
         // Handle both string and object error payloads
         if (typeof action.payload === 'string') {
           state.addBankAccountError = action.payload;
@@ -612,10 +612,10 @@ export const selectHasFetchedAccount = (state) =>
 export const selectFetchAttempted = (state) =>
   state.account?.fetchAttempted || false;
 
-export const selectAccountDropdown = (state) => ({
-  isOpen: state.account?.accountDropdownOpen || false,
-});
-
+export const selectAccountDropdown = createSelector(
+  [(state) => state.account?.accountDropdownOpen || false],
+  (isOpen) => ({ isOpen })
+);
 export const selectCurrencyOptions = (state) => {
   const accounts = selectAccounts(state);
   return [...new Set(accounts.map((account) => account.currency))].filter(
@@ -638,18 +638,43 @@ export const selectServiceProviderCurrencies = (state) =>
 export const selectCurrenciesLoading = (state) =>
   state.account?.currenciesLoading || false;
 
-export const selectAccountState = (state) => ({
-  accounts: selectAccounts(state),
-  selectedAccount: selectSelectedAccount(state),
-  selectedCurrency: selectSelectedCurrency(state),
-  accountLoading: selectAccountLoading(state),
-  balanceLoading: selectBalanceLoading(state),
-  accountError: selectAccountError(state),
-  hasFetchedAccount: selectHasFetchedAccount(state),
-  fetchAttempted: selectFetchAttempted(state),
-  lastUpdated: selectLastUpdated(state),
-  accountDropdown: selectAccountDropdown(state),
-});
+export const selectAccountState = createSelector(
+  [
+    selectAccounts,
+    selectSelectedAccount,
+    selectSelectedCurrency,
+    selectAccountLoading,
+    selectBalanceLoading,
+    selectAccountError,
+    selectHasFetchedAccount,
+    selectFetchAttempted,
+    selectLastUpdated,
+    selectAccountDropdown,
+  ],
+  (
+    accounts,
+    selectedAccount,
+    selectedCurrency,
+    accountLoading,
+    balanceLoading,
+    accountError,
+    hasFetchedAccount,
+    fetchAttempted,
+    lastUpdated,
+    accountDropdown
+  ) => ({
+    accounts,
+    selectedAccount,
+    selectedCurrency,
+    accountLoading,
+    balanceLoading,
+    accountError,
+    hasFetchedAccount,
+    fetchAttempted,
+    lastUpdated,
+    accountDropdown,
+  })
+);
 
 export const {
   setSelectedAccount,
