@@ -363,9 +363,7 @@ const Profile = () => {
           console.log("📸 KYC Image response:", imageResponse.data);
 
           const pictureUrl = imageResponse.data.data?.profile_image ||
-            imageResponse.data.profile_image ||
-            imageResponse.data.data?.profile_picture ||
-            imageResponse.data.profile_picture ||
+           
             imageResponse.data.picture ||
             null;
 
