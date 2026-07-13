@@ -489,7 +489,7 @@ const Header = ({ customerId }) => {
                 </div>
                 <div className="flex-1">
                   <p className="text-white font-semibold text-lg">
-                    {profileData?.first_name || localStorage.getItem("firstName") || "User"}
+                    {getDisplayName()}
                   </p>
                   <p className="text-blue-100 text-sm mt-1">ID: {customerId}</p>
                   <div className="flex items-center mt-2 space-x-2">
@@ -565,6 +565,27 @@ const Header = ({ customerId }) => {
     </AnimatePresence>
   );
 
+  const getDisplayName = useCallback(() => {
+    // If we have profile data
+    if (profileData) {
+      // If customer is an INSTITUTION, show the institution name
+      if (profileData.customer_type === "institution" && profileData.institution_name) {
+        return profileData.institution_name;
+      }
+
+      // If customer is INDIVIDUAL, show their first name
+      if (profileData.first_name &&
+        profileData.first_name !== "User" &&
+        profileData.first_name !== "undefined" &&
+        profileData.first_name !== "null") {
+        return profileData.first_name;
+      }
+    }
+
+    // Fallback - if nothing works, show "User"
+    return "User";
+  }, [profileData]);
+
   const ProfileSection = useMemo(() => {
     if (profileLoading && !profileData) {
       return (
@@ -575,18 +596,7 @@ const Header = ({ customerId }) => {
       );
     }
 
-    const displayName =
-      profileData?.first_name &&
-        profileData.first_name !== "User" &&
-        profileData.first_name !== "undefined" &&
-        profileData.first_name !== "null"
-        ? profileData.first_name
-        : localStorage.getItem("firstName") &&
-          localStorage.getItem("firstName") !== "User" &&
-          localStorage.getItem("firstName") !== "undefined" &&
-          localStorage.getItem("firstName") !== "null"
-          ? localStorage.getItem("firstName")
-          : "User";
+    const displayName = getDisplayName();
 
     const userRole =
       isStaffLogin === "1"
@@ -850,6 +860,7 @@ const Header = ({ customerId }) => {
     handleMouseEnter,
     handleMouseLeave,
     dispatch,
+    getDisplayName,
   ]);
 
   const LogoContent = useMemo(() => {
