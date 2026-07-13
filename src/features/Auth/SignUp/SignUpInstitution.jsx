@@ -127,7 +127,6 @@ import {
 } from "../slices/institutionRegistrationSlice";
 
 import {
-  // ... your existing imports ...
   sendEmailVerificationPasscode,
   validateEmailVerificationPasscode,
   selectEmailVerification,
@@ -139,6 +138,17 @@ import {
   clearEmailVerificationError,
   clearEmailVerificationSuccess,
   resetEmailVerification,
+  sendPhoneVerificationCode,
+  verifyPhoneVerificationCode,
+  selectPhoneVerification,
+  selectIsPhoneVerified,
+  selectShowPhoneVerificationInput,
+  selectIsPhoneSendingCode,
+  selectIsPhoneVerifying,
+  setPhoneVerificationField,
+  clearPhoneVerificationError,
+  resetPhoneVerification,
+  setPhoneVerified,
 } from "../slices/signupSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
@@ -498,6 +508,12 @@ const Institution = () => {
   const showVerificationInput = useSelector(selectShowVerificationInput);
   const isSendingCode = useSelector(selectIsSendingCode);
   const isVerifying = useSelector(selectIsVerifying);
+
+  const phoneVerification = useSelector(selectPhoneVerification);
+  const isPhoneVerified = useSelector(selectIsPhoneVerified);
+  const showPhoneVerificationInput = useSelector(selectShowPhoneVerificationInput);
+  const isPhoneSendingCode = useSelector(selectIsPhoneSendingCode);
+  const isPhoneVerifying = useSelector(selectIsPhoneVerifying);
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
@@ -955,6 +971,81 @@ const Institution = () => {
 
   const handleResendCode = (email) => {
     handleSendVerificationCode(email);
+  };
+
+  const handleSendPhoneVerificationCode = async (countryCode, mobileNumber, setFieldValue) => {
+    if (!mobileNumber) {
+      toast.error("Please enter your phone number first");
+      return;
+    }
+
+    const phoneRegex = /^[0-9]{7,15}$/;
+    if (!phoneRegex.test(mobileNumber.replace(/\s/g, ''))) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
+    if (!countryCode) {
+      toast.error("Please select a country code first");
+      return;
+    }
+
+    const partnerId = parseInt(localStorage.getItem("whitelabelledpartnerid"));
+
+    try {
+      const result = await dispatch(sendPhoneVerificationCode({
+        countryCode: countryCode,
+        mobileNumber: mobileNumber.replace(/\s/g, ''),
+        partnerId: partnerId 
+      }));
+
+      if (sendPhoneVerificationCode.fulfilled.match(result)) {
+        toast.success("Verification code sent to your phone!");
+      } else {
+        toast.error(result.payload || "Failed to send verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to send verification code");
+    }
+  };
+
+  const handleVerifyPhoneCode = async (mobileNumber, countryCode, setFieldValue) => {
+    const code = phoneVerification.verificationCode;
+
+    if (!code || code.length !== 6) {
+      toast.error("Please enter a valid 6-digit verification code");
+      return;
+    }
+
+    try {
+      const result = await dispatch(verifyPhoneVerificationCode({
+        countryCode: countryCode,
+        mobileNumber: mobileNumber.replace(/\s/g, ''),
+        otpCode: code
+      }));
+
+      if (verifyPhoneVerificationCode.fulfilled.match(result)) {
+        toast.success("Phone number verified successfully!");
+        dispatch(setPhoneVerificationField({ field: "verificationCode", value: "" }));
+        setFieldValue("phone_verified", true);
+      } else {
+        toast.error(result.payload || "Invalid verification code");
+      }
+    } catch (error) {
+      toast.error("Failed to verify phone number");
+    }
+  };
+
+  const handlePhoneVerificationCodeChange = (e) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    dispatch(setPhoneVerificationField({ field: "verificationCode", value }));
+    if (phoneVerification.error) {
+      dispatch(clearPhoneVerificationError());
+    }
+  };
+
+  const handleResendPhoneCode = (countryCode, mobileNumber) => {
+    handleSendPhoneVerificationCode(countryCode, mobileNumber);
   };
 
   useEffect(() => {
@@ -1626,12 +1717,12 @@ const Institution = () => {
             "controller_doc_type",
             "controller_doc_id",
             "controller_doc_country",
-            "director_role_id",              
-            "percentage_of_shares",          
-            "controllerHouseNumber",        
-            "has_nominees",                  
-            "nominee_first_name",            
-            "nominee_middle_name",           
+            "director_role_id",
+            "percentage_of_shares",
+            "controllerHouseNumber",
+            "has_nominees",
+            "nominee_first_name",
+            "nominee_middle_name",
             "nominee_last_name",
           );
 
@@ -1918,6 +2009,12 @@ const Institution = () => {
 
         if (currentStep === 2 && !isResponsiblePersonEmailVerified) {
           dispatch(setErrorMessage("Please verify your email address before proceeding"));
+          dispatch(setShowPopup(true));
+          return;
+        }
+
+        if (currentStep === 2 && !isPhoneVerified) {
+          dispatch(setErrorMessage("Please verify your phone number before proceeding"));
           dispatch(setShowPopup(true));
           return;
         }
@@ -2268,7 +2365,7 @@ const Institution = () => {
             ? JSON.stringify(finalFormData.countries_to_receive_funds_from)
             : "",
 
-            countries_to_send_funds_to: finalFormData.countries_to_send_funds_to?.length  // ADD THIS
+          countries_to_send_funds_to: finalFormData.countries_to_send_funds_to?.length  // ADD THIS
             ? JSON.stringify(finalFormData.countries_to_send_funds_to)
             : "",
 
@@ -6305,75 +6402,219 @@ const Institution = () => {
                           showPhoneCode={false}
                         />
 
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Phone Number <span className="text-red-500">*</span>
-                          </label>
-                          <div className="flex space-x-3">
-                            <div className="w-1/2 min-w-[180px]">
-                              <CustomSelect
-                                id="mobilenumber_countrycode"
-                                label="Country Code"
-                                options={countryOptions}
-                                value={countryOptions.find(
-                                  (opt) => opt.value === values.mobilenumber_country
+                        {/* Phone Number with Verification */}
+                        <div className="md:col-span-2">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Phone Number <span className="text-red-500">*</span>
+                            </label>
+
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                              {/* Country Code */}
+                              <div>
+                                <CustomSelect
+                                  id="mobilenumber_countrycode"
+                                  label="Country Code"
+                                  options={countryOptions}
+                                  value={countryOptions.find(
+                                    (opt) => opt.value === values.mobilenumber_country
+                                  )}
+                                  onChange={(option) => {
+                                    if (option) {
+                                      const phoneCode =
+                                        option.phoneCode || option.phone_code || "";
+                                      setFieldValue(
+                                        "mobilenumber_countrycode",
+                                        phoneCode
+                                      );
+                                      setFieldValue(
+                                        "mobilenumber_country",
+                                        option.value
+                                      );
+                                      dispatch(
+                                        setFormField({
+                                          field: "mobilenumber_countrycode",
+                                          value: phoneCode,
+                                        })
+                                      );
+                                      dispatch(
+                                        setFormField({
+                                          field: "mobilenumber_country",
+                                          value: option.value,
+                                        })
+                                      );
+
+                                      if (isPhoneVerified) {
+                                        dispatch(resetPhoneVerification());
+                                        setFieldValue("phone_verified", false);
+                                      }
+                                    }
+                                  }}
+                                  onBlur={handleBlur}
+                                  touched={touched.mobilenumber_countrycode}
+                                  error={errors.mobilenumber_countrycode}
+                                  required
+                                  isLoading={countriesLoading}
+                                  isCountryField={true}
+                                  showPhoneCode={true}
+                                />
+                              </div>
+
+                              {/* Phone + Verify */}
+                              <div className="flex gap-2 items-end md:col-span-2 md:col-start-2 md:row-start-1">
+                                <div className="flex-1">
+                                  <FormField
+                                    id="mobile_number"
+                                    label="Phone Number"
+                                    name="mobile_number"
+                                    value={values.mobile_number || ""}
+                                    onChange={(e) => {
+                                      enhancedHandleChange(
+                                        "mobile_number",
+                                        setFieldValue
+                                      )(e);
+
+                                      if (isPhoneVerified) {
+                                        dispatch(resetPhoneVerification());
+                                        setFieldValue("phone_verified", false);
+                                      }
+                                    }}
+                                    onBlur={handleBlur}
+                                    onFocus={() => setActiveField("mobile_number")}
+                                    touched={touched.mobile_number}
+                                    error={errors.mobile_number}
+                                    required
+                                    activeField={activeField}
+                                    placeholder="e.g., 1234567890"
+                                    fieldStyles={FIELD_STYLES}
+                                  />
+                                </div>
+
+                                {!isPhoneVerified ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleSendPhoneVerificationCode(
+                                        values.mobilenumber_countrycode,
+                                        values.mobile_number,
+                                        setFieldValue
+                                      )
+                                    }
+                                    disabled={
+                                      isPhoneSendingCode ||
+                                      !values.mobile_number ||
+                                      errors.mobile_number
+                                    }
+                                    className={`mt-6 px-4 py-3 rounded-lg whitespace-nowrap font-medium ${isPhoneSendingCode ||
+                                        !values.mobile_number ||
+                                        errors.mobile_number
+                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                        : "bg-blue-600 text-white hover:bg-blue-700"
+                                      }`}
+                                  >
+                                    {isPhoneSendingCode ? (
+                                      <div className="flex items-center gap-2">
+                                        <RingLoader size={16} color="#fff" />
+                                        <span>Sending...</span>
+                                      </div>
+                                    ) : (
+                                      "Verify"
+                                    )}
+                                  </button>
+                                ) : (
+                                  <div className="mt-6 px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="text-green-600"
+                                    />
+                                    <span>Verified</span>
+                                  </div>
                                 )}
-                                onChange={(option) => {
-                                  if (option) {
-                                    const phoneCode =
-                                      option.phoneCode || option.phone_code || "";
-
-                                    setFieldValue("mobilenumber_countrycode", phoneCode);
-
-                                    // NEW
-                                    setFieldValue("mobilenumber_country", option.value);
-
-                                    dispatch(
-                                      setFormField({
-                                        field: "mobilenumber_countrycode",
-                                        value: phoneCode,
-                                      })
-                                    );
-
-                                    dispatch(
-                                      setFormField({
-                                        field: "mobilenumber_country",
-                                        value: option.value,
-                                      })
-                                    );
-                                  }
-                                }}
-                                onBlur={handleBlur}
-                                touched={touched.mobilenumber_countrycode}
-                                error={errors.mobilenumber_countrycode}
-                                required
-                                isLoading={countriesLoading}
-                                isCountryField={true}
-                                showPhoneCode={true}
-                              />
+                              </div>
                             </div>
-                            <div className="w-1/2">
-                              <FormField
-                                id="mobile_number"
-                                label="Phone Number"
-                                name="mobile_number"
-                                value={values.mobile_number || ""}
-                                onChange={enhancedHandleChange(
-                                  "mobile_number",
-                                  setFieldValue,
-                                )}
-                                onBlur={handleBlur}
-                                onFocus={() => setActiveField("mobile_number")}
-                                touched={touched.mobile_number}
-                                error={errors.mobile_number}
-                                required
-                                activeField={activeField}
-                                placeholder="e.g., 1234567890"
-                                fieldStyles={FIELD_STYLES}
-                              />
-                            </div>
+
+                            {touched.mobile_number &&
+                              errors.mobile_number &&
+                              !isPhoneVerified && (
+                                <div className="text-red-500 text-xs mt-1 flex items-center">
+                                  <FontAwesomeIcon
+                                    icon={faInfoCircle}
+                                    className="mr-1 w-3 h-3"
+                                  />
+                                  {errors.mobile_number}
+                                </div>
+                              )}
                           </div>
                         </div>
+                        {/* Verification Code Input */}
+                        {showPhoneVerificationInput && !isPhoneVerified && (
+                          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Enter Verification Code
+                            </label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={phoneVerification?.verificationCode || ""}
+                                  onChange={handlePhoneVerificationCodeChange}
+                                  placeholder="Enter 6-digit code"
+                                  maxLength={6}
+                                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyPhoneCode(
+                                  values.mobile_number,
+                                  values.mobilenumber_countrycode,
+                                  setFieldValue
+                                )}
+                                disabled={isPhoneVerifying || !phoneVerification?.verificationCode || phoneVerification?.verificationCode?.length !== 6}
+                                className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                              >
+                                {isPhoneVerifying ? (
+                                  <div className="flex items-center gap-2">
+                                    <RingLoader size={16} color="#ffffff" />
+                                    <span>Verifying...</span>
+                                  </div>
+                                ) : (
+                                  'Submit'
+                                )}
+                              </button>
+                            </div>
+
+                            <div className="mt-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleResendPhoneCode(
+                                  values.mobilenumber_countrycode,
+                                  values.mobile_number
+                                )}
+                                disabled={isPhoneSendingCode}
+                                className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isPhoneSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                              </button>
+                            </div>
+
+                            {phoneVerification?.error && (
+                              <p className="text-red-500 text-xs mt-3 flex items-center">
+                                <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                                {typeof phoneVerification.error === 'string'
+                                  ? phoneVerification.error
+                                  : phoneVerification.error?.message || 'Verification failed'}
+                              </p>
+                            )}
+
+                            {phoneVerification?.success && !isPhoneVerified && (
+                              <p className="text-green-600 text-xs mt-3 flex items-center">
+                                <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                                {phoneVerification.success}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Nationality and Gender on same row */}
