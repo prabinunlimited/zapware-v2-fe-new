@@ -2010,40 +2010,37 @@ const Remittance = () => {
 
   useEffect(() => {
     console.log("📍 Remittance location state:", location.state);
-
+  
+    // Handle returning from Add Beneficiary with a new beneficiary (either newly created OR existing added)
     if (location.state?.newBeneficiary && location.state?.returnToStep === 2) {
-      console.log("🔄 Returning from Add Beneficiary with new beneficiary:", location.state.newBeneficiary);
-
+      console.log("🔄 Returning from Add Beneficiary with beneficiary:", location.state.newBeneficiary);
+  
       const wasRestored = restoreRemittanceState();
       console.log("📊 State restored:", wasRestored);
-
+  
       const newBeneficiary = location.state.newBeneficiary;
-
+  
       if (newBeneficiary && newBeneficiary.id) {
         if (step !== 2) {
           console.log("📌 Setting step to 2");
           dispatch(setStep(2));
         }
-
-        const customerIdForFetch =
-          customerId || localStorage.getItem("customerId");
-
+  
+        const customerIdForFetch = customerId || localStorage.getItem("customerId") || "1720";
+  
         // Force a refetch so Redux's `beneficiaries` array includes the
-        // newly created beneficiary with its full record.
+        // newly added/created beneficiary with its full record.
         dispatch(fetchBeneficiaries(customerIdForFetch));
-
-        // Don't select here — mark it pending. A separate effect below
-        // watches the Redux `beneficiaries` array (the exact same array
-        // that powers the dropdown) and selects the full record the
-        // moment it appears there.
+  
+        // Mark it pending for selection
         setPendingNewBeneficiaryId(newBeneficiary.id);
-        
-
+  
         // Clear the location state to prevent re-selection on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
-
+  
+    // Handle returning from Add Beneficiary cancellation
     if (location.state?.from === "remittance" && !location.state?.newBeneficiary) {
       console.log("🔄 Returning from Add Beneficiary cancellation");
       
