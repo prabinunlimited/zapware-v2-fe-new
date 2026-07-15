@@ -2877,7 +2877,7 @@ function SignUpIndividualContent() {
                       className="block text-sm font-medium text-gray-700 mb-2.5"
                     >
                       ZIP/Postal Code *
-                      
+
                     </label>
                     <div className="relative">
                       <input
@@ -3468,8 +3468,11 @@ function SignUpIndividualContent() {
                           } shadow-sm`}
                       >
                         <option value="">-- Select ID Document Type --</option>
-                        {idDocumentTypes.map((docType) => (
-                          <option key={docType.name} value={docType.name}>
+                        {idDocumentTypes.map((docType, index) => (
+                          <option
+                            key={docType.id ?? `${docType.name}-${index}`}
+                            value={docType.name}
+                          >
                             {docType.name}
                           </option>
                         ))}
