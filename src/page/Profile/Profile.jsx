@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from "react-redux";
 import axios from "axios";
 import { RingLoader } from "react-spinners";
 import Select from "react-select";
+import { createPortal } from "react-dom";
 import {
   FaUser,
   FaEnvelope,
@@ -23,6 +24,8 @@ import {
   FaBusinessTime,
   FaCamera,
   FaSpinner,
+  FaChevronRight,
+  FaChevronLeft
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -44,6 +47,7 @@ import {
 
 // Import countries selectors
 import { selectCountries, selectCountriesLoading } from "../../features/Auth/slices/countrySlice";
+import { setOwnerDetails } from "../../features/Auth/slices/authSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -175,10 +179,65 @@ const Profile = () => {
   });
   const [toast, setToast] = useState(null);
 
+  const [ownerDetails, setOwnerDetails] = useState(null);
+
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [showDocumentDropdown, setShowDocumentDropdown] = useState(false);
+  const [selectedDocumentType, setSelectedDocumentType] = useState(null);
+  const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+
   // Check if account type is individual
   const isIndividualAccount = useMemo(() => {
     return profileData?.customer_type?.toLowerCase() === "individual";
   }, [profileData?.customer_type]);
+
+  // Define tabs based on account type - HIDE specified tabs for individual accounts
+  const getAvailableTabs = () => {
+    if (isIndividualAccount) {
+      // For individual accounts, only show Owner Details and Uploaded Documents
+      return [];
+    }
+    // For non-individual accounts, show all tabs
+    return [
+      "Business Information",
+      "Responsible Person",
+      "Office Controllers",
+      "Owner Details",
+      "Uploaded Documents",
+    ];
+  };
+
+  const availableTabs = getAvailableTabs();
+
+  const tabScrollRef = React.useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabScroll = () => {
+    const el = tabScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    checkTabScroll();
+    const el = tabScrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", checkTabScroll);
+    window.addEventListener("resize", checkTabScroll);
+    return () => {
+      el.removeEventListener("scroll", checkTabScroll);
+      window.removeEventListener("resize", checkTabScroll);
+    };
+  }, [availableTabs]);
+
+  const scrollTabs = (dir) => {
+    const el = tabScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * 150, behavior: "smooth" });
+  };
 
   // Auto-close modal after delay
   useEffect(() => {
@@ -363,7 +422,7 @@ const Profile = () => {
           console.log("📸 KYC Image response:", imageResponse.data);
 
           const pictureUrl = imageResponse.data.data?.profile_image ||
-           
+
             imageResponse.data.picture ||
             null;
 
@@ -405,6 +464,7 @@ const Profile = () => {
     }
   }, [profileData, customerId, authtoken, bearertoken]);
   // Fetch tab data when tab changes - ONLY for non-individual accounts
+  // Fetch tab data when tab changes - ONLY for non-individual accounts
   useEffect(() => {
     const fetchTabData = async () => {
       // Don't fetch ANY tab data for individual accounts
@@ -413,43 +473,55 @@ const Profile = () => {
         return;
       }
 
-      if (!uuid || !authtoken) return;
+      // Get customerUuid from localStorage
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid || !authtoken) {
+        console.log("❌ Profile: Missing customerUuid or authtoken", {
+          customerUuid: !!customerUuid,
+          authtoken: !!authtoken
+        });
+        return;
+      }
 
       try {
         setTabLoading(true);
-        console.log(`📊 Profile: Fetching ${activeTab} data`);
+        console.log(`📊 Profile: Fetching ${activeTab} data for customerUuid: ${customerUuid}`);
 
         let response;
         let endpoint = "";
 
         switch (activeTab) {
           case "Business Information":
-            endpoint = `${API_URL}/customers/business-information/${uuid}`;
+            endpoint = `${API_URL}/customers/business-information/${customerUuid}`;
             response = await axios.get(endpoint, {
               headers: { Authorization: `Bearer ${authtoken}` },
             });
             setBusinessInfo(response.data);
             break;
           case "Responsible Person":
-            endpoint = `${API_URL}/customers/responsible-person/${uuid}`;
+            endpoint = `${API_URL}/customers/responsible-person/${customerUuid}`;
             response = await axios.get(endpoint, {
               headers: { Authorization: `Bearer ${authtoken}` },
             });
             setResponsiblePerson(response.data);
             break;
           case "Office Controllers":
-            endpoint = `${API_URL}/customers/office-controllers/${uuid}`;
+            endpoint = `${API_URL}/customers/office-controllers/${customerUuid}`;
             response = await axios.get(endpoint, {
               headers: { Authorization: `Bearer ${authtoken}` },
             });
             setOfficeControllers(response.data);
             break;
           case "Owner Details":
-            // Add your Owner Details API endpoint here if needed
-            console.log("👑 Profile: Owner Details tab selected");
+            endpoint = `${API_URL}/customers/owner-details/${customerUuid}`;
+            response = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${authtoken}` },
+            });
+            setOwnerDetails(response.data);
             break;
           case "Uploaded Documents":
-            endpoint = `${API_URL}/customers/uploaded-documents/${uuid}`;
+            endpoint = `${API_URL}/customers/uploaded-documents/${customerUuid}`;
             response = await axios.get(endpoint, {
               headers: { Authorization: `Bearer ${authtoken}` },
             });
@@ -462,13 +534,14 @@ const Profile = () => {
         console.log(`✅ Profile: ${activeTab} data fetched successfully`);
       } catch (err) {
         console.error(`❌ Profile: Failed to fetch ${activeTab} data`, err);
+        // Optionally set error state or show toast notification
       } finally {
         setTabLoading(false);
       }
     };
 
     fetchTabData();
-  }, [activeTab, uuid, authtoken, isIndividualAccount]);
+  }, [activeTab, authtoken, isIndividualAccount]); // Remove uuid from dependencies since we get it inside
 
   // Initialize editableData when profileData changes
   useEffect(() => {
@@ -839,7 +912,6 @@ const Profile = () => {
     }
   };
 
-
   // Verify OTP and update mobile number
   const handleVerifyOtp = async () => {
     if (!otpCode || otpCode.length !== 6) {
@@ -1205,6 +1277,139 @@ const Profile = () => {
     }
   };
 
+  // Fetch document types for dropdown
+  const fetchDocumentTypes = async () => {
+    try {
+      console.log("📄 Fetching document types...");
+      const response = await axios.get(`${API_URL}/institution-upload-document-types`, {
+        headers: { Authorization: `Bearer ${authtoken}` },
+      });
+
+      console.log("📄 Document types response:", response.data);
+
+      // The response is directly the array of document types
+      if (Array.isArray(response.data)) {
+        setDocumentTypes(response.data);
+        console.log("✅ Document types loaded:", response.data.length, "types");
+      } else if (response.data.status === "success" && Array.isArray(response.data.data)) {
+        setDocumentTypes(response.data.data);
+        console.log("✅ Document types loaded:", response.data.data.length, "types");
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch document types:", err);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || "Failed to fetch document types. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    }
+  };
+
+  // Handle document upload
+  const handleDocumentUpload = async () => {
+    // Validate selections
+    if (!selectedDocumentType) {
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: "Please select a document type.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    if (!selectedFile) {
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: "Please select a file to upload.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setDocumentUploadLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('customerUuid', customerUuid);
+      formData.append('documentTypeId', selectedDocumentType.id);
+      formData.append('document', selectedFile);
+
+      console.log("📄 Uploading document:", {
+        customerUuid,
+        documentTypeId: selectedDocumentType.id,
+        documentTypeName: selectedDocumentType.name || selectedDocumentType.document_type,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type
+      });
+
+      // Make API call
+      const response = await axios.post(
+        `${API_URL}/customers/add-document`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${authtoken}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      console.log("📄 Upload response:", response.data);
+
+      if (response.data.status === "success") {
+        // Refresh the uploaded documents list
+        const refreshResponse = await axios.get(
+          `${API_URL}/customers/uploaded-documents/${customerUuid}`,
+          { headers: { Authorization: `Bearer ${authtoken}` } }
+        );
+        setUploadedDocuments(refreshResponse.data);
+
+        // Show success message
+        setModalData({
+          isOpen: true,
+          title: "Success",
+          message: "Document uploaded successfully!",
+          type: "success",
+        });
+        setIsModalOpen(true);
+
+        // Reset form
+        setShowDocumentDropdown(false);
+        setSelectedDocumentType(null);
+        setSelectedFile(null);
+      } else {
+        throw new Error(response.data.message || "Failed to upload document");
+      }
+    } catch (err) {
+      console.error("❌ Failed to upload document:", err);
+      setModalData({
+        isOpen: true,
+        title: "Upload Failed",
+        message: err.response?.data?.message || err.message || "Failed to upload document. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setDocumentUploadLoading(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
       console.error("❌ Profile: Missing auth token or customer ID for save");
@@ -1465,24 +1670,6 @@ const Profile = () => {
 
   // Use profile data from Redux with fallbacks
   const displayProfileData = profileData || defaultProfileData;
-
-  // Define tabs based on account type - HIDE specified tabs for individual accounts
-  const getAvailableTabs = () => {
-    if (isIndividualAccount) {
-      // For individual accounts, only show Owner Details and Uploaded Documents
-      return [];
-    }
-    // For non-individual accounts, show all tabs
-    return [
-      "Business Information",
-      "Responsible Person",
-      "Office Controllers",
-      "Owner Details",
-      "Uploaded Documents",
-    ];
-  };
-
-  const availableTabs = getAvailableTabs();
 
   const renderTabContent = () => {
     // If no tabs are available (individual account), show appropriate message
@@ -1868,6 +2055,161 @@ const Profile = () => {
                       transition={{ delay: index * 0.1 }}
                       className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
                     >
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+                        <h4 className="text-lg font-semibold text-[#005481]">
+                          Controller {index + 1}
+                        </h4>
+                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Name:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.first_name && controller.last_name
+                              ? `${controller.first_name} ${controller.last_name}`.trim()
+                              : controller.name || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Email:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 break-words">
+                            {controller.email || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Position:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.designation || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Date of Birth:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.dob || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Gender:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.gendername || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Country:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.country_name || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            City:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.city || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Address:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.street_address_1 || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Nationality:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.nationality_name || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[100px]">
+                            Resident Country:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {controller.residentcountry_name || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+                >
+                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FaUsers className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-600 mb-2">
+                    No office controllers added
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Add office controllers to your business profile
+                  </p>
+                </motion.div>
+              )
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+              >
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaUsers className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600 mb-2">
+                  No office controllers information
+                </p>
+                <p className="text-sm text-gray-500">
+                  Please complete the office controllers details
+                </p>
+              </motion.div>
+            )}
+          </div>
+        );
+        return (
+          <div className="w-full space-y-6 md:space-y-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
+                Office Controllers
+              </h3>
+              {officeControllers &&
+                Array.isArray(officeControllers.data) &&
+                officeControllers.data.length > 0 && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    {officeControllers.data.length} Controllers
+                  </span>
+                )}
+            </div>
+
+            {officeControllers && Array.isArray(officeControllers.data) ? (
+              officeControllers.data.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {officeControllers.data.map((controller, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
+                    >
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-lg font-semibold text-[#005481]">
                           Controller {index + 1}
@@ -1943,6 +2285,141 @@ const Profile = () => {
       case "Owner Details":
         return (
           <div className="w-full space-y-6 md:space-y-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
+                Owner Details
+              </h3>
+              {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
+                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                  {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
+                </span>
+              )}
+            </div>
+
+            {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {ownerDetails.data.map((owner, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+                      <h4 className="text-lg font-semibold text-[#005481]">
+                        Owner {index + 1}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                          {owner.ownership_percentage}%
+                        </span>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Full Name:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.name || `${owner.first_name} ${owner.last_name}`.trim() || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Email:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.email || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Phone:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.mobile_number ? `${owner.mobile_number_country_code || ''} ${owner.mobile_number}` : "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Date of Birth:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.dob || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Country:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.country_name || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Owner Type:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 capitalize">
+                          {owner.owner_type || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          KYC Status:
+                        </span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${owner.kyc_status === 1
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                          }`}>
+                          {owner.kyc_status === 1 ? "Verified" : "Pending"}
+                        </span>
+                      </div>
+
+                      {owner.needs_access_to_system === 1 && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            System Access:
+                          </span>
+                          <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                            Enabled
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+              >
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaUser className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600 mb-2">
+                  No owner details available
+                </p>
+                <p className="text-sm text-gray-500">
+                  Please complete the owner details
+                </p>
+              </motion.div>
+            )}
+          </div>
+        );
+        return (
+          <div className="w-full space-y-6 md:space-y-8">
             <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide mb-4">
               Owner Details
             </h3>
@@ -1981,63 +2458,272 @@ const Profile = () => {
 
       case "Uploaded Documents":
         return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
-                Uploaded Documents
-              </h3>
-              {uploadedDocuments &&
-                Array.isArray(uploadedDocuments.data) &&
-                uploadedDocuments.data.length > 0 && (
-                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                    {uploadedDocuments.data.length} Documents
-                  </span>
+          <div className="w-full space-y-4 sm:space-y-6 md:space-y-8">
+            {/* Header with Add Document Button */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <h3 className="text-base sm:text-xl md:text-2xl font-semibold text-[#005481] tracking-wide">
+                  Uploaded Documents
+                </h3>
+                {uploadedDocuments &&
+                  Array.isArray(uploadedDocuments.data) &&
+                  uploadedDocuments.data.length > 0 && (
+                    <span className="text-xs sm:text-sm text-green-600 bg-green-100 px-2 sm:px-3 py-1 rounded-full whitespace-nowrap">
+                      {uploadedDocuments.data.length} Documents
+                    </span>
+                  )}
+              </div>
+
+              {/* Add Document Button - Mobile Responsive */}
+              <div className="relative w-full sm:w-auto">
+                <motion.button
+                  onClick={() => {
+                    if (!showDocumentDropdown) {
+                      fetchDocumentTypes();
+                    }
+                    setShowDocumentDropdown(!showDocumentDropdown);
+                    if (showDocumentDropdown) {
+                      setSelectedDocumentType(null);
+                      setSelectedFile(null);
+                    }
+                  }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`${headerColorProps.className} text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all w-full sm:w-auto text-sm sm:text-base`}
+                  style={headerColorProps.style}
+                >
+                  <FaFileAlt className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span>Add Document</span>
+                  <svg
+                    className={`w-3 h-3 sm:w-4 sm:h-4 transition-transform ${showDocumentDropdown ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </motion.button>
+
+                {/* Dropdown Menu - Mobile Optimized */}
+                {showDocumentDropdown && (
+                  <>
+                    {/* Backdrop for mobile */}
+                    <div
+                      className="fixed inset-0 bg-black bg-opacity-50 z-40 sm:hidden"
+                      onClick={() => {
+                        setShowDocumentDropdown(false);
+                        setSelectedDocumentType(null);
+                        setSelectedFile(null);
+                      }}
+                    ></div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      className="fixed sm:absolute bottom-0 sm:bottom-auto left-0 sm:left-auto right-0 sm:right-0 w-full sm:w-96 bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[90vh] sm:max-h-[500px]"
+                    >
+                      {/* Mobile Handle Bar */}
+                      <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-1 sm:hidden"></div>
+
+                      {/* Close button for mobile */}
+                      <button
+                        onClick={() => {
+                          setShowDocumentDropdown(false);
+                          setSelectedDocumentType(null);
+                          setSelectedFile(null);
+                        }}
+                        className="absolute top-3 right-3 p-1.5 hover:bg-gray-100 rounded-full transition-colors sm:hidden"
+                      >
+                        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+
+                      <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-60px)] sm:max-h-[450px]">
+                        <h4 className="text-base sm:text-lg font-semibold text-gray-800 mb-4 pr-8 sm:pr-0">
+                          Upload New Document
+                        </h4>
+
+                        {/* Document Type Selection */}
+                        <div className="mb-4">
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                            Document Type *
+                          </label>
+                          <select
+                            value={selectedDocumentType?.id || ''}
+                            onChange={(e) => {
+                              const selected = documentTypes.find(
+                                type => type.id === parseInt(e.target.value)
+                              );
+                              setSelectedDocumentType(selected || null);
+                            }}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          >
+                            <option value="">Select document type</option>
+                            {documentTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                          {documentTypes.length === 0 && (
+                            <p className="text-xs text-gray-400 mt-1.5">
+                              Loading document types...
+                            </p>
+                          )}
+                          {documentTypes.length > 0 && (
+                            <p className="text-xs text-gray-400 mt-1.5">
+                              {documentTypes.length} document types available
+                            </p>
+                          )}
+                        </div>
+
+                        {/* File Upload */}
+                        <div className="mb-4">
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                            File *
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="file"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    setModalData({
+                                      isOpen: true,
+                                      title: "File Too Large",
+                                      message: "Please upload a file smaller than 10MB.",
+                                      type: "error",
+                                    });
+                                    setIsModalOpen(true);
+                                    e.target.value = '';
+                                    return;
+                                  }
+                                  setSelectedFile(file);
+                                }
+                              }}
+                              className="w-full text-xs sm:text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-1.5 sm:file:py-2 file:px-3 sm:file:px-4 file:rounded-lg file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            />
+                          </div>
+                          {selectedFile && (
+                            <p className="text-xs text-green-600 mt-1.5 truncate">
+                              Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Supported formats hint */}
+                        <p className="text-xs text-gray-400 mb-4">
+                          Supported: PDF, JPG, PNG, DOC, DOCX (Max 10MB)
+                        </p>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end">
+                          <button
+                            onClick={() => {
+                              setShowDocumentDropdown(false);
+                              setSelectedDocumentType(null);
+                              setSelectedFile(null);
+                            }}
+                            className="px-4 py-2.5 sm:py-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors w-full sm:w-auto"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleDocumentUpload}
+                            disabled={!selectedDocumentType || !selectedFile || documentUploadLoading}
+                            className={`px-4 py-2.5 sm:py-2 text-sm text-white rounded-lg transition-colors flex items-center justify-center gap-2 w-full sm:w-auto ${!selectedDocumentType || !selectedFile || documentUploadLoading
+                              ? 'opacity-50 cursor-not-allowed bg-gray-400'
+                              : headerColorProps.className
+                              }`}
+                            style={!selectedDocumentType || !selectedFile || documentUploadLoading ? {} : headerColorProps.style}
+                          >
+                            {documentUploadLoading ? (
+                              <>
+                                <RingLoader size={16} color="#ffffff" />
+                                <span>Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FaCheckCircle className="w-4 h-4" />
+                                <span>Upload</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </>
                 )}
+              </div>
             </div>
 
+            {/* Document List - Mobile Responsive Grid */}
             {uploadedDocuments && Array.isArray(uploadedDocuments.data) ? (
               uploadedDocuments.data.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {uploadedDocuments.data.map((doc, index) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
+                      className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
                     >
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-semibold text-[#005481]">
-                          {doc.documenttype || `Document ${index + 1}`}
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                        <h4 className="text-sm sm:text-base font-semibold text-[#005481] truncate flex-1 mr-2">
+                          {doc.documenttype || doc.document_type || doc.name || `Document ${index + 1}`}
                         </h4>
-                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors flex-shrink-0"></div>
                       </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
+
+                      <div className="space-y-2 sm:space-y-3">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">
                             Type:
                           </span>
-                          <span className="text-sm font-medium text-gray-800">
-                            {doc.documenttype || "N/A"}
+                          <span className="text-xs sm:text-sm font-medium text-gray-800 text-right break-words flex-1">
+                            {doc.documenttype || doc.document_type || doc.type || "N/A"}
                           </span>
                         </div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
+
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">
                             Uploaded:
                           </span>
-                          <span className="text-sm font-medium text-gray-800">
-                            {doc.uploaded_date || "N/A"}
+                          <span className="text-xs sm:text-sm font-medium text-gray-800 text-right break-words flex-1">
+                            {doc.uploaded_date || doc.created_at || doc.upload_date || "N/A"}
                           </span>
                         </div>
+
+                        {doc.status && (
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">
+                              Status:
+                            </span>
+                            <span className={`text-xs sm:text-sm font-medium px-2 py-0.5 rounded-full ${doc.status === 'approved' || doc.status === 'verified'
+                              ? 'bg-green-100 text-green-800'
+                              : doc.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                              }`}>
+                              {doc.status}
+                            </span>
+                          </div>
+                        )}
+
                         {doc.file_path && (
                           <div className="pt-2">
                             <a
                               href={doc.file_path}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                              className="inline-flex items-center text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium transition-colors"
                             >
-                              <FaFileAlt className="w-4 h-4 mr-1" />
+                              <FaFileAlt className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                               View Document
                             </a>
                           </div>
@@ -2050,16 +2736,16 @@ const Profile = () => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+                  className="text-center py-8 sm:py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
                 >
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaFileAlt className="w-8 h-8 text-gray-400" />
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                    <FaFileAlt className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                   </div>
-                  <p className="text-gray-600 mb-2">
+                  <p className="text-sm sm:text-base text-gray-600 mb-1 sm:mb-2">
                     No documents uploaded yet
                   </p>
-                  <p className="text-sm text-gray-500">
-                    Upload documents to complete your profile
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    Click the "Add Document" button to upload files
                   </p>
                 </motion.div>
               )
@@ -2067,20 +2753,19 @@ const Profile = () => {
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+                className="text-center py-8 sm:py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
               >
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaFileAlt className="w-8 h-8 text-gray-400" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <FaFileAlt className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                 </div>
-                <p className="text-gray-600 mb-2">No documents information</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm sm:text-base text-gray-600 mb-1 sm:mb-2">No documents information</p>
+                <p className="text-xs sm:text-sm text-gray-500">
                   Please upload required documents
                 </p>
               </motion.div>
             )}
           </div>
         );
-
       default:
         return (
           <div className="text-center py-12">
@@ -2168,15 +2853,16 @@ const Profile = () => {
           <button onClick={() => setToast(null)} className="ml-4 opacity-70 hover:opacity-100">✕</button>
         </div>
       )}
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <PopupModal
+          isOpen={isModalOpen}
           title={modalData.title}
           message={modalData.message}
           type={modalData.type}
           onClose={() => setIsModalOpen(false)}
-        />
+        />,
+        document.body
       )}
-
       {/* Change Email/Mobile Modal */}
       {isChangeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -2997,15 +3683,31 @@ const Profile = () => {
 
               {/* Tabs Section - Show different tabs based on account type */}
               {availableTabs.length > 0 && (
-                <div className="bg-white rounded-xl shadow-md p-6">
-                  <div className="border-b border-gray-200">
-                    <div className="flex overflow-x-auto scrollbar-hide -mb-px">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                  <div className="relative border-b border-gray-200">
+                    {/* Left arrow — desktop and mobile, only when scrolled right */}
+                    {canScrollLeft && (
+                      <button
+                        onClick={() => scrollTabs(-1)}
+                        className="absolute left-0 top-0 bottom-1 z-10 flex items-center bg-gradient-to-r from-white via-white to-transparent pr-4 pl-0.5"
+                        aria-label="Scroll tabs left"
+                      >
+                        <FaChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                      </button>
+                    )}
+
+                    <div
+                      ref={tabScrollRef}
+                      className="tab-scroll flex gap-4 sm:gap-6 overflow-x-auto -mb-px"
+                      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                    >
+                      <style>{`.tab-scroll::-webkit-scrollbar{display:none}`}</style>
                       {availableTabs.map((tab) => (
                         <motion.button
                           key={tab}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
+                          className={`flex-shrink-0 whitespace-nowrap px-1 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${activeTab === tab
                             ? "border-blue-500 text-blue-600"
                             : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                             }`}
@@ -3015,7 +3717,25 @@ const Profile = () => {
                         </motion.button>
                       ))}
                     </div>
+
+                    {/* Right arrow — desktop and mobile, only when there's more to scroll to */}
+                    {canScrollRight && (
+                      <button
+                        onClick={() => scrollTabs(1)}
+                        className="absolute right-0 top-0 bottom-1 z-10 flex items-center bg-gradient-to-l from-white via-white to-transparent pl-4 pr-0.5"
+                        aria-label="Scroll tabs right"
+                      >
+                        <FaChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                      </button>
+                    )}
                   </div>
+
+                  {/* Mobile-only swipe hint — shows only while there's more content to the right */}
+                  {canScrollRight && (
+                    <p className="mt-1.5 text-[11px] text-gray-400 flex items-center gap-1 sm:hidden">
+                      Swipe to see more <FaChevronRight className="w-2 h-2" />
+                    </p>
+                  )}
 
                   {/* Tab Content */}
                   <div className="mt-4">{renderTabContent()}</div>

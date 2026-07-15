@@ -1949,7 +1949,7 @@ const Remittance = () => {
     };
 
     const stateToSave = {
-      step,
+      step: step,
       sendAmount: formData.sendAmount,
       receiveAmount: formData.receiveAmount,
       sendCurrency: sanitizeOption(formData.sendCurrency),
@@ -2026,7 +2026,7 @@ const Remittance = () => {
         }
 
         const customerIdForFetch =
-          customerId || localStorage.getItem("customerId") || "1720";
+          customerId || localStorage.getItem("customerId");
 
         // Force a refetch so Redux's `beneficiaries` array includes the
         // newly created beneficiary with its full record.
@@ -2037,10 +2037,28 @@ const Remittance = () => {
         // that powers the dropdown) and selects the full record the
         // moment it appears there.
         setPendingNewBeneficiaryId(newBeneficiary.id);
+        
 
         // Clear the location state to prevent re-selection on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
+    }
+
+    if (location.state?.from === "remittance" && !location.state?.newBeneficiary) {
+      console.log("🔄 Returning from Add Beneficiary cancellation");
+      
+      // Make sure we're on step 2
+      if (step !== 2) {
+        console.log("📌 Setting step to 2 (cancellation)");
+        dispatch(setStep(2));
+      }
+      
+      // Restore the saved state
+      const wasRestored = restoreRemittanceState();
+      console.log("📊 State restored (cancellation):", wasRestored);
+      
+      // Clear the location state to prevent re-triggering
+      navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, dispatch, navigate, step, restoreRemittanceState, customerId]);
 

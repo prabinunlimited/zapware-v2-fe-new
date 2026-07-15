@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useDispatch, useSelector,shallowEqual } from "react-redux";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { useFormik } from "formik";
 import { RingLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
@@ -1124,7 +1124,37 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   const handleCancel = () => {
-    navigate(-1);
+    const locationState = location.state || {};
+
+    console.log("🔙 Cancel button clicked, locationState:", locationState);
+
+    // Get the return path and step from location state
+    const returnPath = locationState.cancelReturnTo || locationState.returnTo;
+    const returnStep = locationState.cancelStep || locationState.returnStep || 2;
+
+    console.log("🔙 Returning to:", returnPath, "step:", returnStep);
+
+    // Clear any search state
+    if (phoneSearch.searched) {
+      dispatch(clearPhoneSearch());
+    }
+
+    // If we have a return path from navigation state, use it
+    if (returnPath) {
+      // Navigate back to remittance with the step
+      navigate(returnPath, {
+        state: {
+          returnToStep: returnStep,
+          from: "remittance",
+          // Important: DO NOT pass newBeneficiary since we're cancelling
+          // This will trigger the Remittance component to restore state
+        },
+        replace: true // Use replace to prevent going back to add beneficiary
+      });
+    } else {
+      // Fallback: go back in history
+      navigate(-1);
+    }
   };
 
   const mapNationalityToId = (nationalityName, nationalitiesList) => {
@@ -3721,7 +3751,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   <div>
                     <h3 className="font-bold text-base sm:text-lg">Beneficiary Already Exists!</h3>
                     <p className="text-xs sm:text-sm">
-                      This beneficiary is already associated with your account.
+                      A beneficiary is already associated with this phone number. We cannot create a new beneficiary with the same phone number
                     </p>
                   </div>
                 </div>
