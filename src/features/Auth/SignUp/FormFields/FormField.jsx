@@ -20,6 +20,8 @@ const FormField = ({
   maxLength,
   rows = 4,
   as = "input", // Add 'as' prop to determine if it's input or textarea
+  activeField,  
+  fieldStyles, 
   ...props
 }) => {
   const baseClassName = `w-full px-4 py-3 text-sm text-gray-900 bg-white border ${

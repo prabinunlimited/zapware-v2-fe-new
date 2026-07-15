@@ -738,7 +738,10 @@ const BankTransfer = ({
 
     //State before navigating
     if (onSaveRemittanceState) {
+      console.log("💾 Saving remittance state before navigation...");
       onSaveRemittanceState();
+    } else {
+      console.warn("⚠️ onSaveRemittanceState is not available!");
     }
 
     navigate(`/addbeneficiary/${customerId}`, {
@@ -747,7 +750,9 @@ const BankTransfer = ({
         returnStep: 2,
         returnToStep: 2,
         preserveRemittanceState: true,
-        from: "remittance"
+        from: "remittance",
+        cancelReturnTo: `/remittance/${customerId}`,
+        cancelStep: 2
       }
     });
   };
