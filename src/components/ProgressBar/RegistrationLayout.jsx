@@ -13,16 +13,27 @@ function RegistrationLayout({ children }) {
           <h1 className="text-3xl font-bold text-gray-800">Create Your Account</h1>
           <p className="text-gray-600 mt-2">Follow these steps to set up your new account</p>
         </div>
-        
+
         <RegistrationProgressBar currentStep={currentStep} />
-        
+
         <div className="bg-white rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
           {children}
         </div>
-        
+
         {/* Help section */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          Need help? <a href="#" className="text-sky-700 hover:text-sky-900 font-medium">Contact support</a>
+        <div className="mt-8 text-center text-sm text-gray-500">
+          <p>Need help? Contact support</p>
+          <div className="mt-1 text-sm text-gray-700">
+            {localStorage.getItem("partner_support_phone") && (
+              <span>{localStorage.getItem("partner_support_phone")}</span>
+            )}
+            {localStorage.getItem("partner_support_phone") && localStorage.getItem("partner_support_email") && (
+              <span className="mx-2">|</span>
+            )}
+            {localStorage.getItem("partner_support_email") && (
+              <span>{localStorage.getItem("partner_support_email")}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>

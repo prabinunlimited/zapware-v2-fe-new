@@ -1125,32 +1125,38 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleCancel = () => {
     const locationState = location.state || {};
-
+    
     console.log("🔙 Cancel button clicked, locationState:", locationState);
-
+  
     // Get the return path and step from location state
     const returnPath = locationState.cancelReturnTo || locationState.returnTo;
     const returnStep = locationState.cancelStep || locationState.returnStep || 2;
-
-    console.log("🔙 Returning to:", returnPath, "step:", returnStep);
-
+    const fromPage = locationState.from || "beneficiaries";
+  
+    console.log("🔙 Returning to:", returnPath, "step:", returnStep, "from:", fromPage);
+  
     // Clear any search state
     if (phoneSearch.searched) {
       dispatch(clearPhoneSearch());
     }
-
+  
     // If we have a return path from navigation state, use it
     if (returnPath) {
-      // Navigate back to remittance with the step
-      navigate(returnPath, {
-        state: {
-          returnToStep: returnStep,
-          from: "remittance",
-          // Important: DO NOT pass newBeneficiary since we're cancelling
-          // This will trigger the Remittance component to restore state
-        },
-        replace: true // Use replace to prevent going back to add beneficiary
-      });
+      // For Remittance, pass the step
+      if (fromPage === "remittance") {
+        navigate(returnPath, {
+          state: {
+            returnToStep: returnStep,
+            from: "remittance",
+          },
+          replace: true
+        });
+      } else {
+        // For Beneficiaries page, just go back
+        navigate(returnPath, {
+          replace: true
+        });
+      }
     } else {
       // Fallback: go back in history
       navigate(-1);
@@ -1416,55 +1422,82 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
   };
 
   const handleUseFoundBeneficiary = async () => {
-    console.log("🔄 Using existing beneficiary via API:", foundBeneficiary || phoneSearch.data);
-
     const beneficiaryToUse = foundBeneficiary || phoneSearch.data;
-
+  
     if (!beneficiaryToUse) {
       toast.error("Beneficiary data not found. Please search again.");
       return;
     }
-
-    // Get the beneficiary UUID
+  
     const beneficiaryUuid = beneficiaryToUse.benef_uuid || beneficiaryToUse.uuid;
-
+  
     if (!beneficiaryUuid) {
       toast.error("Beneficiary UUID not found. Cannot add this beneficiary.");
       return;
     }
-
-    // Get customer UUID from localStorage or Redux
+  
     let customerUuid = localStorage.getItem("userUuid") || localStorage.getItem("customerUuid");
-
+  
     if (!customerUuid) {
-      // Try to get from Redux state if available
       const state = store.getState();
       customerUuid = state?.auth?.user?.uuid;
     }
-
+  
     if (!customerUuid) {
       toast.error("Customer UUID not found. Please log in again.");
       return;
     }
-
+  
     try {
       setLoading(true);
-
-      // Call the API to add existing beneficiary
+  
       const result = await dispatch(addExistingBeneficiary({
         beneficiaryUuid: beneficiaryUuid,
         customerUuid: customerUuid
       })).unwrap();
-
-      console.log("✅ Add existing beneficiary result:", result);
-
+  
       if (result.success) {
         toast.success("Beneficiary added successfully!");
-
-        // Navigate back to beneficiaries page after successful addition
-        setTimeout(() => {
-          navigate(-1); // Go back to previous page
-        }, 1500);
+        
+        // Get the return path from location state
+        const locationState = location.state || {};
+        const fromPage = locationState.from || "beneficiaries"; // Default to beneficiaries page
+        const returnPath = locationState.returnTo || `/beneficiaries/${customerId}`;
+        const returnStep = locationState.returnStep || 2;
+        
+        console.log("🔄 Use Existing Beneficiary - From page:", fromPage);
+        console.log("🔄 Returning to:", returnPath);
+        
+        // Check if we came from Remittance page
+        if (fromPage === "remittance") {
+          // Navigate back to Remittance with the new beneficiary
+          navigate(returnPath, {
+            state: {
+              returnToStep: returnStep,
+              from: "remittance",
+              newBeneficiary: {
+                id: result.beneficiaryId || beneficiaryToUse.id,
+                uuid: beneficiaryUuid,
+                name: beneficiaryToUse.name,
+                phone_number: beneficiaryToUse.phone_number,
+                email: beneficiaryToUse.email,
+              }
+            },
+            replace: true
+          });
+        } else {
+          // Navigate back to Beneficiaries page
+          navigate(`/beneficiaries/${customerId}`, {
+            state: {
+              refresh: true,
+              newBeneficiaryAdded: true,
+              beneficiaryId: result.beneficiaryId || beneficiaryToUse.id
+            },
+            replace: true
+          });
+        }
+      } else {
+        toast.error(result.message || "Failed to add beneficiary. Please try again.");
       }
     } catch (error) {
       console.error("❌ Failed to add existing beneficiary:", error);
