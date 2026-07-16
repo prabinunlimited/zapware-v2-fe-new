@@ -2114,7 +2114,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           console.log("📦 Create result:", result);
 
           // Handle different response scenarios
-          if (result?.success === true || result?.beneficiaryId || result?.warning) {
+          if (result?.success === false) {
+            toast.error(result.message || result.error || "Failed to create beneficiary.");
+            setLoading(false);
+            return;
+          } else if (result?.success === true || result?.beneficiaryId || result?.warning) {
             if (bankAccountsToSend.length === 0) {
               toast.success("Beneficiary created successfully!");
             } else {
@@ -2125,6 +2129,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
             }, 1500);
           } else if (result?.error) {
             toast.error(result.error);
+            setLoading(false);
+            return;
           } else {
             toast.success("Beneficiary created successfully!");
             setTimeout(() => {
@@ -2270,22 +2276,24 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       }
     } catch (error) {
       console.error(`❌ ${mode} error:`, error);
+      const errorMessage = typeof error === "string" ? error : error?.message;
       console.error("Error details:", error.message || error);
 
       // Show more specific error message
-      if (error.message && error.message.includes("newBeneficiaryId")) {
+      if (errorMessage && errorMessage.includes("newBeneficiaryId")) {
         toast.error("Beneficiary created successfully! (ID retrieval pending)");
         // Still navigate back after a short delay
         setTimeout(() => {
           navigate(-1);
         }, 1500);
-      } else if (error.response?.data?.message) {
+      } else if (error?.response?.data?.message) {
         toast.error(error.response.data.message);
-      } else if (error.message) {
-        toast.error(error.message);
+      } else if (errorMessage) {
+        toast.error(errorMessage);
       } else {
         toast.error(`Failed to ${mode} beneficiary. Please try again.`);
       }
+      setLoading(false);
     } finally {
       if (isMounted.current) {
         setLoading(false);
