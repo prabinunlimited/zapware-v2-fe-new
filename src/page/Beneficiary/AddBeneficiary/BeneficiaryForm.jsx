@@ -3457,7 +3457,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                 </div>
               )}
 
-            {/* GBP/DKK Local Transfer */}
+            {/* GBP/DKK/SEK Local Transfer */}
             {(accountCurrency === "GBP" || accountCurrency === "DKK" || accountCurrency === "SEK") && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="mb-4">
@@ -3523,8 +3523,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   </div>
                 )}
 
-                {/* IBAN for DKK and SEK */}
-                {(accountCurrency === "DKK" ) && (
+                {/* IBAN for DKK */}
+                {(accountCurrency === "DKK") && (
                   <div className="mb-4">
                     <FieldLabel required>
                       IBAN Number
@@ -3538,6 +3538,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         handleBankAccountChange(index, "iban", e.target.value)
                       }
                       required
+                    />
+                  </div>
+                )}
+
+                {/* SWIFT Code for DKK*/}
+                {(accountCurrency === "DKK") && (
+                  <div className="mb-4">
+                    <FieldLabel required info="Bank Identifier Code">
+                      SWIFT/BIC Code
+                    </FieldLabel>
+                    <input
+                      type="text"
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
+                      placeholder="Enter SWIFT/BIC code"
+                      value={account.swift || ""}
+                      onChange={(e) =>
+                        handleBankAccountChange(index, "swift", e.target.value)
+                      }
+                      // required
                     />
                   </div>
                 )}
@@ -5111,7 +5130,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       </div>
       <ToastContainer
         position="bottom-right"
-        autoClose={3000}
+        autoClose={8000}
         hideProgressBar={false}
         newestOnTop
         closeOnClick
