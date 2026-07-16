@@ -51,6 +51,9 @@ function SelectCountry() {
   const [mobileMessage, setMobileMessage] = useState("");
   const [mobileSuccessMessage, setMobileSuccessMessage] = useState("");
 
+  const [showEmailSection, setShowEmailSection] = useState(true);
+  const [showMobileSection, setShowMobileSection] = useState(false);
+
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -170,6 +173,8 @@ function SelectCountry() {
             emailVerified: true,
             accountType: accountType
           });
+          setShowEmailSection(false);
+          setShowMobileSection(true);
         }
       } else {
         // Handle other status
@@ -186,6 +191,8 @@ function SelectCountry() {
           emailVerified: true,
           accountType: accountType
         });
+        setShowEmailSection(false);
+        setShowMobileSection(true);
       }
     } catch (error) {
       console.error("Email check error:", error);
@@ -202,6 +209,8 @@ function SelectCountry() {
           emailVerified: true,
           accountType: accountType
         });
+        setShowEmailSection(false);
+        setShowMobileSection(true);
       } else {
         console.log("verify email error", error);
         setEmailError("Failed to verify email. Please try again next time.");
@@ -287,6 +296,7 @@ function SelectCountry() {
             mobileVerified: true,
             selectedCountryId: selectedCountryId
           });
+          setShowMobileSection(false);
         }
       } else {
         // Handle other status
@@ -304,6 +314,7 @@ function SelectCountry() {
           mobileVerified: true,
           selectedCountryId: selectedCountryId
         });
+        setShowMobileSection(false);
       }
     } catch (error) {
       console.error("Mobile verification error:", error);
@@ -321,6 +332,7 @@ function SelectCountry() {
           mobileVerified: true,
           selectedCountryId: selectedCountryId
         });
+        setShowMobileSection(false);
       } else {
         setMobileError("Failed to verify mobile number. Please try again.");
         setIsMobileValid(false);
@@ -342,6 +354,8 @@ function SelectCountry() {
       setExistingAccountType("");
       setEmailMessage("");
       setEmailSuccessMessage("");
+      setShowEmailSection(true);
+      setShowMobileSection(false);
     }
   };
 
@@ -354,6 +368,8 @@ function SelectCountry() {
       setShowMobileExistsPopup(false);
       setMobileMessage("");
       setMobileSuccessMessage("");
+      setMobileSuccessMessage("");
+      setShowMobileSection(true);
     }
   };
 
@@ -479,143 +495,156 @@ function SelectCountry() {
         </div>
 
         {/* Email Check Section */}
-        <div className="mb-6 md:mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center mb-3">
-            <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your email</h3>
+        {showEmailSection && (
+          <div className="mb-6 md:mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center mb-3">
+              <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your email</h3>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={handleEmailChange}
+                  placeholder="you@example.com"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  disabled={isEmailValid}
+                />
+                <button
+                  onClick={handleCheckEmail}
+                  disabled={isCheckingEmail || isEmailValid}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap text-sm sm:text-base"
+                >
+                  {isCheckingEmail ? "Checking..." : "Check Email"}
+                </button>
+              </div>
+            </div>
+
+            {/* Show success message below input */}
+            {emailSuccessMessage && (
+              <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
+                ✓ {emailSuccessMessage}
+              </div>
+            )}
+
+            {emailError && (
+              <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
+                {emailError}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 mt-3">
+              Enter your email address to check if you have an existing account.
+            </p>
           </div>
+        )}
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="email"
-                value={email}
-                onChange={handleEmailChange}
-                placeholder="you@example.com"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                disabled={isEmailValid}
-              />
-              <button
-                onClick={handleCheckEmail}
-                disabled={isCheckingEmail || isEmailValid}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap text-sm sm:text-base"
-              >
-                {isCheckingEmail ? "Checking..." : "Check Email"}
-              </button>
-            </div>
+        {/* Email Verified Message - Show above mobile section */}
+        {showMobileSection && (
+          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-700">
+              ✅ Email checked! Now check your mobile number below.
+            </p>
           </div>
-
-          {/* Show success message below input */}
-          {emailSuccessMessage && (
-            <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
-              ✓ {emailSuccessMessage}
-            </div>
-          )}
-
-          {emailError && (
-            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
-              {emailError}
-            </div>
-          )}
-
-          <p className="text-xs text-gray-500 mt-3">
-            Enter your email address to check if you have an existing account.
-          </p>
-        </div>
+        )}
 
         {/* Mobile Number Section */}
-        <div className="mb-6 md:mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center mb-3">
-            <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your mobile number</h3>
-          </div>
+        {showMobileSection && (
+          <div className="mb-6 md:mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center mb-3">
+              <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <h3 className="text-base sm:text-lg font-medium text-gray-900">Check your mobile number</h3>
+            </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row gap-2">
-                {/* Country Selector */}
-                <div className="w-full sm:w-1/2">
-                  <Select
-                    options={countryOptions}
-                    value={currentCountryOption}
-                    onChange={(option) => {
-                      setSelectedCountryId(option.value);
-                      setPhoneCode(option.phoneCode);
-                    }}
-                    placeholder="Select country"
-                    isSearchable
-                    classNamePrefix="react-select"
-                    isDisabled={isMobileValid}
-                    styles={{
-                      control: (provided) => ({
-                        ...provided,
-                        minHeight: "42px",
-                        borderColor: mobileError ? "#f87171" : "#d1d5db",
-                        "&:hover": {
-                          borderColor: mobileError ? "#f87171" : "#9ca3af",
-                        },
-                      }),
-                    }}
-                    formatOptionLabel={(option) => (
-                      <div className="flex items-center">
-                        {option.flagUrl && (
-                          <img
-                            src={option.flagUrl}
-                            alt={option.label}
-                            className="w-5 h-4 object-cover mr-2"
-                          />
-                        )}
-                        <span>{option.label}</span>
-                      </div>
-                    )}
-                  />
-                </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {/* Country Selector */}
+                  <div className="w-full sm:w-1/2">
+                    <Select
+                      options={countryOptions}
+                      value={currentCountryOption}
+                      onChange={(option) => {
+                        setSelectedCountryId(option.value);
+                        setPhoneCode(option.phoneCode);
+                      }}
+                      placeholder="Select country"
+                      isSearchable
+                      classNamePrefix="react-select"
+                      isDisabled={isMobileValid}
+                      styles={{
+                        control: (provided) => ({
+                          ...provided,
+                          minHeight: "42px",
+                          borderColor: mobileError ? "#f87171" : "#d1d5db",
+                          "&:hover": {
+                            borderColor: mobileError ? "#f87171" : "#9ca3af",
+                          },
+                        }),
+                      }}
+                      formatOptionLabel={(option) => (
+                        <div className="flex items-center">
+                          {option.flagUrl && (
+                            <img
+                              src={option.flagUrl}
+                              alt={option.label}
+                              className="w-5 h-4 object-cover mr-2"
+                            />
+                          )}
+                          <span>{option.label}</span>
+                        </div>
+                      )}
+                    />
+                  </div>
 
-                {/* Mobile Number Input */}
-                <div className="w-full sm:w-1/2">
-                  <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={handleMobileNumberChange}
-                    placeholder="Phone Number"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                    disabled={isMobileValid}
-                  />
+                  {/* Mobile Number Input */}
+                  <div className="w-full sm:w-1/2">
+                    <input
+                      type="tel"
+                      value={mobileNumber}
+                      onChange={handleMobileNumberChange}
+                      placeholder="Phone Number"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                      disabled={isMobileValid}
+                    />
+                  </div>
                 </div>
+                <button
+                  onClick={handleCheckMobile}
+                  disabled={isCheckingMobile || isMobileValid}
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                >
+                  {isCheckingMobile ? "Checking..." : "Check Mobile No."}
+                </button>
               </div>
-              <button
-                onClick={handleCheckMobile}
-                disabled={isCheckingMobile || isMobileValid}
-                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
-              >
-                {isCheckingMobile ? "Checking..." : "Check Mobile No."}
-              </button>
             </div>
+
+            {/* Show success message below input */}
+            {mobileSuccessMessage && (
+              <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
+                ✓ {mobileSuccessMessage}
+              </div>
+            )}
+
+            {mobileError && (
+              <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
+                {mobileError}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 mt-3">
+              Enter your mobile number to check if you have an existing account.
+            </p>
           </div>
-
-          {/* Show success message below input */}
-          {mobileSuccessMessage && (
-            <div className="mt-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
-              ✓ {mobileSuccessMessage}
-            </div>
-          )}
-
-          {mobileError && (
-            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
-              {mobileError}
-            </div>
-          )}
-
-          <p className="text-xs text-gray-500 mt-3">
-            Enter your mobile number to check if you have an existing account.
-          </p>
-        </div>
+        )}
 
         {/* Email Exists Popup Modal */}
         {showEmailExistsPopup && (
@@ -732,6 +761,13 @@ function SelectCountry() {
         {/* Country Selection Section - Only shown when both verifications are complete */}
         {isVerificationComplete && (
           <>
+            {/* Success message */}
+            <div className="text-center mb-4">
+              <p className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200">
+                ✅ Email and mobile number checked successfully! Now select your country.
+              </p>
+            </div>
+
             {/* Content Header */}
             <div className="mb-6 md:mb-8">
               <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">

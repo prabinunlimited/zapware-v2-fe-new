@@ -557,10 +557,12 @@ const OpenCurrencyAccount = () => {
                 {getAccountTypeTitle()}
               </h1>
             </div>
-            <p className="text-center text-blue-100 text-sm opacity-90">
-              {ucaDescription ||
-                "Select your currency accounts for international transactions"}
-            </p>
+            {!forceRemittanceOnly && (
+              <p className="text-center text-blue-100 text-sm opacity-90">
+                {ucaDescription ||
+                  "Select your currency accounts for international transactions"}
+              </p>
+            )}
           </div>
 
           {/* Close Button */}
