@@ -532,6 +532,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     "BDT",
     "CAD",
     "DKK",
+    "SEK",
     "EUR",
     "GBP",
     "INR",
@@ -1125,21 +1126,21 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleCancel = () => {
     const locationState = location.state || {};
-    
+
     console.log("🔙 Cancel button clicked, locationState:", locationState);
-  
+
     // Get the return path and step from location state
     const returnPath = locationState.cancelReturnTo || locationState.returnTo;
     const returnStep = locationState.cancelStep || locationState.returnStep || 2;
     const fromPage = locationState.from || "beneficiaries";
-  
+
     console.log("🔙 Returning to:", returnPath, "step:", returnStep, "from:", fromPage);
-  
+
     // Clear any search state
     if (phoneSearch.searched) {
       dispatch(clearPhoneSearch());
     }
-  
+
     // If we have a return path from navigation state, use it
     if (returnPath) {
       // For Remittance, pass the step
@@ -1423,51 +1424,51 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
   const handleUseFoundBeneficiary = async () => {
     const beneficiaryToUse = foundBeneficiary || phoneSearch.data;
-  
+
     if (!beneficiaryToUse) {
       toast.error("Beneficiary data not found. Please search again.");
       return;
     }
-  
+
     const beneficiaryUuid = beneficiaryToUse.benef_uuid || beneficiaryToUse.uuid;
-  
+
     if (!beneficiaryUuid) {
       toast.error("Beneficiary UUID not found. Cannot add this beneficiary.");
       return;
     }
-  
+
     let customerUuid = localStorage.getItem("userUuid") || localStorage.getItem("customerUuid");
-  
+
     if (!customerUuid) {
       const state = store.getState();
       customerUuid = state?.auth?.user?.uuid;
     }
-  
+
     if (!customerUuid) {
       toast.error("Customer UUID not found. Please log in again.");
       return;
     }
-  
+
     try {
       setLoading(true);
-  
+
       const result = await dispatch(addExistingBeneficiary({
         beneficiaryUuid: beneficiaryUuid,
         customerUuid: customerUuid
       })).unwrap();
-  
+
       if (result.success) {
         toast.success("Beneficiary added successfully!");
-        
+
         // Get the return path from location state
         const locationState = location.state || {};
         const fromPage = locationState.from || "beneficiaries"; // Default to beneficiaries page
         const returnPath = locationState.returnTo || `/beneficiaries/${customerId}`;
         const returnStep = locationState.returnStep || 2;
-        
+
         console.log("🔄 Use Existing Beneficiary - From page:", fromPage);
         console.log("🔄 Returning to:", returnPath);
-        
+
         // Check if we came from Remittance page
         if (fromPage === "remittance") {
           // Navigate back to Remittance with the new beneficiary
@@ -1882,7 +1883,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               setLoading(false);
               return;
             }
-            if ((accountCurrency === "GBP" || accountCurrency === "DKK") && !account.sortCode) {
+            if ((accountCurrency === "GBP" || accountCurrency === "DKK" || accountCurrency === "SEK") && !account.sortCode) {
               toast.error(`Sort Code is required for ${accountCurrency} transfers`);
               setLoading(false);
               return;
@@ -3457,7 +3458,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               )}
 
             {/* GBP/DKK Local Transfer */}
-            {(accountCurrency === "GBP" || accountCurrency === "DKK") && (
+            {(accountCurrency === "GBP" || accountCurrency === "DKK" || accountCurrency === "SEK") && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="mb-4">
                   <FieldLabel required>
@@ -3495,7 +3496,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   />
                 </div>
 
-                {["GBP", "EUR", "CAD"].includes(accountCurrency) && (
+                {["GBP", "EUR", "CAD", "DKK", "SEK"].includes(accountCurrency) && (
                   <div className="mb-4">
                     <FieldLabel required>
                       Bank Country
@@ -3519,6 +3520,25 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         </option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {/* IBAN for DKK and SEK */}
+                {(accountCurrency === "DKK" ) && (
+                  <div className="mb-4">
+                    <FieldLabel required>
+                      IBAN Number
+                    </FieldLabel>
+                    <input
+                      type="text"
+                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
+                      placeholder="Enter IBAN number"
+                      value={account.iban || ""}
+                      onChange={(e) =>
+                        handleBankAccountChange(index, "iban", e.target.value)
+                      }
+                      required
+                    />
                   </div>
                 )}
               </div>
