@@ -228,6 +228,10 @@ export const createBeneficiaryWithBanks = createAsyncThunk(
 
       const result = JSON.parse(responseText);
       console.log("✅ API Success Response:", result);
+      if (result?.success === false) {
+        
+        return rejectWithValue(result.message || "Failed to create beneficiary");
+      }
 
       return result;
     } catch (error) {
