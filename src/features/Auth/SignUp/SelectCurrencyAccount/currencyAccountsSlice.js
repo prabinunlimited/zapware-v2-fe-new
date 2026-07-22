@@ -108,7 +108,7 @@ const filterAccountsByCurrency = (accounts, currencyFilter) => {
 export const fetchAccountOptions = createAsyncThunk(
   "currencyAccounts/fetchAccountOptions",
   async (
-    { accountType, countryId, API_URL },
+    { accountType, countryId, API_URL, partnerUuid },
     { rejectWithValue, getState },
   ) => {
     try {
@@ -117,18 +117,18 @@ export const fetchAccountOptions = createAsyncThunk(
         "/get-onboarding-description",
       );
 
-      // Step 2: Get partnerId from localStorage
-      const partnerId = localStorage.getItem("whitelabelledpartnerid");
-      const isPartnerFlow =
-        partnerId &&
-        partnerId !== "0" &&
-        partnerId !== "undefined" &&
-        partnerId !== "null" &&
-        partnerId !== "";
+      // Step 2: Get partnerUuid from localStorage if not passed
+      let uuid = partnerUuid;
+      if (!uuid) {
+        uuid = localStorage.getItem("partner_uuid");
+      }
+
+      // Check if we have a valid partner UUID
+      const hasValidPartnerUuid = uuid && uuid !== "undefined" && uuid !== "null" && uuid !== "";
 
       console.log("🔍 THUNK DEBUG - fetchAccountOptions:", {
-        partnerId,
-        isPartnerFlow,
+        partnerUuid: uuid,
+        hasValidPartnerUuid,
         accountType,
         timestamp: new Date().toISOString(),
       });
@@ -136,19 +136,19 @@ export const fetchAccountOptions = createAsyncThunk(
       let endpoint;
       let responseData;
 
-      if (isPartnerFlow) {
-        // ✅ NEW PARTNER API - Use partner/bank-currencies endpoint
-        endpoint = `partner/bank-currencies/${partnerId}`;
+      if (hasValidPartnerUuid) {
+        // ✅ NEW API - Use bank-account-currencies with partner_uuid
+        endpoint = `partners/bank-account-currencies/${uuid}/${accountType}`;
         console.log(`🔍 Using PARTNER API: ${endpoint}`);
 
         const response = await api.get(endpoint);
         responseData = response.data;
         console.log("✅ Partner API response received:", {
           status: response.status,
-          dataKeys: Object.keys(responseData),
+          dataKeys: Object.keys(responseData || {}),
         });
       } else {
-        // ✅ STANDARD FLOW - For non-partners, use standard API with USA country
+        // ✅ STANDARD FLOW - For non-partners
         const validatedCountryId = "186"; // Force USA for standard flow
         endpoint = `/get-bank-ac-type-and-country/${accountType}/${validatedCountryId}`;
         console.log(`🔍 Using STANDARD API: ${endpoint}`);
@@ -163,8 +163,8 @@ export const fetchAccountOptions = createAsyncThunk(
         termsData: responseData,
         accountType,
         countryId: "186",
-        isPartnerFlow,
-        partnerId: isPartnerFlow ? partnerId : null,
+        isPartnerFlow: hasValidPartnerUuid,
+        partnerId: uuid, // Store the UUID as partnerId
       };
     } catch (error) {
       console.error("❌ API Error in fetchAccountOptions:", error.message);

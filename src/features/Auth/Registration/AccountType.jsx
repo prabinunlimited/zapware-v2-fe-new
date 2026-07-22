@@ -60,12 +60,24 @@ const AccountType = () => {
       } else if (data.data && data.data.partner_id) {
         partnerId = data.data.partner_id;
       }
+      let partnerUuid = null;
+      if (data.partner_uuid) {
+        partnerUuid = data.partner_uuid;
+      } else if (data.data && data.data.partner_uuid) {
+        partnerUuid = data.data.partner_uuid;
+      }
+
 
       // ✅ Store partner_id as whitelabelledpartnerid in localStorage
       if (partnerId) {
         localStorage.setItem('whitelabelledpartnerid', partnerId);
         localStorage.setItem('iswhitelabelledpartner', 'Y');
         console.log('✅ Saved whitelabelledpartnerid:', localStorage.getItem('whitelabelledpartnerid'));
+      }
+
+      if (partnerUuid) {
+        localStorage.setItem('partner_uuid', partnerUuid);
+        console.log('✅ Saved partner_uuid:', localStorage.getItem('partner_uuid'));
       }
 
       // Navigate immediately after API call
