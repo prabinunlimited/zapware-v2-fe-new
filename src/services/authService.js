@@ -181,7 +181,7 @@ export const tokenService = {
         console.warn("No partner data provided to setPartnerData");
         return;
       }
-  
+
       // Store partner_id
       if (
         partnerData.partner_id !== undefined &&
@@ -191,7 +191,12 @@ export const tokenService = {
         localStorage.setItem("whitelabelledpartnerid", partnerId);
         console.log("✅ Partner ID stored:", partnerId);
       }
-  
+
+      if (partnerData.partner_uuid) {
+        localStorage.setItem("partner_uuid", partnerData.partner_uuid);
+        console.log("✅ Partner UUID stored:", partnerData.partner_uuid);
+      }
+
       // Store beneficiary portal title
       if (partnerData.beneficiary_portal_title) {
         localStorage.setItem(
@@ -203,31 +208,31 @@ export const tokenService = {
           partnerData.beneficiary_portal_title
         );
       }
-  
+
       // Store partner name
       if (partnerData.partner_name) {
         localStorage.setItem("support_partner_name", partnerData.partner_name);
         console.log("✅ Support partner name saved:", partnerData.partner_name);
       }
-  
+
       // Store support email
       if (partnerData.support_email) {
         localStorage.setItem("partner_support_email", partnerData.support_email);
         console.log("✅ Support email stored:", partnerData.support_email);
       }
-  
+
       // Store support phone number
       if (partnerData.support_phoneno) {
         localStorage.setItem("partner_support_phone", partnerData.support_phoneno);
         console.log("✅ Support phone stored:", partnerData.support_phoneno);
       }
-  
+
       // Store partner address
       if (partnerData.partner_address) {
         localStorage.setItem("partner_address", partnerData.partner_address);
         console.log("✅ Partner address stored:", partnerData.partner_address);
       }
-  
+
       // Store white labelled partner flag
       if (partnerData.is_white_labelled_partner) {
         localStorage.setItem(
@@ -235,7 +240,7 @@ export const tokenService = {
           partnerData.is_white_labelled_partner
         );
       }
-  
+
       // Store show_estimated_time_delivery flag
       if (partnerData.show_estimated_time_delivery) {
         localStorage.setItem(
@@ -247,12 +252,12 @@ export const tokenService = {
           partnerData.show_estimated_time_delivery
         );
       }
-  
+
     } catch (error) {
       console.error("❌ Error storing partner data:", error);
     }
   },
-  
+
   // Get partner ID
   getPartnerId: () => {
     try {
@@ -262,7 +267,16 @@ export const tokenService = {
       return null;
     }
   },
-  
+
+  getPartnerUuid: () => {
+    try {
+      return localStorage.getItem("partner_uuid");
+    } catch (error) {
+      console.error("Error getting partner UUID:", error);
+      return null;
+    }
+  },
+
   // Get beneficiary portal title
   getBeneficiaryPortalTitle: () => {
     try {
@@ -272,7 +286,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Get partner name
   getPartnerName: () => {
     try {
@@ -282,7 +296,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Get support email
   getSupportEmail: () => {
     try {
@@ -292,7 +306,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Get support phone number
   getSupportPhone: () => {
     try {
@@ -302,7 +316,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Get partner address
   getPartnerAddress: () => {
     try {
@@ -312,7 +326,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Get show estimated time delivery flag
   getShowEstimatedTimeDelivery: () => {
     try {
@@ -322,7 +336,7 @@ export const tokenService = {
       return null;
     }
   },
-  
+
   // Check if white labelled partner
   isWhiteLabelledPartner: () => {
     try {
@@ -332,11 +346,12 @@ export const tokenService = {
       return false;
     }
   },
-  
+
   // Clear all partner data
   clearPartnerData: () => {
     try {
       localStorage.removeItem("whitelabelledpartnerid");
+      localStorage.removeItem("partner_uuid");
       localStorage.removeItem("beneficiary_portal_title");
       localStorage.removeItem("partner_name");
       localStorage.removeItem("partner_support_email");
@@ -349,14 +364,14 @@ export const tokenService = {
       console.error("Error clearing partner data:", error);
     }
   },
-  
+
   // Clear all authentication and partner data (complete logout)
   clearAll: () => {
     tokenService.clearToken();
     tokenService.clearPartnerData();
     console.log("✅ All authentication and partner data cleared");
   },
-  
+
   // Debug partner data info
   debugPartnerData: () => {
     try {
@@ -368,7 +383,7 @@ export const tokenService = {
       const partnerAddress = tokenService.getPartnerAddress();
       const isWhiteLabelled = tokenService.isWhiteLabelledPartner();
       const showEstimatedTimeDelivery = tokenService.getShowEstimatedTimeDelivery();
-  
+
       return {
         partnerId: partnerId,
         beneficiaryPortalTitle: portalTitle,
@@ -387,7 +402,7 @@ export const tokenService = {
       };
     }
   },
-  
+
   // Get all partner data as an object
   getAllPartnerData: () => {
     return {
