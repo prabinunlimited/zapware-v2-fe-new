@@ -1704,15 +1704,27 @@ const Profile = () => {
       case "Business Information":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Business Information
               </h3>
-              {businessInfo && businessInfo.data && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  ✓ Complete
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {businessInfo && businessInfo.data && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    ✓ Complete
+                  </span>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/edit-business-information/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaEdit className="inline mr-1.5" />
+                  Edit
+                </motion.button>
+              </div>
             </div>
 
             {businessInfo && businessInfo.data ? (
@@ -1899,15 +1911,27 @@ const Profile = () => {
       case "Responsible Person":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Responsible Person
               </h3>
-              {responsiblePerson && responsiblePerson.data && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  ✓ Complete
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {responsiblePerson && responsiblePerson.data && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    ✓ Complete
+                  </span>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/edit-responsible-person/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaEdit className="inline mr-1.5" />
+                  Edit
+                </motion.button>
+              </div>
             </div>
 
             {responsiblePerson && responsiblePerson.data ? (
@@ -1999,7 +2023,7 @@ const Profile = () => {
                           <span className="text-sm font-medium text-gray-600 min-w-[120px]">
                             {item.label}:
                           </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 min-w-0 break-words">
                             {item.value || "N/A"}
                           </span>
                         </div>
@@ -2031,22 +2055,22 @@ const Profile = () => {
       case "Office Controllers":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Office Controllers
               </h3>
-              {officeControllers &&
-                Array.isArray(officeControllers.data) &&
-                officeControllers.data.length > 0 && (
+              <div className="flex items-center gap-3">
+                {officeControllers && Array.isArray(officeControllers.data) && officeControllers.data.length > 0 && (
                   <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
                     {officeControllers.data.length} Controllers
                   </span>
                 )}
+              </div>
             </div>
 
             {officeControllers && Array.isArray(officeControllers.data) ? (
               officeControllers.data.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {officeControllers.data.map((controller, index) => (
                     <motion.div
                       key={index}
@@ -2059,7 +2083,9 @@ const Profile = () => {
                         <h4 className="text-lg font-semibold text-[#005481]">
                           Controller {index + 1}
                         </h4>
-                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        </div>
                       </div>
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
@@ -2145,6 +2171,20 @@ const Profile = () => {
                           </span>
                         </div>
                       </div>
+
+                      {/* Edit Button for each controller */}
+                      <div className="mt-4 pt-3 border-t border-gray-200">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => navigate(`/edit-controller/${customerId}/${controller.id || controller.controller_id || index}`)}
+                          className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                          style={headerColorProps.style}
+                        >
+                          <FaEdit className="inline mr-1.5" />
+                          Edit Controller {index + 1}
+                        </motion.button>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -2157,12 +2197,8 @@ const Profile = () => {
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                     <FaUsers className="w-8 h-8 text-gray-400" />
                   </div>
-                  <p className="text-gray-600 mb-2">
-                    No office controllers added
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add office controllers to your business profile
-                  </p>
+                  <p className="text-gray-600 mb-2">No office controllers added</p>
+                  <p className="text-sm text-gray-500">Add office controllers to your business profile</p>
                 </motion.div>
               )
             ) : (
@@ -2174,73 +2210,142 @@ const Profile = () => {
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FaUsers className="w-8 h-8 text-gray-400" />
                 </div>
-                <p className="text-gray-600 mb-2">
-                  No office controllers information
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the office controllers details
-                </p>
+                <p className="text-gray-600 mb-2">No office controllers information</p>
+                <p className="text-sm text-gray-500">Please complete the office controllers details</p>
               </motion.div>
             )}
           </div>
         );
-        return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
-                Office Controllers
-              </h3>
-              {officeControllers &&
-                Array.isArray(officeControllers.data) &&
-                officeControllers.data.length > 0 && (
-                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                    {officeControllers.data.length} Controllers
-                  </span>
-                )}
-            </div>
 
-            {officeControllers && Array.isArray(officeControllers.data) ? (
-              officeControllers.data.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {officeControllers.data.map((controller, index) => (
+        case "Owner Details":
+          return (
+            <div className="w-full space-y-6 md:space-y-8">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
+                  Owner Details
+                </h3>
+                <div className="flex items-center gap-3">
+                  {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
+                    <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                      {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
+                    </span>
+                  )}
+                </div>
+              </div>
+        
+              {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {ownerDetails.data.map((owner, index) => (
                     <motion.div
                       key={index}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
+                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col"
                     >
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
                         <h4 className="text-lg font-semibold text-[#005481]">
-                          Controller {index + 1}
+                          Owner {index + 1}
                         </h4>
-                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                            {owner.ownership_percentage}%
+                          </span>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        </div>
                       </div>
+        
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
-                            Name:
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            Full Name:
                           </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.name || "N/A"}
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {owner.name || `${owner.first_name} ${owner.last_name}`.trim() || "N/A"}
                           </span>
                         </div>
+        
                         <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
                             Email:
                           </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.email || "N/A"}
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {owner.email || "N/A"}
                           </span>
                         </div>
+        
                         <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
-                            Position:
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            Phone:
                           </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.position || "N/A"}
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {owner.mobile_number ? `${owner.mobile_number_country_code || ''} ${owner.mobile_number}` : "N/A"}
                           </span>
                         </div>
+        
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            Date of Birth:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {owner.dob || "N/A"}
+                          </span>
+                        </div>
+        
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            Country:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                            {owner.country_name || "N/A"}
+                          </span>
+                        </div>
+        
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            Owner Type:
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 capitalize">
+                            {owner.owner_type || "N/A"}
+                          </span>
+                        </div>
+        
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            KYC Status:
+                          </span>
+                          <span className={`text-sm font-medium px-2 py-1 rounded-full ${owner.kyc_status === 1
+                            ? "bg-green-100 text-green-800"
+                            : "bg-yellow-100 text-yellow-800"
+                            }`}>
+                            {owner.kyc_status === 1 ? "Verified" : "Pending"}
+                          </span>
+                        </div>
+        
+                        {owner.needs_access_to_system === 1 && (
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                              System Access:
+                            </span>
+                            <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                              Enabled
+                            </span>
+                          </div>
+                        )}
+                      </div>
+        
+                      {/* Edit Button for each owner */}
+                      <div className="mt-auto pt-3 border-t border-gray-200">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => navigate(`/edit-owner/${customerId}/${owner.owner_uuid}`)}
+                          className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                          style={headerColorProps.style}
+                        >
+                          <FaEdit className="inline mr-1.5" />
+                          Edit Owner {index + 1}
+                        </motion.button>
                       </div>
                     </motion.div>
                   ))}
@@ -2252,210 +2357,15 @@ const Profile = () => {
                   className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
                 >
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaUsers className="w-8 h-8 text-gray-400" />
+                    <FaUser className="w-8 h-8 text-gray-400" />
                   </div>
-                  <p className="text-gray-600 mb-2">
-                    No office controllers added
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add office controllers to your business profile
-                  </p>
+                  <p className="text-gray-600 mb-2">No owner details available</p>
+                  <p className="text-sm text-gray-500">Please complete the owner details</p>
                 </motion.div>
-              )
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
-              >
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaUsers className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="text-gray-600 mb-2">
-                  No office controllers information
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the office controllers details
-                </p>
-              </motion.div>
-            )}
-          </div>
-        );
-
-      case "Owner Details":
-        return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
-                Owner Details
-              </h3>
-              {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
-                </span>
               )}
             </div>
-
-            {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {ownerDetails.data.map((owner, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
-                      <h4 className="text-lg font-semibold text-[#005481]">
-                        Owner {index + 1}
-                      </h4>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                          {owner.ownership_percentage}%
-                        </span>
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Full Name:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                          {owner.name || `${owner.first_name} ${owner.last_name}`.trim() || "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Email:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                          {owner.email || "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Phone:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                          {owner.mobile_number ? `${owner.mobile_number_country_code || ''} ${owner.mobile_number}` : "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Date of Birth:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                          {owner.dob || "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Country:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                          {owner.country_name || "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          Owner Type:
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 capitalize">
-                          {owner.owner_type || "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                          KYC Status:
-                        </span>
-                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${owner.kyc_status === 1
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                          }`}>
-                          {owner.kyc_status === 1 ? "Verified" : "Pending"}
-                        </span>
-                      </div>
-
-                      {owner.needs_access_to_system === 1 && (
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            System Access:
-                          </span>
-                          <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                            Enabled
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
-              >
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaUser className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="text-gray-600 mb-2">
-                  No owner details available
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the owner details
-                </p>
-              </motion.div>
-            )}
-          </div>
-        );
-        return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide mb-4">
-              Owner Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <h4 className="text-lg font-semibold text-[#005481] mb-4 pb-2 border-b border-gray-200">
-                  Ownership Information
-                </h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium text-gray-600">
-                      Owner Name:
-                    </span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {displayProfileData.first_name}{" "}
-                      {displayProfileData.last_name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium text-gray-600">
-                      Ownership Percentage:
-                    </span>
-                    <span className="text-sm font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                      100%
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        );
-
+          );
+        
       case "Uploaded Documents":
         return (
           <div className="w-full space-y-4 sm:space-y-6 md:space-y-8">
