@@ -229,6 +229,10 @@ const router = createBrowserRouter([
         element: <ResponsiblePersonEdit />,
       },
       {
+        path: "add-controller/:customerId",
+        element: <EditController />,
+      },
+      {
         path: "edit-controller/:customerId/:controllerId?",
         element: <EditController />,
       },

@@ -225,6 +225,7 @@ const EditController = () => {
     const { customerId, controllerId } = useParams(); // Get both customerId and controllerId
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const isCreateMode = !controllerId;
 
     const authtoken = localStorage.getItem('authtoken');
     const [loading, setLoading] = useState(true);
@@ -291,6 +292,11 @@ const EditController = () => {
     // ===================== LOAD CONTROLLER DATA =====================
     useEffect(() => {
         const fetchController = async () => {
+            if (isCreateMode) {
+                setLoading(false);
+                return;
+            }
+
             try {
                 const customerUuid = localStorage.getItem('customerUuid');
                 if (!customerUuid) {
@@ -307,7 +313,7 @@ const EditController = () => {
                 if (response.data && response.data.data && response.data.data.length > 0) {
                     let foundController = null;
                     let foundIndex = -1;
-
+                
                     if (controllerId) {
                         foundIndex = response.data.data.findIndex(
                             (ctrl) => ctrl.controller_uuid === controllerId
@@ -316,17 +322,18 @@ const EditController = () => {
                             foundController = response.data.data[foundIndex];
                         }
                     }
-
+                
                     if (!foundController) {
-                        foundController = response.data.data[0];
-                        foundIndex = 0;
+                        toast.error('Controller not found');
+                        setLoading(false);
+                        return;
                     }
-
+                
                     setControllerIndex(foundIndex);
                     const data = foundController;
-
+                
                     console.log('📦 Selected Controller:', data);
-
+                
                     setFormData({
                         controller_uuid: data.controller_uuid || '',
                         controller_first_name: data.controller_first_name || data.first_name || '',
@@ -334,7 +341,7 @@ const EditController = () => {
                         controller_last_name: data.controller_last_name || data.last_name || '',
                         controller_email: data.controller_email || data.email || '',
                         controller_resident_country: data.residentcountry_id || data.resident_country || '',
-                        controller_mobilenumber_countrycode: data.mobilenumber_countrycode || data.phone_code || '',
+                        controller_mobilenumber_countrycode: data.mobile_number_country_code || data.mobilenumber_countrycode || data.phone_code || '',
                         controller_mobile_number: data.mobile_number || data.phone_number || '',
                         controller_nationality: data.nationality_id || data.nationality || '',
                         controller_country: data.country_id || data.country || '',
@@ -343,7 +350,7 @@ const EditController = () => {
                         controller_street_address_1: data.street_address_1 || '',
                         controller_street_address_2: data.street_address_2 || '',
                         controller_zip_code: data.zip_code || '',
-                        controller_gender: data.genderid || data.gender || '',
+                        controller_gender: data.genderid ? String(data.genderid) : '',
                         controller_dob: data.dob || '',
                         controller_designation: data.designation || '',
                         controller_ssn: data.ssn || '',
@@ -392,7 +399,7 @@ const EditController = () => {
                 clearTimeout(zipDebounceTimer);
             }
         };
-    }, [customerId, controllerId, authtoken, dispatch]);
+    }, [customerId, controllerId, authtoken, dispatch, isCreateMode]);
 
     // ===================== FETCH STATES WHEN COUNTRY CHANGES =====================
     useEffect(() => {
@@ -483,11 +490,19 @@ const EditController = () => {
                 }
             });
 
+            if (isCreateMode) {
+                delete payload.controller_uuid;
+            }
+
             console.log('📤 Form Data:', formData);
             console.log('📤 Sending payload:', payload);
 
+            const endpoint = isCreateMode
+                ? `${API_URL}/customers/add-office-controller/${customerUuid}`
+                : `${API_URL}/customers/update-office-controller/${customerUuid}`;
+
             const response = await axios.post(
-                `${API_URL}/customers/update-office-controller/${customerUuid}`,
+                endpoint,
                 payload,
                 { headers: { Authorization: `Bearer ${authtoken}` } }
             );
@@ -495,7 +510,10 @@ const EditController = () => {
             console.log('📥 API Response:', response.data);
 
             if (response.data?.status === 'success') {
-                setSuccessMessage(response.data.message || 'Office controller information updated successfully!');
+                setSuccessMessage(
+                    response.data.message ||
+                    (isCreateMode ? 'Office controller added successfully!' : 'Office controller information updated successfully!')
+                );
                 setShowSuccessModal(true);
             } else {
                 setErrorMessage(response.data?.message || 'Failed to update office controller information');
@@ -550,7 +568,7 @@ const EditController = () => {
     const genderOptions = useMemo(() => {
         if (!genders || !Array.isArray(genders)) return [];
         return genders.map(gender => ({
-            value: gender.id,
+            value: String(gender.id),
             label: gender.name,
         }));
     }, [genders]);
@@ -603,7 +621,7 @@ const EditController = () => {
                         <FaArrowLeft className="text-gray-600" />
                     </button>
                     <h1 className="text-2xl font-bold text-gray-800">
-                        Edit Controller {controllerIndex !== null ? `#${controllerIndex + 1}` : ''}
+                        {isCreateMode ? 'Add Controller' : `Edit Controller ${controllerIndex !== null ? `#${controllerIndex + 1}` : ''}`}
                     </h1>
                 </div>
 
@@ -1348,7 +1366,7 @@ const EditController = () => {
                                 ) : (
                                     <>
                                         <FaSave className="w-4 h-4" />
-                                        Save Changes
+                                        {isCreateMode ? 'Add Controller' : 'Save Changes'}
                                     </>
                                 )}
                             </button>

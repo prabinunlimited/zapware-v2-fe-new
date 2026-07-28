@@ -168,6 +168,10 @@ const Profile = () => {
   const [emailPasscodeResendTimer, setEmailPasscodeResendTimer] = useState(0);
   const [canResendEmailPasscode, setCanResendEmailPasscode] = useState(true);
 
+  const [showDeleteControllerModal, setShowDeleteControllerModal] = useState(false);
+  const [controllerToDelete, setControllerToDelete] = useState(null);
+  const [deleteControllerLoading, setDeleteControllerLoading] = useState(false);
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({
@@ -1410,6 +1414,70 @@ const Profile = () => {
     }
   };
 
+  // Open delete confirmation for a controller
+  const handleDeleteControllerClick = (controller) => {
+    setControllerToDelete(controller);
+    setShowDeleteControllerModal(true);
+  };
+
+  // Confirm and perform deletion
+  const handleConfirmDeleteController = async () => {
+    if (!controllerToDelete) return;
+
+    setDeleteControllerLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+      const authCustomerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      console.log("🗑️ Deleting controller:", controllerToDelete.controller_uuid);
+
+      const payload = {
+        controller_uuid: controllerToDelete.controller_uuid,
+        updated_user_type: "customer",
+        updated_user_id: authCustomerId ? parseInt(authCustomerId) : null,
+      };
+
+      const response = await axios.post(
+        `${API_URL}/customers/delete-office-controller/${customerUuid}`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        // Refresh the office controllers list
+        const refreshResponse = await axios.get(
+          `${API_URL}/customers/office-controllers/${customerUuid}`,
+          { headers: { Authorization: `Bearer ${authtoken}` } }
+        );
+        setOfficeControllers(refreshResponse.data);
+
+        setToast({ message: "Controller deleted successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setShowDeleteControllerModal(false);
+        setControllerToDelete(null);
+      } else {
+        throw new Error(response.data.message || "Failed to delete controller");
+      }
+    } catch (err) {
+      console.error("❌ Failed to delete controller:", err);
+      setModalData({
+        isOpen: true,
+        title: "Delete Failed",
+        message: err.response?.data?.message || "Failed to delete controller. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setDeleteControllerLoading(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
       console.error("❌ Profile: Missing auth token or customer ID for save");
@@ -2065,6 +2133,16 @@ const Profile = () => {
                     {officeControllers.data.length} Controllers
                   </span>
                 )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/add-controller/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaEdit className="inline mr-1.5" />
+                  Add Controller
+                </motion.button>
               </div>
             </div>
 
@@ -2172,17 +2250,26 @@ const Profile = () => {
                         </div>
                       </div>
 
-                      {/* Edit Button for each controller */}
-                      <div className="mt-4 pt-3 border-t border-gray-200">
+                      {/* Edit / Delete Buttons for each controller */}
+                      <div className="mt-4 pt-3 border-t border-gray-200 flex gap-2">
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => navigate(`/edit-controller/${customerId}/${controller.id || controller.controller_id || index}`)}
-                          className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                          onClick={() => navigate(`/edit-controller/${customerId}/${controller.controller_uuid}`)}
+                          className={`flex-1 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
                           style={headerColorProps.style}
                         >
                           <FaEdit className="inline mr-1.5" />
-                          Edit Controller {index + 1}
+                          Edit
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleDeleteControllerClick(controller)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                        >
+                          <FaTimesCircle className="inline mr-1.5" />
+                          Delete
                         </motion.button>
                       </div>
                     </motion.div>
@@ -2217,155 +2304,155 @@ const Profile = () => {
           </div>
         );
 
-        case "Owner Details":
-          return (
-            <div className="w-full space-y-6 md:space-y-8">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
-                  Owner Details
-                </h3>
-                <div className="flex items-center gap-3">
-                  {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
-                    <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                      {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
-                    </span>
-                  )}
-                </div>
+      case "Owner Details":
+        return (
+          <div className="w-full space-y-6 md:space-y-8">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
+                Owner Details
+              </h3>
+              <div className="flex items-center gap-3">
+                {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
+                  </span>
+                )}
               </div>
-        
-              {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {ownerDetails.data.map((owner, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col"
-                    >
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
-                        <h4 className="text-lg font-semibold text-[#005481]">
-                          Owner {index + 1}
-                        </h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                            {owner.ownership_percentage}%
-                          </span>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                      </div>
-        
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Full Name:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                            {owner.name || `${owner.first_name} ${owner.last_name}`.trim() || "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Email:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                            {owner.email || "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Phone:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                            {owner.mobile_number ? `${owner.mobile_number_country_code || ''} ${owner.mobile_number}` : "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Date of Birth:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                            {owner.dob || "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Country:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
-                            {owner.country_name || "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            Owner Type:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 capitalize">
-                            {owner.owner_type || "N/A"}
-                          </span>
-                        </div>
-        
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                            KYC Status:
-                          </span>
-                          <span className={`text-sm font-medium px-2 py-1 rounded-full ${owner.kyc_status === 1
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                            }`}>
-                            {owner.kyc_status === 1 ? "Verified" : "Pending"}
-                          </span>
-                        </div>
-        
-                        {owner.needs_access_to_system === 1 && (
-                          <div className="flex justify-between items-start">
-                            <span className="text-sm font-medium text-gray-600 min-w-[120px]">
-                              System Access:
-                            </span>
-                            <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                              Enabled
-                            </span>
-                          </div>
-                        )}
-                      </div>
-        
-                      {/* Edit Button for each owner */}
-                      <div className="mt-auto pt-3 border-t border-gray-200">
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => navigate(`/edit-owner/${customerId}/${owner.owner_uuid}`)}
-                          className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
-                          style={headerColorProps.style}
-                        >
-                          <FaEdit className="inline mr-1.5" />
-                          Edit Owner {index + 1}
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
-                >
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaUser className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-600 mb-2">No owner details available</p>
-                  <p className="text-sm text-gray-500">Please complete the owner details</p>
-                </motion.div>
-              )}
             </div>
-          );
-        
+
+            {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {ownerDetails.data.map((owner, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col"
+                  >
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+                      <h4 className="text-lg font-semibold text-[#005481]">
+                        Owner {index + 1}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                          {owner.ownership_percentage}%
+                        </span>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Full Name:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.name || `${owner.first_name} ${owner.last_name}`.trim() || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Email:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.email || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Phone:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.mobile_number ? `${owner.mobile_number_country_code || ''} ${owner.mobile_number}` : "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Date of Birth:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.dob || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Country:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          {owner.country_name || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          Owner Type:
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 capitalize">
+                          {owner.owner_type || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                          KYC Status:
+                        </span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${owner.kyc_status === 1
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                          }`}>
+                          {owner.kyc_status === 1 ? "Verified" : "Pending"}
+                        </span>
+                      </div>
+
+                      {owner.needs_access_to_system === 1 && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                            System Access:
+                          </span>
+                          <span className="text-sm font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                            Enabled
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Edit Button for each owner */}
+                    <div className="mt-auto pt-3 border-t border-gray-200">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => navigate(`/edit-owner/${customerId}/${owner.owner_uuid}`)}
+                        className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                        style={headerColorProps.style}
+                      >
+                        <FaEdit className="inline mr-1.5" />
+                        Edit Owner {index + 1}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
+              >
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaUser className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600 mb-2">No owner details available</p>
+                <p className="text-sm text-gray-500">Please complete the owner details</p>
+              </motion.div>
+            )}
+          </div>
+        );
+
       case "Uploaded Documents":
         return (
           <div className="w-full space-y-4 sm:space-y-6 md:space-y-8">
@@ -3234,6 +3321,63 @@ const Profile = () => {
         customerId={customerId}
         authtoken={authtoken}
       />
+
+      {/* Delete Controller Confirmation Modal */}
+      {showDeleteControllerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <FaTimesCircle className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">
+                Delete Controller?
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete{" "}
+                <span className="font-medium text-gray-800">
+                  {controllerToDelete?.first_name && controllerToDelete?.last_name
+                    ? `${controllerToDelete.first_name} ${controllerToDelete.last_name}`
+                    : "this controller"}
+                </span>
+                ? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setShowDeleteControllerModal(false);
+                    setControllerToDelete(null);
+                  }}
+                  disabled={deleteControllerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteController}
+                  disabled={deleteControllerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {deleteControllerLoading ? (
+                    <>
+                      <RingLoader size={16} color="#ffffff" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <div className="container mx-auto p-4 py-6 sm:p-6">
         <motion.div
