@@ -25,7 +25,9 @@ import {
   FaCamera,
   FaSpinner,
   FaChevronRight,
-  FaChevronLeft
+  FaChevronLeft,
+  FaPlus,
+  FaTrashAlt,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -171,6 +173,11 @@ const Profile = () => {
   const [showDeleteControllerModal, setShowDeleteControllerModal] = useState(false);
   const [controllerToDelete, setControllerToDelete] = useState(null);
   const [deleteControllerLoading, setDeleteControllerLoading] = useState(false);
+
+  const [showDeleteOwnerModal, setShowDeleteOwnerModal] = useState(false);
+  const [ownerToDelete, setOwnerToDelete] = useState(null);
+  const [deleteOwnerLoading, setDeleteOwnerLoading] = useState(false);
+  const [remainingOwnersPercentages, setRemainingOwnersPercentages] = useState([]);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1478,6 +1485,117 @@ const Profile = () => {
     }
   };
 
+  // Open delete confirmation for an owner
+  const handleDeleteOwnerClick = (owner) => {
+    const remaining = (ownerDetails?.data || [])
+      .filter((o) => o.owner_uuid !== owner.owner_uuid)
+      .map((o) => ({
+        owner_uuid: o.owner_uuid,
+        name: o.name || `${o.first_name || ""} ${o.last_name || ""}`.trim() || "Unnamed Owner",
+        ownership_percentage: o.ownership_percentage || "0",
+      }));
+
+    setRemainingOwnersPercentages(remaining);
+    setOwnerToDelete(owner);
+    setShowDeleteOwnerModal(true);
+  };
+
+  // Update a remaining owner's percentage while editing before delete
+  const handleRemainingOwnerPercentageChange = (ownerUuid, value) => {
+    setRemainingOwnersPercentages((prev) =>
+      prev.map((o) =>
+        o.owner_uuid === ownerUuid ? { ...o, ownership_percentage: value } : o
+      )
+    );
+  };
+
+  // Sum of remaining owners' percentages, for validation
+  const remainingOwnersTotalPercentage = useMemo(() => {
+    return remainingOwnersPercentages.reduce(
+      (sum, o) => sum + (parseFloat(o.ownership_percentage) || 0),
+      0
+    );
+  }, [remainingOwnersPercentages]);
+
+  // Confirm and perform deletion
+  const handleConfirmDeleteOwner = async () => {
+    if (!ownerToDelete) return;
+
+    if (remainingOwnersPercentages.length > 0 && Math.round(remainingOwnersTotalPercentage * 100) / 100 !== 100) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid Ownership Total",
+        message: `Remaining owners' percentages must total 100%. Current total: ${remainingOwnersTotalPercentage.toFixed(2)}%.`,
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setDeleteOwnerLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+      const authCustomerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      console.log("🗑️ Deleting owner:", ownerToDelete.owner_uuid);
+
+      // Build the list of remaining owners (everyone except the one being deleted)
+      // with their existing ownership percentages, as required by the delete endpoint
+      const remainingOwners = (ownerDetails?.data || []).filter(
+        (owner) => owner.owner_uuid !== ownerToDelete.owner_uuid
+      );
+      const payload = {
+        owner_uuid: ownerToDelete.owner_uuid,
+        updated_user_type: "customer",
+        other_ownership_percentage_datas: remainingOwnersPercentages.map((owner) => ({
+          other_owner_uuid: owner.owner_uuid,
+          other_ownership_percentage: owner.ownership_percentage,
+        })),
+        updated_user_id: authCustomerId ? parseInt(authCustomerId) : null,
+      };
+
+      const response = await axios.post(
+        `${API_URL}/customers/delete-owner/${customerUuid}`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        // Refresh the owner details list
+        const refreshResponse = await axios.get(
+          `${API_URL}/customers/owner-details/${customerUuid}`,
+          { headers: { Authorization: `Bearer ${authtoken}` } }
+        );
+        setOwnerDetails(refreshResponse.data);
+
+        setToast({ message: "Owner deleted successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setShowDeleteOwnerModal(false);
+        setOwnerToDelete(null);
+        setRemainingOwnersPercentages([]);
+      } else {
+        throw new Error(response.data.message || "Failed to delete owner");
+      }
+    } catch (err) {
+      console.error("❌ Failed to delete owner:", err);
+      setModalData({
+        isOpen: true,
+        title: "Delete Failed",
+        message: err.response?.data?.message || "Failed to delete owner. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setDeleteOwnerLoading(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
       console.error("❌ Profile: Missing auth token or customer ID for save");
@@ -2140,7 +2258,7 @@ const Profile = () => {
                   className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
                   style={headerColorProps.style}
                 >
-                  <FaEdit className="inline mr-1.5" />
+                  <FaPlus className="inline mr-1.5" />
                   Add Controller
                 </motion.button>
               </div>
@@ -2155,7 +2273,7 @@ const Profile = () => {
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
+                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex flex-col"
                     >
                       <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
                         <h4 className="text-lg font-semibold text-[#005481]">
@@ -2251,7 +2369,7 @@ const Profile = () => {
                       </div>
 
                       {/* Edit / Delete Buttons for each controller */}
-                      <div className="mt-4 pt-3 border-t border-gray-200 flex gap-2">
+                      <div className="mt-auto pt-3 border-t border-gray-200 flex gap-2">
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -2268,7 +2386,7 @@ const Profile = () => {
                           onClick={() => handleDeleteControllerClick(controller)}
                           className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
                         >
-                          <FaTimesCircle className="inline mr-1.5" />
+                          <FaTrashAlt className="inline mr-1.5" />
                           Delete
                         </motion.button>
                       </div>
@@ -2317,6 +2435,16 @@ const Profile = () => {
                     {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
                   </span>
                 )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/add-owner/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaPlus className="inline mr-1.5" />
+                  Add Owner
+                </motion.button>
               </div>
             </div>
 
@@ -2352,11 +2480,11 @@ const Profile = () => {
                         </span>
                       </div>
 
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px] flex-shrink-0">
                           Email:
                         </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 min-w-0 break-words">
                           {owner.email || "N/A"}
                         </span>
                       </div>
@@ -2421,17 +2549,26 @@ const Profile = () => {
                       )}
                     </div>
 
-                    {/* Edit Button for each owner */}
-                    <div className="mt-auto pt-3 border-t border-gray-200">
+                    {/* Edit / Delete Buttons for each owner */}
+                    <div className="mt-auto pt-3 border-t border-gray-200 flex gap-2">
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => navigate(`/edit-owner/${customerId}/${owner.owner_uuid}`)}
-                        className={`w-full text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                        className={`flex-1 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
                         style={headerColorProps.style}
                       >
                         <FaEdit className="inline mr-1.5" />
-                        Edit Owner {index + 1}
+                        Edit
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleDeleteOwnerClick(owner)}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                      >
+                        <FaTrashAlt className="inline mr-1.5" />
+                        Delete
                       </motion.button>
                     </div>
                   </motion.div>
@@ -3365,6 +3502,110 @@ const Profile = () => {
                   className="flex-1 px-4 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {deleteControllerLoading ? (
+                    <>
+                      <RingLoader size={16} color="#ffffff" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Owner Confirmation Modal */}
+      {showDeleteOwnerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <FaTimesCircle className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">
+                Delete Owner?
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to delete{" "}
+                <span className="font-medium text-gray-800">
+                  {ownerToDelete?.name ||
+                    (ownerToDelete?.first_name && ownerToDelete?.last_name
+                      ? `${ownerToDelete.first_name} ${ownerToDelete.last_name}`
+                      : "this owner")}
+                </span>
+                ? This action cannot be undone.
+              </p>
+
+              {remainingOwnersPercentages.length > 0 && (
+                <div className="w-full text-left mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Adjust remaining owners' percentages so they total 100%:
+                  </p>
+                  <div className="space-y-2">
+                    {remainingOwnersPercentages.map((owner) => (
+                      <div key={owner.owner_uuid} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-700 truncate flex-1">{owner.name}</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={owner.ownership_percentage}
+                            onChange={(e) =>
+                              handleRemainingOwnerPercentageChange(owner.owner_uuid, e.target.value)
+                            }
+                            className="w-20 border border-gray-300 rounded-md px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                    <span className="text-xs text-gray-500">Total</span>
+                    <span
+                      className={`text-sm font-medium ${Math.round(remainingOwnersTotalPercentage * 100) / 100 === 100
+                        ? "text-green-600"
+                        : "text-red-500"
+                        }`}
+                    >
+                      {remainingOwnersTotalPercentage.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setShowDeleteOwnerModal(false);
+                    setOwnerToDelete(null);
+                    setRemainingOwnersPercentages([]);
+                  }}
+                  disabled={deleteOwnerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteOwner}
+                  disabled={
+                    deleteOwnerLoading ||
+                    (remainingOwnersPercentages.length > 0 &&
+                      Math.round(remainingOwnersTotalPercentage * 100) / 100 !== 100)
+                  }
+                  className="flex-1 px-4 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteOwnerLoading ? (
                     <>
                       <RingLoader size={16} color="#ffffff" />
                       <span>Deleting...</span>

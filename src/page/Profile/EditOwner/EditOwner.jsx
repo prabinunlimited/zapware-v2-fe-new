@@ -294,6 +294,7 @@ const EditOwner = () => {
   const { customerId, ownerId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const isCreateMode = !ownerId;
 
   const authtoken = localStorage.getItem('authtoken');
   const [loading, setLoading] = useState(true);
@@ -371,6 +372,14 @@ const EditOwner = () => {
 
         if (response.data && response.data.data && response.data.data.length > 0) {
           setAllOwners(response.data.data);
+
+          // In create mode, there's no existing owner to load into the form —
+          // we just needed allOwners populated for the "other owners" list above.
+          if (isCreateMode) {
+            setLoading(false);
+            return;
+          }
+
           let foundOwner = null;
           let foundIndex = -1;
 
@@ -384,8 +393,9 @@ const EditOwner = () => {
           }
 
           if (!foundOwner) {
-            foundOwner = response.data.data[0];
-            foundIndex = 0;
+            toast.error('Owner not found');
+            setLoading(false);
+            return;
           }
 
           const data = foundOwner;
@@ -399,12 +409,12 @@ const EditOwner = () => {
             owner_last_name: data.last_name || '',
             owner_email: data.email || '',
             owner_phone_number: data.mobile_number || '',
-            owner_phone_number_country_code: data.mobile_number_country_code  || '',
+            owner_phone_number_country_code: data.mobile_number_country_code || '',
             owner_country_id: data.country_id || '',
             ownership_percentage: data.ownership_percentage || 0,
             owner_dob: data.dob || '',
             ssn: data.ssn || '',
-            owner_gender:  data.genderid|| '',
+            owner_gender: data.genderid || '',
             owner_resident_country: data.residentcountry_id || '',
             owner_nationality: data.nationality_id || '',
             owner_zip_code: data.zip_code || '',
@@ -424,7 +434,10 @@ const EditOwner = () => {
             other_ownership_percentage_datas: data.other_ownership_percentage_datas || [],
           });
         } else {
-          toast.warning('No owner found');
+          // No owners exist yet at all — fine in create mode, nothing to show as "other owners"
+          if (!isCreateMode) {
+            toast.warning('No owner found');
+          }
         }
       } catch (error) {
         console.error('Error fetching owner:', error);
@@ -453,7 +466,7 @@ const EditOwner = () => {
     return () => {
       // Cleanup
     };
-  }, [customerId, ownerId, authtoken, dispatch]);
+  }, [customerId, ownerId, authtoken, dispatch, isCreateMode]);
 
   // ===================== FETCH STATES WHEN COUNTRY CHANGES =====================
   useEffect(() => {
@@ -552,18 +565,29 @@ const EditOwner = () => {
         }
       });
 
+      if (isCreateMode) {
+        delete payload.owner_uuid;
+      }
+
       console.log('📤 Form Data:', formData);
       console.log('📤 Sending payload:', payload);
 
+      const endpoint = isCreateMode
+        ? `${API_URL}/customers/add-owner-detail/${customerUuid}`
+        : `${API_URL}/customers/update-owner-detail/${customerUuid}`;
+
       const response = await axios.post(
-        `${API_URL}/customers/update-owner-detail/${customerUuid}`,
+        endpoint,
         payload,
         { headers: { Authorization: `Bearer ${authtoken}` } }
       );
 
       console.log('📥 API Response:', response.data);
       if (response.data?.status === 'success') {
-        setSuccessMessage(response.data.message || 'Owner information updated successfully!');
+        setSuccessMessage(
+          response.data.message ||
+          (isCreateMode ? 'Owner added successfully!' : 'Owner Details updated successfully!')
+        );
         setShowSuccessModal(true);
       } else {
         setErrorMessage(response.data?.message || 'Failed to update owner information');
@@ -709,7 +733,9 @@ const EditOwner = () => {
           >
             <FaArrowLeft className="text-gray-600" />
           </button>
-          <h1 className="text-2xl font-bold text-gray-800">Edit Owner</h1>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isCreateMode ? 'Add Owner' : 'Edit Owner'}
+          </h1>
         </div>
 
         {/* Form */}
@@ -1216,7 +1242,7 @@ const EditOwner = () => {
                         <span className="truncate">
                           {owner.name || `${owner.first_name} ${owner.last_name}`} :
                           {owner.mobile_number
-                            ? ` · ${owner.mobile_number_country_code || ''} ${owner.mobile_number}`
+                            ? `  ${owner.mobile_number_country_code || ''} ${owner.mobile_number}`
                             : ''}
                         </span>
                         <span className="font-medium text-gray-800 whitespace-nowrap">
@@ -1252,7 +1278,7 @@ const EditOwner = () => {
                 ) : (
                   <>
                     <FaSave className="w-4 h-4" />
-                    Save Changes
+                    {isCreateMode ? 'Add Owner' : 'Save Changes'}
                   </>
                 )}
               </button>
