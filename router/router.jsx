@@ -48,6 +48,10 @@ import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction
 import AllTransactions from "../src/components/Dashboard/Account/Transaction/AllTransactions";
 import SelectCountry from "../src/features/Auth/SignUp/SelectCountry";
 import CustomerSupport from "../src/page/CustomerSupport/CustomerSupport";
+import BusinessInformationEdit from "../src/page/Profile/BusinessInformationEdit/BusinessInformationEdit";
+import ResponsiblePersonEdit from "../src/page/Profile/ResponsiblePersonEdit/ResponsiblePersonEdit";
+import EditController from "../src/page/Profile/EditController/EditController";
+import EditOwner from "../src/page/Profile/EditOwner/EditOwner";
 
 const ProtectedLayout = () => {
   return (
@@ -216,7 +220,30 @@ const router = createBrowserRouter([
         path: "customer-support/:customerId", 
         element: <CustomerSupport />,
       },
-      
+      {
+        path: "edit-business-information/:customerId",
+        element: <BusinessInformationEdit />,
+      },
+      {
+        path: "edit-responsible-person/:customerId",
+        element: <ResponsiblePersonEdit />,
+      },
+      {
+        path: "add-controller/:customerId",
+        element: <EditController />,
+      },
+      {
+        path: "edit-controller/:customerId/:controllerId?",
+        element: <EditController />,
+      },
+      {
+        path: "add-owner/:customerId",
+        element: <EditOwner />,
+      },
+      {
+        path: "edit-owner/:customerId/:ownerId",
+        element: <EditOwner />,
+      },
     ],
   },
 
