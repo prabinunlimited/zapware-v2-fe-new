@@ -51,18 +51,28 @@ import {
 import { selectCountries, selectCountriesLoading } from "../../features/Auth/slices/countrySlice";
 import { setOwnerDetails } from "../../features/Auth/slices/authSlice";
 
+import {
+  fetchIdDocumentTypes,
+  selectIdDocumentTypes,
+  selectIdDocumentTypesLoading,
+} from "../../features/Auth/slices/signupSlice"
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 const defaultProfileData = {
   first_name: "",
+  middle_name: "",
   last_name: "",
   gender_id: "",
   dob: "",
   nationality_id: "",
   country_id: "",
+  resident_country_id: "",
   city: "",
   state: "",
   zip_code: "",
+  street_address_1: "",
+  street_address_2: "",
   ssn: "",
   mobile_number: "",
   email: "",
@@ -73,6 +83,15 @@ const defaultProfileData = {
   agent_code: "",
   country_name: "",
   nationality: "",
+  occupation_id: "",
+  purpose_of_account: "",
+  monthly_expected_activity: "",
+  customer_sending_countries: [],
+  customer_receiving_funds_countries: [],
+  id_document_type_id: "",
+  id_document_number: "",
+  id_issuing_country_id: "",
+  id_expiry_date: "",
 };
 
 const Profile = () => {
@@ -125,6 +144,17 @@ const Profile = () => {
   const [nationalities, setNationalities] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
   const [editableData, setEditableData] = useState(defaultProfileData);
+
+  const [occupations, setOccupations] = useState([]);
+  const [occupationsLoading, setOccupationsLoading] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+
+  const idDocumentTypes = useSelector(selectIdDocumentTypes) || [];
+  const idDocumentTypesLoading = useSelector(selectIdDocumentTypesLoading);
+
+  const [selectedSendingCountries, setSelectedSendingCountries] = useState([]);
+  const [selectedReceivingCountries, setSelectedReceivingCountries] = useState([]);
+
   const [activeTab, setActiveTab] = useState("Business Information");
   const [businessInfo, setBusinessInfo] = useState(null);
   const [responsiblePerson, setResponsiblePerson] = useState(null);
@@ -560,14 +590,27 @@ const Profile = () => {
       console.log("🔄 Profile: Initializing editableData from profileData");
       setEditableData({
         first_name: profileData.first_name || "",
+        middle_name: profileData.middle_name || "",
         last_name: profileData.last_name || "",
         gender_id: profileData.gender_id || "",
         dob: profileData.dob || "",
         nationality_id: profileData.nationality_id || "",
         country_id: profileData.country_id || "",
+        resident_country_id: profileData.resident_country_id || "",
         city: profileData.city || "",
         state: profileData.state || "",
         zip_code: profileData.zip_code || "",
+        street_address_1: profileData.street_address_1 || "",
+        street_address_2: profileData.street_address_2 || "",
+        occupation_id: profileData.occupation_id || "",
+        purpose_of_account: profileData.purpose_of_account || "",
+        monthly_expected_activity: profileData.monthly_expected_activity || "",
+        customer_sending_countries: (profileData.funds_sending_countries || []).map((c) => c.country_id),
+        customer_receiving_funds_countries: (profileData.funds_receiving_countries || []).map((c) => c.country_id),
+        id_document_type_id: profileData.id_document_type_id || "",
+        id_document_number: profileData.id_document_number || "",
+        id_issuing_country_id: profileData.id_document_type_country_id || "",
+        id_expiry_date: profileData.id_document_expiry_date || "",
       });
     }
   }, [profileData]);
@@ -600,6 +643,69 @@ const Profile = () => {
     fetchData();
   }, [bearertoken]);
 
+  // Fetch occupations (individual accounts only)
+  useEffect(() => {
+    const fetchOccupations = async () => {
+      if (!isIndividualAccount || !bearertoken) return;
+      try {
+        setOccupationsLoading(true);
+        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+        });
+        if (response.data?.data && Array.isArray(response.data.data)) {
+          setOccupations(response.data.data);
+        } else if (Array.isArray(response.data)) {
+          setOccupations(response.data);
+        } else {
+          setOccupations([]);
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch occupations:", error);
+        setOccupations([]);
+      } finally {
+        setOccupationsLoading(false);
+      }
+    };
+    fetchOccupations();
+  }, [isIndividualAccount, bearertoken]);
+
+  // Fetch ID document types (individual accounts only)
+  useEffect(() => {
+    if (isIndividualAccount && idDocumentTypes.length === 0) {
+      dispatch(fetchIdDocumentTypes());
+    }
+  }, [isIndividualAccount, idDocumentTypes.length, dispatch]);
+
+  // Sync selected occupation once data + profile are both loaded
+  useEffect(() => {
+    if (profileData?.occupation_id && occupations.length > 0) {
+      const occ = occupations.find(
+        (o) => String(o.id) === String(profileData.occupation_id)
+      );
+      if (occ) setSelectedOccupation({ value: occ.id, label: occ.name });
+    }
+  }, [profileData, occupations]);
+
+  // Sync sending/receiving country multi-selects
+  useEffect(() => {
+    if (Array.isArray(profileData?.funds_sending_countries)) {
+      setSelectedSendingCountries(
+        profileData.funds_sending_countries.map((c) => ({
+          value: c.country_id,
+          label: c.countryname,
+        }))
+      );
+    }
+    if (Array.isArray(profileData?.funds_receiving_countries)) {
+      setSelectedReceivingCountries(
+        profileData.funds_receiving_countries.map((c) => ({
+          value: c.country_id,
+          label: c.countryname,
+        }))
+      );
+    }
+  }, [profileData]);
+
   // Memoize country options from Redux countries data
   const countryCodeOptions = useMemo(() => {
     if (!reduxCountries || !Array.isArray(reduxCountries)) {
@@ -616,6 +722,29 @@ const Profile = () => {
         flagUrl: country.flag_url,
       }))
       .sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically
+  }, [reduxCountries]);
+
+  const nationalityOptions = useMemo(() => {
+    return nationalities.map((n) => ({
+      value: n.id,
+      label: n.name,
+      flagUrl: n.flag_url, // omit if your nationalities API doesn't return this
+    }));
+  }, [nationalities]);
+
+  const genderOptions = useMemo(() => {
+    return genders.map((g) => ({
+      value: g.id,
+      label: g.name,
+    }));
+  }, [genders]);
+
+  const profileCountryOptions = useMemo(() => {
+    if (!reduxCountries || !Array.isArray(reduxCountries)) return [];
+    return reduxCountries.map((c) => ({
+      value: c.id,
+      label: c.name,
+    }));
   }, [reduxCountries]);
 
   // Find current selected country option
@@ -678,15 +807,32 @@ const Profile = () => {
       // Reset to original data from Redux
       setEditableData({
         first_name: profileData?.first_name || "",
+        middle_name: profileData?.middle_name || "",
         last_name: profileData?.last_name || "",
         gender_id: profileData?.gender_id || "",
         dob: profileData?.dob || "",
         nationality_id: profileData?.nationality_id || "",
         country_id: profileData?.country_id || "",
+        resident_country_id: profileData?.resident_country_id || "",
         city: profileData?.city || "",
         state: profileData?.state || "",
         zip_code: profileData?.zip_code || "",
+        street_address_1: profileData?.street_address_1 || "",
+        street_address_2: profileData?.street_address_2 || "",
+        occupation_id: profileData?.occupation_id || "",
+        purpose_of_account: profileData?.purpose_of_account || "",
+        monthly_expected_activity: profileData?.monthly_expected_activity || "",
+        customer_sending_countries: (profileData?.funds_sending_countries || []).map((c) => c.country_id),
+        customer_receiving_funds_countries: (profileData?.funds_receiving_countries || []).map((c) => c.country_id),
+        id_document_type_id: profileData?.id_document_type_id || "",
+        id_document_number: profileData?.id_document_number || "",
+        id_issuing_country_id: profileData?.id_document_type_country_id || "",
+        id_expiry_date: profileData?.id_document_expiry_date || "",
       });
+      if (profileData?.occupation_id) {
+        const occ = occupations.find((o) => o.id === profileData.occupation_id);
+        setSelectedOccupation(occ ? { value: occ.id, label: occ.name } : null);
+      }
     }
     setIsEditing((prev) => !prev);
   };
@@ -696,6 +842,50 @@ const Profile = () => {
     setEditableData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  };
+  const handleNationalitySelectChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, nationality_id: selectedOption?.value || "" }));
+  };
+
+  const handleGenderSelectChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, gender_id: selectedOption?.value || "" }));
+  };
+
+  const handleProfileCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, country_id: selectedOption?.value || "" }));
+  };
+
+  const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setEditableData((prev) => ({ ...prev, occupation_id: selectedOption?.value || "" }));
+  };
+
+  const handleResidentCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, resident_country_id: selectedOption?.value || "" }));
+  };
+
+  const handleIdIssuingCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, id_issuing_country_id: selectedOption?.value || "" }));
+  };
+
+  const handleIdDocumentTypeChange = (e) => {
+    setEditableData((prev) => ({ ...prev, id_document_type_id: e.target.value }));
+  };
+
+  const handleSendingCountriesChange = (selectedOptions) => {
+    setSelectedSendingCountries(selectedOptions || []);
+    setEditableData((prev) => ({
+      ...prev,
+      customer_sending_countries: (selectedOptions || []).map((opt) => opt.value),
+    }));
+  };
+
+  const handleReceivingCountriesChange = (selectedOptions) => {
+    setSelectedReceivingCountries(selectedOptions || []);
+    setEditableData((prev) => ({
+      ...prev,
+      customer_receiving_funds_countries: (selectedOptions || []).map((opt) => opt.value),
     }));
   };
 
@@ -1606,26 +1796,88 @@ const Profile = () => {
     try {
       console.log("💾 Profile: Saving changes", editableData);
 
-      const requestData = {
-        customer_id: customerId,
-        first_name: editableData.first_name,
-        last_name: editableData.last_name,
-        gender: editableData.gender_id
-          ? parseInt(editableData.gender_id, 10)
-          : null,
-        dob: editableData.dob,
-        country: editableData.country_id,
-        nationality: editableData.nationality_id,
-        city: editableData.city,
-        state: editableData.state,
-        zip_code: editableData.zip_code,
-      };
+      let response;
 
-      const response = await axios.post(
-        `${API_URL}/customers/update-profile`,
-        requestData,
-        { headers: { Authorization: `Bearer ${authtoken}` } },
-      );
+      if (isIndividualAccount) {
+        // Individual accounts use a dedicated endpoint with a different payload shape
+        const customerUuid = localStorage.getItem("customerUuid");
+        const authCustomerId = localStorage.getItem("authcustomer_id");
+
+        if (!customerUuid) {
+          throw new Error("Customer UUID not found. Please logout and login again.");
+        }
+
+        const individualRequestData = {
+          first_name: editableData.first_name,
+          middle_name: editableData.middle_name,
+          last_name: editableData.last_name,
+          resident_country_id: editableData.resident_country_id
+            ? parseInt(editableData.resident_country_id, 10)
+            : null,
+          nationality_id: editableData.nationality_id
+            ? parseInt(editableData.nationality_id, 10)
+            : null,
+          gender_id: editableData.gender_id
+            ? parseInt(editableData.gender_id, 10)
+            : null,
+          dob: editableData.dob,
+          occupation_id: editableData.occupation_id
+            ? parseInt(editableData.occupation_id, 10)
+            : null,
+          purpose_of_account: editableData.purpose_of_account,
+          monthly_expected_activity: editableData.monthly_expected_activity,
+          customer_sending_countries: editableData.customer_sending_countries,
+          customer_receiving_funds_countries: editableData.customer_receiving_funds_countries,
+          contact_address_country_id: editableData.country_id
+            ? parseInt(editableData.country_id, 10)
+            : null,
+          contact_address_zip_code: editableData.zip_code,
+          contact_address_street_address_1: editableData.street_address_1,
+          contact_address_street_address_2: editableData.street_address_2,
+          contact_address_city: editableData.city,
+          contact_address_state: editableData.state,
+          id_document_type_id: editableData.id_document_type_id
+            ? parseInt(editableData.id_document_type_id, 10)
+            : null,
+          id_document_number: editableData.id_document_number,
+          id_issuing_country_id: editableData.id_issuing_country_id
+            ? parseInt(editableData.id_issuing_country_id, 10)
+            : null,
+          id_expiry_date: editableData.id_expiry_date,
+          updated_user_type: "customer",
+          updated_user_id: authCustomerId ? parseInt(authCustomerId, 10) : null,
+        };
+
+        console.log("📤 Individual update payload:", individualRequestData);
+
+        response = await axios.post(
+          `${API_URL}/customers/update-individual-customer-details/${customerUuid}`,
+          individualRequestData,
+          { headers: { Authorization: `Bearer ${authtoken}` } },
+        );
+      } else {
+        // Non-individual (institution) accounts keep the existing endpoint/payload
+        const requestData = {
+          customer_id: customerId,
+          first_name: editableData.first_name,
+          last_name: editableData.last_name,
+          gender: editableData.gender_id
+            ? parseInt(editableData.gender_id, 10)
+            : null,
+          dob: editableData.dob,
+          country: editableData.country_id,
+          nationality: editableData.nationality_id,
+          city: editableData.city,
+          state: editableData.state,
+          zip_code: editableData.zip_code,
+        };
+
+        response = await axios.post(
+          `${API_URL}/customers/update-profile`,
+          requestData,
+          { headers: { Authorization: `Bearer ${authtoken}` } },
+        );
+      }
 
       if (response.data.status === "success") {
         console.log("✅ Profile: Updated successfully");
@@ -1643,6 +1895,8 @@ const Profile = () => {
           type: "success",
         });
         setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to update profile");
       }
     } catch (err) {
       console.error("❌ Profile: Failed to update", err);
@@ -1650,7 +1904,7 @@ const Profile = () => {
       setModalData({
         isOpen: true,
         title: "Error",
-        message: "Failed to update profile. Please try again.",
+        message: err.response?.data?.message || err.message || "Failed to update profile. Please try again.",
         type: "error",
       });
       setIsModalOpen(true);
@@ -1658,6 +1912,7 @@ const Profile = () => {
       setSaveLoading(false);
     }
   };
+
   // Handle profile picture upload
   const handleProfilePictureUpload = async (file) => {
     // Validate file
@@ -3713,7 +3968,7 @@ const Profile = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Name */}
-                  <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                  <div className={`md:col-span-2 grid gap-4 ${isIndividualAccount ? "grid-cols-3" : "grid-cols-2"}`}>
                     {isEditing ? (
                       <>
                         <div>
@@ -3728,6 +3983,20 @@ const Profile = () => {
                             placeholder="First Name"
                           />
                         </div>
+                        {isIndividualAccount && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Middle Name
+                            </label>
+                            <input
+                              name="middle_name"
+                              value={editableData.middle_name}
+                              onChange={handleInputChange}
+                              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Middle Name"
+                            />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">
                             Last Name
@@ -3751,6 +4020,16 @@ const Profile = () => {
                             {displayProfileData.first_name || "Not Available"}
                           </span>
                         </div>
+                        {isIndividualAccount && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Middle Name
+                            </label>
+                            <span className="text-sm font-medium text-gray-800 block py-2">
+                              {displayProfileData.middle_name || "N/A"}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">
                             Last Name
@@ -3810,19 +4089,14 @@ const Profile = () => {
                       Gender
                     </label>
                     {isEditing ? (
-                      <select
-                        name="gender_id"
-                        value={editableData.gender_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select gender</option>
-                        {genders.map((gender) => (
-                          <option key={gender.id} value={gender.id}>
-                            {gender.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={genderOptions}
+                        value={genderOptions.find((opt) => opt.value === editableData.gender_id) || null}
+                        onChange={handleGenderSelectChange}
+                        placeholder="Select gender"
+                        isSearchable
+                        classNamePrefix="react-select"
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {genders.find(
@@ -3857,19 +4131,27 @@ const Profile = () => {
                       Nationality
                     </label>
                     {isEditing ? (
-                      <select
-                        name="nationality_id"
-                        value={editableData.nationality_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select nationality</option>
-                        {nationalities.map((nationality) => (
-                          <option key={nationality.id} value={nationality.id}>
-                            {nationality.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={nationalityOptions}
+                        value={nationalityOptions.find((opt) => opt.value === editableData.nationality_id) || null}
+                        onChange={handleNationalitySelectChange}
+                        placeholder="Select nationality"
+                        isSearchable
+                        classNamePrefix="react-select"
+                        formatOptionLabel={(option) => (
+                          <div className="flex items-center">
+                            {option.flagUrl && (
+                              <img
+                                src={option.flagUrl}
+                                alt={option.label}
+                                className="w-5 h-4 object-cover mr-2"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            )}
+                            <span>{option.label}</span>
+                          </div>
+                        )}
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {displayProfileData.nationality || "N/A"}
@@ -3882,19 +4164,16 @@ const Profile = () => {
                       Country
                     </label>
                     {isEditing ? (
-                      <select
-                        name="country_id"
-                        value={editableData.country_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select country</option>
-                        {reduxCountries && reduxCountries.map((country) => (  // ← Use reduxCountries
-                          <option key={country.id} value={country.id}>
-                            {country.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={profileCountryOptions}
+                        value={profileCountryOptions.find((opt) => opt.value === editableData.country_id) || null}
+                        onChange={handleProfileCountryChange}
+                        placeholder="Select country"
+                        isSearchable
+                        isLoading={countriesLoading}
+                        classNamePrefix="react-select"
+                        cursor="pointer"
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {displayProfileData.country_name || "N/A"}
@@ -3959,6 +4238,268 @@ const Profile = () => {
                       </span>
                     )}
                   </div>
+
+                  {isIndividualAccount && (
+                    <>
+                      {/* <div>
+                        <label className="block text-xs text-gray-500 mb-1">Middle Name</label>
+                        {isEditing ? (
+                          <input
+                            name="middle_name"
+                            value={editableData.middle_name}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Middle Name"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.middle_name || "N/A"}
+                          </span>
+                        )}
+                      </div> */}
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Resident Country</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={
+                              reduxCountries
+                                ?.map((c) => ({ value: c.id, label: c.name }))
+                                .find((opt) => opt.value === editableData.resident_country_id) || null
+                            }
+                            onChange={handleResidentCountryChange}
+                            placeholder="Select resident country"
+                            isSearchable
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {reduxCountries?.find((c) => c.id === displayProfileData.resident_country_id)?.name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Street Address</label>
+                        {isEditing ? (
+                          <input
+                            name="street_address_1"
+                            value={editableData.street_address_1}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Street Address"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.street_address_1 || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Street Address 2 (Optional)</label>
+                        {isEditing ? (
+                          <input
+                            name="street_address_2"
+                            value={editableData.street_address_2}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Apt, suite, unit, etc."
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.street_address_2 || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Occupation</label>
+                        {isEditing ? (
+                          occupationsLoading ? (
+                            <div className="flex items-center py-2 text-sm text-gray-500">
+                              <RingLoader size={16} color="#3b82f6" />
+                              <span className="ml-2">Loading occupations...</span>
+                            </div>
+                          ) : (
+                            <Select
+                              options={occupations.map((occ) => ({ value: occ.id, label: occ.name }))}
+                              value={selectedOccupation}
+                              onChange={handleOccupationChange}
+                              placeholder="Select occupation"
+                              isClearable
+                              classNamePrefix="react-select"
+                            />
+                          )
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.occupation_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Purpose of Account</label>
+                        {isEditing ? (
+                          <input
+                            name="purpose_of_account"
+                            value={editableData.purpose_of_account}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Personal savings"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.purpose_of_account || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Monthly Expected Activity</label>
+                        {isEditing ? (
+                          <input
+                            name="monthly_expected_activity"
+                            value={editableData.monthly_expected_activity}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., $1,000 - $5,000"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.monthly_expected_activity || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-500 mb-1">Customer Sending Countries</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={selectedSendingCountries}
+                            onChange={handleSendingCountriesChange}
+                            isMulti
+                            placeholder="Select sending countries"
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {(displayProfileData.funds_sending_countries || [])
+                              .map((c) => c.countryname)
+                              .filter(Boolean)
+                              .join(", ") || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-500 mb-1">Customer Receiving Funds Countries</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={selectedReceivingCountries}
+                            onChange={handleReceivingCountriesChange}
+                            isMulti
+                            placeholder="Select receiving countries"
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {(displayProfileData.funds_receiving_countries || [])
+                              .map((c) => c.countryname)
+                              .filter(Boolean)
+                              .join(", ") || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Document Type</label>
+                        {isEditing ? (
+                          idDocumentTypesLoading ? (
+                            <div className="flex items-center py-2 text-sm text-gray-500">
+                              <RingLoader size={16} color="#3b82f6" />
+                              <span className="ml-2">Loading...</span>
+                            </div>
+                          ) : (
+                            <select
+                              name="id_document_type_id"
+                              value={editableData.id_document_type_id}
+                              onChange={handleIdDocumentTypeChange}
+                              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="">Select document type</option>
+                              {idDocumentTypes.map((type) => (
+                                <option key={type.id} value={type.id}>{type.name}</option>
+                              ))}
+                            </select>
+                          )
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_type_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Document Number</label>
+                        {isEditing ? (
+                          <input
+                            name="id_document_number"
+                            value={editableData.id_document_number}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Document number"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_number || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Issuing Country</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={
+                              reduxCountries
+                                ?.map((c) => ({ value: c.id, label: c.name }))
+                                .find((opt) => String(opt.value) === String(editableData.id_issuing_country_id)) || null
+                            }
+                            onChange={handleIdIssuingCountryChange}
+                            placeholder="Select issuing country"
+                            isSearchable
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_type_country_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Expiry Date</label>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            name="id_expiry_date"
+                            value={editableData.id_expiry_date}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_expiry_date || "N/A"}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   {/* SSN (only for US) */}
                   {isUnitedStatesSelected() && (
