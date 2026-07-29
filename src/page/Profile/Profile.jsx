@@ -25,7 +25,9 @@ import {
   FaCamera,
   FaSpinner,
   FaChevronRight,
-  FaChevronLeft
+  FaChevronLeft,
+  FaPlus,
+  FaTrashAlt,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -49,18 +51,28 @@ import {
 import { selectCountries, selectCountriesLoading } from "../../features/Auth/slices/countrySlice";
 import { setOwnerDetails } from "../../features/Auth/slices/authSlice";
 
+import {
+  fetchIdDocumentTypes,
+  selectIdDocumentTypes,
+  selectIdDocumentTypesLoading,
+} from "../../features/Auth/slices/signupSlice"
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 const defaultProfileData = {
   first_name: "",
+  middle_name: "",
   last_name: "",
   gender_id: "",
   dob: "",
   nationality_id: "",
   country_id: "",
+  resident_country_id: "",
   city: "",
   state: "",
   zip_code: "",
+  street_address_1: "",
+  street_address_2: "",
   ssn: "",
   mobile_number: "",
   email: "",
@@ -71,6 +83,15 @@ const defaultProfileData = {
   agent_code: "",
   country_name: "",
   nationality: "",
+  occupation_id: "",
+  purpose_of_account: "",
+  monthly_expected_activity: "",
+  customer_sending_countries: [],
+  customer_receiving_funds_countries: [],
+  id_document_type_id: "",
+  id_document_number: "",
+  id_issuing_country_id: "",
+  id_expiry_date: "",
 };
 
 const Profile = () => {
@@ -123,6 +144,17 @@ const Profile = () => {
   const [nationalities, setNationalities] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
   const [editableData, setEditableData] = useState(defaultProfileData);
+
+  const [occupations, setOccupations] = useState([]);
+  const [occupationsLoading, setOccupationsLoading] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState(null);
+
+  const idDocumentTypes = useSelector(selectIdDocumentTypes) || [];
+  const idDocumentTypesLoading = useSelector(selectIdDocumentTypesLoading);
+
+  const [selectedSendingCountries, setSelectedSendingCountries] = useState([]);
+  const [selectedReceivingCountries, setSelectedReceivingCountries] = useState([]);
+
   const [activeTab, setActiveTab] = useState("Business Information");
   const [businessInfo, setBusinessInfo] = useState(null);
   const [responsiblePerson, setResponsiblePerson] = useState(null);
@@ -167,6 +199,15 @@ const Profile = () => {
   const [emailPasscodeRequestLoading, setEmailPasscodeRequestLoading] = useState(false);
   const [emailPasscodeResendTimer, setEmailPasscodeResendTimer] = useState(0);
   const [canResendEmailPasscode, setCanResendEmailPasscode] = useState(true);
+
+  const [showDeleteControllerModal, setShowDeleteControllerModal] = useState(false);
+  const [controllerToDelete, setControllerToDelete] = useState(null);
+  const [deleteControllerLoading, setDeleteControllerLoading] = useState(false);
+
+  const [showDeleteOwnerModal, setShowDeleteOwnerModal] = useState(false);
+  const [ownerToDelete, setOwnerToDelete] = useState(null);
+  const [deleteOwnerLoading, setDeleteOwnerLoading] = useState(false);
+  const [remainingOwnersPercentages, setRemainingOwnersPercentages] = useState([]);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -549,14 +590,27 @@ const Profile = () => {
       console.log("🔄 Profile: Initializing editableData from profileData");
       setEditableData({
         first_name: profileData.first_name || "",
+        middle_name: profileData.middle_name || "",
         last_name: profileData.last_name || "",
         gender_id: profileData.gender_id || "",
         dob: profileData.dob || "",
         nationality_id: profileData.nationality_id || "",
         country_id: profileData.country_id || "",
+        resident_country_id: profileData.resident_country_id || "",
         city: profileData.city || "",
         state: profileData.state || "",
         zip_code: profileData.zip_code || "",
+        street_address_1: profileData.street_address_1 || "",
+        street_address_2: profileData.street_address_2 || "",
+        occupation_id: profileData.occupation_id || "",
+        purpose_of_account: profileData.purpose_of_account || "",
+        monthly_expected_activity: profileData.monthly_expected_activity || "",
+        customer_sending_countries: (profileData.funds_sending_countries || []).map((c) => c.country_id),
+        customer_receiving_funds_countries: (profileData.funds_receiving_countries || []).map((c) => c.country_id),
+        id_document_type_id: profileData.id_document_type_id || "",
+        id_document_number: profileData.id_document_number || "",
+        id_issuing_country_id: profileData.id_document_type_country_id || "",
+        id_expiry_date: profileData.id_document_expiry_date || "",
       });
     }
   }, [profileData]);
@@ -589,6 +643,69 @@ const Profile = () => {
     fetchData();
   }, [bearertoken]);
 
+  // Fetch occupations (individual accounts only)
+  useEffect(() => {
+    const fetchOccupations = async () => {
+      if (!isIndividualAccount || !bearertoken) return;
+      try {
+        setOccupationsLoading(true);
+        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
+          headers: { Authorization: `Bearer ${bearertoken}` },
+        });
+        if (response.data?.data && Array.isArray(response.data.data)) {
+          setOccupations(response.data.data);
+        } else if (Array.isArray(response.data)) {
+          setOccupations(response.data);
+        } else {
+          setOccupations([]);
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch occupations:", error);
+        setOccupations([]);
+      } finally {
+        setOccupationsLoading(false);
+      }
+    };
+    fetchOccupations();
+  }, [isIndividualAccount, bearertoken]);
+
+  // Fetch ID document types (individual accounts only)
+  useEffect(() => {
+    if (isIndividualAccount && idDocumentTypes.length === 0) {
+      dispatch(fetchIdDocumentTypes());
+    }
+  }, [isIndividualAccount, idDocumentTypes.length, dispatch]);
+
+  // Sync selected occupation once data + profile are both loaded
+  useEffect(() => {
+    if (profileData?.occupation_id && occupations.length > 0) {
+      const occ = occupations.find(
+        (o) => String(o.id) === String(profileData.occupation_id)
+      );
+      if (occ) setSelectedOccupation({ value: occ.id, label: occ.name });
+    }
+  }, [profileData, occupations]);
+
+  // Sync sending/receiving country multi-selects
+  useEffect(() => {
+    if (Array.isArray(profileData?.funds_sending_countries)) {
+      setSelectedSendingCountries(
+        profileData.funds_sending_countries.map((c) => ({
+          value: c.country_id,
+          label: c.countryname,
+        }))
+      );
+    }
+    if (Array.isArray(profileData?.funds_receiving_countries)) {
+      setSelectedReceivingCountries(
+        profileData.funds_receiving_countries.map((c) => ({
+          value: c.country_id,
+          label: c.countryname,
+        }))
+      );
+    }
+  }, [profileData]);
+
   // Memoize country options from Redux countries data
   const countryCodeOptions = useMemo(() => {
     if (!reduxCountries || !Array.isArray(reduxCountries)) {
@@ -605,6 +722,29 @@ const Profile = () => {
         flagUrl: country.flag_url,
       }))
       .sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically
+  }, [reduxCountries]);
+
+  const nationalityOptions = useMemo(() => {
+    return nationalities.map((n) => ({
+      value: n.id,
+      label: n.name,
+      flagUrl: n.flag_url, // omit if your nationalities API doesn't return this
+    }));
+  }, [nationalities]);
+
+  const genderOptions = useMemo(() => {
+    return genders.map((g) => ({
+      value: g.id,
+      label: g.name,
+    }));
+  }, [genders]);
+
+  const profileCountryOptions = useMemo(() => {
+    if (!reduxCountries || !Array.isArray(reduxCountries)) return [];
+    return reduxCountries.map((c) => ({
+      value: c.id,
+      label: c.name,
+    }));
   }, [reduxCountries]);
 
   // Find current selected country option
@@ -667,15 +807,32 @@ const Profile = () => {
       // Reset to original data from Redux
       setEditableData({
         first_name: profileData?.first_name || "",
+        middle_name: profileData?.middle_name || "",
         last_name: profileData?.last_name || "",
         gender_id: profileData?.gender_id || "",
         dob: profileData?.dob || "",
         nationality_id: profileData?.nationality_id || "",
         country_id: profileData?.country_id || "",
+        resident_country_id: profileData?.resident_country_id || "",
         city: profileData?.city || "",
         state: profileData?.state || "",
         zip_code: profileData?.zip_code || "",
+        street_address_1: profileData?.street_address_1 || "",
+        street_address_2: profileData?.street_address_2 || "",
+        occupation_id: profileData?.occupation_id || "",
+        purpose_of_account: profileData?.purpose_of_account || "",
+        monthly_expected_activity: profileData?.monthly_expected_activity || "",
+        customer_sending_countries: (profileData?.funds_sending_countries || []).map((c) => c.country_id),
+        customer_receiving_funds_countries: (profileData?.funds_receiving_countries || []).map((c) => c.country_id),
+        id_document_type_id: profileData?.id_document_type_id || "",
+        id_document_number: profileData?.id_document_number || "",
+        id_issuing_country_id: profileData?.id_document_type_country_id || "",
+        id_expiry_date: profileData?.id_document_expiry_date || "",
       });
+      if (profileData?.occupation_id) {
+        const occ = occupations.find((o) => o.id === profileData.occupation_id);
+        setSelectedOccupation(occ ? { value: occ.id, label: occ.name } : null);
+      }
     }
     setIsEditing((prev) => !prev);
   };
@@ -685,6 +842,50 @@ const Profile = () => {
     setEditableData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  };
+  const handleNationalitySelectChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, nationality_id: selectedOption?.value || "" }));
+  };
+
+  const handleGenderSelectChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, gender_id: selectedOption?.value || "" }));
+  };
+
+  const handleProfileCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, country_id: selectedOption?.value || "" }));
+  };
+
+  const handleOccupationChange = (selectedOption) => {
+    setSelectedOccupation(selectedOption);
+    setEditableData((prev) => ({ ...prev, occupation_id: selectedOption?.value || "" }));
+  };
+
+  const handleResidentCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, resident_country_id: selectedOption?.value || "" }));
+  };
+
+  const handleIdIssuingCountryChange = (selectedOption) => {
+    setEditableData((prev) => ({ ...prev, id_issuing_country_id: selectedOption?.value || "" }));
+  };
+
+  const handleIdDocumentTypeChange = (e) => {
+    setEditableData((prev) => ({ ...prev, id_document_type_id: e.target.value }));
+  };
+
+  const handleSendingCountriesChange = (selectedOptions) => {
+    setSelectedSendingCountries(selectedOptions || []);
+    setEditableData((prev) => ({
+      ...prev,
+      customer_sending_countries: (selectedOptions || []).map((opt) => opt.value),
+    }));
+  };
+
+  const handleReceivingCountriesChange = (selectedOptions) => {
+    setSelectedReceivingCountries(selectedOptions || []);
+    setEditableData((prev) => ({
+      ...prev,
+      customer_receiving_funds_countries: (selectedOptions || []).map((opt) => opt.value),
     }));
   };
 
@@ -1410,6 +1611,181 @@ const Profile = () => {
     }
   };
 
+  // Open delete confirmation for a controller
+  const handleDeleteControllerClick = (controller) => {
+    setControllerToDelete(controller);
+    setShowDeleteControllerModal(true);
+  };
+
+  // Confirm and perform deletion
+  const handleConfirmDeleteController = async () => {
+    if (!controllerToDelete) return;
+
+    setDeleteControllerLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+      const authCustomerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      console.log("🗑️ Deleting controller:", controllerToDelete.controller_uuid);
+
+      const payload = {
+        controller_uuid: controllerToDelete.controller_uuid,
+        updated_user_type: "customer",
+        updated_user_id: authCustomerId ? parseInt(authCustomerId) : null,
+      };
+
+      const response = await axios.post(
+        `${API_URL}/customers/delete-office-controller/${customerUuid}`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        // Refresh the office controllers list
+        const refreshResponse = await axios.get(
+          `${API_URL}/customers/office-controllers/${customerUuid}`,
+          { headers: { Authorization: `Bearer ${authtoken}` } }
+        );
+        setOfficeControllers(refreshResponse.data);
+
+        setToast({ message: "Controller deleted successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setShowDeleteControllerModal(false);
+        setControllerToDelete(null);
+      } else {
+        throw new Error(response.data.message || "Failed to delete controller");
+      }
+    } catch (err) {
+      console.error("❌ Failed to delete controller:", err);
+      setModalData({
+        isOpen: true,
+        title: "Delete Failed",
+        message: err.response?.data?.message || "Failed to delete controller. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setDeleteControllerLoading(false);
+    }
+  };
+
+  // Open delete confirmation for an owner
+  const handleDeleteOwnerClick = (owner) => {
+    const remaining = (ownerDetails?.data || [])
+      .filter((o) => o.owner_uuid !== owner.owner_uuid)
+      .map((o) => ({
+        owner_uuid: o.owner_uuid,
+        name: o.name || `${o.first_name || ""} ${o.last_name || ""}`.trim() || "Unnamed Owner",
+        ownership_percentage: o.ownership_percentage || "0",
+      }));
+
+    setRemainingOwnersPercentages(remaining);
+    setOwnerToDelete(owner);
+    setShowDeleteOwnerModal(true);
+  };
+
+  // Update a remaining owner's percentage while editing before delete
+  const handleRemainingOwnerPercentageChange = (ownerUuid, value) => {
+    setRemainingOwnersPercentages((prev) =>
+      prev.map((o) =>
+        o.owner_uuid === ownerUuid ? { ...o, ownership_percentage: value } : o
+      )
+    );
+  };
+
+  // Sum of remaining owners' percentages, for validation
+  const remainingOwnersTotalPercentage = useMemo(() => {
+    return remainingOwnersPercentages.reduce(
+      (sum, o) => sum + (parseFloat(o.ownership_percentage) || 0),
+      0
+    );
+  }, [remainingOwnersPercentages]);
+
+  // Confirm and perform deletion
+  const handleConfirmDeleteOwner = async () => {
+    if (!ownerToDelete) return;
+
+    if (remainingOwnersPercentages.length > 0 && Math.round(remainingOwnersTotalPercentage * 100) / 100 !== 100) {
+      setModalData({
+        isOpen: true,
+        title: "Invalid Ownership Total",
+        message: `Remaining owners' percentages must total 100%. Current total: ${remainingOwnersTotalPercentage.toFixed(2)}%.`,
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setDeleteOwnerLoading(true);
+
+    try {
+      const customerUuid = localStorage.getItem("customerUuid");
+      const authCustomerId = localStorage.getItem("authcustomer_id");
+
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      console.log("🗑️ Deleting owner:", ownerToDelete.owner_uuid);
+
+      // Build the list of remaining owners (everyone except the one being deleted)
+      // with their existing ownership percentages, as required by the delete endpoint
+      const remainingOwners = (ownerDetails?.data || []).filter(
+        (owner) => owner.owner_uuid !== ownerToDelete.owner_uuid
+      );
+      const payload = {
+        owner_uuid: ownerToDelete.owner_uuid,
+        updated_user_type: "customer",
+        other_ownership_percentage_datas: remainingOwnersPercentages.map((owner) => ({
+          other_owner_uuid: owner.owner_uuid,
+          other_ownership_percentage: owner.ownership_percentage,
+        })),
+        updated_user_id: authCustomerId ? parseInt(authCustomerId) : null,
+      };
+
+      const response = await axios.post(
+        `${API_URL}/customers/delete-owner/${customerUuid}`,
+        payload,
+        { headers: { Authorization: `Bearer ${authtoken}` } }
+      );
+
+      if (response.data.status === "success") {
+        // Refresh the owner details list
+        const refreshResponse = await axios.get(
+          `${API_URL}/customers/owner-details/${customerUuid}`,
+          { headers: { Authorization: `Bearer ${authtoken}` } }
+        );
+        setOwnerDetails(refreshResponse.data);
+
+        setToast({ message: "Owner deleted successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setShowDeleteOwnerModal(false);
+        setOwnerToDelete(null);
+        setRemainingOwnersPercentages([]);
+      } else {
+        throw new Error(response.data.message || "Failed to delete owner");
+      }
+    } catch (err) {
+      console.error("❌ Failed to delete owner:", err);
+      setModalData({
+        isOpen: true,
+        title: "Delete Failed",
+        message: err.response?.data?.message || "Failed to delete owner. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setDeleteOwnerLoading(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
       console.error("❌ Profile: Missing auth token or customer ID for save");
@@ -1420,26 +1796,88 @@ const Profile = () => {
     try {
       console.log("💾 Profile: Saving changes", editableData);
 
-      const requestData = {
-        customer_id: customerId,
-        first_name: editableData.first_name,
-        last_name: editableData.last_name,
-        gender: editableData.gender_id
-          ? parseInt(editableData.gender_id, 10)
-          : null,
-        dob: editableData.dob,
-        country: editableData.country_id,
-        nationality: editableData.nationality_id,
-        city: editableData.city,
-        state: editableData.state,
-        zip_code: editableData.zip_code,
-      };
+      let response;
 
-      const response = await axios.post(
-        `${API_URL}/customers/update-profile`,
-        requestData,
-        { headers: { Authorization: `Bearer ${authtoken}` } },
-      );
+      if (isIndividualAccount) {
+        // Individual accounts use a dedicated endpoint with a different payload shape
+        const customerUuid = localStorage.getItem("customerUuid");
+        const authCustomerId = localStorage.getItem("authcustomer_id");
+
+        if (!customerUuid) {
+          throw new Error("Customer UUID not found. Please logout and login again.");
+        }
+
+        const individualRequestData = {
+          first_name: editableData.first_name,
+          middle_name: editableData.middle_name,
+          last_name: editableData.last_name,
+          resident_country_id: editableData.resident_country_id
+            ? parseInt(editableData.resident_country_id, 10)
+            : null,
+          nationality_id: editableData.nationality_id
+            ? parseInt(editableData.nationality_id, 10)
+            : null,
+          gender_id: editableData.gender_id
+            ? parseInt(editableData.gender_id, 10)
+            : null,
+          dob: editableData.dob,
+          occupation_id: editableData.occupation_id
+            ? parseInt(editableData.occupation_id, 10)
+            : null,
+          purpose_of_account: editableData.purpose_of_account,
+          monthly_expected_activity: editableData.monthly_expected_activity,
+          customer_sending_countries: editableData.customer_sending_countries,
+          customer_receiving_funds_countries: editableData.customer_receiving_funds_countries,
+          contact_address_country_id: editableData.country_id
+            ? parseInt(editableData.country_id, 10)
+            : null,
+          contact_address_zip_code: editableData.zip_code,
+          contact_address_street_address_1: editableData.street_address_1,
+          contact_address_street_address_2: editableData.street_address_2,
+          contact_address_city: editableData.city,
+          contact_address_state: editableData.state,
+          id_document_type_id: editableData.id_document_type_id
+            ? parseInt(editableData.id_document_type_id, 10)
+            : null,
+          id_document_number: editableData.id_document_number,
+          id_issuing_country_id: editableData.id_issuing_country_id
+            ? parseInt(editableData.id_issuing_country_id, 10)
+            : null,
+          id_expiry_date: editableData.id_expiry_date,
+          updated_user_type: "customer",
+          updated_user_id: authCustomerId ? parseInt(authCustomerId, 10) : null,
+        };
+
+        console.log("📤 Individual update payload:", individualRequestData);
+
+        response = await axios.post(
+          `${API_URL}/customers/update-individual-customer-details/${customerUuid}`,
+          individualRequestData,
+          { headers: { Authorization: `Bearer ${authtoken}` } },
+        );
+      } else {
+        // Non-individual (institution) accounts keep the existing endpoint/payload
+        const requestData = {
+          customer_id: customerId,
+          first_name: editableData.first_name,
+          last_name: editableData.last_name,
+          gender: editableData.gender_id
+            ? parseInt(editableData.gender_id, 10)
+            : null,
+          dob: editableData.dob,
+          country: editableData.country_id,
+          nationality: editableData.nationality_id,
+          city: editableData.city,
+          state: editableData.state,
+          zip_code: editableData.zip_code,
+        };
+
+        response = await axios.post(
+          `${API_URL}/customers/update-profile`,
+          requestData,
+          { headers: { Authorization: `Bearer ${authtoken}` } },
+        );
+      }
 
       if (response.data.status === "success") {
         console.log("✅ Profile: Updated successfully");
@@ -1457,6 +1895,8 @@ const Profile = () => {
           type: "success",
         });
         setIsModalOpen(true);
+      } else {
+        throw new Error(response.data.message || "Failed to update profile");
       }
     } catch (err) {
       console.error("❌ Profile: Failed to update", err);
@@ -1464,7 +1904,7 @@ const Profile = () => {
       setModalData({
         isOpen: true,
         title: "Error",
-        message: "Failed to update profile. Please try again.",
+        message: err.response?.data?.message || err.message || "Failed to update profile. Please try again.",
         type: "error",
       });
       setIsModalOpen(true);
@@ -1472,6 +1912,7 @@ const Profile = () => {
       setSaveLoading(false);
     }
   };
+
   // Handle profile picture upload
   const handleProfilePictureUpload = async (file) => {
     // Validate file
@@ -1704,15 +2145,27 @@ const Profile = () => {
       case "Business Information":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Business Information
               </h3>
-              {businessInfo && businessInfo.data && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  ✓ Complete
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {businessInfo && businessInfo.data && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    ✓ Complete
+                  </span>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/edit-business-information/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaEdit className="inline mr-1.5" />
+                  Edit
+                </motion.button>
+              </div>
             </div>
 
             {businessInfo && businessInfo.data ? (
@@ -1899,15 +2352,27 @@ const Profile = () => {
       case "Responsible Person":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Responsible Person
               </h3>
-              {responsiblePerson && responsiblePerson.data && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  ✓ Complete
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {responsiblePerson && responsiblePerson.data && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    ✓ Complete
+                  </span>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/edit-responsible-person/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaEdit className="inline mr-1.5" />
+                  Edit
+                </motion.button>
+              </div>
             </div>
 
             {responsiblePerson && responsiblePerson.data ? (
@@ -1999,7 +2464,7 @@ const Profile = () => {
                           <span className="text-sm font-medium text-gray-600 min-w-[120px]">
                             {item.label}:
                           </span>
-                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                          <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2 min-w-0 break-words">
                             {item.value || "N/A"}
                           </span>
                         </div>
@@ -2031,35 +2496,47 @@ const Profile = () => {
       case "Office Controllers":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Office Controllers
               </h3>
-              {officeControllers &&
-                Array.isArray(officeControllers.data) &&
-                officeControllers.data.length > 0 && (
+              <div className="flex items-center gap-3">
+                {officeControllers && Array.isArray(officeControllers.data) && officeControllers.data.length > 0 && (
                   <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
                     {officeControllers.data.length} Controllers
                   </span>
                 )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/add-controller/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaPlus className="inline mr-1.5" />
+                  Add Controller
+                </motion.button>
+              </div>
             </div>
 
             {officeControllers && Array.isArray(officeControllers.data) ? (
               officeControllers.data.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {officeControllers.data.map((controller, index) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
+                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex flex-col"
                     >
                       <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
                         <h4 className="text-lg font-semibold text-[#005481]">
                           Controller {index + 1}
                         </h4>
-                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
+                        </div>
                       </div>
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
@@ -2145,102 +2622,28 @@ const Profile = () => {
                           </span>
                         </div>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
-                >
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaUsers className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-600 mb-2">
-                    No office controllers added
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add office controllers to your business profile
-                  </p>
-                </motion.div>
-              )
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300"
-              >
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaUsers className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="text-gray-600 mb-2">
-                  No office controllers information
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the office controllers details
-                </p>
-              </motion.div>
-            )}
-          </div>
-        );
-        return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
-                Office Controllers
-              </h3>
-              {officeControllers &&
-                Array.isArray(officeControllers.data) &&
-                officeControllers.data.length > 0 && (
-                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                    {officeControllers.data.length} Controllers
-                  </span>
-                )}
-            </div>
 
-            {officeControllers && Array.isArray(officeControllers.data) ? (
-              officeControllers.data.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {officeControllers.data.map((controller, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-semibold text-[#005481]">
-                          Controller {index + 1}
-                        </h4>
-                        <div className="w-3 h-3 bg-blue-500 rounded-full group-hover:bg-blue-600 transition-colors"></div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
-                            Name:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.name || "N/A"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
-                            Email:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.email || "N/A"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-medium text-gray-600">
-                            Position:
-                          </span>
-                          <span className="text-sm font-medium text-gray-800 text-right">
-                            {controller.position || "N/A"}
-                          </span>
-                        </div>
+                      {/* Edit / Delete Buttons for each controller */}
+                      <div className="mt-auto pt-3 border-t border-gray-200 flex gap-2">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => navigate(`/edit-controller/${customerId}/${controller.controller_uuid}`)}
+                          className={`flex-1 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                          style={headerColorProps.style}
+                        >
+                          <FaEdit className="inline mr-1.5" />
+                          Edit
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleDeleteControllerClick(controller)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                        >
+                          <FaTrashAlt className="inline mr-1.5" />
+                          Delete
+                        </motion.button>
                       </div>
                     </motion.div>
                   ))}
@@ -2254,12 +2657,8 @@ const Profile = () => {
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                     <FaUsers className="w-8 h-8 text-gray-400" />
                   </div>
-                  <p className="text-gray-600 mb-2">
-                    No office controllers added
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add office controllers to your business profile
-                  </p>
+                  <p className="text-gray-600 mb-2">No office controllers added</p>
+                  <p className="text-sm text-gray-500">Add office controllers to your business profile</p>
                 </motion.div>
               )
             ) : (
@@ -2271,12 +2670,8 @@ const Profile = () => {
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FaUsers className="w-8 h-8 text-gray-400" />
                 </div>
-                <p className="text-gray-600 mb-2">
-                  No office controllers information
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the office controllers details
-                </p>
+                <p className="text-gray-600 mb-2">No office controllers information</p>
+                <p className="text-sm text-gray-500">Please complete the office controllers details</p>
               </motion.div>
             )}
           </div>
@@ -2285,15 +2680,27 @@ const Profile = () => {
       case "Owner Details":
         return (
           <div className="w-full space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide">
                 Owner Details
               </h3>
-              {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
-                <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                  {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 && (
+                  <span className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                    {ownerDetails.data.length} {ownerDetails.data.length === 1 ? 'Owner' : 'Owners'}
+                  </span>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(`/add-owner/${customerId}`)}
+                  className={`text-white text-sm font-medium py-1.5 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                  style={headerColorProps.style}
+                >
+                  <FaPlus className="inline mr-1.5" />
+                  Add Owner
+                </motion.button>
+              </div>
             </div>
 
             {ownerDetails && ownerDetails.data && ownerDetails.data.length > 0 ? (
@@ -2304,7 +2711,7 @@ const Profile = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col"
                   >
                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
                       <h4 className="text-lg font-semibold text-[#005481]">
@@ -2328,11 +2735,11 @@ const Profile = () => {
                         </span>
                       </div>
 
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-medium text-gray-600 min-w-[120px]">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-sm font-medium text-gray-600 min-w-[120px] flex-shrink-0">
                           Email:
                         </span>
-                        <span className="text-sm font-medium text-gray-800 text-right flex-1 ml-2">
+                        <span className="text-sm font-medium text-gray-800 text-right flex-1 min-w-0 break-words">
                           {owner.email || "N/A"}
                         </span>
                       </div>
@@ -2396,6 +2803,29 @@ const Profile = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Edit / Delete Buttons for each owner */}
+                    <div className="mt-auto pt-3 border-t border-gray-200 flex gap-2">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => navigate(`/edit-owner/${customerId}/${owner.owner_uuid}`)}
+                        className={`flex-1 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors ${headerColorProps.className}`}
+                        style={headerColorProps.style}
+                      >
+                        <FaEdit className="inline mr-1.5" />
+                        Edit
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleDeleteOwnerClick(owner)}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                      >
+                        <FaTrashAlt className="inline mr-1.5" />
+                        Delete
+                      </motion.button>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -2408,51 +2838,10 @@ const Profile = () => {
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FaUser className="w-8 h-8 text-gray-400" />
                 </div>
-                <p className="text-gray-600 mb-2">
-                  No owner details available
-                </p>
-                <p className="text-sm text-gray-500">
-                  Please complete the owner details
-                </p>
+                <p className="text-gray-600 mb-2">No owner details available</p>
+                <p className="text-sm text-gray-500">Please complete the owner details</p>
               </motion.div>
             )}
-          </div>
-        );
-        return (
-          <div className="w-full space-y-6 md:space-y-8">
-            <h3 className="text-xl sm:text-2xl font-semibold text-[#005481] tracking-wide mb-4">
-              Owner Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <h4 className="text-lg font-semibold text-[#005481] mb-4 pb-2 border-b border-gray-200">
-                  Ownership Information
-                </h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium text-gray-600">
-                      Owner Name:
-                    </span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {displayProfileData.first_name}{" "}
-                      {displayProfileData.last_name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium text-gray-600">
-                      Ownership Percentage:
-                    </span>
-                    <span className="text-sm font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                      100%
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
           </div>
         );
 
@@ -3325,6 +3714,167 @@ const Profile = () => {
         authtoken={authtoken}
       />
 
+      {/* Delete Controller Confirmation Modal */}
+      {showDeleteControllerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <FaTimesCircle className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">
+                Delete Controller?
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete{" "}
+                <span className="font-medium text-gray-800">
+                  {controllerToDelete?.first_name && controllerToDelete?.last_name
+                    ? `${controllerToDelete.first_name} ${controllerToDelete.last_name}`
+                    : "this controller"}
+                </span>
+                ? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setShowDeleteControllerModal(false);
+                    setControllerToDelete(null);
+                  }}
+                  disabled={deleteControllerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteController}
+                  disabled={deleteControllerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {deleteControllerLoading ? (
+                    <>
+                      <RingLoader size={16} color="#ffffff" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Owner Confirmation Modal */}
+      {showDeleteOwnerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <FaTimesCircle className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">
+                Delete Owner?
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to delete{" "}
+                <span className="font-medium text-gray-800">
+                  {ownerToDelete?.name ||
+                    (ownerToDelete?.first_name && ownerToDelete?.last_name
+                      ? `${ownerToDelete.first_name} ${ownerToDelete.last_name}`
+                      : "this owner")}
+                </span>
+                ? This action cannot be undone.
+              </p>
+
+              {remainingOwnersPercentages.length > 0 && (
+                <div className="w-full text-left mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Adjust remaining owners' percentages so they total 100%:
+                  </p>
+                  <div className="space-y-2">
+                    {remainingOwnersPercentages.map((owner) => (
+                      <div key={owner.owner_uuid} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-700 truncate flex-1">{owner.name}</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={owner.ownership_percentage}
+                            onChange={(e) =>
+                              handleRemainingOwnerPercentageChange(owner.owner_uuid, e.target.value)
+                            }
+                            className="w-20 border border-gray-300 rounded-md px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                    <span className="text-xs text-gray-500">Total</span>
+                    <span
+                      className={`text-sm font-medium ${Math.round(remainingOwnersTotalPercentage * 100) / 100 === 100
+                        ? "text-green-600"
+                        : "text-red-500"
+                        }`}
+                    >
+                      {remainingOwnersTotalPercentage.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setShowDeleteOwnerModal(false);
+                    setOwnerToDelete(null);
+                    setRemainingOwnersPercentages([]);
+                  }}
+                  disabled={deleteOwnerLoading}
+                  className="flex-1 px-4 py-2.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteOwner}
+                  disabled={
+                    deleteOwnerLoading ||
+                    (remainingOwnersPercentages.length > 0 &&
+                      Math.round(remainingOwnersTotalPercentage * 100) / 100 !== 100)
+                  }
+                  className="flex-1 px-4 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteOwnerLoading ? (
+                    <>
+                      <RingLoader size={16} color="#ffffff" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div className="container mx-auto p-4 py-6 sm:p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -3418,7 +3968,7 @@ const Profile = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Name */}
-                  <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                  <div className={`md:col-span-2 grid gap-4 ${isIndividualAccount ? "grid-cols-3" : "grid-cols-2"}`}>
                     {isEditing ? (
                       <>
                         <div>
@@ -3433,6 +3983,20 @@ const Profile = () => {
                             placeholder="First Name"
                           />
                         </div>
+                        {isIndividualAccount && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Middle Name
+                            </label>
+                            <input
+                              name="middle_name"
+                              value={editableData.middle_name}
+                              onChange={handleInputChange}
+                              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Middle Name"
+                            />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">
                             Last Name
@@ -3456,6 +4020,16 @@ const Profile = () => {
                             {displayProfileData.first_name || "Not Available"}
                           </span>
                         </div>
+                        {isIndividualAccount && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Middle Name
+                            </label>
+                            <span className="text-sm font-medium text-gray-800 block py-2">
+                              {displayProfileData.middle_name || "N/A"}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">
                             Last Name
@@ -3515,19 +4089,14 @@ const Profile = () => {
                       Gender
                     </label>
                     {isEditing ? (
-                      <select
-                        name="gender_id"
-                        value={editableData.gender_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select gender</option>
-                        {genders.map((gender) => (
-                          <option key={gender.id} value={gender.id}>
-                            {gender.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={genderOptions}
+                        value={genderOptions.find((opt) => opt.value === editableData.gender_id) || null}
+                        onChange={handleGenderSelectChange}
+                        placeholder="Select gender"
+                        isSearchable
+                        classNamePrefix="react-select"
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {genders.find(
@@ -3562,19 +4131,27 @@ const Profile = () => {
                       Nationality
                     </label>
                     {isEditing ? (
-                      <select
-                        name="nationality_id"
-                        value={editableData.nationality_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select nationality</option>
-                        {nationalities.map((nationality) => (
-                          <option key={nationality.id} value={nationality.id}>
-                            {nationality.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={nationalityOptions}
+                        value={nationalityOptions.find((opt) => opt.value === editableData.nationality_id) || null}
+                        onChange={handleNationalitySelectChange}
+                        placeholder="Select nationality"
+                        isSearchable
+                        classNamePrefix="react-select"
+                        formatOptionLabel={(option) => (
+                          <div className="flex items-center">
+                            {option.flagUrl && (
+                              <img
+                                src={option.flagUrl}
+                                alt={option.label}
+                                className="w-5 h-4 object-cover mr-2"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            )}
+                            <span>{option.label}</span>
+                          </div>
+                        )}
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {displayProfileData.nationality || "N/A"}
@@ -3587,19 +4164,16 @@ const Profile = () => {
                       Country
                     </label>
                     {isEditing ? (
-                      <select
-                        name="country_id"
-                        value={editableData.country_id || ""}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select country</option>
-                        {reduxCountries && reduxCountries.map((country) => (  // ← Use reduxCountries
-                          <option key={country.id} value={country.id}>
-                            {country.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select
+                        options={profileCountryOptions}
+                        value={profileCountryOptions.find((opt) => opt.value === editableData.country_id) || null}
+                        onChange={handleProfileCountryChange}
+                        placeholder="Select country"
+                        isSearchable
+                        isLoading={countriesLoading}
+                        classNamePrefix="react-select"
+                        cursor="pointer"
+                      />
                     ) : (
                       <span className="text-sm font-medium text-gray-800 block py-2">
                         {displayProfileData.country_name || "N/A"}
@@ -3664,6 +4238,268 @@ const Profile = () => {
                       </span>
                     )}
                   </div>
+
+                  {isIndividualAccount && (
+                    <>
+                      {/* <div>
+                        <label className="block text-xs text-gray-500 mb-1">Middle Name</label>
+                        {isEditing ? (
+                          <input
+                            name="middle_name"
+                            value={editableData.middle_name}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Middle Name"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.middle_name || "N/A"}
+                          </span>
+                        )}
+                      </div> */}
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Resident Country</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={
+                              reduxCountries
+                                ?.map((c) => ({ value: c.id, label: c.name }))
+                                .find((opt) => opt.value === editableData.resident_country_id) || null
+                            }
+                            onChange={handleResidentCountryChange}
+                            placeholder="Select resident country"
+                            isSearchable
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {reduxCountries?.find((c) => c.id === displayProfileData.resident_country_id)?.name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Street Address</label>
+                        {isEditing ? (
+                          <input
+                            name="street_address_1"
+                            value={editableData.street_address_1}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Street Address"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.street_address_1 || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Street Address 2 (Optional)</label>
+                        {isEditing ? (
+                          <input
+                            name="street_address_2"
+                            value={editableData.street_address_2}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Apt, suite, unit, etc."
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.street_address_2 || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Occupation</label>
+                        {isEditing ? (
+                          occupationsLoading ? (
+                            <div className="flex items-center py-2 text-sm text-gray-500">
+                              <RingLoader size={16} color="#3b82f6" />
+                              <span className="ml-2">Loading occupations...</span>
+                            </div>
+                          ) : (
+                            <Select
+                              options={occupations.map((occ) => ({ value: occ.id, label: occ.name }))}
+                              value={selectedOccupation}
+                              onChange={handleOccupationChange}
+                              placeholder="Select occupation"
+                              isClearable
+                              classNamePrefix="react-select"
+                            />
+                          )
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.occupation_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Purpose of Account</label>
+                        {isEditing ? (
+                          <input
+                            name="purpose_of_account"
+                            value={editableData.purpose_of_account}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Personal savings"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.purpose_of_account || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Monthly Expected Activity</label>
+                        {isEditing ? (
+                          <input
+                            name="monthly_expected_activity"
+                            value={editableData.monthly_expected_activity}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., $1,000 - $5,000"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.monthly_expected_activity || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-500 mb-1">Customer Sending Countries</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={selectedSendingCountries}
+                            onChange={handleSendingCountriesChange}
+                            isMulti
+                            placeholder="Select sending countries"
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {(displayProfileData.funds_sending_countries || [])
+                              .map((c) => c.countryname)
+                              .filter(Boolean)
+                              .join(", ") || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-500 mb-1">Customer Receiving Funds Countries</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={selectedReceivingCountries}
+                            onChange={handleReceivingCountriesChange}
+                            isMulti
+                            placeholder="Select receiving countries"
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {(displayProfileData.funds_receiving_countries || [])
+                              .map((c) => c.countryname)
+                              .filter(Boolean)
+                              .join(", ") || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Document Type</label>
+                        {isEditing ? (
+                          idDocumentTypesLoading ? (
+                            <div className="flex items-center py-2 text-sm text-gray-500">
+                              <RingLoader size={16} color="#3b82f6" />
+                              <span className="ml-2">Loading...</span>
+                            </div>
+                          ) : (
+                            <select
+                              name="id_document_type_id"
+                              value={editableData.id_document_type_id}
+                              onChange={handleIdDocumentTypeChange}
+                              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="">Select document type</option>
+                              {idDocumentTypes.map((type) => (
+                                <option key={type.id} value={type.id}>{type.name}</option>
+                              ))}
+                            </select>
+                          )
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_type_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Document Number</label>
+                        {isEditing ? (
+                          <input
+                            name="id_document_number"
+                            value={editableData.id_document_number}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Document number"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_number || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Issuing Country</label>
+                        {isEditing ? (
+                          <Select
+                            options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                            value={
+                              reduxCountries
+                                ?.map((c) => ({ value: c.id, label: c.name }))
+                                .find((opt) => String(opt.value) === String(editableData.id_issuing_country_id)) || null
+                            }
+                            onChange={handleIdIssuingCountryChange}
+                            placeholder="Select issuing country"
+                            isSearchable
+                            classNamePrefix="react-select"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_type_country_name || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Expiry Date</label>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            name="id_expiry_date"
+                            value={editableData.id_expiry_date}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_expiry_date || "N/A"}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   {/* SSN (only for US) */}
                   {isUnitedStatesSelected() && (
