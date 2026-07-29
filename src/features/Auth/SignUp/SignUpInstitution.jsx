@@ -5629,7 +5629,7 @@ const Institution = () => {
                                 value={values.registered_address_street_state || ""}
                                 onChange={(e) => {
                                   const value = e.target.value;
-                                  setFieldValue("registered_address_street_state", label);
+                                  setFieldValue("registered_address_street_state", value);
                                   setLocalFormData((prev) => ({
                                     ...prev,
                                     registered_address_street_state: value,
