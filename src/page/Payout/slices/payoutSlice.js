@@ -107,11 +107,7 @@ export const fetchDestinationCurrencies = createAsyncThunk(
 
       const apiCall = async () => {
         const bearertoken = localStorage.getItem("bearertoken");
-        const isWhiteLabelled = localStorage.getItem("iswhitelabelledpartner");
-        const partnerId =
-          isWhiteLabelled === "1"
-            ? localStorage.getItem("whitelabelledpartnerid")
-            : "0";
+        const partnerId = localStorage.getItem("whitelabelledpartnerid") || "0";
 
         const response = await api.get(
           `/partner-payout-currencies/${partnerId}`,
