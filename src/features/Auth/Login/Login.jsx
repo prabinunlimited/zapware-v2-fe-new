@@ -92,7 +92,7 @@ import {
   selectLastDownloadUrl,
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
-import { partnerLogin } from "../../../services/authService";
+import { partnerLogin, fetchAndStoreLogoutTime } from "../../../services/authService";
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -193,6 +193,23 @@ const Login = () => {
   // ✅ Single initialization effect
   useEffect(() => {
     dispatch(initializeApp());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (localStorage.getItem("show_session_expired") === "true") {
+      dispatch(
+        openModal({
+          title: "Session Expired",
+          message: "You've been logged out due to inactivity. Please log in again.",
+          type: "warning",
+          modalProps: {
+            showCloseButton: true, // stays open until user closes it
+          },
+        })
+      );
+  
+      localStorage.removeItem("show_session_expired"); // so it doesn't show again on refresh
+    }
   }, [dispatch]);
 
   // ✅ Reset stuck loading state
@@ -646,6 +663,7 @@ const Login = () => {
           }
 
           dispatch(setAuthState(authState));
+          await fetchAndStoreLogoutTime();
 
           dispatch(
             openModal({
@@ -1170,7 +1188,7 @@ const Login = () => {
           localStorage.setItem('customer_type', processedData.customer_type);
         }
 
-
+        await fetchAndStoreLogoutTime();
         dispatch(setPasscode(new Array(6).fill("")));
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1371,8 +1389,7 @@ const Login = () => {
           localStorage.setItem('customer_type', result.customer_type);
         }
 
-
-
+        await fetchAndStoreLogoutTime();
         dispatch(setOtp(new Array(6).fill("")));
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));

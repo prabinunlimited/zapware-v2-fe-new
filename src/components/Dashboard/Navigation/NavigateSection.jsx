@@ -41,6 +41,8 @@ import {
 
 import { selectAuthToken } from "../../../store/selectors";
 
+import AddAccountPopup from "./AddAccountPopup/AddAccountPopup";
+
 function NavigateSectionContent({
   selectedCurrencyCode,
   onLoadingStart,
@@ -69,6 +71,8 @@ function NavigateSectionContent({
   const whiteLabelledPartnerId = useSelector(selectWhiteLabelledPartnerId);
   const hasFetchedProfile = useSelector(selectHasFetchedProfile);
   const hasFetchedModules = useSelector(selectHasFetchedModules);
+
+  const [showAddAccountPopup, setShowAddAccountPopup] = useState(false);
 
   // Local state
   const [isFetching, setIsFetching] = useState(false);
@@ -102,7 +106,7 @@ function NavigateSectionContent({
       hasFetchBeenCalled.current = false;
       setIsFetching(false);
       setLocalError(null);
-      
+
       // Also reset Redux flags to allow refetch on next login
       dispatch(setHasFetchedProfile(false));
       dispatch(setHasFetchedModules(false));
@@ -309,14 +313,14 @@ function NavigateSectionContent({
       // For navigation, use the numeric customer_id from localStorage or prop
       // The customerId prop already contains the numeric ID (12773)
       const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
-      
+
       console.log("Navigating to recurring remit with numeric ID:", numericCustomerId);
-      
+
       if (!numericCustomerId) {
         showPopup("Customer ID not found. Please login again.");
         return;
       }
-      
+
       // Navigate using numeric customer_id (12773)
       navigate(`/recurring-remit/${numericCustomerId}`);
     } catch (error) {
@@ -330,14 +334,14 @@ function NavigateSectionContent({
   const handleCustomerSupportClick = () => {
     try {
       const numericCustomerId = customerId || localStorage.getItem("authcustomer_id");
-      
+
       console.log("Navigating to customer support with numeric ID:", numericCustomerId);
-      
+
       if (!numericCustomerId) {
         showPopup("Customer ID not found. Please login again.");
         return;
       }
-      
+
       // Navigate to customer support page
       navigate(`/customer-support/${numericCustomerId}`);
     } catch (error) {
@@ -385,6 +389,21 @@ function NavigateSectionContent({
 
   const textColorProps = getTextColorStyle();
 
+  const handleAddMoreAccountsClick = () => {
+    try {
+      if (customerStatus === "Deactivated") {
+        showPopup(
+          "Your account is deactivated. You cannot add more accounts.",
+        );
+        return;
+      }
+      // Open the Add Account Popup
+      setShowAddAccountPopup(true);
+    } catch (error) {
+      setLocalError("Failed to open add account popup");
+    }
+  };
+
   // Navigation items configuration
   const navigationItems = [
     {
@@ -411,8 +430,8 @@ function NavigateSectionContent({
       id: "transfer",
       label:
         hostName === "localhost" ||
-        hostName === "ourzap.unlimitedremit.com" ||
-        hostName === "sandbox-ourzap.unlimitedremit.com"
+          hostName === "ourzap.unlimitedremit.com" ||
+          hostName === "sandbox-ourzap.unlimitedremit.com"
           ? "Transfer"
           : "Internal Transfer",
       icon: <img src={depositImg} alt="Transfer" className="w-5 h-5" />,
@@ -474,7 +493,7 @@ function NavigateSectionContent({
       id: "add-accounts",
       label: "Add More Accounts",
       icon: <img src={addImg} alt="Add Account" className="w-5 h-5" />,
-      onClick: () => navigate(`/addaccount/${customerId}`),
+      onClick: handleAddMoreAccountsClick,
       visible: allowedModules.some(
         (module) => module.module_name === "Add More Accounts",
       ),
@@ -646,6 +665,14 @@ function NavigateSectionContent({
         isOpen={featurePopup.isOpen}
         onClose={() => setFeaturePopup({ isOpen: false, featureName: "" })}
         featureName={featurePopup.featureName}
+      />
+
+      {/* Add Account Popup */}
+      <AddAccountPopup
+        isOpen={showAddAccountPopup}
+        onClose={() => setShowAddAccountPopup(false)}
+        customerId={customerId}
+        partnerId={whiteLabelledPartnerId}
       />
     </div>
   );
