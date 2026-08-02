@@ -896,6 +896,8 @@ export const logout = async () => {
   console.log("🔍 Starting logout process...");
 
   tokenService.clearAll();
+  localStorage.removeItem("inactivity_minutes");
+  localStorage.removeItem("logout_deadline");
   console.log("✅ Token and partner data cleared");
 
   try {
@@ -912,7 +914,23 @@ export const logout = async () => {
 };
 
 export const getLogoutTime = async () => {
-  return debouncedApiCall("logout-time", () => api.get("/logout"));
+  return api.get("/logout-time");
+};
+
+const INACTIVITY_MINUTES_KEY = "inactivity_minutes";
+
+export const fetchAndStoreLogoutTime = async () => {
+  try {
+    const res = await getLogoutTime();
+    const minutes = res.data?.expiry_time;
+    if (minutes) {
+      localStorage.setItem(INACTIVITY_MINUTES_KEY, minutes.toString());
+      console.log("✅ Inactivity limit stored:", minutes, "min");
+    }
+  } catch (err) {
+    console.error("❌ Failed to fetch logout-time:", err.message);
+    localStorage.setItem(INACTIVITY_MINUTES_KEY, "15");
+  }
 };
 
 export const getPartnerConfig = async (partnerId) => {
@@ -1154,6 +1172,7 @@ export default {
   getGifImages,
   getManuals,
   getLogoutTime,
+  fetchAndStoreLogoutTime,
   getPartnerConfig,
 
   // User Profile & Modules

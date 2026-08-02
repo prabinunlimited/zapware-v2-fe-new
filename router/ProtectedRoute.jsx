@@ -19,9 +19,11 @@ import Header from "../src/components/Dashboard/Header/Header";
 import NavigateSection from "../src/components/Dashboard/Navigation/NavigateSection";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiMenu, FiX } from "react-icons/fi";
+import { useInactivityLogout } from "../src/hooks/useInactivityLogout";
 
 const ProtectedRoute = () => {
   // ✅ ALL HOOKS AT THE TOP - BEFORE ANY CONDITIONALS
+  useInactivityLogout();
   const token = useSelector(selectAuthToken);
   const customerId = useSelector(selectCustomerId);
   const isAuthenticated = useSelector(selectIsAuthenticated);
