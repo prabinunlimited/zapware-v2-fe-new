@@ -7,6 +7,7 @@ import {
   faCheckCircle,
   faChevronDown,
   faChevronUp,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import ProgressBar from "../../../components/ProgressBar/ProgressBar";
@@ -22,6 +23,24 @@ const partnerIcon =
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Maps a dynamic customer_type to a static icon/color, since the API doesn't
+// return those.
+const ICON_MAP = {
+  individual: userIcon,
+  institution: institutionIcon,
+};
+const COLOR_MAP = {
+  individual: "blue",
+  institution: "purple",
+};
+
+// Trims trailing zeros off a decimal string: "45.00" -> "45", "45.50" -> "45.5"
+const formatAmount = (value) => {
+  const num = parseFloat(value);
+  if (Number.isNaN(num)) return value;
+  return num % 1 === 0 ? num.toString() : num.toString();
+};
+
 const AccountType = () => {
   const navigate = useNavigate();
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -29,77 +48,119 @@ const AccountType = () => {
   const [tappedAccount, setTappedAccount] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  // null = no dynamic data (or fetch failed/empty) -> fall back to static cards
+  const [customerTypes, setCustomerTypes] = useState(null);
+  // Dynamic page headings from partner-login response
+  const [registrationHeading1, setRegistrationHeading1] = useState(null);
+  const [registrationHeading2, setRegistrationHeading2] = useState(null);
   const hostName = window.location.hostname;
   const currentStep = useCurrentStep(); // Get current step from hook
 
-  const handleSelectAccount = async (type) => {
+  // On mount: call partner-login, then (if we have a partner_uuid + token)
+  // call customer-registration-types before rendering any account cards.
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const response = await fetch(`${API_URL}/partner-login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            client_id: "HK6V7709",
+            client_secret: "057d433a-2d02-437b-a265-56114567aa44",
+            hostname: hostName,
+            account_type: null, // nullable — no account type chosen yet
+          }),
+        });
+
+        const data = await response.json();
+
+        const partnerId = data?.data?.partner_id ?? null;
+        const partnerUuid = data?.data?.partner_uuid ?? null;
+        const bearerToken = data?.data?.token ?? null;
+
+        // Dynamic headings — null means "use default text"
+        setRegistrationHeading1(data?.data?.registration_heading_1 ?? null);
+        setRegistrationHeading2(data?.data?.registration_heading_2 ?? null);
+
+        // Store partner_id as whitelabelledpartnerid in localStorage
+        if (partnerId) {
+          localStorage.setItem("whitelabelledpartnerid", partnerId);
+          localStorage.setItem("iswhitelabelledpartner", "Y");
+          console.log(
+            "Saved whitelabelledpartnerid:",
+            localStorage.getItem("whitelabelledpartnerid")
+          );
+        }
+
+        if (partnerUuid) {
+          localStorage.setItem("partner_uuid", partnerUuid);
+          console.log("✅ Saved partner_uuid:", localStorage.getItem("partner_uuid"));
+        }
+
+        if (bearerToken) {
+          localStorage.setItem("bearertoken", bearerToken);
+          console.log("✅ Saved bearertoken:", localStorage.getItem("bearertoken"));
+        } else {
+          console.warn("⚠️ No bearer token found in partner-login response:", data);
+        }
+
+        // Fetch customer registration types for this partner before showing content
+        if (partnerUuid) {
+          try {
+            const typesResponse = await fetch(
+              `${API_URL}/partners/customer-registration-types/${partnerUuid}`,
+              {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                  ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+                },
+              }
+            );
+
+            const typesData = await typesResponse.json();
+
+            if (
+              Array.isArray(typesData?.data) &&
+              typesData.data.length > 0
+            ) {
+              setCustomerTypes(typesData.data);
+            } else {
+              // No data -> keep original static cards
+              setCustomerTypes(null);
+            }
+          } catch (typesError) {
+            console.error("customer-registration-types call failed:", typesError);
+            setCustomerTypes(null);
+          }
+        }
+      } catch (error) {
+        console.error("partner-login API call failed:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    init();
+    // Runs once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSelectAccount = (type) => {
     setSelectedAccount(type);
 
-    try {
-      // Call the API for partner account selection
-      const response = await fetch(`${API_URL}/partner-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: "HK6V7709",
-          client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-          hostname: hostName,
-          account_type: type,
-        }),
-      });
-
-      const data = await response.json();
-
-      // Get partner_id from response
-      let partnerId = null;
-      if (data.partner_id) {
-        partnerId = data.partner_id;
-      } else if (data.data && data.data.partner_id) {
-        partnerId = data.data.partner_id;
+    setTimeout(() => {
+      if (type === "partner") {
+        navigate("/selectcountry");
+      } else {
+        navigate("/selectcountry", { state: { accountType: type } });
       }
-      let partnerUuid = null;
-      if (data.partner_uuid) {
-        partnerUuid = data.partner_uuid;
-      } else if (data.data && data.data.partner_uuid) {
-        partnerUuid = data.data.partner_uuid;
-      }
-
-
-      // ✅ Store partner_id as whitelabelledpartnerid in localStorage
-      if (partnerId) {
-        localStorage.setItem('whitelabelledpartnerid', partnerId);
-        localStorage.setItem('iswhitelabelledpartner', 'Y');
-        console.log('✅ Saved whitelabelledpartnerid:', localStorage.getItem('whitelabelledpartnerid'));
-      }
-
-      if (partnerUuid) {
-        localStorage.setItem('partner_uuid', partnerUuid);
-        console.log('✅ Saved partner_uuid:', localStorage.getItem('partner_uuid'));
-      }
-
-      // Navigate immediately after API call
-      setTimeout(() => {
-        if (type === "partner") {
-          navigate("/selectcountry");
-        } else {
-          navigate("/selectcountry", { state: { accountType: type } });
-        }
-      }, 300);
-
-    } catch (error) {
-      console.error('API call failed:', error);
-      // Still navigate even if API fails
-      setTimeout(() => {
-        if (type === "partner") {
-          navigate("/selectcountry");
-        } else {
-          navigate("/selectcountry", { state: { accountType: type } });
-        }
-      }, 300);
-    }
+    }, 300);
   };
 
   const handleCancel = () => {
@@ -107,17 +168,17 @@ const AccountType = () => {
   };
 
   const handleAccountTap = (accountId) => {
-    // For mobile devices, toggle features visibility on tap
     if (expandedAccount === accountId) {
       setExpandedAccount(null);
     } else {
       setExpandedAccount(accountId);
     }
     setTappedAccount(accountId);
-    setTimeout(() => setTappedAccount(null), 300); // Reset after animation
+    setTimeout(() => setTappedAccount(null), 300);
   };
 
-  const accountTypes = [
+  // Static fallback — used only when the API returns no dynamic data
+  const staticAccountTypes = [
     {
       id: "individual",
       title: "Individual Account",
@@ -149,6 +210,33 @@ const AccountType = () => {
       ],
     },
   ];
+
+  // If we got dynamic data, map it into the shape the cards need.
+  // customer_type ("individual" / "institution") becomes the id used for
+  // selection/navigation, matching the static cards' behavior.
+  const hasDynamicData = Array.isArray(customerTypes) && customerTypes.length > 0;
+
+  const dynamicAccountTypes = hasDynamicData
+    ? customerTypes.map((ct) => {
+        const currencyLabel =
+          ct.starting_monthly_charge_currency_icon ||
+          ct.starting_monthly_charge_currency_currency_code ||
+          "";
+        return {
+          id: ct.customer_type,
+          title: ct.customer_type_label,
+          descriptionHtml: ct.customer_type_description,
+          icon: ICON_MAP[ct.customer_type] || userIcon,
+          color: COLOR_MAP[ct.customer_type] || "blue",
+          priceText:
+            ct.starting_monthly_charge != null
+              ? `from ${currencyLabel}${(ct.starting_monthly_charge)}/month`
+              : null,
+        };
+      })
+    : [];
+
+  const accountTypes = hasDynamicData ? dynamicAccountTypes : staticAccountTypes;
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -184,7 +272,33 @@ const AccountType = () => {
     return colors[color] || colors.blue;
   };
 
-  // Check if device is touch capable
+  const getAccentColor = (color) => {
+    const colors = {
+      blue: "bg-blue-500",
+      purple: "bg-purple-500",
+      green: "bg-green-500",
+    };
+    return colors[color] || colors.blue;
+  };
+
+  const getPriceTextColor = (color) => {
+    const colors = {
+      blue: "text-blue-700",
+      purple: "text-purple-700",
+      green: "text-green-700",
+    };
+    return colors[color] || colors.blue;
+  };
+
+  const getPriceBgColor = (color) => {
+    const colors = {
+      blue: "bg-blue-50",
+      purple: "bg-purple-50",
+      green: "bg-green-50",
+    };
+    return colors[color] || colors.blue;
+  };
+
   const isTouchDevice = () => {
     return (
       "ontouchstart" in window ||
@@ -193,14 +307,38 @@ const AccountType = () => {
     );
   };
 
+  // Heading text — dynamic values from partner-login win when present,
+  // otherwise fall back to the original static copy/logic.
+  const pageHeading = registrationHeading1 ?? "Choose Your Account Type";
+  const pageSubheading =
+    registrationHeading2 ??
+    (hasDynamicData
+      ? "Select your account type"
+      : isTouchDevice()
+      ? "Tap on each card to see features and select your account type"
+      : "Hover over each card to see features or click to select your account type");
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex flex-col justify-center items-center gap-4">
+        <FontAwesomeIcon
+          icon={faSpinner}
+          spin
+          className="text-4xl text-blue-500"
+        />
+        <p className="text-sm sm:text-base text-gray-500 font-medium">
+          Loading account options...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex justify-center items-center py-8 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background decorative elements */}
       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-blue-100/20 to-transparent"></div>
       <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-blue-200/30"></div>
       <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-purple-200/30"></div>
 
-      {/* Close Button */}
       <button
         onClick={handleCancel}
         className="fixed top-4 right-4 sm:absolute sm:top-6 sm:right-6 
@@ -216,7 +354,7 @@ const AccountType = () => {
              active:scale-95
              touch-manipulation"
         aria-label="Close"
-        style={{ WebkitTapHighlightColor: 'transparent' }}
+        style={{ WebkitTapHighlightColor: "transparent" }}
       >
         <FontAwesomeIcon
           icon={faTimes}
@@ -224,7 +362,6 @@ const AccountType = () => {
         />
       </button>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
@@ -246,159 +383,226 @@ const AccountType = () => {
         </div>
       )}
 
-      {/* Main Content */}
       <div className="w-full max-w-6xl text-center relative z-10">
-        {/* Progress Bar */}
         <ProgressBar currentStep={currentStep} />
 
         <div className="mb-8 sm:mb-12">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">
-            Choose Your Account Type
+            {pageHeading}
           </h1>
           <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
-            {isTouchDevice()
-              ? "Tap on each card to see features and select your account type"
-              : "Hover over each card to see features or click to select your account type"}
+            {pageSubheading}
           </p>
         </div>
 
         <div
-          className={`grid grid-cols-1 ${accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
-            } gap-4 sm:gap-6 md:gap-8`}
+          className={`grid grid-cols-1 ${
+            accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
+          } gap-4 sm:gap-6 md:gap-8`}
         >
-          {accountTypes.map((account) => (
-            <div
-              key={account.id}
-              className={`relative bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-300 min-h-[380px] sm:min-h-[420px]
-                ${selectedAccount === account.id
-                  ? "ring-2 ring-offset-2 scale-105"
-                  : ""
-                } 
-                ${getBorderColor(account.color)} 
-                ${tappedAccount === account.id ? "scale-[1.02]" : ""}
-                hover:shadow-xl`}
-              onMouseEnter={() =>
-                !isTouchDevice() && setExpandedAccount(account.id)
-              }
-              onMouseLeave={() => !isTouchDevice() && setExpandedAccount(null)}
-              onClick={() =>
-                isTouchDevice()
-                  ? handleAccountTap(account.id)
-                  : handleSelectAccount(account.id)
-              }
-            >
-              {/* Image Section */}
-              <div className="relative h-40 sm:h-48 overflow-hidden transition-all duration-500">
-                <div
-                  className="h-full w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url(${account.icon})` }}
-                ></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                <div className="absolute bottom-4 left-4 right-4">
-                  <h2 className="text-lg sm:text-xl font-bold text-white">
-                    {account.title}
-                  </h2>
-                  <p className="text-white/90 text-xs sm:text-sm mt-1 line-clamp-2">
-                    {account.description}
-                  </p>
-                </div>
-                {selectedAccount === account.id && (
-                  <div className="absolute top-3 right-3 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-blue-500 flex items-center justify-center">
-                    <FontAwesomeIcon
-                      icon={faCheckCircle}
-                      className="text-white text-xs sm:text-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Mobile expand indicator */}
-                {isTouchDevice() && (
-                  <div className="absolute top-3 left-3 w-6 h-6 rounded-full bg-black/40 flex items-center justify-center">
-                    <FontAwesomeIcon
-                      icon={
-                        expandedAccount === account.id
-                          ? faChevronUp
-                          : faChevronDown
-                      }
-                      className="text-white text-xs"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Info Section (Always visible) */}
-              <div className="p-4 sm:p-5">
-                <div className="flex justify-between items-center mb-3 sm:mb-4">
-                  <span className="text-xs sm:text-sm font-medium text-gray-500">
-                    Key Features
-                  </span>
-                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                    {account.features.length} features
-                  </span>
-                </div>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelectAccount(account.id);
-                  }}
-                  className={`w-full py-2 sm:py-3 px-4 ${getButtonColor(
-                    account.color
-                  )} text-white rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base shadow-md hover:shadow-lg`}
-                >
-                  <span className="mr-2">Get Started</span>
-                  <FontAwesomeIcon
-                    icon={faArrowRight}
-                    className="text-xs sm:text-sm"
-                  />
-                </button>
-              </div>
-
-              {/* Features Overlay (Appears on hover or tap) */}
+          {accountTypes.map((account) =>
+            hasDynamicData ? (
+              // ---- Dynamic card: no hover key-features overlay, extra polish ----
               <div
-                className={`absolute inset-0 bg-gradient-to-b ${getGradientColor(
-                  account.color
-                )} to-black/95 p-4 sm:p-5 flex flex-col justify-center transition-all duration-500 ease-in-out 
-                ${expandedAccount === account.id ||
-                    (!isTouchDevice() && expandedAccount === account.id)
-                    ? "opacity-100"
-                    : "opacity-0 pointer-events-none"
+                key={account.id}
+                className={`group relative bg-white rounded-2xl shadow-md overflow-hidden cursor-pointer transform transition-all duration-300 flex flex-col border border-gray-100
+                  ${
+                    selectedAccount === account.id
+                      ? "ring-2 ring-offset-2 scale-105 shadow-2xl"
+                      : "hover:-translate-y-1 hover:shadow-2xl"
                   }`}
+                onClick={() => handleSelectAccount(account.id)}
               >
-                <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
-                  Key Features
-                </h3>
-                <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
-                  {account.features.map((feature, index) => (
-                    <li key={index} className="flex items-start text-white">
+                {/* Accent bar */}
+                <div className={`h-1.5 w-full ${getAccentColor(account.color)}`}></div>
+
+                <div className="relative h-40 sm:h-48 overflow-hidden">
+                  <div
+                    className="h-full w-full bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                    style={{ backgroundImage: `url(${account.icon})` }}
+                  ></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h2 className="text-lg sm:text-xl font-bold text-white drop-shadow-sm">
+                      {account.title}
+                    </h2>
+                  </div>
+                  {selectedAccount === account.id && (
+                    <div className="absolute top-3 right-3 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-blue-500 flex items-center justify-center shadow-lg">
                       <FontAwesomeIcon
                         icon={faCheckCircle}
-                        className="text-white mr-2 mt-0.5 text-xs sm:text-sm bg-white/20 p-1 rounded-full flex-shrink-0"
+                        className="text-white text-xs sm:text-sm"
                       />
-                      <span className="text-xs sm:text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-auto">
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 sm:p-5 flex flex-col flex-1">
+                  <div
+                    className="text-xs sm:text-sm text-gray-600 mb-3 flex-1 leading-relaxed [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1"
+                    dangerouslySetInnerHTML={{ __html: account.descriptionHtml }}
+                  />
+
+                  {account.priceText && (
+                    <div
+                      className={`inline-flex self-start items-center px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-4 ${getPriceBgColor(
+                        account.color
+                      )} ${getPriceTextColor(account.color)}`}
+                    >
+                      {account.priceText}
+                    </div>
+                  )}
+
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSelectAccount(account.id);
                     }}
-                    className="w-full py-2 sm:py-3 px-4 bg-white text-gray-900 rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base shadow-md hover:shadow-lg hover:bg-gray-100"
+                    className={`w-full py-2 sm:py-3 px-4 ${getButtonColor(
+                      account.color
+                    )} text-white rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base shadow-md hover:shadow-xl mt-auto group-hover:scale-[1.02]`}
                   >
-                    <span className="mr-2">
-                      Select {account.title.split(" ")[0]}
+                    <span className="mr-2">Get Started</span>
+                    <FontAwesomeIcon
+                      icon={faArrowRight}
+                      className="text-xs sm:text-sm transition-transform duration-300 group-hover:translate-x-1"
+                    />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // ---- Static fallback card: original hover/tap behavior ----
+              <div
+                key={account.id}
+                className={`relative bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-300 min-h-[380px] sm:min-h-[420px]
+                  ${
+                    selectedAccount === account.id
+                      ? "ring-2 ring-offset-2 scale-105"
+                      : ""
+                  } 
+                  ${getBorderColor(account.color)} 
+                  ${tappedAccount === account.id ? "scale-[1.02]" : ""}
+                  hover:shadow-xl`}
+                onMouseEnter={() =>
+                  !isTouchDevice() && setExpandedAccount(account.id)
+                }
+                onMouseLeave={() => !isTouchDevice() && setExpandedAccount(null)}
+                onClick={() =>
+                  isTouchDevice()
+                    ? handleAccountTap(account.id)
+                    : handleSelectAccount(account.id)
+                }
+              >
+                <div className="relative h-40 sm:h-48 overflow-hidden transition-all duration-500">
+                  <div
+                    className="h-full w-full bg-cover bg-center"
+                    style={{ backgroundImage: `url(${account.icon})` }}
+                  ></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h2 className="text-lg sm:text-xl font-bold text-white">
+                      {account.title}
+                    </h2>
+                    <p className="text-white/90 text-xs sm:text-sm mt-1 line-clamp-2">
+                      {account.description}
+                    </p>
+                  </div>
+                  {selectedAccount === account.id && (
+                    <div className="absolute top-3 right-3 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-blue-500 flex items-center justify-center">
+                      <FontAwesomeIcon
+                        icon={faCheckCircle}
+                        className="text-white text-xs sm:text-sm"
+                      />
+                    </div>
+                  )}
+
+                  {isTouchDevice() && (
+                    <div className="absolute top-3 left-3 w-6 h-6 rounded-full bg-black/40 flex items-center justify-center">
+                      <FontAwesomeIcon
+                        icon={
+                          expandedAccount === account.id
+                            ? faChevronUp
+                            : faChevronDown
+                        }
+                        className="text-white text-xs"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 sm:p-5">
+                  <div className="flex justify-between items-center mb-3 sm:mb-4">
+                    <span className="text-xs sm:text-sm font-medium text-gray-500">
+                      Key Features
                     </span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                      {account.features.length} features
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectAccount(account.id);
+                    }}
+                    className={`w-full py-2 sm:py-3 px-4 ${getButtonColor(
+                      account.color
+                    )} text-white rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base shadow-md hover:shadow-lg`}
+                  >
+                    <span className="mr-2">Get Started</span>
                     <FontAwesomeIcon
                       icon={faArrowRight}
                       className="text-xs sm:text-sm"
                     />
                   </button>
                 </div>
+
+                <div
+                  className={`absolute inset-0 bg-gradient-to-b ${getGradientColor(
+                    account.color
+                  )} to-black/95 p-4 sm:p-5 flex flex-col justify-center transition-all duration-500 ease-in-out 
+                  ${
+                    expandedAccount === account.id ||
+                    (!isTouchDevice() && expandedAccount === account.id)
+                      ? "opacity-100"
+                      : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
+                    Key Features
+                  </h3>
+                  <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                    {account.features.map((feature, index) => (
+                      <li key={index} className="flex items-start text-white">
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="text-white mr-2 mt-0.5 text-xs sm:text-sm bg-white/20 p-1 rounded-full flex-shrink-0"
+                        />
+                        <span className="text-xs sm:text-sm">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-auto">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectAccount(account.id);
+                      }}
+                      className="w-full py-2 sm:py-3 px-4 bg-white text-gray-900 rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center font-medium text-sm sm:text-base shadow-md hover:shadow-lg hover:bg-gray-100"
+                    >
+                      <span className="mr-2">
+                        Select {account.title.split(" ")[0]}
+                      </span>
+                      <FontAwesomeIcon
+                        icon={faArrowRight}
+                        className="text-xs sm:text-sm"
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
 
         <div className="mt-8 sm:mt-12 text-center">
