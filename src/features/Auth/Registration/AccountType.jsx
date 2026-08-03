@@ -81,6 +81,7 @@ const AccountType = () => {
         const partnerId = data?.data?.partner_id ?? null;
         const partnerUuid = data?.data?.partner_uuid ?? null;
         const bearerToken = data?.data?.token ?? null;
+        const isMonthlyPackage = data?.data?.is_monthly_package ?? null;
 
         // Dynamic headings — null means "use default text"
         setRegistrationHeading1(data?.data?.registration_heading_1 ?? null);
@@ -98,14 +99,19 @@ const AccountType = () => {
 
         if (partnerUuid) {
           localStorage.setItem("partner_uuid", partnerUuid);
-          console.log("✅ Saved partner_uuid:", localStorage.getItem("partner_uuid"));
+          console.log("Saved partner_uuid:", localStorage.getItem("partner_uuid"));
         }
 
         if (bearerToken) {
           localStorage.setItem("bearertoken", bearerToken);
-          console.log("✅ Saved bearertoken:", localStorage.getItem("bearertoken"));
+          console.log(" Saved bearertoken:", localStorage.getItem("bearertoken"));
         } else {
-          console.warn("⚠️ No bearer token found in partner-login response:", data);
+          console.warn("No bearer token found in partner-login response:", data);
+        }
+
+        if (isMonthlyPackage !== null) {
+          localStorage.setItem("ismonthlypackage", isMonthlyPackage);
+          console.log(" Saved ismonthlypackage:", localStorage.getItem("ismonthlypackage"));
         }
 
         // Fetch customer registration types for this partner before showing content
@@ -151,18 +157,53 @@ const AccountType = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelectAccount = (type) => {
+  const handleSelectAccount = async (type) => {
     setSelectedAccount(type);
-
-    setTimeout(() => {
-      if (type === "partner") {
-        navigate("/selectcountry");
-      } else {
-        navigate("/selectcountry", { state: { accountType: type } });
+  
+    const isMonthlyPackage = localStorage.getItem("ismonthlypackage");
+  
+    if (isMonthlyPackage === "Y") {
+      try {
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+    
+        const response = await fetch(
+          `${API_URL}/package/list/${partnerId}/${type}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              Authorization: `Bearer ${localStorage.getItem("bearertoken")}`,
+            },
+          }
+        );
+    
+        const data = await response.json();
+    
+        const selectedAccountData = accountTypes.find(a => a.id === type);
+        const accountTypeLabel = selectedAccountData?.title || type;
+        
+        setTimeout(() => {
+          navigate("/selectpackage", { 
+            state: { 
+              accountType: type,          
+              accountTypeLabel: accountTypeLabel, 
+              packageList: data 
+            } 
+          });
+        }, 300);
+      } catch (error) {
+        console.error("package/list API call failed:", error);
+        // Fall back to selectcountry if the package list call fails
+        setTimeout(() => {
+          navigate("/selectcountry", { state: { accountType: type } });
+        }, 300);
       }
-    }, 300);
+    } else {
+      // Not a monthly-package partner — skip the API call, navigate immediately
+      navigate("/selectcountry", { state: { accountType: type } });
+    }
   };
-
   const handleCancel = () => {
     navigate("/");
   };
@@ -218,22 +259,22 @@ const AccountType = () => {
 
   const dynamicAccountTypes = hasDynamicData
     ? customerTypes.map((ct) => {
-        const currencyLabel =
-          ct.starting_monthly_charge_currency_icon ||
-          ct.starting_monthly_charge_currency_currency_code ||
-          "";
-        return {
-          id: ct.customer_type,
-          title: ct.customer_type_label,
-          descriptionHtml: ct.customer_type_description,
-          icon: ICON_MAP[ct.customer_type] || userIcon,
-          color: COLOR_MAP[ct.customer_type] || "blue",
-          priceText:
-            ct.starting_monthly_charge != null
-              ? `from ${currencyLabel}${(ct.starting_monthly_charge)}/month`
-              : null,
-        };
-      })
+      const currencyLabel =
+        ct.starting_monthly_charge_currency_icon ||
+        ct.starting_monthly_charge_currency_currency_code ||
+        "";
+      return {
+        id: ct.customer_type,
+        title: ct.customer_type_label,
+        descriptionHtml: ct.customer_type_description,
+        icon: ICON_MAP[ct.customer_type] || userIcon,
+        color: COLOR_MAP[ct.customer_type] || "blue",
+        priceText:
+          ct.starting_monthly_charge != null
+            ? `from ${currencyLabel}${(ct.starting_monthly_charge)}/month`
+            : null,
+      };
+    })
     : [];
 
   const accountTypes = hasDynamicData ? dynamicAccountTypes : staticAccountTypes;
@@ -315,8 +356,8 @@ const AccountType = () => {
     (hasDynamicData
       ? "Select your account type"
       : isTouchDevice()
-      ? "Tap on each card to see features and select your account type"
-      : "Hover over each card to see features or click to select your account type");
+        ? "Tap on each card to see features and select your account type"
+        : "Hover over each card to see features or click to select your account type");
 
   if (isLoading) {
     return (
@@ -327,7 +368,7 @@ const AccountType = () => {
           className="text-4xl text-blue-500"
         />
         <p className="text-sm sm:text-base text-gray-500 font-medium">
-          Loading account options...
+          Loading...
         </p>
       </div>
     );
@@ -396,9 +437,8 @@ const AccountType = () => {
         </div>
 
         <div
-          className={`grid grid-cols-1 ${
-            accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
-          } gap-4 sm:gap-6 md:gap-8`}
+          className={`grid grid-cols-1 ${accountTypes.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"
+            } gap-4 sm:gap-6 md:gap-8`}
         >
           {accountTypes.map((account) =>
             hasDynamicData ? (
@@ -406,10 +446,9 @@ const AccountType = () => {
               <div
                 key={account.id}
                 className={`group relative bg-white rounded-2xl shadow-md overflow-hidden cursor-pointer transform transition-all duration-300 flex flex-col border border-gray-100
-                  ${
-                    selectedAccount === account.id
-                      ? "ring-2 ring-offset-2 scale-105 shadow-2xl"
-                      : "hover:-translate-y-1 hover:shadow-2xl"
+                  ${selectedAccount === account.id
+                    ? "ring-2 ring-offset-2 scale-105 shadow-2xl"
+                    : "hover:-translate-y-1 hover:shadow-2xl"
                   }`}
                 onClick={() => handleSelectAccount(account.id)}
               >
@@ -475,10 +514,9 @@ const AccountType = () => {
               <div
                 key={account.id}
                 className={`relative bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-300 min-h-[380px] sm:min-h-[420px]
-                  ${
-                    selectedAccount === account.id
-                      ? "ring-2 ring-offset-2 scale-105"
-                      : ""
+                  ${selectedAccount === account.id
+                    ? "ring-2 ring-offset-2 scale-105"
+                    : ""
                   } 
                   ${getBorderColor(account.color)} 
                   ${tappedAccount === account.id ? "scale-[1.02]" : ""}
@@ -561,12 +599,11 @@ const AccountType = () => {
                   className={`absolute inset-0 bg-gradient-to-b ${getGradientColor(
                     account.color
                   )} to-black/95 p-4 sm:p-5 flex flex-col justify-center transition-all duration-500 ease-in-out 
-                  ${
-                    expandedAccount === account.id ||
-                    (!isTouchDevice() && expandedAccount === account.id)
+                  ${expandedAccount === account.id ||
+                      (!isTouchDevice() && expandedAccount === account.id)
                       ? "opacity-100"
                       : "opacity-0 pointer-events-none"
-                  }`}
+                    }`}
                 >
                   <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
                     Key Features
@@ -621,4 +658,4 @@ const AccountType = () => {
   );
 };
 
-export default AccountType;
+export default AccountType; 

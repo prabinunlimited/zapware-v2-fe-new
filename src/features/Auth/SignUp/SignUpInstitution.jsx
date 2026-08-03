@@ -996,7 +996,7 @@ const Institution = () => {
       const result = await dispatch(sendPhoneVerificationCode({
         countryCode: countryCode,
         mobileNumber: mobileNumber.replace(/\s/g, ''),
-        partnerId: partnerId 
+        partnerId: partnerId
       }));
 
       if (sendPhoneVerificationCode.fulfilled.match(result)) {
@@ -2166,6 +2166,11 @@ const Institution = () => {
         setIsSubmitting(true);
         setShowFullScreenLoader(true);
 
+        const packageselectedcurrencyidsRaw = JSON.parse(localStorage.getItem("packageselectedcurrencyids") || "[]");
+        const isPartnerPackageModule = localStorage.getItem("ismonthlypackage") || "N";
+
+        const packageselectedcurrencyids = JSON.stringify(packageselectedcurrencyidsRaw);
+
         const finalFormData = { ...getInitialFormData(), ...values };
 
         const serviceProviderIds = locationStateData.service_provide_ids || [];
@@ -2330,6 +2335,9 @@ const Institution = () => {
           trust_purpose: finalFormData.trust_purpose || "",
           tax_id: finalFormData.tax_id || "",
 
+          isPartnerPackageModule: isPartnerPackageModule,
+          packageselectedcurrencyids: packageselectedcurrencyids,
+
           responsiblePersonOccupation: finalFormData.responsible_person_occupation || "",
 
           // CONVERT STATE IDS TO NAMES - ADD THESE LINES (around line 1680-1690):
@@ -2451,7 +2459,7 @@ const Institution = () => {
           doc_type: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
-          isPartnerPackageModule: institutionState.partnerPackageModule || "N",
+          // isPartnerPackageModule: institutionState.partnerPackageModule || "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
           kycVerify: kycVerify,
@@ -6506,10 +6514,10 @@ const Institution = () => {
                                       errors.mobile_number
                                     }
                                     className={`mt-6 px-4 py-3 rounded-lg whitespace-nowrap font-medium ${isPhoneSendingCode ||
-                                        !values.mobile_number ||
-                                        errors.mobile_number
-                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                        : "bg-blue-600 text-white hover:bg-blue-700"
+                                      !values.mobile_number ||
+                                      errors.mobile_number
+                                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                      : "bg-blue-600 text-white hover:bg-blue-700"
                                       }`}
                                   >
                                     {isPhoneSendingCode ? (
