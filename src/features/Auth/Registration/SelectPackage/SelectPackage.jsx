@@ -417,17 +417,28 @@ const SelectPackage = () => {
                         const features = getFeatures(pkg.package_services);
                         const currencyLabel = getCurrencyLabel(pkg);
                         const badgeText = getBadgeText(pkg);
+                        const isPopular = Boolean(pkg.popularity_label);
+
+                        // Popular card is dark by default only while nothing is selected yet.
+                        // Once any card is selected, only the selected card is dark.
+                        const showDark = isSelected || (isPopular && !selectedPackage);
 
                         return (
                             <div
                                 key={pkg.package_id}
                                 onClick={() => handleSelectPackage(pkg)}
                                 className={`relative bg-white rounded-2xl shadow-sm p-6 cursor-pointer transition-all duration-300 border-2 flex flex-col
-                  ${isSelected
-                                        ? "border-blue-600 shadow-lg"
+        ${showDark
+                                        ? "border-blue-900 shadow-lg"
                                         : "border-gray-200 hover:border-gray-300 hover:shadow-md"
                                     }`}
                             >
+                                {isPopular && (
+                                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-900 text-white text-[10px] font-bold tracking-wide px-3 py-1 rounded-full uppercase">
+                                        {pkg.popularity_label}
+                                    </span>
+                                )}
+
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">
                                     {pkg.package_name}
                                 </h3>
@@ -442,9 +453,15 @@ const SelectPackage = () => {
                                     </span>
                                     <span className="text-sm text-gray-500 ml-1">/month</span>
                                 </div>
+                                {pkg.billing_cycle && (
+                                    <p className="text-xs text-gray-400 mb-1">*{pkg.billing_cycle}</p>
+                                )}
 
                                 {badgeText && (
-                                    <div className="inline-flex self-start items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-4 mt-3 bg-blue-50 text-blue-800">
+                                    <div
+                                        className={`inline-flex self-start items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-4 mt-3
+            ${showDark ? "bg-blue-900 text-white" : "bg-blue-50 text-blue-800"}`}
+                                    >
                                         <FontAwesomeIcon icon={faClock} className="text-[10px]" />
                                         {badgeText}
                                     </div>
@@ -468,7 +485,7 @@ const SelectPackage = () => {
                                         handleSelectPackage(pkg);
                                     }}
                                     className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-colors
-                    ${isSelected
+          ${showDark
                                             ? "bg-blue-900 text-white"
                                             : "bg-white border border-gray-300 text-gray-900 hover:bg-gray-50"
                                         }`}
