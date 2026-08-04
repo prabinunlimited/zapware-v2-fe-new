@@ -716,6 +716,7 @@ const PayoutPage = () => {
 
     const payoutMethodsByCurrency = {
       USD: ["swift", "bank"],
+      AUD: ["swift", "bank"],
       NPR: ["bank"],
       INR: ["bank"],
       CAD: ["bank"],

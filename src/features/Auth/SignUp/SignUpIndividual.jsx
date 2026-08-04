@@ -573,7 +573,7 @@ function SignUpIndividualContent() {
   // Get configuration from localStorage
   const iswhitelabelledpartner = localStorage.getItem("iswhitelabelledpartner");
   const whitelabelledpartnerid = localStorage.getItem("whitelabelledpartnerid");
-  const isPartnerPackageModule = localStorage.getItem("isPartnerPackageModule");
+  const isPartnerPackageModule = localStorage.getItem("ismonthlypackage");
   const bearertoken = localStorage.getItem("bearertoken");
 
   const shouldShowPurposeOfAccount = has_multi_currency === true && isRemit === false;
@@ -1083,7 +1083,8 @@ function SignUpIndividualContent() {
         remit_customer: isRemit,
         bank_account_options: service_provide_ids,
         isPartnerPackageModule: isPartnerPackageModule || "N",
-        package_currencies: package_currencies,
+        packageselectedcurrencyids: JSON.parse(localStorage.getItem("packageselectedcurrencyids") || "[]"),
+        // package_currencies: package_currencies,
         whitelabelledpartnerid: whitelabelledpartnerid,
         kycVerify: kyc_verify,
         terms_and_conditions: termsFetched ? acceptedTerms : [],
