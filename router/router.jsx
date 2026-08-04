@@ -10,6 +10,7 @@ import Login from "../src/features/Auth/Login/Login";
 import SignUpIndividual from "../src/features/Auth/SignUp/SignUpIndividual";
 import SignUpInstitution from "../src/features/Auth/SignUp/SignUpInstitution";
 import SelectAccountType from "../src/features/Auth/Registration/AccountType";
+import SelectPackage from "../src/features/Auth/Registration/SelectPackage/SelectPackage";
 import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
 import KYCVerification from "../src/features/Auth/KYCVerification";
@@ -75,6 +76,10 @@ const router = createBrowserRouter([
       {
         path: "selectaccounttype",
         element: <SelectAccountType />,
+      },
+      {
+        path: "selectpackage",
+        element: <SelectPackage />,
       },
       {
         path:"selectcountry",
