@@ -2166,10 +2166,8 @@ const Institution = () => {
         setIsSubmitting(true);
         setShowFullScreenLoader(true);
 
-        const packageselectedcurrencyidsRaw = JSON.parse(localStorage.getItem("packageselectedcurrencyids") || "[]");
+        const packageselectedcurrencyids = JSON.parse(localStorage.getItem("packageselectedcurrencyids") || "[]");
         const isPartnerPackageModule = localStorage.getItem("ismonthlypackage") || "N";
-
-        const packageselectedcurrencyids = JSON.stringify(packageselectedcurrencyidsRaw);
 
         const finalFormData = { ...getInitialFormData(), ...values };
 
@@ -2331,7 +2329,7 @@ const Institution = () => {
           business_website_social_media: finalFormData.business_website_social_media || "",
           service_providers: serviceProviderIds,
           no_of_trading_names: values.no_of_trading_names || 0,
-          trading_names: JSON.stringify(values.trading_names_list?.filter(name => name && name.trim() !== "") || []),
+          trading_names_list: values.trading_names_list?.filter(name => name && name.trim() !== "") || [],
           trust_purpose: finalFormData.trust_purpose || "",
           tax_id: finalFormData.tax_id || "",
 
@@ -2358,24 +2356,24 @@ const Institution = () => {
 
           nominees: hasNominees,
           customer_controller_nominees: hasNominees === "1"
-            ? JSON.stringify([{
+            ? [{
               nominee_first_name: nomineeFirstName || "",
               nominee_middle_name: nomineeMiddleName || "",
               nominee_last_name: nomineeLastName || "",
-            }])
-            : JSON.stringify([]),
+            }]
+            : [],
 
           specify_high_risk_countries: finalFormData.specify_high_risk_countries?.length
-            ? JSON.stringify(finalFormData.specify_high_risk_countries)
-            : "",
+            ? finalFormData.specify_high_risk_countries
+            : [],
 
-          countries_to_receive_funds_from: finalFormData.countries_to_receive_funds_from?.length
-            ? JSON.stringify(finalFormData.countries_to_receive_funds_from)
-            : "",
+          customer_receiving_funds_countries: finalFormData.countries_to_receive_funds_from?.length
+            ? finalFormData.countries_to_receive_funds_from
+            : [],
 
-          countries_to_send_funds_to: finalFormData.countries_to_send_funds_to?.length  // ADD THIS
-            ? JSON.stringify(finalFormData.countries_to_send_funds_to)
-            : "",
+          customer_sending_countries: finalFormData.countries_to_send_funds_to?.length
+            ? finalFormData.countries_to_send_funds_to
+            : [],
 
           user_images: userImagesArray,
 
