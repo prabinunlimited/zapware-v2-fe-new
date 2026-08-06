@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk,createSelector } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, createSelector } from "@reduxjs/toolkit";
 import api, {
   apiCoordinator,
 } from "../../../services/api";
@@ -6,7 +6,7 @@ import { countries } from "../../../features/Auth/slices/countrySlice";
 import axios from "axios";
 
 // ===================== RETRY CONFIGURATION =====================
-const MAX_RETRY_ATTEMPTS = 2;
+const MAX_RETRY_ATTEMPTS = 0;
 const RETRY_DELAY = 1000; // 1 second
 
 // ===================== REQUEST SIGNATURE HELPERS =====================
@@ -667,6 +667,48 @@ export const fetchSenderBankAccounts = createAsyncThunk(
   }
 );
 
+export const fetchTransferPurposes = createAsyncThunk(
+  "payout/fetchTransferPurposes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+      const response = await api.get(`/transactions/get-purposes`, {
+        headers: { Authorization: `Bearer ${bearertoken}` },
+        timeout: 30000,
+      });
+      return response.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+export const fetchIncomeSources = createAsyncThunk(
+  "payout/fetchIncomeSources",
+  async (_, { rejectWithValue }) => {
+    try {
+      const bearertoken = localStorage.getItem("bearertoken");
+      const response = await api.get(`/fetch-income`, {
+        headers: { Authorization: `Bearer ${bearertoken}` },
+        timeout: 30000,
+      });
+      
+      console.log("📡 Income Sources Response:", response.data);
+      
+      // Handle the response structure: { success: true, data: [...] }
+      let sources = [];
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        sources = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        sources = response.data;
+      }
+      
+      return sources;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
 // ===================== INITIAL STATE =====================
 const initialState = {
   // Form values
@@ -734,9 +776,15 @@ const initialState = {
   recurringFrequency: "",
   customDays: "",
 
-  senderBankAccounts: [], 
+  senderBankAccounts: [],
   selectedSenderAccount: null,
   senderBankAccountsLoading: false,
+
+  transferPurposes: [],
+  transferPurposesLoading: false,
+
+  incomeSources: [],
+  incomeSourcesLoading: false,
 
   // Error state
   error: null,
@@ -1028,6 +1076,32 @@ const payoutSlice = createSlice({
         state.modalMessage = action.payload || "Failed to load sender bank accounts";
         state.showErrorModal = true;
       })
+      // Fetch Transfer Purposes
+      .addCase(fetchTransferPurposes.pending, (state) => {
+        state.transferPurposesLoading = true;
+      })
+      .addCase(fetchTransferPurposes.fulfilled, (state, action) => {
+        state.transferPurposesLoading = false;
+        state.transferPurposes = action.payload;
+      })
+      .addCase(fetchTransferPurposes.rejected, (state, action) => {
+        state.transferPurposesLoading = false;
+        state.transferPurposes = [];
+        state.error = action.payload;
+      })
+      // Fetch Income Sources
+      .addCase(fetchIncomeSources.pending, (state) => {
+        state.incomeSourcesLoading = true;
+      })
+      .addCase(fetchIncomeSources.fulfilled, (state, action) => {
+        state.incomeSourcesLoading = false;
+        state.incomeSources = action.payload;
+      })
+      .addCase(fetchIncomeSources.rejected, (state, action) => {
+        state.incomeSourcesLoading = false;
+        state.incomeSources = [];
+        state.error = action.payload;
+      });
   },
 });
 
@@ -1043,6 +1117,10 @@ export const selectDestinationCurrencies = (state) =>
   state.payout.destinationCurrencies;
 export const selectCountries = (state) => state.payout.countries;
 export const selectCurrencies = (state) => state.payout.currencies;
+export const selectTransferPurposes = (state) => state.payout.transferPurposes;
+export const selectTransferPurposesLoading = (state) => state.payout.transferPurposesLoading;
+export const selectIncomeSources = (state) => state.payout.incomeSources;
+export const selectIncomeSourcesLoading = (state) => state.payout.incomeSourcesLoading;
 export const selectConversionData = createSelector(
   [
     (state) => state.payout.convertedValue,
