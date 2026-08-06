@@ -24,6 +24,7 @@ import Convert from "../src/page/Conversion/Convert";
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
 import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiary";
 import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
+import AddBeneficiaryRequestRemit from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/Addbeneficiaryrequestremit";
 
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
@@ -112,6 +113,10 @@ const router = createBrowserRouter([
       {
         path: "plaidcallback",
         element: <PlaidCallback />,
+      },
+      {
+        path: "addbeneficiaryrequestremit",
+        element: <AddBeneficiaryRequestRemit />,
       },
     ],
   },

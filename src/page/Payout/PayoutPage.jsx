@@ -66,7 +66,12 @@ import {
   submitPayout,
   resetPayoutState,
   fetchSenderBankAccounts,
-
+  fetchTransferPurposes,
+  selectTransferPurposes,
+  selectTransferPurposesLoading,
+  fetchIncomeSources,
+  selectIncomeSources,
+  selectIncomeSourcesLoading,
 } from "./slices/payoutSlice";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -269,6 +274,10 @@ const PayoutPage = () => {
   const senderBankAccounts = useSelector(selectSenderBankAccounts);
   const selectedSenderAccount = useSelector(selectSelectedSenderAccount);
   const senderBankAccountsLoading = useSelector(selectSenderBankAccountsLoading);
+  const transferPurposes = useSelector(selectTransferPurposes);
+  const transferPurposesLoading = useSelector(selectTransferPurposesLoading);
+  const incomeSources = useSelector(selectIncomeSources);
+  const incomeSourcesLoading = useSelector(selectIncomeSourcesLoading);
 
   const [showProcessingModal, setShowProcessingModal] = useState(false);
 
@@ -320,6 +329,25 @@ const PayoutPage = () => {
       dispatch(fetchDestinationCurrencies());
     }
   }, [customerId, dispatch, dataLoaded]);
+
+  // Fetch transfer purposes only when the field is visible
+  useEffect(() => {
+    // The field only shows for specific service providers
+    if (showTransferPurposeField()) {
+      dispatch(fetchTransferPurposes());
+    } else {
+    }
+  }, [formValues.to, toServiceProviderInr, dispatch]);
+
+  // Fetch income sources only when the field is visible
+  useEffect(() => {
+    if (showIncomeSourceField()) {
+      console.log("🔄 Income source field is visible, fetching sources...");
+      dispatch(fetchIncomeSources());
+    } else {
+      console.log("⏭️ Income source field is hidden, skipping fetch");
+    }
+  }, [formValues.to, toServiceProviderInr, dispatch]);
 
   // Update step based on form progress
   useEffect(() => {
@@ -641,7 +669,7 @@ const PayoutPage = () => {
 
     formData.append("convertedValue", convertedValue);
     formData.append("amount", formValues.value);
-    formData.append("purpose", formValues.purpose);
+    formData.append("purpose", formValues.transfer_purpose);
     formData.append("promo_code", formValues.promo_code || "");
     formData.append("convertedId", convertedId);
     formData.append("currency", formValues.to);
@@ -1240,37 +1268,40 @@ const PayoutPage = () => {
                         htmlFor="income_source"
                         className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                       >
-                        Income Source
+                        Income Source <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        name="income_source"
-                        value={formValues.income_source}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                      >
-                        <option value="" disabled>
-                          Select Income Source
-                        </option>
-                        {toServiceProviderInr === 41 ? (
-                          <>
-                            <option value="1">PERSONAL SAVINGS</option>
-                            <option value="2">SALARY</option>
-                            <option value="3">END OF SERVICE FUNDS</option>
-                            <option value="4">
-                              LOAN FROM FINANCIAL INSTITUTION
+                      {incomeSourcesLoading ? (
+                        <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500 font-sans">
+                          Loading income sources...
+                        </div>
+                      ) : (
+                        <select
+                          name="income_source"
+                          value={formValues.income_source}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                          required={showIncomeSourceField()}
+                        >
+                          <option value="" disabled>
+                            Select Income Source
+                          </option>
+                          {incomeSources && incomeSources.length > 0 ? (
+                            incomeSources.map((source) => (
+                              <option
+                                key={source.id}
+                                value={source.id}
+                              >
+                                {source.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>
+                              No income sources available
                             </option>
-                            <option value="5">BUSINESS</option>
-                            <option value="6">OTHERS</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="SAL">SALARIED</option>
-                            <option value="PIE">PERSONAL INCOME</option>
-                            <option value="BUS">BUSINESS</option>
-                            <option value="LON">LOAN</option>
-                          </>
-                        )}
-                      </select>
+                          )}
+                        </select>
+
+                      )}
                     </div>
                   )}
 
@@ -1281,58 +1312,34 @@ const PayoutPage = () => {
                         htmlFor="transfer_purpose"
                         className="block text-sm font-medium text-gray-700 mb-2 font-sans"
                       >
-                        Transfer Purpose
+                        Transfer Purpose <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        name="transfer_purpose"
-                        value={formValues.transfer_purpose}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
-                      >
-                        <option value="" disabled>
-                          Select Transfer Purpose
-                        </option>
-                        {toServiceProviderInr === 49 ? (
-                          <>
-                            <option value="1">FAMILY MAINTENANCE</option>
-                            <option value="2">EDUCATION</option>
-                            <option value="3">MEDICAL</option>
-                            <option value="4">INVESTMENT</option>
-                            <option value="5">TOURISM</option>
-                          </>
-                        ) : toServiceProviderInr === 41 ? (
-                          <>
-                            <option value="1">FAMILY MAINTENANCE</option>
-                            <option value="2">MEDICAL</option>
-                            <option value="3">TRAVEL AND TOURISM</option>
-                            <option value="4">EDUCATION</option>
-                            <option value="5">ACCOUNT OPENING</option>
-                            <option value="6">SAVINGS</option>
-                            <option value="7">INSURANCE</option>
-                            <option value="8">
-                              INVESTMENT IN MUTUAL FUNDS/SHARES
+                      {transferPurposesLoading ? (
+                        <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500 font-sans">
+                          Loading purposes...
+                        </div>
+                      ) : (
+                        <select
+                          name="transfer_purpose"
+                          value={formValues.transfer_purpose}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium text-gray-900 font-sans"
+                          required={showTransferPurposeField()}
+                        >
+                          <option value="" disabled>
+                            Select Transfer Purpose
+                          </option>
+                          {transferPurposes.map((purpose) => (
+                            <option
+                              key={purpose.id}
+                              value={purpose.id}
+                            >
+                              {purpose.label}
                             </option>
-                            <option value="9">LOAN PAYMENT</option>
-                            <option value="10">SALARY</option>
-                            <option value="11">TAX PAYMENT</option>
-                          </>
-                        ) : toServiceProviderInr === 27 ||
-                          toServiceProviderInr === 24 ? (
-                          <>
-                            <option value="FAM">Family Maintenance</option>
-                            <option value="SAV">SAVINGS</option>
-                            <option value="TRE">TRADE REMITTANCE</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="FAM">FAMILY</option>
-                            <option value="SAV">SAVINGS</option>
-                            <option value="RE">REMITTANCE</option>
-                            <option value="GIFT">GIFT</option>
-                            <option value="TRE">TRADE REMITTANCE</option>
-                          </>
-                        )}
-                      </select>
+                          ))}
+                        </select>
+
+                      )}
                     </div>
                   )}
 
