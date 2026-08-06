@@ -449,15 +449,55 @@ function SelectCountry() {
       delete registrationData.mobileVerified;
       registrationData.mobileVerified = isMobileValid;
 
+      // Carry forward package/currency selections if they exist
+      if (location.state?.selectedPackage) {
+        registrationData.selectedPackage = location.state.selectedPackage;
+      }
+      if (location.state?.selectedCurrencies) {
+        registrationData.selectedCurrencies = location.state.selectedCurrencies;
+      }
+      if (location.state?.selectedCurrencyIds) {
+        registrationData.selectedCurrencyIds = location.state.selectedCurrencyIds;
+      }
+
       // Final save before navigation
       saveRegistrationData(registrationData);
 
-      navigate("/opencurrencyaccount", {
-        state: registrationData,
-      });
+      // If a monthly package was already selected via SelectPackage,
+      // currencies are already chosen — skip OpenCurrencyAccount entirely
+      // and go straight to signup.
+      const hasSelectedPackage =
+        localStorage.getItem("ismonthlypackage") === "Y" &&
+        Boolean(location.state?.selectedPackage);
+
+      if (hasSelectedPackage) {
+        const navState = {
+          ...registrationData,
+          service_provide_ids: null,
+          service_provider_id: null,
+          accountOptions: [],
+          referral_code: null,
+          remit_customer: false,
+          document_upload: "Y",
+          kyc_verify: "Y",
+          owner_add: "Y",
+          ssn_required: "Y",
+          package_currencies: location.state?.selectedCurrencyIds || [],
+          has_multi_currency: true,
+          selected_currency_accounts: [],
+        };
+
+        navigate(
+          accountType === "individual" ? "/signupindividual" : "/signupinstitution",
+          { state: navState }
+        );
+      } else {
+        navigate("/opencurrencyaccount", {
+          state: registrationData,
+        });
+      }
     }
   };
-
   const handleCancel = () => {
     navigate("/selectaccounttype");
   };

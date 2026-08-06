@@ -1289,9 +1289,9 @@ const PayoutPage = () => {
                             incomeSources.map((source) => (
                               <option
                                 key={source.id}
-                                value={source.id}  
+                                value={source.id}
                               >
-                                {source.name}   
+                                {source.name}
                               </option>
                             ))
                           ) : (
@@ -1300,7 +1300,7 @@ const PayoutPage = () => {
                             </option>
                           )}
                         </select>
-                        
+
                       )}
                     </div>
                   )}
@@ -1332,7 +1332,7 @@ const PayoutPage = () => {
                           {transferPurposes.map((purpose) => (
                             <option
                               key={purpose.id}
-                              value={purpose.value}
+                              value={purpose.id}
                             >
                               {purpose.label}
                             </option>
