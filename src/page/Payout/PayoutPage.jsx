@@ -330,24 +330,25 @@ const PayoutPage = () => {
     }
   }, [customerId, dispatch, dataLoaded]);
 
-  // Fetch transfer purposes only when the field is visible
+  // Fetch transfer purposes and income sources when service provider is available
   useEffect(() => {
-    // The field only shows for specific service providers
-    if (showTransferPurposeField()) {
-      dispatch(fetchTransferPurposes());
-    } else {
-    }
-  }, [formValues.to, toServiceProviderInr, dispatch]);
+    const fetchData = async () => {
+      // Only fetch if we have a service provider ID
+      if (toServiceProviderInr) {
+        // Fetch transfer purposes if field is visible
+        if (showTransferPurposeField()) {
+          dispatch(fetchTransferPurposes({ serviceProviderId: toServiceProviderInr }));
+        }
 
-  // Fetch income sources only when the field is visible
-  useEffect(() => {
-    if (showIncomeSourceField()) {
-      console.log("🔄 Income source field is visible, fetching sources...");
-      dispatch(fetchIncomeSources());
-    } else {
-      console.log("⏭️ Income source field is hidden, skipping fetch");
-    }
-  }, [formValues.to, toServiceProviderInr, dispatch]);
+        // Fetch income sources if field is visible
+        if (showIncomeSourceField()) {
+          dispatch(fetchIncomeSources({ serviceProviderId: toServiceProviderInr }));
+        }
+      }
+    };
+
+    fetchData();
+  }, [toServiceProviderInr, dispatch]);
 
   // Update step based on form progress
   useEffect(() => {
@@ -384,7 +385,10 @@ const PayoutPage = () => {
     }
 
     if (name === "to" && value) {
-      dispatch(fetchServiceProvider(value));
+      // First fetch service provider
+      const result = await dispatch(fetchServiceProvider(value)).unwrap();
+
+      // Then fetch beneficiary accounts
       dispatch(fetchBeneficiaryAccounts({ customerId, currencyCode: value }));
     }
 
