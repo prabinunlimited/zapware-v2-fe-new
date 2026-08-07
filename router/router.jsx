@@ -26,6 +26,8 @@ import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiar
 import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
 import AddBeneficiaryRequestRemit from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/Addbeneficiaryrequestremit";
 
+import BenefHome from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenficiaryHome/BenefHome";
+
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
@@ -197,6 +199,10 @@ const router = createBrowserRouter([
       {
         path: "editbeneficiary/:beneficiaryId",
         element: <EditBeneficiary />,
+      },
+      {
+        path: "benefhome/:beneficiaryId",
+        element: <BenefHome />,
       },
       {
         path: "profile/:customerId",

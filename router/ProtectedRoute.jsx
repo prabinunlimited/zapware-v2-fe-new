@@ -160,17 +160,15 @@ const ProtectedRoute = () => {
     localStorage.getItem("beneficiaryId");
 
   // ✅ Check if current route is beneficiary portal route
-  const isBeneficiaryPortalRoute =
-    location.pathname.startsWith("/beneficiary/") ||
-    location.pathname.startsWith("/benefprofile/") ||
-    location.pathname.startsWith("/benefhomepage/");
+  // ✅ Check if current route is beneficiary portal route
+  const isBeneficiaryPortalRoute = location.pathname.startsWith("/benefhome/");
 
   // ✅ SPECIAL HANDLING FOR BENEFICIARIES
   if (isBeneficiaryUser && beneficiaryId) {
     if (isBeneficiaryPortalRoute) {
       return <Outlet />;
     }
-    const redirectPath = `/beneficiary/homepage/${beneficiaryId}`;
+    const redirectPath = `/benefhome/${beneficiaryId}`;
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -263,22 +261,22 @@ const ProtectedRoute = () => {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
-  <div className="p-4 md:p-6">
+          <div className="p-4 md:p-6">
 
-    {isMobile && !isMobileMenuOpen && (
-      <div className="mb-4">
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="bg-white rounded-full p-3 shadow-md border border-gray-100"
-        >
-          <FiMenu className="w-5 h-5 text-gray-600" />
-        </button>
-      </div>
-    )}
+            {isMobile && !isMobileMenuOpen && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="bg-white rounded-full p-3 shadow-md border border-gray-100"
+                >
+                  <FiMenu className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            )}
 
-    <Outlet />
-  </div>
-</div>
+            <Outlet />
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
