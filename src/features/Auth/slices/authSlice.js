@@ -344,7 +344,7 @@ const initialState = {
   // User Preferences
   rememberMe: false,
   customerType: "",
-  inputType: "mobile",
+  inputType: "",
   showCustomerType: "N",
 
   // Owner/Staff Management

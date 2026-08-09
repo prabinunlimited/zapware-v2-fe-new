@@ -79,6 +79,9 @@ export const initializeApp = createAsyncThunk(
         throw new Error("Failed to establish secure connection");
       }
 
+      const defaultSigninType = localStorage.getItem("default_signin_type");
+      dispatch({ type: "auth/setInputType", payload: defaultSigninType });
+
       // 3. Check cache first for countries
       let countriesData;
       if (apiCache.countries) {
