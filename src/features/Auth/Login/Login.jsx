@@ -114,6 +114,14 @@ const Login = () => {
 
   const isPartnerLoggingInRef = useRef(false);
 
+  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
+  const [userTypeOptions, setUserTypeOptions] = useState([]);
+  const [userTypeMessage, setUserTypeMessage] = useState("");
+  const [selectedUserType, setSelectedUserType] = useState("");
+  const [isSubmittingUserType, setIsSubmittingUserType] = useState(false);
+  const pendingUserTypeFlowRef = useRef(null);
+  const pendingUserTypePayloadRef = useRef(null);
+
   // Select state from Redux
   const auth = useSelector(selectAuth);
   const countries = useSelector(selectCountries);
@@ -358,7 +366,7 @@ const Login = () => {
         customer_id: auth.customerId,
         isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer || false,
         beneficaryLogin: auth.user?.beneficaryLogin,   // NEW
-        beneficaryId: auth.user?.beneficaryId,   
+        beneficaryId: auth.user?.beneficaryId,
       });
     }
   }, [
@@ -780,6 +788,18 @@ const Login = () => {
     );
   };
 
+  const USER_TYPE_OPTIONS_MAP = [
+    { key: "user_is_customer", value: "customer", label: "Customer" },
+    { key: "user_is_customer_staff", value: "customer_staff", label: "Customer Staff" },
+    { key: "user_is_beneficiary", value: "beneficiary", label: "Beneficiary" },
+    { key: "user_is_owner", value: "owner", label: "Owner" },
+  ];
+
+  const getUserTypeOptions = (data) =>
+    USER_TYPE_OPTIONS_MAP.filter((opt) => data?.[opt.key] === 1).map(
+      ({ value, label }) => ({ value, label })
+    );
+
   // Handler functions
   const handleGeneratePasscode = async (e) => {
     e.preventDefault();
@@ -799,21 +819,48 @@ const Login = () => {
       return;
     }
 
+    const payload = {
+      email: values.email,
+      password: values.password,
+    };
+
+    if (showCustomerType === "Y" && values.customerType) {
+      payload.customer_type = values.customerType;
+    }
+
     try {
       dispatch(setLoading(true));
-
-      const payload = {
-        email: values.email,
-        password: values.password,
-      };
-
-      if (showCustomerType === "Y" && values.customerType) {
-        payload.customer_type = values.customerType;
-      }
 
       const result = await dispatch(generatePasscode(payload)).unwrap();
 
       if (result.status === "multiple_accounts") {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode([]));
+        dispatch(
+          openModal({
+            title: "Multiple Accounts Found",
+            message: result.message,
+            type: "info",
+            modalProps: {
+              showCloseButton: true,
+              actions: [
+                {
+                  label: "OK",
+                  primary: true,
+                  actionType: "CALLBACK",
+                  callback: () => {
+                    dispatch(closeModal());
+                  },
+                },
+              ],
+            },
+          })
+        );
+        return;
+      }
+
+      if (result.data?.checkMultipleCustomer === "Y") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode([]));
@@ -858,6 +905,16 @@ const Login = () => {
     } catch (error) {
       console.log("🔍 Passcode Generation Error:", error);
 
+      if (error.hasMultipleUserTypes) {
+        pendingUserTypeFlowRef.current = "passcode";
+        pendingUserTypePayloadRef.current = payload;
+        setUserTypeOptions(getUserTypeOptions(error.data));
+        setUserTypeMessage(error.message || "Please select a user type");
+        setSelectedUserType("");
+        setShowUserTypeModal(true);
+        return;
+      }
+
       if (
         error.data?.blocked_status === 1 ||
         error.payload?.data?.blocked_status === 1
@@ -899,28 +956,28 @@ const Login = () => {
       return;
     }
 
+    if (!values.phone_code || !values.mobile_number || !values.password) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: "Please enter country code, mobile number, AND password",
+          type: "error",
+        })
+      );
+      return;
+    }
+
+    const payload = {
+      phone_code: values.phone_code,
+      mobile_number: values.mobile_number,
+      password: values.password,
+      ...(showCustomerType === "Y" &&
+        values.customerType && {
+        customer_type: values.customerType,
+      }),
+    };
+
     try {
-      if (!values.phone_code || !values.mobile_number || !values.password) {
-        dispatch(
-          openModal({
-            title: "Error",
-            message: "Please enter country code, mobile number, AND password",
-            type: "error",
-          })
-        );
-        return;
-      }
-
-      const payload = {
-        phone_code: values.phone_code,
-        mobile_number: values.mobile_number,
-        password: values.password,
-        ...(showCustomerType === "Y" &&
-          values.customerType && {
-          customer_type: values.customerType,
-        }),
-      };
-
       const result = await dispatch(generateOTP(payload)).unwrap();
 
       if (result.status === "multiple_accounts") {
@@ -968,6 +1025,16 @@ const Login = () => {
         );
       }
     } catch (error) {
+      if (error.hasMultipleUserTypes) {
+        pendingUserTypeFlowRef.current = "otp";
+        pendingUserTypePayloadRef.current = payload;
+        setUserTypeOptions(getUserTypeOptions(error.data));
+        setUserTypeMessage(error.message || "Please select a user type");
+        setSelectedUserType("");
+        setShowUserTypeModal(true);
+        return;
+      }
+
       if (error.requiresCustomerType) {
         dispatch(
           openModal({
@@ -979,6 +1046,7 @@ const Login = () => {
         return;
       }
 
+
       dispatch(
         openModal({
           title: "Error",
@@ -986,6 +1054,73 @@ const Login = () => {
           type: "error",
         })
       );
+    }
+  };
+
+  const handleConfirmUserType = async () => {
+    if (!selectedUserType || !pendingUserTypeFlowRef.current) return;
+
+    const flow = pendingUserTypeFlowRef.current;
+    const payload = {
+      ...pendingUserTypePayloadRef.current,
+      user_type: selectedUserType,
+    };
+
+    setIsSubmittingUserType(true);
+    setShowUserTypeModal(false);
+
+    try {
+      if (flow === "passcode") {
+        dispatch(setLoading(true));
+        await dispatch(generatePasscode(payload)).unwrap();
+
+        dispatch(setShowPasscodeInput(true));
+        dispatch(setPasscodeSent(true));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Passcode Sent",
+            message: "A 6-digit passcode has been sent to your email address.",
+            type: "success",
+            modalProps: {
+              autoClose: true,
+              autoCloseDelay: 3000,
+            },
+          })
+        );
+      } else {
+        const result = await dispatch(generateOTP(payload)).unwrap();
+
+        if (!result.message || result.message === "OTP sent successfully") {
+          dispatch(setShowOtpInput(true));
+          dispatch(setOtpSent(true));
+          dispatch(setOtp(new Array(6).fill("")));
+        }
+
+        if (result.message) {
+          dispatch(
+            openModal({
+              title: result.message.includes("Invalid") ? "Error" : "Success",
+              message: result.message,
+              type: result.message.includes("Invalid") ? "error" : "success",
+            })
+          );
+        }
+      }
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: error.message || "Failed to proceed",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsSubmittingUserType(false);
+      if (flow === "passcode") dispatch(setLoading(false));
+      pendingUserTypeFlowRef.current = null;
+      pendingUserTypePayloadRef.current = null;
     }
   };
 
@@ -1094,11 +1229,15 @@ const Login = () => {
         password: values.password,
         sign_in_option: inputType,
         context: "login_verification",
-      };
+        ...(showCustomerType === "Y" &&
+          values.customerType && {
+          customer_type: values.customerType,
+        }),
 
-      if (showCustomerType === "Y" && values.customerType) {
-        verifyPayload.customer_type = values.customerType;
-      }
+        ...(selectedUserType && {
+          user_type: selectedUserType,
+        }),
+      };
 
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
 
@@ -1324,17 +1463,24 @@ const Login = () => {
         return;
       }
 
+      console.log("🔥 selectedUserType before OTP verify:", selectedUserType);
+
       const verifyPayload = {
         phone_code: values.phone_code,
         mobile_number: values.mobile_number,
         otp: otp.join(""),
         password: values.password,
         sign_in_option: inputType,
-      };
 
-      if (showCustomerType === "Y" && values.customerType) {
-        verifyPayload.customer_type = values.customerType;
-      }
+        ...(showCustomerType === "Y" &&
+          values.customerType && {
+          customer_type: values.customerType,
+        }),
+
+        ...(selectedUserType && {
+          user_type: selectedUserType,
+        }),
+      };
 
       const result = await dispatch(verifyOTP(verifyPayload)).unwrap();
 
@@ -2063,6 +2209,14 @@ const Login = () => {
               Please enter the OTP sent to your mobile number
             </p>
 
+            {auth.error && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
+                {typeof auth.error === "string"
+                  ? auth.error
+                  : auth.error?.message || "OTP verification failed. Please try again."}
+              </div>
+            )}
+
             <div className="flex justify-center gap-3 mb-6">
               {otp.map((digit, index) => (
                 <input
@@ -2139,6 +2293,64 @@ const Login = () => {
                   : "Didn't receive code? Resend OTP"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== USER TYPE SELECTION MODAL ========== */}
+      {showUserTypeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button
+              onClick={() => {
+                setShowUserTypeModal(false);
+                pendingUserTypeFlowRef.current = null;
+                pendingUserTypePayloadRef.current = null;
+              }}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+            >
+              <AiOutlineClose size={20} />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-3">
+              Select User Type
+            </h2>
+            <p className="text-gray-600 mb-6 text-sm">{userTypeMessage}</p>
+
+            <div className="flex flex-col gap-3 mb-6">
+              {userTypeOptions.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50"
+                >
+                  <input
+                    type="radio"
+                    name="userType"
+                    value={opt.value}
+                    checked={selectedUserType === opt.value}
+                    onChange={(e) => setSelectedUserType(e.target.value)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleConfirmUserType}
+              disabled={!selectedUserType || isSubmittingUserType}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
+            >
+              {isSubmittingUserType ? (
+                <>
+                  <RingLoader size={20} color="#ffffff" />
+                  <span>Please wait...</span>
+                </>
+              ) : (
+                "Continue"
+              )}
+            </button>
           </div>
         </div>
       )}
