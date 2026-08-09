@@ -221,7 +221,7 @@ export const initializeApp = createAsyncThunk(
 // ===================== PASSCODE OPERATIONS =====================
 export const generatePasscode = createAsyncThunk(
   "auth/generatePasscode",
-  async ({ email, password, customer_type }, { dispatch, rejectWithValue }) => {
+  async ({ email, password, customer_type, user_type }, { dispatch, rejectWithValue }) => {
     try {
       dispatch({ type: "auth/setIsGeneratingPasscode", payload: true });
 
@@ -235,6 +235,10 @@ export const generatePasscode = createAsyncThunk(
 
       if (customer_type) {
         payload.customer_type = customer_type;
+      }
+
+      if (user_type) {
+        payload.user_type = user_type;
       }
 
       const response = await api.post("/request-passcode-login", payload, {
@@ -271,6 +275,14 @@ export const generatePasscode = createAsyncThunk(
     } catch (error) {
       if (error.response) {
         const responseData = error.response.data;
+
+        if (responseData.data?.has_multiple_user_types === "Y") {
+          return rejectWithValue({
+            hasMultipleUserTypes: true,
+            message: responseData.message || "Please select a user type",
+            data: responseData.data,
+          });
+        }
 
         if (
           responseData.status === "error" &&
@@ -315,7 +327,7 @@ export const generatePasscode = createAsyncThunk(
 export const verifyPasscode = createAsyncThunk(
   "auth/verifyPasscode",
   async (
-    { email, passcode, password, sign_in_option, customer_type },
+    { email, passcode, password, sign_in_option, customer_type, user_type, },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -342,12 +354,10 @@ export const verifyPasscode = createAsyncThunk(
         passcode: formattedPasscode,
         sign_in_option: sign_in_option || "email",
         ...(password && { password: password }),
+        ...(customer_type && { customer_type }),
+        ...(user_type && { user_type }),
         hostname: window.location.hostname,
       };
-
-      if (customer_type) {
-        payload.customer_type = customer_type;
-      }
 
       const response = await api.post("/login", payload, {
         headers: {
@@ -479,7 +489,7 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, password, customer_type },
+    { phone_code, mobile_number, password, customer_type, user_type, },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -507,6 +517,10 @@ export const generateOTP = createAsyncThunk(
         payload.customer_type = customer_type;
       }
 
+      if (user_type) {
+        payload.user_type = user_type;
+      } 
+
       const response = await api.post("/send-otp-login", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -528,6 +542,14 @@ export const generateOTP = createAsyncThunk(
       console.log("❌ Generate OTP Error:", error);
       console.log("❌ Error response:", error.response);
       console.log("❌ Error response data:", error.response?.data);
+
+      if (error.response?.data?.data?.has_multiple_user_types === "Y") {
+        return rejectWithValue({
+          hasMultipleUserTypes: true,
+          message: error.response.data.message || "Please select a user type",
+          data: error.response.data.data,
+        });
+      }
 
       // Handle multiple accounts scenario in error
       if (error.response?.data?.data?.checkMultipleCustomer === "Y") {
@@ -591,7 +613,7 @@ export const generateOTP = createAsyncThunk(
 export const verifyOTP = createAsyncThunk(
   "auth/verifyOTP",
   async (
-    { phone_code, mobile_number, otp, password, sign_in_option, customer_type },
+    { phone_code, mobile_number, otp, password, sign_in_option, customer_type, user_type, },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -621,6 +643,10 @@ export const verifyOTP = createAsyncThunk(
 
       if (customer_type) {
         payload.customer_type = customer_type;
+      }
+
+      if (user_type) {
+        payload.user_type = user_type;
       }
 
       const response = await api.post("/login", payload, {
@@ -1249,7 +1275,7 @@ export const loginUser = createAsyncThunk(
             ...response.data.data,
             isRemittanceOnlyCustomer,
             customer_type,
-            beneficaryLogin, 
+            beneficaryLogin,
             beneficaryId,
           },
         };
