@@ -441,7 +441,7 @@ const Remittance = () => {
   }, []);
 
   const totalToPay = parseFloat(formData.sendAmount || 0);
-  const fee = 0;
+  const fee = parseFloat(exchangeRateData?.fee || exchangeRateData?.payoutCharge || 0);
 
   // ALL useEffects must be at top level
   useEffect(() => {
@@ -650,6 +650,7 @@ const Remittance = () => {
             fromCurrency: sendCurrencyValue,
             toCurrency: receiveCurrencyValue,
             originalAmount: amountForCalculation,
+            fee: response.fee || response.payoutCharge || 0,
             timestamp: Date.now(),
           };
 
@@ -1076,6 +1077,7 @@ const Remittance = () => {
           fromCurrency: formData.sendCurrency.value,
           toCurrency: formData.receiveCurrency.value,
           originalAmount: parseFloat(formData.sendAmount) || 5,
+          fee: response.fee || response.payoutCharge || 0
         };
 
         exchangeRateCache.current[cacheKey] = {
@@ -2010,50 +2012,50 @@ const Remittance = () => {
 
   useEffect(() => {
     console.log("📍 Remittance location state:", location.state);
-  
+
     // Handle returning from Add Beneficiary with a new beneficiary (either newly created OR existing added)
     if (location.state?.newBeneficiary && location.state?.returnToStep === 2) {
       console.log("🔄 Returning from Add Beneficiary with beneficiary:", location.state.newBeneficiary);
-  
+
       const wasRestored = restoreRemittanceState();
       console.log("📊 State restored:", wasRestored);
-  
+
       const newBeneficiary = location.state.newBeneficiary;
-  
+
       if (newBeneficiary && newBeneficiary.id) {
         if (step !== 2) {
           console.log("📌 Setting step to 2");
           dispatch(setStep(2));
         }
-  
+
         const customerIdForFetch = customerId || localStorage.getItem("customerId") || "1720";
-  
+
         // Force a refetch so Redux's `beneficiaries` array includes the
         // newly added/created beneficiary with its full record.
         dispatch(fetchBeneficiaries(customerIdForFetch));
-  
+
         // Mark it pending for selection
         setPendingNewBeneficiaryId(newBeneficiary.id);
-  
+
         // Clear the location state to prevent re-selection on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
-  
+
     // Handle returning from Add Beneficiary cancellation
     if (location.state?.from === "remittance" && !location.state?.newBeneficiary) {
       console.log("🔄 Returning from Add Beneficiary cancellation");
-      
+
       // Make sure we're on step 2
       if (step !== 2) {
         console.log("📌 Setting step to 2 (cancellation)");
         dispatch(setStep(2));
       }
-      
+
       // Restore the saved state
       const wasRestored = restoreRemittanceState();
       console.log("📊 State restored (cancellation):", wasRestored);
-      
+
       // Clear the location state to prevent re-triggering
       navigate(location.pathname, { replace: true, state: {} });
     }
@@ -2564,7 +2566,13 @@ const Remittance = () => {
                   </div>
                   <div className="flex justify-between items-center py-2 border-t border-slate-200">
                     <span className="text-slate-600">Transfer fee</span>
-                    <span className="font-semibold text-emerald-600">FREE</span>
+                    <span className="font-semibold text-slate-900">
+                      {formData.sendCurrency?.value}{" "}
+                      {parseFloat(exchangeRateData?.fee || 0).toLocaleString(
+                        undefined,
+                        { minimumFractionDigits: 2 }
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-t border-slate-200">
                     <span className="font-semibold text-slate-900">
