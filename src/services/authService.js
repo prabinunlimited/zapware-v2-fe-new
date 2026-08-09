@@ -598,24 +598,28 @@ export const partnerLogin = async () => {
 
       if (partnerData.partner_name) {
         localStorage.setItem("support_partner_name", partnerData.partner_name);
-        console.log("✅ Support partner name saved:", partnerData.partner_name);
+        console.log(" Support partner name saved:", partnerData.partner_name);
       }
       if (partnerData.support_email) {
         localStorage.setItem("support_email", partnerData.support_email);
-        console.log("✅ Support email saved:", partnerData.support_email);
+        console.log(" Support email saved:", partnerData.support_email);
       }
       if (partnerData.support_phoneno) {
         localStorage.setItem("support_phoneno", partnerData.support_phoneno);
-        console.log("✅ Support phone saved:", partnerData.support_phoneno);
+        console.log(" Support phone saved:", partnerData.support_phoneno);
       }
       if (partnerData.partner_address) {
         localStorage.setItem("support_partner_address", partnerData.partner_address);
-        console.log("✅ Support partner address saved:", partnerData.partner_address);
+        console.log("Support partner address saved:", partnerData.partner_address);
+      }
+      if (partnerData.default_signin_type) {
+        localStorage.setItem("default_signin_type", partnerData.default_signin_type);
+        console.log(" Default sign-in type saved:", partnerData.default_signin_type);
       }
 
-      // ✅ STORE PARTNER DATA USING TOKEN SERVICE
+      // STORE PARTNER DATA USING TOKEN SERVICE
       tokenService.setPartnerData(partnerData);
-      console.log("✅ Partner data stored from partnerLogin");
+      console.log(" Partner data stored from partnerLogin");
 
       // Store the token using our service
       tokenService.setToken(token);
@@ -623,7 +627,7 @@ export const partnerLogin = async () => {
       // Verify storage worked
       const storedToken = tokenService.getToken();
       if (storedToken === token) {
-        console.log("✅ Token storage verified successfully");
+        console.log("Token storage verified successfully");
         return response.data;
       } else {
         console.error("❌ Token storage verification failed");
