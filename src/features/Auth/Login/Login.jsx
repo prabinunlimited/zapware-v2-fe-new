@@ -98,7 +98,7 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // ✅ Double submission prevention
+  // Double submission prevention
   const isSubmittingRef = useRef(false);
   const kycHandlingRef = useRef(false);
 
@@ -113,6 +113,8 @@ const Login = () => {
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
   const isPartnerLoggingInRef = useRef(false);
+
+  const [isPartnerLoginLoading, setIsPartnerLoginLoading] = useState(false);
 
   const [showUserTypeModal, setShowUserTypeModal] = useState(false);
   const [userTypeOptions, setUserTypeOptions] = useState([]);
@@ -198,9 +200,35 @@ const Login = () => {
     }),
   });
 
-  // ✅ Single initialization effect
+  // Single initialization effect
   useEffect(() => {
     dispatch(initializeApp());
+  }, [dispatch]);
+
+  // Run partner login on page load & set default sign-in option (email/mobile)
+  useEffect(() => {
+    const initPartnerLogin = async () => {
+      try {
+        setIsPartnerLoginLoading(true);
+
+        const response = await partnerLogin();
+
+        // Extract sign in type ("email" or "mobile") from response or cached storage
+        const signInType =
+          response?.data?.default_signin_type ||
+          localStorage.getItem("default_signin_type");
+
+        if (signInType) {
+          dispatch(setInputType(signInType));
+        }
+      } catch (error) {
+        console.error("Partner login error on mount:", error);
+      } finally {
+        setIsPartnerLoginLoading(false);
+      }
+    };
+
+    initPartnerLogin();
   }, [dispatch]);
 
   useEffect(() => {
@@ -1657,6 +1685,14 @@ const Login = () => {
   // Render the login form
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
+      {isPartnerLoginLoading && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+          <RingLoader size={50} color="#2563eb" />
+          <p className="mt-4 text-sm font-medium text-gray-600">
+            Initializing session...
+          </p>
+        </div>
+      )}
       {/* LEFT SIDE - MAIN LOGIN FORM */}
       <div className="w-full md:w-1/2 flex-1 flex flex-col items-center justify-center p-10 md:p-8 lg:p-12">
         <div className="w-full max-w-md bg-white md:p-8">
