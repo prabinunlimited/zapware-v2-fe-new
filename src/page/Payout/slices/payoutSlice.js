@@ -669,15 +669,44 @@ export const fetchSenderBankAccounts = createAsyncThunk(
 
 export const fetchTransferPurposes = createAsyncThunk(
   "payout/fetchTransferPurposes",
-  async (_, { rejectWithValue }) => {
+  async ({ serviceProviderId }, { rejectWithValue }) => {
     try {
       const bearertoken = localStorage.getItem("bearertoken");
+      let purposes = [];
+
+      // First try: Get purposes by service provider
+      if (serviceProviderId) {
+        try {
+          const response = await api.get(
+            `/transactions/get-purposes-by-service-provider/${serviceProviderId}`,
+            {
+              headers: { Authorization: `Bearer ${bearertoken}` },
+              timeout: 30000,
+            }
+          );
+
+          // Check if response has data
+          const data = response.data?.data || response.data || [];
+          if (data && data.length > 0) {
+            return data;
+          }
+        } catch (error) {
+          console.log(` No purposes found for service provider ${serviceProviderId}, falling back to general API`);
+        }
+      }
+
+      // Second try: Get all purposes (fallback)
       const response = await api.get(`/transactions/get-purposes`, {
         headers: { Authorization: `Bearer ${bearertoken}` },
         timeout: 30000,
       });
-      return response.data || [];
+
+      purposes = response.data?.data || response.data || [];
+      console.log(`Found ${purposes.length} purposes from fallback API`);
+      return purposes;
+
     } catch (error) {
+      console.error("❌ Error fetching purposes:", error);
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
@@ -685,30 +714,50 @@ export const fetchTransferPurposes = createAsyncThunk(
 
 export const fetchIncomeSources = createAsyncThunk(
   "payout/fetchIncomeSources",
-  async (_, { rejectWithValue }) => {
+  async ({ serviceProviderId }, { rejectWithValue }) => {
     try {
       const bearertoken = localStorage.getItem("bearertoken");
+      let sources = [];
+
+      // First try: Get income sources by service provider
+      if (serviceProviderId) {
+        try {
+          const response = await api.get(
+            `/fetch-income-source/${serviceProviderId}`,
+            {
+              headers: { Authorization: `Bearer ${bearertoken}` },
+              timeout: 30000,
+            }
+          );
+          
+          // Check if response has data
+          const data = response.data?.data || response.data || [];
+          if (data && data.length > 0) {
+            return data;
+          }
+        } catch (error) {
+          console.log(` No income sources found for service provider ${serviceProviderId}, falling back to general API`);
+        }
+      }
+
+      // Second try: Get all income sources (fallback)
+      console.log("Fetching all income sources (fallback)");
       const response = await api.get(`/fetch-income`, {
         headers: { Authorization: `Bearer ${bearertoken}` },
         timeout: 30000,
       });
       
-      console.log("📡 Income Sources Response:", response.data);
-      
-      // Handle the response structure: { success: true, data: [...] }
-      let sources = [];
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        sources = response.data.data;
-      } else if (Array.isArray(response.data)) {
-        sources = response.data;
-      }
-      
+      sources = response.data?.data || response.data || [];
+      console.log(`Found ${sources.length} income sources from fallback API`);
       return sources;
+      
     } catch (error) {
+      console.error("❌ Error fetching income sources:", error);
       return rejectWithValue(error.response?.data?.message || error.message);
     }
   }
 );
+
 // ===================== INITIAL STATE =====================
 const initialState = {
   // Form values

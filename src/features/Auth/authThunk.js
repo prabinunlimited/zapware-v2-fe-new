@@ -16,7 +16,7 @@ export const handleApiError = (error, dispatch = null) => {
     switch (error.response.status) {
       case 401:
         errorMessage = "Session expired. Please login again.";
-    
+
         window.location.href = "/";
         break;
       case 403:
@@ -296,7 +296,7 @@ export const generatePasscode = createAsyncThunk(
 
           return rejectWithValue(
             responseData.message ||
-              "Validation failed. Please check your input."
+            "Validation failed. Please check your input."
           );
         }
 
@@ -374,9 +374,9 @@ export const verifyPasscode = createAsyncThunk(
         }
 
         // CASE 2: Remittance Only Customer with Pending KYC - Show message (NO redirect)
-        if (responseData.kyc_status === "0" && 
-            responseData.isRemittanceOnlyCustomer === "Y") {
-          
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer === "Y") {
+
           return {
             kyc_status: "0",
             isRemittanceOnlyCustomer: "Y",
@@ -387,9 +387,9 @@ export const verifyPasscode = createAsyncThunk(
         }
 
         // CASE 3: Non-Remittance Customer with Pending KYC - Redirect to Plaid (Open in new tab)
-        if (responseData.kyc_status === "0" && 
-            responseData.isRemittanceOnlyCustomer !== "Y") {
-          
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y") {
+
           // Store temporary auth data
           const tempAuthData = {
             token: responseData.token,
@@ -399,7 +399,7 @@ export const verifyPasscode = createAsyncThunk(
             requiresKyc: true,
           };
           sessionStorage.setItem("temp_auth_data", JSON.stringify(tempAuthData));
-          
+
           return {
             requiresPlaidRedirect: true,
             plaidUrl: responseData.plaid_url,
@@ -440,6 +440,8 @@ export const verifyPasscode = createAsyncThunk(
             whitelabelled_customer_partnerid: responseData.whitelabelled_customer_partnerid || "0",
             whitelabelled_customer_partnername: responseData.whitelabelled_customer_partnername || "",
             customerUuid: responseData.customerUuid || null,
+            beneficaryLogin: responseData.beneficaryLogin || null,
+            beneficaryId: responseData.beneficaryId || null,
             message: "Login successful",
           };
         }
@@ -526,7 +528,7 @@ export const generateOTP = createAsyncThunk(
       console.log("❌ Generate OTP Error:", error);
       console.log("❌ Error response:", error.response);
       console.log("❌ Error response data:", error.response?.data);
-      
+
       // Handle multiple accounts scenario in error
       if (error.response?.data?.data?.checkMultipleCustomer === "Y") {
         dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
@@ -536,11 +538,11 @@ export const generateOTP = createAsyncThunk(
           requiresCustomerType: true,
         };
       }
-      
+
       // Extract the error message properly
       let errorMessage = "";
       let errorStatus = error.response?.status || 500;
-      
+
       if (error.response?.data) {
         const responseData = error.response.data;
         if (typeof responseData === "string") {
@@ -575,7 +577,7 @@ export const generateOTP = createAsyncThunk(
       } else {
         errorMessage = "Failed to generate OTP. Please try again.";
       }
-      
+
       // Return structured error object
       return rejectWithValue({
         message: errorMessage,
@@ -631,9 +633,9 @@ export const verifyOTP = createAsyncThunk(
         const responseData = response.data.data;
 
         // ✅ CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
-        if (responseData.kyc_status === "0" && 
-            responseData.isRemittanceOnlyCustomer === "Y") {
-          
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer === "Y") {
+
           // Return ONLY the message, NO token, NO customer_id for authentication
           return {
             kyc_status: "0",
@@ -646,9 +648,9 @@ export const verifyOTP = createAsyncThunk(
         }
 
         // ✅ CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
-        if (responseData.kyc_status === "0" && 
-            responseData.isRemittanceOnlyCustomer !== "Y") {
-          
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y") {
+
           return {
             kyc_status: "0",
             isRemittanceOnlyCustomer: "N",
@@ -666,7 +668,7 @@ export const verifyOTP = createAsyncThunk(
             localStorage.setItem('customerUuid', responseData.customerUuid);
             console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
           }
-          
+
           // Save other auth data
           localStorage.setItem('authcustomer_id', responseData.customer_id);
           localStorage.setItem('authtoken', responseData.token);
@@ -680,6 +682,8 @@ export const verifyOTP = createAsyncThunk(
             isRemittanceOnlyCustomer: responseData.isRemittanceOnlyCustomer || false,
             customer_type: responseData.customer_type || "individual",
             customerUuid: responseData.customerUuid || null,
+            beneficaryLogin: responseData.beneficaryLogin || null,
+            beneficaryId: responseData.beneficaryId || null,
             message: "Login successful",
           };
         }
@@ -690,9 +694,9 @@ export const verifyOTP = createAsyncThunk(
       }
     } catch (error) {
       console.log("❌ Verify OTP Error:", error);
-      
+
       let errorMessage = "";
-      
+
       if (error.response?.data) {
         const responseData = error.response.data;
         if (typeof responseData === "string") {
@@ -1180,6 +1184,8 @@ export const loginUser = createAsyncThunk(
           bank_approve_status,
           plaid_link_url,
           customerUuid,
+          beneficaryLogin,
+          beneficaryId,
         } = response.data.data;
 
         // Store user token as "authtoken", NOT "bearertoken"
@@ -1243,6 +1249,8 @@ export const loginUser = createAsyncThunk(
             ...response.data.data,
             isRemittanceOnlyCustomer,
             customer_type,
+            beneficaryLogin, 
+            beneficaryId,
           },
         };
       }
@@ -1252,7 +1260,7 @@ export const loginUser = createAsyncThunk(
       console.log("❌ Login Error:", error);
       console.log("❌ Error response:", error.response);
       console.log("❌ Error response data:", error.response?.data);
-      
+
       let errorMessage = "";
       let errorStatus = error.response?.status || 500;
       let modalActions = [];
@@ -1260,7 +1268,7 @@ export const loginUser = createAsyncThunk(
 
       if (error.response?.data) {
         const responseData = error.response.data;
-        
+
         if (typeof responseData === "string") {
           errorMessage = responseData;
         } else if (responseData.message) {
@@ -1281,7 +1289,7 @@ export const loginUser = createAsyncThunk(
             errorMessage = "Login failed. Please try again.";
           }
         }
-        
+
         // Check for account locked status
         if (error.response.data?.error === "account_locked") {
           errorMessage = "Your account has been locked due to multiple failed attempts. Please contact support.";
@@ -1345,7 +1353,7 @@ export const logoutUser = createAsyncThunk(
       localStorage.removeItem('authcustomer_id');
       localStorage.removeItem('currentCustomerId');
       localStorage.removeItem('bearertoken');
-      
+
       dispatch({ type: "auth/clearAuthState" });
       return true;
     } catch (error) {

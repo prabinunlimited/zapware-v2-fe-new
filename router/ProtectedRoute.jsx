@@ -120,7 +120,7 @@ const ProtectedRoute = () => {
     };
   }, [isMobileMenuOpen]);
 
-  // ✅ Show loading while initializing
+  // Show loading while initializing
   if (!isInitialized || isChecking) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -133,7 +133,7 @@ const ProtectedRoute = () => {
     );
   }
 
-  // ✅ Use the enhanced isAuthenticated selector
+  // Use the enhanced isAuthenticated selector
   if (!isAuthenticated) {
     return <Navigate to="/" replace state={{ from: location }} />;
   }
@@ -153,28 +153,34 @@ const ProtectedRoute = () => {
     return <Navigate to={redirectPath} replace />;
   }
 
-  // ✅ Check if user is beneficiary
+  //  Check if user is beneficiary
   const isBeneficiaryUser = localStorage.getItem("beneficaryLogin") === "Y";
   const beneficiaryId =
     localStorage.getItem("beneficaryId") ||
     localStorage.getItem("beneficiaryId");
 
-  // ✅ Check if current route is beneficiary portal route
-  const isBeneficiaryPortalRoute =
-    location.pathname.startsWith("/beneficiary/") ||
-    location.pathname.startsWith("/benefprofile/") ||
-    location.pathname.startsWith("/benefhomepage/");
+  // Check if current route is ANY beneficiary portal route
+  const beneficiaryRoutes = [
+    "/benefhome/",
+    "/beneftransactions/",
+    "/benefsenders/",
+    "/beneficiaryprofile",
+  ];
 
-  // ✅ SPECIAL HANDLING FOR BENEFICIARIES
+  const isBeneficiaryPortalRoute = beneficiaryRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
+
+  //  SPECIAL HANDLING FOR BENEFICIARIES
   if (isBeneficiaryUser && beneficiaryId) {
     if (isBeneficiaryPortalRoute) {
       return <Outlet />;
     }
-    const redirectPath = `/beneficiary/homepage/${beneficiaryId}`;
+    const redirectPath = `/benefhome/${beneficiaryId}`;
     return <Navigate to={redirectPath} replace />;
   }
 
-  // ✅ Check if NON-beneficiary is trying to access beneficiary portal
+  // Check if NON-beneficiary is trying to access beneficiary portal
   if (isBeneficiaryPortalRoute && !isBeneficiaryUser) {
     localStorage.removeItem("beneficaryLogin");
     localStorage.removeItem("beneficaryId");
@@ -263,22 +269,22 @@ const ProtectedRoute = () => {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
-  <div className="p-4 md:p-6">
+          <div className="p-4 md:p-6">
 
-    {isMobile && !isMobileMenuOpen && (
-      <div className="mb-4">
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="bg-white rounded-full p-3 shadow-md border border-gray-100"
-        >
-          <FiMenu className="w-5 h-5 text-gray-600" />
-        </button>
-      </div>
-    )}
+            {isMobile && !isMobileMenuOpen && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="bg-white rounded-full p-3 shadow-md border border-gray-100"
+                >
+                  <FiMenu className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            )}
 
-    <Outlet />
-  </div>
-</div>
+            <Outlet />
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
