@@ -207,7 +207,7 @@ const Login = () => {
           },
         })
       );
-  
+
       localStorage.removeItem("show_session_expired"); // so it doesn't show again on refresh
     }
   }, [dispatch]);
@@ -340,7 +340,7 @@ const Login = () => {
     }
   }, [is_owner_login, owner_id, navigate, isRedirecting, dispatch]);
 
-  // ✅ Download status handler
+  // Download status handler
   useEffect(() => {
     if (downloadStatus === "succeeded" && lastDownloadUrl) {
       window.open(lastDownloadUrl, "_blank");
@@ -357,6 +357,8 @@ const Login = () => {
       handleSuccessfulLoginRedirect({
         customer_id: auth.customerId,
         isRemittanceOnlyCustomer: auth.user?.isRemittanceOnlyCustomer || false,
+        beneficaryLogin: auth.user?.beneficaryLogin,   // NEW
+        beneficaryId: auth.user?.beneficaryId,   
       });
     }
   }, [
@@ -371,6 +373,16 @@ const Login = () => {
   // ========== HANDLER FUNCTIONS ==========
 
   const handleSuccessfulLoginRedirect = (processedData) => {
+    const beneficaryLogin =
+      processedData.beneficaryLogin ?? localStorage.getItem("beneficaryLogin");
+    const beneficaryId =
+      processedData.beneficaryId ?? localStorage.getItem("beneficaryId");
+
+    if (beneficaryLogin === "Y" && beneficaryId) {
+      navigate(`/benefhome/${beneficaryId}`, { replace: true });
+      return;
+    }
+
     const shouldRedirectToHomeRemit =
       processedData.isRemittanceOnlyCustomer === "Y" ||
       processedData.isRemittanceOnlyCustomer === true;
@@ -382,7 +394,7 @@ const Login = () => {
     navigate(redirectPath, { replace: true });
   };
 
-  // ✅ KYC verification handler
+  // KYC verification handler
   const handleKycVerification = async (response, values) => {
     // Check for owner login first with proper validation
     if (response.is_owner_login === true || response.is_owner_login === "1") {
@@ -528,10 +540,10 @@ const Login = () => {
     setPlaidUrl("");
   };
 
-  // ✅ Memoize country options - defined after formik will be but before it's used
+  // Memoize country options - defined after formik will be but before it's used
   // We'll define these after formik is initialized
 
-  // ✅ Formik setup with double-submission prevention
+  //  Formik setup with double-submission prevention
   const formik = useFormik({
     initialValues: {
       email: "",
@@ -544,7 +556,7 @@ const Login = () => {
     },
     validationSchema,
     onSubmit: async (values) => {
-      // ✅ PREVENT DOUBLE SUBMISSION
+      //  PREVENT DOUBLE SUBMISSION
       if (isSubmittingRef.current) {
         return;
       }
@@ -647,12 +659,14 @@ const Login = () => {
             user: {
               customerType: processedData.customer_type,
               isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
+              beneficaryLogin: processedData.beneficaryLogin || null,   // NEW
+              beneficaryId: processedData.beneficaryId || null,
               [inputType === "email" ? "email" : "mobile_number"]:
                 inputType === "email" ? values.email : values.mobile_number,
             },
           };
 
-          // ✅ ADD THIS CODE RIGHT AFTER the authState definition (before dispatch(setAuthState))
+          //  ADD THIS CODE RIGHT AFTER the authState definition (before dispatch(setAuthState))
           localStorage.setItem('authcustomer_id', processedData.customer_id);
           localStorage.setItem('bearertoken', processedData.token);
           if (processedData.isRemittanceOnlyCustomer) {
@@ -660,6 +674,12 @@ const Login = () => {
           }
           if (processedData.customer_type) {
             localStorage.setItem('customer_type', processedData.customer_type);
+          }
+          if (processedData.beneficaryLogin) {
+            localStorage.setItem('beneficaryLogin', processedData.beneficaryLogin);
+          }
+          if (processedData.beneficaryId) {
+            localStorage.setItem('beneficaryId', processedData.beneficaryId);
           }
 
           dispatch(setAuthState(authState));
@@ -1082,7 +1102,7 @@ const Login = () => {
 
       const result = await dispatch(verifyPasscode(verifyPayload)).unwrap();
 
-      // ✅ NEW: Check for owner login
+      // NEW: Check for owner login
       if (result.is_owner_login === true || result.is_owner_login === "1") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1100,7 +1120,7 @@ const Login = () => {
         return;
       }
 
-      // ✅ NEW: Case 1 - Remittance Only Customer with Pending KYC (Show message, NO redirect)
+      //  NEW: Case 1 - Remittance Only Customer with Pending KYC (Show message, NO redirect)
       if (result.kyc_status === "0" && result.isRemittanceOnlyCustomer === "Y") {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1119,7 +1139,7 @@ const Login = () => {
         return;
       }
 
-      // ✅ NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
+      // NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
       if (result.requiresPlaidRedirect && result.plaidUrl) {
         dispatch(setShowPasscodeInput(false));
         dispatch(setPasscodeSent(false));
@@ -1174,11 +1194,13 @@ const Login = () => {
               isRemittanceOnlyCustomer:
                 processedData.isRemittanceOnlyCustomer || false,
               customerType: processedData.customer_type || "individual",
+              beneficaryLogin: processedData.beneficaryLogin || null,   // NEW
+              beneficaryId: processedData.beneficaryId || null,
             },
           })
         );
 
-        // ✅ ADD THIS CODE RIGHT HERE (after setAuthState but before dispatch(setPasscode))
+        //  ADD THIS CODE RIGHT HERE (after setAuthState but before dispatch(setPasscode))
         localStorage.setItem('authcustomer_id', customerId);
         localStorage.setItem('bearertoken', processedData.token);
         if (processedData.isRemittanceOnlyCustomer) {
@@ -1186,6 +1208,12 @@ const Login = () => {
         }
         if (processedData.customer_type) {
           localStorage.setItem('customer_type', processedData.customer_type);
+        }
+        if (processedData.beneficaryLogin) {
+          localStorage.setItem('beneficaryLogin', processedData.beneficaryLogin);
+        }
+        if (processedData.beneficaryId) {
+          localStorage.setItem('beneficaryId', processedData.beneficaryId);
         }
 
         await fetchAndStoreLogoutTime();
@@ -1214,6 +1242,8 @@ const Login = () => {
           handleSuccessfulLoginRedirect({
             customer_id: customerId,
             isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
+            beneficaryLogin: processedData.beneficaryLogin,   // NEW
+            beneficaryId: processedData.beneficaryId,
           });
         }, 1500);
       } else {
@@ -1376,6 +1406,8 @@ const Login = () => {
               phone_code: values.phone_code,
               isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
               customerType: result.customer_type || "individual",
+              beneficaryLogin: result.beneficaryLogin || null,   // NEW
+              beneficaryId: result.beneficaryId || null,
             },
           })
         );
@@ -1387,6 +1419,12 @@ const Login = () => {
         }
         if (result.customer_type) {
           localStorage.setItem('customer_type', result.customer_type);
+        }
+        if (result.beneficaryLogin) {
+          localStorage.setItem('beneficaryLogin', result.beneficaryLogin);
+        }
+        if (result.beneficaryId) {
+          localStorage.setItem('beneficaryId', result.beneficaryId);
         }
 
         await fetchAndStoreLogoutTime();
@@ -1410,6 +1448,8 @@ const Login = () => {
           handleSuccessfulLoginRedirect({
             customer_id: result.customer_id,
             isRemittanceOnlyCustomer: result.isRemittanceOnlyCustomer || false,
+            beneficaryLogin: result.beneficaryLogin,   // NEW
+            beneficaryId: result.beneficaryId,
           });
         }, 1500);
         return;
@@ -1507,7 +1547,7 @@ const Login = () => {
                 Mobile Number
               </label>
             </div>
-            
+
             <div className="relative flex items-center cursor-pointer">
               <input
                 type="radio"
