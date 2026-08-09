@@ -24,9 +24,14 @@ import Convert from "../src/page/Conversion/Convert";
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
 import AddBeneficiary from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiary";
 import EditBeneficiary from "../src/page/Beneficiary/EditBeneficiary/EditBeneficiary";
-import AddBeneficiaryRequestRemit from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/Addbeneficiaryrequestremit";
 
+//BeneficiaryRequestRemit(New)
+import AddBeneficiaryRequestRemit from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/Addbeneficiaryrequestremit";
+import BeneficiaryLayout from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BeneficiaryLayout/BeneficiaryLayout";
 import BenefHome from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenficiaryHome/BenefHome";
+import BenefTransactions from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefTransactions/BenefTransactions";
+import BeneficiarySenders from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefSenders/BenefSenders";
+import BeneficiaryProfile from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefProfile/BenefProfile";
 
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
@@ -201,8 +206,25 @@ const router = createBrowserRouter([
         element: <EditBeneficiary />,
       },
       {
-        path: "benefhome/:beneficiaryId",
-        element: <BenefHome />,
+        element: <BeneficiaryLayout />,
+        children: [
+          {
+            path: "benefhome/:beneficiaryId",
+            element: <BenefHome />,
+          },
+          {
+            path: "beneftransactions/:beneficiaryId",
+            element: <BenefTransactions />,
+          },
+          {
+            path: "benefsenders/:beneficiaryId",
+            element: <BeneficiarySenders/>,
+          },
+          {
+            path: "beneficiaryprofile/:beneficiaryId",
+            element: <BeneficiaryProfile/>,
+          },
+        ],
       },
       {
         path: "profile/:customerId",

@@ -28,11 +28,11 @@ function NavigateSectionBenef() {
     const mainSection = pathSegments[0];
 
     switch (mainSection) {
-      case "benefhomepage":
+      case "benefhome":
         return "dashboard";
-      case "beneficiarytransactions":
+      case "beneftransactions":
         return "transactions";
-      case "beneficiarysenders":
+      case "benefsenders":
         return "senders";
       case "referral":
         return "referral";
@@ -52,7 +52,7 @@ function NavigateSectionBenef() {
       id: "dashboard",
       label: "Dashboard",
       icon: FaChartLine,
-      path: `/benefhomepage/${beneficiaryId}`,
+      path: `/benefhome/${beneficiaryId}`,
       description: "Overview and analytics",
       gradient: "from-blue-500 to-cyan-500",
     },
@@ -60,7 +60,7 @@ function NavigateSectionBenef() {
       id: "transactions",
       label: "Transactions",
       icon: FaExchangeAlt,
-      path: `/beneficiarytransactions/${beneficiaryId}`,
+      path: `/beneftransactions/${beneficiaryId}`,
       description: "View all transactions",
       gradient: "from-emerald-500 to-green-500",
     },
@@ -68,7 +68,7 @@ function NavigateSectionBenef() {
       id: "senders",
       label: "Senders",
       icon: FaUserFriends,
-      path: `/beneficiarysenders/${beneficiaryId}`,
+      path: `/benefsenders/${beneficiaryId}`,
       description: "Manage your senders",
       gradient: "from-purple-500 to-pink-500",
     },

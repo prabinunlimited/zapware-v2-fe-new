@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-// Adjust these import paths to match your project structure
-import HeaderBenef from "../BenefHeader/BenefHeader"
-import NavigateSectionBenef from "../BenficiaryHome/NavigationSectionBenef"
 
 // Professional Share Popup Component
 const SharePopup = ({
@@ -1537,15 +1534,7 @@ Generated on ${currentDate}
           </div>
         </div>
       )}
-
-      {/* Top gradient header */}
-      <HeaderBenef />
-
-      {/* Sidebar + Main Content */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Sidebar */}
-        <NavigateSectionBenef />
-
+      
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto min-w-0 bg-gray-50">
           {/* Mobile-only beneficiary code strip (sidebar is hidden on small screens) */}
@@ -3102,7 +3091,7 @@ Generated on ${currentDate}
           </div>
         </div>
       </div>
-      </div>
+      
 
       {/* Share Popup */}
       <SharePopup

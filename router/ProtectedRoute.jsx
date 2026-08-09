@@ -120,7 +120,7 @@ const ProtectedRoute = () => {
     };
   }, [isMobileMenuOpen]);
 
-  // ✅ Show loading while initializing
+  // Show loading while initializing
   if (!isInitialized || isChecking) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -133,7 +133,7 @@ const ProtectedRoute = () => {
     );
   }
 
-  // ✅ Use the enhanced isAuthenticated selector
+  // Use the enhanced isAuthenticated selector
   if (!isAuthenticated) {
     return <Navigate to="/" replace state={{ from: location }} />;
   }
@@ -153,17 +153,25 @@ const ProtectedRoute = () => {
     return <Navigate to={redirectPath} replace />;
   }
 
-  // ✅ Check if user is beneficiary
+  //  Check if user is beneficiary
   const isBeneficiaryUser = localStorage.getItem("beneficaryLogin") === "Y";
   const beneficiaryId =
     localStorage.getItem("beneficaryId") ||
     localStorage.getItem("beneficiaryId");
 
-  // ✅ Check if current route is beneficiary portal route
-  // ✅ Check if current route is beneficiary portal route
-  const isBeneficiaryPortalRoute = location.pathname.startsWith("/benefhome/");
+  // Check if current route is ANY beneficiary portal route
+  const beneficiaryRoutes = [
+    "/benefhome/",
+    "/beneftransactions/",
+    "/benefsenders/",
+    "/beneficiaryprofile",
+  ];
 
-  // ✅ SPECIAL HANDLING FOR BENEFICIARIES
+  const isBeneficiaryPortalRoute = beneficiaryRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
+
+  //  SPECIAL HANDLING FOR BENEFICIARIES
   if (isBeneficiaryUser && beneficiaryId) {
     if (isBeneficiaryPortalRoute) {
       return <Outlet />;
@@ -172,7 +180,7 @@ const ProtectedRoute = () => {
     return <Navigate to={redirectPath} replace />;
   }
 
-  // ✅ Check if NON-beneficiary is trying to access beneficiary portal
+  // Check if NON-beneficiary is trying to access beneficiary portal
   if (isBeneficiaryPortalRoute && !isBeneficiaryUser) {
     localStorage.removeItem("beneficaryLogin");
     localStorage.removeItem("beneficaryId");
