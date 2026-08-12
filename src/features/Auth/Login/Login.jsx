@@ -124,6 +124,13 @@ const Login = () => {
   const pendingUserTypeFlowRef = useRef(null);
   const pendingUserTypePayloadRef = useRef(null);
 
+  const [showInstitutionModal, setShowInstitutionModal] = useState(false);
+  const [institutionOptions, setInstitutionOptions] = useState([]);
+  const [institutionMessage, setInstitutionMessage] = useState("");
+  const [selectedInstitutionId, setSelectedInstitutionId] = useState("");
+  const [isSubmittingInstitution, setIsSubmittingInstitution] = useState(false);
+  const pendingInstitutionPayloadRef = useRef(null);
+
   // Select state from Redux
   const auth = useSelector(selectAuth);
   const countries = useSelector(selectCountries);
@@ -1008,6 +1015,19 @@ const Login = () => {
     try {
       const result = await dispatch(generateOTP(payload)).unwrap();
 
+      if (result.status === "multiple_institutions") {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        pendingInstitutionPayloadRef.current = payload;
+        setInstitutionOptions(result.customers || []);
+        setInstitutionMessage(result.message || "Please select an institution");
+        setSelectedInstitutionId("");
+        setShowInstitutionModal(true);
+        return;
+      }
+
       if (result.status === "multiple_accounts") {
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
@@ -1149,6 +1169,53 @@ const Login = () => {
       if (flow === "passcode") dispatch(setLoading(false));
       pendingUserTypeFlowRef.current = null;
       pendingUserTypePayloadRef.current = null;
+    }
+  };
+
+  const handleConfirmInstitution = async () => {
+    console.log("🟢 CONFIRM CLICKED", {
+      selectedInstitutionId,
+      pending: pendingInstitutionPayloadRef.current,
+    });
+    if (!selectedInstitutionId || !pendingInstitutionPayloadRef.current) return;
+
+    const payload = {
+      ...pendingInstitutionPayloadRef.current,
+      customer_id: selectedInstitutionId,
+    };
+
+    setIsSubmittingInstitution(true);
+    setShowInstitutionModal(false);
+
+    try {
+      const result = await dispatch(generateOTP(payload)).unwrap();
+
+      if (!result.message || result.message === "OTP sent successfully") {
+        dispatch(setShowOtpInput(true));
+        dispatch(setOtpSent(true));
+        dispatch(setOtp(new Array(6).fill("")));
+      }
+
+      if (result.message) {
+        dispatch(
+          openModal({
+            title: result.message.includes("Invalid") ? "Error" : "Success",
+            message: result.message,
+            type: result.message.includes("Invalid") ? "error" : "success",
+          })
+        );
+      }
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: error.message || "Failed to proceed",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsSubmittingInstitution(false);
+      pendingInstitutionPayloadRef.current = null;
     }
   };
 
@@ -1507,6 +1574,10 @@ const Login = () => {
 
         ...(selectedUserType && {
           user_type: selectedUserType,
+        }),
+
+        ...(selectedInstitutionId && {
+          customer_id: selectedInstitutionId,
         }),
       };
 
@@ -2379,6 +2450,66 @@ const Login = () => {
               className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
             >
               {isSubmittingUserType ? (
+                <>
+                  <RingLoader size={20} color="#ffffff" />
+                  <span>Please wait...</span>
+                </>
+              ) : (
+                "Continue"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========== MULTIPLE INSTITUTION SELECTION MODAL ========== */}
+      {showInstitutionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button
+              onClick={() => {
+                setShowInstitutionModal(false);
+                pendingInstitutionPayloadRef.current = null;
+              }}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+            >
+              <AiOutlineClose size={20} />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-3">
+              Select Institution
+            </h2>
+            <p className="text-gray-600 mb-6 text-sm">{institutionMessage}</p>
+
+            <div className="flex flex-col gap-3 mb-6 max-h-64 overflow-y-auto">
+              {institutionOptions.map((customer) => (
+                <label
+                  key={customer.id}
+                  className="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50"
+                >
+                  <input
+                    type="radio"
+                    name="institution"
+                    value={customer.id}
+                    checked={String(selectedInstitutionId) === String(customer.id)}
+                    onChange={(e) => setSelectedInstitutionId(e.target.value)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">{customer.name}</span>
+                </label>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                console.log("🟡 BUTTON CLICKED");
+                handleConfirmInstitution();
+              }}  
+              disabled={!selectedInstitutionId || isSubmittingInstitution}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
+            >
+              {isSubmittingInstitution ? (
                 <>
                   <RingLoader size={20} color="#ffffff" />
                   <span>Please wait...</span>

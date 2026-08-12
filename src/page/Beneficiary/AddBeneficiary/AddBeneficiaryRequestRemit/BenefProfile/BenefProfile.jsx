@@ -186,7 +186,7 @@ function BeneficiaryProfile() {
                 setCities([]);
                 setHasCities(false);
             }
-               setHasFetchedCities(true);
+            setHasFetchedCities(true);
         } catch (error) {
             console.error("Error fetching cities:", error);
             if (isMountedRef.current) {
@@ -213,6 +213,7 @@ function BeneficiaryProfile() {
         setCities([]);
         setHasCities(false);
         setHasFetchedStates(false);
+        setHasFetchedCities(false);
 
         if (countryId) {
             await dispatch(fetchStatesByCountry(countryId));
@@ -1217,19 +1218,13 @@ function BeneficiaryProfile() {
                                         </label>
                                         {isEditMode ? (
                                             <div className="flex gap-2">
-                                                <div className="w-1/3">
+                                                <div className="w-44 flex-shrink-0">
                                                     <Select
                                                         className="text-sm"
                                                         classNamePrefix="select"
                                                         options={countriesOptions.map((country) => ({
                                                             value: country.phoneCode,
-                                                            label: `${country.phoneCode} (${country.label})`,
-                                                            country: {
-                                                                id: country.id,
-                                                                name: country.label,
-                                                                flag_url: country.flag_url,
-                                                                phone_code: country.phoneCode,
-                                                            },
+                                                            label: `${country.phoneCode} ${country.label}`,
                                                         }))}
                                                         placeholder="Code"
                                                         isSearchable
@@ -1241,31 +1236,10 @@ function BeneficiaryProfile() {
                                                             return selectedCountry
                                                                 ? {
                                                                     value: selectedCountry.phoneCode,
-                                                                    label: `${selectedCountry.phoneCode} (${selectedCountry.label})`,
-                                                                    country: {
-                                                                        id: selectedCountry.id,
-                                                                        name: selectedCountry.label,
-                                                                        flag_url: selectedCountry.flag_url,
-                                                                        phone_code: selectedCountry.phoneCode,
-                                                                    },
+                                                                    label: `${selectedCountry.phoneCode} ${selectedCountry.label}`,
                                                                 }
                                                                 : null;
                                                         })()}
-                                                        formatOptionLabel={({ country, label }) => (
-                                                            <div className="flex items-center gap-2">
-                                                                {country?.flag_url && (
-                                                                    <img
-                                                                        src={country.flag_url}
-                                                                        alt="Flag"
-                                                                        className="w-6 h-4 rounded-sm object-cover"
-                                                                        onError={(e) => {
-                                                                            e.target.style.display = "none";
-                                                                        }}
-                                                                    />
-                                                                )}
-                                                                <span>{label}</span>
-                                                            </div>
-                                                        )}
                                                         styles={customStyles}
                                                         isLoading={countriesLoading}
                                                     />
