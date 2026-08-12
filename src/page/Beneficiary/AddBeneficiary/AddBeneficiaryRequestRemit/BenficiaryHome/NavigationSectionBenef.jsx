@@ -5,7 +5,7 @@ import {
   FaChartLine,
   FaExchangeAlt,
   FaUserFriends,
-  FaShareAlt,
+  FaHeadset,
 } from "react-icons/fa";
 import { IoIosArrowForward } from "react-icons/io";
 
@@ -73,11 +73,11 @@ function NavigateSectionBenef() {
       gradient: "from-purple-500 to-pink-500",
     },
     {
-      id: "referral",
-      label: "Referral",
-      icon: FaShareAlt,
+      id: "support",
+      label: "Support",
+      icon: FaHeadset,
       path: `#`,
-      description: "Refer and earn rewards",
+      description: "Get help and assistance",
       gradient: "from-orange-500 to-red-500",
     },
   ];
