@@ -17,6 +17,7 @@ const BYPASS_COORDINATION_ENDPOINTS = [
   "send-passcode",
   "generate-passcode",
   "request-passcode-login",
+  "send-otp-login",
   "payout/remit-payout",
   "/profile",
 ];
