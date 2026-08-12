@@ -1745,21 +1745,31 @@ const Institution = () => {
           const ownerFields = [];
           if (values.owner_details && values.owner_details.length > 0) {
             values.owner_details.forEach((owner, index) => {
+              const isInstitutionOwner = owner.owner_type === "institution";
+
               ownerFields.push(
-                `owner_details[${index}].owner_first_name`,
-                `owner_details[${index}].owner_middle_name`,
-                `owner_details[${index}].owner_last_name`,
                 `owner_details[${index}].owner_email`,
                 `owner_details[${index}].owner_phone_number`,
                 `owner_details[${index}].owner_country_id`,
                 `owner_details[${index}].owner_phone_number_country_code`,
                 `owner_details[${index}].ownership_percentage`,
-                `owner_details[${index}].owner_dob`,
                 `owner_details[${index}].owner_if`,
+                `owner_details[${index}].owner_type`,
               );
-              if (owner.owner_if === "yes") {
-                ownerFields.push(`owner_details[${index}].owner_type`);
+
+              if (isInstitutionOwner) {
+                ownerFields.push(
+                  `owner_details[${index}].owner_name`,
+                );
+              } else {
+                ownerFields.push(
+                  `owner_details[${index}].owner_first_name`,
+                  `owner_details[${index}].owner_middle_name`,
+                  `owner_details[${index}].owner_last_name`,
+                  `owner_details[${index}].owner_dob`,
+                );
               }
+
               if (owner.owner_if === "no" || index > 0) {
                 ownerFields.push(
                   `owner_details[${index}].owner_needs_access_to_system`,
@@ -1771,7 +1781,8 @@ const Institution = () => {
               // Update to check both conditions
               if (
                 (isNamedAccount || remittanceOnlyAccepted) &&
-                ssn_required === "Y"
+                ssn_required === "Y" &&
+                !isInstitutionOwner
               ) {
                 ownerFields.push(
                   `owner_details[${index}].ssn`,
@@ -2470,9 +2481,17 @@ const Institution = () => {
           ownerAdd: ownerAdd,
 
           owner_details: finalFormData.owner_details?.map((owner) => {
+            const isInstitutionOwner = owner.owner_type === "institution"
             const processedOwner = {
               ...owner,
               owner_country_id: findCountryId(owner.owner_country_id),
+              owner_institution_name: isInstitutionOwner
+                ? owner.owner_name || ""
+                : "",
+              owner_first_name: isInstitutionOwner ? "" : owner.owner_first_name,
+              owner_middle_name: isInstitutionOwner ? "" : owner.owner_middle_name,
+              owner_last_name: isInstitutionOwner ? "" : owner.owner_last_name,
+              owner_dob: isInstitutionOwner ? "" : owner.owner_dob,
             };
 
             if (owner.owner_if === "no") {
