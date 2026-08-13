@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   useCallback,
@@ -423,13 +424,35 @@ const FIELD_STYLES = {
   success: "border-green-500 focus:ring-green-500",
 };
 
+const BACKUP_KEY = "institution_registration_backup";
+const BACKUP_EXPIRY_HOURS = 1;
+
+const loadBackup = () => {
+  try {
+    const raw = sessionStorage.getItem(BACKUP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const diffHours = (new Date() - new Date(parsed.timestamp)) / (1000 * 60 * 60);
+    if (diffHours >= BACKUP_EXPIRY_HOURS) {
+      sessionStorage.removeItem(BACKUP_KEY);
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+};
+
 const Institution = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeField, setActiveField] = useState("");
   const [businessAliasValid, setBusinessAliasValid] = useState(null);
-  const [localFormData, setLocalFormData] = useState({});
+  const [localFormData, setLocalFormData] = useState(() => {
+    const backup = loadBackup();
+    return backup?.data || {};
+  });
   const [showSSNConfirmation, setShowSSNConfirmation] = useState(false);
   const [pendingNextStep, setPendingNextStep] = useState(false);
   const [formValues, setFormValues] = useState({});
@@ -440,6 +463,8 @@ const Institution = () => {
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
 
   const initialLoadRef = React.useRef(false);
+  const prevRegisteredCountryRef = useRef(undefined);
+  const prevResponsiblePersonCountryRef = useRef(undefined);
   const institutionState = useSelector(selectInstitutionRegistration);
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
@@ -777,38 +802,37 @@ const Institution = () => {
     [getSafeCountryOptions],
   );
 
+  // Restore the saved step before paint, so we don't flash Step 1 first
+  useLayoutEffect(() => {
+    const backup = loadBackup();
+    if (backup?.step) {
+      dispatch(setCurrentStep(backup.step));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced save on every change to form data or step
   useEffect(() => {
-    return () => {
-      if (Object.keys(localFormData).length > 0) {
-        localStorage.setItem(
-          "institution_registration_backup",
+    if (Object.keys(localFormData).length === 0) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const { user_image, ...persistable } = localFormData; // files aren't JSON-serializable
+        sessionStorage.setItem(
+          BACKUP_KEY,
           JSON.stringify({
-            data: localFormData,
+            data: persistable,
             timestamp: new Date().toISOString(),
             step: currentStep,
           }),
         );
+      } catch (e) {
+        // storage full/unavailable — fail silently
       }
-    };
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [localFormData, currentStep]);
-
-  useEffect(() => {
-    const backup = localStorage.getItem("institution_registration_backup");
-    if (backup) {
-      try {
-        const { data, timestamp } = JSON.parse(backup);
-        const backupTime = new Date(timestamp);
-        const currentTime = new Date();
-        const diffHours = (currentTime - backupTime) / (1000 * 60 * 60);
-
-        if (diffHours < 1) {
-          setLocalFormData(data);
-        }
-      } catch (error) {
-        // Backup restoration failed silently
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (termsFetched && termsConditions && termsConditions.length > 0) {
@@ -2018,13 +2042,13 @@ const Institution = () => {
           return;
         }
 
-        if (currentStep === 2 && !isResponsiblePersonEmailVerified) {
+        if (currentStep === 2 && !isResponsiblePersonEmailVerified && !values.email_verified) {
           dispatch(setErrorMessage("Please verify your email address before proceeding"));
           dispatch(setShowPopup(true));
           return;
         }
 
-        if (currentStep === 2 && !isPhoneVerified) {
+        if (currentStep === 2 && !isPhoneVerified && !values.phone_verified) {
           dispatch(setErrorMessage("Please verify your phone number before proceeding"));
           dispatch(setShowPopup(true));
           return;
@@ -2532,7 +2556,7 @@ const Institution = () => {
           result &&
           (result.status === "success" || result.success === true)
         ) {
-          localStorage.removeItem("institution_registration_backup");
+          sessionStorage.removeItem(BACKUP_KEY);
           localStorage.removeItem("uploadedFiles");
 
           const mobileNumber = `${finalData.mobilenumber_countrycode} ${finalData.mobile_number}`;
@@ -3757,38 +3781,42 @@ const Institution = () => {
           setTouched,
           isSubmitting,
         }) => {
+          const emailIsVerified = isResponsiblePersonEmailVerified || values.email_verified === true;
+          const phoneIsVerified = isPhoneVerified || values.phone_verified === true;
+
           React.useEffect(() => {
             setFormValues(values);
           }, [values]);
+
+          // Mirror ALL Formik values into localFormData so nothing (dob, checkboxes,
+          // terms_and_conditions, etc.) is lost on refresh
           React.useEffect(() => {
-            // Clear states when country is empty
+            const timer = setTimeout(() => {
+              setLocalFormData((prev) => ({ ...prev, ...values }));
+            }, 300);
+            return () => clearTimeout(timer);
+          }, [values]);
+
+          React.useEffect(() => {
+            const prevCountry = prevRegisteredCountryRef.current;
+            prevRegisteredCountryRef.current = values.registered_address_street_country;
+
             if (!values.registered_address_street_country) {
               dispatch(clearStates());
-              // Clear the state value when country is empty
-              setFieldValue("registered_address_street_state", "");
-              setLocalFormData((prev) => ({
-                ...prev,
-                registered_address_street_state: "",
-              }));
-              dispatch(setFormField({
-                field: "registered_address_street_state",
-                value: ""
-              }));
+              if (prevCountry !== undefined && prevCountry) {
+                setFieldValue("registered_address_street_state", "");
+                setLocalFormData((prev) => ({ ...prev, registered_address_street_state: "" }));
+                dispatch(setFormField({ field: "registered_address_street_state", value: "" }));
+              }
               return;
             }
 
-            // Clear the state value when country changes (before fetching new states)
-            setFieldValue("registered_address_street_state", "");
-            setLocalFormData((prev) => ({
-              ...prev,
-              registered_address_street_state: "",
-            }));
-            dispatch(setFormField({
-              field: "registered_address_street_state",
-              value: ""
-            }));
+            if (prevCountry !== undefined && prevCountry !== values.registered_address_street_country) {
+              setFieldValue("registered_address_street_state", "");
+              setLocalFormData((prev) => ({ ...prev, registered_address_street_state: "" }));
+              dispatch(setFormField({ field: "registered_address_street_state", value: "" }));
+            }
 
-            // Debounce the state fetch to avoid excessive API calls
             const timer = setTimeout(() => {
               dispatch(fetchStatesByCountry(values.registered_address_street_country));
             }, 500);
@@ -3824,40 +3852,29 @@ const Institution = () => {
 
           // useEffect for Responsible Person states
           React.useEffect(() => {
+            const prevCountry = prevResponsiblePersonCountryRef.current;
+            prevResponsiblePersonCountryRef.current = values.country;
+
             const fetchResponsiblePersonStates = async () => {
               if (!values.country) {
                 setResponsiblePersonStates([]);
-                // Clear the state value when country is empty
-                setFieldValue("state", "");
-                setLocalFormData((prev) => ({
-                  ...prev,
-                  state: "",
-                }));
-                dispatch(setFormField({
-                  field: "state",
-                  value: ""
-                }));
+                if (prevCountry !== undefined && prevCountry) {
+                  setFieldValue("state", "");
+                  setLocalFormData((prev) => ({ ...prev, state: "" }));
+                  dispatch(setFormField({ field: "state", value: "" }));
+                }
                 return;
               }
 
-              // Clear the state value when country changes
-              setFieldValue("state", "");
-              setLocalFormData((prev) => ({
-                ...prev,
-                state: "",
-              }));
-              dispatch(setFormField({
-                field: "state",
-                value: ""
-              }));
+              if (prevCountry !== undefined && prevCountry !== values.country) {
+                setFieldValue("state", "");
+                setLocalFormData((prev) => ({ ...prev, state: "" }));
+                dispatch(setFormField({ field: "state", value: "" }));
+              }
 
               setResponsiblePersonStatesLoading(true);
-
               try {
-                const result = await dispatch(
-                  fetchStatesByCountry(values.country)
-                ).unwrap();
-
+                const result = await dispatch(fetchStatesByCountry(values.country)).unwrap();
                 setResponsiblePersonStates(result || []);
               } catch (error) {
                 setResponsiblePersonStates([]);
@@ -3868,7 +3885,7 @@ const Institution = () => {
 
             const timer = setTimeout(fetchResponsiblePersonStates, 500);
             return () => clearTimeout(timer);
-          }, [values.country, dispatch, setFieldValue]);
+          }, [values.country, dispatch]);
 
           // useEffect for Controller states
           React.useEffect(() => {
@@ -6208,8 +6225,8 @@ const Institution = () => {
                               onFocus={() => setActiveField("email")}
                               // disabled={isResponsiblePersonEmailVerified}
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-            ${isResponsiblePersonEmailVerified ? 'bg-green-50 border-green-300' : ''}
-            ${touched.email && errors.email && !isResponsiblePersonEmailVerified
+            ${emailIsVerified? 'bg-green-50 border-green-300' : ''}
+            ${touched.email && errors.email && !emailIsVerified
                                   ? "border-red-500 focus:ring-red-500"
                                   : "border-gray-300 focus:ring-blue-500"
                                 }`}
@@ -6218,7 +6235,7 @@ const Institution = () => {
                           </div>
 
                           {/* Verify Button - Only show when not verified */}
-                          {!isResponsiblePersonEmailVerified && (
+                          {!emailIsVerified && (
                             <button
                               type="button"
                               onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
@@ -6240,7 +6257,7 @@ const Institution = () => {
                           )}
 
                           {/* Verified Badge - Show when verified instead of button */}
-                          {isResponsiblePersonEmailVerified && (
+                          {emailIsVerified && (
                             <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
                               <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                               <span>Verified</span>
@@ -6249,7 +6266,7 @@ const Institution = () => {
                         </div>
 
                         {/* Email field error */}
-                        {touched.email && errors.email && !isResponsiblePersonEmailVerified && (
+                        {touched.email && errors.email && !emailIsVerified && (
                           <div className="text-red-500 text-xs mt-1 flex items-center">
                             <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
                             {errors.email}
@@ -6258,7 +6275,7 @@ const Institution = () => {
                       </div>
 
                       {/* Verification Code Input (shown after clicking Verify) */}
-                      {showVerificationInput && !isResponsiblePersonEmailVerified && (
+                      {showVerificationInput && !emailIsVerified && (
                         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             Enter Verification Code
@@ -6312,7 +6329,7 @@ const Institution = () => {
                           )}
 
                           {/* Success message */}
-                          {emailVerification?.success && !isResponsiblePersonEmailVerified && (
+                          {emailVerification?.success && !emailIsVerified && (
                             <p className="text-green-600 text-xs mt-3 flex items-center">
                               <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
                               {emailVerification.success}
@@ -6515,7 +6532,7 @@ const Institution = () => {
                                   />
                                 </div>
 
-                                {!isPhoneVerified ? (
+                                {!phoneIsVerified ? (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -6560,7 +6577,7 @@ const Institution = () => {
 
                             {touched.mobile_number &&
                               errors.mobile_number &&
-                              !isPhoneVerified && (
+                              !phoneIsVerified&& (
                                 <div className="text-red-500 text-xs mt-1 flex items-center">
                                   <FontAwesomeIcon
                                     icon={faInfoCircle}
@@ -6572,7 +6589,7 @@ const Institution = () => {
                           </div>
                         </div>
                         {/* Verification Code Input */}
-                        {showPhoneVerificationInput && !isPhoneVerified && (
+                        {showPhoneVerificationInput && !phoneIsVerified && (
                           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Enter Verification Code
@@ -6632,7 +6649,7 @@ const Institution = () => {
                               </p>
                             )}
 
-                            {phoneVerification?.success && !isPhoneVerified && (
+                            {phoneVerification?.success && !phoneIsVerified && (
                               <p className="text-green-600 text-xs mt-3 flex items-center">
                                 <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
                                 {phoneVerification.success}
