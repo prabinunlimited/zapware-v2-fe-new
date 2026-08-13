@@ -459,6 +459,7 @@ const Institution = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFullScreenLoader, setShowFullScreenLoader] = useState(false);
+  const [initialDataLoading, setInitialDataLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
 
@@ -1266,25 +1267,37 @@ const Institution = () => {
   useEffect(() => {
     if (!initialLoadRef.current) {
       initialLoadRef.current = true;
-      dispatch(fetchCountries());
-      dispatch(fetchGenders());
-      dispatch(fetchNationalities());
-      dispatch(fetchIndustryTypes());
-      dispatch(fetchTermsAndConditions());
-      dispatch(fetchInstitutionData());
-      dispatch(fetchEmployeesNumberTypes());
-      dispatch(fetchDirectorRoles());
-      dispatch(fetchInstitutionAccountTypes());
-      dispatch(fetchInstitutionTypes());
-      dispatch(fetchTransactionCurrencies());
-      dispatch(fetchOccupation());
-      setTimeout(() => {
-        dispatch(fetchNAICSCodes());
-        dispatch(fetchBusinessTypes());
-        dispatch(fetchOwnerRoles());
-        dispatch(fetchDocumentTypes());
-        dispatch(fetchIdDocumentTypes());
-      }, 1000);
+
+      const primaryFetches = [
+        dispatch(fetchCountries()),
+        dispatch(fetchGenders()),
+        dispatch(fetchNationalities()),
+        dispatch(fetchIndustryTypes()),
+        dispatch(fetchTermsAndConditions()),
+        dispatch(fetchInstitutionData()),
+        dispatch(fetchEmployeesNumberTypes()),
+        dispatch(fetchDirectorRoles()),
+        dispatch(fetchInstitutionAccountTypes()),
+        dispatch(fetchInstitutionTypes()),
+        dispatch(fetchTransactionCurrencies()),
+        dispatch(fetchOccupation()),
+      ];
+
+      const secondaryFetches = new Promise((resolve) => {
+        setTimeout(() => {
+          Promise.allSettled([
+            dispatch(fetchNAICSCodes()),
+            dispatch(fetchBusinessTypes()),
+            dispatch(fetchOwnerRoles()),
+            dispatch(fetchDocumentTypes()),
+            dispatch(fetchIdDocumentTypes()),
+          ]).finally(resolve);
+        }, 1000);
+      });
+
+      Promise.allSettled([...primaryFetches, secondaryFetches]).finally(() => {
+        setInitialDataLoading(false);
+      });
     }
   }, [dispatch]);
 
@@ -3722,6 +3735,13 @@ const Institution = () => {
               Processing your business registration...
             </p>
           </div>
+        </div>
+      )}
+
+      {initialDataLoading && (
+        <div className="fixed inset-0 bg-white z-[60] flex flex-col justify-center items-center">
+          <RingLoader color="#3b82f6" size={60} loading={initialDataLoading} />
+          <p className="mt-4 text-gray-600 font-medium">Loading registration form...</p>
         </div>
       )}
 
@@ -6225,7 +6245,7 @@ const Institution = () => {
                               onFocus={() => setActiveField("email")}
                               // disabled={isResponsiblePersonEmailVerified}
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-            ${emailIsVerified? 'bg-green-50 border-green-300' : ''}
+            ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
             ${touched.email && errors.email && !emailIsVerified
                                   ? "border-red-500 focus:ring-red-500"
                                   : "border-gray-300 focus:ring-blue-500"
@@ -6239,8 +6259,8 @@ const Institution = () => {
                             <button
                               type="button"
                               onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
-                              disabled={isSendingCode || !values.email || errors.email}
-                              className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !values.email || errors.email
+                              disabled={isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")}
+                              className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")
                                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                 : "bg-blue-600 text-white hover:bg-blue-700"
                                 }`}
@@ -6544,12 +6564,10 @@ const Institution = () => {
                                     }
                                     disabled={
                                       isPhoneSendingCode ||
-                                      !values.mobile_number ||
-                                      errors.mobile_number
+                                      !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
                                     }
                                     className={`mt-6 px-4 py-3 rounded-lg whitespace-nowrap font-medium ${isPhoneSendingCode ||
-                                      !values.mobile_number ||
-                                      errors.mobile_number
+                                      !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
                                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                       : "bg-blue-600 text-white hover:bg-blue-700"
                                       }`}
@@ -6577,7 +6595,7 @@ const Institution = () => {
 
                             {touched.mobile_number &&
                               errors.mobile_number &&
-                              !phoneIsVerified&& (
+                              !phoneIsVerified && (
                                 <div className="text-red-500 text-xs mt-1 flex items-center">
                                   <FontAwesomeIcon
                                     icon={faInfoCircle}
