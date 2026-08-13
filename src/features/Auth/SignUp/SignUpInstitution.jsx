@@ -1418,7 +1418,7 @@ const Institution = () => {
           "institution_name",
           "registration_number",
           "registered_address_street_country",
-          "registered_address_street_state",
+          // "registered_address_street_state",
           "registered_address_street_city",
           "registered_address_street_1",
           "registered_address_street_zip",
@@ -1491,7 +1491,7 @@ const Institution = () => {
           "mobile_number",
           "nationality",
           "country",
-          "state",
+          // "state",
           "city",
           "street_address_1",
           "zip_code",
@@ -3303,7 +3303,7 @@ const Institution = () => {
               {/* Controller State/Province with Dynamic Dropdown */}
               <div className="space-y-2">
                 <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
-                  State/Province <span className="text-red-500">*</span>
+                  State/Province 
                 </label>
 
                 {controllerStates && controllerStates.length > 0 ? (
@@ -5580,7 +5580,7 @@ const Institution = () => {
                         <div className="mb-4">
                           <div className="space-y-2">
                             <label htmlFor="registered_address_street_state" className="block text-sm font-medium text-gray-700">
-                              State/Province <span className="text-red-500">*</span>
+                              State/Province 
                             </label>
 
                             {states && states.length > 0 ? (
@@ -5965,7 +5965,7 @@ const Institution = () => {
                           <div className="mb-4">
                             <div className="space-y-2">
                               <label htmlFor="principal_business_address_state" className="block text-sm font-medium text-gray-700">
-                                State/Province <span className="text-red-500">*</span>
+                                State/Province 
                               </label>
 
                               {principalStates && principalStates.length > 0 ? (
@@ -7037,7 +7037,7 @@ const Institution = () => {
                       <div className="mb-4">
                         <div className="space-y-2">
                           <label htmlFor="state" className="block text-sm font-medium text-gray-700">
-                            State/Province <span className="text-red-500">*</span>
+                            State/Province 
                           </label>
 
                           {responsiblePersonStates && responsiblePersonStates.length > 0 ? (
