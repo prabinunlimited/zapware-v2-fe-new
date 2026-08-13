@@ -35,6 +35,7 @@ export {
   setCurrentPasswordError,
   setNewPasswordError,
   setConfirmPasswordError,
+  setStep
 };
 
 // Helper function to validate username (email or phone)
