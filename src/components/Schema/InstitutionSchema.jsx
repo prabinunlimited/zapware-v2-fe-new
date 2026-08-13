@@ -223,9 +223,7 @@ const institutionSchema = (currentStep, options = {}) => {
       "Registered address country is required",
     ),
 
-    registered_address_street_state: Yup.string().required(
-      "State/Province is required",
-    ),
+    registered_address_street_state: Yup.string().nullable(),
 
     registered_address_street_city: Yup.string().required("City is required"),
 
@@ -305,7 +303,7 @@ const institutionSchema = (currentStep, options = {}) => {
     mobile_number: phoneNumber,
     nationality: requiredString,
     country: requiredString,
-    state: requiredString,
+    state: Yup.string().nullable(),
     city: requiredString,
     // REMOVED character count validation from address field
     street_address_1: requiredString,
@@ -391,7 +389,7 @@ const institutionSchema = (currentStep, options = {}) => {
           controller_mobile_number: phoneNumber,
           controller_nationality: requiredString,
           controller_country: requiredString,
-          controller_state: requiredString,
+          controller_state: Yup.string().nullable(),
           controller_city: requiredString,
           // REMOVED character count validation from controller address field
           controller_street_address_1: requiredString,
