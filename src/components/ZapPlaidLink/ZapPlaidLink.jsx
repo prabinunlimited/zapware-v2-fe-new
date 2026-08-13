@@ -485,7 +485,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true, autoInitialize = 
             ? "Delete Bank Account"
             : "Link Your Bank Account"}
         </h3>
-        <button
+        {/* <button
           onClick={onClose}
           className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
           aria-label="Close"
@@ -504,7 +504,7 @@ const ZapPlaidLink = ({ onSuccess, onClose, showButton = true, autoInitialize = 
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
+        </button> */}
       </div>
 
       {!localResult && !result ? (

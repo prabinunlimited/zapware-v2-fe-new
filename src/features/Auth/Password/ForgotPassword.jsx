@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaCheckCircle,
@@ -42,6 +42,7 @@ import {
   selectShowAccountTypeDropdown,
   selectApiResponse,
   resetForgotPassword,
+  setStep
 } from "./forgotPasswordActions";
 
 const ForgotPassword = () => {
@@ -66,6 +67,13 @@ const ForgotPassword = () => {
   const apiResponse = useSelector(selectApiResponse);
 
   const bearertoken = localStorage.getItem("bearertoken");
+
+  useEffect(() => {
+    return () => {
+      // Reset state when component unmounts
+      dispatch(resetForgotPassword());
+    };
+  }, [dispatch]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -648,30 +656,28 @@ const ForgotPassword = () => {
           </AnimatePresence>
 
           <motion.div className="flex justify-between items-center mt-4 sm:mt-6 text-xs sm:text-sm">
-            {step > 1 && (
-              <button
-                onClick={() => {
-                  if (step === 2) {
-                    // Complete reset - clears everything
-                    dispatch(resetForgotPassword());
-                    // Note: resetForgotPassword already sets step to 1
-                  } else if (step === 3) {
-                    // Go back to step 2
-                    dispatch(setStep(2));
-                  } else {
-                    navigate(-1);
-                  }
-                }}
-                className="text-gray-600 hover:text-gray-800 focus:outline-none flex items-center"
-                disabled={isLoading}
-              >
-                <FaChevronLeft className="h-3 w-3 mr-1" />
-                Back
-              </button>
-            )}
-            <div
-              className={`text-gray-500 ${step > 1 ? "ml-auto" : "w-full text-center"}`}
+            <button
+              onClick={() => {
+                // Clear everything when ANY back button is clicked
+                dispatch(resetForgotPassword());
+
+                // Then navigate based on current step
+                if (step === 1) {
+                  navigate(-1); // Go to login (only from step 1)
+                } else if (step === 2) {
+                  dispatch(setStep(1)); // Go back to step 1 with data cleared
+                } else if (step === 3) {
+                  dispatch(setStep(2)); // Go back to step 2 with data cleared
+                }
+              }}
+              className="text-gray-600 hover:text-gray-800 focus:outline-none flex items-center"
+              disabled={isLoading}
             >
+              <FaChevronLeft className="h-3 w-3 mr-1" />
+              Back
+            </button>
+
+            <div className="text-gray-500">
               Step {step} of 3
             </div>
           </motion.div>

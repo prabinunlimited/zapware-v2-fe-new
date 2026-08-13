@@ -168,11 +168,10 @@ const DetailedAccountCard = ({
           <div className="flex items-start space-x-3 sm:space-x-4 flex-1 w-full">
             {/* Bank Icon - smaller on mobile */}
             <div
-              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                account.isPlaid === 1
-                  ? "bg-gradient-to-br from-blue-500 to-indigo-600"
-                  : "bg-gradient-to-br from-gray-600 to-gray-800"
-              }`}
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${account.isPlaid === 1
+                ? "bg-gradient-to-br from-blue-500 to-indigo-600"
+                : "bg-gradient-to-br from-gray-600 to-gray-800"
+                }`}
             >
               <FaBuilding className="text-white text-base sm:text-xl" />
             </div>
@@ -246,11 +245,10 @@ const DetailedAccountCard = ({
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowDeleteConfirm(account.account_id)}
               disabled={isDeleting}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors order-1 sm:order-2 ${
-                isDeleting
-                  ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                  : "bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-              }`}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors order-1 sm:order-2 ${isDeleting
+                ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                : "bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+                }`}
             >
               {isDeleting ? "Removing..." : "Remove"}
             </motion.button>
@@ -334,11 +332,10 @@ const DetailedAccountCard = ({
                   </h4>
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <div
-                      className={`p-2 sm:p-3 rounded-lg ${
-                        account.web_debit_verified
-                          ? "bg-green-50 border border-green-200"
-                          : "bg-gray-50 border border-gray-200"
-                      }`}
+                      className={`p-2 sm:p-3 rounded-lg ${account.web_debit_verified
+                        ? "bg-green-50 border border-green-200"
+                        : "bg-gray-50 border border-gray-200"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-medium text-gray-900">
@@ -354,11 +351,10 @@ const DetailedAccountCard = ({
                     </div>
 
                     <div
-                      className={`p-2 sm:p-3 rounded-lg ${
-                        account.fednow_credit_enabled
-                          ? "bg-blue-50 border border-blue-200"
-                          : "bg-gray-50 border border-gray-200"
-                      }`}
+                      className={`p-2 sm:p-3 rounded-lg ${account.fednow_credit_enabled
+                        ? "bg-blue-50 border border-blue-200"
+                        : "bg-gray-50 border border-gray-200"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-medium text-gray-900">
@@ -374,11 +370,10 @@ const DetailedAccountCard = ({
                     </div>
 
                     <div
-                      className={`p-2 sm:p-3 rounded-lg ${
-                        account.fednow_debit_enabled
-                          ? "bg-blue-50 border border-blue-200"
-                          : "bg-gray-50 border border-gray-200"
-                      }`}
+                      className={`p-2 sm:p-3 rounded-lg ${account.fednow_debit_enabled
+                        ? "bg-blue-50 border border-blue-200"
+                        : "bg-gray-50 border border-gray-200"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-medium text-gray-900">
@@ -394,11 +389,10 @@ const DetailedAccountCard = ({
                     </div>
 
                     <div
-                      className={`p-2 sm:p-3 rounded-lg ${
-                        account.rtp_credit_enabled
-                          ? "bg-teal-50 border border-teal-200"
-                          : "bg-gray-50 border border-gray-200"
-                      }`}
+                      className={`p-2 sm:p-3 rounded-lg ${account.rtp_credit_enabled
+                        ? "bg-teal-50 border border-teal-200"
+                        : "bg-gray-50 border border-gray-200"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-medium text-gray-900">
@@ -506,11 +500,10 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => (
         <button
           key={pageNum}
           onClick={() => onPageChange(pageNum)}
-          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium transition-all text-sm sm:text-base ${
-            currentPage === pageNum
-              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
+          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium transition-all text-sm sm:text-base ${currentPage === pageNum
+            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm"
+            : "text-gray-600 hover:bg-gray-100"
+            }`}
         >
           {pageNum}
         </button>
@@ -599,8 +592,8 @@ const BankLink = () => {
     }
   }, [customerId, dispatch]);
 
-  useEffect(()=>{
-    if(customerId && !showPlaidLink && !isAddingAccount) {
+  useEffect(() => {
+    if (customerId && !showPlaidLink && !isAddingAccount) {
       dispatch(setShowPlaidLink(true));
       setShowPlaidButton(false);
     }
@@ -784,12 +777,26 @@ const BankLink = () => {
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="pt-4 sm:pt-6 md:pt-8 pb-4 sm:pb-6"
+          className="pt-0 pb-4 sm:pb-6 -mt-10 sm:-mt-12"
         >
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
-            <div className="space-y-2 sm:space-y-3">
+          {/* Top Bar: Aligned with Hamburger Row */}
+          <div className="flex items-center justify-end mb-2 sm:mb-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate(`/home/${customerId}`)}
+              className="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-xs sm:text-sm transition-all duration-200 shadow-sm"
+            >
+              <span className="mr-1.5">←</span> Back to Dashboard
+            </motion.button>
+          </div>
+
+          {/* Main Title Row: Bank Accounts (Left) & Refresh Icon (Right) */}
+          <div className="flex items-center justify-between gap-4">
+            {/* Left Side: Icon + Title + Optional Card Payment Banner */}
+            <div className="flex flex-col space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl shadow-sm">
+                <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl shadow-sm flex-shrink-0">
                   <FaBuilding className="text-white text-lg sm:text-2xl" />
                 </div>
                 <div>
@@ -814,7 +821,8 @@ const BankLink = () => {
               )}
             </div>
 
-            <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Far Right Side: Refresh Button Only */}
+            <div className="flex items-center flex-shrink-0">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -1052,4 +1060,4 @@ const BankLink = () => {
   );
 };
 
-export default BankLink;
+export default BankLink;	
