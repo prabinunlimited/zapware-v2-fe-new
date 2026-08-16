@@ -165,7 +165,8 @@ const ProtectedRoute = () => {
     "/beneftransactions/",
     "/benefsenders/",
     "/beneficiaryprofile",
-    "/addbenefbank"
+    "/addbenefbank",
+    "/beneficiary-all-transactions"
   ];
 
   const isBeneficiaryPortalRoute = beneficiaryRoutes.some((route) =>
