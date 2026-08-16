@@ -3303,7 +3303,7 @@ const Institution = () => {
               {/* Controller State/Province with Dynamic Dropdown */}
               <div className="space-y-2">
                 <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
-                  State/Province 
+                  State/Province
                 </label>
 
                 {controllerStates && controllerStates.length > 0 ? (
@@ -4477,6 +4477,8 @@ const Institution = () => {
                         id="purpose_of_account"
                         label="Purpose of Account"
                         name="purpose_of_account"
+                        as="textarea"
+                        rows={4}
                         value={values.purpose_of_account || ""}
                         onChange={(e) => handlePurposeOfAccountChange(e, setFieldValue)}
                         onBlur={handleBlur}
@@ -5580,7 +5582,7 @@ const Institution = () => {
                         <div className="mb-4">
                           <div className="space-y-2">
                             <label htmlFor="registered_address_street_state" className="block text-sm font-medium text-gray-700">
-                              State/Province 
+                              State/Province
                             </label>
 
                             {states && states.length > 0 ? (
@@ -5965,7 +5967,7 @@ const Institution = () => {
                           <div className="mb-4">
                             <div className="space-y-2">
                               <label htmlFor="principal_business_address_state" className="block text-sm font-medium text-gray-700">
-                                State/Province 
+                                State/Province
                               </label>
 
                               {principalStates && principalStates.length > 0 ? (
@@ -7037,7 +7039,7 @@ const Institution = () => {
                       <div className="mb-4">
                         <div className="space-y-2">
                           <label htmlFor="state" className="block text-sm font-medium text-gray-700">
-                            State/Province 
+                            State/Province
                           </label>
 
                           {responsiblePersonStates && responsiblePersonStates.length > 0 ? (

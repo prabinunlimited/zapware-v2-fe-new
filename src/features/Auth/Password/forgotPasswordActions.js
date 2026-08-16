@@ -50,7 +50,17 @@ const getBearerToken = () => {
   return localStorage.getItem("bearertoken");
 };
 
-export const requestPasscode = (username, accountType, setShowAccountTypeDropdown) => async (dispatch) => {
+const formatErrorMessage = (errorData, defaultMessage = "An error occurred.") => {
+  if (!errorData) return defaultMessage;
+  if (typeof errorData === "string") return errorData;
+  if (Array.isArray(errorData)) return errorData.join(" ");
+  if (typeof errorData === "object") {
+    return Object.values(errorData).flat().join(" ");
+  }
+  return String(errorData);
+};
+
+export const requestPasscode = (username, accountType) => async (dispatch) => {
   if (!username || !isValidUsername(username)) {
     dispatch(setError("Please enter a valid email address or mobile number."));
     return;
@@ -66,58 +76,62 @@ export const requestPasscode = (username, accountType, setShowAccountTypeDropdow
   dispatch(clearError());
 
   try {
-    // First API call to check if user has multiple accounts
     const checkResponse = await fetch(`${API_URL}/customers/multiple-accounts-username`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ username }),
     });
 
     const checkData = await checkResponse.json();
 
-    if (!checkResponse.ok) {
+    if (!checkResponse.ok && checkData?.data?.has_multiple_user_types !== "Y") {
       dispatch(setError(checkData.message || "Failed to verify account information."));
       dispatch(setIsLoading(false));
       return;
     }
 
-    // Check the has_multiple_accounts value from the response
     const hasMultipleAccounts = checkData?.data?.has_multiple_accounts;
-    
-    // If has_multiple_accounts is "Y", show account type dropdown
-    if (hasMultipleAccounts === "Y") {
+    const hasMultipleUserTypes = checkData?.data?.has_multiple_user_types === "Y";
+
+    if (checkData.data) {
+      dispatch(setApiResponse(checkData.data));
+    }
+
+    if (hasMultipleAccounts === "Y" || hasMultipleUserTypes) {
       if (!accountType) {
-        // Store the username for later use
         dispatch(setUsername(username));
         dispatch(setShowAccountTypeDropdown(true));
+        dispatch(setError(checkData.message || "Please select an account type."));
         dispatch(setIsLoading(false));
         return;
       }
-    } else if (hasMultipleAccounts === "N") {
-      // If response is "N", proceed without account type
+    } else if (hasMultipleAccounts === "N" && !hasMultipleUserTypes) {
       dispatch(setShowAccountTypeDropdown(false));
-      // Clear any previously selected account type
       dispatch(setAccountType(null));
     }
 
-    // Second API call to request OTP
     const requestPayload = {
       username: username,
     };
-    
-    // Add account_type only if it exists and hasMultipleAccounts is "Y"
-    if (accountType && hasMultipleAccounts === "Y") {
-      requestPayload.account_type = accountType;
+
+    if (accountType) {
+      if (hasMultipleUserTypes) {
+        requestPayload.user_type = accountType;
+      } else if (hasMultipleAccounts === "Y") {
+        requestPayload.account_type = accountType;
+      } else {
+        requestPayload.user_type = accountType;
+      }
     }
 
     const otpResponse = await fetch(`${API_URL}/request-username-otp-passcode`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(requestPayload),
     });
@@ -125,9 +139,14 @@ export const requestPasscode = (username, accountType, setShowAccountTypeDropdow
     const otpData = await otpResponse.json();
 
     if (otpResponse.ok) {
+      dispatch(setShowAccountTypeDropdown(false));
       dispatch(setStep(2));
       dispatch(setSuccessMessage(otpData.message || "Verification code sent to your email or phone."));
     } else {
+      if (otpData?.data?.has_multiple_user_types === "Y") {
+        if (otpData.data) dispatch(setApiResponse(otpData.data));
+        dispatch(setShowAccountTypeDropdown(true));
+      }
       dispatch(setError(otpData.error || otpData.message || "Failed to send verification code. Please try again."));
     }
   } catch (err) {
@@ -138,7 +157,7 @@ export const requestPasscode = (username, accountType, setShowAccountTypeDropdow
   }
 };
 
-export const validatePasscode = (username, passcode, accountType) => async (dispatch) => {
+export const validatePasscode = (username, passcode, accountType) => async (dispatch, getState) => {
   const code = passcode.join("");
   if (!code || code.length !== 6) {
     dispatch(setError("Please enter a valid 6-digit verification code."));
@@ -155,61 +174,66 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
   dispatch(clearError());
 
   try {
+    const state = getState();
+    const isMultiUserType = state.forgotPassword?.apiResponse?.has_multiple_user_types === "Y";
+
     const payload = {
       username: username,
       otp_passcode: code,
     };
-    
-    // Add account_type only if it exists
-    if (accountType) {
-      payload.account_type = accountType;
-    }
 
-    console.log("Verify payload:", payload);
+    if (accountType) {
+      if (isMultiUserType) {
+        payload.user_type = accountType;
+      } else {
+        payload.account_type = accountType;
+      }
+    }
 
     const response = await fetch(`${API_URL}/verify-username-otp-passcode`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
     });
 
     const data = await response.json();
-    console.log("Verify response:", data);
 
     if (response.ok) {
-      // Extract customerId from response - check different possible paths
-      const customerId = data?.data?.customerId || data?.customerId;
-      
-      console.log("Extracted customerId:", customerId);
-      
-      if (customerId) {
-        // Store customerId in apiResponse
-        dispatch(setApiResponse({ 
-          customerId: customerId,
-          verificationData: data 
-        }));
-        
-        // Also store in localStorage as backup
-        localStorage.setItem("resetCustomerId", customerId);
-        
+      const userUuid = data?.data?.user_uuid || data?.user_uuid;
+
+      if (userUuid) {
+        dispatch(
+          setApiResponse({
+            user_uuid: userUuid,
+            verificationData: data,
+          })
+        );
+
+        localStorage.setItem("resetUserUuid", userUuid);
         dispatch(setStep(3));
         dispatch(setSuccessMessage("Verification successful! Set your new password."));
       } else {
-        console.error("No customerId found in response:", data);
-        dispatch(setError("Customer ID not found in verification response. Please contact support."));
+        console.error("No user_uuid found in response:", data);
+        dispatch(setError("User UUID not found in verification response. Please contact support."));
       }
     } else {
-      // Check if the error message indicates account type is needed
-      const errorMessage = data.message || "Invalid verification code. Please try again.";
-      if (errorMessage.toLowerCase().includes("account type") || 
-          errorMessage.toLowerCase().includes("please mention account type")) {
-        // Go back to step 1 and show account type dropdown
+      const rawError = data?.message || data?.error || "Invalid verification code. Please try again.";
+      const errorMessage = typeof rawError === "string" 
+        ? rawError 
+        : (typeof rawError === "object" ? Object.values(rawError).flat().join(". ") : String(rawError));
+
+      const lowerMsg = errorMessage.toLowerCase();
+
+      if (
+        lowerMsg.includes("user type") ||
+        lowerMsg.includes("account type")
+      ) {
         dispatch(setStep(1));
         dispatch(setShowAccountTypeDropdown(true));
-        dispatch(setError("Please select your account type to continue."));
+        dispatch(setError("Please select your account/user type to continue."));
       } else {
         dispatch(setError(errorMessage));
       }
@@ -222,109 +246,97 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
   }
 };
 
-export const resetPassword = (username, newPassword, confirmPassword, bearertoken, navigate, customerId) => async (dispatch, getState) => {
-  console.log("resetPassword called with:", { username, newPassword, confirmPassword, customerId });
-  
-  // Password validation
-  if (!newPassword || newPassword.length < 12) {
-    dispatch(setNewPasswordError("Password must be at least 12 characters."));
-    return;
-  }
-
-  if (newPassword !== confirmPassword) {
-    dispatch(setConfirmPasswordError("Passwords do not match."));
-    return;
-  }
-
-  // Password strength validation
-  const hasUpperCase = /[A-Z]/.test(newPassword);
-  const hasLowerCase = /[a-z]/.test(newPassword);
-  const hasNumbers = /\d/.test(newPassword);
-  const hasSpecialChar = /[!@#$%^&*]/.test(newPassword);
-
-  if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
-    dispatch(setNewPasswordError("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character."));
-    return;
-  }
-
-  // Clear password-specific errors
-  dispatch(setNewPasswordError(null));
-  dispatch(setConfirmPasswordError(null));
-
-  const token = bearertoken || getBearerToken();
-  console.log("Token available:", !!token);
-  
-  if (!token) {
-    dispatch(setError("Authentication required. Please login again."));
-    return;
-  }
-
-  // Get customerId from apiResponse in state if not provided
-  let finalCustomerId = customerId;
-  if (!finalCustomerId) {
-    const state = getState();
-    finalCustomerId = state.forgotPassword.apiResponse?.customerId;
-    console.log("CustomerId from state:", finalCustomerId);
-  }
-
-  if (!finalCustomerId) {
-    dispatch(setError("Customer information not found. Please restart the password reset process."));
-    return;
-  }
-
-  dispatch(setIsLoading(true));
-  dispatch(clearError());
-
-  try {
-    const payload = {
-      customerId: finalCustomerId,
-      password: newPassword,
-      confirmPassword: confirmPassword,
-    };
-    
-    console.log("Reset password payload:", payload);
-    console.log("API URL:", `${API_URL}/reset-password-customer`);
-
-    const response = await fetch(`${API_URL}/reset-password-customer`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    console.log("Response status:", response.status);
-    
-    const data = await response.json();
-    console.log("Response data:", data);
-
-    if (response.ok) {
-      dispatch(setSuccessMessage(data.message || "Password reset successfully!"));
-      // Clear stored customerId
-      localStorage.removeItem("resetCustomerId");
-      setTimeout(() => {
-        dispatch(resetForgotPassword());
-        navigate("/");
-      }, 2000);
-    } else {
-      let errorMessage = "Failed to reset password.";
-      if (data.message) errorMessage = data.message;
-      else if (data.error) errorMessage = data.error;
-      else if (data.errors) {
-        errorMessage = Object.values(data.errors).flat().join(". ");
-      }
-      
-      dispatch(setError(errorMessage));
-      console.error("Reset password error:", errorMessage);
+export const resetPassword =
+  (username, newPassword, confirmPassword, bearertoken, navigate, userUuid) =>
+  async (dispatch, getState) => {
+    if (!newPassword || newPassword.length < 12) {
+      dispatch(setNewPasswordError("Password must be at least 12 characters."));
+      return;
     }
-  } catch (err) {
-    console.error("Error in resetPassword:", err);
-    dispatch(setError("Network error. Please try again."));
-  } finally {
-    dispatch(setIsLoading(false));
-  }
-};
+
+    if (newPassword !== confirmPassword) {
+      dispatch(setConfirmPasswordError("Passwords do not match."));
+      return;
+    }
+
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumbers = /\d/.test(newPassword);
+    const hasSpecialChar = /[!@#$%^&*]/.test(newPassword);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+      dispatch(
+        setNewPasswordError(
+          "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        )
+      );
+      return;
+    }
+
+    dispatch(setNewPasswordError(null));
+    dispatch(setConfirmPasswordError(null));
+
+    const token = bearertoken || getBearerToken();
+    if (!token) {
+      dispatch(setError("Authentication required. Please login again."));
+      return;
+    }
+
+    let finalUserUuid = userUuid;
+    if (!finalUserUuid) {
+      const state = getState();
+      finalUserUuid =
+        state.forgotPassword?.apiResponse?.user_uuid ||
+        localStorage.getItem("resetUserUuid");
+    }
+
+    if (!finalUserUuid) {
+      dispatch(
+        setError("User information not found. Please restart the password reset process.")
+      );
+      return;
+    }
+
+    dispatch(setIsLoading(true));
+    dispatch(clearError());
+
+    try {
+      const payload = {
+        user_uuid: finalUserUuid,
+        password: newPassword,
+        confirmPassword: confirmPassword,
+      };
+
+      const response = await fetch(`${API_URL}/reset-password-username`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        dispatch(setSuccessMessage(data.message || "Password reset successfully!"));
+        localStorage.removeItem("resetUserUuid");
+        setTimeout(() => {
+          dispatch(resetForgotPassword());
+          navigate("/");
+        }, 2000);
+      } else {
+        const rawError = data.message || data.error || data.errors || "Failed to reset password.";
+        const errorMessage = formatErrorMessage(rawError, "Failed to reset password.");
+        dispatch(setError(errorMessage));
+      }
+    } catch (err) {
+      console.error("Error in resetPassword:", err);
+      dispatch(setError("Network error. Please try again."));
+    } finally {
+      dispatch(setIsLoading(false));
+    }
+  };
 
 export const handlePasscodeChange = (index, value) => (dispatch) => {
   // Allow only digits

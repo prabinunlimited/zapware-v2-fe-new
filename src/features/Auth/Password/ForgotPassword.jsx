@@ -13,6 +13,8 @@ import {
   FaPhone,
   FaBuilding,
   FaUser,
+  FaUserFriends,
+  FaUserTie,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -45,6 +47,12 @@ import {
   setStep
 } from "./forgotPasswordActions";
 
+const USER_TYPE_MAP = [
+  { key: "customer", apiKey: "user_is_customer", label: "Customer", icon: FaUser },
+  { key: "beneficiary", apiKey: "user_is_beneficiary", label: "Beneficiary", icon: FaUserFriends },
+  { key: "customer_staff", apiKey: "user_is_customer_staff", label: "Customer Staff", icon: FaUserTie },
+];
+
 const ForgotPassword = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -67,6 +75,12 @@ const ForgotPassword = () => {
   const apiResponse = useSelector(selectApiResponse);
 
   const bearertoken = localStorage.getItem("bearertoken");
+
+  const isMultiUserType = apiResponse?.has_multiple_user_types === "Y";
+  const dynamicUserTypes = isMultiUserType
+    ? USER_TYPE_MAP.filter((item) => apiResponse?.[item.apiKey] === 1)
+    : [];
+
 
   useEffect(() => {
     return () => {
@@ -131,7 +145,11 @@ const ForgotPassword = () => {
   };
 
   const isLastThreePasswordsError = (errorMsg) => {
-    return errorMsg && errorMsg.toLowerCase().includes("last three");
+    if (!errorMsg) return false;
+    const msg = typeof errorMsg === "string"
+      ? errorMsg
+      : (typeof errorMsg === "object" ? Object.values(errorMsg).flat().join(" ") : String(errorMsg));
+    return msg.toLowerCase().includes("last three");
   };
 
   const isValidUsername = (value) => {
@@ -201,7 +219,9 @@ const ForgotPassword = () => {
                 <FaExclamationCircle className="flex-shrink-0 h-4 w-4 sm:h-5 sm:w-5 text-red-500 mr-2 sm:mr-3 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-red-800 break-words">
-                    {error}
+                    {typeof error === "object" && error !== null
+                      ? Object.values(error).flat().join(" ")
+                      : String(error)}
                   </p>
                   {isLastThreePasswordsError(error) && (
                     <div className="mt-1 sm:mt-2 text-xs text-red-700">
@@ -292,34 +312,62 @@ const ForgotPassword = () => {
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
                       Select Account Type
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => dispatch(setAccountType("individual"))}
-                        className={`p-3 rounded-lg border-2 transition-all ${accountType === "individual"
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-gray-300 hover:border-blue-300 text-gray-600"
-                          }`}
-                      >
-                        <FaUser className="h-5 w-5 mx-auto mb-1" />
-                        <span className="text-sm font-medium">Individual</span>
-                      </button>
-                      <button
-                        onClick={() => dispatch(setAccountType("institution"))}
-                        className={`p-3 rounded-lg border-2 transition-all ${accountType === "institution"
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-gray-300 hover:border-blue-300 text-gray-600"
-                          }`}
-                      >
-                        <FaBuilding className="h-5 w-5 mx-auto mb-1" />
-                        <span className="text-sm font-medium">Institution</span>
-                      </button>
-                    </div>
+
+                    {/* Dynamic roles (customer, beneficiary, customer_staff) when value === 1 */}
+                    {isMultiUserType && dynamicUserTypes.length > 0 ? (
+                      <div className={`grid grid-cols-${Math.min(dynamicUserTypes.length, 2)} gap-3`}>
+                        {dynamicUserTypes.map((type) => {
+                          const IconComponent = type.icon;
+                          const isSelected = accountType === type.key;
+                          return (
+                            <button
+                              key={type.key}
+                              type="button"
+                              onClick={() => dispatch(setAccountType(type.key))}
+                              className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center justify-center ${isSelected
+                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                : "border-gray-300 hover:border-blue-300 text-gray-600"
+                                }`}
+                            >
+                              <IconComponent className="h-5 w-5 mb-1" />
+                              <span className="text-sm font-medium">{type.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* Preserved fallback: Individual vs Institution */
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => dispatch(setAccountType("individual"))}
+                          className={`p-3 rounded-lg border-2 transition-all ${accountType === "individual"
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-300 hover:border-blue-300 text-gray-600"
+                            }`}
+                        >
+                          <FaUser className="h-5 w-5 mx-auto mb-1" />
+                          <span className="text-sm font-medium">Individual</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dispatch(setAccountType("institution"))}
+                          className={`p-3 rounded-lg border-2 transition-all ${accountType === "institution"
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-300 hover:border-blue-300 text-gray-600"
+                            }`}
+                        >
+                          <FaBuilding className="h-5 w-5 mx-auto mb-1" />
+                          <span className="text-sm font-medium">Institution</span>
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
                 <motion.button
                   variants={itemVariants}
-                  onClick={() => dispatch(requestPasscode(username, accountType, setShowAccountTypeDropdown))}
+                  onClick={() => dispatch(requestPasscode(username, accountType))}
                   disabled={isLoading || !username || !isValidUsername(username) || (showAccountTypeDropdown && !accountType)}
                   className={`w-full ${username && isValidUsername(username) && (!showAccountTypeDropdown || accountType)
                     ? "bg-blue-600 hover:bg-blue-700"
