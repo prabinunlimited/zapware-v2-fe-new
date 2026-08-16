@@ -567,7 +567,7 @@ import React, {
     const { beneficiaryId, benefId: routeBenefId } = useParams();
     const benefId = routeBenefId || beneficiaryId;
   
-    const customerId = localStorage.getItem("customerId");
+    const customerId = localStorage.getItem("authcustomer_id");
     const [showModal, setShowModal] = useState(false);
     const [showAddSenderModal, setShowAddSenderModal] = useState(false);
     const [beneficiaryToDelete, setBeneficiaryToDelete] = useState(null);
@@ -828,7 +828,7 @@ import React, {
   
     // Navigation
     const navigation = {
-      handleRoute: () => navigate(`/addbeneficiary/${customerId}`),
+      handleRoute: () => navigate(`/addbenefbank/${benefId}`),
       goBack: () => navigate(-1),
     };
   

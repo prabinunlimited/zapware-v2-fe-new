@@ -63,20 +63,14 @@ function HeaderBenef() {
 
   const handleMyProfile = () => {
     setIsProfileOpen(false);
-    // Adjust this path to match your actual beneficiary profile route
     navigate(`/beneficiaryprofile/${beneficiaryId}`);
   };
 
   const handleLogout = () => {
     setIsProfileOpen(false);
-    localStorage.removeItem("beneficaryLogin");
-    localStorage.removeItem("beneficaryId");
-    localStorage.removeItem("beneficiaryId");
-    localStorage.removeItem("authtoken");
-    localStorage.removeItem("authcustomer_id");
-    localStorage.removeItem("bearertoken");
-    localStorage.removeItem("customerUuid");
-    navigate("/");
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = "/";
   };
 
   return (

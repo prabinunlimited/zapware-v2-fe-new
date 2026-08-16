@@ -492,7 +492,7 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, password, customer_type, user_type, },
+    { phone_code, mobile_number, password, customer_type, user_type,  customer_id},
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -524,11 +524,34 @@ export const generateOTP = createAsyncThunk(
         payload.user_type = user_type;
       } 
 
+      if (customer_id) {
+        payload.customer_id = customer_id;
+      }
+
       const response = await api.post("/send-otp-login", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      // Handle multiple accounts scenario
+      if (response.data?.data?.checkMultipleCustomer === "Y") {
+        dispatch({ type: "auth/setShowCustomerType", payload: "Y" });
+        return {
+          status: "multiple_accounts",
+          message: response.data.message || "Please select customer type",
+          requiresCustomerType: true,
+        };
+      }
+
+      // Handle multiple institution accounts scenario
+      if (response.data?.data?.checkMultipleInstitutionCustomer === "Y") {
+        return {
+          status: "multiple_institutions",
+          message: response.data.message || "Please select an institution",
+          customers: response.data.data.customers || [],
+        };
+      }
 
       // Handle multiple accounts scenario
       if (response.data?.data?.checkMultipleCustomer === "Y") {
@@ -616,7 +639,7 @@ export const generateOTP = createAsyncThunk(
 export const verifyOTP = createAsyncThunk(
   "auth/verifyOTP",
   async (
-    { phone_code, mobile_number, otp, password, sign_in_option, customer_type, user_type, },
+    { phone_code, mobile_number, otp, password, sign_in_option, customer_type, user_type, customer_id },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -650,6 +673,10 @@ export const verifyOTP = createAsyncThunk(
 
       if (user_type) {
         payload.user_type = user_type;
+      }
+
+      if (customer_id) {
+        payload.customer_id = customer_id;
       }
 
       const response = await api.post("/login", payload, {
