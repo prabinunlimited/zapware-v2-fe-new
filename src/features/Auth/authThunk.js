@@ -877,6 +877,70 @@ export const sendOtp = createAsyncThunk(
   }
 );
 
+// ===================== RESEND REGISTRATION OTP =====================
+export const resendRegistrationOtp = createAsyncThunk(
+  "auth/resendRegistrationOtp",
+  async ({ customer_type, country_code, mobile_number }, { rejectWithValue, dispatch }) => {
+    try {
+      const token = await getBearerToken();
+
+      const payload = {
+        customer_type: customer_type || "individual",
+        mobile_number_country_code: country_code,
+        mobile_number: mobile_number,
+      };
+
+      const response = await api.post("/resend-otp-registration", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data?.status === "success") {
+        try {
+          const otpCounterResponse = await api.get("/otp-counter", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (otpCounterResponse.data?.counter) {
+            const otpInfo = otpCounterResponse.data.counter;
+            dispatch({
+              type: "auth/setResendAttempts",
+              payload: otpInfo.otp_limit,
+            });
+            if (otpInfo.otp_resend) {
+              dispatch({
+                type: "auth/setResendTimer",
+                payload: otpInfo.otp_resend,
+              });
+            }
+          }
+        } catch (err) {
+          // Silent catch for counter error
+        }
+      }
+
+      if (response.status === 429) {
+        return rejectWithValue("Too many requests. Please wait a moment before trying again.");
+      }
+
+      if (response.data?.status === "error") {
+        return rejectWithValue(response.data.message || "Failed to resend OTP");
+      }
+
+      return {
+        status: "success",
+        message: response.data?.message || "OTP resent successfully",
+        data: response.data?.data || {},
+      };
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(error.response?.data?.message || errorMessage || "Failed to resend OTP");
+    }
+  }
+);
+
 // ===================== VALIDATE OTP (for PhoneVerification component) =====================
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",

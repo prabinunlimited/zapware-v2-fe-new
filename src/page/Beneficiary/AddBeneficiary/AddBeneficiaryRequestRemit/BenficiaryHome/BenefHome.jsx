@@ -70,13 +70,13 @@ Generated on ${currentDate}
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-3 sm:p-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-2xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-gray-100 p-2 rounded-full">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="bg-gray-100 p-2 rounded-full flex-shrink-0">
                 <svg
                   className="w-5 h-5 text-gray-700"
                   fill="none"
@@ -91,18 +91,18 @@ Generated on ${currentDate}
                   />
                 </svg>
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900 truncate">
                   Send Remittance Request
                 </h2>
-                <p className="text-gray-500 text-sm">
+                <p className="text-gray-500 text-xs sm:text-sm">
                   Send payment request directly to your beneficiary
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors flex-shrink-0"
             >
               <svg
                 className="w-4 h-4"
@@ -122,10 +122,10 @@ Generated on ${currentDate}
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Enhanced Message Preview Section */}
           <div className="mb-6">
-            <div className="border border-dashed border-gray-200 rounded-lg p-5 bg-gray-50">
+            <div className="border border-dashed border-gray-200 rounded-lg p-4 sm:p-5 bg-gray-50">
               <div className="text-center mb-3">
                 <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-3">
                   <svg
@@ -158,16 +158,16 @@ Generated on ${currentDate}
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Payment Link
             </label>
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2 sm:gap-0">
               <input
                 type="text"
                 value={requestRemitLink}
                 readOnly
-                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-600 font-mono text-sm"
+                className="flex-1 min-w-0 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-600 font-mono text-xs sm:text-sm truncate"
               />
               <button
                 onClick={onCopyLink}
-                className="px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center space-x-2"
+                className="px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center justify-center space-x-2 flex-shrink-0"
               >
                 <svg
                   className="w-4 h-4"
@@ -191,7 +191,7 @@ Generated on ${currentDate}
           <div className="mb-2">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
               <svg
-                className="w-4 h-4 mr-2 text-gray-400"
+                className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -206,7 +206,7 @@ Generated on ${currentDate}
               Send Email Directly
             </h3>
 
-            <div className="space-y-4 bg-gray-50 rounded-lg p-4 border border-gray-100">
+            <div className="space-y-4 bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-100">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Recipient Email
@@ -240,7 +240,7 @@ Generated on ${currentDate}
                   Message Preview
                 </label>
                 <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-32 overflow-y-auto">
-                  <pre className="text-sm text-gray-500 whitespace-pre-wrap">
+                  <pre className="text-xs sm:text-sm text-gray-500 whitespace-pre-wrap break-words">
                     {generateEnhancedEmailContent().substring(0, 300)}...
                   </pre>
                 </div>
@@ -282,14 +282,14 @@ Generated on ${currentDate}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 justify-between sm:items-center">
+            <p className="text-xs sm:text-sm text-gray-500">
               Email will be sent directly from your email client
             </p>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors self-end sm:self-auto"
             >
               Close
             </button>
@@ -1538,7 +1538,7 @@ Generated on ${currentDate}
     <div className="h-screen flex flex-col overflow-hidden bg-white">
       {/* Global Loading Overlay */}
       {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white px-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-gray-900 mx-auto mb-4"></div>
             <h3 className="text-base font-semibold text-gray-900 mb-1">
@@ -1563,12 +1563,12 @@ Generated on ${currentDate}
           </div>
         )}
 
-        <div className="py-8 lg:py-10 px-4 sm:px-6 lg:px-10">
+        <div className="py-5 sm:py-8 lg:py-10 px-3 sm:px-6 lg:px-10">
           <div className="max-w-7xl mx-auto">
             {/* Authentication Warning */}
             {!getAuthToken() && (
-              <div className="mb-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-center">
+              <div className="mb-6 sm:mb-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start sm:items-center">
                   <div className="flex-shrink-0">
                     <svg
                       className="h-5 w-5 text-amber-500"
@@ -1596,13 +1596,13 @@ Generated on ${currentDate}
 
             {/* Stats Grid - Only show when beneficiary data is loaded */}
             {hasFetchedBeneficiary && (
-              <div className="mb-10">
+              <div className="mb-8 sm:mb-10">
                 {/* Section Header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center flex-wrap gap-2">
                       Performance Dashboard
-                      <span className="ml-3 px-2.5 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
+                      <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
                         Real-time
                       </span>
                     </h2>
@@ -1613,7 +1613,7 @@ Generated on ${currentDate}
                   </div>
                   <button
                     onClick={fetchAllData}
-                    className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm"
+                    className="flex items-center justify-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm w-full sm:w-auto flex-shrink-0"
                   >
                     <svg
                       className={`w-4 h-4 ${statusLoading || transactionsLoading
@@ -1664,7 +1664,7 @@ Generated on ${currentDate}
                           All requests
                         </div>
                       </div>
-                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                         <svg
                           className="w-5 h-5 text-blue-600"
                           fill="none"
@@ -1720,7 +1720,7 @@ Generated on ${currentDate}
                           Needs attention
                         </div>
                       </div>
-                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                         <svg
                           className="w-5 h-5 text-amber-600"
                           fill="none"
@@ -1778,7 +1778,7 @@ Generated on ${currentDate}
                           Successfully processed
                         </div>
                       </div>
-                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                         <svg
                           className="w-5 h-5 text-emerald-600"
                           fill="none"
@@ -1830,11 +1830,11 @@ Generated on ${currentDate}
                   {/* Total Processed Card */}
                   <div className="bg-white rounded-xl p-5 border border-gray-200 hover:border-gray-300 transition-colors">
                     <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-gray-500 text-sm font-medium mb-1">
                           Total Processed
                         </p>
-                        <p className="text-2xl font-semibold text-gray-900 mb-2">
+                        <p className="text-2xl font-semibold text-gray-900 mb-2 truncate">
                           ${stats.totalAmount.toLocaleString()}
                         </p>
                         <div className="flex items-center text-gray-400 text-xs">
@@ -1854,7 +1854,7 @@ Generated on ${currentDate}
                           Total volume
                         </div>
                       </div>
-                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                         <svg
                           className="w-5 h-5 text-gray-700"
                           fill="none"
@@ -1896,12 +1896,12 @@ Generated on ${currentDate}
 
             {/* TRANSACTIONS SECTION */}
             {hasFetchedBeneficiary && (
-              <div className="bg-white rounded-xl border border-gray-200 mb-10 overflow-hidden relative">
-                <div className="px-6 lg:px-8 py-6 lg:py-8">
+              <div className="bg-white rounded-xl border border-gray-200 mb-8 sm:mb-10 overflow-hidden relative">
+                <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 lg:py-8">
                   {/* Header */}
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                     <div className="flex items-center space-x-4">
-                      <div className="w-11 h-11 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200">
+                      <div className="w-11 h-11 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200 flex-shrink-0">
                         <svg
                           className="w-5 h-5 text-gray-700"
                           fill="none"
@@ -1916,10 +1916,10 @@ Generated on ${currentDate}
                           />
                         </svg>
                       </div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-gray-900 flex items-center flex-wrap gap-2">
                           Transaction Analytics
-                          <span className="ml-3 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium border border-emerald-200">
+                          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium border border-emerald-200">
                             Live
                           </span>
                         </h2>
@@ -1932,7 +1932,7 @@ Generated on ${currentDate}
                     {/* Refresh Button */}
                     <button
                       onClick={fetchAllData}
-                      className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm"
+                      className="flex items-center justify-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm w-full sm:w-auto flex-shrink-0"
                     >
                       <svg
                         className={`w-4 h-4 ${transactionsLoading ? "animate-spin" : ""
@@ -1960,7 +1960,7 @@ Generated on ${currentDate}
                         <div className="text-gray-700 text-sm font-semibold">
                           Total Transactions
                         </div>
-                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                           <svg
                             className="w-5 h-5 text-blue-600"
                             fill="none"
@@ -2030,7 +2030,7 @@ Generated on ${currentDate}
                         <div className="text-gray-700 text-sm font-semibold">
                           In Progress
                         </div>
-                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                           <svg
                             className="w-5 h-5 text-amber-600"
                             fill="none"
@@ -2133,7 +2133,7 @@ Generated on ${currentDate}
                         <div className="text-gray-700 text-sm font-semibold">
                           Completed
                         </div>
-                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                           <svg
                             className="w-5 h-5 text-emerald-600"
                             fill="none"
@@ -2176,7 +2176,7 @@ Generated on ${currentDate}
                         <div className="text-gray-700 text-sm font-semibold">
                           Failed
                         </div>
-                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                           <svg
                             className="w-5 h-5 text-red-600"
                             fill="none"
@@ -2226,7 +2226,7 @@ Generated on ${currentDate}
                   </div>
 
                   {/* Status Legend */}
-                  <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-gray-500 text-sm">
+                  <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-500 text-sm">
                     <div className="flex items-center space-x-2">
                       <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
                       <span>Completed</span>
@@ -2246,8 +2246,8 @@ Generated on ${currentDate}
                   </div>
 
                   {/* Quick Actions Footer */}
-                  <div className="mt-8 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 pt-6 border-t border-gray-100">
-                    <div className="flex items-center space-x-6 text-gray-500 text-sm">
+                  <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-100">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-500 text-sm">
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                         <span>Live updates</span>
@@ -2258,11 +2258,11 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    <div className="flex space-x-3">
-                      <button className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 text-sm font-medium transition-colors">
+                    <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+                      <button className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 text-sm font-medium transition-colors">
                         Export Report
                       </button>
-                      <button className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-colors">
+                      <button className="flex-1 sm:flex-none px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-colors">
                         View Details
                       </button>
                     </div>
@@ -2287,7 +2287,7 @@ Generated on ${currentDate}
               {/* Left Column - Quick Transfer */}
               <div className="xl:col-span-1">
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200">
+                  <div className="px-4 sm:px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-900 tracking-wide uppercase">
                       Request Payments
                     </h3>
@@ -2295,7 +2295,7 @@ Generated on ${currentDate}
                       Create new remittance request
                     </p>
                   </div>
-                  <div className="p-5 lg:p-6">
+                  <div className="p-4 sm:p-5 lg:p-6">
                     {/* Status Message */}
                     {message.text && (
                       <div
@@ -2318,13 +2318,13 @@ Generated on ${currentDate}
                     {/* Reset Beneficiary Button */}
                     {hasFetchedBeneficiary && (
                       <div className="mb-5 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-500">
                               Beneficiary Information
                             </p>
                             {benefCode && (
-                              <p className="text-lg font-semibold text-gray-900 mt-1">
+                              <p className="text-lg font-semibold text-gray-900 mt-1 truncate">
                                 {benefCode}
                               </p>
                             )}
@@ -2332,7 +2332,7 @@ Generated on ${currentDate}
                               Bank accounts loaded successfully
                             </p>
                           </div>
-                          <div className="w-9 h-9 bg-white border border-gray-200 rounded-full flex items-center justify-center">
+                          <div className="w-9 h-9 bg-white border border-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
                             <svg
                               className="w-4 h-4 text-emerald-600"
                               fill="none"
@@ -2353,11 +2353,11 @@ Generated on ${currentDate}
 
                     {senders.length > 0 && (
                       <div className="mb-5">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2 gap-2">
                           <label className="block text-sm font-medium text-gray-700">
                             Senders
                           </label>
-                          <div className="flex space-x-3">
+                          <div className="flex space-x-3 flex-shrink-0">
                             <button
                               type="button"
                               onClick={handleSelectAllSenders}
@@ -2396,20 +2396,20 @@ Generated on ${currentDate}
                                   onChange={() =>
                                     handleSenderSelection(sender.id)
                                   }
-                                  className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded"
+                                  className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded flex-shrink-0"
                                 />
-                                <div className="ml-3 flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-gray-900">
+                                <div className="ml-3 flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-medium text-gray-900 truncate">
                                       {sender.full_name}
                                     </span>
                                     {selectedSenders.includes(sender.id) && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 flex-shrink-0">
                                         Selected
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-xs text-gray-400 mt-0.5">
+                                  <div className="text-xs text-gray-400 mt-0.5 truncate">
                                     {sender.email} • {sender.phone}
                                   </div>
                                 </div>
@@ -2463,7 +2463,7 @@ Generated on ${currentDate}
                           {errors.beneficiary_bank_id && (
                             <p className="mt-1.5 text-sm text-red-600 flex items-center">
                               <svg
-                                className="w-4 h-4 mr-1"
+                                className="w-4 h-4 mr-1 flex-shrink-0"
                                 fill="currentColor"
                                 viewBox="0 0 20 20"
                               >
@@ -2502,7 +2502,7 @@ Generated on ${currentDate}
                             {errors.amount && (
                               <p className="mt-1.5 text-sm text-red-600 flex items-center">
                                 <svg
-                                  className="w-4 h-4 mr-1"
+                                  className="w-4 h-4 mr-1 flex-shrink-0"
                                   fill="currentColor"
                                   viewBox="0 0 20 20"
                                 >
@@ -2544,7 +2544,7 @@ Generated on ${currentDate}
                             {errors.currency && (
                               <p className="mt-1.5 text-sm text-red-600 flex items-center">
                                 <svg
-                                  className="w-4 h-4 mr-1"
+                                  className="w-4 h-4 mr-1 flex-shrink-0"
                                   fill="currentColor"
                                   viewBox="0 0 20 20"
                                 >
@@ -2626,7 +2626,7 @@ Generated on ${currentDate}
 
                     {/* Success Section with Enhanced Link Sharing */}
                     {requestRemitLink && (
-                      <div className="mt-5 p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <div className="mt-5 p-4 sm:p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
                         <div className="text-center">
                           <div className="mx-auto h-11 w-11 bg-white rounded-full flex items-center justify-center mb-3 border border-emerald-200">
                             <svg
@@ -2653,11 +2653,11 @@ Generated on ${currentDate}
 
                           {/* Enhanced Link Section with Copy and Share */}
                           <div className="bg-white rounded-lg p-4 mb-4 border border-emerald-200">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                                 Tracking Link
                               </p>
-                              <div className="flex items-center space-x-3">
+                              <div className="flex items-center justify-center space-x-3">
                                 {/* Copy Button */}
                                 <button
                                   onClick={handleCopyLink}
@@ -2790,7 +2790,7 @@ Generated on ${currentDate}
                 <div className="xl:col-span-2 space-y-6 lg:space-y-8">
                   {/* Request Status Section */}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200 flex justify-between items-center">
+                    <div className="px-4 sm:px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900 tracking-wide uppercase">
                           Request Status
@@ -2801,7 +2801,7 @@ Generated on ${currentDate}
                       </div>
                       <button
                         onClick={fetchAllData}
-                        className="flex items-center text-xs lg:text-sm text-gray-500 hover:text-gray-900 font-medium transition-colors"
+                        className="flex items-center text-xs lg:text-sm text-gray-500 hover:text-gray-900 font-medium transition-colors self-start sm:self-auto"
                       >
                         <svg
                           className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-1"
@@ -2819,7 +2819,7 @@ Generated on ${currentDate}
                         Refresh
                       </button>
                     </div>
-                    <div className="p-5 lg:p-6">
+                    <div className="p-4 sm:p-5 lg:p-6">
                       {statusLoading ? (
                         <div className="text-center py-6 lg:py-8">
                           <div className="animate-spin rounded-full h-6 w-6 lg:h-8 lg:w-8 border-2 border-gray-200 border-t-gray-900 mx-auto"></div>
@@ -2834,8 +2834,8 @@ Generated on ${currentDate}
                               key={request.id}
                               className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 lg:p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
                             >
-                              <div className="flex items-center space-x-3.5 mb-2 sm:mb-0">
-                                <div className="w-9 h-9 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+                              <div className="flex items-center space-x-3.5 mb-2 sm:mb-0 min-w-0">
+                                <div className="w-9 h-9 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                                   <svg
                                     className="w-4 h-4 text-gray-600"
                                     fill="none"
@@ -2850,7 +2850,7 @@ Generated on ${currentDate}
                                     />
                                   </svg>
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <p className="font-medium text-gray-900 text-sm">
                                     {request.amount} {request.currency}
                                   </p>
@@ -2868,7 +2868,7 @@ Generated on ${currentDate}
                                 </div>
                               </div>
                               {request.request_remit_link && (
-                                <div className="flex items-center space-x-3 sm:text-right">
+                                <div className="flex items-center space-x-3 sm:text-right flex-wrap gap-y-1">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -2949,7 +2949,7 @@ Generated on ${currentDate}
 
                   {/* Transactions Section */}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200 flex justify-between items-center">
+                    <div className="px-4 sm:px-5 lg:px-6 py-4 lg:py-5 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900 tracking-wide uppercase">
                           Transaction History
@@ -2960,7 +2960,7 @@ Generated on ${currentDate}
                       </div>
                       <button
                         onClick={fetchAllData}
-                        className="flex items-center text-xs lg:text-sm text-gray-500 hover:text-gray-900 font-medium transition-colors"
+                        className="flex items-center text-xs lg:text-sm text-gray-500 hover:text-gray-900 font-medium transition-colors self-start sm:self-auto"
                       >
                         <svg
                           className="w-3.5 h-3.5 lg:w-4 lg:h-4 mr-1"
@@ -2978,7 +2978,7 @@ Generated on ${currentDate}
                         Refresh
                       </button>
                     </div>
-                    <div className="p-5 lg:p-6">
+                    <div className="p-4 sm:p-5 lg:p-6">
                       {transactionsLoading ? (
                         <div className="text-center py-6 lg:py-8">
                           <div className="animate-spin rounded-full h-6 w-6 lg:h-8 lg:w-8 border-2 border-gray-200 border-t-gray-900 mx-auto"></div>
@@ -2993,9 +2993,9 @@ Generated on ${currentDate}
                               key={transaction.id}
                               className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 lg:p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
                             >
-                              <div className="flex items-center space-x-3.5 mb-2 sm:mb-0">
+                              <div className="flex items-center space-x-3.5 mb-2 sm:mb-0 min-w-0">
                                 <div
-                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border ${transaction.direction === "Inbound"
+                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border flex-shrink-0 ${transaction.direction === "Inbound"
                                     ? "bg-emerald-50 border-emerald-200"
                                     : "bg-gray-50 border-gray-200"
                                     }`}
@@ -3026,8 +3026,8 @@ Generated on ${currentDate}
                                     )}
                                   </svg>
                                 </div>
-                                <div>
-                                  <p className="font-medium text-gray-900 text-sm">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-900 text-sm truncate">
                                     {transaction.id}
                                   </p>
                                   <p className="text-xs lg:text-sm text-gray-500">
