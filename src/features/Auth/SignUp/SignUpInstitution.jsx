@@ -2061,11 +2061,11 @@ const Institution = () => {
           return;
         }
 
-        if (currentStep === 2 && !isPhoneVerified && !values.phone_verified) {
-          dispatch(setErrorMessage("Please verify your phone number before proceeding"));
-          dispatch(setShowPopup(true));
-          return;
-        }
+        // if (currentStep === 2 && !isPhoneVerified && !values.phone_verified) {
+        //   dispatch(setErrorMessage("Please verify your phone number before proceeding"));
+        //   dispatch(setShowPopup(true));
+        //   return;
+        // }
 
         // SSN confirmation check
         if (
@@ -2606,6 +2606,9 @@ const Institution = () => {
               })) || [],
           });
 
+          const resendMinutes = result.data?.resend_minutes ;
+          localStorage.setItem("otp_resend_minutes", resendMinutes);
+          
           navigate("/phoneverification", {
             state: {
               mobileNumber: mobileNumber,
@@ -2613,6 +2616,8 @@ const Institution = () => {
               customerData: result.data || null,
               customer_id: result.data?.customer_id,
               institution_name: finalData.institution_name,
+              customer_type: "institution",
+              resendMinutes: resendMinutes,
               hasSSN: hasSSN,
             },
           });
@@ -6508,10 +6513,10 @@ const Institution = () => {
                                         })
                                       );
 
-                                      if (isPhoneVerified) {
-                                        dispatch(resetPhoneVerification());
-                                        setFieldValue("phone_verified", false);
-                                      }
+                                      // if (isPhoneVerified) {
+                                      //   dispatch(resetPhoneVerification());
+                                      //   setFieldValue("phone_verified", false);
+                                      // }
                                     }
                                   }}
                                   onBlur={handleBlur}
@@ -6538,10 +6543,10 @@ const Institution = () => {
                                         setFieldValue
                                       )(e);
 
-                                      if (isPhoneVerified) {
-                                        dispatch(resetPhoneVerification());
-                                        setFieldValue("phone_verified", false);
-                                      }
+                                      // if (isPhoneVerified) {
+                                      //   dispatch(resetPhoneVerification());
+                                      //   setFieldValue("phone_verified", false);
+                                      // }
                                     }}
                                     onBlur={handleBlur}
                                     onFocus={() => setActiveField("mobile_number")}
@@ -6554,7 +6559,7 @@ const Institution = () => {
                                   />
                                 </div>
 
-                                {!phoneIsVerified ? (
+                                {/* {!phoneIsVerified ? (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -6591,13 +6596,13 @@ const Institution = () => {
                                     />
                                     <span>Verified</span>
                                   </div>
-                                )}
+                                )} */}
                               </div>
                             </div>
 
                             {touched.mobile_number &&
                               errors.mobile_number &&
-                              !phoneIsVerified && (
+                              // !phoneIsVerified && (
                                 <div className="text-red-500 text-xs mt-1 flex items-center">
                                   <FontAwesomeIcon
                                     icon={faInfoCircle}
@@ -6605,11 +6610,12 @@ const Institution = () => {
                                   />
                                   {errors.mobile_number}
                                 </div>
-                              )}
+                              // )
+                              }
                           </div>
                         </div>
                         {/* Verification Code Input */}
-                        {showPhoneVerificationInput && !phoneIsVerified && (
+                        {/* {showPhoneVerificationInput && !phoneIsVerified && (
                           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Enter Verification Code
@@ -6676,7 +6682,7 @@ const Institution = () => {
                               </p>
                             )}
                           </div>
-                        )}
+                        )} */}
                       </div>
 
                       {/* Nationality and Gender on same row */}
