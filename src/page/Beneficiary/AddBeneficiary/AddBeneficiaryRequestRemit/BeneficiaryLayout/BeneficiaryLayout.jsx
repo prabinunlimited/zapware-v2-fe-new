@@ -1,26 +1,23 @@
-import React from "react";
-import { Outlet } from "react-router-dom";
-import NavigateSectionBenef from "../BenficiaryHome/NavigationSectionBenef";
+import React, { useState } from "react";
 import HeaderBenef from "../BenefHeader/BenefHeader";
+import NavigateSectionBenef from "../BenficiaryHome/NavigationSectionBenef";
+import { Outlet } from "react-router-dom";
 
-const BeneficiaryLayout = () => {
+export default function BeneficiaryLayout() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
-      {/* Top Header */}
-      <HeaderBenef />
-
-      {/* Main Container */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Persistent Left Navigation Sidebar */}
-        <NavigateSectionBenef />
-
-        {/* Dynamic Tab Page Content */}
-        <div className="flex-1 overflow-y-auto min-w-0 p-4 md:p-6">
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+      <HeaderBenef onToggleMobileMenu={() => setIsMobileMenuOpen(prev => !prev)} />
+      <div className="flex flex-1 overflow-hidden relative">
+        <NavigateSectionBenef
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );
-};
-
-export default BeneficiaryLayout;
+}
