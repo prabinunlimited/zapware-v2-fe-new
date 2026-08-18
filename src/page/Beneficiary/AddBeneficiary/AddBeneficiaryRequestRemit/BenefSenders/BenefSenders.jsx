@@ -608,7 +608,7 @@ const BeneficiarySenders = () => {
   }, []);
 
   const confirmDelete = useCallback(() => {
-    if (beneficiaryToDelete) {
+    if (beneficiaryToDelete) {  
       deleteBeneficiary(beneficiaryToDelete);
     }
   }, [beneficiaryToDelete, deleteBeneficiary]);
@@ -794,13 +794,13 @@ const BeneficiarySenders = () => {
                       <FaSave size={12} />
                     )}
                   </button>
-                  <button
+                  {/* <button
                     onClick={() => handleDeleteClick(sender.id)}
                     className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                     title="Remove Sender"
                   >
                     <FaTrash size={12} />
-                  </button>
+                  </button> */}
                 </div>
               </td>
             </tr>

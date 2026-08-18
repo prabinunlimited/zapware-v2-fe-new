@@ -86,6 +86,11 @@ function BeneficiaryProfile() {
     const [submitError, setSubmitError] = useState(null);
     const [submitSuccess, setSubmitSuccess] = useState(false);
 
+    // Delete Bank Modal States
+    const [showDeleteBankModal, setShowDeleteBankModal] = useState(false);
+    const [bankIdToDelete, setBankIdToDelete] = useState(null);
+    const [isDeletingBank, setIsDeletingBank] = useState(false);
+
     // Redux
     const dispatch = useDispatch();
     const countriesOptions = useSelector(selectCountriesOptions);
@@ -116,6 +121,18 @@ function BeneficiaryProfile() {
 
     const navigate = useNavigate();
     const beneficiaryId = localStorage.getItem("beneficaryId");
+
+    const bankTabsRef = useRef(null);
+    const handleTabClick = (index, event) => {
+        setActiveBankIndex(index);
+        if (event?.currentTarget) {
+            event.currentTarget.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+                inline: "center", // Automatically scrolls left or right to center the clicked tab
+            });
+        }
+    };
 
     // Refs for partner ID
     const whiteLabelledPartnerIdRef = useRef(null);
@@ -341,6 +358,51 @@ function BeneficiaryProfile() {
 
         const country = getCountryById(parseInt(nationalityId));
         return country ? country.name : nationalityId;
+    };
+
+    // Delete Bank Modal Handlers
+    const handleOpenDeleteModal = (bankId) => {
+        setBankIdToDelete(bankId);
+        setShowDeleteBankModal(true);
+    };
+
+    const handleCloseDeleteModal = () => {
+        setShowDeleteBankModal(false);
+        setBankIdToDelete(null);
+    };
+
+    const handleConfirmDeleteBank = async () => {
+        if (!bankIdToDelete) return;
+
+        setIsDeletingBank(true);
+        try {
+            const authtoken = localStorage.getItem("authtoken");
+            const response = await fetch(
+                `${API_URL}/beneficiaries/delete-benef-bank/${bankIdToDelete}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${authtoken}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            const result = await response.json();
+            if (response.ok && (result.status === "success" || result.status === 200 || !result.error)) {
+                toast.success(result.message || "Bank account deleted successfully!");
+                await fetchBeneficiaryData();
+                setActiveBankIndex(0);
+                handleCloseDeleteModal();
+            } else {
+                toast.error(result.message || "Failed to delete bank account");
+            }
+        } catch (err) {
+            console.error("Error deleting bank account:", err);
+            toast.error("Error deleting bank account");
+        } finally {
+            setIsDeletingBank(false);
+        }
     };
 
     // Email verification functions
@@ -756,34 +818,6 @@ function BeneficiaryProfile() {
         }));
     };
 
-    const addBankAccount = () => {
-        setFormData((prev) => ({
-            ...prev,
-            banks: [
-                ...prev.banks,
-                {
-                    rails: "local",
-                    currency_code: "",
-                    bank_name: "",
-                    bank_acc_no: "",
-                },
-            ],
-        }));
-        setActiveBankIndex(formData.banks.length);
-    };
-
-    const removeBankAccount = (index) => {
-        if (formData.banks.length > 1) {
-            setFormData((prev) => ({
-                ...prev,
-                banks: prev.banks.filter((_, i) => i !== index),
-            }));
-            if (activeBankIndex >= index && activeBankIndex > 0) {
-                setActiveBankIndex(activeBankIndex - 1);
-            }
-        }
-    };
-
     const handleRefresh = () => {
         navigate(`/benefhome/${beneficiaryId}`);
     };
@@ -884,6 +918,59 @@ function BeneficiaryProfile() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-4 sm:py-6 lg:py-8">
+            {/* Delete Bank Confirmation Modal */}
+            {showDeleteBankModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-6 w-full max-w-sm sm:max-w-md animate-in fade-in zoom-in duration-200 text-center">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
+                            <svg
+                                className="w-7 h-7 sm:w-8 sm:h-8 text-red-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                            </svg>
+                        </div>
+
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-1.5">
+                            Delete Bank Account
+                        </h3>
+                        <p className="text-gray-600 text-xs sm:text-sm mb-6 leading-relaxed">
+                            Are you sure you want to delete this bank account? This action cannot be undone.
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row gap-2.5">
+                            <button
+                                type="button"
+                                onClick={handleCloseDeleteModal}
+                                disabled={isDeletingBank}
+                                className="w-full sm:flex-1 bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-200 transition-colors text-xs sm:text-sm cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDeleteBank}
+                                disabled={isDeletingBank}
+                                className="w-full sm:flex-1 bg-red-600 text-white font-semibold py-2.5 rounded-xl hover:bg-red-700 transition-colors text-xs sm:text-sm flex items-center justify-center cursor-pointer shadow-xs"
+                            >
+                                {isDeletingBank ? (
+                                    <ClipLoader size={16} color="#ffffff" />
+                                ) : (
+                                    "Yes, Delete"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Email Verification Popup Modal */}
             {showEmailPopup && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -1594,15 +1681,18 @@ function BeneficiaryProfile() {
 
                             {/* Bank Accounts Card */}
                             <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 shadow-2xs">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-gray-100">
-                                    <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                                {/* Header: Title and Add Bank */}
+                                <div className="flex items-center justify-between gap-3 mb-4 pb-2.5 border-b border-gray-100">
+                                    <h2 className="text-base sm:text-lg font-bold text-gray-800 tracking-tight">
                                         Bank Accounts
                                     </h2>
-                                    {isEditMode && (
+
+                                    {/* ADD BANK BUTTON (VIEW MODE) */}
+                                    {!isEditMode && (
                                         <button
                                             type="button"
-                                            onClick={addBankAccount}
-                                            className="bg-green-600 text-white px-3.5 py-1.5 rounded-xl hover:bg-green-700 transition-colors font-semibold flex items-center space-x-1.5 text-xs self-start sm:self-auto cursor-pointer shadow-2xs"
+                                            onClick={() => navigate(`/addbenefbank/${beneficiaryId}`)}
+                                            className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 sm:px-3.5 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 text-xs shadow-xs cursor-pointer flex-shrink-0"
                                         >
                                             <svg
                                                 className="w-3.5 h-3.5"
@@ -1613,7 +1703,7 @@ function BeneficiaryProfile() {
                                                 <path
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
-                                                    strokeWidth={2}
+                                                    strokeWidth={2.5}
                                                     d="M12 4v16m8-8H4"
                                                 />
                                             </svg>
@@ -1706,15 +1796,6 @@ function BeneficiaryProfile() {
                                                         <h3 className="text-xs sm:text-sm font-bold text-gray-800">
                                                             Bank Account {index + 1}
                                                         </h3>
-                                                        {formData.banks.length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => removeBankAccount(index)}
-                                                                className="text-red-600 hover:text-red-800 text-xs font-semibold cursor-pointer"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        )}
                                                     </div>
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1800,15 +1881,15 @@ function BeneficiaryProfile() {
                                 ) : (
                                     <div>
                                         {beneficiary.benef_banks && beneficiary.benef_banks.length > 1 && (
-                                            <div className="mb-5">
+                                            <div className="mb-4">
                                                 {/* Mobile (< sm): Clean Account Switcher Bar */}
-                                                <div className="block sm:hidden bg-gray-50/80 border border-gray-200 rounded-2xl p-2">
+                                                <div className="block sm:hidden bg-gray-50/90 border border-gray-200/80 rounded-2xl p-2">
                                                     <div className="flex items-center justify-between gap-2">
                                                         <button
                                                             type="button"
                                                             disabled={activeBankIndex === 0}
                                                             onClick={() => setActiveBankIndex((prev) => Math.max(0, prev - 1))}
-                                                            className="w-8 h-8 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-30 flex items-center justify-center shadow-2xs flex-shrink-0 cursor-pointer"
+                                                            className="w-8 h-8 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-30 flex items-center justify-center shadow-xs flex-shrink-0 cursor-pointer"
                                                             aria-label="Previous bank account"
                                                         >
                                                             <FaArrowLeft className="text-xs" />
@@ -1819,7 +1900,7 @@ function BeneficiaryProfile() {
                                                                 <span className="font-bold text-xs text-gray-900 truncate">
                                                                     Account {activeBankIndex + 1}
                                                                 </span>
-                                                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-bold">
+                                                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200/60 px-1.5 py-0.5 rounded-full font-bold">
                                                                     {activeBankIndex + 1} of {beneficiary.benef_banks.length}
                                                                 </span>
                                                             </div>
@@ -1836,7 +1917,7 @@ function BeneficiaryProfile() {
                                                                     Math.min(beneficiary.benef_banks.length - 1, prev + 1)
                                                                 )
                                                             }
-                                                            className="w-8 h-8 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-30 flex items-center justify-center shadow-2xs flex-shrink-0 cursor-pointer"
+                                                            className="w-8 h-8 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-30 flex items-center justify-center shadow-xs flex-shrink-0 cursor-pointer"
                                                             aria-label="Next bank account"
                                                         >
                                                             <FaArrowLeft className="text-xs rotate-180" />
@@ -1844,26 +1925,57 @@ function BeneficiaryProfile() {
                                                     </div>
                                                 </div>
 
-                                                {/* Desktop (>= sm): Horizontal Pill Buttons */}
-                                                <div className="hidden sm:flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                                    {beneficiary.benef_banks.map((bank, index) => (
+                                                {/* Desktop Tabs with Arrow Navigation & Clean Overflow */}
+                                                <div className="hidden sm:flex items-center gap-1.5 mb-4">
+                                                    {/* Left Scroll Button */}
+                                                    {beneficiary.benef_banks && beneficiary.benef_banks.length > 3 && (
                                                         <button
-                                                            key={bank.id || index}
                                                             type="button"
-                                                            onClick={() => setActiveBankIndex(index)}
-                                                            className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap text-xs flex-shrink-0 cursor-pointer ${activeBankIndex === index
-                                                                ? "bg-blue-600 text-white shadow-2xs"
-                                                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                                                }`}
+                                                            onClick={() => scrollTabs("left")}
+                                                            className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 flex items-center justify-center flex-shrink-0 cursor-pointer shadow-2xs transition-colors"
+                                                            aria-label="Scroll left"
                                                         >
-                                                            Account {index + 1}
-                                                            {bank.bank_name && ` • ${bank.bank_name}`}
+                                                            <FaArrowLeft className="text-xs" />
                                                         </button>
-                                                    ))}
+                                                    )}
+
+                                                    {/* Desktop Tabs with Auto-Scroll on Click */}
+                                                    <div
+                                                        ref={bankTabsRef}
+                                                        className="hidden sm:flex items-center gap-2 overflow-x-auto scroll-smooth py-1 mb-4 flex-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                                                    >
+                                                        {beneficiary.benef_banks.map((bank, index) => (
+                                                            <button
+                                                                key={bank.id || index}
+                                                                type="button"
+                                                                onClick={(e) => handleTabClick(index, e)}
+                                                                className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap text-xs flex-shrink-0 cursor-pointer ${activeBankIndex === index
+                                                                        ? "bg-blue-600 text-white shadow-2xs scale-[1.02]"
+                                                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                                                    }`}
+                                                            >
+                                                                Account {index + 1}
+                                                                {bank.bank_name && ` • ${bank.bank_name}`}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Right Scroll Button */}
+                                                    {beneficiary.benef_banks && beneficiary.benef_banks.length > 3 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => scrollTabs("right")}
+                                                            className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 flex items-center justify-center flex-shrink-0 cursor-pointer shadow-2xs transition-colors"
+                                                            aria-label="Scroll right"
+                                                        >
+                                                            <FaArrowLeft className="text-xs rotate-180" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
 
+                                        {/* Bank Card Details */}
                                         <div className="space-y-4">
                                             {beneficiary.benef_banks &&
                                                 beneficiary.benef_banks.map((bank, index) => (
@@ -1872,12 +1984,40 @@ function BeneficiaryProfile() {
                                                         className={`border rounded-2xl p-4 sm:p-5 transition-all duration-200 ${activeBankIndex === index
                                                             ? "border-blue-200 bg-blue-50/40"
                                                             : "border-gray-200 bg-gray-50/50"
-                                                            } ${beneficiary.benef_banks.length > 1 &&
-                                                                index !== activeBankIndex
+                                                            } ${beneficiary.benef_banks.length > 1 && index !== activeBankIndex
                                                                 ? "hidden"
                                                                 : ""
                                                             }`}
                                                     >
+                                                        {/* Card Top Row: Title + Delete Button */}
+                                                        <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-gray-200/60">
+                                                            <span className="text-xs sm:text-sm font-bold text-gray-800">
+                                                                Account {index + 1} Details
+                                                            </span>
+                                                            {beneficiary.benef_banks.length > 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenDeleteModal(bank.id)}
+                                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200/60 active:scale-95 transition-all cursor-pointer"
+                                                                >
+                                                                    <svg
+                                                                        className="w-3.5 h-3.5"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={2}
+                                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                        />
+                                                                    </svg>
+                                                                    <span>Delete</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                                                             <InfoField
                                                                 label="Bank Name"
