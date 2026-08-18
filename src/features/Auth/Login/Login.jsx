@@ -704,6 +704,9 @@ const Login = () => {
               isRemittanceOnlyCustomer: processedData.isRemittanceOnlyCustomer,
               beneficaryLogin: processedData.beneficaryLogin || null,   // NEW
               beneficaryId: processedData.beneficaryId || null,
+              loginUserType: processedData.login_user_type || null,
+              customerUuid: processedData.customerUuid || null,
+              beneficaryUuid: processedData.beneficaryUuid || null,
               [inputType === "email" ? "email" : "mobile_number"]:
                 inputType === "email" ? values.email : values.mobile_number,
             },
@@ -712,6 +715,16 @@ const Login = () => {
           //  ADD THIS CODE RIGHT AFTER the authState definition (before dispatch(setAuthState))
           localStorage.setItem('authcustomer_id', processedData.customer_id);
           localStorage.setItem('bearertoken', processedData.token);
+          localStorage.setItem('login_user_type', processedData.login_user_type || '');
+
+          if (processedData.login_user_type === 'customer' && processedData.customerUuid) {
+            localStorage.setItem('customer_uuid', processedData.customerUuid);
+            localStorage.removeItem('beneficiary_uuid'); // Clear beneficiary UUID if switching
+          } else if (processedData.login_user_type === 'beneficiary' && processedData.beneficaryUuid) {
+            localStorage.setItem('beneficiary_uuid', processedData.beneficaryUuid);
+            localStorage.removeItem('customer_uuid'); // Clear customer UUID if switching
+          }
+
           if (processedData.isRemittanceOnlyCustomer) {
             localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
           }
@@ -1437,6 +1450,15 @@ const Login = () => {
         //  ADD THIS CODE RIGHT HERE (after setAuthState but before dispatch(setPasscode))
         localStorage.setItem('authcustomer_id', customerId);
         localStorage.setItem('bearertoken', processedData.token);
+
+        if (processedData.login_user_type === 'customer' && processedData.customerUuid) {
+          localStorage.setItem('customer_uuid', processedData.customerUuid);
+          localStorage.removeItem('beneficiary_uuid');
+        } else if (processedData.login_user_type === 'beneficiary' && processedData.beneficaryUuid) {
+          localStorage.setItem('beneficiary_uuid', processedData.beneficaryUuid);
+          localStorage.removeItem('customer_uuid');
+        }
+
         if (processedData.isRemittanceOnlyCustomer) {
           localStorage.setItem('isRemittanceOnlyCustomer', processedData.isRemittanceOnlyCustomer);
         }
@@ -1659,6 +1681,17 @@ const Login = () => {
 
         localStorage.setItem('authcustomer_id', result.customer_id);
         localStorage.setItem('bearertoken', result.token);
+        localStorage.setItem('login_user_type', result.login_user_type || '');
+
+        // Store UUIDs based on login type
+        if (result.login_user_type === 'customer' && result.customerUuid) {
+          localStorage.setItem('customer_uuid', result.customerUuid);
+          localStorage.removeItem('beneficiary_uuid');
+        } else if (result.login_user_type === 'beneficiary' && result.beneficaryUuid) {
+          localStorage.setItem('beneficiary_uuid', result.beneficaryUuid);
+          localStorage.removeItem('customer_uuid');
+        }
+
         if (result.isRemittanceOnlyCustomer) {
           localStorage.setItem('isRemittanceOnlyCustomer', result.isRemittanceOnlyCustomer);
         }
@@ -2505,7 +2538,7 @@ const Login = () => {
               onClick={() => {
                 console.log("🟡 BUTTON CLICKED");
                 handleConfirmInstitution();
-              }}  
+              }}
               disabled={!selectedInstitutionId || isSubmittingInstitution}
               className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
             >

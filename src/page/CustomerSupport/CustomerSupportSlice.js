@@ -6,21 +6,63 @@ import { extractErrorMessage } from "../../services/authService";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Helper to automatically identify customer vs beneficiary
+const resolveUserInfo = (ticketData = {}) => {
+  const storedType = (
+    ticketData.request_user_type ||
+    localStorage.getItem("login_user_type") ||
+    localStorage.getItem("user_type") ||
+    ""
+  ).toLowerCase();
+
+  const isBeneficiaryFlag =
+    localStorage.getItem("beneficaryLogin") === "Y" ||
+    localStorage.getItem("beneficiaryLogin") === "Y";
+
+  const benefUuid =
+    ticketData.beneficiary_uuid ||
+    localStorage.getItem("beneficiary_uuid") ||
+    localStorage.getItem("beneficiaryUuid") ||
+    localStorage.getItem("beneficaryId") ||
+    localStorage.getItem("beneficiaryId");
+
+  const custUuid =
+    ticketData.customer_uuid ||
+    localStorage.getItem("customer_uuid") ||
+    localStorage.getItem("customerUuid") ||
+    localStorage.getItem("customerid");
+
+  const isBeneficiary =
+    storedType.includes("benef") ||
+    isBeneficiaryFlag ||
+    (Boolean(benefUuid) && !custUuid);
+
+  return {
+    isBeneficiary,
+    requestUserType: isBeneficiary ? "beneficiary" : "customer",
+    uuid: isBeneficiary ? benefUuid : custUuid,
+  };
+};
+
 // Async thunk to store support ticket
 export const storeSupportTicket = createAsyncThunk(
   "customerSupport/storeTicket",
-  async (ticketData, { rejectWithValue, getState }) => {
+  async (ticketData, { rejectWithValue }) => {
     try {
-      const customerUuid = localStorage.getItem('customerUuid');
-
-      if (!customerUuid) {
-        throw new Error("Customer ID not found. Please login again.");
-      }
-
-      const token = localStorage.getItem('bearertoken') || localStorage.getItem('authtoken');
+      const token =
+        localStorage.getItem("bearertoken") ||
+        localStorage.getItem("authtoken");
 
       if (!token) {
         throw new Error("Authentication token not found. Please login again.");
+      }
+
+      const { isBeneficiary, requestUserType, uuid } = resolveUserInfo(ticketData);
+
+      if (!uuid) {
+        throw new Error(
+          `${isBeneficiary ? "Beneficiary" : "Customer"} ID not found. Please login again.`
+        );
       }
 
       const payload = {
@@ -28,7 +70,10 @@ export const storeSupportTicket = createAsyncThunk(
         description: ticketData.description,
         priority: ticketData.priority,
         category: ticketData.category,
-        customer_id: customerUuid
+        request_user_type: requestUserType,
+        ...(isBeneficiary
+          ? { beneficiary_uuid: uuid }
+          : { customer_uuid: uuid }),
       };
 
       console.log("📤 Submitting support ticket:", payload);
@@ -44,7 +89,7 @@ export const storeSupportTicket = createAsyncThunk(
         return {
           success: true,
           message: response.data.message || "Support ticket submitted successfully",
-          data: response.data.data
+          data: response.data.data,
         };
       } else {
         throw new Error(response.data.message || "Failed to submit ticket");
@@ -62,21 +107,53 @@ export const fetchAllTickets = createAsyncThunk(
   "customerSupport/fetchAllTickets",
   async (_, { rejectWithValue }) => {
     try {
-      const customerUuid = localStorage.getItem('customerUuid');
-
-      if (!customerUuid) {
-        throw new Error("Customer ID not found. Please login again.");
-      }
-
-      const token = localStorage.getItem('bearertoken') || localStorage.getItem('authtoken');
+      const token =
+        localStorage.getItem("bearertoken") ||
+        localStorage.getItem("authtoken");
 
       if (!token) {
         throw new Error("Authentication token not found. Please login again.");
       }
 
-      console.log("📤 Fetching all tickets for customer:", customerUuid);
+      // 1. Detect user type from localStorage
+      const userType = (
+        localStorage.getItem("login_user_type") ||
+        localStorage.getItem("user_type") ||
+        "customer"
+      ).toLowerCase();
 
-      const response = await api.get(`/fetch-ticket/${customerUuid}`, {
+      const isBeneficiary =
+        userType.includes("benef") || userType === "beneficiary";
+
+      // 2. Retrieve the appropriate UUID
+      let uuid = null;
+      if (isBeneficiary) {
+        uuid =
+          localStorage.getItem("beneficiary_uuid") ||
+          localStorage.getItem("beneficiaryUuid") ||
+          localStorage.getItem("beneficaryId") ||
+          localStorage.getItem("beneficiaryId");
+      } else {
+        uuid =
+          localStorage.getItem("customer_uuid") ||
+          localStorage.getItem("customerUuid") ||
+          localStorage.getItem("customerid");
+      }
+
+      if (!uuid) {
+        throw new Error(
+          `${isBeneficiary ? "Beneficiary" : "Customer"} ID not found. Please login again.`
+        );
+      }
+
+      // 3. Choose endpoint dynamically based on user type
+      const endpoint = isBeneficiary
+        ? `/fetch-beneficiary-ticket/${uuid}`
+        : `/fetch-ticket/${uuid}`;
+
+      console.log(`📤 Fetching tickets from: ${endpoint}`);
+
+      const response = await api.get(endpoint, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -84,11 +161,11 @@ export const fetchAllTickets = createAsyncThunk(
       });
 
       if (response.data.status === "success") {
-        console.log("✅ Tickets fetched successfully:", response.data.data);
+        console.log(" Tickets fetched successfully:", response.data.data);
         return {
           success: true,
           tickets: response.data.data || [],
-          message: response.data.message
+          message: response.data.message,
         };
       } else {
         throw new Error(response.data.message || "Failed to fetch tickets");
@@ -177,7 +254,7 @@ export const fetchTicketCategories = createAsyncThunk(
   }
 );
 
-// ✅ Async thunk to fetch status list
+// Async thunk to fetch status list
 export const fetchStatusList = createAsyncThunk(
   "customerSupport/fetchStatusList",
   async (_, { rejectWithValue }) => {
@@ -215,10 +292,10 @@ export const fetchStatusList = createAsyncThunk(
   }
 );
 
-// ✅ Async thunk to update ticket status - DIRECT FIX
+// Async thunk to update ticket status - DIRECT FIX
 export const updateTicketStatus = createAsyncThunk(
   "customerSupport/updateTicketStatus",
-  async ({ ticketUuid, statusId }, { rejectWithValue }) => {
+  async ({ ticketUuid, statusId, requestData = {} }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('bearertoken') || localStorage.getItem('authtoken');
 
@@ -226,14 +303,24 @@ export const updateTicketStatus = createAsyncThunk(
         throw new Error("Authentication token not found. Please login again.");
       }
 
+      const { isBeneficiary, requestUserType, uuid } = resolveUserInfo(requestData);
+
       console.log("📤 Updating ticket status:", {
         status: statusId,
-        ticket_id: ticketUuid
+        ticket_id: ticketUuid,
+        request_user_type: requestUserType,
+        ...(isBeneficiary
+          ? { beneficiary_uuid: uuid }
+          : { customer_uuid: uuid }),
       });
 
       const response = await api.post("/update-ticket-status", {
         status: statusId,
-        ticket_id: ticketUuid  // Make sure this field name matches exactly what API expects
+        ticket_id: ticketUuid,
+        request_user_type: requestUserType,
+        ...(isBeneficiary
+          ? { beneficiary_uuid: uuid }
+          : { customer_uuid: uuid }),
       }, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -242,23 +329,32 @@ export const updateTicketStatus = createAsyncThunk(
       });
 
       if (response.data.status === "success") {
-        console.log("✅ Ticket status updated successfully:", response.data);
+        console.log("Ticket status updated successfully:", response.data);
         return {
           success: true,
           ticket: response.data.data,
           message: response.data.message || "Status updated successfully"
         };
       } else {
-        throw new Error(response.data.message || "Failed to update status");
+        const msg =
+          typeof response.data.message === "object"
+            ? Object.values(response.data.message).flat().join(" ")
+            : response.data.message;
+        throw new Error(msg || "Failed to update status");
       }
     } catch (error) {
       console.error("❌ Error updating ticket status:", error);
-      console.error("Error response:", error.response?.data);
-      const errorMessage = extractErrorMessage(error);
+      let errorMessage = extractErrorMessage
+        ? extractErrorMessage(error)
+        : error.message;
+      if (typeof errorMessage === "object") {
+        errorMessage = Object.values(errorMessage).flat().join(" ");
+      }
       return rejectWithValue(errorMessage);
     }
   }
 );
+
 // Async thunk to update a ticket (using POST)
 export const updateTicket = createAsyncThunk(
   "customerSupport/updateTicket",
@@ -270,6 +366,8 @@ export const updateTicket = createAsyncThunk(
         throw new Error("Authentication token not found. Please login again.");
       }
 
+      const { isBeneficiary, requestUserType, uuid } = resolveUserInfo(ticketData);
+
       console.log("📤 Updating ticket:", ticketId, ticketData);
 
       const response = await api.post(`/update-ticket`, {
@@ -277,7 +375,11 @@ export const updateTicket = createAsyncThunk(
         subject: ticketData.subject,
         description: ticketData.description,
         priority: ticketData.priority,
-        category: ticketData.category
+        category: ticketData.category,
+        request_user_type: requestUserType,
+        ...(isBeneficiary
+          ? { beneficiary_uuid: uuid }
+          : { customer_uuid: uuid }),
       }, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -286,62 +388,69 @@ export const updateTicket = createAsyncThunk(
       });
 
       if (response.data.status === "success") {
-        console.log("✅ Ticket updated successfully:", response.data);
+        console.log("Ticket updated successfully:", response.data);
         return {
           success: true,
           ticket: response.data.data,
           message: response.data.message || "Ticket updated successfully"
         };
       } else {
-        throw new Error(response.data.message || "Failed to update ticket");
+        const msg = typeof response.data.message === "object"
+          ? Object.values(response.data.message).flat().join(" ")
+          : response.data.message;
+        throw new Error(msg || "Failed to update ticket");
       }
     } catch (error) {
       console.error("❌ Error updating ticket:", error);
-      const errorMessage = extractErrorMessage(error);
+      let errorMessage = extractErrorMessage ? extractErrorMessage(error) : error.message;
+      if (typeof errorMessage === "object") {
+        errorMessage = Object.values(errorMessage).flat().join(" ");
+      }
       return rejectWithValue(errorMessage);
     }
   }
 );
 
-// Async thunk to delete a ticket
+// Async thunk to delete a ticket (using POST)
 export const deleteTicket = createAsyncThunk(
   "customerSupport/deleteTicket",
-  async (ticketUuid, { rejectWithValue }) => {
+  async ({ ticketId, requestData = {} }, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('bearertoken') || localStorage.getItem('authtoken');
+      const token = localStorage.getItem("bearertoken") || localStorage.getItem("authtoken");
+      if (!token) throw new Error("Authentication token not found. Please login again.");
 
-      if (!token) {
-        throw new Error("Authentication token not found. Please login again.");
-      }
+      const { isBeneficiary, requestUserType, uuid } = resolveUserInfo(requestData);
 
-      console.log("📤 Deleting ticket:", ticketUuid);
+      const payload = {
+        ticket_id: ticketId,
+        request_user_type: requestUserType,
+        ...(isBeneficiary ? { beneficiary_uuid: uuid } : { customer_uuid: uuid }),
+      };
 
-      const response = await api.delete(`/delete-ticket/${ticketUuid}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      console.log("📤 Deleting ticket with payload (POST):", payload);
+
+      const response = await api.post("/delete-ticket", payload, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
 
       if (response.data.status === "success") {
-        console.log("✅ Ticket deleted successfully:", response.data);
-        return {
-          success: true,
-          ticketUuid: ticketUuid,
-          message: response.data.message || "Ticket deleted successfully"
-        };
+        return { success: true, ticketId, message: response.data.message || "Ticket deleted successfully" };
       } else {
-        throw new Error(response.data.message || "Failed to delete ticket");
+        const msg = typeof response.data.message === "object"
+          ? Object.values(response.data.message).flat().join(" ")
+          : response.data.message;
+        throw new Error(msg || "Failed to delete ticket");
       }
     } catch (error) {
-      console.error("❌ Error deleting ticket:", error);
-      const errorMessage = extractErrorMessage(error);
+      console.error("❌ Error deleting ticket (caught):", error);
+      let errorMessage = extractErrorMessage ? extractErrorMessage(error) : error.message;
+      if (typeof errorMessage === "object") errorMessage = Object.values(errorMessage).flat().join(" ");
       return rejectWithValue(errorMessage);
     }
   }
 );
 
-// ✅ Async thunk to fetch status logs
+// Async thunk to fetch status logs
 export const fetchStatusLogs = createAsyncThunk(
   "customerSupport/fetchStatusLogs",
   async (ticketId, { rejectWithValue }) => {
@@ -362,7 +471,7 @@ export const fetchStatusLogs = createAsyncThunk(
       });
 
       if (response.data.status === "success") {
-        console.log("✅ Status logs fetched successfully:", response.data.data);
+        console.log("Status logs fetched successfully:", response.data.data);
         return {
           success: true,
           statusLogs: response.data.data || [],
@@ -398,7 +507,7 @@ const initialState = {
   fetchingCategories: false,
   fetchingStatusList: false,
   updatingStatus: false,
-  fetchingStatusLogs: false 
+  fetchingStatusLogs: false
 };
 
 // Create slice
