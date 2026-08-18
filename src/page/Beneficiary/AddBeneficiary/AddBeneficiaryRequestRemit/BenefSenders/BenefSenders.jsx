@@ -15,6 +15,7 @@ import {
   FaExclamationTriangle,
   FaPlus,
   FaUser,
+  FaTrash,
 } from "react-icons/fa";
 import {
   AiOutlineUser,
@@ -96,34 +97,12 @@ const useApi = () => {
   return { apiCall };
 };
 
-// Loader Components
-const FullPageLoader = ({ show, message = "Loading..." }) => {
-  if (!show) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-white/90 flex flex-col items-center justify-center z-50 backdrop-blur-xs"
-    >
-      <div className="flex flex-col items-center space-y-4">
-        <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-gray-700 font-medium text-sm">{message}</p>
-      </div>
-    </motion.div>
-  );
-};
-
 const SkeletonLoader = () => {
   return (
-    <div className="space-y-3">
-      {[...Array(5)].map((_, i) => (
-        <div
-          key={i}
-          className="bg-white rounded-2xl border border-gray-200 h-20 animate-pulse"
-        />
-      ))}
+    <div className="bg-white shadow-2xs rounded-2xl border border-gray-200 py-16 px-4 flex flex-col items-center justify-center text-center">
+      <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+      <p className="text-sm font-semibold text-gray-800">Fetching senders...</p>
+      <p className="text-xs text-gray-400 mt-0.5">Please wait a moment</p>
     </div>
   );
 };
@@ -151,45 +130,30 @@ const DeleteConfirmationModal = ({
             className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md"
           >
             <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
-              {message &&
-                message !== "Do you really want to delete this beneficiary?"
-                ? "Notification"
-                : "Confirm Deletion"}
+              Confirm Action
             </h2>
             <p className="text-gray-600 text-center text-sm mb-6">
               {message ||
-                "Do you really want to delete this beneficiary? This action cannot be undone."}
+                "Do you really want to proceed? This action cannot be undone."}
             </p>
             <div className="flex flex-col sm:flex-row gap-2.5">
-              {message ? (
-                <button
-                  onClick={onClose}
-                  className="w-full px-4 py-2.5 bg-gray-100 text-gray-800 rounded-xl hover:bg-gray-200 transition-colors font-semibold text-xs sm:text-sm cursor-pointer"
-                  disabled={isLoading}
-                >
-                  Close
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={onClose}
-                    className="w-full sm:flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold text-xs sm:text-sm cursor-pointer"
-                    disabled={isLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={onConfirm}
-                    className="w-full sm:flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold text-xs sm:text-sm flex items-center justify-center cursor-pointer shadow-2xs"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <FaSpinner className="animate-spin mr-2 text-xs" />
-                    ) : null}
-                    {isLoading ? "Deleting..." : "Yes, Delete"}
-                  </button>
-                </>
-              )}
+              <button
+                onClick={onClose}
+                className="w-full sm:flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold text-xs sm:text-sm cursor-pointer"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="w-full sm:flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold text-xs sm:text-sm flex items-center justify-center cursor-pointer shadow-2xs"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <FaSpinner className="animate-spin mr-2 text-xs" />
+                ) : null}
+                {isLoading ? "Removing..." : "Yes, Remove"}
+              </button>
             </div>
           </motion.div>
         </motion.div>
@@ -198,150 +162,56 @@ const DeleteConfirmationModal = ({
   );
 };
 
-// Search Hook
-const useSearch = (apiCall) => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [error, setError] = useState(null);
-
-  const abortControllerRef = useRef(null);
-  const debouncedSearchQuery = useDebounce(searchQuery, 500);
-
-  const performSearch = useCallback(
-    async (query) => {
-      if (!query.trim()) {
-        setSearchResults(null);
-        setHasSearched(false);
-        return;
-      }
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      abortControllerRef.current = new AbortController();
-
-      setSearchLoading(true);
-      setError(null);
-      setHasSearched(true);
-
-      let searchType = "email";
-      let formattedQuery = query;
-
-      const mobileRegex = /^[\+]?[0-9\s\-\(\)]+$/;
-      if (mobileRegex.test(query.replace(/\s/g, ""))) {
-        searchType = "mobile";
-        formattedQuery = query.replace(/[^\d\+\s]/g, "");
-
-        if (formattedQuery.includes("+") && !formattedQuery.includes(" ")) {
-          const plusIndex = formattedQuery.indexOf("+");
-          if (plusIndex === 0 && formattedQuery.length > 3) {
-            const countryCode = formattedQuery.substring(0, 3);
-            const number = formattedQuery.substring(3);
-            formattedQuery = `${countryCode} ${number}`;
-          }
-        }
-      }
-
-      try {
-        const result = await apiCall(
-          `${API_URL}/beneficiaries/customer/search`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              customer_type: searchType,
-              query: formattedQuery,
-            }),
-            signal: abortControllerRef.current.signal,
-          }
-        );
-
-        if (result.customers_data && Array.isArray(result.customers_data)) {
-          const beneficiariesWithVisibility = result.customers_data.map(
-            (customer) => ({
-              id: customer.id,
-              name: `${customer.first_name || ""} ${customer.middle_name || ""
-                } ${customer.last_name || ""}`.trim(),
-              email: customer.email,
-              full_phone_number: customer.full_mobile_number,
-              relationtobenef: "Customer",
-              street: customer.street_address_1 || "Not Available",
-              isVisible: true,
-              isSearchResult: true,
-            })
-          );
-          setSearchResults(beneficiariesWithVisibility);
-        } else {
-          setSearchResults([]);
-        }
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          console.error("Search error:", error);
-          setError(error.message || "Search failed");
-          setSearchResults([]);
-        }
-      } finally {
-        setSearchLoading(false);
-      }
-    },
-    [apiCall]
-  );
-
-  useEffect(() => {
-    if (debouncedSearchQuery.trim().length >= 3) {
-      performSearch(debouncedSearchQuery);
-    } else if (debouncedSearchQuery.trim().length === 0 && hasSearched) {
-      setSearchResults(null);
-      setHasSearched(false);
-    }
-  }, [debouncedSearchQuery, performSearch, hasSearched]);
-
-  const clearSearch = useCallback(() => {
-    setSearchQuery("");
-    setSearchResults(null);
-    setHasSearched(false);
-    setError(null);
-    setSearchLoading(false);
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  }, []);
-
-  return {
-    searchQuery,
-    setSearchQuery,
-    searchResults,
-    searchLoading,
-    hasSearched,
-    error,
-    clearSearch,
-    performSearch,
-  };
-};
-
 // Add Sender Modal Component
 const AddSenderModal = ({ show, onClose, onAddSender, isLoading = false }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const { apiCall } = useApi();
 
-  const handleSearch = async (query) => {
-    if (query.trim().length < 3) {
+  // Reset state whenever modal is opened or closed
+  useEffect(() => {
+    if (!show) {
+      setSearchQuery("");
       setSearchResults([]);
+      setHasSearched(false);
+      setSearchLoading(false);
+    }
+  }, [show]);
+
+  // Handle typing: update query and reset previous search results immediately
+  const handleInputChange = (e) => {
+    setSearchQuery(e.target.value);
+    setSearchResults([]);
+    setHasSearched(false);
+  };
+
+  // Search function - called when button is clicked or Enter is pressed
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+
+    if (query.length < 3) {
+      toast.warning("Please type at least 3 characters to search");
       return;
     }
 
     setSearchLoading(true);
+    setHasSearched(true);
+
+    let searchType = "name";
+    if (query.includes("@")) {
+      searchType = "email";
+    } else if (/^[\+]?[0-9\s\-()]+$/.test(query)) {
+      searchType = "mobile";
+    }
+
     try {
       const result = await apiCall(`${API_URL}/beneficiaries/customer/search`, {
         method: "POST",
         body: JSON.stringify({
-          customer_type: "email",
-          query: query.trim(),
+          customer_type: searchType,
+          query: query,
         }),
       });
 
@@ -352,14 +222,28 @@ const AddSenderModal = ({ show, onClose, onAddSender, isLoading = false }) => {
       }
     } catch (error) {
       console.error("Search error:", error);
+      toast.error(error.message || "Search failed");
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
   };
 
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
   const handleAddSender = (customer) => {
     onAddSender(customer);
+  };
+
+  const handleClear = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setHasSearched(false);
+    setSearchLoading(false);
   };
 
   return (
@@ -384,18 +268,38 @@ const AddSenderModal = ({ show, onClose, onAddSender, isLoading = false }) => {
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Search Customers
               </label>
-              <input
-                type="text"
-                placeholder="Search by email or name..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  handleSearch(e.target.value);
-                }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Search by email or name..."
+                  value={searchQuery}
+                  onChange={handleInputChange}
+                  onKeyPress={handleKeyPress}
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <button
+                  onClick={handleSearch}
+                  disabled={searchLoading || searchQuery.trim().length < 3}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs flex-shrink-0"
+                >
+                  {searchLoading ? (
+                    <FaSpinner className="animate-spin text-xs" />
+                  ) : (
+                    <FaSearch size={12} />
+                  )}
+                  <span>Search</span>
+                </button>
+              </div>
+              {searchQuery && (
+                <button
+                  onClick={handleClear}
+                  className="text-xs text-gray-400 hover:text-gray-600 mt-1 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
               <p className="text-[11px] text-gray-400 mt-1">
-                Type at least 3 characters to search
+                Type at least 3 characters, then click Search
               </p>
             </div>
 
@@ -436,13 +340,13 @@ const AddSenderModal = ({ show, onClose, onAddSender, isLoading = false }) => {
                     </button>
                   </div>
                 ))
-              ) : searchQuery.trim().length >= 3 ? (
+              ) : hasSearched ? (
                 <div className="text-center py-8 text-gray-400 text-xs">
                   No customers found
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-400 text-xs">
-                  Start typing to search for customers
+                  Type a name or email, then click Search
                 </div>
               )}
             </div>
@@ -479,7 +383,6 @@ const BeneficiarySenders = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addingSender, setAddingSender] = useState(false);
-  const [filterVisibility, setFilterVisibility] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [saveLoadingId, setSaveLoadingId] = useState(null);
 
@@ -487,16 +390,8 @@ const BeneficiarySenders = () => {
   const config = usePartnerConfig(authToken);
   const navigate = useNavigate();
 
-  const {
-    searchQuery,
-    setSearchQuery,
-    searchResults,
-    searchLoading,
-    hasSearched,
-    error: searchError,
-    clearSearch,
-    performSearch,
-  } = useSearch(apiCall);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterVisibility, setFilterVisibility] = useState("all");
 
   const headerColor =
     config?.header_color || localStorage.getItem("header_color");
@@ -609,20 +504,41 @@ const BeneficiarySenders = () => {
     }
   };
 
-  const displayedBeneficiaries = hasSearched ? searchResults : beneficiaries;
+  const displayedBeneficiaries = beneficiaries;
 
   const filteredBeneficiaries = useMemo(() => {
     if (!displayedBeneficiaries) return [];
 
     return displayedBeneficiaries.filter((beneficiary) => {
+      // Visibility filter
       const matchesVisibilityFilter =
         filterVisibility === "all" ||
         (filterVisibility === "visible" && beneficiary.isVisible) ||
         (filterVisibility === "hidden" && !beneficiary.isVisible);
 
-      return matchesVisibilityFilter;
+      // Client-side search filter
+      const searchTerm = searchQuery.toLowerCase().trim().replace(/\s+/g, " ");
+      if (!searchTerm) return matchesVisibilityFilter;
+
+      const normalizedName = (beneficiary.name || "").toLowerCase().replace(/\s+/g, " ");
+      const normalizedEmail = (beneficiary.email || "").toLowerCase();
+      const normalizedPhone = (beneficiary.full_phone_number || "").toLowerCase();
+
+      // Check if full string matches, OR all typed words match somewhere in the name
+      const searchWords = searchTerm.split(" ");
+      const nameMatchesAllWords = searchWords.every((word) =>
+        normalizedName.includes(word)
+      );
+
+      const matchesSearch =
+        normalizedName.includes(searchTerm) ||
+        nameMatchesAllWords ||
+        normalizedEmail.includes(searchTerm) ||
+        normalizedPhone.includes(searchTerm);
+
+      return matchesVisibilityFilter && matchesSearch;
     });
-  }, [displayedBeneficiaries, filterVisibility]);
+  }, [displayedBeneficiaries, filterVisibility, searchQuery]);
 
   const paginatedBeneficiaries = useMemo(() => {
     const indexOfLastBeneficiary = currentPage * beneficiariesPerPage;
@@ -648,6 +564,12 @@ const BeneficiarySenders = () => {
     );
   }, []);
 
+  const handleDeleteClick = (senderId) => {
+    setBeneficiaryToDelete(senderId);
+    setDeleteMessage("Do you really want to remove this sender from this beneficiary?");
+    setShowModal(true);
+  };
+
   const deleteBeneficiary = useCallback(
     async (id) => {
       setIsDeleting(true);
@@ -665,14 +587,13 @@ const BeneficiarySenders = () => {
         });
 
         setBeneficiaries((prev) => prev.filter((benef) => benef.id !== id));
-        setDeleteMessage("Beneficiary deleted successfully!");
-        toast.success("Beneficiary deleted successfully!");
+        toast.success("Sender removed successfully!");
         setShowModal(false);
         setBeneficiaryToDelete(null);
+        setDeleteMessage("");
       } catch (error) {
-        console.error("Error deleting beneficiary:", error);
-        setDeleteMessage(error.message);
-        toast.error(error.message);
+        console.error("Error deleting sender:", error);
+        toast.error(error.message || "Failed to remove sender");
       } finally {
         setIsDeleting(false);
       }
@@ -728,7 +649,7 @@ const BeneficiarySenders = () => {
   };
 
   const handleClearSearch = () => {
-    clearSearch();
+    setSearchQuery("");
     setCurrentPage(1);
   };
 
@@ -777,6 +698,13 @@ const BeneficiarySenders = () => {
                   <FaSave size={12} />
                 )}
               </button>
+              {/* <button
+                onClick={() => handleDeleteClick(sender.id)}
+                className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                title="Remove Sender"
+              >
+                <FaTrash size={12} />
+              </button> */}
             </div>
           </div>
 
@@ -866,6 +794,13 @@ const BeneficiarySenders = () => {
                       <FaSave size={12} />
                     )}
                   </button>
+                  <button
+                    onClick={() => handleDeleteClick(sender.id)}
+                    className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    title="Remove Sender"
+                  >
+                    <FaTrash size={12} />
+                  </button>
                 </div>
               </td>
             </tr>
@@ -897,7 +832,6 @@ const BeneficiarySenders = () => {
   return (
     <div className="min-h-screen bg-gray-50/50 p-3 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-        <FullPageLoader show={loading && !hasSearched} />
 
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -927,62 +861,47 @@ const BeneficiarySenders = () => {
               <FiUserPlus size={14} />
               <span>Add Sender</span>
             </button>
-            <button
+            {/* <button
               onClick={navigation.handleRoute}
               className="w-full sm:w-auto text-blue-600 border border-blue-200 bg-white py-2.5 px-4 rounded-xl shadow-2xs flex items-center justify-center gap-2 hover:bg-blue-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
             >
               <FaPiggyBank size={14} />
               <span>Add Bank</span>
-            </button>
+            </button> */}
           </div>
         </div>
-        
+
         {/* Search and Filter Section */}
         <div className="bg-white rounded-2xl shadow-2xs border border-gray-200 p-3.5 sm:p-5">
-          <div className="flex flex-col md:flex-row gap-3 items-end">
-            <div className="flex-1 min-w-0 w-full">
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Search Senders
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <FaSearch className="text-gray-400" size={13} />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search by name, email or phone..."
-                    value={searchQuery}
-                    onChange={handleSearchInputChange}
-                    className="block w-full pl-10 pr-9 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-gray-400"
-                    disabled={loading}
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={handleClearSearch}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
-                      disabled={loading}
-                      title="Clear search"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="py-2.5 px-5 rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm disabled:opacity-50 cursor-pointer flex-shrink-0 shadow-2xs"
-                  disabled={loading || searchLoading}
-                  onClick={() =>
-                    searchQuery.trim() && performSearch(searchQuery)
-                  }
-                >
-                  {searchLoading ? (
-                    <FaSpinner className="animate-spin text-xs" />
-                  ) : null}
-                  <span>Search</span>
-                </button>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            Search Senders
+          </label>
+
+          <div className="flex flex-col md:flex-row gap-3 items-center">
+            {/* Input Box */}
+            <div className="relative flex-1 min-w-0 w-full">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <FaSearch className="text-gray-400" size={13} />
               </div>
+              <input
+                type="text"
+                placeholder="Search by name, email or phone..."
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                className="block w-full pl-10 pr-9 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-gray-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
             </div>
 
+            {/* Clear Button */}
             {(searchQuery || filterVisibility !== "all") && (
               <div className="w-full md:w-auto flex-shrink-0">
                 <button
@@ -991,34 +910,22 @@ const BeneficiarySenders = () => {
                     setFilterVisibility("all");
                   }}
                   className="w-full md:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
-                  disabled={loading}
                 >
-                  Clear All
+                  Clear All Filters
                 </button>
               </div>
             )}
           </div>
+
+          {/* Helper text placed below the entire row */}
+          <p className="text-[11px] text-gray-400 mt-1.5">
+            Type to filter the list below
+          </p>
         </div>
 
         {/* Content View */}
-        {loading && !hasSearched ? (
+        {loading ? (
           <SkeletonLoader />
-        ) : searchError && hasSearched ? (
-          <div className="flex flex-col items-center justify-center py-10 bg-white rounded-2xl shadow-2xs border border-gray-200 text-center p-6">
-            <div className="h-12 w-12 rounded-full bg-red-50 flex items-center justify-center mb-3 text-red-500 border border-red-100">
-              <FaExclamationTriangle size={20} />
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-1">
-              Search Failed
-            </h3>
-            <p className="text-xs text-gray-500 max-w-sm mb-4">{searchError}</p>
-            <button
-              onClick={handleClearSearch}
-              className="bg-blue-600 text-white py-2 px-4 rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
-            >
-              Clear Search
-            </button>
-          </div>
         ) : filteredBeneficiaries.length === 0 ? (
           renderEmptyState()
         ) : (
