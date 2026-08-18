@@ -47,8 +47,9 @@ const BenefTransactions = ({
   const customerId = propCustomerId || localStorage.getItem("customerid");
 
   const navigate = useNavigate();
+
   const handleViewMoreDetails = useCallback(() => {
-    navigate(`/fulltransaction/${beneficiaryId}`);
+    navigate(`/beneficiary-all-transactions/${beneficiaryId}`);
   }, [navigate, beneficiaryId]);
 
   const formatDate = useCallback((dateString) => {
@@ -78,7 +79,7 @@ const BenefTransactions = ({
       if (onLoadingStart) onLoadingStart();
 
       const response = await apiClient.get(
-        `/beneficiaries/all-transactions/${beneficiaryId}`,
+        `/beneficiaries/recent-transactions/${beneficiaryId}`,
         { headers: { Authorization: `Bearer ${authtoken}` } }
       );
 
@@ -103,8 +104,8 @@ const BenefTransactions = ({
       console.error("Error fetching transactions:", err);
       setError(
         err.response?.data?.message ||
-          err.message ||
-          "Failed to fetch transactions"
+        err.message ||
+        "Failed to fetch transactions"
       );
     } finally {
       setLoading(false);
@@ -194,8 +195,7 @@ const BenefTransactions = ({
           ["Status", transaction.status || "Pending"],
           [
             "Amount",
-            `${transaction.instructed_amount || 0} ${
-              transaction.currency_code || ""
+            `${transaction.instructed_amount || 0} ${transaction.currency_code || ""
             }`,
           ],
           ["Fee", transaction.fee_amount || "0"],
@@ -297,16 +297,15 @@ const BenefTransactions = ({
     };
     const label =
       normalized === "completed" ||
-      normalized === "failed" ||
-      normalized === "cancelled"
+        normalized === "failed" ||
+        normalized === "cancelled"
         ? normalized
         : "pending";
 
     return (
       <span
-        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
-          config[label]
-        }`}
+        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${config[label]
+          }`}
       >
         {label}
       </span>
@@ -325,18 +324,16 @@ const BenefTransactions = ({
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2.5">
             <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
-                transaction.direction === "Inbound"
+              className={`w-9 h-9 rounded-lg flex items-center justify-center border ${transaction.direction === "Inbound"
                   ? "bg-emerald-50 border-emerald-200"
                   : "bg-gray-50 border-gray-200"
-              }`}
+                }`}
             >
               <FaExchangeAlt
-                className={`w-3.5 h-3.5 ${
-                  transaction.direction === "Inbound"
+                className={`w-3.5 h-3.5 ${transaction.direction === "Inbound"
                     ? "text-emerald-600"
                     : "text-gray-600"
-                }`}
+                  }`}
               />
             </div>
             <div>
@@ -355,14 +352,13 @@ const BenefTransactions = ({
           <div>
             <p className="text-gray-400 text-xs mb-0.5">Amount</p>
             <p
-              className={`font-medium ${
-                transaction.direction === "Outbound"
+              className={`font-medium ${transaction.direction === "Outbound"
                   ? "text-red-600"
                   : "text-emerald-600"
-              }`}
+                }`}
             >
               {transaction.instructed_amount !== undefined &&
-              transaction.currency_code
+                transaction.currency_code
                 ? `${transaction.instructed_amount} ${transaction.currency_code}`
                 : "0"}
             </p>
@@ -429,11 +425,10 @@ const BenefTransactions = ({
                 </td>
                 <td className="py-4 px-5">
                   <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                      transaction.direction === "Inbound"
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${transaction.direction === "Inbound"
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : "bg-gray-50 text-gray-600 border border-gray-200"
-                    }`}
+                      }`}
                   >
                     {transaction.direction || "N/A"}
                   </span>
@@ -443,14 +438,13 @@ const BenefTransactions = ({
                 </td>
                 <td className="py-4 px-5">
                   <span
-                    className={`font-medium ${
-                      transaction.direction === "Outbound"
+                    className={`font-medium ${transaction.direction === "Outbound"
                         ? "text-red-600"
                         : "text-emerald-600"
-                    }`}
+                      }`}
                   >
                     {transaction.instructed_amount !== undefined &&
-                    transaction.currency_code
+                      transaction.currency_code
                       ? `${transaction.instructed_amount} ${transaction.currency_code}`
                       : "0"}
                   </span>
@@ -572,20 +566,17 @@ const BenefTransactions = ({
       )}
 
       {/* No transactions state */}
-      {beneficiaryId &&
-        !loading &&
-        !error &&
-        filteredTransactions.length === 0 && (
-          <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200">
-            <p className="text-gray-600 font-medium">No Transactions Found</p>
-            <p className="text-gray-400 text-sm mt-1">
-              No transactions available.
-            </p>
-          </div>
-        )}
+      {beneficiaryId && !loading && !error && transactionData.length === 0 && (
+        <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200">
+          <p className="text-gray-600 font-medium">No Transactions Found</p>
+          <p className="text-gray-400 text-sm mt-1">
+            No transactions available.
+          </p>
+        </div>
+      )}
 
       {/* Transactions */}
-      {!loading && !error && filteredTransactions.length > 0 && (
+      {!loading && !error && transactionData.length > 0 && (
         <>
           {/* Filters */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-wrap gap-4 items-end mb-6">
@@ -642,8 +633,15 @@ const BenefTransactions = ({
             )}
           </div>
 
-          {/* List */}
-          {isMobile ? (
+        {/* List or Filtered Empty Message */}
+        {filteredTransactions.length === 0 ? (
+            <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200">
+              <p className="text-gray-600 font-medium">No matching transactions</p>
+              <p className="text-gray-400 text-sm mt-1">
+                No transactions match the selected filters.
+              </p>
+            </div>
+          ) : isMobile ? (
             <div className="space-y-3">
               {filteredTransactions.map(renderMobileTransactionCard)}
             </div>

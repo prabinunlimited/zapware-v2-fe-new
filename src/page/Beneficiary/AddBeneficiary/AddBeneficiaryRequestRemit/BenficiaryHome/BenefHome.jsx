@@ -252,11 +252,10 @@ Generated on ${currentDate}
               <button
                 onClick={onEmailSend}
                 disabled={!emailForm.to}
-                className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors flex items-center justify-center space-x-2 ${
-                  !emailForm.to
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-gray-900 hover:bg-gray-800"
-                }`}
+                className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors flex items-center justify-center space-x-2 ${!emailForm.to
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-gray-900 hover:bg-gray-800"
+                  }`}
               >
                 <svg
                   className="w-4 h-4"
@@ -353,6 +352,7 @@ function BenefHome() {
     totalTransactions: 0,
     transactionsPending: 0,
     transactionsPaid: 0,
+    transactionsFailed: 0,
   });
 
   const API_URL = import.meta.env.VITE_API_URL;
@@ -403,10 +403,22 @@ function BenefHome() {
         );
       }).length || 0;
 
+    const transactionsFailed =
+      transactions?.filter((trans) => {
+        const status = trans.status?.toLowerCase();
+        return (
+          status === "failed" ||
+          status === "cancelled" ||
+          status === "rejected" ||
+          status === "declined"
+        );
+      }).length || 0;
+
     setTransactionStats({
       totalTransactions,
       transactionsPending,
       transactionsPaid,
+      transactionsFailed,
     });
   }, []);
 
@@ -592,7 +604,12 @@ function BenefHome() {
 
         // Set empty transactions on error
         setTransactions([]);
-        calculateTransactionStats([]);
+        setTransactionStats({
+          totalTransactions: 0,
+          transactionsPending: 0,
+          transactionsPaid: 0,
+          transactionsFailed: 0,
+        });
         throw error; // Re-throw to be caught by fetchAllData
       } finally {
         setTransactionsLoading(false);
@@ -741,9 +758,8 @@ function BenefHome() {
           const sendersData = data.getbenefsendersacctobeneficiaryid_data.map(
             (item) => ({
               id: item.customer_id,
-              full_name: `${item.customer?.first_name || ""} ${
-                item.customer?.middle_name || ""
-              } ${item.customer?.last_name || ""}`
+              full_name: `${item.customer?.first_name || ""} ${item.customer?.middle_name || ""
+                } ${item.customer?.last_name || ""}`
                 .trim()
                 .replace(/\s+/g, " "),
               first_name: item.customer?.first_name || "",
@@ -1534,21 +1550,21 @@ Generated on ${currentDate}
           </div>
         </div>
       )}
-      
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto min-w-0 bg-gray-50">
-          {/* Mobile-only beneficiary code strip (sidebar is hidden on small screens) */}
-          {beneficiaryId && (
-            <div className="lg:hidden bg-white border-b border-gray-200 sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-400">Beneficiary Code</span>
-              <span className="text-sm font-mono font-medium text-gray-900">
-                {benefCode || beneficiaryId}
-              </span>
-            </div>
-          )}
 
-          <div className="py-8 lg:py-10 px-4 sm:px-6 lg:px-10">
-            <div className="max-w-7xl mx-auto">
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto min-w-0 bg-gray-50">
+        {/* Mobile-only beneficiary code strip (sidebar is hidden on small screens) */}
+        {beneficiaryId && (
+          <div className="lg:hidden bg-white border-b border-gray-200 sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
+            <span className="text-xs text-gray-400">Beneficiary Code</span>
+            <span className="text-sm font-mono font-medium text-gray-900">
+              {benefCode || beneficiaryId}
+            </span>
+          </div>
+        )}
+
+        <div className="py-8 lg:py-10 px-4 sm:px-6 lg:px-10">
+          <div className="max-w-7xl mx-auto">
             {/* Authentication Warning */}
             {!getAuthToken() && (
               <div className="mb-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
@@ -1600,11 +1616,10 @@ Generated on ${currentDate}
                     className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm"
                   >
                     <svg
-                      className={`w-4 h-4 ${
-                        statusLoading || transactionsLoading
-                          ? "animate-spin"
-                          : ""
-                      }`}
+                      className={`w-4 h-4 ${statusLoading || transactionsLoading
+                        ? "animate-spin"
+                        : ""
+                        }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1791,7 +1806,7 @@ Generated on ${currentDate}
                             {Math.round(
                               (stats.completedTransactions /
                                 stats.totalRequests) *
-                                100
+                              100
                             )}
                             %
                           </span>
@@ -1803,7 +1818,7 @@ Generated on ${currentDate}
                               width: `${Math.round(
                                 (stats.completedTransactions /
                                   stats.totalRequests) *
-                                  100
+                                100
                               )}%`,
                             }}
                           ></div>
@@ -1920,9 +1935,8 @@ Generated on ${currentDate}
                       className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm"
                     >
                       <svg
-                        className={`w-4 h-4 ${
-                          transactionsLoading ? "animate-spin" : ""
-                        }`}
+                        className={`w-4 h-4 ${transactionsLoading ? "animate-spin" : ""
+                          }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1990,7 +2004,7 @@ Generated on ${currentDate}
                             {Math.round(
                               (transactionStats.totalTransactions /
                                 (transactionStats.totalTransactions || 1)) *
-                                100
+                              100
                             )}
                             %
                           </span>
@@ -2002,7 +2016,7 @@ Generated on ${currentDate}
                               width: `${Math.round(
                                 (transactionStats.totalTransactions /
                                   (transactionStats.totalTransactions || 1)) *
-                                  100
+                                100
                               )}%`,
                             }}
                           ></div>
@@ -2285,18 +2299,16 @@ Generated on ${currentDate}
                     {/* Status Message */}
                     {message.text && (
                       <div
-                        className={`rounded-lg p-3.5 mb-5 ${
-                          message.type === "error"
-                            ? "bg-red-50 border border-red-200"
-                            : "bg-emerald-50 border border-emerald-200"
-                        }`}
+                        className={`rounded-lg p-3.5 mb-5 ${message.type === "error"
+                          ? "bg-red-50 border border-red-200"
+                          : "bg-emerald-50 border border-emerald-200"
+                          }`}
                       >
                         <div
-                          className={`text-sm font-medium ${
-                            message.type === "error"
-                              ? "text-red-700"
-                              : "text-emerald-700"
-                          }`}
+                          className={`text-sm font-medium ${message.type === "error"
+                            ? "text-red-700"
+                            : "text-emerald-700"
+                            }`}
                         >
                           {message.text}
                         </div>
@@ -2372,11 +2384,10 @@ Generated on ${currentDate}
                             senders.map((sender) => (
                               <div
                                 key={sender.id}
-                                className={`flex items-center p-3 border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ${
-                                  selectedSenders.includes(sender.id)
-                                    ? "bg-gray-50"
-                                    : "hover:bg-gray-50"
-                                }`}
+                                className={`flex items-center p-3 border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ${selectedSenders.includes(sender.id)
+                                  ? "bg-gray-50"
+                                  : "hover:bg-gray-50"
+                                  }`}
                                 onClick={() => handleSenderSelection(sender.id)}
                               >
                                 <input
@@ -2437,11 +2448,10 @@ Generated on ${currentDate}
                             name="beneficiary_bank_id"
                             value={formData.beneficiary_bank_id}
                             onChange={handleChange}
-                            className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
-                              errors.beneficiary_bank_id
-                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                            } focus:outline-none transition-colors`}
+                            className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.beneficiary_bank_id
+                              ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                              : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                              } focus:outline-none transition-colors`}
                           >
                             <option value="">Select bank account</option>
                             {beneficiaryData?.benef_banks?.map((bank) => (
@@ -2483,11 +2493,10 @@ Generated on ${currentDate}
                               onChange={handleChange}
                               min="1"
                               step="0.01"
-                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
-                                errors.amount
-                                  ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                  : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                              } focus:outline-none transition-colors`}
+                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.amount
+                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                                } focus:outline-none transition-colors`}
                               placeholder="0.00"
                             />
                             {errors.amount && (
@@ -2517,11 +2526,10 @@ Generated on ${currentDate}
                               value={formData.currency}
                               onChange={handleChange}
                               disabled={currenciesLoading}
-                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
-                                errors.currency
-                                  ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                  : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                              } focus:outline-none transition-colors disabled:bg-gray-50`}
+                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.currency
+                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                                } focus:outline-none transition-colors disabled:bg-gray-50`}
                             >
                               <option value="">Select currency</option>
                               {currencies.map((currency, index) => (
@@ -2561,13 +2569,12 @@ Generated on ${currentDate}
                             !formData.beneficiary_bank_id ||
                             !getAuthToken()
                           }
-                          className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors ${
-                            loading ||
+                          className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors ${loading ||
                             !formData.beneficiary_bank_id ||
                             !getAuthToken()
-                              ? "bg-gray-300 cursor-not-allowed"
-                              : "bg-gray-900 hover:bg-gray-800"
-                          }`}
+                            ? "bg-gray-300 cursor-not-allowed"
+                            : "bg-gray-900 hover:bg-gray-800"
+                            }`}
                         >
                           {loading ? (
                             <div className="flex items-center justify-center">
@@ -2850,12 +2857,12 @@ Generated on ${currentDate}
                                   <p className="text-xs lg:text-sm text-gray-500">
                                     {request.created_at
                                       ? new Date(
-                                          request.created_at
-                                        ).toLocaleDateString("en-US", {
-                                          month: "short",
-                                          day: "numeric",
-                                          year: "numeric",
-                                        })
+                                        request.created_at
+                                      ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })
                                       : "N/A"}
                                   </p>
                                 </div>
@@ -2988,18 +2995,16 @@ Generated on ${currentDate}
                             >
                               <div className="flex items-center space-x-3.5 mb-2 sm:mb-0">
                                 <div
-                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
-                                    transaction.direction === "Inbound"
-                                      ? "bg-emerald-50 border-emerald-200"
-                                      : "bg-gray-50 border-gray-200"
-                                  }`}
+                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border ${transaction.direction === "Inbound"
+                                    ? "bg-emerald-50 border-emerald-200"
+                                    : "bg-gray-50 border-gray-200"
+                                    }`}
                                 >
                                   <svg
-                                    className={`w-4 h-4 ${
-                                      transaction.direction === "Inbound"
-                                        ? "text-emerald-600"
-                                        : "text-gray-600"
-                                    }`}
+                                    className={`w-4 h-4 ${transaction.direction === "Inbound"
+                                      ? "text-emerald-600"
+                                      : "text-gray-600"
+                                      }`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -3041,12 +3046,12 @@ Generated on ${currentDate}
                                 <p className="text-xs text-gray-400 mt-1.5 font-medium">
                                   {transaction.created_at
                                     ? new Date(
-                                        transaction.created_at
-                                      ).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      })
+                                      transaction.created_at
+                                    ).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })
                                     : "N/A"}
                                 </p>
                                 {transaction.direction && (
@@ -3091,7 +3096,7 @@ Generated on ${currentDate}
           </div>
         </div>
       </div>
-      
+
 
       {/* Share Popup */}
       <SharePopup
