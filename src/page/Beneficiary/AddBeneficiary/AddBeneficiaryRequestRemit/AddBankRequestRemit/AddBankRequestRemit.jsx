@@ -6,12 +6,10 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import {
     FaCreditCard,
-    FaTrash,
-    FaPlus,
     FaChevronLeft,
     FaUniversity,
 } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -33,13 +31,13 @@ const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
         opacity: 1,
-        transition: { duration: 0.5, staggerChildren: 0.08 },
+        transition: { duration: 0.4, staggerChildren: 0.08 },
     },
 };
 
 const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+    hidden: { opacity: 0, y: 15 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
 };
 
 const emptyBankAccount = (currency) => ({
@@ -188,14 +186,6 @@ function AddBenefBank() {
         );
     }, [currency, apiCall]);
 
-    const addBankAccount = () => {
-        setBankAccounts((prev) => [...prev, emptyBankAccount(currency)]);
-    };
-
-    const removeBankAccount = (index) => {
-        setBankAccounts((prev) => prev.filter((_, i) => i !== index));
-    };
-
     const handleBankAccountChange = (index, field, value) => {
         setBankAccounts((prev) =>
             prev.map((account, i) => (i === index ? { ...account, [field]: value } : account))
@@ -228,7 +218,6 @@ function AddBenefBank() {
         setLoading(true);
 
         try {
-            // One POST per bank account, since the endpoint is singular (create-benef-bank)
             for (const account of bankAccounts) {
                 const payload = {
                     benef_id: beneficiaryId,
@@ -269,32 +258,32 @@ function AddBenefBank() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gray-50/50 py-4 sm:py-6 lg:py-8 px-3 sm:px-6 lg:px-8">
             <ToastContainer position="top-right" autoClose={4000} theme="light" />
 
             <motion.div
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="max-w-4xl mx-auto"
+                className="max-w-3xl mx-auto space-y-4 sm:space-y-6"
             >
                 {/* Header */}
-                <motion.div variants={itemVariants} className="flex items-center gap-3 mb-6">
+                <motion.div variants={itemVariants} className="flex items-center gap-3 mb-5 sm:mb-6">
                     <button
+                        type="button"
                         onClick={() => navigate(-1)}
-                        className="p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+                        className="w-10 h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-95 transition-all flex items-center justify-center shadow-sm cursor-pointer flex-shrink-0"
+                        aria-label="Go back"
                     >
-                        <FaChevronLeft className="text-gray-600" />
+                        <FaChevronLeft className="text-gray-700 text-xs sm:text-sm" />
                     </button>
-                    <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl">
-                        <FaCreditCard className="text-blue-600 text-xl" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-semibold text-gray-900">
-                            Bank Account Information
+
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-base sm:text-xl font-bold text-gray-900 leading-snug">
+                            Add Bank Account
                         </h1>
-                        <p className="text-sm text-gray-500 mt-0.5">
-                            Add bank account for this beneficiary
+                        <p className="text-xs sm:text-sm text-gray-500 leading-normal">
+                            Enter banking details for this beneficiary
                         </p>
                     </div>
                 </motion.div>
@@ -303,38 +292,38 @@ function AddBenefBank() {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"
+                        className="p-3.5 sm:p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs sm:text-sm shadow-2xs"
                     >
                         {apiError}
                     </motion.div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                     {bankAccounts.map((account, index) => (
                         <motion.div
                             key={index}
                             variants={itemVariants}
-                            className="relative border-2 border-gray-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
+                            className="border border-gray-200 rounded-2xl p-4 sm:p-6 bg-white shadow-2xs space-y-4 sm:space-y-5"
                         >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-600 font-bold text-sm">
-                                    1
+                            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center font-bold text-xs">
+                                    {index + 1}
                                 </div>
-                                <h4 className="text-md font-semibold text-gray-800">
-                                    Bank Account
+                                <h4 className="text-sm sm:text-base font-bold text-gray-900">
+                                    Bank Account Details
                                 </h4>
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                     {/* Select Rails */}
                                     <div>
-                                        <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                        <label className="block text-gray-700 text-xs font-semibold mb-1">
                                             Select Rails
-                                            <span className="text-red-500 ml-1">*</span>
+                                            <span className="text-red-500 ml-0.5">*</span>
                                         </label>
                                         <select
-                                            className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                             value={account.rails}
                                             onChange={(e) =>
                                                 handleBankAccountChange(index, "rails", e.target.value)
@@ -359,11 +348,11 @@ function AddBenefBank() {
                                     {/* Select Currency */}
                                     {account.rails !== "Mobile" && (
                                         <div>
-                                            <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                            <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                 Select Currency
                                             </label>
                                             <select
-                                                className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                 value={currency}
                                                 onChange={(e) => {
                                                     setCurrency(e.target.value);
@@ -382,15 +371,15 @@ function AddBenefBank() {
                                 </div>
 
                                 {account.rails && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                         <div>
-                                            <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                            <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                 Account Number
-                                                <span className="text-red-500 ml-1">*</span>
+                                                <span className="text-red-500 ml-0.5">*</span>
                                             </label>
                                             <input
                                                 type="text"
-                                                className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                 placeholder="Enter account number"
                                                 value={account.accountNumber}
                                                 onChange={(e) =>
@@ -401,22 +390,22 @@ function AddBenefBank() {
                                         </div>
 
                                         <div>
-                                            <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                            <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                 Bank Name
                                                 {account.rails !== "Mobile" && (
-                                                    <span className="text-red-500 ml-1">*</span>
+                                                    <span className="text-red-500 ml-0.5">*</span>
                                                 )}
                                             </label>
                                             {loadingBanks ? (
-                                                <div className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50/50 flex items-center justify-center">
-                                                    <ClipLoader size={20} color="#3B82F6" />
-                                                    <span className="ml-2 text-gray-600 text-sm">
+                                                <div className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 bg-gray-50 flex items-center justify-center gap-2">
+                                                    <ClipLoader size={16} color="#2563EB" />
+                                                    <span className="text-gray-500 text-xs">
                                                         Loading banks...
                                                     </span>
                                                 </div>
                                             ) : getBanksForCurrency() && getBanksForCurrency().length > 0 ? (
                                                 <select
-                                                    className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                     value={account.bankCode || account.bankName || ""}
                                                     onChange={(e) => {
                                                         const selectedValue = e.target.value;
@@ -460,7 +449,7 @@ function AddBenefBank() {
                                                 <div>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter bank name"
                                                         value={account.bankName}
                                                         onChange={(e) => {
@@ -469,15 +458,14 @@ function AddBenefBank() {
                                                         }}
                                                         required={account.rails !== "Mobile"}
                                                     />
-                                                    <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
-                                                        <span>ℹ️</span>
-                                                        No banks found for {currency}. Please enter manually.
+                                                    <p className="text-amber-600 text-[11px] mt-1">
+                                                        No banks found for {currency}. Enter manually.
                                                     </p>
                                                 </div>
                                             ) : (
                                                 <input
                                                     type="text"
-                                                    className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                     placeholder="Enter bank name"
                                                     value={account.bankName}
                                                     onChange={(e) => {
@@ -494,15 +482,15 @@ function AddBenefBank() {
                                 {account.rails && (
                                     <>
                                         {currency === "BDT" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Routing Number (Bank Code)
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter routing number"
                                                         value={account.bankCode}
                                                         onChange={(e) =>
@@ -512,12 +500,12 @@ function AddBenefBank() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Branch Code
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter branch code"
                                                         value={account.branchCode}
                                                         onChange={(e) =>
@@ -529,15 +517,15 @@ function AddBenefBank() {
                                         )}
 
                                         {currency === "INR" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         IFSC Code
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter IFSC code"
                                                         value={account.ifsc}
                                                         onChange={(e) =>
@@ -550,15 +538,15 @@ function AddBenefBank() {
                                         )}
 
                                         {currency === "PKR" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Bank Code
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter bank code"
                                                         value={account.bankCode}
                                                         onChange={(e) =>
@@ -571,15 +559,15 @@ function AddBenefBank() {
                                         )}
 
                                         {currency === "USD" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Routing Number
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter routing number"
                                                         value={account.routingNumber}
                                                         onChange={(e) =>
@@ -592,15 +580,15 @@ function AddBenefBank() {
                                         )}
 
                                         {currency === "GBP" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Sort Code
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter sort code"
                                                         value={account.sortCode}
                                                         onChange={(e) =>
@@ -613,15 +601,15 @@ function AddBenefBank() {
                                         )}
 
                                         {currency === "EUR" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         IBAN
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter IBAN"
                                                         value={account.iban}
                                                         onChange={(e) =>
@@ -634,15 +622,15 @@ function AddBenefBank() {
                                         )}
 
                                         {account.rails === "Swift" && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-dashed border-gray-200 pt-4 mt-2">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 border-t border-gray-100 pt-3 mt-1">
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         SWIFT Code
-                                                        <span className="text-red-500 ml-1">*</span>
+                                                        <span className="text-red-500 ml-0.5">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter SWIFT code"
                                                         value={account.swift}
                                                         onChange={(e) =>
@@ -652,12 +640,12 @@ function AddBenefBank() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                                         Intermediary SWIFT (Optional)
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                                         placeholder="Enter intermediary SWIFT"
                                                         value={account.intermediarySwift}
                                                         onChange={(e) =>
@@ -673,23 +661,23 @@ function AddBenefBank() {
                         </motion.div>
                     ))}
 
-                    {/* Beneficiary ID fields for BDT, INR, PKR (shared across accounts, entered once) */}
+                    {/* Beneficiary ID fields for BDT, INR, PKR */}
                     {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                         <motion.div
                             variants={itemVariants}
-                            className="border-2 border-gray-200 rounded-2xl p-6 bg-white shadow-sm"
+                            className="border border-gray-200 rounded-2xl p-4 sm:p-6 bg-white shadow-2xs space-y-4"
                         >
-                            <h4 className="text-md font-semibold text-gray-800 mb-4">
+                            <h4 className="text-sm sm:text-base font-bold text-gray-900 pb-2 border-b border-gray-100">
                                 Beneficiary Identification
                             </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div>
-                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                         Beneficiary ID Type
-                                        <span className="text-red-500 ml-1">*</span>
+                                        <span className="text-red-500 ml-0.5">*</span>
                                     </label>
                                     <select
-                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                         value={beneficiaryIdType}
                                         onChange={(e) => setBeneficiaryIdType(e.target.value)}
                                     >
@@ -711,13 +699,13 @@ function AddBenefBank() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    <label className="block text-gray-700 text-xs font-semibold mb-1">
                                         Beneficiary ID Number
-                                        <span className="text-red-500 ml-1">*</span>
+                                        <span className="text-red-500 ml-0.5">*</span>
                                     </label>
                                     <input
                                         type="text"
-                                        className="w-full border-2 border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50/80"
+                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white transition-all"
                                         placeholder="Enter ID number"
                                         value={beneficiaryIdNumber}
                                         onChange={(e) => setBeneficiaryIdNumber(e.target.value)}
@@ -727,33 +715,34 @@ function AddBenefBank() {
                         </motion.div>
                     )}
 
-                    {/* Actions */}
+                    {/* Action Buttons */}
                     <motion.div
                         variants={itemVariants}
-                        className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t-2 border-gray-200"
+                        className="flex flex-col-reverse sm:flex-row justify-between items-center gap-3 pt-4 border-t border-gray-200"
                     >
                         <button
                             type="button"
                             onClick={() => navigate(-1)}
-                            className="flex items-center gap-2 px-6 py-3 border-2 border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 font-medium w-full sm:w-auto justify-center"
+                            className="flex items-center justify-center gap-1.5 px-5 py-2.5 sm:py-3 border border-gray-200 text-gray-700 bg-white rounded-xl hover:bg-gray-50 transition-colors text-xs sm:text-sm font-semibold w-full sm:w-auto cursor-pointer shadow-2xs"
                         >
-                            <FaChevronLeft className="text-sm" />
-                            Cancel
+                            <FaChevronLeft className="text-xs" />
+                            <span>Cancel</span>
                         </button>
+
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full sm:w-auto"
+                            className="px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl transition-all text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer"
                         >
                             {loading ? (
                                 <>
-                                    <ClipLoader size={20} color="#ffffff" />
-                                    Saving...
+                                    <ClipLoader size={16} color="#ffffff" />
+                                    <span>Saving...</span>
                                 </>
                             ) : (
                                 <>
-                                    <FaUniversity className="text-sm" />
-                                    Save Bank Account
+                                    <FaUniversity className="text-xs" />
+                                    <span>Save Bank Account</span>
                                 </>
                             )}
                         </button>
