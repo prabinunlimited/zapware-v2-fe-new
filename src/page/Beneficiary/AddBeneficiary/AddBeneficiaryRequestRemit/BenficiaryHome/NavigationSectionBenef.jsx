@@ -34,8 +34,8 @@ function NavigateSectionBenef() {
         return "transactions";
       case "benefsenders":
         return "senders";
-      case "referral":
-        return "referral";
+      case "benefsupport": 
+        return "support";
       default:
         return "";
     }
@@ -76,7 +76,7 @@ function NavigateSectionBenef() {
       id: "support",
       label: "Support",
       icon: FaHeadset,
-      path: `#`,
+      path: `/beneficiarysupport/${beneficiaryId}`,
       description: "Get help and assistance",
       gradient: "from-orange-500 to-red-500",
     },
@@ -94,10 +94,9 @@ function NavigateSectionBenef() {
               className={`
                 group relative flex items-center w-full text-left
                 rounded-2xl p-4 transition-all duration-200
-                ${
-                  isActive
-                    ? `bg-gradient-to-r ${item.gradient} shadow-md`
-                    : "hover:bg-gray-50"
+                ${isActive
+                  ? `bg-gradient-to-r ${item.gradient} shadow-md`
+                  : "hover:bg-gray-50"
                 }
               `}
             >
@@ -105,10 +104,9 @@ function NavigateSectionBenef() {
                 <div
                   className={`
                     w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
-                    ${
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : `bg-gradient-to-r ${item.gradient} text-white`
+                    ${isActive
+                      ? "bg-white/20 text-white"
+                      : `bg-gradient-to-r ${item.gradient} text-white`
                     }
                   `}
                 >
@@ -117,25 +115,22 @@ function NavigateSectionBenef() {
 
                 <div className="flex flex-col ml-3 flex-1 min-w-0">
                   <span
-                    className={`font-semibold text-base leading-tight ${
-                      isActive ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`font-semibold text-base leading-tight ${isActive ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     {item.label}
                   </span>
                   <span
-                    className={`text-xs mt-0.5 leading-tight ${
-                      isActive ? "text-white/85" : "text-gray-500"
-                    }`}
+                    className={`text-xs mt-0.5 leading-tight ${isActive ? "text-white/85" : "text-gray-500"
+                      }`}
                   >
                     {item.description}
                   </span>
                 </div>
 
                 <IoIosArrowForward
-                  className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform duration-200 group-hover:translate-x-0.5 ${
-                    isActive ? "text-white" : "text-gray-400"
-                  }`}
+                  className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform duration-200 group-hover:translate-x-0.5 ${isActive ? "text-white" : "text-gray-400"
+                    }`}
                 />
               </div>
             </button>
