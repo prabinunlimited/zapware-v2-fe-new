@@ -1064,14 +1064,47 @@ export const validateSession = async (token) => {
 // ===================== UTILITY FUNCTIONS =====================
 
 export const extractErrorMessage = (error) => {
-  if (error.response) {
-    return (
-      error.response.data?.message ||
-      error.response.data?.error ||
-      error.message
-    );
+  if (!error) return "An unexpected error occurred.";
+
+  if (error.response?.data) {
+    const data = error.response.data;
+
+    // 1. If 'message' is an object containing validation arrays: { field: ["error message"] }
+    if (data.message && typeof data.message === "object") {
+      return Object.values(data.message)
+        .flat()
+        .join(" ");
+    }
+
+    // 2. If 'errors' is an object containing validation arrays: { errors: { field: ["..."] } }
+    if (data.errors && typeof data.errors === "object") {
+      return Object.values(data.errors)
+        .flat()
+        .join(" ");
+    }
+
+    // 3. If 'message' is a plain string
+    if (typeof data.message === "string" && data.message.trim() !== "") {
+      return data.message;
+    }
+
+    // 4. If 'error' is a string or object
+    if (data.error) {
+      if (typeof data.error === "string") return data.error;
+      if (typeof data.error === "object") {
+        return Object.values(data.error)
+          .flat()
+          .join(" ");
+      }
+    }
   }
-  return error.message || "An unexpected error occurred";
+
+  // Fallback to error message string
+  if (typeof error.message === "string") {
+    return error.message;
+  }
+
+  return String(error);
 };
 
 export const handleApiError = (error, dispatch = null) => {

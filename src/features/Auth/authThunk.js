@@ -431,10 +431,17 @@ export const verifyPasscode = createAsyncThunk(
 
         // CASE 5: Successful login with KYC verified
         if (responseData.token && responseData.customer_id) {
-          // Save customerUuid to localStorage
-          if (responseData.customerUuid) {
-            localStorage.setItem('customerUuid', responseData.customerUuid);
-            console.log('✅ Customer UUID saved from verifyPasscode:', responseData.customerUuid);
+          if (responseData.login_user_type) {
+            localStorage.setItem('login_user_type', responseData.login_user_type);
+
+            // Store UUIDs based on login type
+            if (responseData.login_user_type === 'customer' && responseData.customerUuid) {
+              localStorage.setItem('customer_uuid', responseData.customerUuid);
+              localStorage.removeItem('beneficiary_uuid');
+            } else if (responseData.login_user_type === 'beneficiary' && responseData.beneficaryUuid) {
+              localStorage.setItem('beneficiary_uuid', responseData.beneficaryUuid);
+              localStorage.removeItem('customer_uuid');
+            }
           }
 
           return {
@@ -492,7 +499,7 @@ export const verifyPasscode = createAsyncThunk(
 export const generateOTP = createAsyncThunk(
   "auth/generateOTP",
   async (
-    { phone_code, mobile_number, password, customer_type, user_type,  customer_id},
+    { phone_code, mobile_number, password, customer_type, user_type, customer_id },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -522,7 +529,7 @@ export const generateOTP = createAsyncThunk(
 
       if (user_type) {
         payload.user_type = user_type;
-      } 
+      }
 
       if (customer_id) {
         payload.customer_id = customer_id;
@@ -688,7 +695,7 @@ export const verifyOTP = createAsyncThunk(
       if (response.data.status === "success") {
         const responseData = response.data.data;
 
-        // ✅ CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
+        //  CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
         if (responseData.kyc_status === "0" &&
           responseData.isRemittanceOnlyCustomer === "Y") {
 
@@ -703,7 +710,7 @@ export const verifyOTP = createAsyncThunk(
           };
         }
 
-        // ✅ CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
+        // CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
         if (responseData.kyc_status === "0" &&
           responseData.isRemittanceOnlyCustomer !== "Y") {
 
@@ -718,11 +725,19 @@ export const verifyOTP = createAsyncThunk(
           };
         }
 
-        // ✅ CASE 3: KYC Completed - Normal login
+        //  CASE 3: KYC Completed - Normal login
         if (responseData.token && responseData.customer_id) {
-          if (responseData.customerUuid) {
-            localStorage.setItem('customerUuid', responseData.customerUuid);
-            console.log('✅ Customer UUID saved from verifyOTP:', responseData.customerUuid);
+          if (responseData.login_user_type) {
+            localStorage.setItem('login_user_type', responseData.login_user_type);
+
+            // Store UUIDs based on login type
+            if (responseData.login_user_type === 'customer' && responseData.customerUuid) {
+              localStorage.setItem('customer_uuid', responseData.customerUuid);
+              localStorage.removeItem('beneficiary_uuid');
+            } else if (responseData.login_user_type === 'beneficiary' && responseData.beneficaryUuid) {
+              localStorage.setItem('beneficiary_uuid', responseData.beneficaryUuid);
+              localStorage.removeItem('customer_uuid');
+            }
           }
 
           // Save other auth data
@@ -1242,18 +1257,28 @@ export const loginUser = createAsyncThunk(
           customerUuid,
           beneficaryLogin,
           beneficaryId,
+          login_user_type,
+          beneficaryUuid,
         } = response.data.data;
 
         // Store user token as "authtoken", NOT "bearertoken"
         localStorage.setItem("authtoken", userToken);
         localStorage.setItem("authcustomer_id", customer_id);
 
-        // ✅ SAVE customerUuid to localStorage
-        if (customerUuid) {
-          localStorage.setItem('customerUuid', customerUuid);
-          console.log('✅ Customer UUID saved from loginUser:', customerUuid);
-        }
 
+        // Store login_user_type and UUIDs
+        if (login_user_type) {
+          localStorage.setItem('login_user_type', login_user_type);
+
+          // Store UUIDs based on login type
+          if (login_user_type === 'customer' && customerUuid) {
+            localStorage.setItem('customer_uuid', customerUuid);
+            localStorage.removeItem('beneficiary_uuid');
+          } else if (login_user_type === 'beneficiary' && beneficaryUuid) {
+            localStorage.setItem('beneficiary_uuid', beneficaryUuid);
+            localStorage.removeItem('customer_uuid');
+          }
+        }
         if (is_owner_login === "1") {
           dispatch({
             type: "auth/setOwnerDetails",

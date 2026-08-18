@@ -12,13 +12,11 @@ import {
   FileText,
   AlertCircle,
   Tag,
-  Headphones,
   HelpCircle,
   Clock,
   MessageCircle,
   CheckCircle,
   Award,
-  Shield,
   Zap,
   Ticket,
   RefreshCw,
@@ -28,10 +26,11 @@ import {
   Loader,
   X,
   Edit2,
-  Trash2, Globe, Building2Icon
+  Trash2,
+  Building2Icon
 } from "lucide-react";
 import RingLoader from "react-spinners/RingLoader";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 // Import Redux actions and selectors
 import {
@@ -50,11 +49,27 @@ import {
   selectTicketCategories,
   selectFetchingCategories,
   selectStatusList,
-  selectFetchingStatusList,
   selectUpdatingStatus,
   selectStatusLogs,
   selectFetchingStatusLogs
 } from "../CustomerSupport/CustomerSupportSlice";
+
+const getCurrentUser = () => {
+  const userType =
+    localStorage.getItem("login_user_type") ||
+    (localStorage.getItem("beneficaryLogin") === "Y" ? "beneficiary" : "customer");
+
+  const isBeneficiary = userType.toLowerCase().includes("benef");
+
+  const userUuid = isBeneficiary
+    ? localStorage.getItem("beneficiary_uuid") || localStorage.getItem("beneficiaryUuid")
+    : localStorage.getItem("customer_uuid") || localStorage.getItem("customerUuid") || localStorage.getItem("authcustomer_id");
+
+  return {
+    userType: isBeneficiary ? "beneficiary" : "customer",
+    userUuid,
+  };
+};
 
 function CustomerSupport() {
   const { customerId } = useParams();
@@ -74,10 +89,33 @@ function CustomerSupport() {
   const categories = useSelector(selectTicketCategories);
   const fetchingCategories = useSelector(selectFetchingCategories);
   const statusList = useSelector(selectStatusList);
-  const fetchingStatusList = useSelector(selectFetchingStatusList);
   const updatingStatus = useSelector(selectUpdatingStatus);
   const statusLogs = useSelector(selectStatusLogs);
   const fetchingStatusLogs = useSelector(selectFetchingStatusLogs);
+
+  // Full-page initial loading state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Reusable Alert Modal state (replaces old successMessage/errorMessage/updateSuccessMessage)
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    type: "success", // "success" | "error"
+    title: "",
+    message: "",
+  });
+
+  const showAlert = (type, title, message) => {
+    const formattedMsg =
+      typeof message === "object" && message !== null
+        ? Object.values(message).flat().join(" ")
+        : String(message || "");
+    setAlertModal({ isOpen: true, type, title, message: formattedMsg });
+  };
+
+  const closeAlert = () => {
+    setAlertModal((prev) => ({ ...prev, isOpen: false }));
+  };
 
   const [partnerInfo, setPartnerInfo] = useState({
     partner_name: "",
@@ -92,11 +130,9 @@ function CustomerSupport() {
     category: ""
   });
   const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [isLoadingTicket, setIsLoadingTicket] = useState(false);
-  const [updateSuccessMessage, setUpdateSuccessMessage] = useState("");
+
   // Status modal states
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedTicketForStatus, setSelectedTicketForStatus] = useState(null);
@@ -115,10 +151,10 @@ function CustomerSupport() {
 
   // Load partner info from localStorage
   useEffect(() => {
-    const partnerName = localStorage.getItem('support_partner_name');
-    const supportEmail = localStorage.getItem('partner_support_email');  // Changed from 'support_email'
-    const supportPhone = localStorage.getItem('partner_support_phone');  // Changed from 'support_phoneno'
-    const partnerAddress = localStorage.getItem('partner_address');
+    const partnerName = localStorage.getItem('support_partner_name') || "Support Team";
+    const supportEmail = localStorage.getItem('partner_support_email') || "support@unlimitedremit.com";
+    const supportPhone = localStorage.getItem('partner_support_phone') || "Not provided";
+    const partnerAddress = localStorage.getItem('partner_address') || "Global Support Center";
 
     setPartnerInfo({
       partner_name: partnerName,
@@ -126,73 +162,76 @@ function CustomerSupport() {
       support_phoneno: supportPhone,
       partner_address: partnerAddress
     });
-
-    console.log("Partner info loaded:", {
-      partnerName,
-      supportEmail,
-      supportPhone,
-      partnerAddress
-    });
   }, []);
 
-  // Handle success from Redux
+  // Fetch initial data with a full-page loader shown until everything settles
+  useEffect(() => {
+    const loadInitialData = async () => {
+      dispatch(clearError());
+      setPageLoading(true);
+      try {
+        await Promise.allSettled([
+          dispatch(fetchAllTickets()),
+          dispatch(fetchTicketCategories()),
+          dispatch(fetchStatusList()),
+        ]);
+      } catch (err) {
+        console.error("Failed loading initial support data:", err);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, [dispatch]);
+
+  // Handle success via modal
   useEffect(() => {
     if (success) {
-      setSuccessMessage("✨ Your support ticket has been submitted successfully! We'll get back to you within 24 hours.");
+      showAlert(
+        "success",
+        "Success",
+        "Your support ticket has been submitted successfully! We'll get back to you within 24 hours."
+      );
       setFormData({
         subject: "",
         description: "",
         priority: "medium",
         category: ""
       });
-      // Refresh tickets after successful submission
       dispatch(fetchAllTickets());
-      // Clear success after 3 seconds
-      setTimeout(() => {
-        dispatch(clearSuccess());
-        setSuccessMessage("");
-      }, 3000);
+      dispatch(clearSuccess());
     }
   }, [success, dispatch]);
 
-  // Handle error from Redux
+  // Handle error via modal
   useEffect(() => {
     if (error) {
-      setErrorMessage(error);
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        dispatch(clearError());
-        setErrorMessage("");
-      }, 5000);
+      showAlert("error", "Error", error);
+      dispatch(clearError());
     }
   }, [error, dispatch]);
 
-  // Handle current ticket from Redux
+  // Show ticket details when fetched
   useEffect(() => {
     if (currentTicket) {
       setShowTicketModal(true);
       setIsLoadingTicket(false);
-      // Clear update success message after showing updated data
-      setTimeout(() => {
-        setUpdateSuccessMessage("");
-      }, 3000);
     }
   }, [currentTicket]);
 
-
-  // Fetch tickets and categories when component mounts
-  useEffect(() => {
-    // Fetch tickets
-    dispatch(fetchAllTickets());
-
-    // Fetch categories
-    dispatch(fetchTicketCategories());
-  }, [dispatch]);
-
-  // Fetch status list when component mounts
-  useEffect(() => {
-    dispatch(fetchStatusList());
-  }, [dispatch]);
+  // Stable refresh tickets handler
+  const handleRefreshTickets = async () => {
+    if (isRefreshing || fetchingTickets) return;
+    setIsRefreshing(true);
+    try {
+      await dispatch(fetchAllTickets()).unwrap();
+    } catch (err) {
+      showAlert("error", "Refresh Failed", err || "Unable to refresh tickets list.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -200,8 +239,6 @@ function CustomerSupport() {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
-    setSuccessMessage("");
-    setErrorMessage("");
   };
 
   const validateForm = () => {
@@ -227,10 +264,10 @@ function CustomerSupport() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const customerUuid = localStorage.getItem('customerUuid');
+    const { userType, userUuid } = getCurrentUser();
 
-    if (!customerUuid) {
-      setErrorMessage("Customer ID not found. Please login again.");
+    if (!userUuid) {
+      showAlert("error", "Error", "User identifier not found. Please login again.");
       return;
     }
 
@@ -239,10 +276,12 @@ function CustomerSupport() {
       description: formData.description,
       priority: formData.priority,
       category: formData.category,
-      customer_id: customerUuid
+      request_user_type: userType,
+      ...(userType === "beneficiary"
+        ? { beneficiary_uuid: userUuid }
+        : { customer_uuid: userUuid, customer_id: userUuid }),
     };
 
-    console.log("Submitting ticket:", ticketData);
     await dispatch(storeSupportTicket(ticketData));
   };
 
@@ -263,16 +302,12 @@ function CustomerSupport() {
   const handleViewTicket = async (ticket) => {
     const ticketUuid = ticket.ticket_uuid || ticket.uuid || ticket.id || ticket.ticket_id;
 
-    console.log("Viewing ticket:", ticket);
-    console.log("Ticket UUID to fetch:", ticketUuid);
-
     if (ticketUuid) {
       setIsLoadingTicket(true);
       setShowTicketModal(true);
-      setUpdateSuccessMessage("");
       await dispatch(fetchTicketByUuid(ticketUuid));
     } else {
-      setErrorMessage("Invalid ticket ID. Cannot fetch ticket details.");
+      showAlert("error", "Error", "Invalid ticket ID. Cannot fetch ticket details.");
     }
   };
 
@@ -281,7 +316,6 @@ function CustomerSupport() {
     setIsEditing(false);
     setShowDeleteConfirm(false);
     setIsLoadingTicket(false);
-    setUpdateSuccessMessage("");
     dispatch(clearCurrentTicket());
   };
 
@@ -295,7 +329,6 @@ function CustomerSupport() {
         category: currentTicket.category || ""
       });
       setIsEditing(true);
-      setUpdateSuccessMessage("");
     }
   };
 
@@ -308,7 +341,7 @@ function CustomerSupport() {
     const ticketId = currentTicket.ticket_uuid || currentTicket.uuid || currentTicket.id || currentTicket.ticket_id;
 
     if (!ticketId) {
-      setErrorMessage("Invalid ticket ID");
+      showAlert("error", "Error", "Invalid ticket ID");
       return;
     }
 
@@ -319,7 +352,7 @@ function CustomerSupport() {
 
     if (updateTicket.fulfilled.match(result)) {
       setIsEditing(false);
-      setUpdateSuccessMessage("✅ Ticket updated successfully!");
+      showAlert("success", "Success", "Ticket updated successfully!");
       // Refresh the current ticket with updated data
       await dispatch(fetchTicketByUuid(ticketId));
       // Refresh tickets list in background
@@ -333,74 +366,99 @@ function CustomerSupport() {
   };
 
   const handleConfirmDelete = async () => {
-    const ticketId = currentTicket.ticket_uuid || currentTicket.uuid || currentTicket.id || currentTicket.ticket_id;
-
+    const ticketId =
+      currentTicket.ticket_uuid ||
+      currentTicket.uuid ||
+      currentTicket.id ||
+      currentTicket.ticket_id;
+  
     if (!ticketId) {
-      setErrorMessage("Invalid ticket ID");
+      showAlert("error", "Error", "Invalid ticket ID");
       return;
     }
-
-    const result = await dispatch(deleteTicket(ticketId));
-
+  
+    const { userType, userUuid } = getCurrentUser();
+  
+    const result = await dispatch(
+      deleteTicket({
+        ticketId,
+        requestData: {
+          request_user_type: userType,
+          ...(userType === "beneficiary"
+            ? { beneficiary_uuid: userUuid }
+            : { customer_uuid: userUuid }),
+        },
+      })
+    );
+  
     if (deleteTicket.fulfilled.match(result)) {
       setShowDeleteConfirm(false);
       setShowTicketModal(false);
       setIsEditing(false);
-      setSuccessMessage("Ticket deleted successfully!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-      // Refresh tickets list
+      showAlert("success", "Deleted", "Ticket deleted successfully!");
       dispatch(fetchAllTickets());
       dispatch(clearCurrentTicket());
+    } else {
+      console.log("❌ Delete did NOT match fulfilled:", result); // ADD
     }
   };
-
+  
   const handleCancelDelete = () => {
     setShowDeleteConfirm(false);
-  };
-
-  // Status modal handlers
-  const handleOpenStatusModal = (ticket, e) => {
-    e.stopPropagation();
-    setSelectedTicketForStatus(ticket);
-    setSelectedStatus(ticket.status || 'Pending');
-    setShowStatusModal(true);
   };
 
   const handleStatusUpdate = async () => {
     if (!selectedTicketForStatus || !selectedStatus) return;
 
-    const selectedStatusObj = statusList.find(s => s.name === selectedStatus);
-
+    const selectedStatusObj = statusList.find((s) => s.name === selectedStatus);
     if (!selectedStatusObj) {
-      setErrorMessage("Invalid status selected");
+      showAlert("error", "Error", "Invalid status selected");
       return;
     }
 
-    const result = await dispatch(updateTicketStatus({
-      ticketUuid: selectedTicketForStatus.id,  // Use 'id' not 'ticket_uuid'
-      statusId: selectedStatusObj.id
-    }));
+    const ticketId =
+      selectedTicketForStatus.ticket_uuid ||
+      selectedTicketForStatus.uuid ||
+      selectedTicketForStatus.id ||
+      selectedTicketForStatus.ticket_id;
+
+    const { userType, userUuid } = getCurrentUser();
+
+    const result = await dispatch(
+      updateTicketStatus({
+        ticketUuid: ticketId,
+        statusId: selectedStatusObj.id,
+        requestData: {
+          request_user_type: userType,
+          ...(userType === "beneficiary"
+            ? { beneficiary_uuid: userUuid }
+            : { customer_uuid: userUuid }),
+        },
+      })
+    );
 
     if (updateTicketStatus.fulfilled.match(result)) {
       setShowStatusModal(false);
       setSelectedTicketForStatus(null);
       setSelectedStatus("");
-      setUpdateSuccessMessage("✅ Status updated successfully!");
-      setTimeout(() => setUpdateSuccessMessage(""), 3000);
+      showAlert("success", "Success", "Status updated successfully!");
       dispatch(fetchAllTickets());
+      if (ticketId) {
+        dispatch(fetchTicketByUuid(ticketId));
+      }
     }
   };
 
   const getPriorityColor = (priority) => {
     switch (priority?.toLowerCase()) {
       case 'low':
-        return 'bg-emerald-100 text-emerald-800';    // Emerald green - softer
+        return 'bg-emerald-100 text-emerald-800';
       case 'medium':
-        return 'bg-amber-100 text-amber-800';        // Amber yellow - warmer
+        return 'bg-amber-100 text-amber-800';
       case 'high':
-        return 'bg-orange-100 text-orange-800';      // Orange - good
+        return 'bg-orange-100 text-orange-800';
       case 'critical':
-        return 'bg-rose-100 text-rose-800';          // Rose red - more vibrant
+        return 'bg-rose-100 text-rose-800';
       default:
         return 'bg-slate-100 text-slate-800';
     }
@@ -408,17 +466,17 @@ function CustomerSupport() {
   const getStatusColor = (status) => {
     switch (status) {
       case 'New':
-        return 'bg-indigo-100 text-indigo-800';  // Indigo for new/unread
+        return 'bg-indigo-100 text-indigo-800';
       case 'In Progress':
-        return 'bg-blue-100 text-blue-800';      // Blue for ongoing work
+        return 'bg-blue-100 text-blue-800';
       case 'Awaiting Customer':
-        return 'bg-yellow-100 text-yellow-800';  // Yellow for waiting (caution)
+        return 'bg-yellow-100 text-yellow-800';
       case 'Closed':
-        return 'bg-green-100 text-green-800';    // Green for completed/success
+        return 'bg-green-100 text-green-800';
       case 'Cancelled':
-        return 'bg-red-100 text-red-800';        // Red for cancelled/void
+        return 'bg-red-100 text-red-800';
       case 'Reopened':
-        return 'bg-orange-100 text-orange-800';  // Orange for reopened (different from cancelled)
+        return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -434,7 +492,6 @@ function CustomerSupport() {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
 
-      // Format to local timezone with proper conversion
       return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -457,12 +514,25 @@ function CustomerSupport() {
   ];
 
   const handleViewStatusLogs = async (ticketId) => {
-    setShowStatusLogs(true);  // Open modal first
-    // Clear previous logs immediately
-    // The fetchingStatusLogs will be true from the slice
+    setShowStatusLogs(true);
     await dispatch(fetchStatusLogs(ticketId));
   };
 
+  // Full page initial loading state — shown until tickets, categories and
+  // the status list have all been fetched (or failed) once.
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-50 flex flex-col items-center justify-center p-4">
+        <RingLoader color="#3b82f6" size={48} />
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800 mt-4 text-center">
+          Loading Support Portal
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center">
+          Fetching your tickets and details...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-50">
@@ -473,42 +543,42 @@ function CustomerSupport() {
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="relative max-w-7xl mx-auto py-4 sm:py-6 md:py-8 px-3 sm:px-6 lg:px-8">
         {/* Back Button */}
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
           onClick={handleGoBack}
-          className="flex items-center text-gray-600 hover:text-blue-600 mb-6 transition-all bg-white/80 backdrop-blur-sm px-5 py-2.5 rounded-full shadow-sm hover:shadow-md border border-blue-100"
+          className="flex items-center text-sm sm:text-base text-gray-600 hover:text-blue-600 mb-4 sm:mb-6 transition-all bg-white/80 backdrop-blur-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full shadow-sm hover:shadow-md border border-blue-100"
         >
-          <ChevronLeft className="w-5 h-5 mr-1" />
+          <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-1" />
           Back to Dashboard
         </motion.button>
 
         {/* Main Content */}
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left Side - Support Form (UNCHANGED) */}
+        <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
+          {/* Left Side - Support Form */}
           <div className="lg:w-1/2">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
-              className="bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
             >
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-8">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-5 sm:p-8">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-white/20 rounded-2xl backdrop-blur-sm">
-                    <MessageCircle className="w-6 h-6 text-white" />
+                    <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">Submit a Ticket</h1>
-                    <p className="text-blue-100 text-sm mt-1">We'll respond within 24 hours</p>
+                    <h1 className="text-lg sm:text-2xl font-bold text-white">Submit a Ticket</h1>
+                    <p className="text-blue-100 text-xs sm:text-sm mt-0.5 sm:mt-1">We'll respond within 24 hours</p>
                   </div>
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-8 space-y-6 flex-1 ">
+              <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-5 sm:space-y-6 flex-1">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Subject <span className="text-red-500">*</span>
@@ -523,7 +593,7 @@ function CustomerSupport() {
                       value={formData.subject}
                       onChange={handleInputChange}
                       placeholder="What's your issue about?"
-                      className={`block w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 ${errors.subject ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white focus:bg-white'
+                      className={`block w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 text-sm sm:text-base ${errors.subject ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white focus:bg-white'
                         }`}
                     />
                   </div>
@@ -548,7 +618,7 @@ function CustomerSupport() {
                       onChange={handleInputChange}
                       rows="5"
                       placeholder="Please describe your issue in detail..."
-                      className={`block w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 ${errors.description ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white focus:bg-white'
+                      className={`block w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 text-sm sm:text-base ${errors.description ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50 hover:bg-white focus:bg-white'
                         }`}
                     />
                   </div>
@@ -576,7 +646,7 @@ function CustomerSupport() {
                       name="priority"
                       value={formData.priority}
                       onChange={handleInputChange}
-                      className="block w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 bg-gray-50 hover:bg-white"
+                      className="block w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all duration-200 bg-gray-50 hover:bg-white text-sm sm:text-base"
                     >
                       {priorityOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -599,7 +669,7 @@ function CustomerSupport() {
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
-                      className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition-all bg-gray-50 hover:bg-white ${errors.category ? 'border-rose-500' : 'border-gray-200'
+                      className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition-all bg-gray-50 hover:bg-white text-sm sm:text-base ${errors.category ? 'border-rose-500' : 'border-gray-200'
                         }`}
                       disabled={fetchingCategories}
                     >
@@ -621,16 +691,16 @@ function CustomerSupport() {
                   whileTap={{ scale: 0.98 }}
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3.5 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-semibold shadow-lg mt-auto"
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 sm:py-3.5 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-semibold shadow-lg mt-auto text-sm sm:text-base"
                 >
                   {submitting ? (
                     <>
-                      <RingLoader color="#ffffff" size={20} />
+                      <RingLoader color="#ffffff" size={18} />
                       <span>Submitting Ticket...</span>
                     </>
                   ) : (
                     <>
-                      <Send className="w-5 h-5" />
+                      <Send className="w-4 h-4 sm:w-5 sm:h-5" />
                       <span>Submit Ticket</span>
                     </>
                   )}
@@ -639,28 +709,27 @@ function CustomerSupport() {
             </motion.div>
           </div>
 
-          {/* Right Side - Contact Information & Tickets (MADE RESPONSIVE) */}
+          {/* Right Side - Contact Information & Tickets */}
           <div className="lg:w-1/2">
             <motion.div
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="space-y-6"
+              className="space-y-4 sm:space-y-6"
             >
-              {/* Company Header - Made Responsive */}
-              <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+              {/* Company Header */}
+              <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden">
                 <div className="relative">
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
 
                   <div className="p-4 sm:p-6 md:p-8">
-                    {/* Header section - Stack on mobile, row on tablet/desktop */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
                       <div className="flex items-center space-x-3 sm:space-x-4">
                         <div className="p-2.5 sm:p-3 bg-blue-100 rounded-xl sm:rounded-2xl">
-                          <Building2Icon className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
+                          <Building2Icon className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                         </div>
                         <div>
-                          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">{partnerInfo.partner_name}</h2>
+                          <h2 className="text-lg sm:text-2xl font-bold text-gray-800 break-words">{partnerInfo.partner_name}</h2>
                           <div className="flex items-center mt-0.5 sm:mt-1">
                             <p className="text-gray-500 text-xs sm:text-sm">Premium Support</p>
                           </div>
@@ -674,13 +743,13 @@ function CustomerSupport() {
                       </div>
                     </div>
 
-                    <p className="text-gray-600 text-sm sm:text-base leading-relaxed">
+                    <p className="text-gray-600 text-xs sm:text-base leading-relaxed">
                       We're committed to providing you with exceptional support.
                       Our dedicated team is available to assist you with any questions or concerns.
                     </p>
                   </div>
 
-                  {/* Contact Information Cards - Made Responsive */}
+                  {/* Contact Information Cards */}
                   <div className="px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8">
                     <div className="grid grid-cols-1 gap-3 sm:gap-4">
                       {/* Email Support Card */}
@@ -692,7 +761,7 @@ function CustomerSupport() {
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-blue-50/50 to-blue-50/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                         <div className="flex items-center justify-between relative z-10">
-                          <div className="flex items-center space-x-3 sm:space-x-4">
+                          <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
                             <div className="p-2 sm:p-2.5 bg-blue-100 rounded-lg sm:rounded-xl group-hover:bg-blue-200 transition-colors">
                               <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                             </div>
@@ -701,7 +770,7 @@ function CustomerSupport() {
                               <p className="text-gray-500 text-xs font-mono break-all">{partnerInfo.support_email}</p>
                             </div>
                           </div>
-                          <div className="text-gray-400 group-hover:text-blue-500 transition-colors ml-2">
+                          <div className="text-gray-400 group-hover:text-blue-500 transition-colors ml-2 flex-shrink-0">
                             <Send className="w-3 h-3 sm:w-4 sm:h-4" />
                           </div>
                         </div>
@@ -739,7 +808,7 @@ function CustomerSupport() {
                           <div className="p-2 sm:p-2.5 bg-blue-100 rounded-lg sm:rounded-xl">
                             <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <p className="text-gray-700 text-xs sm:text-sm font-medium mb-0.5">Office Address</p>
                             <p className="text-gray-500 text-xs leading-relaxed break-words">{partnerInfo.partner_address}</p>
                           </div>
@@ -750,8 +819,8 @@ function CustomerSupport() {
                 </div>
               </div>
 
-              {/* Ticket History Section - Made Responsive */}
-              <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+              {/* Ticket History Section */}
+              <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 sm:p-5 md:p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 sm:space-x-3">
@@ -759,22 +828,23 @@ function CustomerSupport() {
                         <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="text-lg sm:text-xl font-bold text-white">My Tickets</h3>
+                        <h3 className="text-base sm:text-xl font-bold text-white">My Tickets</h3>
                         <p className="text-blue-100 text-xs sm:text-sm">Track your support requests</p>
                       </div>
                     </div>
                     <button
-                      onClick={() => dispatch(fetchAllTickets())}
-                      disabled={fetchingTickets}
-                      className="p-1.5 sm:p-2 bg-white/20 rounded-lg sm:rounded-xl hover:bg-white/30 transition-all"
+                      onClick={handleRefreshTickets}
+                      disabled={isRefreshing || fetchingTickets}
+                      className="p-1.5 sm:p-2 bg-white/20 rounded-lg sm:rounded-xl hover:bg-white/30 transition-all disabled:opacity-50"
+                      title="Refresh tickets"
                     >
-                      <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 text-white ${fetchingTickets ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 text-white ${isRefreshing || fetchingTickets ? 'animate-spin' : ''}`} />
                     </button>
                   </div>
                 </div>
 
                 <div className="p-4 sm:p-5 md:p-6">
-                  {fetchingTickets ? (
+                  {fetchingTickets && !isRefreshing ? (
                     <div className="flex flex-col items-center justify-center py-8 sm:py-12">
                       <RingLoader color="#3b82f6" size={40} />
                       <p className="mt-3 sm:mt-4 text-gray-500 text-xs sm:text-sm">Loading your tickets...</p>
@@ -830,29 +900,66 @@ function CustomerSupport() {
         </div>
       </div>
 
-      {/* Ticket Detail Modal with Edit and Delete (UNCHANGED) */}
+      {/* Alert Notification Modal — shows every success/error message */}
+      {alertModal.isOpen && (
+        <div
+          className="fixed inset-0 bg-gray-900/40 z-[100] flex items-center justify-center p-4"
+          onClick={closeAlert}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-w-sm w-full border border-gray-200 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center space-x-2.5">
+              {alertModal.type === "success" ? (
+                <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+              )}
+              <h3 className="text-base font-bold text-gray-900">{alertModal.title}</h3>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">{alertModal.message}</p>
+            <div className="pt-2">
+              <button
+                onClick={closeAlert}
+                className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors"
+              >
+                Okay
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Ticket Detail Modal with Edit and Delete */}
       {showTicketModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleCloseModal}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4" onClick={handleCloseModal}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full max-h-[85vh] sm:max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 sticky top-0">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 sm:p-6 sticky top-0 z-10">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-white/20 rounded-xl">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="p-2 bg-white/20 rounded-xl flex-shrink-0">
                     <Eye className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-white">
+                  <h3 className="text-base sm:text-xl font-bold text-white truncate">
                     {isEditing ? "Edit Ticket" : "Ticket Details"}
                   </h3>
                 </div>
                 <button
                   onClick={handleCloseModal}
-                  className="p-2 bg-white/30 hover:bg-white/50 rounded-xl transition-all text-white"
+                  className="p-2 bg-white/30 hover:bg-white/50 rounded-xl transition-all text-white flex-shrink-0"
                   title="Close"
                 >
                   <X className="w-5 h-5" />
@@ -860,22 +967,12 @@ function CustomerSupport() {
               </div>
             </div>
 
-            {/* Update Success Message */}
-            {updateSuccessMessage && (
-              <div className="mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
-                <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                  <p className="text-green-700">{updateSuccessMessage}</p>
-                </div>
-              </div>
-            )}
-
             {isLoadingTicket || fetchingTicketDetail ? (
               <div className="flex justify-center py-12">
                 <Loader className="w-8 h-8 text-blue-500 animate-spin" />
               </div>
             ) : currentTicket ? (
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 {isEditing ? (
                   <>
                     <div>
@@ -894,7 +991,7 @@ function CustomerSupport() {
                         name="subject"
                         value={editFormData.subject}
                         onChange={handleEditInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none text-sm sm:text-base"
                         placeholder="Enter subject"
                       />
                     </div>
@@ -908,7 +1005,7 @@ function CustomerSupport() {
                         value={editFormData.description}
                         onChange={handleEditInputChange}
                         rows="4"
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none text-sm sm:text-base"
                         placeholder="Enter description"
                       />
                     </div>
@@ -922,7 +1019,7 @@ function CustomerSupport() {
                           name="priority"
                           value={editFormData.priority}
                           onChange={handleEditInputChange}
-                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none text-sm sm:text-base"
                         >
                           <option value="low">Low</option>
                           <option value="medium">Medium</option>
@@ -939,7 +1036,7 @@ function CustomerSupport() {
                           name="category"
                           value={editFormData.category}
                           onChange={handleEditInputChange}
-                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm sm:text-base"
                           disabled={fetchingCategories}
                         >
                           <option value="">{fetchingCategories ? "Loading categories..." : "Select category"}</option>
@@ -956,13 +1053,13 @@ function CustomerSupport() {
                       <button
                         onClick={handleUpdateTicket}
                         disabled={updatingTicket}
-                        className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50"
+                        className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 text-sm sm:text-base"
                       >
                         {updatingTicket ? "Updating..." : "Update Ticket"}
                       </button>
                       <button
                         onClick={() => setIsEditing(false)}
-                        className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-xl hover:bg-gray-300 transition-all"
+                        className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl hover:bg-gray-300 transition-all text-sm sm:text-base"
                       >
                         Cancel
                       </button>
@@ -979,19 +1076,19 @@ function CustomerSupport() {
 
                     <div>
                       <label className="text-sm font-semibold text-gray-500">Subject</label>
-                      <p className="text-gray-800 font-medium">{currentTicket.subject}</p>
+                      <p className="text-gray-800 font-medium break-words">{currentTicket.subject}</p>
                     </div>
 
                     <div>
                       <label className="text-sm font-semibold text-gray-500">Description</label>
-                      <p className="text-gray-700 whitespace-pre-wrap">{currentTicket.description}</p>
+                      <p className="text-gray-700 whitespace-pre-wrap break-words">{currentTicket.description}</p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Priority</label>
                         <div className="mt-2">
-                          <p className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${getPriorityColor(currentTicket.priority)}`}>
+                          <p className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium ${getPriorityColor(currentTicket.priority)}`}>
                             {currentTicket.priority || 'Medium'}
                           </p>
                         </div>
@@ -999,7 +1096,7 @@ function CustomerSupport() {
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Status</label>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <p className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(currentTicket.status)}`}>
+                          <p className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(currentTicket.status)}`}>
                             {currentTicket.status}
                           </p>
                           <button
@@ -1025,8 +1122,8 @@ function CustomerSupport() {
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Created At</label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <p className="text-gray-700">{formatDate(currentTicket.created_at)}</p>
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <p className="text-gray-700 text-sm">{formatDate(currentTicket.created_at)}</p>
                         </div>
                       </div>
                     )}
@@ -1035,8 +1132,8 @@ function CustomerSupport() {
                       <div>
                         <label className="text-sm font-semibold text-gray-500">Last Updated</label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <p className="text-gray-700">{formatDate(currentTicket.updated_at)}</p>
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <p className="text-gray-700 text-sm">{formatDate(currentTicket.updated_at)}</p>
                         </div>
                       </div>
                     )}
@@ -1055,7 +1152,7 @@ function CustomerSupport() {
                       <button
                         onClick={handleEditClick}
                         disabled={updatingTicket}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all disabled:opacity-50 text-sm sm:text-base"
                       >
                         <Edit2 className="w-4 h-4" />
                         <span>Edit</span>
@@ -1063,7 +1160,7 @@ function CustomerSupport() {
                       <button
                         onClick={handleDeleteClick}
                         disabled={deletingTicket}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all disabled:opacity-50 text-sm sm:text-base"
                       >
                         <Trash2 className="w-4 h-4" />
                         <span>Delete</span>
@@ -1073,50 +1170,50 @@ function CustomerSupport() {
                 )}
               </div>
             ) : (
-              <div className="p-12 text-center">
-                <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-                <p className="text-gray-500">Failed to load ticket details</p>
-                <p className="text-gray-400 text-sm mt-2">The ticket may not exist or you don't have permission to view it.</p>
+              <div className="p-8 sm:p-12 text-center">
+                <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 text-red-400 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm sm:text-base">Failed to load ticket details</p>
+                <p className="text-gray-400 text-xs sm:text-sm mt-2">The ticket may not exist or you don't have permission to view it.</p>
               </div>
             )}
           </motion.div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal (UNCHANGED) */}
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={handleCancelDelete}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-3 sm:p-4" onClick={handleCancelDelete}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-3xl max-w-md w-full"
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-red-500 to-red-600 p-6 rounded-t-3xl">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 p-5 sm:p-6 rounded-t-2xl sm:rounded-t-3xl">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-white/20 rounded-xl">
-                  <AlertCircle className="w-6 h-6 text-white" />
+                  <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-white">Delete Ticket</h3>
+                <h3 className="text-base sm:text-xl font-bold text-white">Delete Ticket</h3>
               </div>
             </div>
 
-            <div className="p-6">
-              <p className="text-gray-700 mb-2">Are you sure you want to delete this ticket?</p>
-              <p className="text-gray-500 text-sm mb-6">This action cannot be undone.</p>
+            <div className="p-5 sm:p-6">
+              <p className="text-gray-700 mb-2 text-sm sm:text-base">Are you sure you want to delete this ticket?</p>
+              <p className="text-gray-500 text-xs sm:text-sm mb-6">This action cannot be undone.</p>
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleConfirmDelete}
                   disabled={deletingTicket}
-                  className="flex-1 bg-red-500 text-white py-2 rounded-xl hover:bg-red-600 transition-all disabled:opacity-50"
+                  className="flex-1 bg-red-500 text-white py-2.5 rounded-xl hover:bg-red-600 transition-all disabled:opacity-50 text-sm sm:text-base"
                 >
                   {deletingTicket ? "Deleting..." : "Yes, Delete"}
                 </button>
                 <button
                   onClick={handleCancelDelete}
-                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-xl hover:bg-gray-300 transition-all"
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl hover:bg-gray-300 transition-all text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -1126,36 +1223,36 @@ function CustomerSupport() {
         </div>
       )}
 
-      {/* Status Change Modal (UNCHANGED) */}
+      {/* Status Change Modal */}
       {showStatusModal && selectedTicketForStatus && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowStatusModal(false)}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-3 sm:p-4" onClick={() => setShowStatusModal(false)}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-3xl max-w-md w-full"
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-t-3xl">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-5 sm:p-6 rounded-t-2xl sm:rounded-t-3xl">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-white/20 rounded-xl">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="p-2 bg-white/20 rounded-xl flex-shrink-0">
                     <Tag className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-white">Update Status</h3>
+                  <h3 className="text-base sm:text-xl font-bold text-white">Update Status</h3>
                 </div>
                 <button
                   onClick={() => setShowStatusModal(false)}
-                  className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition-all"
+                  className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition-all flex-shrink-0"
                 >
                   <X className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-5 sm:p-6">
               <div className="mb-4">
-                <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                <label className="text-sm font-semibold text-gray-700 mb-2 block break-words">
                   Ticket: <span className="text-blue-600">{selectedTicketForStatus.subject}</span>
                 </label>
               </div>
@@ -1167,7 +1264,7 @@ function CustomerSupport() {
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 text-sm sm:text-base"
                 >
                   {statusList.map((status) => (
                     <option key={status.id} value={status.name}>
@@ -1189,12 +1286,12 @@ function CustomerSupport() {
                 <button
                   onClick={handleStatusUpdate}
                   disabled={updatingStatus}
-                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {updatingStatus ? (
                     <>
                       <RingLoader color="#ffffff" size={18} />
-                      <span className="ml-2">Updating...</span>
+                      <span>Updating...</span>
                     </>
                   ) : (
                     "Update Status"
@@ -1202,7 +1299,7 @@ function CustomerSupport() {
                 </button>
                 <button
                   onClick={() => setShowStatusModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 transition-all"
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 transition-all text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -1212,23 +1309,23 @@ function CustomerSupport() {
         </div>
       )}
 
-      {/* Status Logs Modal (UNCHANGED) */}
+      {/* Status Logs Modal */}
       {showStatusLogs && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowStatusLogs(false)}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4" onClick={() => setShowStatusLogs(false)}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-3xl max-w-lg w-full max-h-[70vh] overflow-hidden"
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[70vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-white/20 rounded-xl">
                     <Clock className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-white">Status History</h3>
+                  <h3 className="text-base sm:text-xl font-bold text-white">Status History</h3>
                 </div>
                 <button
                   onClick={() => setShowStatusLogs(false)}
@@ -1239,7 +1336,7 @@ function CustomerSupport() {
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[calc(70vh-100px)]">
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(70vh-100px)]">
               {fetchingStatusLogs ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader className="w-8 h-8 text-blue-500 animate-spin" />
@@ -1250,7 +1347,7 @@ function CustomerSupport() {
                   {statusLogs.map((log, index) => (
                     <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all gap-2">
                       <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
                         <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${getStatusColor(log.status)}`}>
                           {log.status}
                         </span>
@@ -1265,7 +1362,7 @@ function CustomerSupport() {
               ) : (
                 <div className="text-center py-8">
                   <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No status history available</p>
+                  <p className="text-gray-500 text-sm sm:text-base">No status history available</p>
                 </div>
               )}
             </div>

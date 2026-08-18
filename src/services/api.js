@@ -20,6 +20,14 @@ const BYPASS_COORDINATION_ENDPOINTS = [
   "send-otp-login",
   "payout/remit-payout",
   "/profile",
+  "/update-ticket-status",
+  "/update-ticket",
+  "/store-ticket",
+  "/delete-ticket",
+  "/fetch-ticket",
+  "/fetch-beneficiary-ticket",
+  "/ticket-categories",
+  "/status-list",
 ];
 
 const getRequestSignature = (config) => {
@@ -140,12 +148,12 @@ api.interceptors.request.use(
       switch (reason) {
         case "global-in-progress":
           console.log(`🔄 Request cancelled (duplicate): ${config.url}`);
-          return;
-
+          return Promise.reject(new axios.Cancel("Duplicate request in progress"));
+      
         case "throttled":
           console.log(`🚦 Request throttled: ${config.url}`);
           return Promise.reject(new axios.Cancel("Request throttled"));
-
+      
         case "cached":
           console.log(`💾 Serving cached response: ${config.url}`);
           return Promise.reject({
@@ -159,9 +167,9 @@ api.interceptors.request.use(
               request: {},
             },
           });
-
+      
         default:
-          return;
+          return Promise.reject(new axios.Cancel("Duplicate request"));
       }
     }
 
