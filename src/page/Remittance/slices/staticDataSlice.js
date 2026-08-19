@@ -76,17 +76,7 @@ export const fetchOccupations = createAsyncThunk(
       }));
     } catch (error) {
       console.error("Error fetching occupations:", error);
-
-      // Return fallback occupations if API fails
-      return [
-        { value: "business", label: "Business" },
-        { value: "employee", label: "Employee" },
-        { value: "student", label: "Student" },
-        { value: "retired", label: "Retired" },
-        { value: "unemployed", label: "Unemployed" },
-        { value: "self_employed", label: "Self Employed" },
-        { value: "professional", label: "Professional" },
-      ];
+      return rejectWithValue(error.response?.data || error.message);
     }
   },
 );
@@ -194,16 +184,7 @@ const staticDataSlice = createSlice({
       .addCase(fetchPurposes.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to fetch purposes";
-
-        // Set fallback purposes
-        state.purposes = [
-          { value: "family_support", label: "Family Support" },
-          { value: "education", label: "Education Fees" },
-          { value: "medical", label: "Medical Expenses" },
-          { value: "business", label: "Business Investment" },
-          { value: "savings", label: "Savings" },
-          { value: "other", label: "Other" },
-        ];
+        state.purposes = [];
       })
 
       // Fetch income sources
@@ -218,28 +199,7 @@ const staticDataSlice = createSlice({
       .addCase(fetchIncomeSources.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-
-        // Set fallback income sources
-        state.incomeSources = [
-          { value: "salary", label: "Salary", originalName: "Salary" },
-          {
-            value: "business",
-            label: "Business Income",
-            originalName: "Business Income",
-          },
-          {
-            value: "investment",
-            label: "Investment Income",
-            originalName: "Investment Income",
-          },
-          { value: "gift", label: "Gift", originalName: "Gift" },
-          {
-            value: "inheritance",
-            label: "Inheritance",
-            originalName: "Inheritance",
-          },
-          { value: "other", label: "Other", originalName: "Other" },
-        ];
+        state.incomeSources = [];
       })
 
       // Fetch occupations

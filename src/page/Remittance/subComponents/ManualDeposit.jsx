@@ -280,14 +280,7 @@ const ManualDeposit = ({
         }
       } catch (error) {
         console.error("Error fetching occupations:", error);
-        // Set default occupations
-        setOccupations([
-          { value: "Business", label: "Business" },
-          { value: "Employee", label: "Employee" },
-          { value: "Student", label: "Student" },
-          { value: "Retired", label: "Retired" },
-          { value: "Unemployed", label: "Unemployed" },
-        ]);
+        setOccupations([]);
       } finally {
         setIsLoadingOccupations(false);
       }
@@ -702,6 +695,11 @@ const ManualDeposit = ({
               styles={selectStyles}
               placeholder="Select purpose..."
             />
+            {purposeOptions.length === 0 && (
+              <p className="mt-1 text-[10px] sm:text-xs text-red-600">
+                Failed to fetch purpose options. Please refresh or contact support.
+              </p>
+            )}
           </div>
 
           {/* Source of Income */}
@@ -717,6 +715,12 @@ const ManualDeposit = ({
               styles={selectStyles}
               placeholder="Select income source..."
             />
+            {incomeSourceOptions.length === 0 && (
+              <p className="mt-1 text-[10px] sm:text-xs text-red-600">
+                Failed to fetch income source options. Please refresh or contact support.
+              </p>
+            )}
+
           </div>
 
           {/* Occupation Field - Mobile Responsive */}
@@ -775,6 +779,11 @@ const ManualDeposit = ({
                   menuPortalTarget={document.body}
                   menuPosition="fixed"
                 />
+                {!isLoadingOccupations && occupations.length === 0 && (
+                  <p className="mt-1 text-[10px] sm:text-xs text-red-600">
+                    Failed to fetch occupation options. You can type a custom occupation.
+                  </p>
+                )}
               </div>
               <div className="flex-1 w-full">
                 <input
