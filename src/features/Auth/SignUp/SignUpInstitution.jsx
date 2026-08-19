@@ -4010,9 +4010,9 @@ const Institution = () => {
                 }
               } catch (error) {
                 console.log("❌ ZIP lookup failed:", error);
-                toast.warning(`Invalid ZIP code or service unavailable`, {
-                  autoClose: 3000,
-                });
+                // toast.warning(`Invalid ZIP code or service unavailable`, {
+                //   autoClose: 3000,
+                // });
               } finally {
                 setIsZipLoading(false);
               }
@@ -4051,7 +4051,7 @@ const Institution = () => {
                   toast.warning(`Could not auto-fill location for ZIP code: ${zipCode}`, { autoClose: 3000 });
                 }
               } catch (error) {
-                toast.warning(`Invalid ZIP code or service unavailable`, { autoClose: 3000 });
+                // toast.warning(`Invalid ZIP code or service unavailable`, { autoClose: 3000 });
               } finally {
                 setIsZipLoading(false);
               }
@@ -4110,9 +4110,9 @@ const Institution = () => {
                 }
               } catch (error) {
                 console.log("❌ ZIP lookup failed:", error);
-                toast.warning(`Invalid ZIP code or service unavailable`, {
-                  autoClose: 3000,
-                });
+                // toast.warning(`Invalid ZIP code or service unavailable`, {
+                //   autoClose: 3000,
+                // });
               } finally {
                 setIsZipLoading(false);
               }
@@ -4173,9 +4173,9 @@ const Institution = () => {
                 }
               } catch (error) {
                 console.log("❌ ZIP lookup failed:", error);
-                toast.warning(`Invalid ZIP code or service unavailable`, {
-                  autoClose: 3000,
-                });
+                // toast.warning(`Invalid ZIP code or service unavailable`, {
+                //   autoClose: 3000,
+                // });
               } finally {
                 setIsZipLoading(false);
               }
