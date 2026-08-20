@@ -5,6 +5,7 @@ import {
   FaExchangeAlt,
   FaUserFriends,
   FaHeadset,
+  FaHandHoldingUsd,
 } from "react-icons/fa";
 import { IoIosArrowForward } from "react-icons/io";
 import { IoClose } from "react-icons/io5";
@@ -41,6 +42,8 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
         return "transactions";
       case "benefsenders":
         return "senders";
+      case "beneficiary-requestremit":
+        return "requestremit";
       case "benefsupport":
       case "beneficiarysupport":
         return "support";
@@ -77,6 +80,14 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
       gradient: "from-purple-500 to-pink-500",
     },
     {
+      id: "requestremit",
+      label: "Request Remit",
+      icon: FaHandHoldingUsd,
+      path: `/beneficiary-requestremit/${beneficiaryId}`,
+      description: "Request remittance payout",
+      gradient: "from-amber-500 to-yellow-500",
+    },
+    {
       id: "support",
       label: "Support",
       icon: FaHeadset,
@@ -100,10 +111,9 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
             className={`
               group relative flex items-center w-full text-left
               rounded-2xl p-3.5 lg:p-4 transition-all duration-200
-              ${
-                isActive
-                  ? `bg-gradient-to-r ${item.gradient} shadow-md`
-                  : "hover:bg-gray-50"
+              ${isActive
+                ? `bg-gradient-to-r ${item.gradient} shadow-md`
+                : "hover:bg-gray-50"
               }
             `}
           >
@@ -111,10 +121,9 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
               <div
                 className={`
                   w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
-                  ${
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : `bg-gradient-to-r ${item.gradient} text-white`
+                  ${isActive
+                    ? "bg-white/20 text-white"
+                    : `bg-gradient-to-r ${item.gradient} text-white`
                   }
                 `}
               >
@@ -123,25 +132,22 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
 
               <div className="flex flex-col ml-3 flex-1 min-w-0">
                 <span
-                  className={`font-semibold text-sm lg:text-base leading-tight truncate ${
-                    isActive ? "text-white" : "text-gray-900"
-                  }`}
+                  className={`font-semibold text-sm lg:text-base leading-tight truncate ${isActive ? "text-white" : "text-gray-900"
+                    }`}
                 >
                   {item.label}
                 </span>
                 <span
-                  className={`text-xs mt-0.5 leading-tight truncate ${
-                    isActive ? "text-white/85" : "text-gray-500"
-                  }`}
+                  className={`text-xs mt-0.5 leading-tight truncate ${isActive ? "text-white/85" : "text-gray-500"
+                    }`}
                 >
                   {item.description}
                 </span>
               </div>
 
               <IoIosArrowForward
-                className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform duration-200 group-hover:translate-x-0.5 ${
-                  isActive ? "text-white" : "text-gray-400"
-                }`}
+                className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform duration-200 group-hover:translate-x-0.5 ${isActive ? "text-white" : "text-gray-400"
+                  }`}
               />
             </div>
           </button>
@@ -159,11 +165,10 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
 
       {/* Mobile Slide-Over Backdrop & Drawer */}
       <div
-        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-300 ${
-          isMobileMenuOpen
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-300 ${isMobileMenuOpen
             ? "opacity-100 pointer-events-auto"
             : "opacity-0 pointer-events-none"
-        }`}
+          }`}
       >
         {/* Backdrop */}
         <div
@@ -173,9 +178,8 @@ function NavigateSectionBenef({ isMobileMenuOpen, setIsMobileMenuOpen }) {
 
         {/* Off-canvas panel */}
         <div
-          className={`absolute top-0 bottom-0 left-0 w-4/5 max-w-xs bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
-            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={`absolute top-0 bottom-0 left-0 w-4/5 max-w-xs bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
         >
           {/* Drawer Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-blue-600 text-white">

@@ -241,14 +241,7 @@ const Remittance = () => {
           label: purpose.label,
           description: purpose.description,
         }))
-        : [
-          { value: "family_support", label: "Family Support" },
-          { value: "education", label: "Education Fees" },
-          { value: "medical", label: "Medical Expenses" },
-          { value: "business", label: "Business Investment" },
-          { value: "savings", label: "Savings" },
-          { value: "other", label: "Other" },
-        ],
+        : [],
     [purposes],
   );
 
@@ -259,14 +252,7 @@ const Remittance = () => {
           value: source.value,
           label: source.label,
         }))
-        : [
-          { value: "salary", label: "Salary" },
-          { value: "business", label: "Business Income" },
-          { value: "investment", label: "Investment Income" },
-          { value: "gift", label: "Gift" },
-          { value: "inheritance", label: "Inheritance" },
-          { value: "other", label: "Other" },
-        ],
+        : [],
     [incomeSources],
   );
 

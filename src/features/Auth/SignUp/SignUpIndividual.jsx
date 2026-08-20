@@ -2938,7 +2938,7 @@ function SignUpIndividualContent() {
                       </p>
                     ) : null}
 
-                    {zipLookup.error && (
+                    {/* {zipLookup.error && (
                       <p className="text-yellow-600 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2953,7 +2953,7 @@ function SignUpIndividualContent() {
                         </svg>
                         {zipLookup.error.message}
                       </p>
-                    )}
+                    )} */}
 
                     {selectedCountry && (
                       <p className="text-xs text-gray-500 mt-1">
