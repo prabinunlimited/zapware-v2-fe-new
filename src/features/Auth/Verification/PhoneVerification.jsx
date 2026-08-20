@@ -25,7 +25,7 @@ import {
 } from "../../Auth/slices/authSlice";
 
 // Import THUNK ACTIONS from authThunk
-import { sendOtp, validateOtp } from "../../../features/Auth/authThunk";
+import { resendRegistrationOtp, validateOtp } from "../../../features/Auth/authThunk";
 
 import {
   FiCheckCircle,
@@ -55,7 +55,7 @@ function PhoneVerification() {
   const [isPlaidLoading, setIsPlaidLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);  // ← ADD THIS
   const [redirectMessage, setRedirectMessage] = useState("")
-  
+  const [isResending, setIsResending] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,6 +68,7 @@ function PhoneVerification() {
     isMultiCurrency = false,   // ← ADD THIS
     selectedAccounts = [],     // ← ADD THIS
     accountType = null,
+    customer_type = "",
   } = location.state || {};
   const otpRefs = useRef(new Array(6).fill(null));
 
@@ -371,32 +372,32 @@ function PhoneVerification() {
         mobile_number: number,
         otp: otp.join(""),
       };
-  
+
       try {
         const result = await dispatch(validateOtp(loginData));
-  
+
         if (result.payload) {
           const data = result.payload;
-  
+
           if (data.status === "success") {
             toast.success(data.message || "OTP verification successful!");
-  
+
             // Store auth data
             if (data.token) localStorage.setItem("authtoken", data.token);
             if (data.customer_id) localStorage.setItem("authcustomer_id", data.customer_id);
-  
+
             // ✅ FIRST CHECK: If plaid_kyc_required is "N", redirect to login
             if (data.plaid_kyc_required === "N") {
               console.log("🔄 plaid_kyc_required is N - Redirecting to login");
-              
+
               // Show loading state
               setIsRedirecting(true);
               setRedirectMessage("OTP verified! Redirecting to login...");
-              
+
               toast.info("OTP verified! Redirecting to login...", {
                 autoClose: 2000,
               });
-              
+
               // Redirect to login after 2 seconds
               setTimeout(() => {
                 navigate("/login", {
@@ -407,24 +408,24 @@ function PhoneVerification() {
               }, 2000);
               return; // ⚠️ IMPORTANT: This return prevents further execution
             }
-  
+
             // ✅ SECOND CHECK: For Remittance Only - go to login
             if (isRemittanceOnly) {
               console.log("🔄 isRemittanceOnly is true - Redirecting to login");
               setIsRedirecting(true);
               setRedirectMessage("Redirecting to login...");
-              
+
               toast.info("Redirecting to login...");
               setTimeout(() => navigate("/login"), 2000);
               return; // ⚠️ IMPORTANT: This return prevents further execution
             }
-  
+
             // ✅ THIRD CHECK: For Multi-Currency with Plaid URL - go to KYC
             if (data.plaid_url && data.plaid_url !== "") {
               console.log("🔄 Has Plaid URL - Redirecting to KYC verification");
               setIsRedirecting(true);
               setRedirectMessage("Redirecting to KYC verification...");
-              
+
               toast.info("Redirecting to KYC verification...");
               setTimeout(() => {
                 navigate("/kyc-verification", {
@@ -438,14 +439,14 @@ function PhoneVerification() {
               }, 1500);
               return; // ⚠️ IMPORTANT: This return prevents further execution
             }
-  
+
             // ✅ FINAL FALLBACK: Default - go to home
             console.log("🔄 No specific condition met - Redirecting to home");
             setIsRedirecting(true);
             setRedirectMessage("Redirecting to login...");
-            
+
             setTimeout(() => navigate("/"), 1500);
-            
+
           } else {
             toast.error(data.message || "OTP verification failed");
           }
@@ -466,6 +467,14 @@ function PhoneVerification() {
     if (storedMobileNumber) {
       localStorage.removeItem("fullMobileNumber");
     }
+
+    const resendMinutes =
+      location.state?.resendMinutes ||
+      Number(localStorage.getItem("otp_resend_minutes")) ||
+      1;
+
+    // Convert minutes to seconds and set the countdown timer
+    dispatch(setResendTimer(resendMinutes * 60));
 
     // Auto-focus first OTP input when component mounts
     if (otpRefs.current[0]) {
@@ -519,17 +528,35 @@ function PhoneVerification() {
   const handleGenerateOTP = async () => {
     if (resendAttempts <= 0) return;
 
-    const storedMobileNumber = localStorage.getItem("fullMobileNumber");
-    if (!storedMobileNumber) {
+    if (!number) {
       toast.error("No mobile number found. Please try again.");
       return;
     }
 
     try {
-      await dispatch(sendOtp(storedMobileNumber)).unwrap();
-      toast.success("Verification code has been sent to your phone!");
+      setIsResending(true);
+      const res = await dispatch(
+        resendRegistrationOtp({
+          customer_type: customer_type || (location.state?.institution_name ? "institution" : "individual"),
+          country_code: country_code,
+          mobile_number: number,
+        })
+      ).unwrap();
+
+      // 1. Read resend_minutes from API response, fallback to localStorage, default to 1
+      const minutes = res?.data?.resend_minutes || Number(localStorage.getItem("otp_resend_minutes")) || 1;
+
+      // 2. Save back to localStorage
+      localStorage.setItem("otp_resend_minutes", minutes);
+
+      // 3. Reset countdown timer (minutes * 60 seconds)
+      dispatch(setResendTimer(minutes * 60));
+
+      toast.success("Verification code has been resent to your phone!");
     } catch (error) {
-      toast.error("Failed to send OTP. Please try again.");
+      toast.error(error || "Failed to resend OTP. Please try again.");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -574,20 +601,20 @@ function PhoneVerification() {
       <ToastContainer position="top-right" autoClose={1000} />
 
       {isRedirecting && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="text-gray-700 font-medium text-center">
-              {redirectMessage || "Please wait..."}
-            </p>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-blue-600 h-1.5 rounded-full animate-pulse w-full"></div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <p className="text-gray-700 font-medium text-center">
+                {redirectMessage || "Please wait..."}
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-blue-600 h-1.5 rounded-full animate-pulse w-full"></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
       <div className="w-full flex flex-col items-center justify-between max-w-md sm:max-w-xl lg:max-w-2xl bg-white rounded-xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 border border-gray-100">
         {/* Header */}
@@ -776,14 +803,28 @@ function PhoneVerification() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleResendOTP}
-              disabled={resendAttempts <= 0 || resendTimer > 0 || isSubmitting}
-              className={`w-full py-3 sm:py-4 rounded-lg ${resendTimer > 0 || resendAttempts <= 0
-                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
+              disabled={resendAttempts <= 0 || resendTimer > 0 || isSubmitting || isResending}
+              className={`w-full py-3 sm:py-4 rounded-lg ${resendTimer > 0 || resendAttempts <= 0 || isResending
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-gray-600 text-white hover:bg-gray-700 transition duration-300"
                 } flex items-center justify-center font-semibold text-base sm:text-xl`}
             >
-              <FiRefreshCw className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
-              {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend Code"}
+              {isResending ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white mr-2 sm:mr-3"></div>
+                  <span>Resending...</span>
+                </>
+              ) : resendTimer > 0 ? (
+                <>
+                  <FiRefreshCw className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
+                  <span>Resend in {resendTimer}s</span>
+                </>
+              ) : (
+                <>
+                  <FiRefreshCw className="mr-2 sm:mr-3 text-lg sm:text-2xl" />
+                  <span>Resend Code</span>
+                </>
+              )}
             </motion.button>
           </div>
 

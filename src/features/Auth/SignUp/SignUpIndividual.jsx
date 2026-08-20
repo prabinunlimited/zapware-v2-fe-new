@@ -948,12 +948,12 @@ function SignUpIndividualContent() {
         return; // Stop navigation - prevents moving to next section
       }
     }
-    if (currentSection === 1) {
-      if (!isPhoneVerified) {
-        toast.error("Please verify your phone number before proceeding");
-        return;
-      }
-    }
+    // if (currentSection === 1) {
+    //   if (!isPhoneVerified) {
+    //     toast.error("Please verify your phone number before proceeding");
+    //     return;
+    //   }
+    // }
     // Mark all fields in current section as touched
     const sectionFields = getSectionFields(currentSection, formik.values, shouldShowPurposeOfAccount);
     sectionFields.forEach((field) => {
@@ -1127,12 +1127,17 @@ function SignUpIndividualContent() {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
 
+          const resendMinutes = responseData.data?.resend_minutes ;
+          localStorage.setItem("otp_resend_minutes", resendMinutes);
+
           // Navigate to phone verification
           navigate("/phoneverification", {
             state: {
               mobileNumber: `${cleanedData.mobilenumber_countrycode} ${cleanedData.mobile_number}`,
               kyc_verify: kyc_verify,
               customerData: responseData.data || null,
+              customer_type: "individual",
+              resendMinutes: resendMinutes,
               hasSSN: !!cleanedData.ssn,
             },
           });
@@ -2933,7 +2938,7 @@ function SignUpIndividualContent() {
                       </p>
                     ) : null}
 
-                    {zipLookup.error && (
+                    {/* {zipLookup.error && (
                       <p className="text-yellow-600 text-xs mt-2 flex items-center">
                         <svg
                           className="w-3.5 h-3.5 mr-1"
@@ -2948,7 +2953,7 @@ function SignUpIndividualContent() {
                         </svg>
                         {zipLookup.error.message}
                       </p>
-                    )}
+                    )} */}
 
                     {selectedCountry && (
                       <p className="text-xs text-gray-500 mt-1">
@@ -3146,10 +3151,10 @@ function SignUpIndividualContent() {
                             formik.setFieldValue("flag_url", selectedOption?.flag_url || "");
                             setSelectedPhoneCode(selectedOption || null);
                             // Reset phone verification when country code changes
-                            if (isPhoneVerified) {
-                              dispatch(resetPhoneVerification());
-                              formik.setFieldValue("phone_verified", false);
-                            }
+                            // if (isPhoneVerified) {
+                            //   dispatch(resetPhoneVerification());
+                            //   formik.setFieldValue("phone_verified", false);
+                            // }
                           }}
                           onBlur={formik.handleBlur}
                           className="basic-single"
@@ -3189,10 +3194,10 @@ function SignUpIndividualContent() {
                                 const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
                                 formik.setFieldValue("mobile_number", rawValue);
                                 // Reset phone verification when number changes
-                                if (isPhoneVerified) {
-                                  dispatch(resetPhoneVerification());
-                                  formik.setFieldValue("phone_verified", false);
-                                }
+                                // if (isPhoneVerified) {
+                                //   dispatch(resetPhoneVerification());
+                                //   formik.setFieldValue("phone_verified", false);
+                                // }
                               }}
                               onKeyPress={(e) => {
                                 if (!/[0-9]/.test(e.key)) {
@@ -3214,7 +3219,7 @@ function SignUpIndividualContent() {
                           </div>
 
                           {/* Verify Button - Only show when not verified */}
-                          {!isPhoneVerified && (
+                          {/* {!isPhoneVerified && (
                             <button
                               type="button"
                               onClick={handleSendPhoneVerificationCode}
@@ -3230,15 +3235,15 @@ function SignUpIndividualContent() {
                                 'Verify'
                               )}
                             </button>
-                          )}
+                          )} */}
 
                           {/* Verified Badge - Show when verified */}
-                          {isPhoneVerified && (
+                          {/* {isPhoneVerified && (
                             <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
                               <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                               <span className="font-medium">Verified</span>
                             </div>
-                          )}
+                          )} */}
                         </div>
 
                         {/* Phone number error */}
@@ -3254,7 +3259,7 @@ function SignUpIndividualContent() {
                     </div>
 
                     {/* Verification Code Input (shown after clicking Verify) */}
-                    {showPhoneVerificationInput && !isPhoneVerified && (
+                    {/* {showPhoneVerificationInput && !isPhoneVerified && (
                       <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-xl max-w-md">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Enter Verification Code
@@ -3285,10 +3290,10 @@ function SignUpIndividualContent() {
                               'Submit'
                             )}
                           </button>
-                        </div>
+                        </div> */}
 
                         {/* Resend link */}
-                        <div className="mt-3 text-center">
+                        {/* <div className="mt-3 text-center">
                           <button
                             type="button"
                             onClick={handleResendPhoneCode}
@@ -3297,28 +3302,28 @@ function SignUpIndividualContent() {
                           >
                             {isPhoneSendingCode ? 'Sending...' : "Didn't receive? Resend"}
                           </button>
-                        </div>
+                        </div> */}
 
                         {/* Success message */}
-                        {phoneVerification?.success && !isPhoneVerified && (
+                        {/* {phoneVerification?.success && !isPhoneVerified && (
                           <p className="text-green-600 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
                             {phoneVerification.success}
                           </p>
-                        )}
+                        )} */}
 
                         {/* Error message */}
-                        {phoneVerification?.error && (
+                        {/* {phoneVerification?.error && (
                           <p className="text-red-500 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faExclamationCircle} className="text-red-500" />
                             {typeof phoneVerification.error === 'string'
                               ? phoneVerification.error
                               : phoneVerification.error?.message || 'Verification failed'}
                           </p>
-                        )}
+                        )} */}
                       </div>
-                    )}
-                  </div>
+                    {/* )} */}
+                  {/* </div> */}
                 </div>
 
                 <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">

@@ -3,7 +3,6 @@ import React, {
   useState,
   useCallback,
   useMemo,
-  useRef,
 } from "react";
 import PropTypes from "prop-types";
 import axios from "axios";
@@ -14,11 +13,9 @@ import { FaFilePdf, FaFileExcel, FaFilter, FaExchangeAlt } from "react-icons/fa"
 import logoPath from "../../../../../assets/images/Logo/unlimited remit logo.png";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
-import { motion } from "framer-motion";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_URL,
 });
@@ -36,7 +33,6 @@ const BenefTransactions = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [authtoken] = useState(localStorage.getItem("authtoken"));
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [filterDirection, setFilterDirection] = useState("");
   const [filterStartDate, setFilterStartDate] = useState("");
@@ -45,32 +41,47 @@ const BenefTransactions = ({
   const [beneficiaryName, setBeneficiaryName] = useState("");
 
   const customerId = propCustomerId || localStorage.getItem("customerid");
-
   const navigate = useNavigate();
 
   const handleViewMoreDetails = useCallback(() => {
     navigate(`/beneficiary-all-transactions/${beneficiaryId}`);
   }, [navigate, beneficiaryId]);
 
-  const formatDate = useCallback((dateString) => {
+  // Formats only the Date (e.g., Aug 11, 2026)
+  const formatDateOnly = useCallback((dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
-    return date.toLocaleString();
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   }, []);
 
-  // Responsive design effect
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(document.body);
-
-    return () => resizeObserver.disconnect();
+  // Formats only the Time (e.g., 08:01 AM)
+  const formatTimeOnly = useCallback((dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }, []);
 
-  // Main transaction data fetch
+  // Combined format for table/export views
+  const formatFullDate = useCallback((dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleString([], {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, []);
+
+  // Fetch transaction details
   const fetchTransactionDetails = useCallback(async () => {
     if (!beneficiaryId) return;
 
@@ -104,8 +115,8 @@ const BenefTransactions = ({
       console.error("Error fetching transactions:", err);
       setError(
         err.response?.data?.message ||
-        err.message ||
-        "Failed to fetch transactions"
+          err.message ||
+          "Failed to fetch transactions"
       );
     } finally {
       setLoading(false);
@@ -169,7 +180,7 @@ const BenefTransactions = ({
     }
   }, [transactionData, onTransactionComplete]);
 
-  // Export functions
+  // Export handlers
   const exportTransactionPDF = useCallback(
     async (transaction) => {
       try {
@@ -190,12 +201,13 @@ const BenefTransactions = ({
 
         const details = [
           ["Transaction ID", transaction.transaction_id || "N/A"],
-          ["Date", formatDate(transaction.transaction_datetime)],
+          ["Date", formatFullDate(transaction.transaction_datetime)],
           ["Direction", transaction.direction || "N/A"],
           ["Status", transaction.status || "Pending"],
           [
             "Amount",
-            `${transaction.instructed_amount || 0} ${transaction.currency_code || ""
+            `${transaction.instructed_amount || 0} ${
+              transaction.currency_code || ""
             }`,
           ],
           ["Fee", transaction.fee_amount || "0"],
@@ -222,7 +234,7 @@ const BenefTransactions = ({
         if (onLoadingEnd) onLoadingEnd();
       }
     },
-    [formatDate, onLoadingStart, onLoadingEnd]
+    [formatFullDate, onLoadingStart, onLoadingEnd]
   );
 
   const exportTransactionReceiptPDFNew = useCallback(
@@ -230,7 +242,9 @@ const BenefTransactions = ({
       try {
         if (onLoadingStart) onLoadingStart();
 
-        const transaction = transactionData.find((t) => t.id === transactionId);
+        const transaction = transactionData.find(
+          (t) => (t.id || t.transaction_id) === transactionId
+        );
         if (!transaction) {
           toast.error("Transaction not found");
           return;
@@ -255,7 +269,7 @@ const BenefTransactions = ({
         const data = [
           {
             "Transaction ID": transaction.transaction_id || "N/A",
-            Date: formatDate(transaction.transaction_datetime),
+            Date: formatFullDate(transaction.transaction_datetime),
             Direction: transaction.direction || "N/A",
             Status: transaction.status || "Pending",
             Amount: transaction.instructed_amount || 0,
@@ -283,199 +297,230 @@ const BenefTransactions = ({
         if (onLoadingEnd) onLoadingEnd();
       }
     },
-    [formatDate, onLoadingStart, onLoadingEnd]
+    [formatFullDate, onLoadingStart, onLoadingEnd]
   );
 
-  // Status badge helper
+  // Status Badge Helper
   const getStatusBadge = (status) => {
-    const normalized = status || "pending";
+    const normalized = status?.toLowerCase() || "pending";
     const config = {
-      completed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-      failed: "bg-red-50 text-red-700 border border-red-200",
-      cancelled: "bg-gray-50 text-gray-600 border border-gray-200",
-      pending: "bg-amber-50 text-amber-700 border border-amber-200",
+      completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      failed: "bg-red-50 text-red-700 border-red-200",
+      cancelled: "bg-gray-50 text-gray-600 border-gray-200",
+      pending: "bg-amber-50 text-amber-700 border-amber-200",
+      processing: "bg-blue-50 text-blue-700 border-blue-200",
     };
-    const label =
-      normalized === "completed" ||
-        normalized === "failed" ||
-        normalized === "cancelled"
-        ? normalized
-        : "pending";
+    const colorClass = config[normalized] || config.pending;
 
     return (
       <span
-        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${config[label]
-          }`}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize border ${colorClass}`}
       >
-        {label}
+        {status || "Pending"}
       </span>
     );
   };
 
-  // Mobile transaction card
+  // Mobile Clean Card View
   const renderMobileTransactionCard = useCallback(
-    (transaction) => (
-      <motion.div
-        key={transaction.id}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl border border-gray-200 p-4"
-      >
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center border ${transaction.direction === "Inbound"
-                  ? "bg-emerald-50 border-emerald-200"
-                  : "bg-gray-50 border-gray-200"
+    (transaction) => {
+      const isOutbound = transaction.direction === "Outbound";
+      const isInbound = transaction.direction === "Inbound";
+
+      return (
+        <div
+          key={transaction.id || transaction.transaction_id}
+          className="w-full bg-white rounded-2xl border border-gray-200 p-4 shadow-2xs space-y-3"
+        >
+          {/* Top Row: Icon + Date (above) + Time (below) + Status Badge */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                  isInbound
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                    : "bg-blue-50 text-blue-600 border-blue-200"
                 }`}
-            >
-              <FaExchangeAlt
-                className={`w-3.5 h-3.5 ${transaction.direction === "Inbound"
-                    ? "text-emerald-600"
-                    : "text-gray-600"
-                  }`}
-              />
+              >
+                <FaExchangeAlt className="w-3.5 h-3.5" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 leading-tight">
+                  {formatDateOnly(transaction.transaction_datetime)}
+                </p>
+                <p className="text-[11px] text-gray-400 font-medium leading-tight mt-0.5">
+                  {formatTimeOnly(transaction.transaction_datetime)}
+                </p>
+              </div>
             </div>
+
+            <div className="flex-shrink-0">
+              {getStatusBadge(transaction.status)}
+            </div>
+          </div>
+
+          {/* Amount & Fee Box */}
+          <div className="bg-gray-50/80 rounded-xl p-3 flex items-center justify-between border border-gray-100">
             <div>
-              <p className="font-medium text-gray-900 text-sm">
-                {transaction.transaction_id || "N/A"}
-              </p>
-              <p className="text-xs text-gray-400">
-                {formatDate(transaction.transaction_datetime)}
-              </p>
+              <span className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider block">
+                Amount
+              </span>
+              <span
+                className={`text-sm sm:text-base font-bold tracking-tight ${
+                  isOutbound ? "text-red-600" : "text-emerald-600"
+                }`}
+              >
+                {transaction.instructed_amount || "0.00"}{" "}
+                <span className="text-xs font-semibold text-gray-600">
+                  {transaction.currency_code || "USD"}
+                </span>
+              </span>
+            </div>
+
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider block">
+                Fee
+              </span>
+              <span className="text-xs font-semibold text-gray-700">
+                {transaction.fee_amount &&
+                parseFloat(transaction.fee_amount) > 0
+                  ? `${transaction.fee_amount} ${
+                      transaction.currency_code || ""
+                    }`
+                  : "0.00"}
+              </span>
             </div>
           </div>
-          {getStatusBadge(transaction.status)}
-        </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm mb-3 pt-3 border-t border-gray-100">
-          <div>
-            <p className="text-gray-400 text-xs mb-0.5">Amount</p>
-            <p
-              className={`font-medium ${transaction.direction === "Outbound"
-                  ? "text-red-600"
-                  : "text-emerald-600"
-                }`}
-            >
-              {transaction.instructed_amount !== undefined &&
-                transaction.currency_code
-                ? `${transaction.instructed_amount} ${transaction.currency_code}`
-                : "0"}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs mb-0.5">Fee</p>
-            <p className="text-gray-700">{transaction.fee_amount || "0"}</p>
-          </div>
-        </div>
+          {/* Sender & Action Download Buttons */}
+          <div className="flex items-center justify-between pt-1 text-xs">
+            <div className="min-w-0 pr-2">
+              <span className="text-gray-400 text-[11px]">Sender: </span>
+              <span className="font-semibold text-gray-800 truncate">
+                {transaction.sender_name || "N/A"}
+              </span>
+            </div>
 
-        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-          <div>
-            <p className="text-xs text-gray-400">Sender</p>
-            <p className="text-sm text-gray-700">
-              {transaction.sender_name || "N/A"}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-              onClick={() => exportTransactionReceiptPDFNew(transaction.id)}
-              title="Export as PDF"
-            >
-              <FaFilePdf size={14} />
-            </button>
-            <button
-              className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-              onClick={() => exportTransactionExcel(transaction)}
-              title="Export as Excel"
-            >
-              <FaFileExcel size={14} />
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                onClick={() =>
+                  exportTransactionReceiptPDFNew(
+                    transaction.id || transaction.transaction_id
+                  )
+                }
+                className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:text-red-600 hover:bg-red-50 active:scale-95 transition-all cursor-pointer"
+                title="Download PDF"
+                aria-label="Download PDF"
+              >
+                <FaFilePdf size={12} className="text-red-500" />
+              </button>
+              <button
+                onClick={() => exportTransactionExcel(transaction)}
+                className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer"
+                title="Download Excel"
+                aria-label="Download Excel"
+              >
+                <FaFileExcel size={12} className="text-emerald-600" />
+              </button>
+            </div>
           </div>
         </div>
-      </motion.div>
-    ),
-    [formatDate, exportTransactionReceiptPDFNew, exportTransactionExcel]
+      );
+    },
+    [
+      formatDateOnly,
+      formatTimeOnly,
+      exportTransactionReceiptPDFNew,
+      exportTransactionExcel,
+    ]
   );
 
-  // Desktop table
+  // Desktop Table View
   const renderDesktopTable = useMemo(
     () => (
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="min-w-full">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+        <table className="min-w-full divide-y divide-gray-200">
           <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide border-b border-gray-200">
-              <th className="py-3.5 px-5 text-left font-medium">Date</th>
-              <th className="py-3.5 px-5 text-left font-medium">Direction</th>
-              <th className="py-3.5 px-5 text-left font-medium">Status</th>
-              <th className="py-3.5 px-5 text-left font-medium">Amount</th>
-              <th className="py-3.5 px-5 text-left font-medium">Fee</th>
-              <th className="py-3.5 px-5 text-left font-medium">Total</th>
-              <th className="py-3.5 px-5 text-center font-medium">Actions</th>
+            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider font-semibold">
+              <th className="py-3.5 px-4 text-left">Date</th>
+              <th className="py-3.5 px-4 text-left">Direction</th>
+              <th className="py-3.5 px-4 text-left">Status</th>
+              <th className="py-3.5 px-4 text-left">Amount</th>
+              <th className="py-3.5 px-4 text-left">Fee</th>
+              <th className="py-3.5 px-4 text-left">Total</th>
+              <th className="py-3.5 px-4 text-center">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 bg-white">
             {filteredTransactions.map((transaction) => (
               <tr
-                key={transaction.id}
-                className="hover:bg-gray-50/60 transition-colors text-sm"
+                key={transaction.id || transaction.transaction_id}
+                className="hover:bg-gray-50/70 transition-colors text-xs sm:text-sm"
               >
-                <td className="py-4 px-5 text-gray-600">
-                  {formatDate(transaction.transaction_datetime)}
+                <td className="py-3.5 px-4 text-gray-600 whitespace-nowrap">
+                  {formatFullDate(transaction.transaction_datetime)}
                 </td>
-                <td className="py-4 px-5">
+                <td className="py-3.5 px-4 whitespace-nowrap">
                   <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${transaction.direction === "Inbound"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : "bg-gray-50 text-gray-600 border border-gray-200"
-                      }`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                      transaction.direction === "Inbound"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-gray-50 text-gray-600 border-gray-200"
+                    }`}
                   >
                     {transaction.direction || "N/A"}
                   </span>
                 </td>
-                <td className="py-4 px-5">
+                <td className="py-3.5 px-4 whitespace-nowrap">
                   {getStatusBadge(transaction.status)}
                 </td>
-                <td className="py-4 px-5">
+                <td className="py-3.5 px-4 whitespace-nowrap">
                   <span
-                    className={`font-medium ${transaction.direction === "Outbound"
+                    className={`font-semibold ${
+                      transaction.direction === "Outbound"
                         ? "text-red-600"
                         : "text-emerald-600"
-                      }`}
+                    }`}
                   >
                     {transaction.instructed_amount !== undefined &&
-                      transaction.currency_code
+                    transaction.currency_code
                       ? `${transaction.instructed_amount} ${transaction.currency_code}`
                       : "0"}
                   </span>
                 </td>
-                <td className="py-4 px-5 text-gray-600">
+                <td className="py-3.5 px-4 text-gray-600 whitespace-nowrap">
                   {transaction.fee_amount !== undefined
                     ? transaction.fee_amount
                     : "0"}
                 </td>
-                <td className="py-4 px-5 text-gray-600">
+                <td className="py-3.5 px-4 text-gray-600 whitespace-nowrap">
                   {transaction.amount_with_fee !== undefined
                     ? transaction.amount_with_fee
                     : "N/A"}
                 </td>
-                <td className="py-4 px-5">
-                  <div className="flex items-center justify-center gap-2">
+                <td className="py-3.5 px-4 whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1.5">
                     <button
-                      className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                      className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                       onClick={() =>
-                        exportTransactionReceiptPDFNew(transaction.id)
+                        exportTransactionReceiptPDFNew(
+                          transaction.id || transaction.transaction_id
+                        )
                       }
                       title="Export as PDF"
+                      aria-label="Export PDF"
                     >
-                      <FaFilePdf size={15} />
+                      <FaFilePdf size={13} className="text-red-600" />
                     </button>
                     <button
-                      className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                      className="p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                       onClick={() => exportTransactionExcel(transaction)}
                       title="Export as Excel"
+                      aria-label="Export Excel"
                     >
-                      <FaFileExcel size={15} />
+                      <FaFileExcel size={13} className="text-emerald-600" />
                     </button>
                   </div>
                 </td>
@@ -487,106 +532,100 @@ const BenefTransactions = ({
     ),
     [
       filteredTransactions,
-      formatDate,
+      formatFullDate,
       exportTransactionReceiptPDFNew,
       exportTransactionExcel,
     ]
   );
 
-  const renderSkeletonLoader = useMemo(
-    () => (
-      <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-gray-100 rounded-xl animate-pulse h-20"
-          ></div>
-        ))}
-      </div>
-    ),
-    []
-  );
-
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <section className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-2xs">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900">
             Recent Transactions
           </h3>
           {beneficiaryName && (
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
               for {beneficiaryName}
             </p>
           )}
         </div>
-        {!isMobile && (
-          <button
-            className="inline-flex items-center px-4 py-2.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors"
-            onClick={handleViewMoreDetails}
-          >
-            View More Details
-          </button>
-        )}
+        <button
+          className="hidden md:inline-flex items-center px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
+          onClick={handleViewMoreDetails}
+        >
+          View More Details
+        </button>
       </div>
 
-      {/* Loading state */}
+      {/* Loading Skeleton */}
       {loading && (
-        <div>
-          <p className="text-gray-500 text-sm mb-4">Loading transactions...</p>
-          {renderSkeletonLoader}
+        <div className="space-y-3">
+          <p className="text-gray-500 text-xs sm:text-sm mb-3">
+            Loading transactions...
+          </p>
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className="bg-gray-100 rounded-xl animate-pulse h-16 sm:h-20"
+            />
+          ))}
         </div>
       )}
 
-      {/* Error state */}
+      {/* Error View */}
       {error && !loading && (
-        <div className="text-center py-10 bg-red-50 rounded-xl border border-red-200">
-          <p className="text-red-600 font-medium mb-1">
+        <div className="text-center py-8 px-4 bg-red-50 rounded-xl border border-red-200">
+          <p className="text-red-700 font-bold text-sm mb-1">
             Error Loading Transactions
           </p>
-          <p className="text-red-500 text-sm mb-4">{error}</p>
+          <p className="text-red-500 text-xs mb-3.5">{error}</p>
           <button
             onClick={fetchTransactionDetails}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+            className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer shadow-2xs"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* No beneficiary state */}
+      {/* Empty States */}
       {!beneficiaryId && !loading && (
-        <div className="text-center py-10 bg-amber-50 rounded-xl border border-amber-200">
-          <p className="text-amber-700 font-medium">No Beneficiary Selected</p>
-          <p className="text-amber-600 text-sm mt-1">
+        <div className="text-center py-8 px-4 bg-amber-50 rounded-xl border border-amber-200">
+          <p className="text-amber-800 font-bold text-sm">
+            No Beneficiary Selected
+          </p>
+          <p className="text-amber-600 text-xs mt-1">
             Please select a beneficiary to view transactions.
           </p>
         </div>
       )}
 
-      {/* No transactions state */}
       {beneficiaryId && !loading && !error && transactionData.length === 0 && (
-        <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200">
-          <p className="text-gray-600 font-medium">No Transactions Found</p>
-          <p className="text-gray-400 text-sm mt-1">
+        <div className="text-center py-8 px-4 bg-gray-50 rounded-xl border border-gray-200">
+          <p className="text-gray-700 font-bold text-sm">
+            No Transactions Found
+          </p>
+          <p className="text-gray-400 text-xs mt-1">
             No transactions available.
           </p>
         </div>
       )}
 
-      {/* Transactions */}
+      {/* Transactions & Filters */}
       {!loading && !error && transactionData.length > 0 && (
         <>
-          {/* Filters */}
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-wrap gap-4 items-end mb-6">
-            <div className="w-full sm:w-48">
-              <label className="text-xs text-gray-500 mb-1.5 flex items-center gap-1.5">
-                <FaFilter className="text-gray-400" size={11} />
+          {/* Responsive Filters */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-end gap-3 mb-5">
+            <div className="w-full sm:w-44 flex-shrink-0">
+              <label className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1.5">
+                <FaFilter className="text-gray-400" size={10} />
                 Direction
               </label>
               <select
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                 value={filterDirection}
                 onChange={(e) => setFilterDirection(e.target.value)}
               >
@@ -596,27 +635,29 @@ const BenefTransactions = ({
               </select>
             </div>
 
-            <div className="flex-1 min-w-[150px]">
-              <label className="text-xs text-gray-500 mb-1.5 block">
-                Start Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-              />
-            </div>
-            <div className="flex-1 min-w-[150px]">
-              <label className="text-xs text-gray-500 mb-1.5 block">
-                End Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-2 flex-1 w-full">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                />
+              </div>
             </div>
 
             {(filterDirection || filterStartDate || filterEndDate) && (
@@ -626,37 +667,43 @@ const BenefTransactions = ({
                   setFilterStartDate("");
                   setFilterEndDate("");
                 }}
-                className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-3 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors self-start sm:self-auto cursor-pointer"
               >
-                Clear filters
+                Clear
               </button>
             )}
           </div>
 
-        {/* List or Filtered Empty Message */}
-        {filteredTransactions.length === 0 ? (
-            <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200">
-              <p className="text-gray-600 font-medium">No matching transactions</p>
-              <p className="text-gray-400 text-sm mt-1">
+          {filteredTransactions.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-xl border border-gray-200">
+              <p className="text-gray-700 font-bold text-sm">
+                No matching transactions
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
                 No transactions match the selected filters.
               </p>
             </div>
-          ) : isMobile ? (
-            <div className="space-y-3">
-              {filteredTransactions.map(renderMobileTransactionCard)}
-            </div>
           ) : (
-            renderDesktopTable
+            <>
+              {/* Mobile View: Cards (< 768px) */}
+              <div className="block md:hidden space-y-3">
+                {filteredTransactions.map(renderMobileTransactionCard)}
+              </div>
+
+              {/* Desktop View: Table (>= 768px) */}
+              <div className="hidden md:block">
+                {renderDesktopTable}
+              </div>
+            </>
           )}
 
-          {isMobile && (
-            <button
-              className="w-full mt-5 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors"
-              onClick={handleViewMoreDetails}
-            >
-              View More Details
-            </button>
-          )}
+          {/* Full-width Mobile Bottom Link Button */}
+          <button
+            className="md:hidden w-full mt-4 px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
+            onClick={handleViewMoreDetails}
+          >
+            View More Details
+          </button>
         </>
       )}
     </section>

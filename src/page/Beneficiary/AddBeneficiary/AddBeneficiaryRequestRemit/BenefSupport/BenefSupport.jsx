@@ -424,11 +424,9 @@ function BenefSupport() {
       setSelectedStatus("");
       showAlert("success", "Success", "Status updated successfully!");
 
-      // Refresh current ticket in detail modal if open
       if (ticketId) {
         await dispatch(fetchTicketByUuid(ticketId));
       }
-      // Refresh tickets list in background
       dispatch(fetchAllTickets());
     }
   };
@@ -497,97 +495,100 @@ function BenefSupport() {
     { value: "critical", label: "Critical" },
   ];
 
-  // Full page initial loading state
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <RingLoader color="#111827" size={48} />
-        <h3 className="text-base font-semibold text-gray-800 mt-4">Loading Support Portal</h3>
+        <RingLoader color="#111827" size={44} />
+        <h3 className="text-sm font-semibold text-gray-800 mt-4">Loading Support Portal</h3>
         <p className="text-xs text-gray-500 mt-1">Fetching your tickets and details...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50/50 p-3 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Back Button */}
-        <button
-          onClick={handleGoBack}
-          className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 mb-6 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Back to Dashboard
-        </button>
+        <div>
+          <button
+            onClick={handleGoBack}
+            className="inline-flex items-center text-xs sm:text-sm font-semibold text-gray-700 hover:text-gray-900 bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back to Dashboard
+          </button>
+        </div>
 
         {/* Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8">
           {/* Support Ticket Submission Form */}
-          <div className="lg:col-span-6 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white">
+          <div className="lg:col-span-6 bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 sm:p-6 text-white">
               <div className="flex items-center space-x-3">
-                <div className="p-2.5 bg-white/20 rounded-xl">
-                  <MessageCircle className="w-6 h-6" />
+                <div className="p-2.5 bg-white/20 rounded-xl flex-shrink-0">
+                  <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold">Submit a Support Ticket</h1>
+                  <h1 className="text-lg sm:text-xl font-bold">Submit a Support Ticket</h1>
                   <p className="text-orange-100 text-xs mt-0.5">We respond within 24 hours</p>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-              <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-600 mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
                     Subject <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <FileText className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                    <FileText className="h-4 w-4 text-gray-400 absolute left-3 top-3" />
                     <input
                       type="text"
                       name="subject"
                       value={formData.subject}
                       onChange={handleInputChange}
                       placeholder="What is your issue regarding?"
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 ${errors.subject ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-white"
-                        }`}
+                      className={`w-full pl-9 pr-3.5 py-2 border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+                        errors.subject ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-white"
+                      }`}
                     />
                   </div>
                   {errors.subject && <p className="text-red-500 text-xs mt-1">{errors.subject}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-600 mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
                     Description <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <HelpCircle className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                    <HelpCircle className="h-4 w-4 text-gray-400 absolute left-3 top-3" />
                     <textarea
                       name="description"
                       value={formData.description}
                       onChange={handleInputChange}
                       rows="4"
                       placeholder="Describe your issue with relevant details..."
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 ${errors.description ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-white"
-                        }`}
+                      className={`w-full pl-9 pr-3.5 py-2 border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+                        errors.description ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-white"
+                      }`}
                     />
                   </div>
                   {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase text-gray-600 mb-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
                       Priority <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <AlertCircle className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                      <AlertCircle className="h-4 w-4 text-gray-400 absolute left-3 top-2.5" />
                       <select
                         name="priority"
                         value={formData.priority}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 capitalize"
+                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 capitalize"
                       >
                         {priorityOptions.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -599,18 +600,19 @@ function BenefSupport() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold uppercase text-gray-600 mb-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
                       Category <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <Tag className="h-4 w-4 text-gray-400 absolute left-3.5 top-3.5" />
+                      <Tag className="h-4 w-4 text-gray-400 absolute left-3 top-2.5" />
                       <select
                         name="category"
                         value={formData.category}
                         onChange={handleInputChange}
                         disabled={fetchingCategories}
-                        className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 ${errors.category ? "border-red-500" : "border-gray-200"
-                          }`}
+                        className={`w-full pl-9 pr-3 py-2 border rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+                          errors.category ? "border-red-500" : "border-gray-200"
+                        }`}
                       >
                         <option value="">{fetchingCategories ? "Loading..." : "Select category"}</option>
                         {categories.map((cat) => (
@@ -628,7 +630,7 @@ function BenefSupport() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full mt-4 bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center space-x-2 text-sm shadow-sm disabled:opacity-50"
+                className="w-full mt-4 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-2.5 sm:py-3 rounded-xl transition-colors flex items-center justify-center space-x-2 text-xs sm:text-sm shadow-2xs disabled:opacity-50 cursor-pointer"
               >
                 {submitting ? (
                   <>
@@ -646,113 +648,114 @@ function BenefSupport() {
           </div>
 
           {/* Contact Details & Ticket History */}
-          <div className="lg:col-span-6 space-y-6">
+          <div className="lg:col-span-6 space-y-5 sm:space-y-6">
             {/* Contact Details */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100">
-                    <Building2Icon className="w-6 h-6" />
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs p-4 sm:p-6">
+              <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 mb-3.5">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="p-2 sm:p-2.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100 flex-shrink-0">
+                    <Building2Icon className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-900">{partnerInfo.partner_name}</h2>
-                    <p className="text-xs text-gray-500">Official Beneficiary Support</p>
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-bold text-gray-900 truncate">{partnerInfo.partner_name}</h2>
+                    <p className="text-[11px] sm:text-xs text-gray-500">Official Beneficiary Support</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex-shrink-0">
                   <Award className="w-3.5 h-3.5 text-emerald-600" />
                   Verified
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div
                   onClick={handleEmailClick}
-                  className="flex items-center justify-between p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/80 hover:bg-gray-100/60 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 bg-gray-50/70 rounded-xl border border-gray-100 hover:bg-gray-100/70 cursor-pointer transition-colors"
                 >
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700">
-                      <Mail className="w-4 h-4" />
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700 flex-shrink-0">
+                      <Mail className="w-3.5 h-3.5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs text-gray-500 font-medium">Email Support</p>
+                      <p className="text-[11px] text-gray-500 font-medium">Email Support</p>
                       <p className="text-xs font-mono text-gray-800 truncate">{partnerInfo.support_email}</p>
                     </div>
                   </div>
-                  <Send className="w-3.5 h-3.5 text-gray-400" />
+                  <Send className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-2" />
                 </div>
 
                 {partnerInfo.support_phoneno && partnerInfo.support_phoneno !== "Not provided" && (
                   <div
                     onClick={handlePhoneClick}
-                    className="flex items-center justify-between p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/80 hover:bg-gray-100/60 cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 bg-gray-50/70 rounded-xl border border-gray-100 hover:bg-gray-100/70 cursor-pointer transition-colors"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700">
-                        <Phone className="w-4 h-4" />
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700 flex-shrink-0">
+                        <Phone className="w-3.5 h-3.5" />
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500 font-medium">Phone Support</p>
-                        <p className="text-xs text-gray-800">{partnerInfo.support_phoneno}</p>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-gray-500 font-medium">Phone Support</p>
+                        <p className="text-xs text-gray-800 truncate">{partnerInfo.support_phoneno}</p>
                       </div>
                     </div>
-                    <Zap className="w-3.5 h-3.5 text-gray-400" />
+                    <Zap className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-2" />
                   </div>
                 )}
 
-                <div className="flex items-start space-x-3 p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/80">
-                  <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700">
-                    <MapPin className="w-4 h-4" />
+                <div className="flex items-start space-x-2.5 p-3 bg-gray-50/70 rounded-xl border border-gray-100">
+                  <div className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700 flex-shrink-0">
+                    <MapPin className="w-3.5 h-3.5" />
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Office Address</p>
-                    <p className="text-xs text-gray-800 leading-relaxed">{partnerInfo.partner_address}</p>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 font-medium">Office Address</p>
+                    <p className="text-xs text-gray-800 leading-relaxed break-words">{partnerInfo.partner_address}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Ticket History */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center space-x-2.5">
-                  <Ticket className="w-5 h-5 text-gray-700" />
-                  <h3 className="text-base font-bold text-gray-900">Your Tickets</h3>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Ticket className="w-4 h-4 text-gray-700" />
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900">Your Tickets</h3>
                 </div>
                 <button
                   onClick={handleRefreshTickets}
                   disabled={isRefreshing || fetchingTickets}
-                  className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-50"
+                  className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-50 cursor-pointer"
                   title="Refresh tickets"
+                  aria-label="Refresh tickets"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || fetchingTickets ? "animate-spin" : ""}`} />
                 </button>
               </div>
 
-              <div className="p-5">
+              <div className="p-3.5 sm:p-5">
                 {fetchingTickets && !isRefreshing ? (
-                  <div className="flex flex-col items-center justify-center py-10">
-                    <RingLoader color="#111827" size={32} />
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <RingLoader color="#111827" size={28} />
                     <p className="text-xs text-gray-400 mt-2">Loading tickets...</p>
                   </div>
                 ) : tickets.length > 0 ? (
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                  <div className="space-y-2.5 max-h-80 overflow-y-auto">
                     {tickets.map((ticket, index) => (
                       <div
                         key={ticket.ticket_uuid || ticket.uuid || ticket.id || index}
                         onClick={() => handleViewTicket(ticket)}
-                        className="p-3.5 border border-gray-200 rounded-xl hover:bg-gray-50/80 cursor-pointer transition-colors"
+                        className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50/80 cursor-pointer transition-colors space-y-1.5"
                       >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <h4 className="font-semibold text-sm text-gray-900 truncate flex-1">{ticket.subject}</h4>
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-bold text-xs sm:text-sm text-gray-900 truncate flex-1">{ticket.subject}</h4>
                           <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         </div>
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${getPriorityColor(ticket.priority)}`}>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getPriorityColor(ticket.priority)}`}>
                               {ticket.priority || "Medium"}
                             </span>
-                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${getStatusColor(ticket.status)}`}>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(ticket.status)}`}>
                               {ticket.status || "Pending"}
                             </span>
                           </div>
@@ -761,17 +764,17 @@ function BenefSupport() {
                             {formatDate(ticket.created_at)}
                           </div>
                         </div>
-                        <div className="mt-2 text-[11px] text-gray-400 font-mono break-all">
+                        <div className="text-[11px] text-gray-400 font-mono break-all pt-0.5">
                           Ticket ID: {ticket.ticket_uuid || ticket.uuid || ticket.id || ticket.ticket_id || "N/A"}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-10 text-gray-400">
-                    <Ticket className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm font-medium text-gray-600">No support tickets found</p>
-                    <p className="text-xs mt-0.5">Submit your first ticket using the form.</p>
+                  <div className="text-center py-8 text-gray-400">
+                    <Ticket className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs font-semibold text-gray-600">No support tickets found</p>
+                    <p className="text-[11px] mt-0.5">Submit your first ticket using the form.</p>
                   </div>
                 )}
               </div>
@@ -781,33 +784,32 @@ function BenefSupport() {
       </div>
 
       {/* Alert Notification Modal */}
-      {/* Alert Notification Modal */}
       {alertModal.isOpen && (
         <div
-          className="fixed inset-0 bg-gray-900/40 z-[100] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-gray-900/50 z-[100] flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs"
           onClick={closeAlert}
         >
           <div
-            className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-200 shadow-2xl space-y-3"
+            className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-3 animate-in fade-in zoom-in duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center space-x-2.5">
               {alertModal.type === "success" ? (
-                <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
                   <CheckCircle className="w-5 h-5" />
                 </div>
               ) : (
-                <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+                <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
                   <AlertCircle className="w-5 h-5" />
                 </div>
               )}
-              <h3 className="text-base font-bold text-gray-900">{alertModal.title}</h3>
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">{alertModal.title}</h3>
             </div>
             <p className="text-xs text-gray-600 leading-relaxed">{alertModal.message}</p>
             <div className="pt-2">
               <button
                 onClick={closeAlert}
-                className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-colors"
+                className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Okay
               </button>
@@ -818,29 +820,29 @@ function BenefSupport() {
 
       {/* Ticket Details & Edit Modal */}
       {showTicketModal && (
-        <div className="fixed inset-0 bg-gray-900/40 z-50 flex items-center justify-center p-4" onClick={handleCloseModal}>
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs" onClick={handleCloseModal}>
           <div
-            className="bg-white rounded-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-xl border border-gray-200"
+            className="bg-white rounded-2xl max-w-lg w-full max-h-[88vh] overflow-y-auto shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div className="flex items-center space-x-2">
-                <Eye className="w-5 h-5 text-gray-700" />
-                <h3 className="text-base font-bold text-gray-900">
+                <Eye className="w-4 h-4 text-gray-700" />
+                <h3 className="text-sm sm:text-base font-bold text-gray-900">
                   {isEditing ? "Edit Ticket" : "Ticket Details"}
                 </h3>
               </div>
-              <button onClick={handleCloseModal} className="p-1 rounded-lg text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
+              <button onClick={handleCloseModal} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {isLoadingTicket || fetchingTicketDetail ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-10">
                 <Loader className="w-6 h-6 animate-spin text-gray-900" />
               </div>
             ) : currentTicket ? (
-              <div className="p-6 space-y-4 text-sm">
+              <div className="p-4 sm:p-6 space-y-3.5 text-xs sm:text-sm">
                 {isEditing ? (
                   <>
                     <div>
@@ -850,7 +852,7 @@ function BenefSupport() {
                         name="subject"
                         value={editFormData.subject}
                         onChange={handleEditInputChange}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                       />
                     </div>
                     <div>
@@ -860,17 +862,17 @@ function BenefSupport() {
                         value={editFormData.description}
                         onChange={handleEditInputChange}
                         rows="4"
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>
                         <select
                           name="priority"
                           value={editFormData.priority}
                           onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                         >
                           <option value="low">Low</option>
                           <option value="medium">Medium</option>
@@ -884,7 +886,7 @@ function BenefSupport() {
                           name="category"
                           value={editFormData.category}
                           onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                         >
                           {categories.map((c) => (
                             <option key={c.id || c.name} value={c.name}>
@@ -894,17 +896,17 @@ function BenefSupport() {
                         </select>
                       </div>
                     </div>
-                    <div className="flex gap-2 pt-4">
+                    <div className="flex gap-2 pt-3">
                       <button
                         onClick={handleUpdateTicket}
                         disabled={updatingTicket}
-                        className="flex-1 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                        className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 text-xs font-semibold cursor-pointer"
                       >
                         {updatingTicket ? "Updating..." : "Save Changes"}
                       </button>
                       <button
                         onClick={() => setIsEditing(false)}
-                        className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                        className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-xs font-semibold cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -912,101 +914,99 @@ function BenefSupport() {
                   </>
                 ) : (
                   <>
-                    <div>
-                      <span className="text-xs text-gray-400 block mb-0.5">Ticket ID</span>
-                      <p className="font-mono text-xs text-gray-800 break-all">
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs flex justify-between items-center">
+                      <span className="text-gray-400 font-medium">Ticket ID:</span>
+                      <span className="font-mono font-semibold text-gray-700 break-all select-all">
                         {currentTicket.ticket_uuid || currentTicket.uuid || currentTicket.id || currentTicket.ticket_id || "N/A"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-gray-400 block mb-0.5">Subject</span>
+                      <p className="font-bold text-gray-900 text-sm">{currentTicket.subject}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-gray-400 block mb-0.5">Description</span>
+                      <p className="text-gray-700 bg-gray-50/80 p-3 rounded-xl border border-gray-100 leading-relaxed whitespace-pre-wrap text-xs">
+                        {currentTicket.description}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-xs text-gray-400 block mb-0.5">Subject</span>
-                      <p className="font-semibold text-gray-900">{currentTicket.subject}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-gray-400 block mb-0.5">Description</span>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg leading-relaxed whitespace-pre-wrap">{currentTicket.description}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <span className="text-xs text-gray-400 block mb-1">Priority</span>
-                        <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${getPriorityColor(currentTicket.priority)}`}>
+                        <span className="text-[11px] text-gray-400 block mb-1">Priority</span>
+                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${getPriorityColor(currentTicket.priority)}`}>
                           {currentTicket.priority || "Medium"}
                         </span>
                       </div>
                       <div>
-                        <span className="text-xs text-gray-400 block mb-1">Status</span>
-                        <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-400 block mb-1">Status</span>
+                        <div className="flex items-center gap-1.5">
                           <span
-                            className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(
+                            className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(
                               currentTicket.status
                             )}`}
                           >
                             {currentTicket.status}
                           </span>
-                          {/* Edit Status Button */}
                           <button
                             onClick={() => {
                               setSelectedTicketForStatus(currentTicket);
                               setSelectedStatus(currentTicket.status || "Pending");
                               setShowStatusModal(true);
                             }}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
                             title="Change Status"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-400 block mb-1">Category</span>
-                      <p className="text-sm text-gray-700">{currentTicket.category || "General"}</p>
+                      <span className="text-[11px] text-gray-400 block mb-0.5">Category</span>
+                      <p className="font-semibold text-gray-800 text-xs">{currentTicket.category || "General"}</p>
                     </div>
 
                     {currentTicket.created_at && (
-                      <div>
-                        <span className="text-xs text-gray-400 block mb-1">Created At</span>
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <p className="text-sm text-gray-700">{formatDate(currentTicket.created_at)}</p>
-                        </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-1 pt-1">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Created: {formatDate(currentTicket.created_at)}</span>
                       </div>
                     )}
 
                     {currentTicket.updated_at && (
-                      <div>
-                        <span className="text-xs text-gray-400 block mb-1">Last Updated</span>
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <p className="text-sm text-gray-700">{formatDate(currentTicket.updated_at)}</p>
-                        </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Last Updated: {formatDate(currentTicket.updated_at)}</span>
                       </div>
                     )}
 
                     <div className="pt-2">
                       <button
                         onClick={() => handleViewStatusLogs(currentTicket.id)}
-                        className="inline-flex items-center text-xs text-gray-600 hover:text-gray-900 underline gap-1"
+                        className="inline-flex items-center text-xs text-blue-600 hover:text-blue-700 underline gap-1 cursor-pointer"
                       >
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-3 h-3" />
                         View status history logs
                       </button>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+                    <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
                       <button
                         onClick={handleEditClick}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-medium"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold cursor-pointer"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-3 h-3" />
                         Edit
                       </button>
                       <button
                         onClick={handleDeleteClick}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-medium"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-semibold cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                         Delete
                       </button>
                     </div>
@@ -1020,21 +1020,21 @@ function BenefSupport() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-gray-900/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-200 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Delete Support Ticket?</h3>
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-3.5 animate-in fade-in zoom-in duration-150">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900">Delete Support Ticket?</h3>
             <p className="text-xs text-gray-500">This action cannot be undone and will remove the ticket from our records.</p>
             <div className="flex gap-2">
               <button
                 onClick={handleConfirmDelete}
                 disabled={deletingTicket}
-                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold disabled:opacity-50 cursor-pointer shadow-2xs"
               >
                 {deletingTicket ? "Deleting..." : "Yes, Delete"}
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </button>
@@ -1045,17 +1045,17 @@ function BenefSupport() {
 
       {/* Status History Logs Modal */}
       {showStatusLogs && (
-        <div className="fixed inset-0 bg-gray-900/40 z-50 flex items-center justify-center p-4" onClick={() => setShowStatusLogs(false)}>
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs" onClick={() => setShowStatusLogs(false)}>
           <div
-            className="bg-white rounded-2xl max-w-md w-full max-h-[70vh] overflow-hidden border border-gray-200 shadow-xl"
+            className="bg-white rounded-2xl max-w-md w-full max-h-[70vh] overflow-hidden border border-gray-100 shadow-2xl animate-in fade-in zoom-in duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-1.5">
                 <Clock className="w-4 h-4 text-gray-600" />
                 Status History
               </h3>
-              <button onClick={() => setShowStatusLogs(false)}>
+              <button onClick={() => setShowStatusLogs(false)} className="cursor-pointer">
                 <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
               </button>
             </div>
@@ -1064,11 +1064,11 @@ function BenefSupport() {
                 <div className="py-8 text-center text-xs text-gray-400">Loading history...</div>
               ) : statusLogs.length > 0 ? (
                 statusLogs.map((log, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg text-xs">
-                    <span className={`px-2 py-0.5 rounded-full font-medium ${getStatusColor(log.status)}`}>
+                  <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl text-xs border border-gray-100">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${getStatusColor(log.status)}`}>
                       {log.status}
                     </span>
-                    <span className="text-gray-400">{formatDate(log.status_date)}</span>
+                    <span className="text-gray-400 text-[11px]">{formatDate(log.status_date)}</span>
                   </div>
                 ))
               ) : (
@@ -1082,44 +1082,44 @@ function BenefSupport() {
       {/* Status Change Modal */}
       {showStatusModal && selectedTicketForStatus && (
         <div
-          className="fixed inset-0 bg-gray-900/40 z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-gray-900/50 z-[60] flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs"
           onClick={() => setShowStatusModal(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-sm w-full border border-gray-200 shadow-2xl overflow-hidden"
+            className="bg-white rounded-2xl max-w-sm w-full border border-gray-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Tag className="w-4 h-4 text-gray-700" />
-                <h3 className="text-sm font-bold text-gray-900">Update Status</h3>
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900">Update Status</h3>
               </div>
               <button
                 onClick={() => setShowStatusModal(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-3.5">
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">
+                <label className="text-[11px] font-medium text-gray-500 block mb-0.5">
                   Ticket Subject
                 </label>
-                <p className="text-sm font-semibold text-gray-800 truncate">
+                <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">
                   {selectedTicketForStatus.subject}
                 </p>
               </div>
 
               <div>
-                <label className="text-xs font-semibold uppercase text-gray-600 block mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-gray-600 block mb-1">
                   Select New Status
                 </label>
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
                 >
                   {statusList.map((status) => (
                     <option key={status.id} value={status.name}>
@@ -1133,7 +1133,7 @@ function BenefSupport() {
                 <button
                   onClick={handleStatusUpdate}
                   disabled={updatingStatus}
-                  className="flex-1 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                  className="flex-1 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer shadow-2xs"
                 >
                   {updatingStatus ? (
                     <>
@@ -1146,7 +1146,7 @@ function BenefSupport() {
                 </button>
                 <button
                   onClick={() => setShowStatusModal(false)}
-                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition-colors"
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
