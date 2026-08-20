@@ -1385,6 +1385,9 @@ Generated on ${currentDate}
         amount: formData.amount,
         currency: formData.currency,
         senders: formData.senders,
+        author_source: "zap",
+        author_type: "beneficiary",
+        author_id: localStorage.getItem("beneficiary_uuid"),
       };
 
       console.log("Sending payload:", payload);
@@ -1394,7 +1397,7 @@ Generated on ${currentDate}
         selected_senders: payload.senders,
       });
 
-      const response = await fetch(`${API_URL}/request-remit`, {
+      const response = await fetch(`${API_URL}/transactions/request-remit`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${authtoken}`,

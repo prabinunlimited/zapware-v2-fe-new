@@ -35,6 +35,7 @@ import BeneficiaryProfile from "../src/page/Beneficiary/AddBeneficiary/AddBenefi
 import AddBenefBank from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/AddBankRequestRemit/AddBankRequestRemit";
 import BenefAllTransactions from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefAllTransactions/BenefAllTransactions";
 import BenefSupport from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefSupport/BenefSupport";
+import BenefRequestRemit from "../src/page/Beneficiary/AddBeneficiary/AddBeneficiaryRequestRemit/BenefRequestRemit/BenefRequestRemit";
 
 // Import route guards
 import ProtectedRoute from "./ProtectedRoute";
@@ -238,7 +239,11 @@ const router = createBrowserRouter([
           {
             path: "beneficiarysupport/:beneficiaryId",
             element: <BenefSupport/>
-          }
+          },
+          {
+            path: "beneficiary-requestremit/:beneficiaryId",
+            element: <BenefRequestRemit/>
+          },
         ],
       },
       {
