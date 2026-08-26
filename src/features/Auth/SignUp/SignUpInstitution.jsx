@@ -124,7 +124,10 @@ import {
   validateInstitutionStep,
   fetchOccupation,
   selectOccupation,
-  selectOccupationLoading
+  selectOccupationLoading,
+  fetchRegions,
+  selectRegions,
+  selectRegionsLoading,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -153,6 +156,8 @@ import {
 } from "../slices/signupSlice";
 
 import OwnerInfo from "./Steps/OwnerInfo";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 // ===================== DOB VALIDATION FUNCTIONS =====================
 const validateAge = (dateOfBirth) => {
@@ -519,6 +524,9 @@ const Institution = () => {
   const occupations = useSelector(selectOccupation);
   const occupationLoading = useSelector(selectOccupationLoading);
 
+  const regions = useSelector(selectRegions);
+  const regionsLoading = useSelector(selectRegionsLoading);
+
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
@@ -687,6 +695,7 @@ const Institution = () => {
       registered_business_address_apartment_unit_no: mergedData.registered_business_address_apartment_unit_no || "",
       registered_business_address_suburb: mergedData.registered_business_address_suburb || "",
 
+      principal_business_address_region_id: mergedData.principal_business_address_region_id || "",
       principal_business_address_country: mergedData.principal_business_address_country || "",
       principal_business_address_postal_code: mergedData.principal_business_address_postal_code || "",
       principal_business_street: mergedData.principal_business_street || "",
@@ -863,6 +872,169 @@ const Institution = () => {
 
   const remittanceOnlyAccepted =
     remit_customer === 1 || remit_customer === true;
+
+  const [mandatoryFieldsMap, setMandatoryFieldsMap] = useState({});
+  const [mandatoryFieldsLoading, setMandatoryFieldsLoading] = useState(true);
+
+  const ONBOARDING_TYPE_BY_STEP = {
+    1: "institution_customer_business_information",
+    2: "institution_customer_responsible_person",
+    3: "institution_customer_director",
+    4: "institution_customer_owner",
+    5: "institution_customer_document_upload",
+  };
+
+  const fetchOnboardingMandatoryFields = useCallback(
+    async (onboardingType, formikValues) => {
+      setMandatoryFieldsLoading(true);
+      try {
+        const isPartnerPackageModule =
+          localStorage.getItem("ismonthlypackage") === "Y" ? "Y" : "N";
+
+        let payload = { onboarding_type: onboardingType };
+
+        if (onboardingType === "institution_customer_document_upload") {
+          payload.institution_type_id =
+            formikValues.institution_type_id ||
+            localFormData.institution_type_id ||
+            formData.institution_type_id ||
+            "";
+
+          payload.principal_business_address_region_id =
+            formikValues.principal_business_address_region_id ||
+            localFormData.principal_business_address_region_id ||
+            formData.principal_business_address_region_id ||
+            "";
+        }
+
+        if (isPartnerPackageModule === "Y") {
+          const packageselectedcurrencyids = JSON.parse(
+            localStorage.getItem("packageselectedcurrencyids") || "[]",
+          );
+          payload = {
+            ...payload,
+            isPartnerPackageModule: "Y",
+            packageselectedcurrencyids,
+          };
+        } else {
+          const bankAccountOptions = remittanceOnlyAccepted
+          ? ["28-named-USD"]
+          : locationStateData?.service_provide_ids ||
+            localFormData?.service_provide_ids ||
+            [];
+          payload = {
+            ...payload,
+            bank_account_options: bankAccountOptions,
+          };
+        }
+
+        // Get the token from localStorage - try multiple possible keys
+        const token = localStorage.getItem("bearertoken");
+
+        const headers = {
+          "Content-Type": "application/json",
+        };
+
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(
+          `${API_URL}/onboarding-mandatory-fields`,
+          {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify(payload),
+          },
+        );
+
+        // Check if response is ok
+        if (!response.ok) {
+          console.error(`❌ API Error: ${response.status} - ${response.statusText}`);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        console.log("📦 API Response:", result);
+        const fieldsForType = result?.data
+          ? Object.values(result.data).flat()
+          : [];
+
+        const map = {};
+        fieldsForType.forEach((field) => {
+          // Handle Step 5 Document Upload response (match by document ID and Name)
+          if (field.institution_upload_document_types_id !== undefined) {
+            const docId = String(field.institution_upload_document_types_id);
+            map[`doc_id_${docId}`] = { hasDependency: false };
+            map[docId] = { hasDependency: false };
+            if (field.institution_upload_document_type_name) {
+              map[field.institution_upload_document_type_name.toLowerCase().trim()] = { hasDependency: false };
+            }
+          } else if (field.field_name) {
+            //  Handle Steps 1 to 4 standard field responses
+            map[field.field_name] = {
+              hasDependency: field.has_dependency === 1,
+              dependencyFieldName: field.dependency_field_name,
+              dependencyFieldValue: field.dependency_field_value,
+            };
+          }
+        });
+
+        setMandatoryFieldsMap(map);
+      } catch (error) {
+        console.error("❌ Failed to fetch onboarding mandatory fields:", error);
+        setMandatoryFieldsMap({});
+      } finally {
+        setMandatoryFieldsLoading(false);
+      }
+    },
+    [locationStateData],
+  );
+
+  const isFieldMandatory = useCallback(
+    (fieldName, values = {}, currentOwner = null) => {
+      const config = mandatoryFieldsMap[fieldName];
+
+      if (!config) return false;
+      if (config.hasDependency !== 1 && config.hasDependency !== true) return true;
+
+      let depFieldName = config.dependencyFieldName;
+
+      // Step 3 Controller dependency resolution
+      if (
+        currentStep === 3 &&
+        depFieldName === "nationality" &&
+        values.controller_nationality !== undefined
+      ) {
+        depFieldName = "controller_nationality";
+      }
+
+      // Step 4 Owner dependency resolution
+      let dependencyValue;
+      if (currentStep === 4 && currentOwner) {
+        if (depFieldName === "nationality") {
+          depFieldName = "owner_nationality_id";
+        }
+        dependencyValue = currentOwner[depFieldName];
+      } else {
+        dependencyValue = values ? values[depFieldName] : undefined;
+      }
+
+      const expected = config.dependencyFieldValue;
+
+      if (dependencyValue === undefined || dependencyValue === null || dependencyValue === "") {
+        return false;
+      }
+
+      if (Array.isArray(expected)) {
+        return expected.some((v) => String(v) === String(dependencyValue));
+      }
+
+      return String(expected) === String(dependencyValue);
+    },
+    [mandatoryFieldsMap, currentStep],
+  );
 
   useEffect(() => {
     console.log("🔍 locationStateData check:", {
@@ -1281,6 +1453,7 @@ const Institution = () => {
         dispatch(fetchInstitutionTypes()),
         dispatch(fetchTransactionCurrencies()),
         dispatch(fetchOccupation()),
+        dispatch(fetchRegions()),
       ];
 
       const secondaryFetches = new Promise((resolve) => {
@@ -1325,6 +1498,14 @@ const Institution = () => {
       }
     };
   }, [zipDebounceTimer]);
+
+  useEffect(() => {
+    const onboardingType = ONBOARDING_TYPE_BY_STEP[currentStep];
+    if (onboardingType) {
+      fetchOnboardingMandatoryFields(onboardingType, formValues);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, fetchOnboardingMandatoryFields]);
 
   const validateEIN = useCallback(
     (ein) => {
@@ -1412,174 +1593,30 @@ const Institution = () => {
 
     switch (step) {
       case 1: {
-        const requiredFields = [
-          "institution_account_type_id",
-          "institution_type_id",
-          "institution_name",
-          "registration_number",
-          "registered_address_street_country",
-          // "registered_address_street_state",
-          "registered_address_street_city",
-          "registered_address_street_1",
-          "registered_address_street_zip",
-          "date_incorporation",
-          "industry_type",
-        ];
-
-        const requiredFieldsFilled = requiredFields.every((field) => {
-          const value = validationValues[field];
-          return value && value.toString().trim() !== "";
-        });
-
-        const pepValid = validationValues.pep_associated === "0" || validationValues.pep_associated === 0;
-
-        let conditionalFieldsValid = true;
-
-        // Update all conditions to check both
-        const shouldValidateFields = isNamedAccount || remittanceOnlyAccepted;
-
-        if (shouldValidateFields) {
-          // Business Alias
-          if (
-            !validationValues.business_alias ||
-            validationValues.business_alias.trim() === ""
-          ) {
-            conditionalFieldsValid = false;
-          }
-
-          // Business Type
-          if (!validationValues.business_type) {
-            conditionalFieldsValid = false;
-          }
-
-          // EIN
-          if (validationValues.ein && validationValues.ein.trim() !== "") {
-            const cleanEIN = validationValues.ein.replace(/-/g, "");
-            if (cleanEIN.length !== 9 || !/^\d+$/.test(cleanEIN)) {
-              conditionalFieldsValid = false;
-            }
-          }
-
-          // NAICS Code
-          if (
-            !validationValues.naice_code ||
-            validationValues.naice_code.toString().trim() === ""
-          ) {
-            conditionalFieldsValid = false;
-          }
-        }
-
         const hasValidationErrors = Object.keys(errors).some((key) => {
           const error = errors[key];
           return error && typeof error === "string" && error.length > 0;
         });
 
-        return (
-          requiredFieldsFilled && conditionalFieldsValid && !hasValidationErrors && pepValid
-        );
+        return !hasValidationErrors;
       }
 
       case 2: {
-        const requiredFields = [
-          "first_name",
-          "last_name",
-          "email",
-          "password",
-          "confirm_password",
-          "resident_country",
-          "mobilenumber_countrycode",
-          "mobile_number",
-          "nationality",
-          "country",
-          // "state",
-          "city",
-          "street_address_1",
-          "zip_code",
-          "gender",
-          "dob",
-        ];
-
-        const requiredFieldsFilled = requiredFields.every((field) => {
-          const value = validationValues[field];
-          return value && value.toString().trim() !== "";
+        const hasValidationErrors = Object.keys(errors).some((key) => {
+          const error = errors[key];
+          return error && typeof error === "string" && error.length > 0;
         });
 
-        // Check if DOB age is valid (18+)
-        let isAgeValid = true;
-        if (validationValues.dob) {
-          isAgeValid = validateAge(validationValues.dob);
-        } else {
-          isAgeValid = false;
-        }
-
-        const hasValidationErrors = requiredFields.some(
-          (field) => errors[field] && touched[field],
-        );
-
-        const hasUSDNamedAccount = isNamedAccount;
-        const isRemittanceOnly = remittanceOnlyAccepted;
-        const isUSCountry =
-          validationValues.country === "United States" ||
-          validationValues.country === 186;
-
-        const ssnValid =
-          !((hasUSDNamedAccount || isRemittanceOnly) && isUSCountry) ||
-          (validationValues.ssn &&
-            !validateSSN(validationValues.ssn, validationValues.country));
-
-        const allTermsAccepted =
-          termsConditions && termsConditions.length > 0
-            ? validationValues.terms_and_conditions?.length ===
-            termsConditions.length
-            : true;
-
-        return (
-          requiredFieldsFilled &&
-          !hasValidationErrors &&
-          ssnValid &&
-          allTermsAccepted &&
-          isAgeValid
-        );
+        return !hasValidationErrors;
       }
 
       case 3: {
-        const step3Fields = ["is_controller"];
+        const hasValidationErrors = Object.keys(errors).some((key) => {
+          const error = errors[key];
+          return error && typeof error === "string" && error.length > 0;
+        });
 
-        step3Fields.push(
-          "controller_first_name",
-          "controller_middle_name",
-          "controller_last_name",
-          "controller_email",
-          "controller_resident_country",
-          "controller_mobilenumber_countrycode",
-          "controller_mobile_number",
-          "controller_nationality",
-          "controller_country",
-          "controller_state",
-          "controller_city",
-          "controller_street_address_1",
-          "controller_zip_code",
-          "controller_gender",
-          "controller_dob",
-          "controller_designation",
-          "controller_doc_type",
-          "controller_doc_id",
-          "controller_doc_country",
-        );
-
-        const isUSDNamedForController = isNamedAccount;
-        const isControllerUSCountry =
-          values.controller_country === "United States" ||
-          values.controller_country === 186;
-
-        if (
-          (isUSDNamedForController && isControllerUSCountry) ||
-          (remittanceOnlyAccepted && isControllerUSCountry)
-        ) {
-          step3Fields.push("controller_ssn");
-        }
-
-        return step3Fields;
+        return !hasValidationErrors;
       }
 
       case 4: {
@@ -1623,6 +1660,7 @@ const Institution = () => {
           const step1Fields = [
             "institution_account_type_id",
             "institution_type_id",
+            "principal_business_address_region_id",
             "institution_name",
             "registration_number",
             "registered_address_street_country",
@@ -1784,38 +1822,37 @@ const Institution = () => {
             values.owner_details.forEach((owner, index) => {
               const isInstitutionOwner = owner.owner_type === "institution";
 
+              // Common fields
               ownerFields.push(
+                `owner_details[${index}].owner_type`,
+                `owner_details[${index}].owner_role_id`,
                 `owner_details[${index}].owner_email`,
                 `owner_details[${index}].owner_phone_number`,
-                `owner_details[${index}].owner_country_id`,
                 `owner_details[${index}].owner_phone_number_country_code`,
+                `owner_details[${index}].owner_resident_country_id`,
+                `owner_details[${index}].owner_country_id`,
+                `owner_details[${index}].owner_state`,
+                `owner_details[${index}].apartment_unit`,
+                `owner_details[${index}].owner_zip_code`,
                 `owner_details[${index}].ownership_percentage`,
                 `owner_details[${index}].owner_if`,
-                `owner_details[${index}].owner_type`,
+                `owner_details[${index}].doc_country`,
+                `owner_details[${index}].doc_id`,
               );
 
               if (isInstitutionOwner) {
-                ownerFields.push(
-                  `owner_details[${index}].owner_name`,
-                );
+                ownerFields.push(`owner_details[${index}].owner_name`);
               } else {
                 ownerFields.push(
                   `owner_details[${index}].owner_first_name`,
                   `owner_details[${index}].owner_middle_name`,
                   `owner_details[${index}].owner_last_name`,
+                  `owner_details[${index}].owner_nationality_id`,
+                  `owner_details[${index}].owner_gender_id`,
                   `owner_details[${index}].owner_dob`,
                 );
               }
 
-              if (owner.owner_if === "no" || index > 0) {
-                ownerFields.push(
-                  `owner_details[${index}].owner_needs_access_to_system`,
-                );
-                if (owner.owner_needs_access_to_system === "yes") {
-                  ownerFields.push(`owner_details[${index}].owner_role_id`);
-                }
-              }
-              // Update to check both conditions
               if (
                 (isNamedAccount || remittanceOnlyAccepted) &&
                 ssn_required === "Y" &&
@@ -1824,7 +1861,6 @@ const Institution = () => {
                 ownerFields.push(
                   `owner_details[${index}].ssn`,
                   `owner_details[${index}].doc_type`,
-                  `owner_details[${index}].doc_id`,
                 );
               }
             });
@@ -2040,6 +2076,14 @@ const Institution = () => {
             },
           ]
           : [];
+    }
+
+    if (payload.owner_details && Array.isArray(payload.owner_details)) {
+      payload.owner_details = payload.owner_details.map((owner) => ({
+        ...owner,
+        owner_country_id: owner.owner_country_id || owner.owner_resident_country_id || "",
+        owner_resident_country_id: owner.owner_resident_country_id || owner.owner_country_id || "",
+      }));
     }
 
     return payload;
@@ -2395,6 +2439,7 @@ const Institution = () => {
           registered_business_address_apartment_unit_no: finalFormData.registered_business_address_apartment_unit_no || "",
           registered_business_address_suburb: finalFormData.registered_business_address_suburb || "",
 
+          principal_business_address_region_id: finalFormData.principal_business_address_region_id || "",
           principal_business_address_country: findCountryId(finalFormData.principal_business_address_country),
           same_as_registered_address: finalFormData.same_as_registered_address || 0,
           principal_business_address_postal_code: finalFormData.principal_business_address_postal_code,
@@ -2518,29 +2563,38 @@ const Institution = () => {
           ownerAdd: ownerAdd,
 
           owner_details: finalFormData.owner_details?.map((owner) => {
-            const isInstitutionOwner = owner.owner_type === "institution"
+            const isInstitutionOwner = owner.owner_type === "institution";
             const processedOwner = {
               ...owner,
-              owner_country_id: findCountryId(owner.owner_country_id),
-              owner_institution_name: isInstitutionOwner
-                ? owner.owner_name || ""
-                : "",
-              owner_first_name: isInstitutionOwner ? "" : owner.owner_first_name,
-              owner_middle_name: isInstitutionOwner ? "" : owner.owner_middle_name,
-              owner_last_name: isInstitutionOwner ? "" : owner.owner_last_name,
-              owner_dob: isInstitutionOwner ? "" : owner.owner_dob,
+              owner_type: owner.owner_type || "individual",
+              owner_role_id: owner.owner_role_id || "",
+              owner_country_id: findCountryId(owner.owner_country_id || owner.owner_resident_country_id),
+              owner_resident_country_id: findCountryId(owner.owner_resident_country_id || owner.owner_country_id),
+              owner_institution_name: isInstitutionOwner ? owner.owner_name || "" : "",
+              owner_first_name: isInstitutionOwner ? "" : owner.owner_first_name || "",
+              owner_middle_name: isInstitutionOwner ? "" : owner.owner_middle_name || "",
+              owner_last_name: isInstitutionOwner ? "" : owner.owner_last_name || "",
+              owner_nationality_id: isInstitutionOwner ? "" : owner.owner_nationality_id || "",
+              owner_gender_id: isInstitutionOwner ? "" : owner.owner_gender_id || "",
+              owner_dob: isInstitutionOwner
+                ? ""
+                : institutionState.isOwner === "yes"
+                  ? finalFormData.dob
+                  : owner.owner_dob || "",
+              owner_email: owner.owner_email || "",
+              owner_phone_number: owner.owner_phone_number || "",
+              owner_phone_number_country_code: owner.owner_phone_number_country_code || "",
+              owner_state: findStateName(owner.owner_state),
+              apartment_unit: owner.apartment_unit || "",
+              owner_zip_code: owner.owner_zip_code || "",
+              ownership_percentage: parseFloat(owner.ownership_percentage) || 0,
+              doc_country: findCountryId(owner.doc_country),
+              doc_id: owner.doc_id || "",
+              ssn: owner.ssn || "",
+              doc_type: owner.doc_type || "",
             };
 
-            if (owner.owner_if === "no") {
-              return processedOwner;
-            }
-            return {
-              ...processedOwner,
-              owner_dob:
-                institutionState.isOwner === "yes"
-                  ? finalFormData.dob
-                  : owner.owner_dob,
-            };
+            return processedOwner;
           }),
 
           bank_account_options: service_provide_ids,
@@ -2606,9 +2660,9 @@ const Institution = () => {
               })) || [],
           });
 
-          const resendMinutes = result.data?.resend_minutes ;
+          const resendMinutes = result.data?.resend_minutes;
           localStorage.setItem("otp_resend_minutes", resendMinutes);
-          
+
           navigate("/phoneverification", {
             state: {
               mobileNumber: mobileNumber,
@@ -2808,6 +2862,14 @@ const Institution = () => {
     }));
   }, [occupations]);
 
+  const regionOptions = useMemo(() => {
+    if (!regions || !Array.isArray(regions)) return [];
+    return regions.map((item) => ({
+      value: item.id || item.code || item.name,
+      label: item.name || item.region_name || item.title || item.code,
+    }));
+  }, [regions]);
+
   const passwordValidationRules = useMemo(
     () => [
       { label: "At least 12 characters", regex: /^.{12,}$/ },
@@ -2822,7 +2884,9 @@ const Institution = () => {
     [],
   );
 
-  const ControllerSection = React.memo(
+  const ControllerSection = React.useMemo(
+    () =>
+      React.memo(
     ({
       values,
       setFieldValue,
@@ -2855,6 +2919,11 @@ const Institution = () => {
       setNomineeFirstName,
       setNomineeMiddleName,
       setNomineeLastName,
+      RequiredFormField,
+      RequiredCustomSelect,
+      RequiredMark,
+      isFieldMandatory,
+      resolveApiFieldName,
     }) => {
       console.log("🎯 Formik Render - SSN Debug:", {
         currentStep,
@@ -2993,12 +3062,11 @@ const Institution = () => {
           </div>
 
           <div
-            className={`space-y-6 ${values.is_controller === "yes" ? "opacity-75" : ""
-              }`}
+            className="space-y-6"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Row 1: First Name & Middle Name */}
-              <FormField
+              <RequiredFormField
                 id="controller_first_name"
                 label="First Name"
                 name="controller_first_name"
@@ -3011,8 +3079,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_first_name}
                 error={errors.controller_first_name}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_first_name"), values)}
                 fieldStyles={FIELD_STYLES}
               />
               <FormField
@@ -3028,12 +3095,11 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_middle_name}
                 error={errors.controller_middle_name}
-                disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
 
               {/* Row 2: Last Name & Email */}
-              <FormField
+              <RequiredFormField
                 id="controller_last_name"
                 label="Last Name"
                 name="controller_last_name"
@@ -3046,11 +3112,10 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_last_name}
                 error={errors.controller_last_name}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_last_name"), values)}
                 fieldStyles={FIELD_STYLES}
               />
-              <FormField
+              <RequiredFormField
                 id="controller_email"
                 label="Email"
                 name="controller_email"
@@ -3064,8 +3129,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_email}
                 error={errors.controller_email}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_email"), values)}
                 fieldStyles={FIELD_STYLES}
               />
 
@@ -3082,8 +3146,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_password}
                 error={errors.controller_password}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                required={isFieldMandatory(resolveApiFieldName("controller_password"), values)}
                 visible={showPassword}
                 onToggleVisibility={() => dispatch(togglePasswordVisibility())}
                 validationRules={passwordValidationRules}
@@ -3101,8 +3164,7 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_confirm_password}
                 error={errors.controller_confirm_password}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                required={isFieldMandatory(resolveApiFieldName("controller_confirm_password"), values)}
                 visible={showConfirmPassword}
                 onToggleVisibility={() =>
                   dispatch(toggleConfirmPasswordVisibility())
@@ -3111,7 +3173,7 @@ const Institution = () => {
               />
 
               {/* Row 4: Resident Country & Nationality */}
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_resident_country"
                 label="Resident Country"
                 options={countryOptions || []}
@@ -3131,13 +3193,12 @@ const Institution = () => {
                 )}
                 touched={touched.controller_resident_country}
                 error={errors.controller_resident_country}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_resident_country"), values)}
                 isLoading={countriesLoading || countryOptions.length === 0}
                 isCountryField={true}
                 showPhoneCode={false}
               />
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_nationality"
                 label="Nationality"
                 options={nationalityOptions}
@@ -3157,8 +3218,7 @@ const Institution = () => {
                 )}
                 touched={touched.controller_nationality}
                 error={errors.controller_nationality}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_nationality"), values)}
                 isCountryField={true}
                 showPhoneCode={false}
               />
@@ -3167,11 +3227,11 @@ const Institution = () => {
               <div className="md:col-span-2">
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Phone Number <span className="text-red-500">*</span>
+                    Phone Number
                   </label>
                   <div className="flex space-x-3">
                     <div className="w-1/2 min-w-[180px]">
-                      <CustomSelect
+                      <RequiredCustomSelect
                         id="controller_mobilenumber_countrycode"
                         label="Country Code"
                         options={countryOptions}
@@ -3199,15 +3259,14 @@ const Institution = () => {
                         onBlur={handleBlur}
                         touched={touched.controller_mobilenumber_countrycode}
                         error={errors.controller_mobilenumber_countrycode}
-                        required={values.is_controller === "no"}
-                        disabled={values.is_controller === "yes"}
+                        isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobilenumber_countrycode"), values)}
                         isLoading={countriesLoading}
                         isCountryField={true}
                         showPhoneCode={true}
                       />
                     </div>
                     <div className="w-1/2">
-                      <FormField
+                      <RequiredFormField
                         id="controller_mobile_number"
                         label="Phone Number"
                         name="controller_mobile_number"
@@ -3219,8 +3278,7 @@ const Institution = () => {
                         onBlur={handleBlur}
                         touched={touched.controller_mobile_number}
                         error={errors.controller_mobile_number}
-                        required={values.is_controller === "no"}
-                        disabled={values.is_controller === "yes"}
+                        isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobile_number"), values)}
                         placeholder="e.g., 1234567890"
                         fieldStyles={FIELD_STYLES}
                       />
@@ -3230,7 +3288,7 @@ const Institution = () => {
               </div>
 
               {/* Row 6: Country & Zip */}
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_country"
                 label="Country"
                 options={countryOptions}
@@ -3250,8 +3308,7 @@ const Institution = () => {
                 )}
                 touched={touched.controller_country}
                 error={errors.controller_country}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_country"), values)}
                 isLoading={countriesLoading}
                 isCountryField={true}
                 showPhoneCode={false}
@@ -3259,7 +3316,7 @@ const Institution = () => {
 
               {/* ZIP/Postal Code - With lookup */}
               <div className="relative">
-                <FormField
+                <RequiredFormField
                   id="controller_zip_code"
                   label="ZIP/Postal Code"
                   name="controller_zip_code"
@@ -3294,8 +3351,7 @@ const Institution = () => {
                   onFocus={() => setActiveField("controller_zip_code")}
                   touched={touched.controller_zip_code}
                   error={errors.controller_zip_code}
-                  required={values.is_controller === "no"}
-                  disabled={values.is_controller === "yes"}
+                  isMandatory={isFieldMandatory(resolveApiFieldName("controller_zip_code"), values)}
                   fieldStyles={FIELD_STYLES}
                 />
                 {isZipLoading && activeField === "controller_zip_code" && (
@@ -3309,6 +3365,7 @@ const Institution = () => {
               <div className="space-y-2">
                 <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
                   State/Province
+                  <RequiredMark fieldName="controller_state" />
                 </label>
 
                 {controllerStates && controllerStates.length > 0 ? (
@@ -3434,8 +3491,8 @@ const Institution = () => {
                     disabled={controllerStatesLoading || !values.controller_country || values.is_controller === "yes"}
                     placeholder={controllerStatesLoading ? "Loading states..." : !values.controller_country ? "Please select country first" : "Enter state/province..."}
                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-        ${(!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
-        ${touched.controller_state && errors.controller_state
+          ${(!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+          ${touched.controller_state && errors.controller_state
                         ? "border-red-500 focus:ring-red-500"
                         : "border-gray-300 focus:ring-blue-500"
                       }`}
@@ -3457,7 +3514,7 @@ const Institution = () => {
               </div>
 
               {/* City & Street Address 1 */}
-              <FormField
+              <RequiredFormField
                 id="controller_city"
                 label="City"
                 name="controller_city"
@@ -3470,11 +3527,10 @@ const Institution = () => {
                 onFocus={() => setActiveField("controller_city")}
                 touched={touched.controller_city}
                 error={errors.controller_city}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_city"), values)}
                 fieldStyles={FIELD_STYLES}
               />
-              <FormField
+              <RequiredFormField
                 id="controller_street_address_1"
                 label="Street Address 1"
                 name="controller_street_address_1"
@@ -3487,13 +3543,12 @@ const Institution = () => {
                 onFocus={() => setActiveField("controller_street_address_1")}
                 touched={touched.controller_street_address_1}
                 error={errors.controller_street_address_1}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_street_address_1"), values)}
                 fieldStyles={FIELD_STYLES}
               />
 
               {/* Street Address 2 (Optional) */}
-              <FormField
+              <RequiredFormField
                 id="controller_street_address_2"
                 label="Street Address 2/ Suite Address (Optional)"
                 name="controller_street_address_2"
@@ -3506,13 +3561,11 @@ const Institution = () => {
                 onFocus={() => setActiveField("controller_street_address_2")}
                 touched={touched.controller_street_address_2}
                 error={errors.controller_street_address_2}
-                disabled={values.is_controller === "yes"}
                 fieldStyles={FIELD_STYLES}
               />
 
               {/* Row 9: Gender */}
-
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_gender"
                 label="Gender"
                 options={genderOptions}
@@ -3532,12 +3585,11 @@ const Institution = () => {
                 )}
                 touched={touched.controller_gender}
                 error={errors.controller_gender}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_gender"), values)}
               />
 
               {/* Row 10: Date of Birth & Designation */}
-              <FormField
+              <RequiredFormField
                 id="controller_dob"
                 label="Date of Birth"
                 name="controller_dob"
@@ -3547,11 +3599,10 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_dob}
                 error={errors.controller_dob}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_dob"), values)}
                 fieldStyles={FIELD_STYLES}
               />
-              <FormField
+              <RequiredFormField
                 id="controller_designation"
                 label="Designation"
                 name="controller_designation"
@@ -3563,12 +3614,11 @@ const Institution = () => {
                 onBlur={handleBlur}
                 touched={touched.controller_designation}
                 error={errors.controller_designation}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_designation"), values)}
                 fieldStyles={FIELD_STYLES}
               />
 
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_doc_type"
                 label="ID Document Type"
                 options={idDocumentTypeOptions}
@@ -3588,8 +3638,7 @@ const Institution = () => {
                 )}
                 touched={touched.controller_doc_type}
                 error={errors.controller_doc_type}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_type"), values)}
               />
 
               {(function () {
@@ -3661,7 +3710,7 @@ const Institution = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
+              <RequiredFormField
                 id="controller_doc_id"
                 label="ID Document Number"
                 name="controller_doc_id"
@@ -3671,12 +3720,11 @@ const Institution = () => {
                 onFocus={() => setActiveField("controller_doc_id")}
                 touched={touched.controller_doc_id}
                 error={errors.controller_doc_id}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_id"), values)}
                 fieldStyles={FIELD_STYLES}
                 placeholder="Enter ID document number"
               />
-              <CustomSelect
+              <RequiredCustomSelect
                 id="controller_doc_country"
                 label="ID Issuing Country"
                 options={countryOptions}
@@ -3696,8 +3744,7 @@ const Institution = () => {
                 )}
                 touched={touched.controller_doc_country}
                 error={errors.controller_doc_country}
-                required={values.is_controller === "no"}
-                disabled={values.is_controller === "yes"}
+                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_country"), values)}
                 isLoading={countriesLoading}
                 isCountryField={true}
                 showPhoneCode={false}
@@ -3708,6 +3755,8 @@ const Institution = () => {
 
       );
     },
+    ),
+    [currentStep, locationStateData],
   );
 
   return (
@@ -4189,6 +4238,184 @@ const Institution = () => {
 
           const shouldShowSSNField = isNamedAccount && values.country === 186;
 
+          const resolveApiFieldName = useCallback((fieldId) => {
+            const fieldMapping = {
+              // Step 1 - Business Information
+              institution_account_type_id: 'institution_account_type_id',
+              institution_type_id: 'institution_type_id',
+              institution_name: 'institution_name',
+              registration_number: 'registration_number',
+              business_alias: 'business_alias',
+              business_type: 'business_type',
+              industry_type: 'industry_type',
+              ein: 'ein',
+              naice_code: 'naice_code',
+              business_email: 'business_email',
+              business_website: 'business_website',
+              date_incorporation: 'date_incorporation',
+              annual_equivalent_amount: 'annual_equivalent_amount',
+              annual_equivalent_amount_currency: 'annual_equivalent_amount_currency',
+              purpose_of_account: 'purpose_of_account',
+              no_of_trading_names: 'no_of_trading_names',
+              trading_names_list: 'trading_names_list',
+              business_website_social_media: 'business_website_social_media',
+              trust_purpose: 'trust_purpose',
+              tax_id: 'tax_id',
+              business_model_overview: 'business_model_overview',
+              business_size: 'business_size',
+              high_risk_countries: 'high_risk_countries',
+              specify_high_risk_countries: 'specify_high_risk_countries',
+              conducting_payment_activities: 'conducting_payment_activities',
+              employees_number: 'employees_number',
+              reason_for_payments: 'reason_for_payments',
+              product_services_required: 'product_services_required',
+              beneficiary_types: 'beneficiary_types',
+              beneficiary_types_other: 'beneficiary_types_other',
+              beneficiary_industries_top_5: 'beneficiary_industries_top_5',
+              expected_frequency_payments_out: 'expected_frequency_payments_out',
+              expected_avg_payments_out_currency: 'expected_avg_payments_out_currency',
+              expected_avg_payments_out_amount: 'expected_avg_payments_out_amount',
+              sender_types: 'sender_types',
+              sender_types_other: 'sender_types_other',
+              sender_industries_top_5: 'sender_industries_top_5',
+              countries_to_receive_funds_from: 'countries_to_receive_funds_from',
+              countries_to_send_funds_to: 'customer_sending_countries',
+              expected_frequency_payments_in: 'expected_frequency_payments_in',
+              expected_avg_payments_in_currency: 'expected_avg_payments_in_currency',
+              expected_avg_payments_in_amount: 'expected_avg_payments_in_amount',
+              registered_address_street_country: 'registered_address_street_country',
+              registered_address_street_zip: 'registered_address_street_zip',
+              registered_address_street_1: 'registered_address_street_1',
+              registered_address_street_2: 'registered_address_street_2',
+              registered_address_street_city: 'registered_address_street_city',
+              registered_address_street_state: 'registered_address_street_state',
+              registered_business_address_apartment_unit_no: 'registered_business_address_apartment_unit_no',
+              registered_business_address_suburb: 'registered_business_address_suburb',
+              same_as_registered_address: 'same_as_registered_address',
+              principal_business_address_region_id: 'principal_business_address_region_id',
+              principal_business_address_country: 'principal_business_address_country',
+              principal_business_address_postal_code: 'principal_business_address_postal_code',
+              principal_business_street: 'principal_business_street',
+              principal_business_address_city: 'principal_business_address_city',
+              principal_business_address_state: 'principal_business_address_state',
+              principal_business_address_apartment_unit_no: 'principal_business_address_apartment_unit_no',
+              principal_business_address_suburb: 'principal_business_address_suburb',
+              pep_associated: 'is_pep_associated',
+
+              // Step 2 - Responsible Person Information
+              first_name: 'first_name',
+              last_name: 'last_name',
+              email: 'email',
+              mobilenumber_countrycode: 'mobilenumber_countrycode',
+              mobile_number: 'mobile_number',
+              password: 'password',
+              confirm_password: 'confirm_password',
+              resident_country: 'resident_country',
+              nationality: 'nationality',
+              country: 'country',
+              state: 'state',
+              city: 'city',
+              street_address_1: 'street_address_1',
+              zip_code: 'zip_code',
+              gender: 'gender',
+              dob: 'dob',
+              designation: 'designation',
+              responsible_person_occupation: 'responsible_person_occupation',
+              doc_type: 'doc_type',
+              doc_id: 'doc_id',
+              doc_country: 'doc_country',
+              id_issued_date: 'id_issued_date',
+              terms_and_conditions: 'terms_and_conditions',
+
+              // Step 3 - Controller Information
+              controller_first_name: 'controllerFirstName',
+              controller_middle_name: 'controller_middle_name',
+              controller_last_name: 'controllerLastName',
+              controller_email: 'controller_email',
+              controller_password: 'controller_password',
+              controller_confirm_password: 'controller_confirm_password',
+              controller_resident_country: 'resident_country',
+              controller_nationality: 'nationality',
+              controller_mobilenumber_countrycode: 'controller_mobilenumber_countrycode',
+              controller_mobile_number: 'controller_mobile_number',
+              controller_country: 'controller_  country',
+              controller_zip_code: 'controllerZipCode',
+              controller_state: 'state',
+              controller_city: 'city',
+              controller_street_address_1: 'street_address_1',
+              controller_street_address_2: 'controller_street_address_2',
+              controller_gender: 'gender',
+              controller_dob: 'dob',
+              controller_designation: 'controller_designation',
+              controller_doc_type: 'controller_doc_type',
+              controller_doc_id: 'controller_doc_id',
+              controller_doc_country: 'id_issue_country_id',
+              doc_state: 'doc_state',
+              controllerHouseNumber: 'controllerApartmentUnitNumber',
+              percentage_of_shares: 'controller_percentage_of_shares',
+              suburb: 'suburb',
+              controller_past_nationalities: 'controller_past_nationalities',
+              aliases: 'aliases',
+              director_role_id: 'director_role_id',
+              has_nominees: 'nominees',
+              customer_controller_nominees: 'customer_controller_nominees',
+
+              // Step 4 - Owner Information
+              owner_role_id: 'owner_role_id',
+              owner_nationality_id: 'owner_nationality_id',
+              owner_phone_number: 'owner_phone_number',
+              owner_first_name: 'owner_first_name',
+              owner_last_name: 'owner_last_name',
+              doc_country: 'doc_country',
+              doc_id: 'doc_id',
+              ownership_percentage: 'ownership_percentage',
+              owner_dob: 'owner_dob',
+              owner_resident_country_id: 'owner_resident_country_id',
+              apartment_unit: 'apartment_unit',
+              owner_zip_code: 'owner_zip_code',
+              owner_gender_id: 'owner_gender_id',
+              owner_state: 'owner_state',
+              owner_email: 'owner_email',
+              owner_phone_number_country_code: 'owner_phone_number_country_code',
+              owner_if: 'owner_if',
+              owner_type: 'owner_type',
+
+            };
+
+            const mappedField = fieldMapping[fieldId] || fieldId;
+            return mappedField;
+          }, []);
+          const valuesRef = useRef(values);
+          valuesRef.current = values;
+
+          const RequiredFormField = useCallback(
+            (props) => (
+              <FormField
+                {...props}
+                required={isFieldMandatory(resolveApiFieldName(props.id), valuesRef.current)}
+              />
+            ),
+            [isFieldMandatory, resolveApiFieldName],
+          );
+
+          const RequiredCustomSelect = useCallback(
+            (props) => (
+              <CustomSelect
+                {...props}
+                required={isFieldMandatory(resolveApiFieldName(props.id), valuesRef.current)}
+              />
+            ),
+            [isFieldMandatory, resolveApiFieldName],
+          );
+
+          const RequiredMark = useCallback(
+            ({ fieldName }) =>
+              isFieldMandatory(resolveApiFieldName(fieldName), valuesRef.current) ? (
+                <span className="text-red-500 ml-1">*</span>
+              ) : null,
+            [isFieldMandatory, resolveApiFieldName],
+          );
+
           // Debug log for field visibility
           console.log("🎯 FIELD VISIBILITY DEBUG:", {
             isNamedAccount,
@@ -4248,7 +4475,7 @@ const Institution = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       {/* Institution Account Type */}
                       <div>
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="institution_account_type_id"
                           label="Institution Account Type"
                           name="institution_account_type_id"
@@ -4276,7 +4503,6 @@ const Institution = () => {
                           onBlur={handleBlur}
                           touched={touched.institution_account_type_id}
                           error={errors.institution_account_type_id}
-                          required={true}
                           isLoading={institutionAccountTypesLoading}
                           placeholder="Select institution account type..."
                         />
@@ -4287,7 +4513,7 @@ const Institution = () => {
 
                       {/* Institution Type - Side by side */}
                       <div>
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="institution_type_id"
                           label="Institution Type"
                           name="institution_type_id"
@@ -4314,7 +4540,6 @@ const Institution = () => {
                           onBlur={handleBlur}
                           touched={touched.institution_type_id}
                           error={errors.institution_type_id}
-                          required={true}
                           isLoading={!institutionTypes || institutionTypes.length === 0}
                           placeholder="Select institution type..."
                         />
@@ -4326,7 +4551,7 @@ const Institution = () => {
 
                     {/* Business Name and Registration Number on same row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <FormField
+                      <RequiredFormField
                         id="institution_name"
                         label="Business Name"
                         name="institution_name"
@@ -4340,11 +4565,10 @@ const Institution = () => {
                         onFocus={() => setActiveField("institution_name")}
                         touched={touched.institution_name}
                         error={errors.institution_name}
-                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
-                      <FormField
+                      <RequiredFormField
                         id="registration_number"
                         label="Registration Number"
                         name="registration_number"
@@ -4357,7 +4581,6 @@ const Institution = () => {
                         onFocus={() => setActiveField("registration_number")}
                         touched={touched.registration_number}
                         error={errors.registration_number}
-                        required
                         activeField={activeField}
                         fieldStyles={FIELD_STYLES}
                       />
@@ -4367,7 +4590,7 @@ const Institution = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       {/* Business Alias - Always show if either condition is true */}
                       {(isNamedAccount || remittanceOnlyAccepted) && (
-                        <FormField
+                        <RequiredFormField
                           id="business_alias"
                           label="Business Alias"
                           name="business_alias"
@@ -4381,7 +4604,6 @@ const Institution = () => {
                           onFocus={() => setActiveField("business_alias")}
                           touched={touched.business_alias}
                           error={errors.business_alias}
-                          required={true}
                           activeField={activeField}
                           placeholder="Unique business identifier"
                           fieldStyles={FIELD_STYLES}
@@ -4390,7 +4612,7 @@ const Institution = () => {
 
                       {/* Business Type - Always show if either condition is true */}
                       {(isNamedAccount || remittanceOnlyAccepted) && (
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="business_type"
                           label="Business Type"
                           options={businessTypeOptions}
@@ -4404,14 +4626,13 @@ const Institution = () => {
                           )}
                           touched={touched.business_type}
                           error={errors.business_type}
-                          required={true}
                         />
                       )}
                     </div>
 
                     {/* Industry Type and Annual Currency - Side by side */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <CustomSelect
+                      <RequiredCustomSelect
                         id="industry_type"
                         label="Industry Type"
                         name="industry_type"
@@ -4427,11 +4648,10 @@ const Institution = () => {
                         options={industryTypeOptions}
                         touched={touched.industry_type}
                         error={errors.industry_type}
-                        required={true}
                         placeholder="Select Industry Type"
                       />
 
-                      <CustomSelect
+                      <RequiredCustomSelect
                         id="annual_equivalent_amount_currency"
                         label="Annual Equivalent Amount Currency"
                         options={currencyOptions}
@@ -4453,13 +4673,12 @@ const Institution = () => {
                         error={errors.annual_equivalent_amount_currency}
                         placeholder="Select currency"
                         isLoading={transactionCurrenciesLoading}
-                        required={false}
                       />
                     </div>
 
                     {/* Annual Equivalent Amount and Purpose of Account - Side by side */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      <FormField
+                      <RequiredFormField
                         id="annual_equivalent_amount"
                         label="Annual Equivalent Amount"
                         name="annual_equivalent_amount"
@@ -4478,7 +4697,7 @@ const Institution = () => {
                         fieldStyles={FIELD_STYLES}
                       />
 
-                      <FormField
+                      <RequiredFormField
                         id="purpose_of_account"
                         label="Purpose of Account"
                         name="purpose_of_account"
@@ -4496,7 +4715,7 @@ const Institution = () => {
                       />
 
                       <div>
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="no_of_trading_names"
                           label="Number of Trading Names"
                           options={[
@@ -4539,14 +4758,13 @@ const Institution = () => {
                           onBlur={handleBlur}
                           touched={touched.no_of_trading_names}
                           error={errors.no_of_trading_names}
-                          required={false}
                           placeholder="Select number of trading names..."
                           isLoading={false}
                           isClearable={true}
                         />
                         {/* <p className="text-xs text-gray-500 mt-1">
-                          Select how many trading names your business operates under 
-                        </p> */}
+                            Select how many trading names your business operates under 
+                          </p> */}
                       </div>
 
                       {/* Dynamic Trading Names Input Fields - Plain text fields, no icons */}
@@ -4599,7 +4817,7 @@ const Institution = () => {
                       )}
 
                       <div>
-                        <FormField
+                        <RequiredFormField
                           id="business_website_social_media"
                           label="Social Media or Website "
                           name="business_website_social_media"
@@ -4609,14 +4827,13 @@ const Institution = () => {
                           onFocus={() => setActiveField("business_website_social_media")}
                           touched={touched.business_website_social_media}
                           error={errors.business_website_social_media}
-                          required={false}
                           placeholder="https://www.example.com or @socialmediahandle"
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                         {/* <p className="text-xs text-gray-500 mt-1">
-                          Enter your company website URL or social media profile link
-                        </p> */}
+                            Enter your company website URL or social media profile link
+                          </p> */}
                       </div>
 
                       {values.institution_type_id && (
@@ -4628,7 +4845,7 @@ const Institution = () => {
 
                           return isTrustType ? (
                             <div>
-                              <FormField
+                              <RequiredFormField
                                 id="trust_purpose"
                                 label="Purpose of the Trust Account"
                                 name="trust_purpose"
@@ -4640,21 +4857,20 @@ const Institution = () => {
                                 onFocus={() => setActiveField("trust_purpose")}
                                 touched={touched.trust_purpose}
                                 error={errors.trust_purpose}
-                                required={false}
                                 placeholder="Please describe the purpose of this trust account"
                                 activeField={activeField}
                                 fieldStyles={FIELD_STYLES}
                               />
                               {/* <p className="text-xs text-gray-500 mt-1">
-                                  Provide information about the trust's purpose, beneficiaries, and intended use 
-                                </p> */}
+                                    Provide information about the trust's purpose, beneficiaries, and intended use 
+                                  </p> */}
                             </div>
                           ) : null;
                         })()
                       )}
 
                       <div className="mt-2">
-                        <FormField
+                        <RequiredFormField
                           id="tax_id"
                           label="Tax ID "
                           name="tax_id"
@@ -4664,20 +4880,20 @@ const Institution = () => {
                           onFocus={() => setActiveField("tax_id")}
                           touched={touched.tax_id}
                           error={errors.tax_id}
-                          required={false}
                           placeholder="XX-XXXXXXX or Tax Registration Number"
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
                         {/* <p className="text-xs text-gray-500 mt-1">
-                          Enter your Tax ID (EIN for US entities, TRN for other countries)
-                        </p> */}
+                            Enter your Tax ID (EIN for US entities, TRN for other countries)
+                          </p> */}
                       </div>
 
                       {/* NEW: PEP Associated Field */}
                       <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Are you PEP (Politically Exposed Person) associated? <span className="text-red-500">*</span>
+                          Are you PEP (Politically Exposed Person) associated?
+                          <RequiredMark fieldName="pep_associated" />
                         </label>
                         <div className="flex items-center space-x-6">
                           <label className="inline-flex items-center cursor-pointer">
@@ -4734,7 +4950,7 @@ const Institution = () => {
                       <div className="space-y-6">
                         {/* Business Model Overview */}
                         <div>
-                          <FormField
+                          <RequiredFormField
                             id="business_model_overview"
                             label="Business Model Overview"
                             name="business_model_overview"
@@ -4749,7 +4965,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("business_model_overview")}
                             touched={touched.business_model_overview}
                             error={errors.business_model_overview}
-                            required={false}
                             activeField={activeField}
                             placeholder="Describe your business model"
                             fieldStyles={FIELD_STYLES}
@@ -4758,7 +4973,7 @@ const Institution = () => {
 
                         {/* Business Size and High Risk Countries */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="business_size"
                             label="Business Size"
                             options={[
@@ -4785,6 +5000,7 @@ const Institution = () => {
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               High Risk Countries Involved
+                              <RequiredMark fieldName="high_risk_countries" />
                             </label>
                             <div className="flex items-center space-x-4 mb-4">
                               <label className="inline-flex items-center cursor-pointer">
@@ -4850,7 +5066,7 @@ const Institution = () => {
                             {/* Conditional multi-select for specifying high risk countries */}
                             {values.high_risk_countries === 1 && (
                               <div className="mt-3">
-                                <CustomSelect
+                                <RequiredCustomSelect
                                   id="specify_high_risk_countries"
                                   label="Specify High Risk Countries"
                                   options={countryOptions}
@@ -4884,7 +5100,6 @@ const Institution = () => {
                                   error={errors.specify_high_risk_countries}
                                   placeholder="Select high risk countries..."
                                   isLoading={countriesLoading}
-                                  required={false}
                                 />
                               </div>
                             )}
@@ -4893,7 +5108,7 @@ const Institution = () => {
 
                         {/* Conducting Payment Activities */}
                         <div>
-                          <FormField
+                          <RequiredFormField
                             id="conducting_payment_activities"
                             label="Conducting Payment Activities"
                             name="conducting_payment_activities"
@@ -4908,7 +5123,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("conducting_payment_activities")}
                             touched={touched.conducting_payment_activities}
                             error={errors.conducting_payment_activities}
-                            required={false}
                             activeField={activeField}
                             placeholder="Describe your payment activities"
                             fieldStyles={FIELD_STYLES}
@@ -4917,7 +5131,7 @@ const Institution = () => {
 
                         {/* Employees Number - USING YOUR DYNAMIC API */}
                         <div>
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="employees_number"
                             label="Number of Employees"
                             options={employeesNumberTypes.map(type => ({
@@ -4939,7 +5153,6 @@ const Institution = () => {
                             onBlur={handleBlur}
                             touched={touched.employees_number}
                             error={errors.employees_number}
-                            required={false}
                             placeholder="Select number of employees"
                             isLoading={employeesNumberLoading}
                           />
@@ -4947,7 +5160,7 @@ const Institution = () => {
 
                         {/* Reason for Payments */}
                         <div>
-                          <FormField
+                          <RequiredFormField
                             id="reason_for_payments"
                             label="Reason for Payments"
                             name="reason_for_payments"
@@ -4962,7 +5175,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("reason_for_payments")}
                             touched={touched.reason_for_payments}
                             error={errors.reason_for_payments}
-                            required={false}
                             placeholder="Explain the reason for payment processing"
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
@@ -4971,7 +5183,7 @@ const Institution = () => {
 
                         {/* Product Services Required */}
                         <div>
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="product_services_required"
                             label="Product Services Required"
                             options={[
@@ -4993,7 +5205,6 @@ const Institution = () => {
                             ].find((opt) => opt.value === values.product_services_required)}
                             touched={touched.product_services_required}
                             error={errors.product_services_required}
-                            required={false}
                             placeholder="Select product services required"
                           />
                         </div>
@@ -5001,7 +5212,7 @@ const Institution = () => {
                         {/* Beneficiary Types */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <CustomSelect
+                            <RequiredCustomSelect
                               id="beneficiary_types"
                               label="Beneficiary Types"
                               options={[
@@ -5024,7 +5235,7 @@ const Institution = () => {
                           </div>
 
                           {values.beneficiary_types === "Other" && (
-                            <FormField
+                            <RequiredFormField
                               id="beneficiary_types_other"
                               label="Other Beneficiary Types"
                               name="beneficiary_types_other"
@@ -5037,7 +5248,6 @@ const Institution = () => {
                               onFocus={() => setActiveField("beneficiary_types_other")}
                               touched={touched.beneficiary_types_other}
                               error={errors.beneficiary_types_other}
-                              required={false}
                               placeholder="Specify other beneficiary types"
                               activeField={activeField}
                               fieldStyles={FIELD_STYLES}
@@ -5047,7 +5257,7 @@ const Institution = () => {
 
                         {/* Beneficiary Industries Top 5 */}
                         <div>
-                          <FormField
+                          <RequiredFormField
                             id="beneficiary_industries_top_5"
                             label="Beneficiary Industries Top 5"
                             name="beneficiary_industries_top_5"
@@ -5062,7 +5272,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("beneficiary_industries_top_5")}
                             touched={touched.beneficiary_industries_top_5}
                             error={errors.beneficiary_industries_top_5}
-                            required={false}
                             placeholder="List top 5 beneficiary industries (comma separated)"
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
@@ -5071,7 +5280,7 @@ const Institution = () => {
 
                         {/* Expected Frequency Payments Out */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="expected_frequency_payments_out"
                             label="Expected Frequency of Payments Out"
                             options={[
@@ -5094,7 +5303,7 @@ const Institution = () => {
                             placeholder="Select frequency"
                           />
 
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="expected_avg_payments_out_currency"
                             label="Expected Avg Payments Out Currency"
                             options={[
@@ -5129,10 +5338,9 @@ const Institution = () => {
                             touched={touched.expected_avg_payments_out_currency}
                             error={errors.expected_avg_payments_out_currency}
                             placeholder="Select currency"
-                            required={false}
                           />
 
-                          <FormField
+                          <RequiredFormField
                             id="expected_avg_payments_out_amount"
                             label="Expected Avg Payments Out Amount"
                             name="expected_avg_payments_out_amount"
@@ -5147,7 +5355,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("expected_avg_payments_out_amount")}
                             touched={touched.expected_avg_payments_out_amount}
                             error={errors.expected_avg_payments_out_amount}
-                            required={false}
                             placeholder="e.g., 10000.00"
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
@@ -5157,7 +5364,7 @@ const Institution = () => {
                         {/* Sender Types */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <CustomSelect
+                            <RequiredCustomSelect
                               id="sender_types"
                               label="Sender Types"
                               options={[
@@ -5180,7 +5387,7 @@ const Institution = () => {
                           </div>
 
                           {values.sender_types === "Other" && (
-                            <FormField
+                            <RequiredFormField
                               id="sender_types_other"
                               label="Other Sender Types"
                               name="sender_types_other"
@@ -5193,7 +5400,6 @@ const Institution = () => {
                               onFocus={() => setActiveField("sender_types_other")}
                               touched={touched.sender_types_other}
                               error={errors.sender_types_other}
-                              required={false}
                               placeholder="Specify other sender types"
                               activeField={activeField}
                               fieldStyles={FIELD_STYLES}
@@ -5203,7 +5409,7 @@ const Institution = () => {
 
                         {/* Sender Industries Top 5 */}
                         <div>
-                          <FormField
+                          <RequiredFormField
                             id="sender_industries_top_5"
                             label="Sender Industries Top 5"
                             name="sender_industries_top_5"
@@ -5218,7 +5424,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("sender_industries_top_5")}
                             touched={touched.sender_industries_top_5}
                             error={errors.sender_industries_top_5}
-                            required={false}
                             placeholder="List top 5 sender industries (comma separated)"
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
@@ -5227,7 +5432,7 @@ const Institution = () => {
 
                         {/* Countries to Receive Funds From - ADD THIS SECTION */}
                         <div>
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="countries_to_receive_funds_from"
                             label="Countries to Receive Funds From"
                             options={countryOptions}
@@ -5256,13 +5461,13 @@ const Institution = () => {
                             error={errors.countries_to_receive_funds_from}
                             placeholder="Select countries to receive funds from..."
                             isLoading={countriesLoading}
-                            required={false}
+
                           />
                         </div>
 
-                        {/* Countries to Send Funds To */}
+                        {/* Countries Sending  */}
                         <div>
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="countries_to_send_funds_to"
                             label="Countries to Send Funds To"
                             options={countryOptions}
@@ -5291,13 +5496,12 @@ const Institution = () => {
                             error={errors.countries_to_send_funds_to}
                             placeholder="Select countries to send funds to..."
                             isLoading={countriesLoading}
-                            required={false}
                           />
                         </div>
 
                         {/* Expected Frequency Payments In */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="expected_frequency_payments_in"
                             label="Expected Frequency of Payments In"
                             options={[
@@ -5320,7 +5524,7 @@ const Institution = () => {
                             placeholder="Select frequency"
                           />
 
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="expected_avg_payments_in_currency"
                             label="Expected Avg Payments IN Currency"
                             options={[
@@ -5355,10 +5559,9 @@ const Institution = () => {
                             touched={touched.expected_avg_payments_in_currency}
                             error={errors.expected_avg_payments_in_currency}
                             placeholder="Select currency"
-                            required={false}
                           />
 
-                          <FormField
+                          <RequiredFormField
                             id="expected_avg_payments_in_amount"
                             label="Expected Avg Payments In Amount"
                             name="expected_avg_payments_in_amount"
@@ -5373,7 +5576,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("expected_avg_payments_in_amount")}
                             touched={touched.expected_avg_payments_in_amount}
                             error={errors.expected_avg_payments_in_amount}
-                            required={false}
                             placeholder="e.g., 10000.00"
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
@@ -5386,7 +5588,7 @@ const Institution = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 mt-4">
                       {/* EIN Field - Always show if either condition is true */}
                       {(isNamedAccount || remittanceOnlyAccepted) && (
-                        <FormField
+                        <RequiredFormField
                           id="ein"
                           label="EIN (Employer Identification Number)"
                           name="ein"
@@ -5408,7 +5610,6 @@ const Institution = () => {
                           onFocus={() => setActiveField("ein")}
                           touched={touched.ein}
                           error={errors.ein}
-                          required={true}
                           placeholder="XX-XXXXXXX"
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
@@ -5417,7 +5618,7 @@ const Institution = () => {
 
                       {/* NAICS Code Field - Always show if either condition is true */}
                       {(isNamedAccount || remittanceOnlyAccepted) && (
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="naice_code"
                           label="NAICS Code (Required for USD Named Accounts)"
                           options={naicsOptions}
@@ -5431,7 +5632,6 @@ const Institution = () => {
                           )}
                           touched={touched.naice_code}
                           error={errors.naice_code}
-                          required={true}
                         />
                       )}
                     </div>
@@ -5443,7 +5643,7 @@ const Institution = () => {
 
                       {/* 1. Country - MOVED TO TOP */}
                       <div className="mb-4">
-                        <CustomSelect
+                        <RequiredCustomSelect
                           id="registered_address_street_country"
                           label="Country"
                           options={countryOptions}
@@ -5458,7 +5658,6 @@ const Institution = () => {
                           )}
                           touched={touched.registered_address_street_country}
                           error={errors.registered_address_street_country}
-                          required
                           isLoading={countriesLoading}
                           isCountryField={true}
                           showPhoneCode={false}
@@ -5467,7 +5666,7 @@ const Institution = () => {
 
                       {/* 2. ZIP/Postal Code - MOVED TO SECOND */}
                       <div className="mb-4">
-                        <FormField
+                        <RequiredFormField
                           id="registered_address_street_zip"
                           label="ZIP/Postal Code"
                           name="registered_address_street_zip"
@@ -5505,7 +5704,6 @@ const Institution = () => {
                           }
                           touched={touched.registered_address_street_zip}
                           error={errors.registered_address_street_zip}
-                          required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
@@ -5519,7 +5717,7 @@ const Institution = () => {
 
                       {/* 3. Street Address 1 & 2 */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <FormField
+                        <RequiredFormField
                           id="registered_address_street_1"
                           label="Street Address"
                           name="registered_address_street_1"
@@ -5534,11 +5732,10 @@ const Institution = () => {
                           }
                           touched={touched.registered_address_street_1}
                           error={errors.registered_address_street_1}
-                          required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        <FormField
+                        <RequiredFormField
                           id="registered_address_street_2"
                           label="Street Address 2/ Suite Address (Optional)"
                           name="registered_address_street_2"
@@ -5560,7 +5757,7 @@ const Institution = () => {
 
                       {/* 4. City */}
                       <div className="mb-4">
-                        <FormField
+                        <RequiredFormField
                           id="registered_address_street_city"
                           label="City"
                           name="registered_address_street_city"
@@ -5575,7 +5772,6 @@ const Institution = () => {
                           }
                           touched={touched.registered_address_street_city}
                           error={errors.registered_address_street_city}
-                          required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
@@ -5588,6 +5784,7 @@ const Institution = () => {
                           <div className="space-y-2">
                             <label htmlFor="registered_address_street_state" className="block text-sm font-medium text-gray-700">
                               State/Province
+                              <RequiredMark fieldName="registered_address_street_state" />
                             </label>
 
                             {states && states.length > 0 ? (
@@ -5713,8 +5910,8 @@ const Institution = () => {
                                 disabled={statesLoading || !values.registered_address_street_country}
                                 placeholder={statesLoading ? "Loading states..." : !values.registered_address_street_country ? "Please select country first" : "Enter state/province..."}
                                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${(!values.registered_address_street_country || statesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
-          ${touched.registered_address_street_state && errors.registered_address_street_state
+            ${(!values.registered_address_street_country || statesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+            ${touched.registered_address_street_state && errors.registered_address_street_state
                                     ? "border-red-500 focus:ring-red-500"
                                     : "border-gray-300 focus:ring-blue-500"
                                   }`}
@@ -5735,7 +5932,7 @@ const Institution = () => {
                             )}
                           </div>
                         </div>
-                        <FormField
+                        <RequiredFormField
                           id="registered_business_address_apartment_unit_no"
                           label="Apartment Number of the business"
                           name="registered_business_address_apartment_unit_no"
@@ -5748,7 +5945,6 @@ const Institution = () => {
                           onFocus={() => setActiveField("registered_business_address_apartment_unit_no")}
                           touched={touched.registered_business_address_apartment_unit_no}
                           error={errors.registered_business_address_apartment_unit_no}
-                          required
                           activeField={activeField}
                           placeholder="e.g., Apt 4B, Unit 12, Suite 100"
                           fieldStyles={FIELD_STYLES}
@@ -5758,7 +5954,7 @@ const Institution = () => {
 
                       {/* Date of Incorporation & Suburb of the business - SIDE BY SIDE */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <FormField
+                        <RequiredFormField
                           id="date_incorporation"
                           label="Date of Incorporation"
                           name="date_incorporation"
@@ -5769,11 +5965,10 @@ const Institution = () => {
                           onFocus={() => setActiveField("date_incorporation")}
                           touched={touched.date_incorporation}
                           error={errors.date_incorporation}
-                          required
                           activeField={activeField}
                           fieldStyles={FIELD_STYLES}
                         />
-                        <FormField
+                        <RequiredFormField
                           id="registered_business_address_suburb"
                           label="Suburb of the business"
                           name="registered_business_address_suburb"
@@ -5783,7 +5978,6 @@ const Institution = () => {
                           onFocus={() => setActiveField("registered_business_address_suburb")}
                           touched={touched.registered_business_address_suburb}
                           error={errors.registered_business_address_suburb}
-                          required={false}
                           activeField={activeField}
                           placeholder="Enter suburb/district"
                           fieldStyles={FIELD_STYLES}
@@ -5801,6 +5995,7 @@ const Institution = () => {
                       <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                         <label className="block text-sm font-medium text-gray-700 mb-3">
                           Is Principal Business Address same as Registered Address?
+                          <RequiredMark fieldName="same_as_registered_address" />
                         </label>
                         <div className="flex items-center space-x-6">
                           <label className="inline-flex items-center cursor-pointer">
@@ -5882,11 +6077,62 @@ const Institution = () => {
                         </div>
                       </div>
 
+                      <div className="mb-4">
+                        <RequiredCustomSelect
+                          id="principal_business_address_region_id"
+                          label="Region"
+                          name="principal_business_address_region_id"
+                          options={regionOptions}
+                          onChange={(option) => {
+                            if (option) {
+                              const value = option.value;
+                              setFieldValue("principal_business_address_region_id", value);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                principal_business_address_region_id: value,
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "principal_business_address_region_id",
+                                  value: value,
+                                }),
+                              );
+                            } else {
+                              setFieldValue("principal_business_address_region_id", "");
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                principal_business_address_region_id: "",
+                              }));
+                              dispatch(
+                                setFormField({
+                                  field: "principal_business_address_region_id",
+                                  value: "",
+                                }),
+                              );
+                            }
+                          }}
+              
+            value={
+                            regionOptions.find(
+                              (opt) =>
+                                opt.value === values.principal_business_address_region_id ||
+                                String(opt.value) === String(values.principal_business_address_region_id)
+                            ) || null
+                          }
+                          onBlur={handleBlur}
+                          touched={touched.principal_business_address_region_id}
+                          error={errors.principal_business_address_region_id}
+                          isLoading={regionsLoading}
+                          placeholder={regionsLoading ? "Loading regions..." : "Select region..."}
+                          isClearable={true}
+                        />
+                      </div>
+
                       {/* Principal Address Fields */}
                       <div className={`space-y-4 ${values.same_as_registered_address === 1 ? "opacity-60" : ""}`}>
                         {/* Country */}
                         <div className="mb-4">
-                          <CustomSelect
+                          <RequiredCustomSelect
                             id="principal_business_address_country"
                             label=" Country"
                             options={countryOptions}
@@ -5894,7 +6140,6 @@ const Institution = () => {
                             value={countryOptions.find((opt) => opt.value === values.principal_business_address_country)}
                             touched={touched.principal_business_address_country}
                             error={errors.principal_business_address_country}
-                            required
                             isLoading={countriesLoading}
                             isCountryField={true}
                             showPhoneCode={false}
@@ -5904,7 +6149,7 @@ const Institution = () => {
 
                         {/* ZIP/Postal Code */}
                         <div className="mb-4">
-                          <FormField
+                          <RequiredFormField
                             id="principal_business_address_postal_code"
                             label="ZIP/Postal Code"
                             name="principal_business_address_postal_code"
@@ -5925,7 +6170,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("principal_business_address_postal_code")}
                             touched={touched.principal_business_address_postal_code}
                             error={errors.principal_business_address_postal_code}
-                            required
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
                             disabled={values.same_as_registered_address === 1}
@@ -5934,7 +6178,7 @@ const Institution = () => {
 
                         {/* Street Address */}
                         <div className="mb-4">
-                          <FormField
+                          <RequiredFormField
                             id="principal_business_street"
                             label=" Street Address"
                             name="principal_business_street"
@@ -5944,7 +6188,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("principal_business_street")}
                             touched={touched.principal_business_street}
                             error={errors.principal_business_street}
-                            required
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
                             disabled={values.same_as_registered_address === 1}
@@ -5953,7 +6196,7 @@ const Institution = () => {
 
                         {/* City & State */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
+                          <RequiredFormField
                             id="principal_business_address_city"
                             label="City"
                             name="principal_business_address_city"
@@ -5963,7 +6206,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("principal_business_address_city")}
                             touched={touched.principal_business_address_city}
                             error={errors.principal_business_address_city}
-                            required
                             activeField={activeField}
                             fieldStyles={FIELD_STYLES}
                             disabled={values.same_as_registered_address === 1}
@@ -5973,6 +6215,7 @@ const Institution = () => {
                             <div className="space-y-2">
                               <label htmlFor="principal_business_address_state" className="block text-sm font-medium text-gray-700">
                                 State/Province
+                                <RequiredMark fieldName="principal_business_address_state" />
                               </label>
 
                               {principalStates && principalStates.length > 0 ? (
@@ -6096,8 +6339,8 @@ const Institution = () => {
                                   disabled={principalStatesLoading || !values.principal_business_address_country || values.same_as_registered_address === 1}
                                   placeholder={principalStatesLoading ? "Loading states..." : !values.principal_business_address_country ? "Please select country first" : "Enter state/province..."}
                                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${(!values.principal_business_address_country || principalStatesLoading || values.same_as_registered_address === 1) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
-          ${touched.principal_business_address_state && errors.principal_business_address_state
+            ${(!values.principal_business_address_country || principalStatesLoading || values.same_as_registered_address === 1) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+            ${touched.principal_business_address_state && errors.principal_business_address_state
                                       ? "border-red-500 focus:ring-red-500"
                                       : "border-gray-300 focus:ring-blue-500"
                                     }`}
@@ -6121,7 +6364,7 @@ const Institution = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
+                          <RequiredFormField
                             id="principal_business_address_apartment_unit_no"
                             label="Number of the address of the business"
                             name="principal_business_address_apartment_unit_no"
@@ -6131,13 +6374,12 @@ const Institution = () => {
                             onFocus={() => setActiveField("principal_business_address_apartment_unit_no")}
                             touched={touched.principal_business_address_apartment_unit_no}
                             error={errors.principal_business_address_apartment_unit_no}
-                            required
                             activeField={activeField}
                             placeholder="e.g., Apt 4B, Suite 100, Unit 12"
                             fieldStyles={FIELD_STYLES}
                             disabled={values.same_as_registered_address === 1}
                           />
-                          <FormField
+                          <RequiredFormField
                             id="principal_business_address_suburb"
                             label="Suburb the business is located in"
                             name="principal_business_address_suburb"
@@ -6147,7 +6389,6 @@ const Institution = () => {
                             onFocus={() => setActiveField("principal_business_address_suburb")}
                             touched={touched.principal_business_address_suburb}
                             error={errors.principal_business_address_suburb}
-                            required={false}
                             activeField={activeField}
                             placeholder="Enter suburb/district"
                             fieldStyles={FIELD_STYLES}
@@ -6171,1120 +6412,1117 @@ const Institution = () => {
                     transition={{ duration: 0.5 }}
                     className="bg-white p-6 rounded-lg shadow-sm"
                   >
-                    <h2 className="text-xl font-semibold mb-4">
-                      Responsible Person Information
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        id="first_name"
-                        label="First Name"
-                        name="first_name"
-                        value={values.first_name || ""}
-                        onChange={enhancedHandleChange(
-                          "first_name",
-                          setFieldValue,
-                          setResponsiblePersonFirstName,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("first_name")}
-                        touched={touched.first_name}
-                        error={errors.first_name}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-                      <FormField
-                        id="middle_name"
-                        label="Middle Name (Optional)"
-                        name="middle_name"
-                        value={values.middle_name || ""}
-                        onChange={enhancedHandleChange(
-                          "middle_name",
-                          setFieldValue,
-                          setResponsiblePersonMiddleName,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("middle_name")}
-                        touched={touched.middle_name}
-                        error={errors.middle_name}
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-                      <FormField
-                        id="last_name"
-                        label="Last Name"
-                        name="last_name"
-                        value={values.last_name || ""}
-                        onChange={enhancedHandleChange(
-                          "last_name",
-                          setFieldValue,
-                          setResponsiblePersonLastName,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("last_name")}
-                        touched={touched.last_name}
-                        error={errors.last_name}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-                      {/* Email Field with Verification */}
-                      <div className="space-y-2">
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                          Email Address <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex gap-2">
-                          <div className="flex-1 relative">
-                            <input
-                              id="email"
-                              name="email"
-                              type="email"
-                              value={values.email || ""}
-                              onChange={(e) => {
-                                enhancedHandleChange("email", setFieldValue, setResponsiblePersonEmail)(e);
-                                // Reset verification when email changes
-                                if (isResponsiblePersonEmailVerified) {
-                                  dispatch(resetEmailVerification());
-                                  setFieldValue("email_verified", false);
-                                }
-                              }}
-                              onBlur={handleBlur}
-                              onFocus={() => setActiveField("email")}
-                              // disabled={isResponsiblePersonEmailVerified}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-            ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
-            ${touched.email && errors.email && !emailIsVerified
-                                  ? "border-red-500 focus:ring-red-500"
-                                  : "border-gray-300 focus:ring-blue-500"
-                                }`}
-                              placeholder="your.email@example.com"
-                            />
-                          </div>
-
-                          {/* Verify Button - Only show when not verified */}
-                          {!emailIsVerified && (
-                            <button
-                              type="button"
-                              onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
-                              disabled={isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")}
-                              className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")
-                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                : "bg-blue-600 text-white hover:bg-blue-700"
-                                }`}
-                            >
-                              {isSendingCode ? (
-                                <div className="flex items-center gap-2">
-                                  <RingLoader size={16} color="#ffffff" />
-                                  <span>Sending...</span>
-                                </div>
-                              ) : (
-                                'Verify'
-                              )}
-                            </button>
-                          )}
-
-                          {/* Verified Badge - Show when verified instead of button */}
-                          {emailIsVerified && (
-                            <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
-                              <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
-                              <span>Verified</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Email field error */}
-                        {touched.email && errors.email && !emailIsVerified && (
-                          <div className="text-red-500 text-xs mt-1 flex items-center">
-                            <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                            {errors.email}
-                          </div>
-                        )}
+                    {mandatoryFieldsLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16">
+                        <RingLoader color="#3b82f6" size={50} loading={mandatoryFieldsLoading} />
+                        <p className="mt-4 text-gray-600 font-medium">
+                          Loading responsible person information...
+                        </p>
                       </div>
-
-                      {/* Verification Code Input (shown after clicking Verify) */}
-                      {showVerificationInput && !emailIsVerified && (
-                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Enter Verification Code
-                          </label>
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <input
-                                type="text"
-                                value={emailVerification?.verificationCode || ""}
-                                onChange={handleVerificationCodeChange}
-                                placeholder="Enter 6-digit code"
-                                maxLength={6}
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyEmailCode(values.email, setFieldValue)}
-                              disabled={isVerifying || !emailVerification?.verificationCode || emailVerification?.verificationCode?.length !== 6}
-                              className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
-                            >
-                              {isVerifying ? (
-                                <div className="flex items-center gap-2">
-                                  <RingLoader size={16} color="#ffffff" />
-                                  <span>Verifying...</span>
-                                </div>
-                              ) : (
-                                'Submit'
-                              )}
-                            </button>
-                          </div>
-
-                          {/* Resend link */}
-                          <div className="mt-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleResendCode(values.email)}
-                              disabled={isSendingCode}
-                              className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
-                            </button>
-                          </div>
-
-                          {/* Error message */}
-                          {emailVerification?.error && (
-                            <p className="text-red-500 text-xs mt-3 flex items-center">
-                              <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
-                              {emailVerification.error}
-                            </p>
-                          )}
-
-                          {/* Success message */}
-                          {emailVerification?.success && !emailIsVerified && (
-                            <p className="text-green-600 text-xs mt-3 flex items-center">
-                              <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                              {emailVerification.success}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      <PasswordField
-                        id="password"
-                        label="Password"
-                        name="password"
-                        value={values.password || ""}
-                        onChange={enhancedPasswordChange(
-                          "password",
-                          setFieldValue,
-                          setResponsiblePersonPassword,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("password")}
-                        touched={touched.password}
-                        error={errors.password}
-                        required
-                        activeField={activeField}
-                        visible={showPassword}
-                        onToggleVisibility={() =>
-                          dispatch(togglePasswordVisibility())
-                        }
-                        validationRules={passwordValidationRules}
-                        fieldStyles={FIELD_STYLES}
-                      />
-                      <PasswordField
-                        id="confirm_password"
-                        label="Confirm Password"
-                        name="confirm_password"
-                        value={values.confirm_password || ""}
-                        onChange={enhancedPasswordChange(
-                          "confirm_password",
-                          setFieldValue,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("confirm_password")}
-                        touched={touched.confirm_password}
-                        error={errors.confirm_password}
-                        required
-                        activeField={activeField}
-                        visible={showConfirmPassword}
-                        onToggleVisibility={() =>
-                          dispatch(toggleConfirmPasswordVisibility())
-                        }
-                        fieldStyles={FIELD_STYLES}
-                        // Add password match validation
-                        showPasswordMatch={
-                          values.password && values.confirm_password
-                        }
-                        passwordsMatch={
-                          values.password === values.confirm_password
-                        }
-                      />
-
-                      {/* Resident Country and Phone Number on same row */}
-                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <CustomSelect
-                          id="resident_country"
-                          label="Resident Country"
-                          options={countryOptions}
-                          onChange={(option) => {
-                            if (option) {
-                              // Update resident country
-                              setFieldValue("resident_country", option.value);
-                              dispatch(setFormField({ field: "resident_country", value: option.value }));
-
-                              // 🔥 AUTO-FILL PHONE COUNTRY CODE based on selected resident country
-                              if (option.phoneCode || option.phone_code) {
-                                const phoneCode = option.phoneCode || option.phone_code;
-
-                                setFieldValue("mobilenumber_countrycode", phoneCode);
-
-                                // NEW
-                                setFieldValue("mobilenumber_country", option.value);
-
-                                dispatch(
-                                  setFormField({
-                                    field: "mobilenumber_countrycode",
-                                    value: phoneCode,
-                                  })
-                                );
-
-                                dispatch(
-                                  setFormField({
-                                    field: "mobilenumber_country",
-                                    value: option.value,
-                                  })
-                                );
-                              }
-                            }
-                          }}
-                          value={
-                            countryOptions.find(
-                              (opt) => opt.value === values.mobilenumber_country
-                            ) ||
-                            countryOptions.find(
-                              (opt) =>
-                                opt.phoneCode === values.mobilenumber_countrycode ||
-                                opt.phone_code === values.mobilenumber_countrycode
-                            )
-                          }
-                          touched={touched.resident_country}
-                          error={errors.resident_country}
-                          required
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        />
-
-                        {/* Phone Number with Verification */}
-                        <div className="md:col-span-2">
+                    ) : (
+                      <>
+                        <h2 className="text-xl font-semibold mb-4">
+                          Responsible Person Information
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <RequiredFormField
+                            id="first_name"
+                            label="First Name"
+                            name="first_name"
+                            value={values.first_name || ""}
+                            onChange={enhancedHandleChange(
+                              "first_name",
+                              setFieldValue,
+                              setResponsiblePersonFirstName,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("first_name")}
+                            touched={touched.first_name}
+                            error={errors.first_name}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                          <RequiredFormField
+                            id="middle_name"
+                            label="Middle Name (Optional)"
+                            name="middle_name"
+                            value={values.middle_name || ""}
+                            onChange={enhancedHandleChange(
+                              "middle_name",
+                              setFieldValue,
+                              setResponsiblePersonMiddleName,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("middle_name")}
+                            touched={touched.middle_name}
+                            error={errors.middle_name}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                          <RequiredFormField
+                            id="last_name"
+                            label="Last Name"
+                            name="last_name"
+                            value={values.last_name || ""}
+                            onChange={enhancedHandleChange(
+                              "last_name",
+                              setFieldValue,
+                              setResponsiblePersonLastName,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("last_name")}
+                            touched={touched.last_name}
+                            error={errors.last_name}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                          {/* Email Field with Verification */}
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Phone Number <span className="text-red-500">*</span>
+                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                              Email Address
+                              <RequiredMark fieldName="email" />
                             </label>
-
-                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
-                              {/* Country Code */}
-                              <div>
-                                <CustomSelect
-                                  id="mobilenumber_countrycode"
-                                  label="Country Code"
-                                  options={countryOptions}
-                                  value={countryOptions.find(
-                                    (opt) => opt.value === values.mobilenumber_country
-                                  )}
-                                  onChange={(option) => {
-                                    if (option) {
-                                      const phoneCode =
-                                        option.phoneCode || option.phone_code || "";
-                                      setFieldValue(
-                                        "mobilenumber_countrycode",
-                                        phoneCode
-                                      );
-                                      setFieldValue(
-                                        "mobilenumber_country",
-                                        option.value
-                                      );
-                                      dispatch(
-                                        setFormField({
-                                          field: "mobilenumber_countrycode",
-                                          value: phoneCode,
-                                        })
-                                      );
-                                      dispatch(
-                                        setFormField({
-                                          field: "mobilenumber_country",
-                                          value: option.value,
-                                        })
-                                      );
-
-                                      // if (isPhoneVerified) {
-                                      //   dispatch(resetPhoneVerification());
-                                      //   setFieldValue("phone_verified", false);
-                                      // }
-                                    }
-                                  }}
-                                  onBlur={handleBlur}
-                                  touched={touched.mobilenumber_countrycode}
-                                  error={errors.mobilenumber_countrycode}
-                                  required
-                                  isLoading={countriesLoading}
-                                  isCountryField={true}
-                                  showPhoneCode={true}
-                                />
-                              </div>
-
-                              {/* Phone + Verify */}
-                              <div className="flex gap-2 items-end md:col-span-2 md:col-start-2 md:row-start-1">
-                                <div className="flex-1">
-                                  <FormField
-                                    id="mobile_number"
-                                    label="Phone Number"
-                                    name="mobile_number"
-                                    value={values.mobile_number || ""}
-                                    onChange={(e) => {
-                                      enhancedHandleChange(
-                                        "mobile_number",
-                                        setFieldValue
-                                      )(e);
-
-                                      // if (isPhoneVerified) {
-                                      //   dispatch(resetPhoneVerification());
-                                      //   setFieldValue("phone_verified", false);
-                                      // }
-                                    }}
-                                    onBlur={handleBlur}
-                                    onFocus={() => setActiveField("mobile_number")}
-                                    touched={touched.mobile_number}
-                                    error={errors.mobile_number}
-                                    required
-                                    activeField={activeField}
-                                    placeholder="e.g., 1234567890"
-                                    fieldStyles={FIELD_STYLES}
-                                  />
-                                </div>
-
-                                {/* {!phoneIsVerified ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleSendPhoneVerificationCode(
-                                        values.mobilenumber_countrycode,
-                                        values.mobile_number,
-                                        setFieldValue
-                                      )
-                                    }
-                                    disabled={
-                                      isPhoneSendingCode ||
-                                      !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
-                                    }
-                                    className={`mt-6 px-4 py-3 rounded-lg whitespace-nowrap font-medium ${isPhoneSendingCode ||
-                                      !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
-                                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                      : "bg-blue-600 text-white hover:bg-blue-700"
-                                      }`}
-                                  >
-                                    {isPhoneSendingCode ? (
-                                      <div className="flex items-center gap-2">
-                                        <RingLoader size={16} color="#fff" />
-                                        <span>Sending...</span>
-                                      </div>
-                                    ) : (
-                                      "Verify"
-                                    )}
-                                  </button>
-                                ) : (
-                                  <div className="mt-6 px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
-                                    <FontAwesomeIcon
-                                      icon={faCheckCircle}
-                                      className="text-green-600"
-                                    />
-                                    <span>Verified</span>
-                                  </div>
-                                )} */}
-                              </div>
-                            </div>
-
-                            {touched.mobile_number &&
-                              errors.mobile_number &&
-                              // !phoneIsVerified && (
-                                <div className="text-red-500 text-xs mt-1 flex items-center">
-                                  <FontAwesomeIcon
-                                    icon={faInfoCircle}
-                                    className="mr-1 w-3 h-3"
-                                  />
-                                  {errors.mobile_number}
-                                </div>
-                              // )
-                              }
-                          </div>
-                        </div>
-                        {/* Verification Code Input */}
-                        {/* {showPhoneVerificationInput && !phoneIsVerified && (
-                          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Enter Verification Code
-                            </label>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <div className="flex-1">
+                            <div className="flex gap-2">
+                              <div className="flex-1 relative">
                                 <input
-                                  type="text"
-                                  value={phoneVerification?.verificationCode || ""}
-                                  onChange={handlePhoneVerificationCodeChange}
-                                  placeholder="Enter 6-digit code"
-                                  maxLength={6}
-                                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleVerifyPhoneCode(
-                                  values.mobile_number,
-                                  values.mobilenumber_countrycode,
-                                  setFieldValue
-                                )}
-                                disabled={isPhoneVerifying || !phoneVerification?.verificationCode || phoneVerification?.verificationCode?.length !== 6}
-                                className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
-                              >
-                                {isPhoneVerifying ? (
-                                  <div className="flex items-center gap-2">
-                                    <RingLoader size={16} color="#ffffff" />
-                                    <span>Verifying...</span>
-                                  </div>
-                                ) : (
-                                  'Submit'
-                                )}
-                              </button>
-                            </div>
-
-                            <div className="mt-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleResendPhoneCode(
-                                  values.mobilenumber_countrycode,
-                                  values.mobile_number
-                                )}
-                                disabled={isPhoneSendingCode}
-                                className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {isPhoneSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
-                              </button>
-                            </div>
-
-                            {phoneVerification?.error && (
-                              <p className="text-red-500 text-xs mt-3 flex items-center">
-                                <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
-                                {typeof phoneVerification.error === 'string'
-                                  ? phoneVerification.error
-                                  : phoneVerification.error?.message || 'Verification failed'}
-                              </p>
-                            )}
-
-                            {phoneVerification?.success && !phoneIsVerified && (
-                              <p className="text-green-600 text-xs mt-3 flex items-center">
-                                <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                                {phoneVerification.success}
-                              </p>
-                            )}
-                          </div>
-                        )} */}
-                      </div>
-
-                      {/* Nationality and Gender on same row */}
-                      <CustomSelect
-                        id="nationality"
-                        label="Nationality"
-                        options={nationalityOptions}
-                        onChange={enhancedSelectChange(
-                          "nationality",
-                          setFieldValue,
-                        )}
-                        value={nationalityOptions.find(
-                          (opt) => opt.value === values.nationality,
-                        )}
-                        touched={touched.nationality}
-                        error={errors.nationality}
-                        required
-                      />
-                      <CustomSelect
-                        id="gender"
-                        label="Gender"
-                        options={genderOptions}
-                        onChange={enhancedSelectChange("gender", setFieldValue)}
-                        value={genderOptions.find(
-                          (opt) => opt.value === values.gender,
-                        )}
-                        touched={touched.gender}
-                        error={errors.gender}
-                        required
-                      />
-
-                      {/* Date of Birth and Designation on same row - WITH AGE VALIDATION AND MESSAGE */}
-                      <div className="space-y-2">
-                        <label htmlFor="dob" className="block text-sm font-medium text-gray-700">
-                          Date of Birth <span className="text-red-500">*</span>
-                        </label>
-                        <Field
-                          type="date"
-                          id="dob"
-                          name="dob"
-                          max={getMaxDateForDOB()}  // This returns date 18 years ago
-                          onChange={(e) => {
-                            const selectedDate = e.target.value;
-                            const maxDate = getMaxDateForDOB();
-                            if (selectedDate > maxDate) {
-                              e.target.value = maxDate;
-                            }
-                            handleChange(e);
-                          }}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${touched.dob && errors.dob
-                            ? "border-red-500 focus:ring-red-500"
-                            : touched.dob &&
-                              values.dob &&
-                              !validateAge(values.dob)
-                              ? "border-red-500 focus:ring-red-500"
-                              : "border-gray-300 focus:ring-blue-500"
-                            }`}
-                        />
-                        {/* Age validation message */}
-                        {touched.dob && values.dob && !validateAge(values.dob) && (
-                          <div className="text-red-500 text-xs mt-1 flex items-center">
-                            <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                            You must be at least 18 years old to register
-                          </div>
-                        )}
-
-                        {/* Helpful message explaining why they can't select certain dates */}
-                        <div className="text-xs text-gray-500 mt-1 flex items-center">
-                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                          You must be at least 18 years old to register. Only dates before {getMaxDateForDOB()} are selectable.
-                        </div>
-
-                      </div>
-
-                      <FormField
-                        id="designation"
-                        label="Designation"
-                        name="designation"
-                        value={values.designation || ""}
-                        onChange={enhancedHandleChange(
-                          "designation",
-                          setFieldValue,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("designation")}
-                        touched={touched.designation}
-                        error={errors.designation}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-
-                      <CustomSelect
-                        id="responsible_person_occupation"
-                        label="Occupation"
-                        options={occupationOptions}
-                        onChange={enhancedSelectChange("responsible_person_occupation", setFieldValue)}
-                        value={occupationOptions.find(opt => opt.value === values.responsible_person_occupation)}
-                        touched={touched.responsible_person_occupation}
-                        error={errors.responsible_person_occupation}
-                        required={true}
-                        isLoading={occupationLoading}
-                        placeholder="Select occupation..."
-                      />
-
-                      {/* ID Document Type and ID Document Number on same row */}
-                      <CustomSelect
-                        id="doc_type"
-                        label="ID Document Type"
-                        options={idDocumentTypeOptions}
-                        onChange={enhancedSelectChange(
-                          "doc_type",
-                          setFieldValue,
-                        )}
-                        value={idDocumentTypeOptions.find(
-                          (opt) => opt.value === values.doc_type,
-                        )}
-                        touched={touched.doc_type}
-                        error={errors.doc_type}
-                        required
-                      />
-                      <FormField
-                        id="doc_id"
-                        label="ID Document Number"
-                        name="doc_id"
-                        value={values.doc_id || ""}
-                        onChange={enhancedHandleChange("doc_id", setFieldValue)}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("doc_id")}
-                        touched={touched.doc_id}
-                        error={errors.doc_id}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-
-                      {/* ID Issuing Country and ID Issue Date on same row */}
-                      <CustomSelect
-                        id="doc_country"
-                        label="ID Issuing Country"
-                        options={countryOptions}
-                        onChange={enhancedSelectChange(
-                          "doc_country",
-                          setFieldValue,
-                        )}
-                        value={countryOptions.find(
-                          (opt) => opt.value === values.doc_country,
-                        )}
-                        touched={touched.doc_country}
-                        error={errors.doc_country}
-                        required
-                        isLoading={countriesLoading}
-                        isCountryField={true}
-                        showPhoneCode={false}
-                      />
-                      <FormField
-                        id="id_issued_date"
-                        label="ID Issue Date"
-                        name="id_issued_date"
-                        type="date"
-                        value={values.id_issued_date || ""}
-                        onChange={enhancedHandleChange(
-                          "id_issued_date",
-                          setFieldValue,
-                        )}
-                        onBlur={handleBlur}
-                        onFocus={() => setActiveField("id_issued_date")}
-                        touched={touched.id_issued_date}
-                        error={errors.id_issued_date}
-                        required
-                        activeField={activeField}
-                        fieldStyles={FIELD_STYLES}
-                      />
-
-                      {/* SSN Field (conditional) */}
-                      {(function () {
-                        const hasUSDNamedAccount = isNamedAccount;
-                        const isRemittanceOnly = remittanceOnlyAccepted;
-                        const isUSCountry =
-                          values.country === "United States" ||
-                          values.country === 186;
-
-                        const shouldShowSSNField =
-                          (hasUSDNamedAccount || isRemittanceOnly) &&
-                          isUSCountry;
-
-                        return shouldShowSSNField ? (
-                          <div className="md:col-span-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1">
-                                <FormField
-                                  id="ssn"
-                                  label="Social Security Number (SSN)"
-                                  name="ssn"
-                                  value={values.ssn || ""}
+                                  id="email"
+                                  name="email"
+                                  type="email"
+                                  value={values.email || ""}
                                   onChange={(e) => {
-                                    const formatted = formatTaxId(
-                                      e.target.value,
-                                      "ssn",
-                                    );
-                                    enhancedHandleChange(
-                                      "ssn",
-                                      setFieldValue,
-                                    )({
-                                      target: { value: formatted },
-                                    });
+                                    enhancedHandleChange("email", setFieldValue, setResponsiblePersonEmail)(e);
+                                    // Reset verification when email changes
+                                    if (isResponsiblePersonEmailVerified) {
+                                      dispatch(resetEmailVerification());
+                                      setFieldValue("email_verified", false);
+                                    }
                                   }}
                                   onBlur={handleBlur}
-                                  onFocus={() => setActiveField("ssn")}
-                                  touched={touched.ssn}
-                                  error={errors.ssn}
-                                  required={true}
-                                  placeholder="XXX-XX-XXXX"
-                                  activeField={activeField}
-                                  fieldStyles={FIELD_STYLES}
+                                  onFocus={() => setActiveField("email")}
+                                  // disabled={isResponsiblePersonEmailVerified}
+                                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+              ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
+              ${touched.email && errors.email && !emailIsVerified
+                                      ? "border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:ring-blue-500"
+                                    }`}
+                                  placeholder="your.email@example.com"
                                 />
                               </div>
-                              <div className="mt-6">
-                                <SSNInfoPopup />
-                              </div>
+
+                              {/* Verify Button - Only show when not verified */}
+                              {!emailIsVerified && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
+                                  disabled={isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")}
+                                  className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")
+                                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                    : "bg-blue-600 text-white hover:bg-blue-700"
+                                    }`}
+                                >
+                                  {isSendingCode ? (
+                                    <div className="flex items-center gap-2">
+                                      <RingLoader size={16} color="#ffffff" />
+                                      <span>Sending...</span>
+                                    </div>
+                                  ) : (
+                                    'Verify'
+                                  )}
+                                </button>
+                              )}
+
+                              {/* Verified Badge - Show when verified instead of button */}
+                              {emailIsVerified && (
+                                <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                                  <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
+                                  <span>Verified</span>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-xs text-gray-600 mt-1">
-                              Required for{" "}
-                              {hasUSDNamedAccount
-                                ? "USD Named Accounts"
-                                : "Remittance Services Only accounts"}
-                            </p>
+
+                            {/* Email field error */}
+                            {touched.email && errors.email && !emailIsVerified && (
+                              <div className="text-red-500 text-xs mt-1 flex items-center">
+                                <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                {errors.email}
+                              </div>
+                            )}
                           </div>
-                        ) : null;
-                      })()}
-                    </div>
 
-                    {/* Terms and Conditions section remains the same */}
-                    <div className="mt-8">
-                      <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
-                        Contact Address
-                      </h3>
+                          {/* Verification Code Input (shown after clicking Verify) */}
+                          {showVerificationInput && !emailIsVerified && (
+                            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Enter Verification Code
+                              </label>
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <input
+                                    type="text"
+                                    value={emailVerification?.verificationCode || ""}
+                                    onChange={handleVerificationCodeChange}
+                                    placeholder="Enter 6-digit code"
+                                    maxLength={6}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyEmailCode(values.email, setFieldValue)}
+                                  disabled={isVerifying || !emailVerification?.verificationCode || emailVerification?.verificationCode?.length !== 6}
+                                  className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                                >
+                                  {isVerifying ? (
+                                    <div className="flex items-center gap-2">
+                                      <RingLoader size={16} color="#ffffff" />
+                                      <span>Verifying...</span>
+                                    </div>
+                                  ) : (
+                                    'Submit'
+                                  )}
+                                </button>
+                              </div>
 
-                      {/* Address fields remain the same */}
-                      <div className="mb-4">
-                        <CustomSelect
-                          id="country"
-                          label="Country"
-                          options={countryOptions}
-                          onChange={enhancedSelectChange(
-                            "country",
-                            setFieldValue,
+                              {/* Resend link */}
+                              <div className="mt-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendCode(values.email)}
+                                  disabled={isSendingCode}
+                                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                                </button>
+                              </div>
+
+                              {/* Error message */}
+                              {emailVerification?.error && (
+                                <p className="text-red-500 text-xs mt-3 flex items-center">
+                                  <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                                  {emailVerification.error}
+                                </p>
+                              )}
+
+                              {/* Success message */}
+                              {emailVerification?.success && !emailIsVerified && (
+                                <p className="text-green-600 text-xs mt-3 flex items-center">
+                                  <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                                  {emailVerification.success}
+                                </p>
+                              )}
+                            </div>
                           )}
-                          value={countryOptions.find(
-                            (opt) => opt.value === values.country,
-                          )}
-                          touched={touched.country}
-                          error={errors.country}
-                          required
-                          isLoading={countriesLoading}
-                          isCountryField={true}
-                          showPhoneCode={false}
-                        />
-                      </div>
-
-                      <div className="mb-4">
-                        <FormField
-                          id="zip_code"
-                          label="ZIP/Postal Code"
-                          name="zip_code"
-                          value={values.zip_code || ""}
-                          onChange={(e) => {
-                            const zipCode = e.target.value;
-                            enhancedHandleChange("zip_code", setFieldValue)(e);
-
-                            if (zipDebounceTimer) {
-                              clearTimeout(zipDebounceTimer);
+                          <PasswordField
+                            id="password"
+                            label="Password"
+                            name="password"
+                            value={values.password || ""}
+                            onChange={enhancedPasswordChange(
+                              "password",
+                              setFieldValue,
+                              setResponsiblePersonPassword,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("password")}
+                            touched={touched.password}
+                            error={errors.password}
+                            required={isFieldMandatory(resolveApiFieldName("password"), values)}
+                            activeField={activeField}
+                            visible={showPassword}
+                            onToggleVisibility={() =>
+                              dispatch(togglePasswordVisibility())
                             }
+                            validationRules={passwordValidationRules}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                          <PasswordField
+                            id="confirm_password"
+                            label="Confirm Password"
+                            name="confirm_password"
+                            value={values.confirm_password || ""}
+                            onChange={enhancedPasswordChange(
+                              "confirm_password",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("confirm_password")}
+                            touched={touched.confirm_password}
+                            error={errors.confirm_password}
+                            required={isFieldMandatory(resolveApiFieldName("confirm_password"), values)}
+                            activeField={activeField}
+                            visible={showConfirmPassword}
+                            onToggleVisibility={() =>
+                              dispatch(toggleConfirmPasswordVisibility())
+                            }
+                            fieldStyles={FIELD_STYLES}
+                            // Add password match validation
+                            showPasswordMatch={
+                              values.password && values.confirm_password
+                            }
+                            passwordsMatch={
+                              values.password === values.confirm_password
+                            }
+                          />
 
-                            const timer = setTimeout(() => {
-                              const countryId = values.country;
-                              if (
-                                zipCode &&
-                                countryId &&
-                                zipCode.replace(/\s+/g, "").length >= 3
-                              ) {
-                                handleResponsiblePersonZipLookup(
-                                  zipCode,
-                                  countryId,
-                                );
-                              }
-                            }, 1000);
-
-                            setZipDebounceTimer(timer);
-                          }}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("zip_code")}
-                          touched={touched.zip_code}
-                          error={errors.zip_code}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        {isZipLoading && activeField === "zip_code" && (
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <RingLoader size={16} color="#3b82f6" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <FormField
-                          id="street_address_1"
-                          label="Street Address 1"
-                          name="street_address_1"
-                          value={values.street_address_1 || ""}
-                          onChange={enhancedHandleChange(
-                            "street_address_1",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("street_address_1")}
-                          touched={touched.street_address_1}
-                          error={errors.street_address_1}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        <FormField
-                          id="street_address_2"
-                          label="Street Address 2/ Suite Address (Optional)"
-                          name="street_address_2"
-                          value={values.street_address_2 || ""}
-                          onChange={enhancedHandleChange(
-                            "street_address_2",
-                            setFieldValue,
-                          )}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("street_address_2")}
-                          touched={touched.street_address_2}
-                          error={errors.street_address_2}
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      <div className="mb-4">
-                        <FormField
-                          id="city"
-                          label="City"
-                          name="city"
-                          value={values.city || ""}
-                          onChange={enhancedHandleChange("city", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("city")}
-                          touched={touched.city}
-                          error={errors.city}
-                          required
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-
-                      {/* State/Province with Dynamic Dropdown - RESPONSIBLE PERSON */}
-                      <div className="mb-4">
-                        <div className="space-y-2">
-                          <label htmlFor="state" className="block text-sm font-medium text-gray-700">
-                            State/Province
-                          </label>
-
-                          {responsiblePersonStates && responsiblePersonStates.length > 0 ? (
-                            <Select
-                              id="state"
-                              name="state"
-                              options={responsiblePersonStates.map(state => ({
-                                value: state.id || state.name,
-                                label: state.name
-                              }))}
-                              value={(() => {
-                                const selectedState = responsiblePersonStates.find(s =>
-                                  s.id === values.state ||
-                                  s.name === values.state
-                                );
-
-                                if (selectedState) {
-                                  return {
-                                    value: selectedState.id || selectedState.name,
-                                    label: selectedState.name
-                                  };
-                                }
-
-                                if (values.state) {
-                                  return {
-                                    value: values.state,
-                                    label: values.state
-                                  };
-                                }
-
-                                return null;
-                              })()}
+                          {/* Resident Country and Phone Number on same row */}
+                          <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <RequiredCustomSelect
+                              id="resident_country"
+                              label="Resident Country"
+                              options={countryOptions}
                               onChange={(option) => {
                                 if (option) {
-                                  const value = option.label;
-                                  setFieldValue("state", value);
-                                  setLocalFormData((prev) => ({
-                                    ...prev,
-                                    state: value,
-                                  }));
-                                  dispatch(setFormField({
-                                    field: "state",
-                                    value: value
-                                  }));
-                                } else {
-                                  setFieldValue("state", "");
-                                  setLocalFormData((prev) => ({
-                                    ...prev,
-                                    state: "",
-                                  }));
-                                  dispatch(setFormField({
-                                    field: "state",
-                                    value: ""
-                                  }));
+                                  // Update resident country
+                                  setFieldValue("resident_country", option.value);
+                                  dispatch(setFormField({ field: "resident_country", value: option.value }));
+
+                                  // 🔥 AUTO-FILL PHONE COUNTRY CODE based on selected resident country
+                                  if (option.phoneCode || option.phone_code) {
+                                    const phoneCode = option.phoneCode || option.phone_code;
+
+                                    setFieldValue("mobilenumber_countrycode", phoneCode);
+
+                                    // NEW
+                                    setFieldValue("mobilenumber_country", option.value);
+
+                                    dispatch(
+                                      setFormField({
+                                        field: "mobilenumber_countrycode",
+                                        value: phoneCode,
+                                      })
+                                    );
+
+                                    dispatch(
+                                      setFormField({
+                                        field: "mobilenumber_country",
+                                        value: option.value,
+                                      })
+                                    );
+                                  }
                                 }
                               }}
-                              onBlur={handleBlur}
-                              isDisabled={responsiblePersonStatesLoading || !values.country}
-                              isLoading={responsiblePersonStatesLoading}
-                              placeholder={responsiblePersonStatesLoading ? "Loading states..." : "Select state/province..."}
-                              isClearable={true}
-                              styles={{
-                                control: (base, state) => ({
-                                  ...base,
-                                  minHeight: "50px",
-                                  borderColor: touched.state && errors.state ? "#ef4444" : "#d1d5db",
-                                  borderRadius: "0.5rem",
-                                  padding: "0.25rem 0.5rem",
-                                  fontSize: "0.875rem",
-                                  backgroundColor: (!values.country || responsiblePersonStatesLoading) ? "#f3f4f6" : "white",
-                                  opacity: (!values.country || responsiblePersonStatesLoading) ? 0.6 : 1,
-                                  "&:hover": {
-                                    borderColor: touched.state && errors.state ? "#ef4444" : "#9ca3af",
-                                  },
-                                }),
-                                placeholder: (base) => ({
-                                  ...base,
-                                  fontSize: "0.875rem",
-                                  color: "#6b7280",
-                                }),
-                                menu: (base) => ({
-                                  ...base,
-                                  fontSize: "0.875rem",
-                                  zIndex: 9999,
-                                }),
-                                singleValue: (base) => ({
-                                  ...base,
-                                  fontSize: "0.875rem",
-                                }),
-                                option: (base, state) => ({
-                                  ...base,
-                                  fontSize: "0.875rem",
-                                  backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
-                                  color: state.isSelected ? "white" : "#1f2937",
-                                  "&:hover": {
-                                    backgroundColor: "#eff6ff",
-                                  },
-                                }),
-                              }}
+                              value={
+                                countryOptions.find(
+                                  (opt) => opt.value === values.mobilenumber_country
+                                ) ||
+                                countryOptions.find(
+                                  (opt) =>
+                                    opt.phoneCode === values.mobilenumber_countrycode ||
+                                    opt.phone_code === values.mobilenumber_countrycode
+                                )
+                              }
+                              touched={touched.resident_country}
+                              error={errors.resident_country}
+                              isLoading={countriesLoading}
+                              isCountryField={true}
+                              showPhoneCode={false}
                             />
-                          ) : (
-                            <input
-                              type="text"
-                              id="state"
-                              name="state"
-                              value={values.state || ""}
+
+                            {/* Phone Number with Verification */}
+                            <div className="md:col-span-2">
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Phone Number
+                                </label>
+
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                                  {/* Country Code */}
+                                  <div>
+                                    <RequiredCustomSelect
+                                      id="mobilenumber_countrycode"
+                                      label="Country Code"
+                                      options={countryOptions}
+                                      value={countryOptions.find(
+                                        (opt) => opt.value === values.mobilenumber_country
+                                      )}
+                                      onChange={(option) => {
+                                        if (option) {
+                                          const phoneCode =
+                                            option.phoneCode || option.phone_code || "";
+                                          setFieldValue(
+                                            "mobilenumber_countrycode",
+                                            phoneCode
+                                          );
+                                          setFieldValue(
+                                            "mobilenumber_country",
+                                            option.value
+                                          );
+                                          dispatch(
+                                            setFormField({
+                                              field: "mobilenumber_countrycode",
+                                              value: phoneCode,
+                                            })
+                                          );
+                                          dispatch(
+                                            setFormField({
+                                              field: "mobilenumber_country",
+                                              value: option.value,
+                                            })
+                                          );
+
+                                          // if (isPhoneVerified) {
+                                          //   dispatch(resetPhoneVerification());
+                                          //   setFieldValue("phone_verified", false);
+                                          // }
+                                        }
+                                      }}
+                                      onBlur={handleBlur}
+                                      touched={touched.mobilenumber_countrycode}
+                                      error={errors.mobilenumber_countrycode}
+                                      isLoading={countriesLoading}
+                                      isCountryField={true}
+                                      showPhoneCode={true}
+                                    />
+                                  </div>
+
+                                  {/* Phone + Verify */}
+                                  <div className="flex gap-2 items-end md:col-span-2 md:col-start-2 md:row-start-1">
+                                    <div className="flex-1">
+                                      <RequiredFormField
+                                        id="mobile_number"
+                                        label="Phone Number"
+                                        name="mobile_number"
+                                        value={values.mobile_number || ""}
+                                        onChange={(e) => {
+                                          enhancedHandleChange(
+                                            "mobile_number",
+                                            setFieldValue
+                                          )(e);
+
+                                          // if (isPhoneVerified) {
+                                          //   dispatch(resetPhoneVerification());
+                                          //   setFieldValue("phone_verified", false);
+                                          // }
+                                        }}
+                                        onBlur={handleBlur}
+                                        onFocus={() => setActiveField("mobile_number")}
+                                        touched={touched.mobile_number}
+                                        error={errors.mobile_number}
+                                        activeField={activeField}
+                                        placeholder="e.g., 1234567890"
+                                        fieldStyles={FIELD_STYLES}
+                                      />
+                                    </div>
+
+                                    {/* {!phoneIsVerified ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleSendPhoneVerificationCode(
+                                          values.mobilenumber_countrycode,
+                                          values.mobile_number,
+                                          setFieldValue
+                                        )
+                                      }
+                                      disabled={
+                                        isPhoneSendingCode ||
+                                        !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
+                                      }
+                                      className={`mt-6 px-4 py-3 rounded-lg whitespace-nowrap font-medium ${isPhoneSendingCode ||
+                                        !/^[0-9]{7,15}$/.test((values.mobile_number || "").replace(/\s/g, ""))
+                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                        : "bg-blue-600 text-white hover:bg-blue-700"
+                                        }`}
+                                    >
+                                      {isPhoneSendingCode ? (
+                                        <div className="flex items-center gap-2">
+                                          <RingLoader size={16} color="#fff" />
+                                          <span>Sending...</span>
+                                        </div>
+                                      ) : (
+                                        "Verify"
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <div className="mt-6 px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                                      <FontAwesomeIcon
+                                        icon={faCheckCircle}
+                                        className="text-green-600"
+                                      />
+                                      <span>Verified</span>
+                                    </div>
+                                  )} */}
+                                  </div>
+                                </div>
+
+                                {touched.mobile_number &&
+                                  errors.mobile_number &&
+                                  // !phoneIsVerified && (
+                                  <div className="text-red-500 text-xs mt-1 flex items-center">
+                                    <FontAwesomeIcon
+                                      icon={faInfoCircle}
+                                      className="mr-1 w-3 h-3"
+                                    />
+                                    {errors.mobile_number}
+                                  </div>
+                                  // )
+                                }
+                              </div>
+                            </div>
+                            {/* Verification Code Input */}
+                            {/* {showPhoneVerificationInput && !phoneIsVerified && (
+                            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Enter Verification Code
+                              </label>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1">
+                                  <input
+                                    type="text"
+                                    value={phoneVerification?.verificationCode || ""}
+                                    onChange={handlePhoneVerificationCodeChange}
+                                    placeholder="Enter 6-digit code"
+                                    maxLength={6}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyPhoneCode(
+                                    values.mobile_number,
+                                    values.mobilenumber_countrycode,
+                                    setFieldValue
+                                  )}
+                                  disabled={isPhoneVerifying || !phoneVerification?.verificationCode || phoneVerification?.verificationCode?.length !== 6}
+                                  className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                                >
+                                  {isPhoneVerifying ? (
+                                    <div className="flex items-center gap-2">
+                                      <RingLoader size={16} color="#ffffff" />
+                                      <span>Verifying...</span>
+                                    </div>
+                                  ) : (
+                                    'Submit'
+                                  )}
+                                </button>
+                              </div>
+
+                              <div className="mt-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendPhoneCode(
+                                    values.mobilenumber_countrycode,
+                                    values.mobile_number
+                                  )}
+                                  disabled={isPhoneSendingCode}
+                                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isPhoneSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                                </button>
+                              </div>
+
+                              {phoneVerification?.error && (
+                                <p className="text-red-500 text-xs mt-3 flex items-center">
+                                  <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                                  {typeof phoneVerification.error === 'string'
+                                    ? phoneVerification.error
+                                    : phoneVerification.error?.message || 'Verification failed'}
+                                </p>
+                              )}
+
+                              {phoneVerification?.success && !phoneIsVerified && (
+                                <p className="text-green-600 text-xs mt-3 flex items-center">
+                                  <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                                  {phoneVerification.success}
+                                </p>
+                              )}
+                            </div>
+                          )} */}
+                          </div>
+
+                          {/* Nationality and Gender on same row */}
+                          <RequiredCustomSelect
+                            id="nationality"
+                            label="Nationality"
+                            options={nationalityOptions}
+                            onChange={enhancedSelectChange(
+                              "nationality",
+                              setFieldValue,
+                            )}
+                            value={nationalityOptions.find(
+                              (opt) => opt.value === values.nationality,
+                            )}
+                            touched={touched.nationality}
+                            error={errors.nationality}
+                            required
+                          />
+                          <CustomSelect
+                            id="gender"
+                            label="Gender"
+                            options={genderOptions}
+                            onChange={enhancedSelectChange("gender", setFieldValue)}
+                            value={genderOptions.find(
+                              (opt) => opt.value === values.gender,
+                            )}
+                            touched={touched.gender}
+                            error={errors.gender}
+                          />
+
+                          {/* Date of Birth and Designation on same row - WITH AGE VALIDATION AND MESSAGE */}
+                          <div className="space-y-2">
+                            <label htmlFor="dob" className="block text-sm font-medium text-gray-700">
+                              Date of Birth
+                              <RequiredMark fieldName="dob" />
+                            </label>
+                            <Field
+                              type="date"
+                              id="dob"
+                              name="dob"
+                              max={getMaxDateForDOB()}  // This returns date 18 years ago
                               onChange={(e) => {
-                                const value = e.target.value;
-                                setFieldValue("state", value);
-                                setLocalFormData((prev) => ({
-                                  ...prev,
-                                  state: value,
-                                }));
-                                dispatch(setFormField({
-                                  field: "state",
-                                  value: value
-                                }));
+                                const selectedDate = e.target.value;
+                                const maxDate = getMaxDateForDOB();
+                                if (selectedDate > maxDate) {
+                                  e.target.value = maxDate;
+                                }
+                                handleChange(e);
                               }}
-                              onBlur={handleBlur}
-                              onFocus={() => setActiveField("state")}
-                              disabled={responsiblePersonStatesLoading || !values.country}
-                              placeholder={responsiblePersonStatesLoading ? "Loading states..." : !values.country ? "Please select country first" : "Enter state/province..."}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${(!values.country || responsiblePersonStatesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
-          ${touched.state && errors.state
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${touched.dob && errors.dob
+                                ? "border-red-500 focus:ring-red-500"
+                                : touched.dob &&
+                                  values.dob &&
+                                  !validateAge(values.dob)
                                   ? "border-red-500 focus:ring-red-500"
                                   : "border-gray-300 focus:ring-blue-500"
                                 }`}
                             />
-                          )}
+                            {/* Age validation message */}
+                            {touched.dob && values.dob && !validateAge(values.dob) && (
+                              <div className="text-red-500 text-xs mt-1 flex items-center">
+                                <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                You must be at least 18 years old to register
+                              </div>
+                            )}
 
-                          {touched.state && errors.state && (
-                            <div className="text-red-500 text-xs mt-1 flex items-center">
+                            {/* Helpful message explaining why they can't select certain dates */}
+                            <div className="text-xs text-gray-500 mt-1 flex items-center">
                               <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                              {errors.state}
+                              You must be at least 18 years old to register. Only dates before {getMaxDateForDOB()} are selectable.
                             </div>
-                          )}
 
-                          {responsiblePersonStates && responsiblePersonStates.length === 0 && values.country && !responsiblePersonStatesLoading && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              No states available for the selected country. Please enter the state manually.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                          </div>
 
-                    {/* Terms and Conditions section */}
-                    <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-medium text-gray-700 mb-3">
-                        Terms and Conditions{" "}
-                        <span className="text-red-500">*</span>
-                      </h3>
-                      {termsLoading ? (
-                        <div className="flex items-center">
-                          <RingLoader
-                            color="#0284c7"
-                            size={16}
-                            className="mr-2"
+                          <RequiredFormField
+                            id="designation"
+                            label="Designation"
+                            name="designation"
+                            value={values.designation || ""}
+                            onChange={enhancedHandleChange(
+                              "designation",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("designation")}
+                            touched={touched.designation}
+                            error={errors.designation}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
                           />
-                          <p className="text-sm text-gray-500">
-                            Loading terms...
-                          </p>
+
+                          <RequiredCustomSelect
+                            id="responsible_person_occupation"
+                            label="Occupation"
+                            options={occupationOptions}
+                            onChange={enhancedSelectChange("responsible_person_occupation", setFieldValue)}
+                            value={occupationOptions.find(opt => opt.value === values.responsible_person_occupation)}
+                            touched={touched.responsible_person_occupation}
+                            error={errors.responsible_person_occupation}
+                            isLoading={occupationLoading}
+                            placeholder="Select occupation..."
+                          />
+
+                          {/* ID Document Type and ID Document Number on same row */}
+                          <RequiredCustomSelect
+                            id="doc_type"
+                            label="ID Document Type"
+                            options={idDocumentTypeOptions}
+                            onChange={enhancedSelectChange(
+                              "doc_type",
+                              setFieldValue,
+                            )}
+                            value={idDocumentTypeOptions.find(
+                              (opt) => opt.value === values.doc_type,
+                            )}
+                            touched={touched.doc_type}
+                            error={errors.doc_type}
+                          />
+                          <RequiredFormField
+                            id="doc_id"
+                            label="ID Document Number"
+                            name="doc_id"
+                            value={values.doc_id || ""}
+                            onChange={enhancedHandleChange("doc_id", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("doc_id")}
+                            touched={touched.doc_id}
+                            error={errors.doc_id}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+
+                          {/* ID Issuing Country and ID Issue Date on same row */}
+                          <RequiredCustomSelect
+                            id="doc_country"
+                            label="ID Issuing Country"
+                            options={countryOptions}
+                            onChange={enhancedSelectChange(
+                              "doc_country",
+                              setFieldValue,
+                            )}
+                            value={countryOptions.find(
+                              (opt) => opt.value === values.doc_country,
+                            )}
+                            touched={touched.doc_country}
+                            error={errors.doc_country}
+                            isLoading={countriesLoading}
+                            isCountryField={true}
+                            showPhoneCode={false}
+                          />
+                          <RequiredFormField
+                            id="id_issued_date"
+                            label="ID Issue Date"
+                            name="id_issued_date"
+                            type="date"
+                            value={values.id_issued_date || ""}
+                            onChange={enhancedHandleChange(
+                              "id_issued_date",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("id_issued_date")}
+                            touched={touched.id_issued_date}
+                            error={errors.id_issued_date}
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+
+                          {/* SSN Field (conditional) */}
+                          {(function () {
+                            const hasUSDNamedAccount = isNamedAccount;
+                            const isRemittanceOnly = remittanceOnlyAccepted;
+                            const isUSCountry =
+                              values.country === "United States" ||
+                              values.country === 186;
+
+                            const shouldShowSSNField =
+                              (hasUSDNamedAccount || isRemittanceOnly) &&
+                              isUSCountry;
+
+                            return shouldShowSSNField ? (
+                              <div className="md:col-span-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <FormField
+                                      id="ssn"
+                                      label="Social Security Number (SSN)"
+                                      name="ssn"
+                                      value={values.ssn || ""}
+                                      onChange={(e) => {
+                                        const formatted = formatTaxId(
+                                          e.target.value,
+                                          "ssn",
+                                        );
+                                        enhancedHandleChange(
+                                          "ssn",
+                                          setFieldValue,
+                                        )({
+                                          target: { value: formatted },
+                                        });
+                                      }}
+                                      onBlur={handleBlur}
+                                      onFocus={() => setActiveField("ssn")}
+                                      touched={touched.ssn}
+                                      error={errors.ssn}
+                                      required={true}
+                                      placeholder="XXX-XX-XXXX"
+                                      activeField={activeField}
+                                      fieldStyles={FIELD_STYLES}
+                                    />
+                                  </div>
+                                  <div className="mt-6">
+                                    <SSNInfoPopup />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Required for{" "}
+                                  {hasUSDNamedAccount
+                                    ? "USD Named Accounts"
+                                    : "Remittance Services Only accounts"}
+                                </p>
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
-                      ) : termsConditions && termsConditions.length > 0 ? (
-                        <div className="space-y-3">
-                          {termsConditions.map((term) => (
-                            <div key={term.id} className="flex items-start">
-                              <div className="flex items-center h-5">
-                                <input
-                                  id={`term-${term.id}`}
-                                  name={`term-${term.id}`}
-                                  type="checkbox"
-                                  className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                                  checked={
-                                    values.terms_and_conditions?.some(
-                                      (t) => t.id === term.id,
-                                    ) || false
+
+                        {/* Terms and Conditions section remains the same */}
+                        <div className="mt-8">
+                          <h3 className="text-lg font-medium mb-4 text-blue-600 border-b border-blue-200 pb-2">
+                            Contact Address
+                          </h3>
+
+                          {/* Address fields remain the same */}
+                          <div className="mb-4">
+                            <RequiredCustomSelect
+                              id="country"
+                              label="Country"
+                              options={countryOptions}
+                              onChange={enhancedSelectChange(
+                                "country",
+                                setFieldValue,
+                              )}
+                              value={countryOptions.find(
+                                (opt) => opt.value === values.country,
+                              )}
+                              touched={touched.country}
+                              error={errors.country}
+                              isLoading={countriesLoading}
+                              isCountryField={true}
+                              showPhoneCode={false}
+                            />
+                          </div>
+
+                          <div className="mb-4">
+                            <RequiredFormField
+                              id="zip_code"
+                              label="ZIP/Postal Code"
+                              name="zip_code"
+                              value={values.zip_code || ""}
+                              onChange={(e) => {
+                                const zipCode = e.target.value;
+                                enhancedHandleChange("zip_code", setFieldValue)(e);
+
+                                if (zipDebounceTimer) {
+                                  clearTimeout(zipDebounceTimer);
+                                }
+
+                                const timer = setTimeout(() => {
+                                  const countryId = values.country;
+                                  if (
+                                    zipCode &&
+                                    countryId &&
+                                    zipCode.replace(/\s+/g, "").length >= 3
+                                  ) {
+                                    handleResponsiblePersonZipLookup(
+                                      zipCode,
+                                      countryId,
+                                    );
                                   }
-                                  onChange={(e) => {
-                                    const isChecked = e.target.checked;
-                                    const currentTerms =
-                                      values.terms_and_conditions || [];
-                                    if (isChecked) {
-                                      const newTerm = {
-                                        id: term.id,
-                                        accepted_at:
-                                          new Date().toLocaleString(),
-                                        ip: clientMeta.ip,
-                                        location: clientMeta.location,
-                                        device: navigator.userAgent,
+                                }, 1000);
+
+                                setZipDebounceTimer(timer);
+                              }}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("zip_code")}
+                              touched={touched.zip_code}
+                              error={errors.zip_code}
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                            {isZipLoading && activeField === "zip_code" && (
+                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <RingLoader size={16} color="#3b82f6" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                            <RequiredFormField
+                              id="street_address_1"
+                              label="Street Address 1"
+                              name="street_address_1"
+                              value={values.street_address_1 || ""}
+                              onChange={enhancedHandleChange(
+                                "street_address_1",
+                                setFieldValue,
+                              )}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("street_address_1")}
+                              touched={touched.street_address_1}
+                              error={errors.street_address_1}
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                            <RequiredFormField
+                              id="street_address_2"
+                              label="Street Address 2/ Suite Address (Optional)"
+                              name="street_address_2"
+                              value={values.street_address_2 || ""}
+                              onChange={enhancedHandleChange(
+                                "street_address_2",
+                                setFieldValue,
+                              )}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("street_address_2")}
+                              touched={touched.street_address_2}
+                              error={errors.street_address_2}
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
+
+                          <div className="mb-4">
+                            <RequiredFormField
+                              id="city"
+                              label="City"
+                              name="city"
+                              value={values.city || ""}
+                              onChange={enhancedHandleChange("city", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("city")}
+                              touched={touched.city}
+                              error={errors.city}
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
+
+                          {/* State/Province with Dynamic Dropdown - RESPONSIBLE PERSON */}
+                          <div className="mb-4">
+                            <div className="space-y-2">
+                              <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                                State/Province
+                              </label>
+
+                              {responsiblePersonStates && responsiblePersonStates.length > 0 ? (
+                                <Select
+                                  id="state"
+                                  name="state"
+                                  options={responsiblePersonStates.map(state => ({
+                                    value: state.id || state.name,
+                                    label: state.name
+                                  }))}
+                                  value={(() => {
+                                    const selectedState = responsiblePersonStates.find(s =>
+                                      s.id === values.state ||
+                                      s.name === values.state
+                                    );
+
+                                    if (selectedState) {
+                                      return {
+                                        value: selectedState.id || selectedState.name,
+                                        label: selectedState.name
                                       };
-                                      setFieldValue("terms_and_conditions", [
-                                        ...currentTerms,
-                                        newTerm,
-                                      ]);
+                                    }
+
+                                    if (values.state) {
+                                      return {
+                                        value: values.state,
+                                        label: values.state
+                                      };
+                                    }
+
+                                    return null;
+                                  })()}
+                                  onChange={(option) => {
+                                    if (option) {
+                                      const value = option.label;
+                                      setFieldValue("state", value);
+                                      setLocalFormData((prev) => ({
+                                        ...prev,
+                                        state: value,
+                                      }));
+                                      dispatch(setFormField({
+                                        field: "state",
+                                        value: value
+                                      }));
                                     } else {
-                                      const updatedTerms = currentTerms.filter(
-                                        (t) => t.id !== term.id,
-                                      );
-                                      setFieldValue(
-                                        "terms_and_conditions",
-                                        updatedTerms,
-                                      );
+                                      setFieldValue("state", "");
+                                      setLocalFormData((prev) => ({
+                                        ...prev,
+                                        state: "",
+                                      }));
+                                      dispatch(setFormField({
+                                        field: "state",
+                                        value: ""
+                                      }));
                                     }
                                   }}
+                                  onBlur={handleBlur}
+                                  isDisabled={responsiblePersonStatesLoading || !values.country}
+                                  isLoading={responsiblePersonStatesLoading}
+                                  placeholder={responsiblePersonStatesLoading ? "Loading states..." : "Select state/province..."}
+                                  isClearable={true}
+                                  styles={{
+                                    control: (base, state) => ({
+                                      ...base,
+                                      minHeight: "50px",
+                                      borderColor: touched.state && errors.state ? "#ef4444" : "#d1d5db",
+                                      borderRadius: "0.5rem",
+                                      padding: "0.25rem 0.5rem",
+                                      fontSize: "0.875rem",
+                                      backgroundColor: (!values.country || responsiblePersonStatesLoading) ? "#f3f4f6" : "white",
+                                      opacity: (!values.country || responsiblePersonStatesLoading) ? 0.6 : 1,
+                                      "&:hover": {
+                                        borderColor: touched.state && errors.state ? "#ef4444" : "#9ca3af",
+                                      },
+                                    }),
+                                    placeholder: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      color: "#6b7280",
+                                    }),
+                                    menu: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      zIndex: 9999,
+                                    }),
+                                    singleValue: (base) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                    }),
+                                    option: (base, state) => ({
+                                      ...base,
+                                      fontSize: "0.875rem",
+                                      backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                                      color: state.isSelected ? "white" : "#1f2937",
+                                      "&:hover": {
+                                        backgroundColor: "#eff6ff",
+                                      },
+                                    }),
+                                  }}
                                 />
-                              </div>
-                              <div className="ml-3 text-sm">
-                                <label
-                                  htmlFor={`term-${term.id}`}
-                                  className="font-medium text-gray-700"
-                                >
-                                  I agree to the{" "}
-                                  <a
-                                    href={term.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-500 hover:underline"
-                                  >
-                                    {term.title}
-                                  </a>
-                                </label>
-                              </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  id="state"
+                                  name="state"
+                                  value={values.state || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setFieldValue("state", value);
+                                    setLocalFormData((prev) => ({
+                                      ...prev,
+                                      state: value,
+                                    }));
+                                    dispatch(setFormField({
+                                      field: "state",
+                                      value: value
+                                    }));
+                                  }}
+                                  onBlur={handleBlur}
+                                  onFocus={() => setActiveField("state")}
+                                  disabled={responsiblePersonStatesLoading || !values.country}
+                                  placeholder={responsiblePersonStatesLoading ? "Loading states..." : !values.country ? "Please select country first" : "Enter state/province..."}
+                                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+            ${(!values.country || responsiblePersonStatesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+            ${touched.state && errors.state
+                                      ? "border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:ring-blue-500"
+                                    }`}
+                                />
+                              )}
+
+                              {touched.state && errors.state && (
+                                <div className="text-red-500 text-xs mt-1 flex items-center">
+                                  <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                  {errors.state}
+                                </div>
+                              )}
+
+                              {responsiblePersonStates && responsiblePersonStates.length === 0 && values.country && !responsiblePersonStatesLoading && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  No states available for the selected country. Please enter the state manually.
+                                </p>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">
-                          No terms available. Please contact support.
-                        </p>
-                      )}
-                      {touched.terms_and_conditions &&
-                        errors.terms_and_conditions && (
-                          <div className="text-red-500 text-xs mt-2">
-                            {errors.terms_and_conditions}
                           </div>
-                        )}
-                    </div>
+                        </div>
+
+                        {/* Terms and Conditions section */}
+                        <div className="mt-6 bg-blue-50 p-4 rounded-lg">
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">
+                            Terms and Conditions
+                            <RequiredMark fieldName="terms_and_conditions" />
+                          </h3>
+                          {termsLoading ? (
+                            <div className="flex items-center">
+                              <RingLoader
+                                color="#0284c7"
+                                size={16}
+                                className="mr-2"
+                              />
+                              <p className="text-sm text-gray-500">
+                                Loading terms...
+                              </p>
+                            </div>
+                          ) : termsConditions && termsConditions.length > 0 ? (
+                            <div className="space-y-3">
+                              {termsConditions.map((term) => (
+                                <div key={term.id} className="flex items-start">
+                                  <div className="flex items-center h-5">
+                                    <input
+                                      id={`term-${term.id}`}
+                                      name={`term-${term.id}`}
+                                      type="checkbox"
+                                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                      checked={
+                                        values.terms_and_conditions?.some(
+                                          (t) => t.id === term.id,
+                                        ) || false
+                                      }
+                                      onChange={(e) => {
+                                        const isChecked = e.target.checked;
+                                        const currentTerms =
+                                          values.terms_and_conditions || [];
+                                        if (isChecked) {
+                                          const newTerm = {
+                                            id: term.id,
+                                            accepted_at:
+                                              new Date().toLocaleString(),
+                                            ip: clientMeta.ip,
+                                            location: clientMeta.location,
+                                            device: navigator.userAgent,
+                                          };
+                                          setFieldValue("terms_and_conditions", [
+                                            ...currentTerms,
+                                            newTerm,
+                                          ]);
+                                        } else {
+                                          const updatedTerms = currentTerms.filter(
+                                            (t) => t.id !== term.id,
+                                          );
+                                          setFieldValue(
+                                            "terms_and_conditions",
+                                            updatedTerms,
+                                          );
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="ml-3 text-sm">
+                                    <label
+                                      htmlFor={`term-${term.id}`}
+                                      className="font-medium text-gray-700"
+                                    >
+                                      I agree to the{" "}
+                                      <a
+                                        href={term.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-500 hover:underline"
+                                      >
+                                        {term.title}
+                                      </a>
+                                    </label>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">
+                              No terms available. Please contact support.
+                            </p>
+                          )}
+                          {touched.terms_and_conditions &&
+                            errors.terms_and_conditions && (
+                              <div className="text-red-500 text-xs mt-2">
+                                {errors.terms_and_conditions}
+                              </div>
+                            )}
+                        </div>
+                      </>
+                    )}
                   </motion.div>
                 )}
 
@@ -7298,371 +7536,392 @@ const Institution = () => {
                     transition={{ duration: 0.5 }}
                     className="bg-white p-6 rounded-lg shadow-sm"
                   >
-                    <h2 className="text-xl font-semibold mb-4">
-                      Controller Information
-                    </h2>
-                    <p className="text-gray-600 mb-6">
-                      Please specify if you are the controller of this
-                      institution or provide controller details.
-                    </p>
-
-                    <ControllerSection
-                      values={values}
-                      setFieldValue={setFieldValue}
-                      handleBlur={handleBlur}
-                      touched={touched}
-                      errors={errors}
-                      countryOptions={countryOptions}
-                      countriesLoading={countriesLoading}
-                      nationalityOptions={nationalityOptions}
-                      genderOptions={genderOptions}
-                      showPassword={showPassword}
-                      showConfirmPassword={showConfirmPassword}
-                      institutionState={institutionState}
-                      showSSNField={showSSNField}
-                      enhancedHandleChange={enhancedHandleChange}
-                      enhancedPasswordChange={enhancedPasswordChange}
-                      enhancedSelectChange={enhancedSelectChange}
-                      passwordValidationRules={passwordValidationRules}
-                      formatTaxId={formatTaxId}
-                      handleControllerZipLookup={handleControllerZipLookup}
-                      isZipLoading={isZipLoading}
-                      activeField={activeField}
-                      directorRoles={directorRoles}
-                      directorRolesLoading={directorRolesLoading}
-                    />
-
-                    {/* Director Dropdown */}
-                    <div className="mt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField
-                          id="doc_state"
-                          label="ID Issuing State"
-                          name="doc_state"
-                          value={values.doc_state || ""}
-                          onChange={enhancedHandleChange("doc_state", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("doc_state")}
-                          touched={touched.doc_state}
-                          error={errors.doc_state}
-                          required={false}
-                          placeholder="e.g., California, NY, London"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-
-                        <FormField
-                          id="controllerHouseNumber"
-                          label="House Number"
-                          name="controllerHouseNumber"  // Use camelCase here
-                          value={values.controllerHouseNumber || ""}
-                          onChange={enhancedHandleChange("controllerHouseNumber", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("controllerHouseNumber")}
-                          touched={touched.controllerHouseNumber}
-                          error={errors.controllerHouseNumber}
-                          required={false}
-                          placeholder="e.g., 123, 45A, B-12"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
+                    {mandatoryFieldsLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16">
+                        <RingLoader color="#3b82f6" size={50} loading={mandatoryFieldsLoading} />
+                        <p className="mt-4 text-gray-600 font-medium">
+                          Loading controller information...
+                        </p>
                       </div>
+                    ) : (
+                      <>
+                        <h2 className="text-xl font-semibold mb-4">
+                          Controller Information
+                        </h2>
+                        <p className="text-gray-600 mb-6">
+                          Please specify if you are the controller of this
+                          institution or provide controller details.
+                        </p>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        <FormField
-                          id="percentage_of_shares"
-                          label="Percentage of Shares"
-                          name="percentage_of_shares"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={values.percentage_of_shares || ""}
-                          onChange={enhancedHandleChange("percentage_of_shares", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("percentage_of_shares")}
-                          touched={touched.percentage_of_shares}
-                          error={errors.percentage_of_shares}
-                          required={false}
-                          placeholder="e.g., 25.50"
+                        <ControllerSection
+                          values={values}
+                          setFieldValue={setFieldValue}
+                          handleBlur={handleBlur}
+                          touched={touched}
+                          errors={errors}
+                          countryOptions={countryOptions}
+                          countriesLoading={countriesLoading}
+                          nationalityOptions={nationalityOptions}
+                          genderOptions={genderOptions}
+                          showPassword={showPassword}
+                          showConfirmPassword={showConfirmPassword}
+                          institutionState={institutionState}
+                          showSSNField={showSSNField}
+                          enhancedHandleChange={enhancedHandleChange}
+                          enhancedPasswordChange={enhancedPasswordChange}
+                          enhancedSelectChange={enhancedSelectChange}
+                          passwordValidationRules={passwordValidationRules}
+                          formatTaxId={formatTaxId}
+                          handleControllerZipLookup={handleControllerZipLookup}
+                          isZipLoading={isZipLoading}
                           activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
+                          directorRoles={directorRoles}
+                          directorRolesLoading={directorRolesLoading}
+                          RequiredFormField={RequiredFormField}
+                          RequiredCustomSelect={RequiredCustomSelect}
+                          RequiredMark={RequiredMark}
+                          isFieldMandatory={isFieldMandatory}
+                          resolveApiFieldName={resolveApiFieldName}
                         />
 
-                        <FormField
-                          id="suburb"
-                          label="Suburb"
-                          name="suburb"
-                          value={values.suburb || ""}
-                          onChange={enhancedHandleChange("suburb", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("suburb")}
-                          touched={touched.suburb}
-                          error={errors.suburb}
-                          required={false}
-                          placeholder="e.g., New Baneshwor"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
+                        {/* Director Dropdown */}
+                        <div className="mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <RequiredFormField
+                              id="doc_state"
+                              label="ID Issuing State"
+                              name="doc_state"
+                              value={values.doc_state || ""}
+                              onChange={enhancedHandleChange("doc_state", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("doc_state")}
+                              touched={touched.doc_state}
+                              error={errors.doc_state}
+                              isMandatory={isFieldMandatory(resolveApiFieldName("doc_state"), values)}
+                              placeholder="e.g., California, NY, London"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
 
-                      {/* Past Nationalities and Aliases - Side by Side */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        {/* Past Nationalities - Multi-select */}
-                        <div>
-                          <CustomSelect
-                            id="controller_past_nationalities"
-                            label="Past Nationalities"
-                            options={nationalityOptions}
-                            isMulti={true}
-                            onChange={(selectedOptions) => {
-                              const selectedIds = selectedOptions
-                                ? selectedOptions.map((opt) => opt.value)
-                                : [];
-                              setFieldValue("controller_past_nationalities", selectedIds);
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                controller_past_nationalities: selectedIds,
-                              }));
-                              dispatch(
-                                setFormField({
-                                  field: "controller_past_nationalities",
-                                  value: selectedIds,
-                                })
-                              );
-                            }}
-                            value={nationalityOptions.filter((opt) =>
-                              values.controller_past_nationalities?.includes(opt.value)
-                            )}
-                            onBlur={handleBlur}
-                            touched={touched.controller_past_nationalities}
-                            error={errors.controller_past_nationalities}
-                            placeholder="Select past nationalities..."
-                            required={false}
-                          />
-                        </div>
+                            <RequiredFormField
+                              id="controllerHouseNumber"
+                              label="House Number"
+                              name="controllerHouseNumber"
+                              value={values.controllerHouseNumber || ""}
+                              onChange={enhancedHandleChange("controllerHouseNumber", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("controllerHouseNumber")}
+                              touched={touched.controllerHouseNumber}
+                              error={errors.controllerHouseNumber}
+                              isMandatory={isFieldMandatory(resolveApiFieldName("controllerHouseNumber"), values)}
+                              placeholder="e.g., 123, 45A, B-12"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
 
-                        <FormField
-                          id="aliases"
-                          label="Aliases"
-                          name="aliases"
-                          value={values.aliases || ""}
-                          onChange={enhancedHandleChange("aliases", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("aliases")}
-                          touched={touched.aliases}
-                          error={errors.aliases}
-                          required={false}
-                          placeholder="e.g., Alias Name"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            <RequiredFormField
+                              id="percentage_of_shares"
+                              label="Percentage of Shares"
+                              name="percentage_of_shares"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={values.percentage_of_shares || ""}
+                              onChange={enhancedHandleChange("percentage_of_shares", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("percentage_of_shares")}
+                              touched={touched.percentage_of_shares}
+                              error={errors.percentage_of_shares}
+                              isMandatory={isFieldMandatory(resolveApiFieldName("percentage_of_shares"), values)}
+                              placeholder="e.g., 25.50"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
 
+                            <RequiredFormField
+                              id="suburb"
+                              label="Suburb"
+                              name="suburb"
+                              value={values.suburb || ""}
+                              onChange={enhancedHandleChange("suburb", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("suburb")}
+                              touched={touched.suburb}
+                              error={errors.suburb}
+                              isMandatory={isFieldMandatory(resolveApiFieldName("suburb"), values)}
+                              placeholder="e.g., New Baneshwor"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
-                        {/* Left side - Director Role Dropdown */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Role
-                          </label>
-                          <Select
-                            id="director_role_id"
-                            name="director_role_id"
-                            options={directorRoles?.map(role => ({ value: role.id, label: role.name })) || []}
-                            onChange={(option) => {
-                              if (option) {
-                                setFieldValue("director_role_id", option.value);
-                                dispatch(setDirectorRoleId(option.value));
-                                dispatch(
-                                  setFormField({
-                                    field: "director_role_id",
-                                    value: option.value,
-                                  })
-                                );
-                              } else {
-                                setFieldValue("director_role_id", "");
-                                dispatch(setDirectorRoleId(""));
-                                dispatch(
-                                  setFormField({
-                                    field: "director_role_id",
-                                    value: "",
-                                  })
-                                );
-                              }
-                            }}
-                            value={(directorRoles?.map(role => ({ value: role.id, label: role.name })) || []).find(
-                              (opt) => opt.value === values.director_role_id
-                            )}
-                            isDisabled={false}
-                            isLoading={directorRolesLoading}
-                            placeholder="Select director role"
-                            isClearable={true}
-                            styles={{
-                              control: (base) => ({
-                                ...base,
-                                minHeight: "38px",
-                                borderColor: "#d1d5db",
-                                borderRadius: "0.5rem",
-                                padding: "0.25rem 0.5rem",
-                                "&:hover": {
-                                  borderColor: "#9ca3af",
-                                },
-                              }),
-                              placeholder: (base) => ({
-                                ...base,
-                                fontSize: "0.875rem",
-                                color: "#6b7280",
-                              }),
-                              menu: (base) => ({
-                                ...base,
-                                fontSize: "0.875rem",
-                                zIndex: 9999,
-                              }),
-                              singleValue: (base) => ({
-                                ...base,
-                                fontSize: "0.875rem",
-                              }),
-                              option: (base, state) => ({
-                                ...base,
-                                fontSize: "0.875rem",
-                                backgroundColor: state.isSelected
-                                  ? "#3b82f6"
-                                  : state.isFocused
-                                    ? "#eff6ff"
-                                    : "white",
-                                color: state.isSelected ? "white" : "#1f2937",
-                                "&:hover": {
-                                  backgroundColor: "#eff6ff",
-                                },
-                              }),
-                            }}
-                          />
-                          {touched.director_role_id && errors.director_role_id && (
-                            <div className="text-red-500 text-xs mt-1 flex items-center">
-                              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                              {errors.director_role_id}
+                          {/* Past Nationalities and Aliases - Side by Side */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            {/* Past Nationalities - Multi-select */}
+                            <div>
+                              <RequiredCustomSelect
+                                id="controller_past_nationalities"
+                                label="Past Nationalities"
+                                options={nationalityOptions}
+                                isMulti={true}
+                                onChange={(selectedOptions) => {
+                                  const selectedIds = selectedOptions
+                                    ? selectedOptions.map((opt) => opt.value)
+                                    : [];
+                                  setFieldValue("controller_past_nationalities", selectedIds);
+                                  setLocalFormData((prev) => ({
+                                    ...prev,
+                                    controller_past_nationalities: selectedIds,
+                                  }));
+                                  dispatch(
+                                    setFormField({
+                                      field: "controller_past_nationalities",
+                                      value: selectedIds,
+                                    })
+                                  );
+                                }}
+                                value={nationalityOptions.filter((opt) =>
+                                  values.controller_past_nationalities?.includes(opt.value)
+                                )}
+                                onBlur={handleBlur}
+                                touched={touched.controller_past_nationalities}
+                                error={errors.controller_past_nationalities}
+                                placeholder="Select past nationalities..."
+                                isMandatory={isFieldMandatory(resolveApiFieldName("controller_past_nationalities"), values)}
+                              />
                             </div>
-                          )}
-                        </div>
 
-                        {/* Right side - Has Nominees Radio Buttons */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Has Nominees?
-                          </label>
-                          <div className="flex items-center gap-4 pt-1">
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="has_nominees"
-                                value="1"
-                                checked={hasNominees === "1"}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  setHasNominees(value);
-                                  setFieldValue("has_nominees", value);
-                                  if (value === "0") {
-                                    setNomineeFirstName("");
-                                    setNomineeMiddleName("");
-                                    setNomineeLastName("");
-                                    setFieldValue("nominee_first_name", "");
-                                    setFieldValue("nominee_middle_name", "");
-                                    setFieldValue("nominee_last_name", "");
+                            <RequiredFormField
+                              id="aliases"
+                              label="Aliases"
+                              name="aliases"
+                              value={values.aliases || ""}
+                              onChange={enhancedHandleChange("aliases", setFieldValue)}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("aliases")}
+                              touched={touched.aliases}
+                              error={errors.aliases}
+                              isMandatory={isFieldMandatory(resolveApiFieldName("aliases"), values)}
+                              placeholder="e.g., Alias Name"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
+
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
+                            {/* Left side - Director Role Dropdown */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Role
+                                <RequiredMark fieldName="director_role_id" />
+                              </label>
+                              <Select
+                                id="director_role_id"
+                                name="director_role_id"
+                                options={directorRoles?.map(role => ({ value: role.id, label: role.name })) || []}
+                                onChange={(option) => {
+                                  if (option) {
+                                    setFieldValue("director_role_id", option.value);
+                                    dispatch(setDirectorRoleId(option.value));
+                                    dispatch(
+                                      setFormField({
+                                        field: "director_role_id",
+                                        value: option.value,
+                                      })
+                                    );
+                                  } else {
+                                    setFieldValue("director_role_id", "");
+                                    dispatch(setDirectorRoleId(""));
+                                    dispatch(
+                                      setFormField({
+                                        field: "director_role_id",
+                                        value: "",
+                                      })
+                                    );
                                   }
                                 }}
-                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-gray-700">Yes</span>
-                            </label>
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="has_nominees"
-                                value="0"
-                                checked={hasNominees === "0"}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  setHasNominees(value);
-                                  setFieldValue("has_nominees", value);
-                                  if (value === "0") {
-                                    setNomineeFirstName("");
-                                    setNomineeMiddleName("");
-                                    setNomineeLastName("");
-                                    setFieldValue("nominee_first_name", "");
-                                    setFieldValue("nominee_middle_name", "");
-                                    setFieldValue("nominee_last_name", "");
-                                  }
+                                value={(directorRoles?.map(role => ({ value: role.id, label: role.name })) || []).find(
+                                  (opt) => opt.value === values.director_role_id
+                                )}
+                                isDisabled={false}
+                                isLoading={directorRolesLoading}
+                                placeholder="Select director role"
+                                isClearable={true}
+                                styles={{
+                                  control: (base) => ({
+                                    ...base,
+                                    minHeight: "38px",
+                                    borderColor: "#d1d5db",
+                                    borderRadius: "0.5rem",
+                                    padding: "0.25rem 0.5rem",
+                                    "&:hover": {
+                                      borderColor: "#9ca3af",
+                                    },
+                                  }),
+                                  placeholder: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    color: "#6b7280",
+                                  }),
+                                  menu: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    zIndex: 9999,
+                                  }),
+                                  singleValue: (base) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                  }),
+                                  option: (base, state) => ({
+                                    ...base,
+                                    fontSize: "0.875rem",
+                                    backgroundColor: state.isSelected
+                                      ? "#3b82f6"
+                                      : state.isFocused
+                                        ? "#eff6ff"
+                                        : "white",
+                                    color: state.isSelected ? "white" : "#1f2937",
+                                    "&:hover": {
+                                      backgroundColor: "#eff6ff",
+                                    },
+                                  }),
                                 }}
-                                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
                               />
-                              <span className="text-sm text-gray-700">No</span>
-                            </label>
+                              {touched.director_role_id && errors.director_role_id && (
+                                <div className="text-red-500 text-xs mt-1 flex items-center">
+                                  <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                                  {errors.director_role_id}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right side - Has Nominees Radio Buttons */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Has Nominees?
+                                <RequiredMark fieldName="has_nominees" />
+                              </label>
+                              <div className="flex items-center gap-4 pt-1">
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="has_nominees"
+                                    value="1"
+                                    checked={hasNominees === "1"}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setHasNominees(value);
+                                      setFieldValue("has_nominees", value);
+                                      if (value === "0") {
+                                        setNomineeFirstName("");
+                                        setNomineeMiddleName("");
+                                        setNomineeLastName("");
+                                        setFieldValue("nominee_first_name", "");
+                                        setFieldValue("nominee_middle_name", "");
+                                        setFieldValue("nominee_last_name", "");
+                                      }
+                                    }}
+                                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">Yes</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="has_nominees"
+                                    value="0"
+                                    checked={hasNominees === "0"}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setHasNominees(value);
+                                      setFieldValue("has_nominees", value);
+                                      if (value === "0") {
+                                        setNomineeFirstName("");
+                                        setNomineeMiddleName("");
+                                        setNomineeLastName("");
+                                        setFieldValue("nominee_first_name", "");
+                                        setFieldValue("nominee_middle_name", "");
+                                        setFieldValue("nominee_last_name", "");
+                                      }
+                                    }}
+                                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">No</span>
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Nominee Text Fields - Shows below when "Yes" is selected */}
-                    {hasNominees === "1" && (
-                      <div className="mt-6 pt-4 border-t border-gray-200">
-                        <h4 className="text-md font-medium text-gray-800 mb-4 flex items-center gap-2">
-                          <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" />
-                          Nominee Information
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              First Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={nomineeFirstName}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setNomineeFirstName(value);
-                                setFieldValue("nominee_first_name", value);
-                              }}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Enter first name"
-                            />
-                          </div>
+                        {/* Nominee Text Fields - Shows below when "Yes" is selected */}
+                        {hasNominees === "1" && (
+                          <div className="mt-6 pt-4 border-t border-gray-200">
+                            <h4 className="text-md font-medium text-gray-800 mb-4 flex items-center gap-2">
+                              <FontAwesomeIcon icon={faUserPlus} className="text-blue-500" />
+                              Nominee Information
+                              <RequiredMark fieldName="customer_controller_nominees" />
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  First Name
+                                  <RequiredMark fieldName="customer_controller_nominees" />
+                                </label>
+                                <input
+                                  type="text"
+                                  value={nomineeFirstName}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setNomineeFirstName(value);
+                                    setFieldValue("nominee_first_name", value);
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter first name"
+                                />
+                              </div>
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Middle Name <span className="text-gray-400 text-xs">(Optional)</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={nomineeMiddleName}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setNomineeMiddleName(value);
-                                setFieldValue("nominee_middle_name", value);
-                              }}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Enter middle name"
-                            />
-                          </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Middle Name <span className="text-gray-400 text-xs">(Optional)</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={nomineeMiddleName}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setNomineeMiddleName(value);
+                                    setFieldValue("nominee_middle_name", value);
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter middle name"
+                                />
+                              </div>
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Last Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={nomineeLastName}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setNomineeLastName(value);
-                                setFieldValue("nominee_last_name", value);
-                              }}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Enter last name"
-                            />
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Last Name
+                                  <RequiredMark fieldName="customer_controller_nominees" />
+                                </label>
+                                <input
+                                  type="text"
+                                  value={nomineeLastName}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setNomineeLastName(value);
+                                    setFieldValue("nominee_last_name", value);
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter last name"
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        )}
+                      </>
                     )}
                   </motion.div>
                 )}
@@ -7677,27 +7936,40 @@ const Institution = () => {
                     transition={{ duration: 0.5 }}
                     className="bg-white p-6 rounded-lg shadow-sm"
                   >
-                    <OwnerInfo
-                      values={values}
-                      setFieldValue={setFieldValue}
-                      handleChange={handleChange}
-                      handleBlur={handleBlur}
-                      errors={errors}
-                      touched={touched}
-                      activeField={activeField}
-                      setActiveField={setActiveField}
-                      nationalityOptions={nationalityOptions}
-                      roleOptions={roleOptions}
-                      idDocumentTypeOptions={idDocumentTypeOptions}
-                      totalOwnershipPercentage={totalOwnershipPercentage}
-                      dispatch={dispatch}
-                      countryOptions={countryOptions}
-                      countriesLoading={countriesLoading}
-                      ownerAdd={ownerAdd}
-                      isNamedAccount={isNamedAccount}
-                      countries={countries}
-                      selectedCurrency={defaultCurrency}
-                    />
+                    {mandatoryFieldsLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16">
+                        <RingLoader color="#3b82f6" size={50} loading={mandatoryFieldsLoading} />
+                        <p className="mt-4 text-gray-600 font-medium">
+                          Loading owner information...
+                        </p>
+                      </div>
+                    ) : (
+                      <OwnerInfo
+                        values={values}
+                        setFieldValue={setFieldValue}
+                        handleChange={handleChange}
+                        handleBlur={handleBlur}
+                        errors={errors}
+                        touched={touched}
+                        activeField={activeField}
+                        setActiveField={setActiveField}
+                        nationalityOptions={nationalityOptions}
+                        genderOptions={genderOptions}
+                        roleOptions={roleOptions}
+                        idDocumentTypeOptions={idDocumentTypeOptions}
+                        totalOwnershipPercentage={totalOwnershipPercentage}
+                        dispatch={dispatch}
+                        countryOptions={countryOptions}
+                        countriesLoading={countriesLoading}
+                        ownerAdd={ownerAdd}
+                        isNamedAccount={isNamedAccount}
+                        countries={countries}
+                        selectedCurrency={defaultCurrency}
+                        isFieldMandatory={isFieldMandatory}
+                        resolveApiFieldName={resolveApiFieldName}
+                        mandatoryFieldsMap={mandatoryFieldsMap}
+                      />
+                    )}
                   </motion.div>
                 )}
 
@@ -7711,113 +7983,133 @@ const Institution = () => {
                     transition={{ duration: 0.5 }}
                     className="bg-white p-6 rounded-lg shadow-sm"
                   >
-                    <h2 className="text-xl font-semibold mb-4">
-                      Document Upload & Final Review
-                    </h2>
-                    {documentUpload && (
-                      <div className="mb-8">
-                        <h3 className="text-lg font-medium mb-4 text-blue-600">
-                          Required Documents
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {documents.map((doc) => (
-                            <div
-                              key={doc.id}
-                              className="border border-gray-200 rounded-lg p-4"
-                            >
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                {doc.name}{" "}
-                                {doc.required && (
-                                  <span className="text-red-500">*</span>
-                                )}
-                              </label>
-                              <input
-                                type="file"
-                                onChange={async (e) => {
-                                  const file = e.target.files[0];
-                                  if (file) {
-                                    const base64Data =
-                                      await convertFileToBase64(file);
-                                    const fileData = {
-                                      name: file.name,
-                                      type: file.type,
-                                      size: file.size,
-                                      base64: base64Data,
-                                    };
-
-                                    setFieldValue(
-                                      `user_image.${doc.id}`,
-                                      fileData,
-                                    );
-                                  }
-                                }}
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                accept=".jpg,.jpeg,.png,.pdf"
-                              />
-                              {values.user_image &&
-                                values.user_image[doc.id] && (
-                                  <p className="text-sm text-green-600 mt-1">
-                                    ✓ Document uploaded:{" "}
-                                    {values.user_image[doc.id].name}
-                                  </p>
-                                )}
-                              {touched.user_image?.[doc.id] &&
-                                errors.user_image?.[doc.id] && (
-                                  <div className="text-red-500 text-xs mt-1">
-                                    {errors.user_image[doc.id]}
-                                  </div>
-                                )}
-                              {doc.description && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {doc.description}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="border-t pt-6">
-                      <h3 className="text-lg font-medium mb-4">
-                        Final Agreement
-                      </h3>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="flex items-start space-x-3 cursor-pointer">
-                          <Field
-                            name="terms_agreement"
-                            type="checkbox"
-                            checked={values.terms_agreement || false}
-                            className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <span className="text-sm text-gray-700">
-                            I certify that all information provided is true and
-                            accurate to the best of my knowledge. I agree to
-                            abide by the terms and conditions of this
-                            institution registration.
-                          </span>
-                        </label>
-                        {touched.terms_agreement && errors.terms_agreement && (
-                          <div className="text-red-500 text-xs mt-2 ml-7">
-                            {errors.terms_agreement}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start space-x-3">
-                      <i className="fas fa-check-circle text-green-600 mt-1"></i>
-                      <div>
-                        <h3 className="text-lg font-medium text-green-800 mb-1">
-                          Ready to Submit!
-                        </h3>
-                        <p className="text-green-700 text-sm">
-                          Please review all information before submitting. Once
-                          submitted, your application will be processed and you
-                          will receive a confirmation email.
+                    {mandatoryFieldsLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16">
+                        <RingLoader color="#3b82f6" size={50} loading={mandatoryFieldsLoading} />
+                        <p className="mt-4 text-gray-600 font-medium">
+                          Loading document requirements...
                         </p>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <h2 className="text-xl font-semibold mb-4">
+                          Document Upload & Final Review
+                        </h2>
+                        {documentUpload && (
+                          <div className="mb-8">
+                            <h3 className="text-lg font-medium mb-4 text-blue-600">
+                              Required Documents
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {documents.map((doc) => {
+                                //  Check if document is required in API response (by ID or name)
+                                const isDocRequired =
+                                  doc.required === true ||
+                                  Boolean(mandatoryFieldsMap[String(doc.id)]) ||
+                                  Boolean(mandatoryFieldsMap[`doc_id_${doc.id}`]) ||
+                                  (doc.name && Boolean(mandatoryFieldsMap[doc.name.toLowerCase().trim()]));
+
+                                return (
+                                  <div
+                                    key={doc.id}
+                                    className="border border-gray-200 rounded-lg p-4"
+                                  >
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                      {doc.name}{" "}
+                                      {isDocRequired && (
+                                        <span className="text-red-500 font-bold ml-1">*</span>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="file"
+                                      onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                          const base64Data =
+                                            await convertFileToBase64(file);
+                                          const fileData = {
+                                            name: file.name,
+                                            type: file.type,
+                                            size: file.size,
+                                            base64: base64Data,
+                                          };
+
+                                          setFieldValue(
+                                            `user_image.${doc.id}`,
+                                            fileData,
+                                          );
+                                        }
+                                      }}
+                                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                      accept=".jpg,.jpeg,.png,.pdf"
+                                    />
+                                    {values.user_image &&
+                                      values.user_image[doc.id] && (
+                                        <p className="text-sm text-green-600 mt-1">
+                                          ✓ Document uploaded:{" "}
+                                          {values.user_image[doc.id].name}
+                                        </p>
+                                      )}
+                                    {touched.user_image?.[doc.id] &&
+                                      errors.user_image?.[doc.id] && (
+                                        <div className="text-red-500 text-xs mt-1">
+                                          {errors.user_image[doc.id]}
+                                        </div>
+                                      )}
+                                    {doc.description && (
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {doc.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="border-t pt-6">
+                          <h3 className="text-lg font-medium mb-4">
+                            Final Agreement
+                          </h3>
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <label className="flex items-start space-x-3 cursor-pointer">
+                              <Field
+                                name="terms_agreement"
+                                type="checkbox"
+                                checked={values.terms_agreement || false}
+                                className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">
+                                I certify that all information provided is true and
+                                accurate to the best of my knowledge. I agree to
+                                abide by the terms and conditions of this
+                                institution registration.
+                              </span>
+                            </label>
+                            {touched.terms_agreement && errors.terms_agreement && (
+                              <div className="text-red-500 text-xs mt-2 ml-7">
+                                {errors.terms_agreement}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start space-x-3">
+                          <i className="fas fa-check-circle text-green-600 mt-1"></i>
+                          <div>
+                            <h3 className="text-lg font-medium text-green-800 mb-1">
+                              Ready to Submit!
+                            </h3>
+                            <p className="text-green-700 text-sm">
+                              Please review all information before submitting. Once
+                              submitted, your application will be processed and you
+                              will receive a confirmation email.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
