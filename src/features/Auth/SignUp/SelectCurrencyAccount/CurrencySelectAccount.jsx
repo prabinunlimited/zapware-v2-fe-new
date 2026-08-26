@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo,useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -61,6 +61,8 @@ const OpenCurrencyAccount = () => {
   const [isLoadingSpinner, setIsLoadingSpinner] = useState(true);
   const [selectedCurrencyUrl, setSelectedCurrencyUrl] = useState(null);
   const [lastSelectedCurrency, setLastSelectedCurrency] = useState("");
+
+ const hasFetchedRef = useRef(false);
 
   // Storage variables
   const bearertoken = localStorage.getItem("bearertoken");
@@ -129,56 +131,65 @@ const OpenCurrencyAccount = () => {
   }, [API_URL]);
 
   // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
-  useEffect(() => {
-    if (!accountType) {
-      navigate("/selectaccounttype");
-      return;
-    }
+useEffect(() => {
+  if (!accountType) {
+    navigate("/selectaccounttype");
+    return;
+  }
 
-    // For partner ID 8, we only want remittance services
-    // if (isPartnerId8) {
-    //   // Automatically select remittance only and clear any selections
-    //   dispatch(actions.setRemittanceOnlyAccepted(true));
-    //   dispatch(actions.clearSelectedAccounts());
-    //   dispatch(actions.setSelectedPackageCurrencies([]));
-    //   return;
-    // }
+  //  Prevent duplicate dispatches (caused by React Strict Mode)
+  if (hasFetchedRef.current) {
+    console.log("⏭️ Skipping duplicate fetch (Strict Mode)");
+    return;
+  }
 
-    dispatch(actions.clearAllSelections());
+  // For partner ID 8, we only want remittance services
+  // if (isPartnerId8) {
+  //   // Automatically select remittance only and clear any selections
+  //   dispatch(actions.setRemittanceOnlyAccepted(true));
+  //   dispatch(actions.clearSelectedAccounts());
+  //   dispatch(actions.setSelectedPackageCurrencies([]));
+  //   return;
+  // }
 
-    // ⚠️ FIX: Force USA country ID (186) for partner flows
-    const forceCountryId = 186; // USA
+  dispatch(actions.clearAllSelections());
 
-    console.log("🌐 Forcing country ID for partner flow:", {
-      originalCountryId: selectedCountryId,
-      forcedCountryId: forceCountryId,
-      accountType,
-      isPartnerPackageModule,
-    });
+  // ⚠️ FIX: Force USA country ID (186) for partner flows
+  const forceCountryId = 186; // USA
 
-    if (isPartnerPackageModule === "Y") {
-      dispatch(
-        actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
-      );
-    } else {
-      dispatch(
-        actions.fetchAccountOptions({
-          accountType,
-          countryId: forceCountryId, // Use forced country ID
-          API_URL,
-        }),
-      );
-    }
-  }, [
+  console.log("🌐 Forcing country ID for partner flow:", {
+    originalCountryId: selectedCountryId,
+    forcedCountryId: forceCountryId,
     accountType,
-    isPartnerId8,
-    // Remove selectedCountryId from dependencies
     isPartnerPackageModule,
-    dispatch,
-    navigate,
-    partnerId,
-    API_URL,
-  ]);
+  });
+
+  // ✅ Mark as fetched BEFORE dispatching
+  hasFetchedRef.current = true;
+
+  if (isPartnerPackageModule === "Y") {
+    dispatch(
+      actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
+    );
+  } else {
+    dispatch(
+      actions.fetchAccountOptions({
+        accountType,
+        countryId: forceCountryId, // Use forced country ID
+        API_URL,
+      }),
+    );
+  }
+}, [
+  accountType,
+  isPartnerId8,
+  // Remove selectedCountryId from dependencies
+  isPartnerPackageModule,
+  dispatch,
+  navigate,
+  partnerId,
+  API_URL,
+]);
 
   // 2. PRICE FETCHING - Skip for partner ID 8
   useEffect(() => {
