@@ -167,7 +167,7 @@ export const changePassword = createAsyncThunk(
       const token = state.auth.token;
       
       // Get customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
       
       if (!customerUuid) {
         throw new Error("Customer UUID not found");

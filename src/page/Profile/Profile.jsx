@@ -92,6 +92,7 @@ const defaultProfileData = {
   id_document_number: "",
   id_issuing_country_id: "",
   id_expiry_date: "",
+  id_issue_date: "",
 };
 
 const Profile = () => {
@@ -227,6 +228,10 @@ const Profile = () => {
   const [selectedDocumentType, setSelectedDocumentType] = useState(null);
   const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const getCustomerUuid = () => {
+    return localStorage.getItem("customer_uuid") || localStorage.getItem("customerUuid");
+  };
 
   // Check if account type is individual
   const isIndividualAccount = useMemo(() => {
@@ -515,7 +520,7 @@ const Profile = () => {
       }
 
       // Get customerUuid from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid || !authtoken) {
         console.log("❌ Profile: Missing customerUuid or authtoken", {
@@ -611,6 +616,7 @@ const Profile = () => {
         id_document_number: profileData.id_document_number || "",
         id_issuing_country_id: profileData.id_document_type_country_id || "",
         id_expiry_date: profileData.id_document_expiry_date || "",
+        id_issue_date: profileData.id_document_issue_date || "",
       });
     }
   }, [profileData]);
@@ -828,6 +834,7 @@ const Profile = () => {
         id_document_number: profileData?.id_document_number || "",
         id_issuing_country_id: profileData?.id_document_type_country_id || "",
         id_expiry_date: profileData?.id_document_expiry_date || "",
+        id_issue_date: profileData.id_document_issue_date || "",
       });
       if (profileData?.occupation_id) {
         const occ = occupations.find((o) => o.id === profileData.occupation_id);
@@ -980,7 +987,7 @@ const Profile = () => {
       const phoneCode = selectedCountry?.phone_code || "";
 
       // Get the customer UUID from localStorage (THIS IS THE CORRECT ONE)
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       console.log("🔍 Debug - Customer ID sources:", {
         customerUuid: customerUuid,
@@ -1065,7 +1072,7 @@ const Profile = () => {
 
     try {
       // Get the customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1130,7 +1137,7 @@ const Profile = () => {
 
     try {
       // Get the customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1215,7 +1222,7 @@ const Profile = () => {
     setEmailPasscodeRequestLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1287,7 +1294,7 @@ const Profile = () => {
     setEmailPasscodeRequestLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1350,7 +1357,7 @@ const Profile = () => {
     setEmailPasscodeLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1538,7 +1545,7 @@ const Profile = () => {
     setDocumentUploadLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1624,7 +1631,7 @@ const Profile = () => {
     setDeleteControllerLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
       const authCustomerId = localStorage.getItem("authcustomer_id");
 
       if (!customerUuid) {
@@ -1725,7 +1732,7 @@ const Profile = () => {
     setDeleteOwnerLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
       const authCustomerId = localStorage.getItem("authcustomer_id");
 
       if (!customerUuid) {
@@ -1800,7 +1807,7 @@ const Profile = () => {
 
       if (isIndividualAccount) {
         // Individual accounts use a dedicated endpoint with a different payload shape
-        const customerUuid = localStorage.getItem("customerUuid");
+        const customerUuid = getCustomerUuid();
         const authCustomerId = localStorage.getItem("authcustomer_id");
 
         if (!customerUuid) {
@@ -1843,6 +1850,7 @@ const Profile = () => {
           id_issuing_country_id: editableData.id_issuing_country_id
             ? parseInt(editableData.id_issuing_country_id, 10)
             : null,
+          id_issue_date: editableData.id_issue_date,
           id_expiry_date: editableData.id_expiry_date,
           updated_user_type: "customer",
           updated_user_id: authCustomerId ? parseInt(authCustomerId, 10) : null,
@@ -1952,7 +1960,7 @@ const Profile = () => {
     setSaveLoading(true); // ← Show loading spinner
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -4456,6 +4464,23 @@ const Profile = () => {
                         ) : (
                           <span className="text-sm font-medium text-gray-800 block py-2">
                             {displayProfileData.id_document_number || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Issue Date</label>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            name="id_issue_date"
+                            value={editableData.id_issue_date || ''}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_issue_date || "N/A"}
                           </span>
                         )}
                       </div>
