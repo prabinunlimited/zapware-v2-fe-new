@@ -3,10 +3,9 @@ import { FieldArray } from "formik";
 import FormField from "../FormFields/FormField";
 import SelectField from "../FormFields/SelectField";
 import Select from "react-select";
-import { getIn } from "formik";
 
 // ----------------------------------------------------------------------
-// 1. New Sub-Component: OwnerItem
+// 1. Sub-Component: OwnerItem
 // ----------------------------------------------------------------------
 const OwnerItem = ({
   owner,
@@ -24,6 +23,8 @@ const OwnerItem = ({
   onOwnerIfChange,
   onOwnershipChange,
   countryOptions,
+  nationalityOptions,
+  genderOptions,
   roleOptions,
   idDocumentTypeOptions,
   countriesLoading,
@@ -31,12 +32,10 @@ const OwnerItem = ({
   isNamedAccount,
   activeField,
   setActiveField,
+  isFieldMandatory,
 }) => {
   const formatOptionLabel = (option) => {
-    // Get the flag URL from various possible properties
-    const flagUrl =
-      option.flag || option.flag_url || option.originalData?.flag_url;
-
+    const flagUrl = option.flag || option.flag_url || option.originalData?.flag_url;
     const phoneCode = option.phoneCode || option.phone_code || "";
     const countryCode = option.country_code || option.countryCode || "";
     const countryName = option.label || option.name || "";
@@ -50,19 +49,14 @@ const OwnerItem = ({
               alt={`${countryName} flag`}
               className="w-6 h-4 object-cover rounded"
               onError={(e) => {
-                // If image fails to load, show emoji fallback
                 e.target.style.display = "none";
               }}
             />
           ) : (
             <span className="text-base">🏳️</span>
           )}
-          <span className="font-medium text-gray-900 text-sm">
-            {countryName}
-          </span>
-          {countryCode && (
-            <span className="text-gray-500 text-xs">({countryCode})</span>
-          )}
+          <span className="font-medium text-gray-900 text-sm">{countryName}</span>
+          {countryCode && <span className="text-gray-500 text-xs">({countryCode})</span>}
         </div>
         <span className="text-gray-500 text-sm font-medium bg-gray-100 px-2 py-1 rounded">
           {phoneCode}
@@ -74,16 +68,8 @@ const OwnerItem = ({
   const filterOption = (option, inputValue) => {
     const searchTerm = inputValue.toLowerCase();
     const countryName = (option.label || "").toLowerCase();
-    const countryCode = (
-      option.country_code ||
-      option.countryCode ||
-      ""
-    ).toLowerCase();
-    const phoneCode = (
-      option.phoneCode ||
-      option.phone_code ||
-      ""
-    ).toLowerCase();
+    const countryCode = (option.country_code || option.countryCode || "").toLowerCase();
+    const phoneCode = (option.phoneCode || option.phone_code || "").toLowerCase();
 
     return (
       countryName.includes(searchTerm) ||
@@ -93,30 +79,13 @@ const OwnerItem = ({
     );
   };
 
-  return (
-    <div className="border border-gray-200 rounded-lg p-4">
-      {/* Debug Info */}
-      {/* {process.env.NODE_ENV === "development" && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
-          <strong>Owner {index + 1} State:</strong>
-          <div className="grid grid-cols-2 gap-1 mt-1">
-            <span>
-              owner_if: <code>{owner.owner_if || "empty"}</code>
-            </span>
-            <span>
-              isOwnerYes: <code>{isOwnerYes.toString()}</code>
-            </span>
-            <span>
-              isFirstOwner: <code>{isFirstOwner.toString()}</code>
-            </span>
-            <span>
-              Fields Disabled:{" "}
-              <code>{(isOwnerYes && isFirstOwner).toString()}</code>
-            </span>
-          </div>
-        </div>
-      )} */}
+  const isMandatory = (fieldKey) => {
+    if (typeof isFieldMandatory !== "function") return false;
+    return isFieldMandatory(fieldKey, values, owner);
+  };
 
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 mb-6 bg-white shadow-sm">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-blue-600">Owner {index + 1}</h3>
         {values.owner_details.length > 1 && (
@@ -130,7 +99,7 @@ const OwnerItem = ({
         )}
       </div>
 
-      {/* "Are you the owner?" Dropdown - Only for first owner */}
+      {/* "Are you the owner?" Dropdown */}
       {isFirstOwner && (
         <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
           <div className="relative">
@@ -152,57 +121,91 @@ const OwnerItem = ({
               Are you the owner? <span className="text-red-500">*</span>
             </label>
           </div>
-          {touched.owner_details?.[index]?.owner_if &&
-            errors.owner_details?.[index]?.owner_if && (
-              <div className="text-red-500 text-xs mt-2">
-                {errors.owner_details?.[index]?.owner_if}
-              </div>
-            )}
-          {isOwnerYes && (
-            <div>
-              <p className="text-green-600 text-sm mt-2">
-                ✓ Your information will be automatically filled as the owner.
-              </p>
+          {touched.owner_details?.[index]?.owner_if && errors.owner_details?.[index]?.owner_if && (
+            <div className="text-red-500 text-xs mt-2">
+              {errors.owner_details?.[index]?.owner_if}
             </div>
+          )}
+          {isOwnerYes && (
+            <p className="text-green-600 text-sm mt-2">
+              ✓ Primary contact details auto-filled. You can edit any field if required.
+            </p>
           )}
         </div>
       )}
 
-      {/* Owner Type Dropdown - always visible, for every owner */}
-      <div className="mb-6">
-        <SelectField
-          id={`owner_details[${index}].owner_type`}
-          label="Owner Type"
-          options={[
-            { value: "individual", label: "Individual" },
-            { value: "institution", label: "Institution" },
-          ]}
-          onChange={(option) => {
-            const newOwners = [...values.owner_details];
-            newOwners[index] = {
-              ...newOwners[index],
-              owner_type: option?.value || "",
-            };
-            setFieldValue("owner_details", newOwners);
-          }}
-          value={
-            [
+      {/* Owner Type & Owner Role */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div>
+          <SelectField
+            id={`owner_details[${index}].owner_type`}
+            label="Owner Type"
+            options={[
               { value: "individual", label: "Individual" },
               { value: "institution", label: "Institution" },
-            ].find((opt) => opt.value === owner.owner_type) || null
-          }
-          touched={touched.owner_details?.[index]?.owner_type}
-          error={errors.owner_details?.[index]?.owner_type}
-          required
-          disabled={isFirstOwner && isOwnerYes}
-        />
-        {isFirstOwner && isOwnerYes && owner.owner_type === "individual" && (
-          <p className="text-green-600 text-sm mt-2">
-            ✓ Selected "Individual" since you're the owner.
-          </p>
-        )}
+            ]}
+            onChange={(option) => {
+              const newOwners = [...values.owner_details];
+              newOwners[index] = {
+                ...newOwners[index],
+                owner_type: option?.value || "",
+              };
+              setFieldValue("owner_details", newOwners);
+            }}
+            value={
+              [
+                { value: "individual", label: "Individual" },
+                { value: "institution", label: "Institution" },
+              ].find((opt) => opt.value === owner.owner_type) || null
+            }
+            touched={touched.owner_details?.[index]?.owner_type}
+            error={errors.owner_details?.[index]?.owner_type}
+            required={true}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Owner Role {isMandatory("owner_role_id") && <span className="text-red-500">*</span>}
+          </label>
+          <Select
+            id={`owner_details[${index}].owner_role_id`}
+            name={`owner_details[${index}].owner_role_id`}
+            options={roleOptions}
+            onChange={(option) => {
+              const newOwners = [...values.owner_details];
+              newOwners[index] = {
+                ...newOwners[index],
+                owner_role_id: option?.value || "",
+              };
+              setFieldValue("owner_details", newOwners);
+            }}
+            value={roleOptions?.find((opt) => opt.value === owner.owner_role_id) || null}
+            placeholder="Select owner role..."
+            isClearable={true}
+            styles={{
+              control: (base) => ({
+                ...base,
+                minHeight: "50px",
+                borderColor:
+                  touched.owner_details?.[index]?.owner_role_id &&
+                  errors.owner_details?.[index]?.owner_role_id
+                    ? "#ef4444"
+                    : "#d1d5db",
+                borderRadius: "0.5rem",
+              }),
+            }}
+          />
+          {touched.owner_details?.[index]?.owner_role_id &&
+            errors.owner_details?.[index]?.owner_role_id && (
+              <div className="text-red-500 text-xs mt-1">
+                {errors.owner_details?.[index]?.owner_role_id}
+              </div>
+            )}
+        </div>
       </div>
 
+      {/* Ownership Percentage */}
       <div className="mb-6">
         <div className="relative">
           <input
@@ -221,7 +224,7 @@ const OwnerItem = ({
             htmlFor={`ownership_percentage_${index}`}
             className="absolute text-sm text-gray-500 duration-300 transform -translate-y-4 scale-75 top-2 left-3 z-0 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:bg-white peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2"
           >
-            Ownership Percentage <span className="text-red-500">*</span>
+            Ownership Percentage {isMandatory("ownership_percentage") && <span className="text-red-500">*</span>}
           </label>
         </div>
         {touched.owner_details?.[index]?.ownership_percentage &&
@@ -232,7 +235,7 @@ const OwnerItem = ({
           )}
       </div>
 
-      {/* ALL OWNER FIELDS */}
+      {/* Primary Owner Fields */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {owner.owner_type === "institution" ? (
           <div className="md:col-span-2">
@@ -243,14 +246,11 @@ const OwnerItem = ({
               value={owner.owner_name || ""}
               onChange={handleChange}
               onBlur={handleBlur}
-              onFocus={() =>
-                setActiveField(`owner_details[${index}].owner_name`)
-              }
+              onFocus={() => setActiveField(`owner_details[${index}].owner_name`)}
               touched={touched.owner_details?.[index]?.owner_name}
               error={errors.owner_details?.[index]?.owner_name}
-              required
+              required={true}
               activeField={activeField}
-              disabled={isOwnerYes && isFirstOwner}
             />
           </div>
         ) : (
@@ -262,14 +262,11 @@ const OwnerItem = ({
               value={owner.owner_first_name || ""}
               onChange={handleChange}
               onBlur={handleBlur}
-              onFocus={() =>
-                setActiveField(`owner_details[${index}].owner_first_name`)
-              }
+              onFocus={() => setActiveField(`owner_details[${index}].owner_first_name`)}
               touched={touched.owner_details?.[index]?.owner_first_name}
               error={errors.owner_details?.[index]?.owner_first_name}
-              required
+              required={isMandatory("owner_first_name")}
               activeField={activeField}
-              disabled={isOwnerYes && isFirstOwner}
             />
 
             <FormField
@@ -279,13 +276,10 @@ const OwnerItem = ({
               value={owner.owner_middle_name || ""}
               onChange={handleChange}
               onBlur={handleBlur}
-              onFocus={() =>
-                setActiveField(`owner_details[${index}].owner_middle_name`)
-              }
+              onFocus={() => setActiveField(`owner_details[${index}].owner_middle_name`)}
               touched={touched.owner_details?.[index]?.owner_middle_name}
               error={errors.owner_details?.[index]?.owner_middle_name}
               activeField={activeField}
-              disabled={isOwnerYes && isFirstOwner}
             />
 
             <FormField
@@ -295,17 +289,97 @@ const OwnerItem = ({
               value={owner.owner_last_name || ""}
               onChange={handleChange}
               onBlur={handleBlur}
-              onFocus={() =>
-                setActiveField(`owner_details[${index}].owner_last_name`)
-              }
+              onFocus={() => setActiveField(`owner_details[${index}].owner_last_name`)}
               touched={touched.owner_details?.[index]?.owner_last_name}
               error={errors.owner_details?.[index]?.owner_last_name}
-              required
+              required={isMandatory("owner_last_name")}
               activeField={activeField}
-              disabled={isOwnerYes && isFirstOwner}
+            />
+
+            {/* Owner Nationality */}
+            <SelectField
+              id={`owner_details[${index}].owner_nationality_id`}
+              label="Nationality"
+              options={nationalityOptions}
+              onChange={(option) => {
+                const newOwners = [...values.owner_details];
+                newOwners[index] = {
+                  ...newOwners[index],
+                  owner_nationality_id: option?.value || "",
+                };
+                setFieldValue("owner_details", newOwners);
+              }}
+              value={nationalityOptions.find((opt) => opt.value === owner.owner_nationality_id)}
+              touched={touched.owner_details?.[index]?.owner_nationality_id}
+              error={errors.owner_details?.[index]?.owner_nationality_id}
+              required={isMandatory("owner_nationality_id")}
             />
           </>
         )}
+
+        {/* Resident Country & Gender (Row 1) */}
+        <SelectField
+          id={`owner_details[${index}].owner_resident_country_id`}
+          label="Resident Country"
+          options={countryOptions}
+          onChange={(option) => {
+            const newOwners = [...values.owner_details];
+            newOwners[index] = {
+              ...newOwners[index],
+              owner_resident_country_id: option?.value || "",
+            };
+            setFieldValue("owner_details", newOwners);
+          }}
+          value={countryOptions.find(
+            (opt) => opt.value === owner.owner_resident_country_id
+          )}
+          touched={touched.owner_details?.[index]?.owner_resident_country_id}
+          error={errors.owner_details?.[index]?.owner_resident_country_id}
+          required={isMandatory("owner_resident_country_id")}
+          isLoading={countriesLoading}
+        />
+
+        {owner.owner_type !== "institution" ? (
+          <SelectField
+            id={`owner_details[${index}].owner_gender_id`}
+            label="Gender"
+            options={genderOptions}
+            onChange={(option) => {
+              const newOwners = [...values.owner_details];
+              newOwners[index] = {
+                ...newOwners[index],
+                owner_gender_id: option?.value || "",
+              };
+              setFieldValue("owner_details", newOwners);
+            }}
+            value={genderOptions?.find((opt) => opt.value === owner.owner_gender_id)}
+            touched={touched.owner_details?.[index]?.owner_gender_id}
+            error={errors.owner_details?.[index]?.owner_gender_id}
+            required={isMandatory("owner_gender_id")}
+          />
+        ) : (
+          <div />
+        )}
+
+        {/* Address Country & Email (Row 2) */}
+        <SelectField
+          id={`owner_details[${index}].owner_country_id`}
+          label="Country"
+          options={countryOptions}
+          onChange={(option) => {
+            const newOwners = [...values.owner_details];
+            newOwners[index] = {
+              ...newOwners[index],
+              owner_country_id: option?.value || "",
+            };
+            setFieldValue("owner_details", newOwners);
+          }}
+          value={countryOptions.find((opt) => opt.value === owner.owner_country_id)}
+          touched={touched.owner_details?.[index]?.owner_country_id}
+          error={errors.owner_details?.[index]?.owner_country_id}
+          required={isMandatory("owner_country_id")}
+          isLoading={countriesLoading}
+        />
 
         <FormField
           id={`owner_details[${index}].owner_email`}
@@ -318,35 +392,14 @@ const OwnerItem = ({
           onFocus={() => setActiveField(`owner_details[${index}].owner_email`)}
           touched={touched.owner_details?.[index]?.owner_email}
           error={errors.owner_details?.[index]?.owner_email}
-          required
+          required={isMandatory("owner_email")}
           activeField={activeField}
-          disabled={isOwnerYes && isFirstOwner}
-        />
-
-        <SelectField
-          id={`owner_details[${index}].owner_country_id`}
-          label="Country"
-          options={countryOptions}
-          onChange={(option) => {
-            setFieldValue(
-              `owner_details[${index}].owner_country_id`,
-              option?.value || ""
-            );
-          }}
-          value={countryOptions.find(
-            (opt) => opt.value === owner.owner_country_id
-          )}
-          touched={touched.owner_details?.[index]?.owner_country_id}
-          error={errors.owner_details?.[index]?.owner_country_id}
-          required
-          isLoading={countriesLoading}
-          disabled={isOwnerYes && isFirstOwner}
         />
 
         {/* Phone Number with Country Code */}
         <div className="col-span-1 md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Phone Number <span className="text-red-500">*</span>
+            Phone Number {isMandatory("owner_phone_number") && <span className="text-red-500">*</span>}
           </label>
           <div className="flex space-x-3">
             <div className="w-1/2 min-w-[180px]">
@@ -362,9 +415,7 @@ const OwnerItem = ({
                     const updatedOwners = [...values.owner_details];
                     updatedOwners[index] = {
                       ...updatedOwners[index],
-                      owner_phone_number_country_code:
-                        option.phoneCode || option.phone_code || "",
-                      owner_country_id: option.value, // Also set the country ID
+                      owner_phone_number_country_code: option.phoneCode || option.phone_code || "",
                     };
                     setFieldValue("owner_details", updatedOwners);
                   }
@@ -375,30 +426,15 @@ const OwnerItem = ({
                 filterOption={filterOption}
                 isSearchable
                 isLoading={countriesLoading}
-                isDisabled={isOwnerYes && isFirstOwner}
                 styles={{
                   control: (base) => ({
                     ...base,
                     minHeight: "50px",
                     borderColor: "#d1d5db",
                     borderRadius: "0.5rem",
-                    "&:hover": {
-                      borderColor: "#9ca3af",
-                    },
                   }),
                 }}
               />
-              {touched.owner_details?.[index]
-                ?.owner_phone_number_country_code &&
-                errors.owner_details?.[index]
-                  ?.owner_phone_number_country_code && (
-                  <div className="text-red-500 text-xs mt-1">
-                    {
-                      errors.owner_details?.[index]
-                        ?.owner_phone_number_country_code
-                    }
-                  </div>
-                )}
             </div>
             <div className="w-1/2">
               <input
@@ -407,27 +443,68 @@ const OwnerItem = ({
                 value={owner.owner_phone_number || ""}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                disabled={isOwnerYes && isFirstOwner}
-                className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 h-[50px] ${isOwnerYes && isFirstOwner
-                  ? "bg-gray-100 opacity-60 cursor-not-allowed"
-                  : ""
-                  } ${touched.owner_details?.[index]?.owner_phone_number &&
-                    errors.owner_details?.[index]?.owner_phone_number
-                    ? "border-red-500 focus:ring-red-500"
-                    : ""
-                  }`}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 h-[50px]"
                 placeholder="e.g., 1234567890"
               />
-              {touched.owner_details?.[index]?.owner_phone_number &&
-                errors.owner_details?.[index]?.owner_phone_number && (
-                  <div className="text-red-500 text-xs mt-1">
-                    {errors.owner_details?.[index]?.owner_phone_number}
-                  </div>
-                )}
             </div>
           </div>
+          {touched.owner_details?.[index]?.owner_phone_number &&
+            errors.owner_details?.[index]?.owner_phone_number && (
+              <div className="text-red-500 text-xs mt-1">
+                {errors.owner_details?.[index]?.owner_phone_number}
+              </div>
+            )}
         </div>
 
+        {/* State / Province */}
+        <FormField
+          id={`owner_details[${index}].owner_state`}
+          label="State / Province"
+          name={`owner_details[${index}].owner_state`}
+          value={owner.owner_state || ""}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onFocus={() => setActiveField(`owner_details[${index}].owner_state`)}
+          touched={touched.owner_details?.[index]?.owner_state}
+          error={errors.owner_details?.[index]?.owner_state}
+          required={isMandatory("owner_state")}
+          activeField={activeField}
+          placeholder="e.g., California / Bagmati"
+        />
+
+        {/* Apartment / Unit */}
+        <FormField
+          id={`owner_details[${index}].apartment_unit`}
+          label="Apartment / Unit Number"
+          name={`owner_details[${index}].apartment_unit`}
+          value={owner.apartment_unit || ""}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onFocus={() => setActiveField(`owner_details[${index}].apartment_unit`)}
+          touched={touched.owner_details?.[index]?.apartment_unit}
+          error={errors.owner_details?.[index]?.apartment_unit}
+          required={isMandatory("apartment_unit")}
+          activeField={activeField}
+          placeholder="e.g., Apt 4B, Unit 12"
+        />
+
+        {/* ZIP / Postal Code */}
+        <FormField
+          id={`owner_details[${index}].owner_zip_code`}
+          label="ZIP / Postal Code"
+          name={`owner_details[${index}].owner_zip_code`}
+          value={owner.owner_zip_code || ""}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onFocus={() => setActiveField(`owner_details[${index}].owner_zip_code`)}
+          touched={touched.owner_details?.[index]?.owner_zip_code}
+          error={errors.owner_details?.[index]?.owner_zip_code}
+          required={isMandatory("owner_zip_code")}
+          activeField={activeField}
+          placeholder="e.g., 90210"
+        />
+
+        {/* Date of Birth */}
         {owner.owner_type !== "institution" && (
           <FormField
             id={`owner_details[${index}].owner_dob`}
@@ -440,14 +517,46 @@ const OwnerItem = ({
             onFocus={() => setActiveField(`owner_details[${index}].owner_dob`)}
             touched={touched.owner_details?.[index]?.owner_dob}
             error={errors.owner_details?.[index]?.owner_dob}
-            required
+            required={isMandatory("owner_dob")}
             activeField={activeField}
-            disabled={isOwnerYes && isFirstOwner}
           />
         )}
 
+        {/* Document Details */}
+        <SelectField
+          id={`owner_details[${index}].doc_country`}
+          label="ID Issuing Country"
+          options={countryOptions}
+          onChange={(option) => {
+            const newOwners = [...values.owner_details];
+            newOwners[index] = {
+              ...newOwners[index],
+              doc_country: option?.value || "",
+            };
+            setFieldValue("owner_details", newOwners);
+          }}
+          value={countryOptions.find((opt) => opt.value === owner.doc_country)}
+          touched={touched.owner_details?.[index]?.doc_country}
+          error={errors.owner_details?.[index]?.doc_country}
+          required={isMandatory("doc_country")}
+          isLoading={countriesLoading}
+        />
+
+        <FormField
+          id={`owner_details[${index}].doc_id`}
+          label="Document ID"
+          name={`owner_details[${index}].doc_id`}
+          value={owner.doc_id || ""}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          touched={touched.owner_details?.[index]?.doc_id}
+          error={errors.owner_details?.[index]?.doc_id}
+          required={isMandatory("doc_id")}
+          placeholder="Enter document number"
+        />
+
         {selectedCurrency === "USD" && isUSOwner && isNamedAccount && (
-          <>
+          <div className="md:col-span-2">
             <FormField
               id={`owner_details[${index}].ssn`}
               label="SSN"
@@ -457,14 +566,9 @@ const OwnerItem = ({
                 const value = e.target.value.replace(/\D/g, "");
                 let formattedValue = value;
                 if (value.length > 3)
-                  formattedValue = `${value.substring(0, 3)}-${value.substring(
-                    3
-                  )}`;
+                  formattedValue = `${value.substring(0, 3)}-${value.substring(3)}`;
                 if (value.length > 5)
-                  formattedValue = `${value.substring(0, 3)}-${value.substring(
-                    3,
-                    5
-                  )}-${value.substring(5, 9)}`;
+                  formattedValue = `${value.substring(0, 3)}-${value.substring(3, 5)}-${value.substring(5, 9)}`;
                 const newOwners = [...values.owner_details];
                 newOwners[index].ssn = formattedValue;
                 setFieldValue("owner_details", newOwners);
@@ -472,45 +576,11 @@ const OwnerItem = ({
               onBlur={handleBlur}
               touched={touched.owner_details?.[index]?.ssn}
               error={errors.owner_details?.[index]?.ssn}
-              required
+              required={true}
               placeholder="XXX-XX-XXXX"
               maxLength={11}
-              disabled={isOwnerYes && isFirstOwner}
             />
-
-            <SelectField
-              id={`owner_details[${index}].doc_type`}
-              label="Document Type"
-              options={idDocumentTypeOptions}
-              onChange={(option) => {
-                setFieldValue(
-                  `owner_details[${index}].doc_type`,
-                  option?.value
-                );
-                setFieldValue(`owner_details[${index}].doc_id`, "");
-              }}
-              value={idDocumentTypeOptions.find(
-                (opt) => opt.value === owner.doc_type
-              )}
-              touched={touched.owner_details?.[index]?.doc_type}
-              error={errors.owner_details?.[index]?.doc_type}
-              required
-              disabled={isOwnerYes && isFirstOwner}
-            />
-
-            <FormField
-              id={`owner_details[${index}].doc_id`}
-              label="Document ID"
-              name={`owner_details[${index}].doc_id`}
-              value={owner.doc_id || ""}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              touched={touched.owner_details?.[index]?.doc_id}
-              error={errors.owner_details?.[index]?.doc_id}
-              required
-              disabled={isOwnerYes && isFirstOwner}
-            />
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -530,24 +600,17 @@ const OwnerInfo = ({
   activeField,
   setActiveField,
   nationalityOptions,
+  genderOptions,
   roleOptions,
   idDocumentTypeOptions,
-  totalOwnershipPercentage,
-  dispatch,
   countryOptions,
   countriesLoading,
   ownerAdd,
   isNamedAccount,
-  countries,
   selectedCurrency,
+  isFieldMandatory,
 }) => {
-  React.useEffect(() => {
-
-  }, [values, isNamedAccount, selectedCurrency]);
-
   const handleOwnerIfChange = (index, value) => {
-
-
     const newOwners = [...values.owner_details];
     newOwners[index].owner_if = value;
 
@@ -562,12 +625,18 @@ const OwnerInfo = ({
         owner_dob: values.dob || "",
         owner_phone_number: values.mobile_number || "",
         owner_phone_number_country_code: values.mobilenumber_countrycode || "",
+        owner_resident_country_id: values.resident_country || values.country || "",
         owner_country_id: values.country || "",
-        owner_needs_access_to_system: "",
+        owner_nationality_id: values.nationality || "",
+        owner_gender_id: values.gender || "",
+        owner_state: values.state || "",
+        owner_zip_code: values.zip_code || "",
+        apartment_unit: values.controllerHouseNumber || values.registered_business_address_apartment_unit_no || "",
+        doc_country: values.doc_country || "",
+        doc_id: values.doc_id || "",
         owner_role_id: "",
       };
     } else {
-      // ✅ Handle "no" OR empty selection by clearing data
       newOwners[index] = {
         ...newOwners[index],
         owner_type: "",
@@ -578,8 +647,15 @@ const OwnerInfo = ({
         owner_dob: "",
         owner_phone_number: "",
         owner_phone_number_country_code: "",
+        owner_resident_country_id: "",
         owner_country_id: "",
-        owner_needs_access_to_system: "",
+        owner_nationality_id: "",
+        owner_gender_id: "",
+        owner_state: "",
+        owner_zip_code: "",
+        apartment_unit: "",
+        doc_country: "",
+        doc_id: "",
         owner_role_id: "",
       };
     }
@@ -611,55 +687,49 @@ const OwnerInfo = ({
   };
 
   const isOwnerFromUS = (owner) => {
-    return owner.owner_country_id === "United States";
+    return owner.owner_country_id === "United States" || owner.owner_country_id === 186;
   };
 
   const calculateTotalOwnership = (ownerDetails) => {
-    return ownerDetails.reduce(
-      (total, owner) => total + (owner.ownership_percentage || 0),
-      0
-    );
+    return ownerDetails.reduce((total, owner) => total + (parseFloat(owner.ownership_percentage) || 0), 0);
   };
 
   const handleAddOwner = () => {
-    const currentTotal = calculateTotalOwnership(values.owner_details);
+    const newOwner = {
+      id: Date.now(),
+      owner_type: "",
+      owner_role_id: "",
+      owner_first_name: "",
+      owner_middle_name: "",
+      owner_last_name: "",
+      owner_email: "",
+      owner_phone_number: "",
+      owner_phone_number_country_code: "",
+      owner_resident_country_id: "",
+      owner_country_id: "",
+      owner_nationality_id: "",
+      owner_gender_id: "",
+      owner_state: "",
+      owner_zip_code: "",
+      apartment_unit: "",
+      ownership_percentage: 0,
+      owner_dob: "",
+      ssn: "",
+      doc_type: "",
+      doc_id: "",
+      doc_country: "",
+      owner_if: "",
+    };
 
-    if (currentTotal < 100) {
-      const newOwner = {
-        id: Date.now(),
-        owner_type: "",
-        owner_first_name: "",
-        owner_middle_name: "",
-        owner_last_name: "",
-        owner_email: "",
-        owner_phone_number: "",
-        owner_phone_number_country_code: "",
-        owner_country_id: "",
-        ownership_percentage: 0,
-        owner_dob: "",
-        ssn: "",
-        doc_type: "",
-        doc_id: "",
-        doc_country: "",
-        doc_state: "",
-        owner_if: "", // ✅ Updated: Initialize as empty string (forced choice) instead of "no"
-        owner_needs_access_to_system: "",
-        owner_role_id: "",
-      };
-
-      const newOwners = [...values.owner_details, newOwner];
-      setFieldValue("owner_details", newOwners);
-    } else {
-
-    }
+    setFieldValue("owner_details", [...values.owner_details, newOwner]);
   };
 
   const handleRemoveOwner = (index) => {
     if (values.owner_details.length > 1) {
-      const newOwners = values.owner_details.filter((_, i) => i !== index);
-      setFieldValue("owner_details", newOwners);
-    } else {
-
+      setFieldValue(
+        "owner_details",
+        values.owner_details.filter((_, i) => i !== index)
+      );
     }
   };
 
@@ -667,29 +737,9 @@ const OwnerInfo = ({
     <>
       <h2 className="text-xl font-semibold mb-4">Owner Details</h2>
 
-      {/* {process.env.NODE_ENV === "development" && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <details>
-            <summary className="cursor-pointer font-bold text-yellow-800">
-              🔍 Debug Information - OwnerInfo
-            </summary>
-            <div className="mt-3 text-sm space-y-2">
-              <div>
-                <strong>Owner Details:</strong>
-                <pre className="text-xs bg-white p-2 rounded border mt-1 overflow-auto">
-                  {JSON.stringify(values.owner_details, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </details>
-        </div>
-      )} */}
-
       <FieldArray name="owner_details">
-        {({ push, remove }) => {
-          const currentTotalOwnership = calculateTotalOwnership(
-            values.owner_details
-          );
+        {() => {
+          const currentTotalOwnership = calculateTotalOwnership(values.owner_details);
 
           return (
             <div className="space-y-6">
@@ -713,6 +763,8 @@ const OwnerInfo = ({
                     handleBlur={handleBlur}
                     setFieldValue={setFieldValue}
                     countryOptions={countryOptions}
+                    nationalityOptions={nationalityOptions}
+                    genderOptions={genderOptions}
                     roleOptions={roleOptions}
                     idDocumentTypeOptions={idDocumentTypeOptions}
                     countriesLoading={countriesLoading}
@@ -720,11 +772,10 @@ const OwnerInfo = ({
                     isNamedAccount={isNamedAccount}
                     activeField={activeField}
                     setActiveField={setActiveField}
+                    isFieldMandatory={isFieldMandatory}
                     onRemove={() => handleRemoveOwner(index)}
                     onOwnerIfChange={(val) => handleOwnerIfChange(index, val)}
-                    onOwnershipChange={(val) =>
-                      handleOwnershipPercentageChange(index, val)
-                    }
+                    onOwnershipChange={(val) => handleOwnershipPercentageChange(index, val)}
                   />
                 );
               })}
@@ -733,29 +784,21 @@ const OwnerInfo = ({
                 <button
                   type="button"
                   onClick={handleAddOwner}
-                  disabled={
-                    !ownerAdd ||
-                    calculateTotalOwnership(values.owner_details) >= 100
-                  }
+                  disabled={!ownerAdd || calculateTotalOwnership(values.owner_details) >= 100}
                   className="w-full md:w-auto py-3 px-6 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-500 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <i className="fas fa-plus mr-2"></i>
-                  {values.owner_details.length === 0
-                    ? "Add Owner"
-                    : "Add Another Owner"}
+                  {values.owner_details.length === 0 ? "Add Owner" : "Add Another Owner"}
                 </button>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-gray-700">
-                    Total Ownership:
-                  </span>
+                  <span className="font-medium text-gray-700">Total Ownership:</span>
                   <span
-                    className={`text-lg font-bold ${Math.abs(currentTotalOwnership - 100) < 0.01
-                      ? "text-green-600"
-                      : "text-red-600"
-                      }`}
+                    className={`text-lg font-bold ${
+                      Math.abs(currentTotalOwnership - 100) < 0.01 ? "text-green-600" : "text-red-600"
+                    }`}
                   >
                     {currentTotalOwnership.toFixed(2)}%
                   </span>
@@ -763,12 +806,9 @@ const OwnerInfo = ({
 
                 {Math.abs(currentTotalOwnership - 100) > 0.01 ? (
                   <div className="space-y-2">
+                    <p className="text-red-600 text-sm">❌ Total ownership must equal exactly 100%</p>
                     <p className="text-red-600 text-sm">
-                      ❌ Total ownership must equal exactly 100%
-                    </p>
-                    <p className="text-red-600 text-sm">
-                      Current difference:{" "}
-                      {(100 - currentTotalOwnership).toFixed(2)}%
+                      Current difference: {(100 - currentTotalOwnership).toFixed(2)}%
                     </p>
                   </div>
                 ) : (

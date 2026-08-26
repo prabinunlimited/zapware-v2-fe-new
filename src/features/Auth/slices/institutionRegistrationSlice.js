@@ -710,12 +710,44 @@ export const fetchStatesByCountry = createAsyncThunk(
   }
 );
 
+export const fetchRegions = createAsyncThunk(
+  "institutionRegistration/fetchRegions",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/fetch-regions");
+
+      if (response.data?.status === "success" && response.data?.data) {
+        return Array.isArray(response.data.data)
+          ? response.data.data
+          : response.data.data.lists || [];
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch regions"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
   currentStep: 1,
   formData: {
     institution_name: "",
+    principal_business_address_region_id: "",
     registration_number: "",
     ein: "",
     naice_code: "",
@@ -732,6 +764,7 @@ const initialState = {
     industry_type: "",
     country_of_registration: "",
     country_of_operation: "",
+    region: "",
     business_alias: "",
     company_phone_number: "",
     companyphone_countrycode: "",
@@ -907,6 +940,11 @@ const initialState = {
 
   occupations: [],
   occupationsLoading: false,
+
+  regions: [],
+  regionsLoading: false,
+  regionsError: null,
+  selectedRegion: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -1171,6 +1209,10 @@ const institutionRegistrationSlice = createSlice({
     setSelectedOccupation: (state, action) => {
       state.selectedOccupation = action.payload;
       state.formData.responsible_person_occupation = action.payload;
+    },
+    setRegion: (state, action) => {
+      state.selectedRegion = action.payload;
+      state.formData.region = action.payload;
     },
 
     // Controller sync
@@ -1885,6 +1927,18 @@ const institutionRegistrationSlice = createSlice({
       .addCase(fetchOccupation.rejected, (state) => {
         state.occupationsLoading = false;
         state.occupations = [];
+      }).addCase(fetchRegions.pending, (state) => {
+        state.regionsLoading = true;
+        state.regionsError = null;
+      })
+      .addCase(fetchRegions.fulfilled, (state, action) => {
+        state.regionsLoading = false;
+        state.regions = action.payload || [];
+      })
+      .addCase(fetchRegions.rejected, (state, action) => {
+        state.regionsLoading = false;
+        state.regionsError = action.payload;
+        state.regions = [];
       });
   },
 });
@@ -1970,6 +2024,7 @@ export const {
   setSelectedStateId,
   clearStates,
   setSelectedOccupation,
+  setRegion,
 } = institutionRegistrationSlice.actions;
 
 // =============================================================================
@@ -2148,6 +2203,10 @@ export const selectSelectedStateId = (state) =>
 
 export const selectOccupation = (state) => state.institutionRegistration.occupations;
 export const selectOccupationLoading = (state) => state.institutionRegistration.occupationsLoading;
+
+export const selectRegions = (state) => state.institutionRegistration.regions;
+export const selectRegionsLoading = (state) => state.institutionRegistration.regionsLoading;
+export const selectRegionsError = (state) => state.institutionRegistration.regionsError;
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
 // =============================================================================
