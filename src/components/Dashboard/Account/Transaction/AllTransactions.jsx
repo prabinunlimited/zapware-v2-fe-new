@@ -81,7 +81,7 @@ const AllTransactions = () => {
         localStorage.getItem("isRemittanceOnly") ||
         localStorage.getItem("isRemittanceOnlyCustomer");
 
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
 
       let response;
 

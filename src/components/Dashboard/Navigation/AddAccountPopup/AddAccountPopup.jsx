@@ -51,7 +51,7 @@ const AddAccountPopup = ({ isOpen, onClose, customerId, partnerId, onSuccess }) 
 
     try {
       const partnerUuid = localStorage.getItem("partner_uuid");
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
       const customerType = localStorage.getItem("customer_type");
 
       const response = await api.get(
@@ -110,7 +110,7 @@ const AddAccountPopup = ({ isOpen, onClose, customerId, partnerId, onSuccess }) 
     setSuccessMessage("");
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
 
       const bankAccounts = selectedCurrencies.map((id) => {
         const currency = currencies.find((c) => c.id === id);
