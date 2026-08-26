@@ -409,7 +409,7 @@ const PayoutPage = () => {
 
       // If service_provider_id is 59, fetch sender bank accounts using the thunk
       if (selectedAccount?.service_provider_id === 59) {
-        const customerUuid = localStorage.getItem("customerUuid");
+        const customerUuid = localStorage.getItem("customer_uuid");
         if (customerUuid) {
           dispatch(fetchSenderBankAccounts({
             customerUuid: customerUuid,

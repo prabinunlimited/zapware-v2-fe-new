@@ -8,7 +8,7 @@ export const fetchRequestRemitDetails = createAsyncThunk(
   async (_, { rejectWithValue, getState }) => {
     try {
       // Get customerUuid from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
 
       if (!customerUuid) {
         console.error("❌ No customer UUID found in localStorage");
@@ -63,7 +63,7 @@ export const approveRequestRemit = createAsyncThunk(
   "requestRemit/approve",
   async ({ requestId, remarks }, { rejectWithValue }) => {
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = localStorage.getItem("customer_uuid");
 
       if (!customerUuid) {
         console.error("❌ No customer UUID found in localStorage");
