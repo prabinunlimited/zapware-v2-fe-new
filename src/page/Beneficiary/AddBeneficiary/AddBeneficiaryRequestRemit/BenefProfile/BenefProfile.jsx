@@ -128,12 +128,16 @@ function BeneficiaryProfile() {
         confirmPassword: "",
     });
     const [passwordLoading, setPasswordLoading] = useState(false);
+    const [passwordError, setPasswordError] = useState(null);
+    const [passwordSuccess, setPasswordSuccess] = useState(null);
 
     const handlePasswordInputChange = (field, value) => {
         setPasswordData((prev) => ({
             ...prev,
             [field]: value,
         }));
+        // Clear errors as soon as the user starts typing again
+        if (passwordError) setPasswordError(null);
     };
 
     const handleClosePasswordModal = () => {
@@ -142,53 +146,86 @@ function BeneficiaryProfile() {
         setShowOldPassword(false);
         setShowNewPassword(false);
         setShowConfirmPassword(false);
+        setPasswordError(null);
+        setPasswordSuccess(null);
     };
 
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
+        setPasswordError(null);
+        setPasswordSuccess(null);
+
         const { oldPassword, newPassword, confirmPassword } = passwordData;
 
         if (!oldPassword || !newPassword || !confirmPassword) {
-            toast.error("Please fill in all password fields.");
+            setPasswordError(["Please fill in all password fields."]);
             return;
         }
 
         if (newPassword.length < 8) {
-            toast.error("New password must be at least 8 characters long.");
+            setPasswordError(["New password must be at least 8 characters long."]);
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            toast.error("New password and confirm password do not match.");
+            setPasswordError(["New password and confirm password do not match."]);
             return;
         }
 
         setPasswordLoading(true);
         try {
-            const authtoken = localStorage.getItem("authtoken");
-            const response = await fetch(`${API_URL}/beneficiaries/change-password`, {
+            const authtoken = localStorage.getItem("authtoken") || localStorage.getItem("bearertoken");
+            const beneficiaryUuid = localStorage.getItem("beneficiary_uuid");
+
+            const payload = {
+                userType: "beneficiary",
+                userId: beneficiaryUuid,
+                oldPassword: oldPassword,
+                newPassword: newPassword,
+                confirmNewPassword: confirmPassword,
+            };
+
+            const response = await fetch(`${API_URL}/change-password`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${authtoken}`,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    beneficiary_id: beneficiaryId,
-                    old_password: oldPassword,
-                    new_password: newPassword,
-                }),
+                body: JSON.stringify(payload),
             });
 
             const result = await response.json();
+
             if (response.ok && (result.status === "success" || result.status === 200)) {
-                toast.success(result.message || "Password changed successfully!");
-                handleClosePasswordModal();
+                const successMsg = typeof result.message === "string"
+                    ? result.message
+                    : "Password changed successfully!";
+
+                setPasswordSuccess(successMsg);
+
+                // Automatically close the modal after 1.5 seconds on success
+                setTimeout(() => {
+                    handleClosePasswordModal();
+                }, 1500);
             } else {
-                toast.error(result.message || "Failed to update password");
+                // Extract error message(s) from string or object/array formats
+                if (result.message && typeof result.message === "object") {
+                    const extractedErrors = Object.values(result.message)
+                        .flat()
+                        .filter(Boolean);
+
+                    setPasswordError(
+                        extractedErrors.length > 0
+                            ? extractedErrors
+                            : ["Failed to update password."]
+                    );
+                } else {
+                    setPasswordError([result.message || "Failed to update password."]);
+                }
             }
         } catch (err) {
             console.error("Error changing password:", err);
-            toast.error("An error occurred while updating the password.");
+            setPasswordError(["An error occurred while updating the password. Please try again."]);
         } finally {
             setPasswordLoading(false);
         }
@@ -1230,7 +1267,33 @@ function BeneficiaryProfile() {
                             </p>
                         </div>
 
-                        {/* --- SECURITY NOTE BOX --- */}
+                        {/* In-Modal Success Message */}
+                        {passwordSuccess && (
+                            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-xs flex items-center gap-2">
+                                <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>{passwordSuccess}</span>
+                            </div>
+                        )}
+
+                        {/* In-Modal Error Messages */}
+                        {passwordError && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs">
+                                <div className="flex items-start gap-2">
+                                    <svg className="w-4 h-4 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <div className="space-y-0.5">
+                                        {passwordError.map((err, i) => (
+                                            <p key={i}>{err}</p>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Security Note Box */}
                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-blue-900 text-xs">
                             <div className="flex items-start gap-2">
                                 <div>
@@ -1242,10 +1305,9 @@ function BeneficiaryProfile() {
                                 </div>
                             </div>
                         </div>
-                        {/* ------------------------- */}
 
                         <form onSubmit={handlePasswordSubmit} className="space-y-3.5">
-                            {/* Current Password Field */}
+                            {/* Current Password */}
                             <div>
                                 <label className="block text-xs text-gray-600 font-medium mb-1">
                                     Current Password
@@ -1270,7 +1332,7 @@ function BeneficiaryProfile() {
                                 </div>
                             </div>
 
-                            {/* New Password Field */}
+                            {/* New Password */}
                             <div>
                                 <label className="block text-xs text-gray-600 font-medium mb-1">
                                     New Password
@@ -1295,7 +1357,7 @@ function BeneficiaryProfile() {
                                 </div>
                             </div>
 
-                            {/* Confirm Password Field */}
+                            {/* Confirm Password */}
                             <div>
                                 <label className="block text-xs text-gray-600 font-medium mb-1">
                                     Confirm New Password
@@ -1307,7 +1369,12 @@ function BeneficiaryProfile() {
                                         onChange={(e) => handlePasswordInputChange("confirmPassword", e.target.value)}
                                         placeholder="••••••••"
                                         required
-                                        className="w-full border border-gray-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className={`w-full border rounded-xl pl-3.5 pr-10 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 transition-colors ${passwordData.confirmPassword
+                                                ? passwordData.newPassword === passwordData.confirmPassword
+                                                    ? "border-green-500 focus:ring-green-500"
+                                                    : "border-red-500 focus:ring-red-500"
+                                                : "border-gray-200 focus:ring-blue-500"
+                                            }`}
                                     />
                                     <button
                                         type="button"
@@ -1318,6 +1385,27 @@ function BeneficiaryProfile() {
                                         {showConfirmPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
                                     </button>
                                 </div>
+
+                                {/* Live Match / Do Not Match Indicator */}
+                                {passwordData.confirmPassword && (
+                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                        {passwordData.newPassword === passwordData.confirmPassword ? (
+                                            <span className="text-green-600 text-xs font-semibold flex items-center gap-1">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                Passwords match
+                                            </span>
+                                        ) : (
+                                            <span className="text-red-500 text-xs font-semibold flex items-center gap-1">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                                Passwords do not match
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
@@ -1345,7 +1433,6 @@ function BeneficiaryProfile() {
                     </div>
                 </div>
             )}
-
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
                 {/* Status Messages */}
                 {submitError && (
