@@ -19,6 +19,7 @@ import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
 import HomeRemit from "../src/page/Home/HomeRemit";
 import Convert from "../src/page/Conversion/Convert";
+import HeroSection from "../src/page/Rates/Rates";
 
 // Import Beneficiary Components (ONLY existing files)
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
@@ -128,6 +129,10 @@ const router = createBrowserRouter([
       {
         path: "addbeneficiaryrequestremit",
         element: <AddBeneficiaryRequestRemit />,
+      },
+      {
+        path: "rates",
+        element: <HeroSection />,
       },
     ],
   },
