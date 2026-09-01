@@ -220,7 +220,10 @@ const BankTransfer = ({
       dispatch(checkSilaBankAccounts(customerId))
         .unwrap()
         .then(result => {
-          console.log("✅ Sila bank accounts loaded:", result);
+          console.log("Sila bank accounts loaded:", result);
+          if (result?.message) {
+            setSilaAccountsMessage(result.message);
+          }
         })
         .catch(error => {
           console.error("❌ Failed to load Sila bank accounts:", error);
@@ -267,6 +270,7 @@ const BankTransfer = ({
   const [occupations, setOccupations] = useState([]);
   const [isLoadingOccupations, setIsLoadingOccupations] = useState(false);
   const [showBankAccountInfo, setShowBankAccountInfo] = useState(false);
+  const [silaAccountsMessage, setSilaAccountsMessage] = useState("");
 
   const [isNavigatingToAdd, setIsNavigatingToAdd] = useState(false);
 
@@ -863,13 +867,13 @@ const BankTransfer = ({
 
         <div className="space-y-3 sm:space-y-4">
           {/* Select Your Bank Account (Sila Accounts) - Mobile Responsive */}
-          {displayedHasSilaAccounts && selectedCurrency === "USD" && (
+          {selectedCurrency === "USD" && (
             <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700">
                   Select Your Bank Account *
                 </label>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mt-1 sm:mt-0">
                   {displayedSilaAccountsLoading ? (
                     <div className="flex items-center">
                       <RingLoader size={isMobile ? 16 : 20} color="#3b82f6" />
@@ -901,10 +905,10 @@ const BankTransfer = ({
                         }
                       });
                     }}
-                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap self-start sm:self-auto"
                   >
                     <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                    Add/Remove Bank
+                    Link/Remove Bank
                   </button>
                 </div>
               </div>
@@ -936,25 +940,27 @@ const BankTransfer = ({
                       displayedSilaAccountsLoading
                         ? "Loading your bank accounts..."
                         : silaAccountOptions.length === 0
-                          ? "No bank accounts found. Please link a bank account."
+                          ? "No bank accounts linked"
                           : "Select your bank account..."
                     }
                     isSearchable
+                    menuPortalTarget={document.body}
+                    menuPosition="fixed"
                     getOptionLabel={(option) => (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                        <div>
-                          <div className="font-medium text-xs sm:text-sm">{option.account_name}</div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 min-w-0">
+                        <div className="min-w-0">
+                          <div className="font-medium text-xs sm:text-sm truncate">{option.account_name}</div>
                           <div className="text-[10px] sm:text-xs text-gray-500 flex flex-wrap items-center gap-1">
-                            {option.provider} • {option.account_type}
+                            <span className="truncate">{option.provider} • {option.account_type}</span>
                             {option.web_debit_verified && (
-                              <span className="ml-1 text-green-600">
+                              <span className="ml-1 text-green-600 flex items-center flex-shrink-0">
                                 <FaCheckCircle className="inline mr-0.5 text-[10px] sm:text-xs" />
                                 Verified
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="text-[10px] sm:text-xs text-gray-400">
+                        <div className="text-[10px] sm:text-xs text-gray-400 flex-shrink-0">
                           {option.accountNumberHash}
                         </div>
                       </div>
@@ -970,9 +976,9 @@ const BankTransfer = ({
                         <FaExclamationTriangle className="text-yellow-600 mt-0.5 mr-2 text-xs sm:text-sm flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs sm:text-sm text-yellow-800">
-                            No bank accounts found. Please link a bank account to proceed.
+                            No bank account have been linked yet. Please link to proceed.
                           </p>
-                          <button
+                          {/* <button
                             type="button"
                             className="mt-1 sm:mt-2 text-xs sm:text-sm text-blue-600 hover:text-blue-800"
                             onClick={() => {
@@ -988,7 +994,7 @@ const BankTransfer = ({
                             }}
                           >
                             Link a Bank Account
-                          </button>
+                          </button> */}
                         </div>
                       </div>
                     </div>
@@ -1224,7 +1230,7 @@ const BankTransfer = ({
                 />
                 {!isLoadingOccupations && occupations.length === 0 && (
                   <p className="mt-1 text-[10px] sm:text-xs text-red-600">
-                     Failed to fetch occupation options. You can type a custom occupation.
+                    Failed to fetch occupation options. You can type a custom occupation.
                   </p>
                 )}
               </div>
