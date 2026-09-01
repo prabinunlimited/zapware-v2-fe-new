@@ -57,6 +57,10 @@ const OpenCurrencyAccount = () => {
   const [expandedDetails, setExpandedDetails] = useState({});
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
+  const [accountTypeDescriptions, setAccountTypeDescriptions] = useState({
+    named: "",
+    pooled: "",
+  });
   const [forceRemittanceOnly, setForceRemittanceOnly] = useState(null); // ✅ ADD THIS LINE
   const [isLoadingSpinner, setIsLoadingSpinner] = useState(true);
   const [selectedCurrencyUrl, setSelectedCurrencyUrl] = useState(null);
@@ -129,6 +133,32 @@ const OpenCurrencyAccount = () => {
       setIsModalOpen(true);
     }
   }, [API_URL]);
+
+    // Fetch Named/Pooled account type descriptions
+    const hasFetchedAccountTypesRef = useRef(false);
+  useEffect(() => {
+    if (!API_URL) return;
+    if (hasFetchedAccountTypesRef.current) return;
+    hasFetchedAccountTypesRef.current = true;
+
+    fetch(`${API_URL}/bank-account-type`, {
+      headers: { Authorization: `Bearer ${bearertoken}` },
+    })
+      .then((res) => res.json())
+      .then((res) => {
+        const list = res.data || [];
+        const descriptions = {};
+        list.forEach((item) => {
+          const name = item.name?.toLowerCase();
+          if (name?.includes("named")) descriptions.named = item.description;
+          if (name?.includes("pooled")) descriptions.pooled = item.description;
+        });
+        setAccountTypeDescriptions((prev) => ({ ...prev, ...descriptions }));
+      })
+      .catch(() => {
+        // no fallback — leave blank if the fetch fails
+      });
+  }, [API_URL, bearertoken]);
 
   // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
 useEffect(() => {
@@ -1727,27 +1757,16 @@ useEffect(() => {
               {infoType === "named" ? (
                 <>
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      A Named Account is a dedicated bank account issued in the
-                      customer's name. All transactions are processed directly
-                      through this account, allowing funds to be received and
-                      sent in the customer's own identity. This provides higher
-                      transparency, better reconciliation, and improved trust
-                      for business and high-volume customers.
+                  <p className="text-gray-700">
+                      {accountTypeDescriptions.named}
                     </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="bg-indigo-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      A Pooled Account is a shared account operated by the
-                      platform on behalf of multiple customers. Individual
-                      customer balances are maintained virtually within the
-                      system, while actual transactions are settled through the
-                      pooled account. This allows faster onboarding and
-                      efficient handling for customers who do not require a
-                      dedicated bank account.
+                  <p className="text-gray-700">
+                      {accountTypeDescriptions.pooled}
                     </p>
                   </div>
                 </>
