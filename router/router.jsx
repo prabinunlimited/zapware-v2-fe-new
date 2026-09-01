@@ -56,6 +56,7 @@ import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
 import RecurringRemit from "../src/page/Remittance/RecurringRemit/RecurringRemit"
+import RequestRemit from "../src/page/RequestRemit/CustomerSide/RequestRemit";
 import RecurringRemitDetail from "../src/page/Remittance/RecurringRemit/RecurringRemitDetail";
 import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
@@ -306,6 +307,10 @@ const router = createBrowserRouter([
       {
         path: "edit-owner/:customerId/:ownerId",
         element: <EditOwner />,
+      },
+      {
+        path: "request-remit/:customerId",
+        element: <RequestRemit />,
       },
     ],
   },
