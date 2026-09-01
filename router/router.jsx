@@ -19,6 +19,7 @@ import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
 import HomeRemit from "../src/page/Home/HomeRemit";
 import Convert from "../src/page/Conversion/Convert";
+import HeroSection from "../src/page/Rates/Rates";
 
 // Import Beneficiary Components (ONLY existing files)
 import Beneficiaries from "../src/page/Beneficiary/MyBeneficiaries/Beneficiaries";
@@ -55,6 +56,7 @@ import PayoutPage from "../src/page/Payout/PayoutPage";
 import BankLetter from "./../src/page/BankLetter/BankLetter";
 import Remittance from "../src/page/Remittance/remittance";
 import RecurringRemit from "../src/page/Remittance/RecurringRemit/RecurringRemit"
+import RequestRemit from "../src/page/RequestRemit/CustomerSide/RequestRemit";
 import RecurringRemitDetail from "../src/page/Remittance/RecurringRemit/RecurringRemitDetail";
 import CardPaymentSuccess from "../src/page/Deposit/components/Card/CardPaymentSuccess";
 import MonthlyTransactions from "../src/components/Dashboard/Account/Transaction/MonthlyTransactions";
@@ -128,6 +130,10 @@ const router = createBrowserRouter([
       {
         path: "addbeneficiaryrequestremit",
         element: <AddBeneficiaryRequestRemit />,
+      },
+      {
+        path: "rates",
+        element: <HeroSection />,
       },
     ],
   },
@@ -301,6 +307,10 @@ const router = createBrowserRouter([
       {
         path: "edit-owner/:customerId/:ownerId",
         element: <EditOwner />,
+      },
+      {
+        path: "request-remit/:customerId",
+        element: <RequestRemit />,
       },
     ],
   },

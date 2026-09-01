@@ -67,6 +67,8 @@ import remittanceStaticDataReducer from "../page/Remittance/slices/staticDataSli
 
 import CustomerSupportSlice from "../page/CustomerSupport/CustomerSupportSlice";
 
+import requestRemitReducer from "../page/RequestRemit/CustomerSide/RequestRemitSlice";
+
 // ===================== CUSTOM SERIALIZABLE CHECK =====================
 const customSerializableCheck = {
   ignoredActions: [
@@ -379,6 +381,8 @@ export const store = configureStore({
 
     // ===================== CUSTOMER SUPPORT REDUCER (NEW) =====================
      customerSupport: CustomerSupportSlice,
+
+     requestRemit: requestRemitReducer,
   },
 
   middleware: (getDefaultMiddleware) =>
