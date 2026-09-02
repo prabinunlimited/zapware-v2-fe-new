@@ -945,7 +945,7 @@ export const resendRegistrationOtp = createAsyncThunk(
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
-    { country_code, mobile_number, otp },
+    { country_code, mobile_number_country_code, mobile_number, otp },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -953,16 +953,15 @@ export const validateOtp = createAsyncThunk(
 
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
       const token = await getBearerToken();
-      const currentDateTimeLocal = new Date().toLocaleString();
 
-      // Use the FULL mobile number with country code
-      const full_mobile_number = `${country_code} ${mobile_number}`;
+      // Resolve country code from whichever property was passed
+      const finalCountryCode = mobile_number_country_code || country_code;
 
+      // Exact payload required by the endpoint
       const payload = {
-        sign_in_option: "mobile",
-        mobile_number: full_mobile_number,
+        mobile_number_country_code: finalCountryCode,
+        mobile_number: mobile_number,
         otp: formattedOTP,
-        currentDate: currentDateTimeLocal,
       };
 
       const response = await api.post("/validate-otp", payload, {
@@ -981,6 +980,7 @@ export const validateOtp = createAsyncThunk(
           kyc_status: responseData.kyc_status,
           plaid_status: responseData.plaid_status,
           plaid_url: responseData.plaid_url,
+          plaid_kyc_required: responseData.plaid_kyc_required, // Ensure this passes through for your UI check
           token: responseData.token,
           customer_id: responseData.customer_id,
           is_whitelabelled_partner_customer:
@@ -994,8 +994,8 @@ export const validateOtp = createAsyncThunk(
           sessionStorage.setItem(
             "pending_mobile_auth",
             JSON.stringify({
-              country_code: country_code,
-              mobile_number: full_mobile_number,
+              country_code: finalCountryCode,
+              mobile_number: `${finalCountryCode} ${mobile_number}`,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
             })

@@ -179,7 +179,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       let customerUuid = state.auth?.user?.uuid || localStorage.getItem("userUuid") || null;
 
       if (!customerUuid) {
-        customerUuid = localStorage.getItem("customerUuid") || null;
+        customerUuid = localStorage.getItem("customer_uuid") || null;
       }
 
       if (!customerUuid) {
@@ -193,7 +193,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       }
 
       const payload = {
-        beneficiary_type: beneficiaryType || "individual",
+        beneficiary_type: beneficiaryType,
         mobile_number_country_code: cleanedCountryCode,
         mobile_number: phoneNumber,
         customer_uuid: customerUuid
