@@ -471,6 +471,8 @@ const Institution = () => {
   const initialLoadRef = React.useRef(false);
   const prevRegisteredCountryRef = useRef(undefined);
   const prevResponsiblePersonCountryRef = useRef(undefined);
+  const prevControllerCountryRef = useRef(undefined);
+  const controllerSyncFromPrimaryRef = useRef(false);
   const institutionState = useSelector(selectInstitutionRegistration);
   const countries = useSelector(selectCountriesOptions);
   const countriesLoading = useSelector(selectCountriesLoading);
@@ -918,8 +920,8 @@ const Institution = () => {
           };
         } else {
           const bankAccountOptions = remittanceOnlyAccepted
-          ? ["28-named-USD"]
-          : locationStateData?.service_provide_ids ||
+            ? ["28-named-USD"]
+            : locationStateData?.service_provide_ids ||
             localFormData?.service_provide_ids ||
             [];
           payload = {
@@ -2887,875 +2889,880 @@ const Institution = () => {
   const ControllerSection = React.useMemo(
     () =>
       React.memo(
-    ({
-      values,
-      setFieldValue,
-      handleBlur,
-      touched,
-      errors,
-      countryOptions,
-      countriesLoading,
-      nationalityOptions,
-      genderOptions,
-      showPassword,
-      showConfirmPassword,
-      institutionState,
-      showSSNField,
-      enhancedHandleChange,
-      enhancedPasswordChange,
-      enhancedSelectChange,
-      passwordValidationRules,
-      formatTaxId,
-      handleControllerZipLookup,
-      isZipLoading,
-      activeField,
-      directorRoles,
-      directorRolesLoading,
-      hasNominees,
-      nomineeFirstName,
-      nomineeMiddleName,
-      nomineeLastName,
-      setHasNominees,
-      setNomineeFirstName,
-      setNomineeMiddleName,
-      setNomineeLastName,
-      RequiredFormField,
-      RequiredCustomSelect,
-      RequiredMark,
-      isFieldMandatory,
-      resolveApiFieldName,
-    }) => {
-      console.log("🎯 Formik Render - SSN Debug:", {
-        currentStep,
-        country: values.country,
-        isUS: values.country === "United States",
-        institutionStateSSN: institutionState.ssnRequiredForSelectedAccount,
-        locationStateDataSSNCheck: (() => {
-          if (
-            !locationStateData.accountOptions ||
-            !locationStateData.service_provide_ids
-          ) {
-            return "No data";
-          }
-          const needsSSN = locationStateData.accountOptions.some(
-            (account) =>
-              locationStateData.service_provide_ids.includes(
-                `${account.service_provide_id}-${account.accountType}`,
-              ) && account.ssn_required === "Y",
-          );
-          return needsSSN ? "YES" : "NO";
-        })(),
-        shouldShowSSN:
-          institutionState.ssnRequiredForSelectedAccount &&
-          values.country === "United States",
-      });
-      const dispatch = useDispatch();
-
-      const directorRoleOptions = useMemo(() => {
-        if (!directorRoles || !Array.isArray(directorRoles)) {
-          return [];
-        }
-        return directorRoles.map(role => ({
-          value: role.id,
-          label: role.name
-        }));
-      }, [directorRoles]);
-
-      const syncControllerFromPrimary = useCallback(() => {
-        const primaryContactFields = {
-          controller_first_name: values.first_name,
-          controller_middle_name: values.middle_name,
-          controller_last_name: values.last_name,
-          controller_email: values.email,
-          controller_password: values.password,
-          controller_confirm_password: values.confirm_password,
-          controller_resident_country: values.resident_country,
-          controller_nationality: values.nationality,
-          controller_mobilenumber_countrycode: values.mobilenumber_countrycode,
-          controller_mobile_number: values.mobile_number,
-          controller_country: values.country,
-          controller_state: values.state,
-          controller_city: values.city,
-          controller_street_address_1: values.street_address_1,
-          controller_street_address_2: values.street_address_2,
-          controller_zip_code: values.zip_code,
-          controller_gender: values.gender,
-          controller_dob: values.dob,
-          controller_designation: values.designation,
-          controller_ssn: values.ssn,
-          director_role_id: "",
-          controller_doc_type: values.doc_type,
-          controller_doc_id: values.doc_id,
-          controller_doc_country: values.doc_country,
-        };
-        Object.entries(primaryContactFields).forEach(([field, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            setFieldValue(field, value);
-            dispatch(setFormField({ field, value }));
-          }
-        });
-      }, [values, setFieldValue, dispatch]);
-
-      const handleControllerCheckboxChange = (e) => {
-        const isController = e.target.checked;
-        setFieldValue("is_controller", isController ? "yes" : "no");
-        if (isController) {
-          syncControllerFromPrimary();
-        } else {
-          const controllerFields = [
-            "controller_first_name",
-            "controller_middle_name",
-            "controller_last_name",
-            "controller_email",
-            "controller_password",
-            "controller_confirm_password",
-            "controller_resident_country",
-            "controller_mobilenumber_countrycode",
-            "controller_mobile_number",
-            "controller_nationality",
-            "controller_country",
-            "controller_state",
-            "controller_city",
-            "controller_street_address_1",
-            "controller_street_address_2",
-            "controller_zip_code",
-            "controller_gender",
-            "controller_dob",
-            "controller_designation",
-            "controller_ssn",
-            "director_role_id",
-            "controller_doc_type",
-            "controller_doc_id",
-            "controller_doc_country",
-          ];
-          controllerFields.forEach((field) => {
-            setFieldValue(field, "");
-            dispatch(setFormField({ field, value: "" }));
+        ({
+          values,
+          setFieldValue,
+          handleBlur,
+          touched,
+          errors,
+          countryOptions,
+          countriesLoading,
+          nationalityOptions,
+          genderOptions,
+          showPassword,
+          showConfirmPassword,
+          institutionState,
+          showSSNField,
+          enhancedHandleChange,
+          enhancedPasswordChange,
+          enhancedSelectChange,
+          passwordValidationRules,
+          formatTaxId,
+          handleControllerZipLookup,
+          isZipLoading,
+          activeField,
+          directorRoles,
+          directorRolesLoading,
+          hasNominees,
+          nomineeFirstName,
+          nomineeMiddleName,
+          nomineeLastName,
+          setHasNominees,
+          setNomineeFirstName,
+          setNomineeMiddleName,
+          setNomineeLastName,
+          RequiredFormField,
+          RequiredCustomSelect,
+          RequiredMark,
+          isFieldMandatory,
+          resolveApiFieldName,
+          controllerStates,
+          controllerStatesLoading,
+          controllerSyncRef,
+        }) => {
+          console.log("🎯 Formik Render - SSN Debug:", {
+            currentStep,
+            country: values.country,
+            isUS: values.country === "United States",
+            institutionStateSSN: institutionState.ssnRequiredForSelectedAccount,
+            locationStateDataSSNCheck: (() => {
+              if (
+                !locationStateData.accountOptions ||
+                !locationStateData.service_provide_ids
+              ) {
+                return "No data";
+              }
+              const needsSSN = locationStateData.accountOptions.some(
+                (account) =>
+                  locationStateData.service_provide_ids.includes(
+                    `${account.service_provide_id}-${account.accountType}`,
+                  ) && account.ssn_required === "Y",
+              );
+              return needsSSN ? "YES" : "NO";
+            })(),
+            shouldShowSSN:
+              institutionState.ssnRequiredForSelectedAccount &&
+              values.country === "United States",
           });
-        }
-      };
+          const dispatch = useDispatch();
+
+          const directorRoleOptions = useMemo(() => {
+            if (!directorRoles || !Array.isArray(directorRoles)) {
+              return [];
+            }
+            return directorRoles.map(role => ({
+              value: role.id,
+              label: role.name
+            }));
+          }, [directorRoles]);
+
+          const syncControllerFromPrimary = useCallback(() => {
+            if (controllerSyncRef) controllerSyncRef.current = true;
+            const primaryContactFields = {
+              controller_first_name: values.first_name,
+              controller_middle_name: values.middle_name,
+              controller_last_name: values.last_name,
+              controller_email: values.email,
+              controller_password: values.password,
+              controller_confirm_password: values.confirm_password,
+              controller_resident_country: values.resident_country,
+              controller_nationality: values.nationality,
+              controller_mobilenumber_countrycode: values.mobilenumber_countrycode,
+              controller_mobile_number: values.mobile_number,
+              controller_country: values.country,
+              controller_state: values.state,
+              controller_city: values.city,
+              controller_street_address_1: values.street_address_1,
+              controller_street_address_2: values.street_address_2,
+              controller_zip_code: values.zip_code,
+              controller_gender: values.gender,
+              controller_dob: values.dob,
+              controller_designation: values.designation,
+              controller_ssn: values.ssn,
+              director_role_id: "",
+              controller_doc_type: values.doc_type,
+              controller_doc_id: values.doc_id,
+              controller_doc_country: values.doc_country,
+            };
+            Object.entries(primaryContactFields).forEach(([field, value]) => {
+              if (value !== undefined && value !== null && value !== "") {
+                setFieldValue(field, value);
+                dispatch(setFormField({ field, value }));
+              }
+            });
+          }, [values, setFieldValue, dispatch]);
+
+          const handleControllerCheckboxChange = (e) => {
+            const isController = e.target.checked;
+            setFieldValue("is_controller", isController ? "yes" : "no");
+            if (controllerSyncRef) controllerSyncRef.current = false;
+            if (isController) {
+              syncControllerFromPrimary();
+            } else {
+              const controllerFields = [
+                "controller_first_name",
+                "controller_middle_name",
+                "controller_last_name",
+                "controller_email",
+                "controller_password",
+                "controller_confirm_password",
+                "controller_resident_country",
+                "controller_mobilenumber_countrycode",
+                "controller_mobile_number",
+                "controller_nationality",
+                "controller_country",
+                "controller_state",
+                "controller_city",
+                "controller_street_address_1",
+                "controller_street_address_2",
+                "controller_zip_code",
+                "controller_gender",
+                "controller_dob",
+                "controller_designation",
+                "controller_ssn",
+                "director_role_id",
+                "controller_doc_type",
+                "controller_doc_id",
+                "controller_doc_country",
+              ];
+              controllerFields.forEach((field) => {
+                setFieldValue(field, "");
+                dispatch(setFormField({ field, value: "" }));
+              });
+            }
+          };
 
 
-      return (
-        <div className="mt-8 border-t pt-6">
-          <h3 className="text-lg font-medium mb-4 text-blue-600">
-            Controller Information
-          </h3>
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <label className="flex items-center">
-              <Field
-                type="checkbox"
-                name="is_controller"
-                className="mr-3 h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
-                onChange={handleControllerCheckboxChange}
-                checked={values.is_controller === "yes"}
-              />
-              <span className="text-lg font-medium text-gray-900">
-                I am the controller of this institution
-              </span>
-            </label>
-            <p className="text-sm text-gray-600 mt-2 ml-8">
-              {values.is_controller === "yes"
-                ? "✓ You have indicated that you are the controller. Your primary contact information has been automatically filled in the controller fields below."
-                : "If you are not the controller, please provide the controller's details below."}
-            </p>
-          </div>
+          return (
+            <div className="mt-8 border-t pt-6">
+              <h3 className="text-lg font-medium mb-4 text-blue-600">
+                Controller Information
+              </h3>
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="flex items-center">
+                  <Field
+                    type="checkbox"
+                    name="is_controller"
+                    className="mr-3 h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
+                    onChange={handleControllerCheckboxChange}
+                    checked={values.is_controller === "yes"}
+                  />
+                  <span className="text-lg font-medium text-gray-900">
+                    I am the controller of this institution
+                  </span>
+                </label>
+                <p className="text-sm text-gray-600 mt-2 ml-8">
+                  {values.is_controller === "yes"
+                    ? "✓ You have indicated that you are the controller. Your primary contact information has been automatically filled in the controller fields below."
+                    : "If you are not the controller, please provide the controller's details below."}
+                </p>
+              </div>
 
-          <div
-            className="space-y-6"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Row 1: First Name & Middle Name */}
-              <RequiredFormField
-                id="controller_first_name"
-                label="First Name"
-                name="controller_first_name"
-                value={values.controller_first_name || ""}
-                onChange={enhancedHandleChange(
-                  "controller_first_name",
-                  setFieldValue,
-                  setControllerFirstName,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_first_name}
-                error={errors.controller_first_name}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_first_name"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-              <FormField
-                id="controller_middle_name"
-                label="Middle Name (Optional)"
-                name="controller_middle_name"
-                value={values.controller_middle_name || ""}
-                onChange={enhancedHandleChange(
-                  "controller_middle_name",
-                  setFieldValue,
-                  setControllerMiddleName,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_middle_name}
-                error={errors.controller_middle_name}
-                fieldStyles={FIELD_STYLES}
-              />
+              <div
+                className="space-y-6"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Row 1: First Name & Middle Name */}
+                  <RequiredFormField
+                    id="controller_first_name"
+                    label="First Name"
+                    name="controller_first_name"
+                    value={values.controller_first_name || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_first_name",
+                      setFieldValue,
+                      setControllerFirstName,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_first_name}
+                    error={errors.controller_first_name}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_first_name"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
+                  <FormField
+                    id="controller_middle_name"
+                    label="Middle Name (Optional)"
+                    name="controller_middle_name"
+                    value={values.controller_middle_name || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_middle_name",
+                      setFieldValue,
+                      setControllerMiddleName,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_middle_name}
+                    error={errors.controller_middle_name}
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-              {/* Row 2: Last Name & Email */}
-              <RequiredFormField
-                id="controller_last_name"
-                label="Last Name"
-                name="controller_last_name"
-                value={values.controller_last_name || ""}
-                onChange={enhancedHandleChange(
-                  "controller_last_name",
-                  setFieldValue,
-                  setControllerLastName,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_last_name}
-                error={errors.controller_last_name}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_last_name"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-              <RequiredFormField
-                id="controller_email"
-                label="Email"
-                name="controller_email"
-                type="email"
-                value={values.controller_email || ""}
-                onChange={enhancedHandleChange(
-                  "controller_email",
-                  setFieldValue,
-                  setControllerEmail,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_email}
-                error={errors.controller_email}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_email"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
+                  {/* Row 2: Last Name & Email */}
+                  <RequiredFormField
+                    id="controller_last_name"
+                    label="Last Name"
+                    name="controller_last_name"
+                    value={values.controller_last_name || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_last_name",
+                      setFieldValue,
+                      setControllerLastName,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_last_name}
+                    error={errors.controller_last_name}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_last_name"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
+                  <RequiredFormField
+                    id="controller_email"
+                    label="Email"
+                    name="controller_email"
+                    type="email"
+                    value={values.controller_email || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_email",
+                      setFieldValue,
+                      setControllerEmail,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_email}
+                    error={errors.controller_email}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_email"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-              {/* Row 3: Password & Confirm Password */}
-              <PasswordField
-                id="controller_password"
-                label="Password"
-                name="controller_password"
-                value={values.controller_password || ""}
-                onChange={enhancedPasswordChange(
-                  "controller_password",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_password}
-                error={errors.controller_password}
-                required={isFieldMandatory(resolveApiFieldName("controller_password"), values)}
-                visible={showPassword}
-                onToggleVisibility={() => dispatch(togglePasswordVisibility())}
-                validationRules={passwordValidationRules}
-                fieldStyles={FIELD_STYLES}
-              />
-              <PasswordField
-                id="controller_confirm_password"
-                label="Confirm Password"
-                name="controller_confirm_password"
-                value={values.controller_confirm_password || ""}
-                onChange={enhancedPasswordChange(
-                  "controller_confirm_password",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_confirm_password}
-                error={errors.controller_confirm_password}
-                required={isFieldMandatory(resolveApiFieldName("controller_confirm_password"), values)}
-                visible={showConfirmPassword}
-                onToggleVisibility={() =>
-                  dispatch(toggleConfirmPasswordVisibility())
-                }
-                fieldStyles={FIELD_STYLES}
-              />
+                  {/* Row 3: Password & Confirm Password */}
+                  <PasswordField
+                    id="controller_password"
+                    label="Password"
+                    name="controller_password"
+                    value={values.controller_password || ""}
+                    onChange={enhancedPasswordChange(
+                      "controller_password",
+                      setFieldValue,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_password}
+                    error={errors.controller_password}
+                    required={isFieldMandatory(resolveApiFieldName("controller_password"), values)}
+                    visible={showPassword}
+                    onToggleVisibility={() => dispatch(togglePasswordVisibility())}
+                    validationRules={passwordValidationRules}
+                    fieldStyles={FIELD_STYLES}
+                  />
+                  <PasswordField
+                    id="controller_confirm_password"
+                    label="Confirm Password"
+                    name="controller_confirm_password"
+                    value={values.controller_confirm_password || ""}
+                    onChange={enhancedPasswordChange(
+                      "controller_confirm_password",
+                      setFieldValue,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_confirm_password}
+                    error={errors.controller_confirm_password}
+                    required={isFieldMandatory(resolveApiFieldName("controller_confirm_password"), values)}
+                    visible={showConfirmPassword}
+                    onToggleVisibility={() =>
+                      dispatch(toggleConfirmPasswordVisibility())
+                    }
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-              {/* Row 4: Resident Country & Nationality */}
-              <RequiredCustomSelect
-                id="controller_resident_country"
-                label="Resident Country"
-                options={countryOptions || []}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_resident_country", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_resident_country",
-                        value: option.value,
-                      }),
-                    );
-                  }
-                }}
-                value={(countryOptions || []).find(
-                  (opt) => opt.value === values.controller_resident_country,
-                )}
-                touched={touched.controller_resident_country}
-                error={errors.controller_resident_country}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_resident_country"), values)}
-                isLoading={countriesLoading || countryOptions.length === 0}
-                isCountryField={true}
-                showPhoneCode={false}
-              />
-              <RequiredCustomSelect
-                id="controller_nationality"
-                label="Nationality"
-                options={nationalityOptions}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_nationality", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_nationality",
-                        value: option.value,
-                      }),
-                    );
-                  }
-                }}
-                value={nationalityOptions.find(
-                  (opt) => opt.value === values.controller_nationality,
-                )}
-                touched={touched.controller_nationality}
-                error={errors.controller_nationality}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_nationality"), values)}
-                isCountryField={true}
-                showPhoneCode={false}
-              />
+                  {/* Row 4: Resident Country & Nationality */}
+                  <RequiredCustomSelect
+                    id="controller_resident_country"
+                    label="Resident Country"
+                    options={countryOptions || []}
+                    onChange={(option) => {
+                      if (option) {
+                        setFieldValue("controller_resident_country", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_resident_country",
+                            value: option.value,
+                          }),
+                        );
+                      }
+                    }}
+                    value={(countryOptions || []).find(
+                      (opt) => opt.value === values.controller_resident_country,
+                    )}
+                    touched={touched.controller_resident_country}
+                    error={errors.controller_resident_country}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_resident_country"), values)}
+                    isLoading={countriesLoading || countryOptions.length === 0}
+                    isCountryField={true}
+                    showPhoneCode={false}
+                  />
+                  <RequiredCustomSelect
+                    id="controller_nationality"
+                    label="Nationality"
+                    options={nationalityOptions}
+                    onChange={(option) => {
+                      if (option) {
+                        setFieldValue("controller_nationality", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_nationality",
+                            value: option.value,
+                          }),
+                        );
+                      }
+                    }}
+                    value={nationalityOptions.find(
+                      (opt) => opt.value === values.controller_nationality,
+                    )}
+                    touched={touched.controller_nationality}
+                    error={errors.controller_nationality}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_nationality"), values)}
+                    isCountryField={true}
+                    showPhoneCode={false}
+                  />
 
-              {/* Row 5: Phone Number (Full Width) */}
-              <div className="md:col-span-2">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Phone Number
-                  </label>
-                  <div className="flex space-x-3">
-                    <div className="w-1/2 min-w-[180px]">
-                      <RequiredCustomSelect
-                        id="controller_mobilenumber_countrycode"
-                        label="Country Code"
-                        options={countryOptions}
-                        value={countryOptions.find(
-                          (opt) =>
-                            opt.phoneCode ===
-                            values.controller_mobilenumber_countrycode ||
-                            opt.phone_code ===
-                            values.controller_mobilenumber_countrycode,
-                        )}
+                  {/* Row 5: Phone Number (Full Width) */}
+                  <div className="md:col-span-2">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Phone Number
+                      </label>
+                      <div className="flex space-x-3">
+                        <div className="w-1/2 min-w-[180px]">
+                          <RequiredCustomSelect
+                            id="controller_mobilenumber_countrycode"
+                            label="Country Code"
+                            options={countryOptions}
+                            value={countryOptions.find(
+                              (opt) =>
+                                opt.phoneCode ===
+                                values.controller_mobilenumber_countrycode ||
+                                opt.phone_code ===
+                                values.controller_mobilenumber_countrycode,
+                            )}
+                            onChange={(option) => {
+                              if (option) {
+                                setFieldValue(
+                                  "controller_mobilenumber_countrycode",
+                                  option.phoneCode || option.phone_code || "",
+                                );
+                                if (
+                                  option.value &&
+                                  option.value !== values.controller_country
+                                ) {
+                                  setFieldValue("controller_country", option.value);
+                                }
+                              }
+                            }}
+                            onBlur={handleBlur}
+                            touched={touched.controller_mobilenumber_countrycode}
+                            error={errors.controller_mobilenumber_countrycode}
+                            isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobilenumber_countrycode"), values)}
+                            isLoading={countriesLoading}
+                            isCountryField={true}
+                            showPhoneCode={true}
+                          />
+                        </div>
+                        <div className="w-1/2">
+                          <RequiredFormField
+                            id="controller_mobile_number"
+                            label="Phone Number"
+                            name="controller_mobile_number"
+                            value={values.controller_mobile_number || ""}
+                            onChange={enhancedHandleChange(
+                              "controller_mobile_number",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            touched={touched.controller_mobile_number}
+                            error={errors.controller_mobile_number}
+                            isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobile_number"), values)}
+                            placeholder="e.g., 1234567890"
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 6: Country & Zip */}
+                  <RequiredCustomSelect
+                    id="controller_country"
+                    label="Country"
+                    options={countryOptions}
+                    onChange={(option) => {
+                      if (option) {
+                        setFieldValue("controller_country", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_country",
+                            value: option.value,
+                          }),
+                        );
+                      }
+                    }}
+                    value={countryOptions.find(
+                      (opt) => opt.value === values.controller_country,
+                    )}
+                    touched={touched.controller_country}
+                    error={errors.controller_country}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_country"), values)}
+                    isLoading={countriesLoading}
+                    isCountryField={true}
+                    showPhoneCode={false}
+                  />
+
+                  {/* ZIP/Postal Code - With lookup */}
+                  <div className="relative">
+                    <RequiredFormField
+                      id="controller_zip_code"
+                      label="ZIP/Postal Code"
+                      name="controller_zip_code"
+                      value={values.controller_zip_code || ""}
+                      onChange={(e) => {
+                        const zipCode = e.target.value;
+                        enhancedHandleChange(
+                          "controller_zip_code",
+                          setFieldValue,
+                        )(e);
+
+                        // Clear previous timer
+                        if (zipDebounceTimer) {
+                          clearTimeout(zipDebounceTimer);
+                        }
+
+                        // Set debounced lookup
+                        const timer = setTimeout(() => {
+                          const countryId = values.controller_country;
+                          if (
+                            zipCode &&
+                            countryId &&
+                            zipCode.replace(/\s+/g, "").length >= 3
+                          ) {
+                            handleControllerZipLookup(zipCode, countryId);
+                          }
+                        }, 1000);
+
+                        setZipDebounceTimer(timer);
+                      }}
+                      onBlur={handleBlur}
+                      onFocus={() => setActiveField("controller_zip_code")}
+                      touched={touched.controller_zip_code}
+                      error={errors.controller_zip_code}
+                      isMandatory={isFieldMandatory(resolveApiFieldName("controller_zip_code"), values)}
+                      fieldStyles={FIELD_STYLES}
+                    />
+                    {isZipLoading && activeField === "controller_zip_code" && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <RingLoader size={16} color="#3b82f6" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Controller State/Province with Dynamic Dropdown */}
+                  <div className="space-y-2">
+                    <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
+                      State/Province
+                      <RequiredMark fieldName="controller_state" />
+                    </label>
+
+                    {controllerStates && controllerStates.length > 0 ? (
+                      <Select
+                        id="controller_state"
+                        name="controller_state"
+                        options={controllerStates.map(state => ({
+                          value: state.id || state.name,
+                          label: state.name
+                        }))}
+                        value={(() => {
+                          // First check if we have a selected state from the dropdown
+                          const selectedState = controllerStates.find(s =>
+                            s.id === values.controller_state ||
+                            s.name === values.controller_state
+                          );
+
+                          if (selectedState) {
+                            return {
+                              value: selectedState.id || selectedState.name,
+                              label: selectedState.name
+                            };
+                          }
+
+                          // If there's a text value (auto-filled or manually entered), show it
+                          if (values.controller_state) {
+                            return {
+                              value: values.controller_state,
+                              label: values.controller_state
+                            };
+                          }
+
+                          return null;
+                        })()}
                         onChange={(option) => {
                           if (option) {
-                            setFieldValue(
-                              "controller_mobilenumber_countrycode",
-                              option.phoneCode || option.phone_code || "",
-                            );
-                            if (
-                              option.value &&
-                              option.value !== values.controller_country
-                            ) {
-                              setFieldValue("controller_country", option.value);
-                            }
+                            const value = option.label;
+                            setFieldValue("controller_state", value);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              controller_state: value,
+                            }));
+                            dispatch(setFormField({
+                              field: "controller_state",
+                              value: value
+                            }));
+                          } else {
+                            setFieldValue("controller_state", "");
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              controller_state: "",
+                            }));
+                            dispatch(setFormField({
+                              field: "controller_state",
+                              value: ""
+                            }));
                           }
                         }}
                         onBlur={handleBlur}
-                        touched={touched.controller_mobilenumber_countrycode}
-                        error={errors.controller_mobilenumber_countrycode}
-                        isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobilenumber_countrycode"), values)}
-                        isLoading={countriesLoading}
-                        isCountryField={true}
-                        showPhoneCode={true}
+                        isDisabled={controllerStatesLoading || !values.controller_country}
+                        isLoading={controllerStatesLoading}
+                        placeholder={controllerStatesLoading ? "Loading states..." : "Select state/province..."}
+                        isClearable={true}
+                        styles={{
+                          control: (base, state) => ({
+                            ...base,
+                            minHeight: "50px",
+                            borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#d1d5db",
+                            borderRadius: "0.5rem",
+                            padding: "0.25rem 0.5rem",
+                            fontSize: "0.875rem",
+                            backgroundColor: (!values.controller_country || controllerStatesLoading) ? "#f3f4f6" : "white",
+                            opacity: (!values.controller_country || controllerStatesLoading) ? 0.6 : 1,
+                            "&:hover": {
+                              borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#9ca3af",
+                            },
+                          }),
+                          placeholder: (base) => ({
+                            ...base,
+                            fontSize: "0.875rem",
+                            color: "#6b7280",
+                          }),
+                          menu: (base) => ({
+                            ...base,
+                            fontSize: "0.875rem",
+                            zIndex: 9999,
+                          }),
+                          singleValue: (base) => ({
+                            ...base,
+                            fontSize: "0.875rem",
+                          }),
+                          option: (base, state) => ({
+                            ...base,
+                            fontSize: "0.875rem",
+                            backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
+                            color: state.isSelected ? "white" : "#1f2937",
+                            "&:hover": {
+                              backgroundColor: "#eff6ff",
+                            },
+                          }),
+                        }}
                       />
-                    </div>
-                    <div className="w-1/2">
-                      <RequiredFormField
-                        id="controller_mobile_number"
-                        label="Phone Number"
-                        name="controller_mobile_number"
-                        value={values.controller_mobile_number || ""}
-                        onChange={enhancedHandleChange(
-                          "controller_mobile_number",
-                          setFieldValue,
-                        )}
+                    ) : (
+                      <input
+                        type="text"
+                        id="controller_state"
+                        name="controller_state"
+                        value={values.controller_state || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFieldValue("controller_state", value);
+                          setLocalFormData((prev) => ({
+                            ...prev,
+                            controller_state: value,
+                          }));
+                          dispatch(setFormField({
+                            field: "controller_state",
+                            value: value
+                          }));
+                        }}
                         onBlur={handleBlur}
-                        touched={touched.controller_mobile_number}
-                        error={errors.controller_mobile_number}
-                        isMandatory={isFieldMandatory(resolveApiFieldName("controller_mobile_number"), values)}
-                        placeholder="e.g., 1234567890"
-                        fieldStyles={FIELD_STYLES}
+                        onFocus={() => setActiveField("controller_state")}
+                        disabled={controllerStatesLoading || !values.controller_country}
+                        placeholder={controllerStatesLoading ? "Loading states..." : !values.controller_country ? "Please select country first" : "Enter state/province..."}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
+          ${(!values.controller_country || controllerStatesLoading) ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
+          ${touched.controller_state && errors.controller_state
+                            ? "border-red-500 focus:ring-red-500"
+                            : "border-gray-300 focus:ring-blue-500"
+                          }`}
                       />
-                    </div>
+                    )}
+
+                    {touched.controller_state && errors.controller_state && (
+                      <div className="text-red-500 text-xs mt-1 flex items-center">
+                        <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                        {errors.controller_state}
+                      </div>
+                    )}
+
+                    {controllerStates && controllerStates.length === 0 && values.controller_country && !controllerStatesLoading && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        No states available for the selected country. Please enter the state manually.
+                      </p>
+                    )}
                   </div>
-                </div>
-              </div>
 
-              {/* Row 6: Country & Zip */}
-              <RequiredCustomSelect
-                id="controller_country"
-                label="Country"
-                options={countryOptions}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_country", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_country",
-                        value: option.value,
-                      }),
-                    );
-                  }
-                }}
-                value={countryOptions.find(
-                  (opt) => opt.value === values.controller_country,
-                )}
-                touched={touched.controller_country}
-                error={errors.controller_country}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_country"), values)}
-                isLoading={countriesLoading}
-                isCountryField={true}
-                showPhoneCode={false}
-              />
-
-              {/* ZIP/Postal Code - With lookup */}
-              <div className="relative">
-                <RequiredFormField
-                  id="controller_zip_code"
-                  label="ZIP/Postal Code"
-                  name="controller_zip_code"
-                  value={values.controller_zip_code || ""}
-                  onChange={(e) => {
-                    const zipCode = e.target.value;
-                    enhancedHandleChange(
-                      "controller_zip_code",
+                  {/* City & Street Address 1 */}
+                  <RequiredFormField
+                    id="controller_city"
+                    label="City"
+                    name="controller_city"
+                    value={values.controller_city || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_city",
                       setFieldValue,
-                    )(e);
+                    )}
+                    onBlur={handleBlur}
+                    onFocus={() => setActiveField("controller_city")}
+                    touched={touched.controller_city}
+                    error={errors.controller_city}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_city"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
+                  <RequiredFormField
+                    id="controller_street_address_1"
+                    label="Street Address 1"
+                    name="controller_street_address_1"
+                    value={values.controller_street_address_1 || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_street_address_1",
+                      setFieldValue,
+                    )}
+                    onBlur={handleBlur}
+                    onFocus={() => setActiveField("controller_street_address_1")}
+                    touched={touched.controller_street_address_1}
+                    error={errors.controller_street_address_1}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_street_address_1"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-                    // Clear previous timer
-                    if (zipDebounceTimer) {
-                      clearTimeout(zipDebounceTimer);
-                    }
+                  {/* Street Address 2 (Optional) */}
+                  <RequiredFormField
+                    id="controller_street_address_2"
+                    label="Street Address 2/ Suite Address (Optional)"
+                    name="controller_street_address_2"
+                    value={values.controller_street_address_2 || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_street_address_2",
+                      setFieldValue,
+                    )}
+                    onBlur={handleBlur}
+                    onFocus={() => setActiveField("controller_street_address_2")}
+                    touched={touched.controller_street_address_2}
+                    error={errors.controller_street_address_2}
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-                    // Set debounced lookup
-                    const timer = setTimeout(() => {
-                      const countryId = values.controller_country;
-                      if (
-                        zipCode &&
-                        countryId &&
-                        zipCode.replace(/\s+/g, "").length >= 3
-                      ) {
-                        handleControllerZipLookup(zipCode, countryId);
-                      }
-                    }, 1000);
-
-                    setZipDebounceTimer(timer);
-                  }}
-                  onBlur={handleBlur}
-                  onFocus={() => setActiveField("controller_zip_code")}
-                  touched={touched.controller_zip_code}
-                  error={errors.controller_zip_code}
-                  isMandatory={isFieldMandatory(resolveApiFieldName("controller_zip_code"), values)}
-                  fieldStyles={FIELD_STYLES}
-                />
-                {isZipLoading && activeField === "controller_zip_code" && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <RingLoader size={16} color="#3b82f6" />
-                  </div>
-                )}
-              </div>
-
-              {/* Controller State/Province with Dynamic Dropdown */}
-              <div className="space-y-2">
-                <label htmlFor="controller_state" className="block text-sm font-medium text-gray-700">
-                  State/Province
-                  <RequiredMark fieldName="controller_state" />
-                </label>
-
-                {controllerStates && controllerStates.length > 0 ? (
-                  <Select
-                    id="controller_state"
-                    name="controller_state"
-                    options={controllerStates.map(state => ({
-                      value: state.id || state.name,
-                      label: state.name
-                    }))}
-                    value={(() => {
-                      // First check if we have a selected state from the dropdown
-                      const selectedState = controllerStates.find(s =>
-                        s.id === values.controller_state ||
-                        s.name === values.controller_state
-                      );
-
-                      if (selectedState) {
-                        return {
-                          value: selectedState.id || selectedState.name,
-                          label: selectedState.name
-                        };
-                      }
-
-                      // If there's a text value (auto-filled or manually entered), show it
-                      if (values.controller_state) {
-                        return {
-                          value: values.controller_state,
-                          label: values.controller_state
-                        };
-                      }
-
-                      return null;
-                    })()}
+                  {/* Row 9: Gender */}
+                  <RequiredCustomSelect
+                    id="controller_gender"
+                    label="Gender"
+                    options={genderOptions}
                     onChange={(option) => {
                       if (option) {
-                        const value = option.label;
-                        setFieldValue("controller_state", value);
-                        setLocalFormData((prev) => ({
-                          ...prev,
-                          controller_state: value,
-                        }));
-                        dispatch(setFormField({
-                          field: "controller_state",
-                          value: value
-                        }));
-                      } else {
-                        setFieldValue("controller_state", "");
-                        setLocalFormData((prev) => ({
-                          ...prev,
-                          controller_state: "",
-                        }));
-                        dispatch(setFormField({
-                          field: "controller_state",
-                          value: ""
-                        }));
+                        setFieldValue("controller_gender", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_gender",
+                            value: option.value,
+                          }),
+                        );
                       }
                     }}
-                    onBlur={handleBlur}
-                    isDisabled={controllerStatesLoading || !values.controller_country || values.is_controller === "yes"}
-                    isLoading={controllerStatesLoading}
-                    placeholder={controllerStatesLoading ? "Loading states..." : "Select state/province..."}
-                    isClearable={true}
-                    styles={{
-                      control: (base, state) => ({
-                        ...base,
-                        minHeight: "50px",
-                        borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#d1d5db",
-                        borderRadius: "0.5rem",
-                        padding: "0.25rem 0.5rem",
-                        fontSize: "0.875rem",
-                        backgroundColor: (!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "#f3f4f6" : "white",
-                        opacity: (!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? 0.6 : 1,
-                        "&:hover": {
-                          borderColor: touched.controller_state && errors.controller_state ? "#ef4444" : "#9ca3af",
-                        },
-                      }),
-                      placeholder: (base) => ({
-                        ...base,
-                        fontSize: "0.875rem",
-                        color: "#6b7280",
-                      }),
-                      menu: (base) => ({
-                        ...base,
-                        fontSize: "0.875rem",
-                        zIndex: 9999,
-                      }),
-                      singleValue: (base) => ({
-                        ...base,
-                        fontSize: "0.875rem",
-                      }),
-                      option: (base, state) => ({
-                        ...base,
-                        fontSize: "0.875rem",
-                        backgroundColor: state.isSelected ? "#3b82f6" : state.isFocused ? "#eff6ff" : "white",
-                        color: state.isSelected ? "white" : "#1f2937",
-                        "&:hover": {
-                          backgroundColor: "#eff6ff",
-                        },
-                      }),
-                    }}
+                    value={genderOptions.find(
+                      (opt) => opt.value === values.controller_gender,
+                    )}
+                    touched={touched.controller_gender}
+                    error={errors.controller_gender}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_gender"), values)}
                   />
-                ) : (
-                  <input
-                    type="text"
-                    id="controller_state"
-                    name="controller_state"
-                    value={values.controller_state || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFieldValue("controller_state", value);
-                      setLocalFormData((prev) => ({
-                        ...prev,
-                        controller_state: value,
-                      }));
-                      dispatch(setFormField({
-                        field: "controller_state",
-                        value: value
-                      }));
-                    }}
+
+                  {/* Row 10: Date of Birth & Designation */}
+                  <RequiredFormField
+                    id="controller_dob"
+                    label="Date of Birth"
+                    name="controller_dob"
+                    type="date"
+                    value={values.controller_dob || ""}
+                    onChange={enhancedHandleChange("controller_dob", setFieldValue)}
                     onBlur={handleBlur}
-                    onFocus={() => setActiveField("controller_state")}
-                    disabled={controllerStatesLoading || !values.controller_country || values.is_controller === "yes"}
-                    placeholder={controllerStatesLoading ? "Loading states..." : !values.controller_country ? "Please select country first" : "Enter state/province..."}
-                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-          ${(!values.controller_country || controllerStatesLoading || values.is_controller === "yes") ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""}
-          ${touched.controller_state && errors.controller_state
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:ring-blue-500"
-                      }`}
+                    touched={touched.controller_dob}
+                    error={errors.controller_dob}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_dob"), values)}
+                    fieldStyles={FIELD_STYLES}
                   />
-                )}
+                  <RequiredFormField
+                    id="controller_designation"
+                    label="Designation"
+                    name="controller_designation"
+                    value={values.controller_designation || ""}
+                    onChange={enhancedHandleChange(
+                      "controller_designation",
+                      setFieldValue,
+                    )}
+                    onBlur={handleBlur}
+                    touched={touched.controller_designation}
+                    error={errors.controller_designation}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_designation"), values)}
+                    fieldStyles={FIELD_STYLES}
+                  />
 
-                {touched.controller_state && errors.controller_state && (
-                  <div className="text-red-500 text-xs mt-1 flex items-center">
-                    <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
-                    {errors.controller_state}
-                  </div>
-                )}
+                  <RequiredCustomSelect
+                    id="controller_doc_type"
+                    label="ID Document Type"
+                    options={idDocumentTypeOptions}
+                    onChange={(option) => {
+                      if (option) {
+                        setFieldValue("controller_doc_type", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_doc_type",
+                            value: option.value,
+                          })
+                        );
+                      }
+                    }}
+                    value={idDocumentTypeOptions.find(
+                      (opt) => opt.value === values.controller_doc_type
+                    )}
+                    touched={touched.controller_doc_type}
+                    error={errors.controller_doc_type}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_type"), values)}
+                  />
 
-                {controllerStates && controllerStates.length === 0 && values.controller_country && !controllerStatesLoading && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    No states available for the selected country. Please enter the state manually.
-                  </p>
-                )}
+                  {(function () {
+                    // Check if either USD named account OR remittance only is selected
+                    const hasUSDNamedAccount = isNamedAccount;
+                    const isRemittanceOnly = remittanceOnlyAccepted;
+
+                    // Check if country is United States
+                    const isUSCountry =
+                      values.country === "United States" || values.country === 186;
+
+                    // Show SSN field if EITHER condition is true AND country is US
+                    const shouldShowSSNField =
+                      (hasUSDNamedAccount || isRemittanceOnly) && isUSCountry;
+
+                    console.log("🔍 Step 2 SSN Field Conditions Check:", {
+                      hasUSDNamedAccount,
+                      isRemittanceOnly,
+                      isUSCountry,
+                      shouldShowSSNField,
+                      countryValue: values.country,
+                      isNamedAccount,
+                      remittanceOnlyAccepted,
+                    });
+
+                    return shouldShowSSNField ? (
+                      <div className="md:col-span-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <FormField
+                              id="ssn"
+                              label="Social Security Number (SSN)"
+                              name="ssn"
+                              value={values.ssn || ""}
+                              onChange={(e) => {
+                                const formatted = formatTaxId(
+                                  e.target.value,
+                                  "ssn",
+                                );
+                                enhancedHandleChange(
+                                  "ssn",
+                                  setFieldValue,
+                                )({
+                                  target: { value: formatted },
+                                });
+                              }}
+                              onBlur={handleBlur}
+                              onFocus={() => setActiveField("ssn")}
+                              touched={touched.ssn}
+                              error={errors.ssn}
+                              required={true}
+                              placeholder="XXX-XX-XXXX"
+                              activeField={activeField}
+                              fieldStyles={FIELD_STYLES}
+                            />
+                          </div>
+                          <div className="mt-6">
+                            <SSNInfoPopup />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {hasUSDNamedAccount
+                            ? "Required for USD Named Accounts with United States as registered country."
+                            : "Required for Remittance Services Only accounts with United States as registered country."}
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <RequiredFormField
+                    id="controller_doc_id"
+                    label="ID Document Number"
+                    name="controller_doc_id"
+                    value={values.controller_doc_id || ""}
+                    onChange={enhancedHandleChange("controller_doc_id", setFieldValue)}
+                    onBlur={handleBlur}
+                    onFocus={() => setActiveField("controller_doc_id")}
+                    touched={touched.controller_doc_id}
+                    error={errors.controller_doc_id}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_id"), values)}
+                    fieldStyles={FIELD_STYLES}
+                    placeholder="Enter ID document number"
+                  />
+                  <RequiredCustomSelect
+                    id="controller_doc_country"
+                    label="ID Issuing Country"
+                    options={countryOptions}
+                    onChange={(option) => {
+                      if (option) {
+                        setFieldValue("controller_doc_country", option.value);
+                        dispatch(
+                          setFormField({
+                            field: "controller_doc_country",
+                            value: option.value,
+                          })
+                        );
+                      }
+                    }}
+                    value={countryOptions.find(
+                      (opt) => opt.value === values.controller_doc_country
+                    )}
+                    touched={touched.controller_doc_country}
+                    error={errors.controller_doc_country}
+                    isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_country"), values)}
+                    isLoading={countriesLoading}
+                    isCountryField={true}
+                    showPhoneCode={false}
+                  />
+                </div>
               </div>
-
-              {/* City & Street Address 1 */}
-              <RequiredFormField
-                id="controller_city"
-                label="City"
-                name="controller_city"
-                value={values.controller_city || ""}
-                onChange={enhancedHandleChange(
-                  "controller_city",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                onFocus={() => setActiveField("controller_city")}
-                touched={touched.controller_city}
-                error={errors.controller_city}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_city"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-              <RequiredFormField
-                id="controller_street_address_1"
-                label="Street Address 1"
-                name="controller_street_address_1"
-                value={values.controller_street_address_1 || ""}
-                onChange={enhancedHandleChange(
-                  "controller_street_address_1",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                onFocus={() => setActiveField("controller_street_address_1")}
-                touched={touched.controller_street_address_1}
-                error={errors.controller_street_address_1}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_street_address_1"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-
-              {/* Street Address 2 (Optional) */}
-              <RequiredFormField
-                id="controller_street_address_2"
-                label="Street Address 2/ Suite Address (Optional)"
-                name="controller_street_address_2"
-                value={values.controller_street_address_2 || ""}
-                onChange={enhancedHandleChange(
-                  "controller_street_address_2",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                onFocus={() => setActiveField("controller_street_address_2")}
-                touched={touched.controller_street_address_2}
-                error={errors.controller_street_address_2}
-                fieldStyles={FIELD_STYLES}
-              />
-
-              {/* Row 9: Gender */}
-              <RequiredCustomSelect
-                id="controller_gender"
-                label="Gender"
-                options={genderOptions}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_gender", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_gender",
-                        value: option.value,
-                      }),
-                    );
-                  }
-                }}
-                value={genderOptions.find(
-                  (opt) => opt.value === values.controller_gender,
-                )}
-                touched={touched.controller_gender}
-                error={errors.controller_gender}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_gender"), values)}
-              />
-
-              {/* Row 10: Date of Birth & Designation */}
-              <RequiredFormField
-                id="controller_dob"
-                label="Date of Birth"
-                name="controller_dob"
-                type="date"
-                value={values.controller_dob || ""}
-                onChange={enhancedHandleChange("controller_dob", setFieldValue)}
-                onBlur={handleBlur}
-                touched={touched.controller_dob}
-                error={errors.controller_dob}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_dob"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-              <RequiredFormField
-                id="controller_designation"
-                label="Designation"
-                name="controller_designation"
-                value={values.controller_designation || ""}
-                onChange={enhancedHandleChange(
-                  "controller_designation",
-                  setFieldValue,
-                )}
-                onBlur={handleBlur}
-                touched={touched.controller_designation}
-                error={errors.controller_designation}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_designation"), values)}
-                fieldStyles={FIELD_STYLES}
-              />
-
-              <RequiredCustomSelect
-                id="controller_doc_type"
-                label="ID Document Type"
-                options={idDocumentTypeOptions}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_doc_type", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_doc_type",
-                        value: option.value,
-                      })
-                    );
-                  }
-                }}
-                value={idDocumentTypeOptions.find(
-                  (opt) => opt.value === values.controller_doc_type
-                )}
-                touched={touched.controller_doc_type}
-                error={errors.controller_doc_type}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_type"), values)}
-              />
-
-              {(function () {
-                // Check if either USD named account OR remittance only is selected
-                const hasUSDNamedAccount = isNamedAccount;
-                const isRemittanceOnly = remittanceOnlyAccepted;
-
-                // Check if country is United States
-                const isUSCountry =
-                  values.country === "United States" || values.country === 186;
-
-                // Show SSN field if EITHER condition is true AND country is US
-                const shouldShowSSNField =
-                  (hasUSDNamedAccount || isRemittanceOnly) && isUSCountry;
-
-                console.log("🔍 Step 2 SSN Field Conditions Check:", {
-                  hasUSDNamedAccount,
-                  isRemittanceOnly,
-                  isUSCountry,
-                  shouldShowSSNField,
-                  countryValue: values.country,
-                  isNamedAccount,
-                  remittanceOnlyAccepted,
-                });
-
-                return shouldShowSSNField ? (
-                  <div className="md:col-span-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <FormField
-                          id="ssn"
-                          label="Social Security Number (SSN)"
-                          name="ssn"
-                          value={values.ssn || ""}
-                          onChange={(e) => {
-                            const formatted = formatTaxId(
-                              e.target.value,
-                              "ssn",
-                            );
-                            enhancedHandleChange(
-                              "ssn",
-                              setFieldValue,
-                            )({
-                              target: { value: formatted },
-                            });
-                          }}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("ssn")}
-                          touched={touched.ssn}
-                          error={errors.ssn}
-                          required={true}
-                          placeholder="XXX-XX-XXXX"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                      </div>
-                      <div className="mt-6">
-                        <SSNInfoPopup />
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {hasUSDNamedAccount
-                        ? "Required for USD Named Accounts with United States as registered country."
-                        : "Required for Remittance Services Only accounts with United States as registered country."}
-                    </p>
-                  </div>
-                ) : null;
-              })()}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <RequiredFormField
-                id="controller_doc_id"
-                label="ID Document Number"
-                name="controller_doc_id"
-                value={values.controller_doc_id || ""}
-                onChange={enhancedHandleChange("controller_doc_id", setFieldValue)}
-                onBlur={handleBlur}
-                onFocus={() => setActiveField("controller_doc_id")}
-                touched={touched.controller_doc_id}
-                error={errors.controller_doc_id}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_id"), values)}
-                fieldStyles={FIELD_STYLES}
-                placeholder="Enter ID document number"
-              />
-              <RequiredCustomSelect
-                id="controller_doc_country"
-                label="ID Issuing Country"
-                options={countryOptions}
-                onChange={(option) => {
-                  if (option) {
-                    setFieldValue("controller_doc_country", option.value);
-                    dispatch(
-                      setFormField({
-                        field: "controller_doc_country",
-                        value: option.value,
-                      })
-                    );
-                  }
-                }}
-                value={countryOptions.find(
-                  (opt) => opt.value === values.controller_doc_country
-                )}
-                touched={touched.controller_doc_country}
-                error={errors.controller_doc_country}
-                isMandatory={isFieldMandatory(resolveApiFieldName("controller_doc_country"), values)}
-                isLoading={countriesLoading}
-                isCountryField={true}
-                showPhoneCode={false}
-              />
-            </div>
-          </div>
-        </div>
-
-      );
-    },
-    ),
+          );
+        },
+      ),
     [currentStep, locationStateData],
   );
 
@@ -3963,14 +3970,31 @@ const Institution = () => {
 
           // useEffect for Controller states
           React.useEffect(() => {
-            const fetchControllerStates = async () => {
-              if (!values.controller_country) {
-                setControllerStates([]);
-                // Don't clear the state if it was auto-filled from responsible person
-                // Only clear if the country changed
-                return;
-              }
+            const prevCountry = prevControllerCountryRef.current;
+            prevControllerCountryRef.current = values.controller_country;
 
+            if (!values.controller_country) {
+              setControllerStates([]);
+              if (prevCountry !== undefined && prevCountry) {
+                setFieldValue("controller_state", "");
+                setLocalFormData((prev) => ({ ...prev, controller_state: "" }));
+                dispatch(setFormField({ field: "controller_state", value: "" }));
+              }
+              return;
+            }
+
+            // Country actually changed (not just initial mount/auto-fill) — clear stale options/value,
+            // unless this change came from "I am the controller" syncing responsible-person data
+            if (prevCountry !== undefined && prevCountry !== values.controller_country) {
+              setControllerStates([]);
+              if (!controllerSyncFromPrimaryRef.current) {
+                setFieldValue("controller_state", "");
+                setLocalFormData((prev) => ({ ...prev, controller_state: "" }));
+                dispatch(setFormField({ field: "controller_state", value: "" }));
+              }
+            }
+
+            const fetchControllerStates = async () => {
               setControllerStatesLoading(true);
 
               try {
@@ -3978,11 +4002,12 @@ const Institution = () => {
                   fetchStatesByCountry(values.controller_country)
                 ).unwrap();
 
-                setControllerStates(result || []);
+                setControllerStates(result?.data || result || []);
               } catch (error) {
                 setControllerStates([]);
               } finally {
                 setControllerStatesLoading(false);
+                controllerSyncFromPrimaryRef.current = false;
               }
             };
 
@@ -6111,8 +6136,8 @@ const Institution = () => {
                               );
                             }
                           }}
-              
-            value={
+
+                          value={
                             regionOptions.find(
                               (opt) =>
                                 opt.value === values.principal_business_address_region_id ||
@@ -7561,6 +7586,9 @@ const Institution = () => {
                           errors={errors}
                           countryOptions={countryOptions}
                           countriesLoading={countriesLoading}
+                          controllerStates={controllerStates}
+                          controllerStatesLoading={controllerStatesLoading}
+                          controllerSyncRef={controllerSyncFromPrimaryRef}
                           nationalityOptions={nationalityOptions}
                           genderOptions={genderOptions}
                           showPassword={showPassword}
