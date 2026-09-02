@@ -130,6 +130,7 @@ const Login = () => {
   const [selectedInstitutionId, setSelectedInstitutionId] = useState("");
   const [isSubmittingInstitution, setIsSubmittingInstitution] = useState(false);
   const pendingInstitutionPayloadRef = useRef(null);
+  const [showDownloadManual, setShowDownloadManual] = useState(false);
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -219,6 +220,12 @@ const Login = () => {
         setIsPartnerLoginLoading(true);
 
         const response = await partnerLogin();
+
+        if (response?.data?.download_registration_manual === "Y") {
+          setShowDownloadManual(true);
+        } else {
+          setShowDownloadManual(false);
+        }
 
         // Extract sign in type ("email" or "mobile") from response or cached storage
         const signInType =
@@ -2215,24 +2222,26 @@ const Login = () => {
             </motion.button>
           </motion.div>
 
-          <button
-            onClick={handleManualDownload}
-            disabled={downloadStatus === "loading"}
-            className="mt-4 w-full py-2 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center gap-2 min-h-[44px]"
-            type="button"
-          >
-            {downloadStatus === "loading" ? (
-              <>
-                <RingLoader size={20} color="#ffffff" />
-                <span className="ml-2">Downloading...</span>
-              </>
-            ) : (
-              <>
-                <MdDownload className="w-5 h-5" />
-                <span>Download Manual</span>
-              </>
-            )}
-          </button>
+          {showDownloadManual && (
+            <button
+              onClick={handleManualDownload}
+              disabled={downloadStatus === "loading"}
+              className="mt-4 w-full py-2 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center gap-2 min-h-[44px]"
+              type="button"
+            >
+              {downloadStatus === "loading" ? (
+                <>
+                  <RingLoader size={20} color="#ffffff" />
+                  <span className="ml-2">Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <MdDownload className="w-5 h-5" />
+                  <span>Download Manual</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

@@ -368,7 +368,7 @@ function PhoneVerification() {
     onSubmit: async (values) => {
       // ✅ Create loginData with the correct format
       const loginData = {
-        country_code: country_code,
+        mobile_number_country_code: country_code,
         mobile_number: number,
         otp: otp.join(""),
       };
@@ -574,13 +574,6 @@ function PhoneVerification() {
       toast.error("Please enter the complete 6-digit OTP code.");
       return;
     }
-
-    const loginData = {
-      country_code: country_code,
-      mobile_number: number,
-      otp: otp.join(""),
-    };
-
     formikSubmit();
   };
 
