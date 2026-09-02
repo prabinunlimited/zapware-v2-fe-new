@@ -28,6 +28,7 @@ import {
   FaChevronLeft,
   FaPlus,
   FaTrashAlt,
+  FaEye,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -228,6 +229,18 @@ const Profile = () => {
   const [selectedDocumentType, setSelectedDocumentType] = useState(null);
   const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const [newIdDocumentNumber, setNewIdDocumentNumber] = useState("");
+  const [newIdDocumentTypeId, setNewIdDocumentTypeId] = useState("");
+  const [newIdIssuingCountryId, setNewIdIssuingCountryId] = useState("");
+  const [newIdIssueDate, setNewIdIssueDate] = useState("");
+  const [newIdExpiryDate, setNewIdExpiryDate] = useState("");
+  const [newIdFile, setNewIdFile] = useState(null);
+  const [newIdUploadLoading, setNewIdUploadLoading] = useState(false);
+
+  const [showViewDocumentModal, setShowViewDocumentModal] = useState(false);
+  const [viewDocumentUrl, setViewDocumentUrl] = useState(null);
+  const [viewDocumentLoading, setViewDocumentLoading] = useState(false);
 
   const getCustomerUuid = () => {
     return localStorage.getItem("customer_uuid") || localStorage.getItem("customerUuid");
@@ -1615,6 +1628,141 @@ const Profile = () => {
       setIsModalOpen(true);
     } finally {
       setDocumentUploadLoading(false);
+    }
+  };
+
+  const handleNewIdFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setModalData({
+          isOpen: true,
+          title: "File Too Large",
+          message: "Please upload a file smaller than 10MB.",
+          type: "error",
+        });
+        setIsModalOpen(true);
+        event.target.value = "";
+        return;
+      }
+      setNewIdFile(file);
+    }
+  };
+
+  const handleUploadNewId = async () => {
+    if (!newIdDocumentTypeId || !newIdDocumentNumber || !newIdIssuingCountryId || !newIdIssueDate || !newIdExpiryDate || !newIdFile) {
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: "Please fill in all ID fields and select a file.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    setNewIdUploadLoading(true);
+
+    try {
+      const customerUuid = getCustomerUuid();
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const loginUserType = localStorage.getItem("login_user_type");
+
+      const formData = new FormData();
+      formData.append("id_document_type_id", newIdDocumentTypeId);
+      formData.append("id_document_number", newIdDocumentNumber);
+      formData.append("id_issuing_country_id", newIdIssuingCountryId);
+      formData.append("id_expiry_date", newIdExpiryDate);
+      formData.append("id_issue_date", newIdIssueDate);
+      formData.append("id_document_file", newIdFile);
+      formData.append("updated_user_type", loginUserType || "");
+      formData.append("updated_user_uuid", customerUuid);
+
+      const response = await axios.post(
+        `${API_URL}/customers/update-individual-customer-document/${customerUuid}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${authtoken}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      if (response.data.status === "success") {
+        setToast({ message: "New ID uploaded successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setNewIdDocumentTypeId("");
+        setNewIdDocumentNumber("");
+        setNewIdIssuingCountryId("");
+        setNewIdIssueDate("");
+        setNewIdExpiryDate("");
+        setNewIdFile(null);
+
+        if (bearertoken) {
+          dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+      } else {
+        throw new Error(response.data.message || "Failed to upload ID");
+      }
+    } catch (err) {
+      console.error("❌ Failed to upload new ID:", err);
+      setModalData({
+        isOpen: true,
+        title: "Upload Failed",
+        message: err.response?.data?.message || err.message || "Failed to upload ID. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setNewIdUploadLoading(false);
+    }
+  };
+
+  const handleViewDocument = async () => {
+    setShowViewDocumentModal(true);
+    setViewDocumentUrl(null);
+    setViewDocumentLoading(true);
+
+    try {
+      const customerUuid = getCustomerUuid();
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const response = await axios.get(
+        `${API_URL}/customers/get-individual-customer-document/${customerUuid}`,
+        { headers: { Authorization: `Bearer ${bearertoken}` } }
+      );
+
+      const docUrl =
+        response.data?.data?.id_document_file ||
+        response.data?.data?.document_url ||
+        response.data?.id_document_file ||
+        response.data?.document_url ||
+        null;
+
+      if (docUrl) {
+        setViewDocumentUrl(docUrl);
+      } else {
+        throw new Error("No document found for this customer.");
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch document:", err);
+      setShowViewDocumentModal(false);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || err.message || "Failed to load document. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setViewDocumentLoading(false);
     }
   };
 
@@ -3722,6 +3870,53 @@ const Profile = () => {
         authtoken={authtoken}
       />
 
+      {/* View Document Modal */}
+      {showViewDocumentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">ID Document</h3>
+              <button
+                onClick={() => {
+                  setShowViewDocumentModal(false);
+                  setViewDocumentUrl(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimesCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center min-h-[300px]">
+              {viewDocumentLoading ? (
+                <RingLoader size={40} color="#3b82f6" />
+              ) : viewDocumentUrl ? (
+                /\.pdf($|\?)/i.test(viewDocumentUrl) ? (
+                  <iframe
+                    src={viewDocumentUrl}
+                    title="ID Document"
+                    className="w-full h-[500px] border border-gray-200 rounded-lg"
+                  />
+                ) : (
+                  <img
+                    src={viewDocumentUrl}
+                    alt="ID Document"
+                    className="max-w-full max-h-[500px] object-contain rounded-lg border border-gray-200"
+                  />
+                )
+              ) : (
+                <p className="text-gray-500 text-sm">No document available.</p>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Delete Controller Confirmation Modal */}
       {showDeleteControllerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -3991,7 +4186,7 @@ const Profile = () => {
                             placeholder="First Name"
                           />
                         </div>
-                        {isIndividualAccount && (
+                        {isIndividualAccount && !isEditing && (
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
                               Middle Name
@@ -4508,7 +4703,9 @@ const Profile = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">ID Expiry Date</label>
+                      <div className="flex items-center gap-3 mb-1">
+                          <label className="block text-xs text-gray-500">ID Expiry Date</label>
+                        </div>
                         {isEditing ? (
                           <input
                             type="date"
@@ -4522,6 +4719,18 @@ const Profile = () => {
                             {displayProfileData.id_document_expiry_date || "N/A"}
                           </span>
                         )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Document</label>
+                        <button
+                          type="button"
+                          onClick={handleViewDocument}
+                          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 py-2"
+                        >
+                          <FaEye className="w-3.5 h-3.5" />
+                          View Document
+                        </button>
                       </div>
                     </>
                   )}
@@ -4541,6 +4750,123 @@ const Profile = () => {
                   )}
                 </div>
               </div>
+
+              {/* Upload New ID Card */}
+              {isIndividualAccount && !isEditing && (
+                <div className="bg-white rounded-xl shadow-md p-6">
+                  <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                    Update Document
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Document Type</label>
+                      {idDocumentTypesLoading ? (
+                        <div className="flex items-center py-2 text-sm text-gray-500">
+                          <RingLoader size={16} color="#3b82f6" />
+                          <span className="ml-2">Loading...</span>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            value={newIdDocumentTypeId}
+                            onChange={(e) => setNewIdDocumentTypeId(e.target.value)}
+                            className="w-full appearance-none border border-gray-300 rounded px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="">Select document type</option>
+                            {idDocumentTypes.map((type) => (
+                              <option key={type.id} value={type.id}>{type.name}</option>
+                            ))}
+                          </select>
+                          <svg
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Document Number</label>
+                      <input
+                        value={newIdDocumentNumber}
+                        onChange={(e) => setNewIdDocumentNumber(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Document number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Issuing Country</label>
+                      <Select
+                        options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                        value={
+                          reduxCountries
+                            ?.map((c) => ({ value: c.id, label: c.name }))
+                            .find((opt) => String(opt.value) === String(newIdIssuingCountryId)) || null
+                        }
+                        onChange={(selectedOption) => setNewIdIssuingCountryId(selectedOption?.value || "")}
+                        placeholder="Select issuing country"
+                        isSearchable
+                        isLoading={countriesLoading}
+                        classNamePrefix="react-select"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Issue Date</label>
+                      <input
+                        type="date"
+                        value={newIdIssueDate}
+                        onChange={(e) => setNewIdIssueDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Expiry Date</label>
+                      <input
+                        type="date"
+                        value={newIdExpiryDate}
+                        onChange={(e) => setNewIdExpiryDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Document File</label>
+                      <input
+                        type="file"
+                        onChange={handleNewIdFileChange}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                      />
+                      {newIdFile && (
+                        <p className="text-xs text-green-600 mt-1.5 truncate">
+                          Selected: {newIdFile.name} ({(newIdFile.size / 1024).toFixed(1)} KB)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleUploadNewId}
+                      disabled={newIdUploadLoading}
+                      className={`text-white text-sm font-medium py-2 px-5 rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                      style={headerColorProps.style}
+                    >
+                      {newIdUploadLoading ? (
+                        <>
+                          <RingLoader size={16} color="#ffffff" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        "Upload ID"
+                      )}
+                    </motion.button>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs Section - Show different tabs based on account type */}
               {availableTabs.length > 0 && (
