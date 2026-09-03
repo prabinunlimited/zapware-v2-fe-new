@@ -517,6 +517,7 @@ function SignUpIndividualContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const countryCodeRef = useRef("");
+  const formTopRef = useRef(null);
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
@@ -1392,6 +1393,10 @@ function SignUpIndividualContent() {
     };
   }, [zipDebounceTimer]);
 
+  useEffect(() => {
+    formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeSection]);
+
   // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
     const countryId = selectedOption?.value || "";
@@ -2100,7 +2105,7 @@ function SignUpIndividualContent() {
             ></div>
           </div>
 
-          <div className="p-6 md:p-8">
+          <div className="p-6 md:p-8" ref={formTopRef}>
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
               <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
