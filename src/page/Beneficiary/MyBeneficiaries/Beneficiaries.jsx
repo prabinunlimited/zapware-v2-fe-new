@@ -699,9 +699,9 @@ const Beneficiaries = ({ mode = "list" }) => {
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                         Currency
                       </th>
-                      <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                      {/* <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                         Status
-                      </th>
+                      </th> */}
                       <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                         Date Added
                       </th>
@@ -761,7 +761,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                             {beneficiary.currency || "N/A"}
                           </span>
                         </td>
-                        <td className="py-4 px-6">
+                        {/* <td className="py-4 px-6">
                           <div className="flex items-center">
                             <button
                               onClick={() =>
@@ -795,7 +795,7 @@ const Beneficiaries = ({ mode = "list" }) => {
                                 : "Hidden"}
                             </span>
                           </div>
-                        </td>
+                        </td> */}
                         <td className="py-4 px-6 text-sm text-gray-500">
                           {formatDate(beneficiary.created_at)}
                         </td>

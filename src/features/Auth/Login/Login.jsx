@@ -219,7 +219,7 @@ const Login = () => {
       try {
         setIsPartnerLoginLoading(true);
 
-        const response = await partnerLogin();
+        const response = await partnerLogin(true);
 
         if (response?.data?.download_registration_manual === "Y") {
           setShowDownloadManual(true);

@@ -521,7 +521,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           <div>
                             <label className="text-gray-500">Bank UUID:</label>
                             <p className="text-gray-700 font-mono truncate">
@@ -534,7 +534,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                               {bank.benef_uuid}
                             </p>
                           </div>
-                        </div>
+                        </div> */}
 
                         <div className="flex flex-col sm:flex-row gap-2 mt-3 justify-end">
                           {/* Delete Button - Hidden if only one bank account */}
